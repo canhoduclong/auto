@@ -70,16 +70,7 @@
                     <a href="{{ url('/register') }}">Đăng ký tài khoản</a>
                 </div>
 
-                {{-- Demo tài khoản --}}
-                <div class="text-muted small mt-3">
-                    <div>admin@example.com / 123456</div>
-                    <div>accountant@example.com / 123456</div>
-                    <div>manager@example.com / 123456</div>
-                    <div>leader@example.com / 123456</div>
-                    <div>factory@example.com / 123456</div>
-                    <div>warehouse@example.com / 123456</div>
-                    <div>sale@example.com / 123456</div>
-                </div>
+                 
             </form>
         </div>
         <div class="card-footer text-center small text-muted">

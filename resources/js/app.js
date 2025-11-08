@@ -1,3 +1,5 @@
+import './bootstrap';
+
 // --- Giao dịch: chọn đơn hàng, hiển thị tổng tiền, thanh toán toàn bộ ---
     let orderSelect = document.getElementById('order_id_select');
     let orderTotalBox = document.getElementById('order_total_box');
@@ -57,7 +59,6 @@
             amountInput.readOnly = false;
         });
     }
-import './bootstrap';
 
 document.addEventListener("DOMContentLoaded", function () {
     // --- Nhân bản biến thể ở trang product-variants index ---

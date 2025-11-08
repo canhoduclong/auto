@@ -11,12 +11,14 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        $middleware->alias([
-            // đăng ký alias 'permission' trỏ đến lớp của bạn
-            'permission' => \App\Http\Middleware\PermissionMiddleware::class,
-            // bạn có thể thêm 'role' => \App\Http\Middleware\RoleMiddleware::class,
-        ]);
-    })
+    $middleware->web(append: [
+        //
+    ]);
+
+    $middleware->alias([
+        'permission' => \App\Http\Middleware\PermissionMiddleware::class,
+    ]);
+})
     //->withMiddleware(function (Middleware $middleware): void {
         //
     //})

@@ -58,29 +58,8 @@
                 @endforeach
             </div>
         </div>
+    </div>
 </div>
 @endsection
 
-@section('footer')
-<footer class="footer mt-auto py-3 bg-light">
-    <div class="container">
-        <div class="row">
-            <div class="col-md-4">
-                <h5>Thông tin công ty</h5>
-                <p>{{ $settings['brand_name']->value ?? '' }}</p>
-                <p>Mã số thuế: {{ $settings['tax_number']->value ?? 'Chưa có' }}</p>
-            </div>
-            <div class="col-md-4">
-                <h5>Liên hệ</h5>
-                <p>Địa chỉ: {{ $settings['address']->value ?? '' }}</p>
-                <p>Hotline: {{ $settings['hotline']->value ?? '' }}</p>
-                <p>Email: {{ $settings['email']->value ?? '' }}</p>
-            </div>
-            <div class="col-md-4">
-                <h5>Chính sách</h5>
-                <p><a href="{{ $settings['policy_page']->value ?? '#' }}">Chính sách và quy định</a></p>
-            </div>
-        </div>
-    </div>
-</footer>
-@endsection
+ 
