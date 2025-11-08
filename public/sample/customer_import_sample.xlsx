@@ -1,0 +1,3 @@
+name	phone	address	email	gender	dob	customer_type_id	note
+Nguyen Van A	0123456789	123 Đường ABC, Quận 1	vana@example.com	male	1990-01-01	1	Khách VIP
+Le Thi B	0987654321	456 Đường XYZ, Quận 2	b.le@example.com	female	1992-05-10	2	Khách mới
