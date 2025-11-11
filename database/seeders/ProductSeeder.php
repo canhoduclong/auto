@@ -20,22 +20,12 @@ class ProductSeeder extends Seeder
         DB::statement('SET FOREIGN_KEY_CHECKS=1;');
         
         $products = [
-            'Vịt bọng - không sọ, không chân',
-            'Vịt bọng ngắn - không sọ, không cổ, không chân',
-            'Vịt tươi nguyên con',
-            'Vịt quay lông nguyên con',
-            'Lòng vịt làm sạch',
-            'Mề vịt làm sạch',
-            'Huyết vịt',
-            'Đầu vịt',
-            'Chân Vịt',
-            'Cánh vịt',
-            'Cánh tỏi vịt',
-            'Đùi vịt góc tư',
-            'Lòng vịt & mề làm sạch', 
-            'Tim vịt',
-            'Lông vịt',
-            'Trưng vịt',
+            'Gương chiếu hậu ô tô',
+            'Đèn pha LED siêu sáng',
+            'camara hành trình 4K',
+            'Cảm biến áp suất lốp',
+            'vali kéo du lịch',
+            'Nước rửa xe ô tô',
         ];
 
         foreach ($products as $productName) {
