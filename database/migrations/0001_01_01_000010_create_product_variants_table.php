@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('product_variants', function (Blueprint $table) {
             $table->id();
             $table->foreignId('product_id')->constrained()->cascadeOnDelete();
-            $table->string('sku')->unique();
+            $table->string('sku')->nullable()->unique();
             $table->string('size')->nullable();       // ví dụ: 1kg, 1.5kg
             $table->string('quality')->nullable();   // ví dụ: Loại 1, Loại 2
             $table->date('production_date')->nullable(); // ngày sản xuất 
