@@ -15,10 +15,22 @@ class ProductSeeder extends Seeder
      */
     public function run(): void
     {
+        /*
         DB::statement('SET FOREIGN_KEY_CHECKS=0;');
         DB::table('products')->truncate();
         DB::statement('SET FOREIGN_KEY_CHECKS=1;');
-        
+        */
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+        }
+
+        Product::truncate();
+
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        }
+
+
         $products = [
             'Gương chiếu hậu ô tô',
             'Đèn pha LED siêu sáng',
