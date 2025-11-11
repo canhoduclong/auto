@@ -16,7 +16,7 @@ class CustomerTypeSeeder extends Seeder
             DB::statement('SET FOREIGN_KEY_CHECKS=0;');
         }
 
-        Product::truncate();
+         DB::table('customer_types')->truncate();
 
         if (DB::getDriverName() !== 'sqlite') {
             DB::statement('SET FOREIGN_KEY_CHECKS=1;');
