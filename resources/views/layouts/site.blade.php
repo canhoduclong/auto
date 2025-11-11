@@ -50,11 +50,15 @@ use App\Models\Setting;
     </div>
     @include('layouts.partials.site_header') 
 
+    @yield('breadcrumb')
     @yield('content')
 
     @include('layouts.partials.site_footer')
 
-     <script src="{{ asset('js/jquery-3.3.1.min.js') }}"></script>
+    
+
+
+    <script src="{{ asset('js/jquery-3.3.1.min.js') }}"></script>
     <script src="{{ asset('js/bootstrap.min.js') }}"></script>
     <script src="{{ asset('js/jquery.nice-select.min.js') }}"></script>
     <script src="{{ asset('js/jquery-ui.min.js') }}"></script>
@@ -62,6 +66,7 @@ use App\Models\Setting;
     <script src="{{ asset('js/mixitup.min.js') }}"></script>
     <script src="{{ asset('js/jquery.slicknav.js') }}"></script>
     <script src="{{ asset('js/owl.carousel.min.js') }}"></script>
+    
     <script src="{{ asset('js/main.js') }}"></script>
 
  

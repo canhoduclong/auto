@@ -1,8 +1,25 @@
-@extends('layouts.site')
-
+@extends('layouts.site') 
+@section('breadcrumb')
+<div class="breadcrumb-option set-bg mb-4 pb-4" data-setbg="{{ asset('img/breadcrumb-bg.jpg') }}" style="background-image: url(&quot;img/breadcrumb-bg.jpg&quot;);">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-12 text-center">
+                    <div class="breadcrumb__text">
+                        <h2>Tin tức</h2>
+                        <div class="breadcrumb__links">
+                            <a href="{{ route('home') }}"><i class="fa fa-home"></i> Trang chủ</a>
+                            <span> Tin tức</span>
+                        </div>
+                        
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div> 
+@endsection
 @section('content')
     <div class="container">
-        <h1>News</h1>
+        <h1>Tin tức</h1>
         <div class="row">
             <div class="col-md-8">
                 @foreach($posts as $post)

@@ -1,5 +1,5 @@
  @yield('footer')
- <footer class="footer set-bg" data-setbg="img/footer-bg.jpg" style="background-image: url(&quot;img/footer-bg.jpg&quot;);">
+ <footer class="footer set-bg" data-setbg="{{ asset('img/footer-bg.jpg') }}" style="background-image: url(&quot;img/footer-bg.jpg&quot;);">
     <div class="container">
             <div class="footer__contact">
                 <div class="row">
@@ -17,7 +17,7 @@
                 </div>
             </div>
             <div class="row">
-                <div class="col-lg-7 col-md-7">
+                <div class="col-lg-9 col-md-9">
                     <div class="footer__about">
                         <div class="footer__logo mb-4">
                             <a href="./"> 
@@ -33,18 +33,7 @@
                          </ul>
                     </div>
                 </div> 
-                 <div class="col-lg-2 col-md-6">
-                    <div class="footer__brand">
-                        <h5>Top Brand</h5>
-                        <ul>
-                            <li><a href="#"><i class="fa fa-angle-right"></i> Abarth</a></li>
-                            <li><a href="#"><i class="fa fa-angle-right"></i> Acura</a></li>
-                            <li><a href="#"><i class="fa fa-angle-right"></i> Alfa Romeo</a></li>
-                            <li><a href="#"><i class="fa fa-angle-right"></i> Audi</a></li>
-                        </ul>
-                       
-                    </div>
-                </div>
+                 
                 <div class="col-md-3">
                     <div class="footer__widget">
                         <h5>Chính sách</h5>
@@ -62,7 +51,7 @@
             </div>
             <!-- Link back to Colorlib can't be removed. Template is licensed under CC BY 3.0. -->
             <div class="footer__copyright__text">
-                <p>Copyright ©<script>document.write(new Date().getFullYear());</script>2025 All rights reserved | This template is made with</p>
+                <p>Copyright ©<script>document.write(new Date().getFullYear());</script>2025 All rights reserved  </p>
             </div>
             <!-- Link back to Colorlib can't be removed. Template is licensed under CC BY 3.0. -->
         </div>

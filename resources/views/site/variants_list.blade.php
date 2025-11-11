@@ -1,5 +1,7 @@
 @extends('layouts.site')
-
+@section('breadcrumb')
+ 
+@endsection
 @section('content')
 <div class="container">
     <div class="row">
@@ -16,7 +18,7 @@
             </div>
         </div>
         <div class="col-md-9">
-            <h1>SẢN PHẨM</h1>
+            <h1>SẢN PHẨMss</h1>
 
             <div class="card">
                 <div class="card-body">

@@ -38,12 +38,29 @@
     </div>
 </header>
 @endsection
-
+@section('breadcrumb')
+<div class="breadcrumb-option set-bg mb-4 pb-4" data-setbg="img/breadcrumb-bg.jpg" style="background-image: url(&quot;img/breadcrumb-bg.jpg&quot;);">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-12 text-center">
+                    <div class="breadcrumb__text">
+                        <h2>Sản phẩm</h2>
+                        <div class="breadcrumb__links">
+                            <a href="./"><i class="fa fa-home"></i> Trang chủ</a>
+                            <span>Sản phẩm</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+     
+@endsection
 @section('content')
 <div class="container">
     <div class="row">
         <div class="col-md-3">
-            <h4>Categories</h4>
+            
             <div class="list-group">
                 <a href="{{ route('pages.products_by_category', ['category' => null, 'date' => request('date')]) }}" class="list-group-item list-group-item-action {{ !isset($category) ? 'active' : '' }}">
                     All Categories
@@ -55,33 +72,22 @@
                 @endforeach
             </div>
         </div>
-        <div class="col-md-9">
-            <h1>Product Variants</h1>
-
+        <div class="col-md-9"> 
             <div class="card mb-4">
                 <div class="card-body">
                     <form action="{{ route('pages.products_by_category', ['category' => $category->slug ?? null]) }}" method="GET">
-                        <div class="row">
-                            <div class="col-md-4">
-                                <input type="date" name="date" class="form-control" value="{{ request('date') }}">
-                            </div>
-                            <div class="col-md-4">
-                                <button type="submit" class="btn btn-primary">Filter by Date</button>
-                            </div>
-                        </div>
+                         
                         <div class="row mt-3">
                             <div class="col-md-6">
                                 <input type="number" name="min_price" class="form-control" placeholder="Min Price" value="{{ request('min_price') }}">
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-md-4">
                                 <input type="number" name="max_price" class="form-control" placeholder="Max Price" value="{{ request('max_price') }}">
                             </div>
-                        </div>
-                        <div class="row mt-3">
-                            <div class="col-md-12">
-                                <button type="submit" class="btn btn-primary">Filter</button>
-                            </div>
-                        </div>
+                            <div class="col-md-2"> 
+                                <button type="submit" class="btn btn-primary">Tìm kiếm</button>
+                            </div> 
+                        </div> 
                     </form>
                 </div>
             </div>
@@ -109,11 +115,7 @@
                             <a href="{{ route('pages.variant_detail', $variant->slug) }}" class="btn btn-info btn-sm">View</a>
                             <button class="btn btn-warning btn-sm add-to-cart" data-variant-id="{{ $variant->id }}">
                                 <i class="bi bi-cart-plus"></i> Add to Cart
-                            </button>
-                            <a href="{{ route('orders.create_new', ['variant_id' => $variant->id]) }}" class="btn btn-success btn-sm order-btn">Lên đơn</a>
-                            @can('update', $variant)
-                                <a href="{{ route('product-variants.edit', $variant->id) }}" class="btn btn-primary btn-sm">Edit</a>
-                            @endcan
+                            </button> 
                         </div>
                     </div>
                 </div>
@@ -129,28 +131,6 @@
 
 @include('site._cart_scripts')
 
-@section('footer')
-<footer class="footer mt-auto py-3 bg-light">
-    <div class="container">
-        <div class="row">
-            <div class="col-md-4">
-                <h5>Thông tin công ty</h5>
-                <p>{{ $settings['brand_name']->value ?? '' }}</p>
-                <p>Mã số thuế: {{ $settings['tax_number']->value ?? 'Chưa có' }}</p>
-            </div>
-            <div class="col-md-4">
-                <h5>Liên hệ</h5>
-                <p>Địa chỉ: {{ $settings['address']->value ?? '' }}</p>
-                <p>Hotline: {{ $settings['hotline']->value ?? '' }}</p>
-                <p>Email: {{ $settings['email']->value ?? '' }}</p>
-            </div>
-            <div class="col-md-4">
-                <h5>Chính sách</h5>
-                <p><a href="{{ $settings['policy_page']->value ?? '#' }}">Chính sách và quy định</a></p>
-            </div>
-        </div>
-    </div>
-</footer>
-@endsection
+ 
 
  
