@@ -14,11 +14,16 @@ class ProductVariantSeeder extends Seeder
      */
     public function run(): void
     {
-        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+        
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+        }
         DB::table('product_variants')->truncate();
         DB::table('product_variant_values')->truncate();
         DB::table('product_attribute_values')->truncate();
-        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        }
 
         $products = \DB::table('products')->get();
         $data = [];
