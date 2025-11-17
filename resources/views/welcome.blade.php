@@ -204,7 +204,17 @@
                 @foreach($posts as $post) 
                     <div class="col-lg-4 col-md-6">
                         <div class="latest__blog__item">
-                            <div class="latest__blog__item__pic set-bg" data-setbg="img/latest-blog/lb-1.jpg" style="background-image: url(&quot;img/latest-blog/lb-1.jpg&quot;);">
+                            @if($post->image)
+                            <div class="latest__blog__item__pic set-bg" 
+                                data-setbg="{{ asset('storage/' . $post->image) }}" 
+                                style="background-image: url(&quot;{{ asset('storage/' . $post->image) }}&quot;);"
+                                > 
+                            @else
+                                <div class="latest__blog__item__pic set-bg" 
+                                data-setbg="img/latest-blog/lb-1.jpg" 
+                                style="background-image: url(&quot;img/latest-blog/lb-1.jpg&quot;);"
+                                >
+                            @endif 
                                 <ul>
                                     <li>By Polly Williams</li>
                                     <li>Dec 19, 2018</li>
@@ -214,7 +224,7 @@
                             <div class="latest__blog__item__text">
                                 <h5>{{ $post->title }}</h5>
                                 <p>{{ $post->excerpt }}.</p>
-                                <a href="#">Xem thêm <i class="fa fa-long-arrow-right"></i></a>
+                                <a href="{{ route('posts.show', $post) }}">Xem thêm <i class="fa fa-long-arrow-right"></i></a>
                             </div>
                         </div>
                     </div>
@@ -229,7 +239,7 @@
                     <div class="sc_googlemap_content_wrap">
                         <div class="sc_googlemap">
                             <iframe
-                            src="https://maps.google.com/maps?t=m&output=embed&iwloc=near&z=14&q=40.66964776535992,-74.22803132273303"
+                            src="https://www.google.com/maps/embed?pb=!1m17!1m12!1m3!1d3917.028662810542!2d106.47366717504458!3d10.961207389198991!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m2!1m1!2zMTDCsDU3JzQwLjQiTiAxMDbCsDI4JzM0LjUiRQ!5e0!3m2!1svi!2s!4v1763396056744!5m2!1svi!2s"
                             scrolling="no"
                             marginheight="0"
                             marginwidth="0"

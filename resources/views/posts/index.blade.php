@@ -27,7 +27,7 @@
                         <div class="card-body">
                             <h5 class="card-title">{{ $post->title }}</h5>
                             <p class="card-text">{{ Str::limit($post->content, 150) }}</p>
-                            <a href="{{ route('posts.show', $post) }}" class="btn btn-primary">Read More</a>
+                            <a href="{{ route('posts.show', $post) }}" class="btn btn-primary">Chi tiết</a>
                         </div>
                     </div>
                 @endforeach

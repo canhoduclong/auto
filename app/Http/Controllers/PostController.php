@@ -8,6 +8,7 @@ use App\Models\Tag;
 use App\Models\Setting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Storage;
 
 class PostController extends Controller
 {
@@ -92,9 +93,22 @@ class PostController extends Controller
         $request->validate([
             'title' => 'required',
             'content' => 'required',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
         ]);
 
-        $post->update($request->all());
+        $data = $request->except('image');
+
+        if ($request->hasFile('image')) {
+            // Delete old image if it exists
+            if ($post->image) {
+                Storage::delete('public/' . $post->image);
+            }
+
+            $path = $request->file('image')->store('posts', 'public');
+            $data['image'] = $path;
+        }
+
+        $post->update($data);
 
         return redirect()->route('admin.posts.index')
             ->with('success', 'Post updated successfully.');
