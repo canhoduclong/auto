@@ -46,22 +46,23 @@
     <!-- Danh mục sản phẩm -->
     <div class="row mt-5">
         <div class="col-md-3">
-            <div class="car__sidebar">
-                <div class="car__filter">
-                    <h5>DANH MỤC SẢN PHẨM</h5> 
-                    <ul>
-                        @foreach($categories as $category)
-                            <li><a href="#" class="list-group-item list-group-item-action">{{ $category->name }}</a></li>
-                        @endforeach
-                    </ul>
-                </div>
-            </div>
+            <h4 class="ml-1">DANH MỤC SẢN PHẨM</h4> 
+            <div class="list-group dashboard-menu list-group-sm mt-2">
+                @foreach($categories as $category)
+                    <a href="#"  class="d-flex list-group-item list-group-item-action">{{ $category->name }}
+                        <span class="icon icon-xs ml-auto">
+                            <span class="fas fa-chevron-right"></span>
+                        </span> 
+                    </a>
+                @endforeach 
+
+            </div> 
         </div>
         <div class="col-md-9">
             <!-- Sản phẩm mới -->
             <div class="row">
                 <div class="col-12">
-                    <h2>Sản phẩm mới</h2>
+                    <h4>SẢN PHẨM MỚI</h4>
                 </div>
             </div>
 
@@ -76,8 +77,7 @@
                             <img src="img/cars/car-3.jpg" alt="">
                         </div>
                         <div class="car__item__text">
-                            <div class="car__item__text__inner">
-                                <div class="label-date">2016</div>
+                            <div class="car__item__text__inner"> 
                                 <h5><a href="#">{{ $product->name }}</a></h5>
                                 <ul>
                                     <li><span>35,000</span> mi</li>
@@ -86,7 +86,7 @@
                                 </ul>
                             </div>
                             <div class="car__item__price">
-                                <span class="car-option">For Rent</span>
+                                <span class="car-option">Sale Off</span>
                                 <h6>$218<span>/Month</span></h6>
                             </div>
                         </div>
@@ -189,8 +189,6 @@
             </div>
         </div>
     </section>
-    
- 
 
     <section class="latest spad">
         <div class="container">

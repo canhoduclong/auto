@@ -75,6 +75,9 @@ class CategoryController extends Controller
 
     public function destroy(Category $category)
     {
+        // Set category_id = null cho các sản phẩm đang dùng category này
+         $category->products()->update(['category_id' => null]);
+         
         $category->delete();
 
         return redirect()->route('categories.index')->with('success', 'Category deleted successfully.');
