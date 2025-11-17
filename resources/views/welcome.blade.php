@@ -215,11 +215,7 @@
                                 style="background-image: url(&quot;img/latest-blog/lb-1.jpg&quot;);"
                                 >
                             @endif 
-                                <ul>
-                                    <li>By Polly Williams</li>
-                                    <li>Dec 19, 2018</li>
-                                    <li>Comment</li>
-                                </ul>
+                                
                             </div>
                             <div class="latest__blog__item__text">
                                 <h5>{{ $post->title }}</h5>
