@@ -21,7 +21,7 @@
                     <div class="footer__about">
                         <div class="footer__logo mb-4">
                             <a href="./"> 
-                                <img src="{{ asset('storage/media/1FfdEsaXZYGT5wk42Pq1yHW7rLoeh9fuNhPlw540.png' ) }}" alt="logo" height="60">
+                                <img src="{{ asset('storage/media/SEK8SvBPDYeM0StEXdxLvP6CMus3gGE6CmwhsTFQ.png' ) }}" alt="logo" height="60">
                                    
                             </a>
                         </div>  
