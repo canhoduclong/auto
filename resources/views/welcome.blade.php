@@ -71,7 +71,6 @@
                         <div class="car__item__text">
                             <div class="car__item__text__inner"> 
                                 <h5><a href="{{ route('products.show', $product) }}">{{ $product->name }}</a></h5> 
-                                <p>{{ $product->description }}</p>
                                 <p class="card-text">Mã sản phẩm: {{ $product->sku }}</p>
                                 <p class="card-text">Giá: {{ number_format($product->price, 0, '.', ',') }} VNĐ</p>
                                 <div class="car__item__prưice mt-2 mb-4"> 
