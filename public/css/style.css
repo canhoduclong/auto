@@ -1282,6 +1282,7 @@ ol {
 .car__item__text__inner h5 a {
 	color: #353535;
 	font-weight: 700;
+	text-decoration:none;
 }
 
 .car__item__text__inner ul li {

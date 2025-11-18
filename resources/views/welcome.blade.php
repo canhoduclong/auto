@@ -45,30 +45,17 @@
     </div>
     <!-- Danh mục sản phẩm -->
     <div class="row mt-5">
-        <div class="col-md-3">
-            <h4 class="ml-1">DANH MỤC SẢN PHẨM</h4> 
-            <div class="list-group dashboard-menu list-group-sm mt-2">
-                @foreach($categories as $category)
-                    <a href="#"  class="d-flex list-group-item list-group-item-action">{{ $category->name }}
-                        <span class="icon icon-xs ml-auto">
-                            <span class="fas fa-chevron-right"></span>
-                        </span> 
-                    </a>
-                @endforeach 
-
-            </div> 
-        </div>
-        <div class="col-md-9">
+        
+        <div class="col-md-12">
             <!-- Sản phẩm mới -->
             <div class="row">
                 <div class="col-12">
                     <h4>SẢN PHẨM MỚI</h4>
                 </div>
-            </div>
-
+            </div> 
             <div class="row">
                  @foreach($products as $product)
-                <div class="col-lg-4 col-md-4">
+                <div class="col-lg-3 col-md-3">
                     <div class="car__item">
                         <div class="car__item__pic__slider owl-carousel">
                             <img src="img/cars/car-1.jpg" alt="">
@@ -78,16 +65,12 @@
                         </div>
                         <div class="car__item__text">
                             <div class="car__item__text__inner"> 
-                                <h5><a href="#">{{ $product->name }}</a></h5>
-                                <ul>
-                                    <li><span>35,000</span> mi</li>
-                                    <li>Auto</li>
-                                    <li><span>700</span> hp</li>
-                                </ul>
+                                <h5><a href="{{ route('products.show', $product) }}">{{ $product->name }}</a></h5> 
+                                <p>{{ $product->description }}</p>
                             </div>
                             <div class="car__item__price">
                                 <span class="car-option">Sale Off</span>
-                                <h6>$218<span>/Month</span></h6>
+                                <h6>{{ $product->price }}<span></span></h6>
                             </div>
                         </div>
                     </div>
