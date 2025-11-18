@@ -79,7 +79,7 @@
                                 @endif
                                 <p class="card-text">Giá: {{ number_format($product->price, 0, '.', ',') }} VNĐ</p>
                                 <div class="car__item__prưice mt-2 mb-4"> 
-                                    <a href="{{ route('products.show', $product) }}" class="btn btn-brand btn-sm">Chi tiết</a>
+                                    <a href="{{ route('products.show', $product) }}" class="btn btn-info  btn-brand btn-sm">Chi tiết</a>
                                     <button class="btn btn-warning btn-sm add-to-cart" data-variant-id="1">
                                         <i class="bi bi-cart-plus"></i> Thêm vào giỏ
                                     </button>  
