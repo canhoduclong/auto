@@ -68,9 +68,9 @@
                                 <h5><a href="{{ route('products.show', $product) }}">{{ $product->name }}</a></h5> 
                                 <p>{{ $product->description }}</p>
                             </div>
-                            <div class="car__item__price">
+                            <div class="car__item__prưice">
                                 <span class="car-option">Sale Off</span>
-                                <h6>{{ $product->price }}<span></span></h6>
+                                <h6>{{ number_format($product->price, 0, '.', ',') }}<span></span></h6>
                             </div>
                         </div>
                     </div>
