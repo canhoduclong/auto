@@ -49,7 +49,7 @@
         <div class="col-md-12">
             <!-- Sản phẩm mới -->
             <div class="row">
-                <div class="col-12">
+                <div class="col-12 text-center mb-4">
                     <h4>SẢN PHẨM MỚI</h4>
                 </div>
             </div> 
@@ -58,19 +58,28 @@
                 <div class="col-lg-3 col-md-3">
                     <div class="car__item">
                         <div class="car__item__pic__slider owl-carousel">
-                            <img src="img/cars/car-1.jpg" alt="">
-                            <img src="img/cars/car-8.jpg" alt="">
-                            <img src="img/cars/car-6.jpg" alt="">
-                            <img src="img/cars/car-3.jpg" alt="">
+                             @if(!empty($product->avatar) && $product->avatar->media)
+                                <img src="{{ asset('storage/'.$product->avatar->media->file_path) }}" >
+                             @endif
+
+                             @foreach($product->gallery as $link)
+                                @if($link->media)
+                                    <img src="{{ asset('storage/' . $link->media->file_path) }}" width="80" class="rounded">
+                                @endif
+                            @endforeach
                         </div>
                         <div class="car__item__text">
                             <div class="car__item__text__inner"> 
                                 <h5><a href="{{ route('products.show', $product) }}">{{ $product->name }}</a></h5> 
                                 <p>{{ $product->description }}</p>
-                            </div>
-                            <div class="car__item__prưice">
-                                <span class="car-option">Sale Off</span>
-                                <h6>{{ number_format($product->price, 0, '.', ',') }}<span></span></h6>
+                                <p class="card-text">Mã sản phẩm: {{ $product->sku }}</p>
+                                <p class="card-text">Giá: {{ number_format($product->price, 0, '.', ',') }} VNĐ</p>
+                                <div class="car__item__prưice mt-2 mb-4"> 
+                                    <a href="{{ route('products.show', $product) }}" class="btn btn-info btn-sm">Chi tiết</a>
+                                    <button class="btn btn-warning btn-sm add-to-cart" data-variant-id="1">
+                                        <i class="bi bi-cart-plus"></i> Thêm vào giỏ
+                                    </button>  
+                                </div>
                             </div>
                         </div>
                     </div>
