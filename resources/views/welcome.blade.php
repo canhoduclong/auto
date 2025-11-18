@@ -71,7 +71,7 @@
                         <div class="car__item__text">
                             <div class="car__item__text__inner"> 
                                 <h5><a href="{{ route('products.show', $product) }}">{{ $product->name }}</a></h5> 
-                                @ìf($product->brand)
+                                @if($product->brand)
                                     <p class="card-text">Thương hiệu: {{ $product->brand->name }}</p>
                                 @endif
                                 @if($product->category)
