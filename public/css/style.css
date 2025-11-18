@@ -1285,6 +1285,9 @@ ol {
 	text-decoration:none;
 }
 
+.brand-color{
+	color:#b90505;
+}
 .car__item__text__inner ul li {
 	list-style: none;
 	font-size: 15px;

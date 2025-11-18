@@ -50,7 +50,7 @@
             <!-- Sản phẩm mới -->
             <div class="row">
                 <div class="col-12 text-center mb-4">
-                    <h4 class="fs-1">SẢN PHẨM MỚI</h4>
+                    <h4 class="fs-3 brand-color text-uppercase fw-bold">SẢN PHẨM MỚI</h4>
                 </div>
             </div> 
             <div class="row">
@@ -73,10 +73,7 @@
                                 <h5><a href="{{ route('products.show', $product) }}">{{ $product->name }}</a></h5> 
                                 @if($product->brand)
                                     <p class="card-text">Thương hiệu: {{ $product->brand->name }}</p>
-                                @endif
-                                @if($product->category)
-                                    <p class="card-text">Danh mục: {{ $product->category->name }}</p>
-                                @endif
+                                @endif 
                                 @if($product->sku)
                                     <p class="card-text">Mã sản phẩm: {{ $product->sku }}</p>
                                 @endif
