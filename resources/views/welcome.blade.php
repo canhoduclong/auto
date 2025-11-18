@@ -7,6 +7,20 @@
 <section class="hero spad set-bg" > 
     <div class="hero-wrap">
 	    <div class="home-slider owl-carousel">
+
+            <div class="slider-item" style="background-image:url(img/SLIDER-3.jpg);">
+                <div class="overlay"></div>
+                <div class="container">
+                <div class="row no-gutters slider-text align-items-center justify-content-start">
+                    <div class="col-md-6 ftco-animate">
+                        <div class="text w-100">
+                            
+                        </div>
+                    </div>
+                    </div>
+                </div>
+            </div>
+
 	      <div class="slider-item" style="background-image:url(img/slider-1.png);">
 	      	<div class="overlay"></div>
 	        <div class="container">
@@ -21,18 +35,7 @@
 	        </div>
 	      </div>
 
-	      <div class="slider-item" style="background-image:url(img/slider-2.jpg);">
-	      	<div class="overlay"></div>
-	        <div class="container">
-	          <div class="row no-gutters slider-text align-items-center justify-content-start">
-		          <div class="col-md-6 ftco-animate">
-		          	<div class="text w-100">
-		          		 
-		            </div>
-		          </div>
-		        </div>
-	        </div>
-	      </div>
+     
 	    </div>
 	  </div>
 </section>
