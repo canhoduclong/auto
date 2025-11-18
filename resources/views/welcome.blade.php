@@ -70,7 +70,7 @@
                         </div>
                         <div class="car__item__text">
                             <div class="car__item__text__inner"> 
-                                <h5><a href="{{ route('products.show', $product) }}">{{ $product->name }}</a></h5> 
+                                <h5><a href="{{ route('products.show', $product) }}" class=" text-uppercase ">{{ $product->name }}</a></h5> 
                                 @if($product->brand)
                                     <p class="card-text">Thương hiệu: {{ $product->brand->name }}</p>
                                 @endif 
@@ -79,7 +79,7 @@
                                 @endif
                                 <p class="card-text">Giá: {{ number_format($product->price, 0, '.', ',') }} VNĐ</p>
                                 <div class="car__item__prưice mt-2 mb-4"> 
-                                    <a href="{{ route('products.show', $product) }}" class="btn btn-info btn-sm">Chi tiết</a>
+                                    <a href="{{ route('products.show', $product) }}" class="btn btn-brand btn-sm">Chi tiết</a>
                                     <button class="btn btn-warning btn-sm add-to-cart" data-variant-id="1">
                                         <i class="bi bi-cart-plus"></i> Thêm vào giỏ
                                     </button>  
