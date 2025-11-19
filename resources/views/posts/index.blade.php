@@ -24,6 +24,11 @@
             <div class="col-md-8">
                 @foreach($posts as $post)
                     <div class="card mb-3">
+                        @if($post->image)
+                            <a href="{{ route('posts.show', $post) }}">
+                                <img src="{{ asset('storage/' . $post->image) }}" class="card-img-top" alt="{{ $post->title }}">
+                            </a>
+                        @else 
                         <div class="card-body">
                             <h5 class="card-title">{{ $post->title }}</h5>
                             <p class="card-text">{{ Str::limit($post->content, 150) }}</p>
