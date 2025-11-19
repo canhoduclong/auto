@@ -28,7 +28,7 @@
                             <a href="{{ route('posts.show', $post) }}">
                                 <img src="{{ asset('storage/' . $post->image) }}" class="card-img-top" alt="{{ $post->title }}">
                             </a>
-                        @else 
+                        @endif 
                         <div class="card-body">
                             <h5 class="card-title">{{ $post->title }}</h5>
                             <p class="card-text">{{ Str::limit($post->content, 150) }}</p>
