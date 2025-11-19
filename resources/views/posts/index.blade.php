@@ -22,22 +22,26 @@
         <h1>Tin tức</h1>
         <div class="row">
             <div class="col-md-8">
-                @foreach($posts as $post)
-                    <div class="card mb-3">
-                        @if($post->image)
-                            <a href="{{ route('posts.show', $post) }}">
-                                <img src="{{ asset('storage/' . $post->image) }}" class="card-img-top" alt="{{ $post->title }}">
-                            </a>
-                        @endif 
-                        <div class="card-body">
-                            <h5 class="card-title">{{ $post->title }}</h5>
-                            <p class="card-text">{{ Str::limit($post->content, 150) }}</p>
-                            <a href="{{ route('posts.show', $post) }}" class="btn btn-primary">Chi tiết</a>
+                <div class="row">
+                    @foreach($posts as $post)
+                    <div class="col-md-4">
+                        <div class="card mb-3">
+                            @if($post->image)
+                                <a href="{{ route('posts.show', $post) }}">
+                                    <img src="{{ asset('storage/' . $post->image) }}" class="card-img-top" alt="{{ $post->title }}">
+                                </a>
+                            @endif 
+                            <div class="card-body">
+                                <h5 class="card-title">{{ $post->title }}</h5>
+                                <p class="card-text">{{ Str::limit($post->content, 150) }}</p>
+                                <a href="{{ route('posts.show', $post) }}" class="btn btn-primary">Chi tiết</a>
+                            </div>
                         </div>
                     </div>
-                @endforeach
-                {{ $posts->links() }}
-            </div>
+                    @endforeach
+                    {{ $posts->links() }}
+                </div>
+            </div> 
             <div class="col-md-4">
                 <div class="card">
                     <div class="card-header">Categories</div>
