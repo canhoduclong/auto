@@ -6,16 +6,16 @@
         <a href="#" class="primary-btn">Add Car</a>
     </div>
     <div class="offcanvas__logo">
-        <a href="./index.html"><img src="img/logo.png" alt=""></a>
+        <a href="{{ route('home') }}"><img src="{{ asset('img/logo-auto-taybac.png') }}" alt=""></a>
     </div>
     <div id="mobile-menu-wrap"></div>
     <ul class="offcanvas__widget__add">
         <li><i class="fa fa-clock-o"></i> Week day: 08:00 am to 18:00 pm</li>
-        <li><i class="fa fa-envelope-o"></i> Info.colorlib@gmail.com</li>
+        <li><i class="fa fa-envelope-o"></i> autotaybac@gmail.com</li>
     </ul>
     <div class="offcanvas__phone__num">
         <i class="fa fa-phone"></i>
-        <span>(+12) 345 678 910</span>
+        <span>093 820 5979</span>
     </div>
     <div class="offcanvas__social">
         <a href="#"><i class="fa fa-facebook"></i></a>
@@ -60,7 +60,7 @@
                                 <img src="{{ asset('storage/' . $media->file_path) }}" alt="logo" height="50">
                             @endif
                         @else
-                            <h2>{{ $settings['brand_name']->value ?? 'My Website' }}</h2>
+                            <h2>{{ $settings['brand_name']->value ?? 'Auto Tây Bắc' }}</h2>
                         @endif
                     </a>
                 </div>
