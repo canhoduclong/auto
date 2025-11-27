@@ -10,7 +10,7 @@
                     </div>
                     <div class="col-lg-6 col-md-6">
                         <div class="footer__contact__option">
-                            <div class="option__item"><i class="fa fa-phone"></i> (+12) 345 678 910</div>
+                            <div class="option__item"><i class="fa fa-phone"></i> (+84) 093 820 5979</div>
                             <div class="option__item email"><i class="fa fa-envelope-o"></i> autotaybac@gmail.com</div>
                         </div>
                     </div>

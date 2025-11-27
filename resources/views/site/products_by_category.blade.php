@@ -39,22 +39,10 @@
 </header>
 @endsection
 @section('breadcrumb')
-<div class="breadcrumb-option set-bg mb-4 pb-4" data-setbg="img/breadcrumb-bg.jpg" style="background-image: url(&quot;img/breadcrumb-bg.jpg&quot;);">
-        <div class="container">
-            <div class="row">
-                <div class="col-lg-12 text-center">
-                    <div class="breadcrumb__text">
-                        <h2>Sản phẩm</h2>
-                        <div class="breadcrumb__links">
-                            <a href="./"><i class="fa fa-home"></i> Trang chủ</a>
-                            <span>Sản phẩm</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-     
+<x-breadcrumb :items="[
+    ['label' => 'Products', 'url' => route('pages.products_by_category')],
+    ['label' => $category->name ?? 'All Categories', 'url' => '']
+]"/> 
 @endsection
 @section('content')
 <div class="container">

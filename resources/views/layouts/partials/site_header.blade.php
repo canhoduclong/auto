@@ -68,14 +68,13 @@
             <div class="col-lg-8 d-flex justify-content-end align-items-center">
                 <div class="header__nav ">
                     <nav class="header__menu "> 
-                        <ul class="mb-0 pb-0">
+                        <ul class="mb-0 ml-0 pb-0">
                             <li><a href="{{ route('home') }}" class="nav-link px-2 link-secondary">Trang chủ</a></li>
                             <li><a href="{{ route('pages.about') }}" class="nav-link px-2 link-dark">Giới thiệu</a></li>
                             <li class="nav-item">
                                 <a class="nav-link" href="{{ route('pages.products_by_category') }}" >
                                     Sản phẩm
-                                </a>
-                                 
+                                </a> 
                             </li>
                             <li><a href="{{ route('posts.list') }}" class="nav-link px-2 link-dark">Tin tức</a></li>
                             <li><a href="{{ route('pages.contact') }}" class="nav-link px-2 link-dark">Liên hệ</a></li>
