@@ -133,18 +133,19 @@
 								<span>{{ __('menu.users') }}</span>
 							</a>
 						</li>
-						                        <li class="nav-item ">
-													<a href="{{ route('categories.index') }}" class="nav-link{{ request()->routeIs('categories.*') ? ' active' : '' }}">
-														<i class="ph-note-blank"></i>
-														<span>{{ __('menu.categories') }}</span>
-													</a>
-												</li>
-												<li class="nav-item ">
-													<a href="{{ route('admin.brands.index') }}" class="nav-link{{ request()->routeIs('admin.brands.*') ? ' active' : '' }}">
-														<i class="ph-note-blank"></i>
-														<span>{{ __('menu.brands') }}</span>
-													</a>
-												</li>						<li class="nav-item ">
+						<li class="nav-item ">
+							<a href="{{ route('categories.index') }}" class="nav-link{{ request()->routeIs('categories.*') ? ' active' : '' }}">
+								<i class="ph-note-blank"></i>
+								<span>{{ __('menu.categories') }}</span>
+							</a>
+						</li>
+						<li class="nav-item ">
+							<a href="{{ route('admin.brands.index') }}" class="nav-link{{ request()->routeIs('admin.brands.*') ? ' active' : '' }}">
+								<i class="ph-note-blank"></i>
+								<span>{{ __('menu.brands') }}</span>
+							</a>
+						</li>
+						<li class="nav-item ">
 							<a href="{{ route('products.index') }}" class="nav-link{{ request()->routeIs('products.*') ? ' active' : '' }}">
 								<i class="ph-note-blank"></i>
 								<span>{{ __('menu.products') }}</span>
@@ -157,7 +158,7 @@
 							</a>
 						</li>
 						
-						<li class="nav-item ">
+						<!--li class="nav-item ">
 							<a href="{{ route('warehouses.index') }}" class="nav-link{{ request()->routeIs('warehouses.*') ? ' active' : '' }}">
 								<i class="ph-storefront"></i>
 								<span>{{ __('menu.warehouses') }}</span>
@@ -192,7 +193,7 @@
 								<i class="ph-timer"></i>
 								<span>{{ __('menu.inventory_reservations') }}</span>
 							</a>
-						</li>
+						</li-->
 						<li class="nav-item ">
 							<a href="{{ route('customertype.index') }}" class="nav-link{{ request()->routeIs('customertype.*') ? ' active' : '' }}">
 								<i class="ph-note-blank"></i>

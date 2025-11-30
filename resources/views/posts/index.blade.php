@@ -18,8 +18,7 @@
     </div> 
 @endsection
 @section('content')
-    <div class="container">
-        <h1>Tin tức</h1>
+    <div class="container"> 
         <div class="row">
             <div class="col-md-8">
                 <div class="row">
@@ -42,21 +41,18 @@
                     {{ $posts->links() }}
                 </div>
             </div> 
-            <div class="col-md-4">
-                <div class="card">
-                    <div class="card-header">Categories</div>
-                    <div class="card-body">
-                        <ul class="list-group">
-                            @foreach($categories as $category)
-                                <li class="list-group-item">
-                                    <a href="{{ route('posts.category', $category) }}">{{ $category->name }}</a>
-                                </li>
-                            @endforeach
-                        </ul>
-                    </div>
-                </div>
+            <div class="col-md-4"> 
+                <ul class="list-group">
+                    <li class="list-group-item">Chuyên mục</li>
+                    @foreach($categories as $category)
+                        <li class="list-group-item">
+                            <a href="{{ route('posts.category', $category) }}">{{ $category->name }}</a>
+                        </li>
+                    @endforeach
+                </ul>
+                   
                 <div class="card mt-3">
-                    <div class="card-header">Tags</div>
+                    <div class="card-header">Thẻ</div>
                     <div class="card-body">
                         @foreach($tags as $tag)
                             <a href="#" class="btn btn-sm btn-secondary mb-1">{{ $tag->name }}</a>
