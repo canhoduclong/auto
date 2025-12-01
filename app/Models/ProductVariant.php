@@ -24,17 +24,9 @@ class ProductVariant extends Model
         });
     }
 
-    // Liên kết media cho biến thể (1 ảnh)
-    public function mediaLink()
+    public function avatar()
     {
         return $this->morphOne(MediaLink::class, 'model')->where('role', 'variant');
-    }
-
-    public function media()
-    {
-        return $this->hasOneThrough(Media::class, MediaLink::class, 'model_id', 'id', 'id', 'media_id')
-            ->where('media_links.model_type', self::class)
-            ->where('media_links.role', 'variant');
     }
 
     public function product()

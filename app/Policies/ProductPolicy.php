@@ -12,6 +12,10 @@ class ProductPolicy
        return $user->hasPermission('products.index');
     }
 
+    public function view(User $user, Product $product) {
+        return $user->hasPermission('products.show');
+    }
+
     public function show(User $user, Product $product) {
         return $user->hasPermission('products.show');
     }

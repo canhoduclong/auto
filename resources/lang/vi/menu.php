@@ -28,4 +28,5 @@ return [
     'settings' => 'Cài đặt',
     'companies' => 'Công ty',    
     'logout' => 'Đăng xuất',
+    'brands' => 'Thương hiệu',
 ];

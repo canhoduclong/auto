@@ -46,6 +46,11 @@ Route::middleware('guest')->group(function () {
         ->middleware('throttle:5,1'); // 5 lần/phút chống brute-force
     Route::get('/register', [AuthController::class, 'showRegistrationForm'])->name('register');
     Route::post('/register', [AuthController::class, 'register']);
+
+
+    //----
+    Route::get('/product/{product:slug}', [PageController::class, 'productDetail'])->name('pages.product_detail');
+    
 });
 
 Route::middleware(['auth'])->group(function () {
@@ -218,7 +223,7 @@ Route::get('/lien-he', [PageController::class, 'contact'])->name('pages.contact'
 Route::post('/lien-he', [PageController::class, 'storeContact'])->name('pages.contact.store');
 Route::get('/san-pham/{category:slug?}', [PageController::class, 'productsByCategory'])->name('pages.products_by_category');
 Route::get('/danh-sach-san-pham/{category:slug?}', [PageController::class, 'productList'])->name('pages.product_list');
-Route::get('/product/{product:slug}', [PageController::class, 'productDetail'])->name('pages.product_detail');
+//Route::get('/product/{product:slug}', [PageController::class, 'productDetail'])->name('pages.product_detail');
 Route::get('/variant/{variant:slug}', [PageController::class, 'variantDetail'])->name('pages.variant_detail');
 Route::get('/my-profile', [PageController::class, 'myDashboard'])->name('pages.my_dashboard');
 Route::post('/my-profile', [PageController::class, 'updateProfile'])->name('pages.update_profile');

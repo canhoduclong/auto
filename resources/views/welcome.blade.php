@@ -57,33 +57,27 @@
                 </div>
             </div> 
             <div class="row">
-                 @foreach($products as $product)
+                 @foreach($variants as $variant)
                 <div class="col-lg-3 col-md-3">
                     <div class="car__item">
                         <div class="car__item__pic__slider owl-carousel">
-                             @if(!empty($product->avatar) && $product->avatar->media)
-                                <img src="{{ asset('storage/'.$product->avatar->media->file_path) }}" >
+                             @if(!empty($variant->avatar) && $variant->avatar->media)
+                                <img src="{{ asset('storage/'.$variant->avatar->media->file_path) }}" >
                              @endif
-
-                             @foreach($product->gallery as $link)
-                                @if($link->media)
-                                    <img src="{{ asset('storage/' . $link->media->file_path) }}" width="80" class="rounded">
-                                @endif
-                            @endforeach
                         </div>
                         <div class="car__item__text">
                             <div class="car__item__text__inner"> 
-                                <h5><a href="{{ route('products.show', $product) }}" class=" text-uppercase ">{{ $product->name }}</a></h5> 
-                                @if($product->brand)
-                                    <p class="card-text">Thương hiệu: {{ $product->brand->name }}</p>
+                                <h5><a href="{{ route('pages.variant_detail', $variant) }}" class=" text-uppercase ">{{ $variant->product->name }} - {{ $variant->name }}</a></h5>
+                                @if($variant->product->brand)
+                                    <p class="card-text">Thương hiệu: {{ $variant->product->brand->name }}</p>
                                 @endif 
-                                @if($product->sku)
-                                    <p class="card-text">Mã sản phẩm: {{ $product->sku }}</p>
+                                @if($variant->sku)
+                                    <p class="card-text">Mã sản phẩm: {{ $variant->sku }}</p>
                                 @endif
-                                <p class="card-text">Giá: {{ number_format($product->price, 0, '.', ',') }} VNĐ</p>
+                                <p class="card-text">Giá: {{ number_format($variant->final_price, 0, '.', ',') }} VNĐ</p>
                                 <div class="car__item__prưice mt-2 mb-4"> 
-                                    <a href="{{ route('products.show', $product) }}" class="btn btn-info  btn-brand btn-sm">Chi tiết</a>
-                                    <button class="btn btn-warning btn-sm add-to-cart" data-variant-id="1">
+                                    <a href="{{ route('pages.variant_detail', $variant) }}" class="btn btn-info  btn-brand btn-sm">Chi tiết</a>
+                                    <button class="btn btn-warning btn-sm add-to-cart" data-variant-id="{{ $variant->id }}">
                                         <i class="bi bi-cart-plus"></i> Thêm vào giỏ
                                     </button>  
                                 </div>

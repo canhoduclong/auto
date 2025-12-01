@@ -23,9 +23,18 @@ class BrandController extends Controller
         $request->validate([
             'name' => 'required',
             'slug' => 'required|unique:brands',
+            'image' => 'image|mimes:jpeg,png,jpg,gif,svg|max:2048',
         ]);
 
-        Brand::create($request->all());
+        $data = $request->all();
+
+        if ($request->hasFile('image')) {
+            $imageName = time().'.'.$request->image->extension();  
+            $request->image->move(public_path('images/brands'), $imageName);
+            $data['image'] = 'images/brands/'.$imageName;
+        }
+
+        Brand::create($data);
 
         return redirect()->route('admin.brands.index')
             ->with('success', 'Brand created successfully.');
@@ -41,9 +50,23 @@ class BrandController extends Controller
         $request->validate([
             'name' => 'required',
             'slug' => 'required|unique:brands,slug,'.$brand->id,
+            'image' => 'image|mimes:jpeg,png,jpg,gif,svg|max:2048',
         ]);
 
-        $brand->update($request->all());
+        $data = $request->all();
+
+        if ($request->hasFile('image')) {
+            // Delete old image
+            if ($brand->image && file_exists(public_path($brand->image))) {
+                unlink(public_path($brand->image));
+            }
+
+            $imageName = time().'.'.$request->image->extension();  
+            $request->image->move(public_path('images/brands'), $imageName);
+            $data['image'] = 'images/brands/'.$imageName;
+        }
+
+        $brand->update($data);
 
         return redirect()->route('admin.brands.index')
             ->with('success', 'Brand updated successfully.');

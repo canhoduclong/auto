@@ -3,7 +3,7 @@
 @section('content')
 <div class="container">
     <h1>Create Brand</h1>
-    <form action="{{ route('admin.brands.store') }}" method="POST">
+    <form action="{{ route('admin.brands.store') }}" method="POST" enctype="multipart/form-data">
         @csrf
         <div class="form-group">
             <label for="name">Name</label>
@@ -12,6 +12,10 @@
         <div class="form-group">
             <label for="slug">Slug</label>
             <input type="text" name="slug" id="slug" class="form-control">
+        </div>
+        <div class="form-group">
+            <label for="image">Image</label>
+            <input type="file" name="image" id="image" class="form-control">
         </div>
         <div class="form-group">
             <label for="description">Description</label>

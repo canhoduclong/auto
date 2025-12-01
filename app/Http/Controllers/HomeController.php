@@ -15,9 +15,13 @@ class HomeController extends Controller
     {
         $settings = Setting::all()->keyBy('key');
         $categories = Category::all();
-        $products = Product::latest()->take(10)->get();
+        $variants = \App\Models\ProductVariant::where('stock', '>', 0)
+            ->with(['product.avatar.media', 'latestPriceRule', 'avatar.media'])
+            ->latest()
+            ->take(12)
+            ->get();
         $posts = Post::latest()->take(5)->get();
-        return view('welcome', compact('settings', 'categories', 'products', 'posts'));
+        return view('welcome', compact('settings', 'categories', 'variants', 'posts'));
     }
 
     public function variants(Request $request)

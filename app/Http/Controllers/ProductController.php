@@ -103,6 +103,16 @@ class ProductController extends Controller
         return redirect()->route('products.index')->with('success', 'Product created successfully!');
     }
 
+    public function show(Product $product)
+    {
+        $this->authorize('view', $product);
+        $product->load('variants.avatar.media', 'category', 'brand', 'avatar.media', 'gallery.media');
+        $categories = Category::all();
+        $brands = Brand::all();
+
+        return view('products.show', compact('product', 'categories', 'brands'));
+    }
+
     public function edit(Request $request, $id)
     {
         $page =(int) $request->get('page', 1);
