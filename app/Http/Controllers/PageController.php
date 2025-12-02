@@ -241,10 +241,19 @@ class PageController extends Controller
         $settings = Setting::all()->keyBy('key');
         $variant->load('avatar.media');
         $product = $variant->product;
-        $product->load('avatar.media', 'gallery.media');
-        $other_variants = $product->variants()->with('avatar.media')->where('id', '!=', $variant->id)->get();
+        $product->load('avatar.media', 'gallery.media', 'category'); // Eager load category
 
-        return view('site.variant_detail', compact('variant', 'product', 'other_variants', 'settings'));
+        // Fetch other products from the same category
+        $other_products = Product::where('category_id', $product->category_id)
+                                    ->where('id', '!=', $product->id)
+                                    ->with('variants', 'avatar.media')
+                                    ->inRandomOrder()
+                                    ->take(6)
+                                    ->get();
+
+        $categories = Category::withCount('products')->get();
+
+        return view('site.variant_detail', compact('variant', 'product', 'other_products', 'settings', 'categories'));
     }
 
     public function myOrders(Request $request)
