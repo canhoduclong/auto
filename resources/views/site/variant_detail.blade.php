@@ -22,7 +22,7 @@
 @endsection
 @section('content')
 <div class="container">
-    <div class="row"> 
+    <div class="row">
         <div class="col-lg-12">
             <div class="row">
                 <div class="col-md-12 mb-4">
@@ -78,10 +78,10 @@
 
             <hr class="my-5">
 
-            <div class="related-products my-4">
+            <div class="related-products">
                 <div class="row">
-                    <div class="col-lg-3">
-                        <div class="card sticky-top">
+                    <div class="col-md-3">
+                         <div class="card sticky-top">
                             <div class="card-header">
                                 <h4>Danh mục sản phẩm</h4>
                             </div>
@@ -97,26 +97,28 @@
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-9">
-                        <h3>Sản phẩm khác</h3>
-                        @if($other_products->count() > 0)
+                    <div class="col-md-9 mb-4">
+                        <h3>Sản phẩm cùng loại</h3> 
+                        @if($other_variants->count() > 0)
                             <div class="row">
-                                @foreach($other_products as $other_product)
+                                @foreach($other_variants as $other_variant)
                                     <div class="col-md-4">
                                         <div class="card mb-4">
-                                            <a href="{{ route('pages.product_detail', $other_product) }}">
-                                                @if($other_product->avatar && $other_product->avatar->media)
-                                                    <img src="{{ asset('storage/' . $other_product->avatar->media->file_path) }}" class="card-img-top" alt="{{ $other_product->name }}">
+                                            <a href="{{ route('pages.variant_detail', $other_variant) }}">
+                                                @if($other_variant->avatar && $other_variant->avatar->media)
+                                                    <img src="{{ asset('storage/' . $other_variant->avatar->media->file_path) }}" class="card-img-top" alt="{{ $other_variant->product->name }}">
+                                                @elseif($other_variant->product->avatar && $other_variant->product->avatar->media)
+                                                    <img src="{{ asset('storage/' . $other_variant->product->avatar->media->file_path) }}" class="card-img-top" alt="{{ $other_variant->product->name }}">
                                                 @else
-                                                    <img src="https://via.placeholder.com/300x200.png?text=No+Image" class="card-img-top" alt="{{ $other_product->name }}">
+                                                    <img src="https://via.placeholder.com/300x200.png?text=No+Image" class="card-img-top" alt="{{ $other_variant->product->name }}">
                                                 @endif
                                             </a>
                                             <div class="card-body">
-                                                <h5 class="card-title"><a href="{{ route('pages.product_detail', $other_product) }}">{{ $other_product->name }}</a></h5>
-                                                @if($other_product->variants->first()?->latestPriceRule)
-                                                <p class="card-text text-danger">{{ number_format($other_product->variants->first()->latestPriceRule->price, 0, ',', '.') }} VNĐ</p>
+                                                <h5 class="card-title"><a href="{{ route('pages.variant_detail', $other_variant) }}">{{ $other_variant->product->name }} - {{ $other_variant->name }}</a></h5>
+                                                @if($other_variant->latestPriceRule)
+                                                <p class="card-text text-danger">{{ number_format($other_variant->latestPriceRule->price, 0, ',', '.') }} VNĐ</p>
                                                 @endif
-                                                <a href="{{ route('pages.product_detail', $other_product) }}" class="btn btn-sm btn-outline-primary">Xem chi tiết</a>
+                                                <a href="{{ route('pages.variant_detail', $other_variant) }}" class="btn btn-sm btn-outline-primary">Xem chi tiết</a>
                                             </div>
                                         </div>
                                     </div>
@@ -126,11 +128,11 @@
                             <p>Không có sản phẩm nào khác trong danh mục này.</p>
                         @endif
                     </div>
+                   
                 </div>
-                
+               
             </div>
-        </div>
-        
+        </div> 
     </div>
 </div>
 @endsection

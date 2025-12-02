@@ -239,21 +239,23 @@ class PageController extends Controller
     public function variantDetail(ProductVariant $variant)
     {
         $settings = Setting::all()->keyBy('key');
-        $variant->load('avatar.media');
+        $variant->load('avatar.media', 'product.category');
         $product = $variant->product;
-        $product->load('avatar.media', 'gallery.media', 'category'); // Eager load category
+        $product->load('avatar.media', 'gallery.media');
 
-        // Fetch other products from the same category
-        $other_products = Product::where('category_id', $product->category_id)
-                                    ->where('id', '!=', $product->id)
-                                    ->with('variants', 'avatar.media')
-                                    ->inRandomOrder()
-                                    ->take(6)
-                                    ->get();
+        // Fetch other product variants from the same category, excluding the current one
+        $other_variants = ProductVariant::where('id', '!=', $variant->id)
+                                          ->whereHas('product', function ($query) use ($product) {
+                                              $query->where('category_id', $product->category_id);
+                                          })
+                                          ->with('product', 'avatar.media', 'latestPriceRule')
+                                          ->inRandomOrder()
+                                          ->take(6)
+                                          ->get();
 
         $categories = Category::withCount('products')->get();
 
-        return view('site.variant_detail', compact('variant', 'product', 'other_products', 'settings', 'categories'));
+        return view('site.variant_detail', compact('variant', 'product', 'other_variants', 'settings', 'categories'));
     }
 
     public function myOrders(Request $request)
