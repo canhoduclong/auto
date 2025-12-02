@@ -40,6 +40,16 @@
             <p><strong>Stock:</strong> {{ $variant->stock }}</p>
             <p><strong>Description:</strong></p>
             <div>{!! $product->description !!}</div>
+
+            <hr>
+            <div class="social-sharing mt-4">
+                <h5>Share this product:</h5>
+                <a href="https://www.facebook.com/sharer/sharer.php?u={{ urlencode(route('pages.variant_detail', $variant)) }}" target="_blank" class="btn btn-primary btn-sm"><i class="fa fa-facebook"></i> Facebook</a>
+                <a href="https://twitter.com/intent/tweet?url={{ urlencode(route('pages.variant_detail', $variant)) }}&text={{ urlencode($product->name) }}" target="_blank" class="btn btn-info btn-sm"><i class="fa fa-twitter"></i> Twitter</a>
+                <a href="https://www.linkedin.com/shareArticle?mini=true&url={{ urlencode(route('pages.variant_detail', $variant)) }}&title={{ urlencode($product->name) }}" target="_blank" class="btn btn-primary btn-sm"><i class="fa fa-linkedin"></i> LinkedIn</a>
+                <a href="https://zalo.me/share?url={{ urlencode(route('pages.variant_detail', $variant)) }}" target="_blank" class="btn btn-info btn-sm">Zalo</a>
+            </div>
+
         </div>
     </div>
 
