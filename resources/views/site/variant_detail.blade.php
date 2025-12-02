@@ -9,7 +9,7 @@
                         <h2>Sản phẩm</h2>
                         <div class="breadcrumb__links">
                             <a href="./"><i class="fa fa-home"></i> Trang chủ</a>
-                            <a href="{{ route('pages.products_by_category') }}"><i class="fa fa-home"></i> Sản phẩm</a> 
+                            <a href="{{ route('pages.products_by_category') }}"><i class="fa fa-home"></i> Sản phẩm</a>
                             <span> {{ $product->name }}</span>
                         </div>
                         
@@ -24,11 +24,13 @@
 <div class="container">
     <div class="row">
         <div class="col-md-12 mb-4">
-            <h1>{{ $product->name }}</h1>
+            <h1>{{ $product->name }} - {{ $variant->name }}</h1>
         </div>
         <div class="col-md-4">
-            @if($variant->image)
-                <img src="{{ asset('storage/' . $variant->image->file_path) }}" class="img-fluid" alt="{{ $product->name }}">
+            @if($variant->avatar && $variant->avatar->media)
+                <img src="{{ asset('storage/' . $variant->avatar->media->file_path) }}" class="img-fluid" alt="{{ $product->name }}">
+            @elseif($product->avatar && $product->avatar->media)
+                <img src="{{ asset('storage/' . $product->avatar->media->file_path) }}" class="img-fluid" alt="{{ $product->name }}">
             @endif
         </div>
         <div class="col-md-8">
@@ -40,9 +42,25 @@
             <div>{!! $product->description !!}</div>
         </div>
     </div>
+
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <h4>Gallery</h4>
+            <div class="row">
+                @foreach($product->gallery as $link)
+                    @if($link->media)
+                        <div class="col-md-3">
+                            <img src="{{ asset('storage/' . $link->media->file_path) }}" class="img-fluid mb-3">
+                        </div>
+                    @endif
+                @endforeach
+            </div>
+        </div>
+    </div>
+
     <div class="row">
         <div class="col-md-12 my-4">
-            <button class="btn btn-warning btn-sm add-to-cart" data-variant-id="{{ $product->id }}">
+            <button class="btn btn-warning btn-sm add-to-cart" data-variant-id="{{ $variant->id }}">
                 <i class="bi bi-cart-plus"></i> Add to Cart
             </button>
         </div>
@@ -56,11 +74,13 @@
             @foreach($other_variants as $other_variant)
                 <div class="col-md-4">
                     <div class="card mb-4">
-                        @if($other_variant->image)
-                            <img src="{{ asset('storage/' . $other_variant->image->file_path) }}" class="card-img-top" alt="{{ $other_variant->product->name }}">
+                        @if($other_variant->avatar && $other_variant->avatar->media)
+                            <img src="{{ asset('storage/' . $other_variant->avatar->media->file_path) }}" class="card-img-top" alt="{{ $other_variant->product->name }}">
+                        @elseif($other_variant->product->avatar && $other_variant->product->avatar->media)
+                            <img src="{{ asset('storage/' . $other_variant->product->avatar->media->file_path) }}" class="card-img-top" alt="{{ $other_variant->product->name }}">
                         @endif
                         <div class="card-body">
-                            <h5 class="card-title">{{ $other_variant->product->name }}</h5>
+                            <h5 class="card-title">{{ $other_variant->product->name }} - {{ $other_variant->name }}</h5>
                             <p class="card-text">SKU: {{ $other_variant->sku }}</p>
                             <a href="{{ route('pages.variant_detail', $other_variant) }}" class="btn btn-primary">View Details</a>
                         </div>

@@ -16,7 +16,7 @@ class HomeController extends Controller
         $settings = Setting::all()->keyBy('key');
         $categories = Category::all();
         $variants = \App\Models\ProductVariant::where('stock', '>', 0)
-            ->with(['product.avatar.media', 'latestPriceRule', 'avatar.media'])
+            ->with(['product.avatar.media', 'product.gallery.media', 'latestPriceRule', 'avatar.media'])
             ->latest()
             ->take(12)
             ->get();

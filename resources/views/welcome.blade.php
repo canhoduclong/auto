@@ -61,9 +61,14 @@
                 <div class="col-lg-3 col-md-3">
                     <div class="car__item">
                         <div class="car__item__pic__slider owl-carousel">
-                             @if(!empty($variant->avatar) && $variant->avatar->media)
-                                <img src="{{ asset('storage/'.$variant->avatar->media->file_path) }}" >
-                             @endif
+                            @if(!empty($variant->product->avatar) && $variant->product->avatar->media)
+                               <img src="{{ asset('storage/'.$variant->product->avatar->media->file_path) }}" >
+                            @endif
+                            @foreach($variant->product->gallery as $link)
+                               @if($link->media)
+                                   <img src="{{ asset('storage/' . $link->media->file_path) }}">
+                               @endif
+                           @endforeach
                         </div>
                         <div class="car__item__text">
                             <div class="car__item__text__inner"> 

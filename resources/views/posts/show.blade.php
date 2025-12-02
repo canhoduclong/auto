@@ -25,6 +25,16 @@
             <div class="col-md-8">
                 <h1>{{ $post->title }}</h1>
                 <p>{{ $post->content }}</p>
+
+                <hr>
+                <div class="social-sharing">
+                    <h5>Share this post:</h5>
+                    <a href="https://www.facebook.com/sharer/sharer.php?u={{ urlencode(route('posts.show', $post)) }}" target="_blank" class="btn btn-primary btn-sm"><i class="fa fa-facebook"></i> Facebook</a>
+                    <a href="https://twitter.com/intent/tweet?url={{ urlencode(route('posts.show', $post)) }}&text={{ urlencode($post->title) }}" target="_blank" class="btn btn-info btn-sm"><i class="fa fa-twitter"></i> Twitter</a>
+                    <a href="https://www.linkedin.com/shareArticle?mini=true&url={{ urlencode(route('posts.show', $post)) }}&title={{ urlencode($post->title) }}" target="_blank" class="btn btn-primary btn-sm"><i class="fa fa-linkedin"></i> LinkedIn</a>
+                    <a href="https://zalo.me/share?url={{ urlencode(route('posts.show', $post)) }}" target="_blank" class="btn btn-info btn-sm">Zalo</a>
+                </div>
+
             </div>
             <div class="col-md-4">
                 <div class="card">

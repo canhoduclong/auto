@@ -239,8 +239,10 @@ class PageController extends Controller
     public function variantDetail(ProductVariant $variant)
     {
         $settings = Setting::all()->keyBy('key');
+        $variant->load('avatar.media');
         $product = $variant->product;
-        $other_variants = $product->variants()->where('id', '!=', $variant->id)->get();
+        $product->load('avatar.media', 'gallery.media');
+        $other_variants = $product->variants()->with('avatar.media')->where('id', '!=', $variant->id)->get();
 
         return view('site.variant_detail', compact('variant', 'product', 'other_variants', 'settings'));
     }
