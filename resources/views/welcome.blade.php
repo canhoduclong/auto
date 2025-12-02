@@ -40,15 +40,16 @@
 	  </div>
 </section>
 
-
-
 <div class="container">
-    <div class="banner__item">
+    <div class="banner__item mb-4">
         <img src="img/banner.jpg" alt=""> 
     </div>
-    <!-- Danh mục sản phẩm -->
-    <div class="row mt-5">
-        
+</div>
+
+@include('partials.product-search')  
+
+<div class="container"> 
+    <div class="row mt-5"> 
         <div class="col-md-12">
             <!-- Sản phẩm mới -->
             <div class="row">
@@ -99,7 +100,7 @@
     </div>
 </div>
 
-  <section class="feature spad">
+  <section class="feature  my-4">
         <div class="container">
             <div class="row">
                 <div class="col-lg-4">

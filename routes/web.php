@@ -38,6 +38,7 @@ use App\Http\Controllers\CartController;
 
 Route::get('/', [HomeController::class, 'index'])->name('home');
 Route::get('/variants', [HomeController::class, 'variants'])->name('site.variants');
+Route::get('/products/search', [ProductController::class, 'search'])->name('products.search');
 
 // Auth pages
 Route::middleware('guest')->group(function () {

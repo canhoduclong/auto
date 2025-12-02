@@ -25,8 +25,8 @@ class PostController extends Controller
     public function show(Post $post)
     {
         $settings = Setting::all()->keyBy('key'); 
-        $otherPosts = Post::where('is_published', true)->where('id', '!=', $post->id)->latest()->take(5)->get();
-        $categories = PostCategory::all();
+        $otherPosts = Post::where('is_published', true)->where('id', '!=', $post->id)->latest()->paginate(5);
+        $categories = PostCategory::withCount('posts')->get();
         $tags = Tag::all();
 
         return view('posts.show', compact('post', 'otherPosts', 'categories', 'tags','settings'));

@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Foundation\Auth\Access\AuthorizesRequests; 
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Http\Request;
 use App\Models\Product;
@@ -12,7 +12,7 @@ use App\Models\Brand;
 use App\Models\Media;
 use App\Models\MediaLink;
 use App\Models\ProductPriceLog;
-use App\Models\ProductPriceRule; 
+use App\Models\ProductPriceRule;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\DB;
@@ -23,7 +23,7 @@ class ProductController extends Controller
     use AuthorizesRequests;
     public function index(Request $request)
     {
-        // Kiêm tra quyền xem có được view không 
+        // Kiêm tra quyền xem có được view không
         $this->authorize('viewAny', Product::class);
         
         // Bắt đầu với một query cơ bản
@@ -41,7 +41,7 @@ class ProductController extends Controller
 
         // Sắp xếp sản phẩm
         $sort_by = $request->get('sort_by', 'name'); // mặc định là 'name'
-        $sort_direction = $request->get('sort_direction', 'asc'); // mặc định là asc 
+        $sort_direction = $request->get('sort_direction', 'asc'); // mặc định là asc
 
         if ($request->filled('sort')) {
             $sortOrder = $request->input('order', 'asc');
@@ -52,11 +52,11 @@ class ProductController extends Controller
 
         $page =(int) $request->get('page', 1);
         $perPage = (int) $request->get('perPage', 10);
-        $perPage = in_array($perPage, [10, 25, 50, 100]) ? $perPage : 10;      
+        $perPage = in_array($perPage, [10, 25, 50, 100]) ? $perPage : 10;
         $products = $query->paginate($perPage);
-        $pageCount = $products->lastPage(); 
+        $pageCount = $products->lastPage();
 
-        $categories = Category::all(); 
+        $categories = Category::all();
 
         return view('products.index', compact('products', 'categories', 'sort_by', 'sort_direction','perPage', 'page','pageCount'));
     }
@@ -128,7 +128,7 @@ class ProductController extends Controller
     public function getQuickEditForm(Product $product)
     {
         return view('products._quick-edit-form', compact('product'));
-    } 
+    }
     
     
     public function update(Request $request, Product $product)
@@ -314,7 +314,6 @@ class ProductController extends Controller
                         'applied_by'         => Auth::id(),
                     ]);
                 }
-                 
             }
             // Xóa các biến thể không còn trong request
             if (!empty($keepIds)) {
@@ -398,7 +397,24 @@ class ProductController extends Controller
         }
     }
 
+    public function search(Request $request)
+    {
+        $keyword = $request->input('keyword');
 
+        $variants = ProductVariant::with(['product.avatar.media', 'latestPriceRule', 'avatar.media'])
+            ->where(function($query) use ($keyword) {
+                $query->where('name', 'like', "%{$keyword}%")
+                    ->orWhere('sku', 'like', "%{$keyword}%");
+            })
+            ->orWhereHas('product', function($query) use ($keyword) {
+                $query->where('name', 'like', "%{$keyword}%")
+                    ->orWhere('description', 'like', "%{$keyword}%");
+            })
+            ->paginate(12);
 
-    
+        $settings = \App\Models\Setting::all()->keyBy('key');
+        $categories = \App\Models\Category::all();
+
+        return view('products.search-results', compact('variants', 'keyword', 'settings', 'categories'));
+    }
 }
