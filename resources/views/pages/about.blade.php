@@ -1,12 +1,11 @@
 @extends('layouts.site')
 
 @section('breadcrumb')
-    <x-breadcrumb
-    title="Giới thiệu"
-    :items="[  
-        ['label' => 'Giới thiệu', 'url' => '']
-    ]"/> 
-@endsection 
+<x-breadcrumb :items="[
+    ['label' => 'Giới thiệu', 'url' => route('pages.about')], 
+    ['label' => 'Giới thiệu', 'url' => '']
+]"/>
+@endsection
 
 @section('content')
     <div class="container">

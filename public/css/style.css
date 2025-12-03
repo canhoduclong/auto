@@ -1776,6 +1776,8 @@ ol {
 	margin-right: 18px;
 	display: inline-block;
 	position: relative;
+	text-transform: uppercase;
+  	text-decoration: none;
 }
 
 .breadcrumb__links a:after {

@@ -1,5 +1,12 @@
 @extends('layouts.site')
 
+@section('breadcrumb')
+<x-breadcrumb :items="[
+    ['label' => 'Giỏ hàng', 'url' => route('cart.show')], 
+    ['label' => 'Giỏ hàng', 'url' => '']
+]"/>
+@endsection
+
 @section('content')
 <div class="container">
     <div class="row">
