@@ -162,7 +162,15 @@ class MediaController extends Controller
             'file' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048',
         ]);
 
-        $path = $request->file('file')->store('media', 'public');
+        $file = $request->file('upload') ?? $request->file('file');
+
+        if (!$file) {
+            return response()->json(['error' => 'File not found in request'], 422);
+        }
+
+        $path = $file->store('media', 'public');
+
+        //$path = $request->file('file')->store('media', 'public');
 
         $media = Media::create([
             'file_name'   => $request->file('file')->getClientOriginalName(),
