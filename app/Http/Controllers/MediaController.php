@@ -158,7 +158,7 @@ class MediaController extends Controller
     public function upload(Request $request)
     {
         $request->validate([
-            'file' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'file' => 'required|image|mimes:jpeg,png,jpg,gif|max:4048',
         ]);
 
         $path = $request->file('file')->store('media', 'public');
