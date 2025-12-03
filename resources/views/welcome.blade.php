@@ -6,43 +6,43 @@
    
 <section class="hero spad set-bg" > 
     <div class="hero-wrap">
-	    <div class="home-slider owl-carousel">
-
-            <div class="slider-item" style="background-image:url(img/SLIDER-3.jpg);">
-                <div class="overlay"></div>
-                <div class="container">
-                <div class="row no-gutters slider-text align-items-center justify-content-start">
-                    <div class="col-md-6 ftco-animate">
-                        <div class="text w-100">
-                            
+        <div class="home-slider owl-carousel">
+            @for ($i = 1; $i <= 5; $i++)
+                @if(isset($settings['slider_' . $i]) && $settings['slider_' . $i]->value)
+                    @php
+                        $media = App\Models\Media::find($settings['slider_' . $i]->value);
+                    @endphp
+                    @if($media)
+                        <div class="slider-item" style="background-image:url({{ asset('storage/' . $media->file_path) }});">
+                            <div class="overlay"></div>
+                            <div class="container">
+                                <div class="row no-gutters slider-text align-items-center justify-content-start">
+                                    <div class="col-md-6 ftco-animate">
+                                        <div class="text w-100">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                    </div>
-                </div>
-            </div>
-
-	      <div class="slider-item" style="background-image:url(img/slider-1.png);">
-	      	<div class="overlay"></div>
-	        <div class="container">
-	          <div class="row no-gutters slider-text align-items-center justify-content-start">
-		          <div class="col-md-6 ftco-animate">
-		          	<div class="text w-100">
-		          		<h2>Dịch vụ dọn xe AUTO TÂY BẮC</h2>
-			            <h1 class="mb-4">DỌN XE CHUYÊN NGHIỆP </h1> 
-		            </div>
-		          </div>
-		        </div>
-	        </div>
-	      </div>
-
-     
-	    </div>
-	  </div>
+                    @endif
+                @endif
+            @endfor
+        </div>
+    </div>
 </section>
 
 <div class="container">
     <div class="banner__item mb-4">
-        <img src="{{ asset('storage/media/banner-auto-tay-bac.png') }}" alt=""> 
+        @php
+            $banner_url = asset('storage/media/banner-auto-tay-bac.png'); // Default
+            if (isset($settings['banner']) && $settings['banner']->value) {
+                $media = App\Models\Media::find($settings['banner']->value);
+                if ($media) {
+                    $banner_url = asset('storage/' . $media->file_path);
+                }
+            }
+        @endphp
+        <img src="{{ $banner_url }}" alt=""> 
     </div>
 </div>
 
