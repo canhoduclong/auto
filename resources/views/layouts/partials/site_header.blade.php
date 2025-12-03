@@ -24,7 +24,7 @@
         <a href="#"><i class="fa fa-instagram"></i></a>
     </div>
 </div>
-<header class="header">
+<header class="header ">
     <div class="header__top">
             <div class="container">
             <div class="row">
