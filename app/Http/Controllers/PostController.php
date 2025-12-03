@@ -9,12 +9,15 @@ use App\Models\Setting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Cache;
 
 class PostController extends Controller
 {
     public function list()
     {
-        $settings = Setting::all()->keyBy('key'); 
+        $settings = Cache::remember('settings', 60, function () {
+            return Setting::all()->keyBy('key');
+        });
         $posts = Post::where('is_published', true)->latest()->paginate(10);
         $categories = PostCategory::all();
         $tags = Tag::all();
@@ -24,7 +27,9 @@ class PostController extends Controller
 
     public function show(Post $post)
     {
-        $settings = Setting::all()->keyBy('key'); 
+        $settings = Cache::remember('settings', 60, function () {
+            return Setting::all()->keyBy('key');
+        });
         $otherPosts = Post::where('is_published', true)->where('id', '!=', $post->id)->latest()->paginate(5);
         $categories = PostCategory::withCount('posts')->get();
         $tags = Tag::all();
@@ -34,7 +39,9 @@ class PostController extends Controller
 
     public function category(PostCategory $category)
     {
-        $settings = Setting::all()->keyBy('key'); 
+        $settings = Cache::remember('settings', 60, function () {
+            return Setting::all()->keyBy('key');
+        });
         $posts = $category->posts()->where('is_published', true)->latest()->paginate(10);
         $categories = PostCategory::all();
         $tags = Tag::all();

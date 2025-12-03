@@ -8,12 +8,15 @@ use App\Models\Setting;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\Post;
+use Illuminate\Support\Facades\Cache;
 
 class HomeController extends Controller
 {
     public function index()
     {
-        $settings = Setting::all()->keyBy('key');
+        $settings = Cache::remember('settings', 60, function () {
+            return Setting::all()->keyBy('key');
+        });
         $categories = Category::all();
         $variants = \App\Models\ProductVariant::where('stock', '>', 0)
             ->with(['product.avatar.media', 'product.gallery.media', 'latestPriceRule', 'avatar.media'])
@@ -26,7 +29,9 @@ class HomeController extends Controller
 
     public function variants(Request $request)
     {
-        $settings = Setting::all()->keyBy('key');
+        $settings = Cache::remember('settings', 60, function () {
+            return Setting::all()->keyBy('key');
+        });
         $categories = \App\Models\Category::all();
         $query = \App\Models\ProductVariant::query()->where('stock', '>', 0);
 

@@ -9,7 +9,7 @@
                                 <input type="text" class="form-control" name="keyword" placeholder="Nhập từ khóa tìm kiếm sản phẩm..." value="{{ request('keyword') }}">
                             </div>
                             <div class="col-lg-2 col-md-2">
-                                <button type="submit" class="site-btn">Tìm kiếm</button>
+                                <button type="submit" class="site-btn btn-sm">Tìm kiếm</button>
                             </div>
                         </div>
                     </form>

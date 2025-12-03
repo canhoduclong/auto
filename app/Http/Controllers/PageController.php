@@ -17,18 +17,23 @@ use Maatwebsite\Excel\Facades\Excel;
 use App\Enums\DeliveryStatus;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentStatus;
+use Illuminate\Support\Facades\Cache;
 
 class PageController extends Controller
 {
     public function about()
     {
-        $settings = Setting::all()->keyBy('key'); 
+        $settings = Cache::remember('settings', 60, function () {
+            return Setting::all()->keyBy('key');
+        }); 
         return view('pages.about', compact('settings'));
     }
 
     public function contact()
     {
-        $settings = Setting::all()->keyBy('key'); 
+        $settings = Cache::remember('settings', 60, function () {
+            return Setting::all()->keyBy('key');
+        }); 
         return view('pages.contact', compact('settings'));
     }
 
@@ -123,7 +128,9 @@ class PageController extends Controller
 
     public function productsByCategory(Request $request, Category $category = null)
     {
-        $settings = Setting::all()->keyBy('key');
+        $settings = Cache::remember('settings', 60, function () {
+            return Setting::all()->keyBy('key');
+        });
         $categories = Category::all();
         $query = ProductVariant::query()->where('stock', '>', 0);
 
@@ -154,7 +161,9 @@ class PageController extends Controller
 
     public function productList(Request $request, Category $category = null)
     {
-        $settings = Setting::all()->keyBy('key');
+        $settings = Cache::remember('settings', 60, function () {
+            return Setting::all()->keyBy('key');
+        });
         $categories = Category::all();
         $query = Product::query();
 
@@ -169,7 +178,9 @@ class PageController extends Controller
 
     public function productDetail(Product $product)
     {
-        $settings = Setting::all()->keyBy('key');
+        $settings = Cache::remember('settings', 60, function () {
+            return Setting::all()->keyBy('key');
+        });
 
         // Eager load all the necessary relationships for the view and JS module
         $product->load([
@@ -191,7 +202,9 @@ class PageController extends Controller
 
     public function myDashboard(Request $request)
     {
-        $settings = Setting::all()->keyBy('key');
+        $settings = Cache::remember('settings', 60, function () {
+            return Setting::all()->keyBy('key');
+        });
         $user = auth()->user();
         
         $customer = Customer::updateOrCreate(
@@ -238,7 +251,9 @@ class PageController extends Controller
 
     public function variantDetail(ProductVariant $variant)
     {
-        $settings = Setting::all()->keyBy('key');
+        $settings = Cache::remember('settings', 60, function () {
+            return Setting::all()->keyBy('key');
+        });
         $variant->load('avatar.media', 'product.category');
         $product = $variant->product;
         $product->load('avatar.media', 'gallery.media');
@@ -260,7 +275,9 @@ class PageController extends Controller
 
     public function myOrders(Request $request)
     {
-        $settings = Setting::all()->keyBy('key');
+        $settings = Cache::remember('settings', 60, function () {
+            return Setting::all()->keyBy('key');
+        });
         $user = auth()->user();
         $orders = \App\Models\Order::with('customer')->where('user_id', $user->id)->latest()->paginate(10);
 

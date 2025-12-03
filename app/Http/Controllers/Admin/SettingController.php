@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller; 
 use Illuminate\Http\Request;
 use App\Models\Setting;
+use Illuminate\Support\Facades\Cache;
  
 
 class SettingController extends Controller
@@ -20,7 +21,9 @@ class SettingController extends Controller
 
     public function index()
     {
-        $settings = Setting::all()->keyBy('key');
+        $settings = Cache::remember('settings', 60, function () {
+            return Setting::all()->keyBy('key');
+        });
         return view('admin.settings.index', compact('settings'));
     }
 
@@ -31,6 +34,8 @@ class SettingController extends Controller
         foreach ($data as $key => $value) {
             Setting::set($key, $value);
         }
+
+        Cache::forget('settings');
 
         return redirect()->back()->with('success', 'Settings updated successfully.');
     }

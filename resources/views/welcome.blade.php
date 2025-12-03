@@ -42,7 +42,7 @@
 
 <div class="container">
     <div class="banner__item mb-4">
-        <img src="img/banner.jpg" alt=""> 
+        <img src="{{ asset('storage/media/banner-auto-tay-bac.png') }}" alt=""> 
     </div>
 </div>
 
