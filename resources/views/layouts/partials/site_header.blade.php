@@ -49,7 +49,7 @@
     </div> 
      <div class="container">
         <div class="row">
-            <div class="col-lg-4">
+            <div class="col-lg-3">
                 <div class="header__logo">
                     <a href="./">
                         @if(isset($settings['logo']) && $settings['logo']->value)
@@ -65,10 +65,10 @@
                     </a>
                 </div>
             </div>
-            <div class="col-lg-8 d-flex justify-content-end align-items-center">
+            <div class="col-lg-9 d-flex justify-content-end align-items-center">
                 <div class="header__nav ">
                     <nav class="header__menu "> 
-                        <ul class="mb-0 ml-0 pb-0">
+                        <ul class="mb-0 ml-0 pb-0 pl-0">
                             <li><a href="{{ route('home') }}" class="nav-link px-2 link-secondary">Trang chủ</a></li>
                             <li><a href="{{ route('pages.about') }}" class="nav-link px-2 link-dark">Giới thiệu</a></li>
                             <li class="nav-item">
