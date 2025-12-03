@@ -1,5 +1,5 @@
  @yield('footer')
- <footer class="footer set-bg" data-setbg="{{ asset('img/footer-bg.jpg') }}" style="background-image: url(&quot;img/footer-bg.jpg&quot;);">
+ <footer class="footer set-bg" data-setbg="{{ asset('img/footer-bg.jpg') }}" style="background-image: url(&quot;{{ asset('img/footer-bg.jpg') }}&quot;);">
     <div class="container">
             <div class="footer__contact">
                 <div class="row">
