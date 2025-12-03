@@ -50,8 +50,8 @@
      <div class="container">
         <div class="row">
             <div class="col-lg-3">
-                <div class="header__logo">
-                    <a href="./">
+                <div class="header__logo"> 
+                    <a href="{{ route('home') }}">
                         @if(isset($settings['logo']) && $settings['logo']->value)
                             @php
                                 $media = App\Models\Media::find($settings['logo']->value);
