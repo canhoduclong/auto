@@ -730,13 +730,13 @@ ol {
           border-color: #fff; }
   .owl-carousel.home-slider {
     position: relative;
-    height: 800px;
+    height: 850px;
     z-index: 0; }
     .owl-carousel.home-slider .slider-item {
       background-size: cover;
       background-repeat: no-repeat;
       background-position: center center;
-      height: 800px;
+      height: 850px;
       position: relative;
       z-index: 0;
       overflow: hidden; }
@@ -754,7 +754,7 @@ ol {
         .owl-carousel.home-slider .slider-item {
           background-position: center center !important; } }
       .owl-carousel.home-slider .slider-item .slider-text {
-        height: 700px;
+        height: 850px;
         position: relative; }
         .owl-carousel.home-slider .slider-item .slider-text .text {
           z-index: 0;
