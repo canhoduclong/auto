@@ -147,12 +147,13 @@ Route::middleware(['auth'])->group(function () {
     //Route::resource('customeraddress', CustomerAddressController::class)->middleware('permission');
     Route::resource('customers.addresses', CustomerAddressController::class)->middleware('permission');
     
-    // Media 
     //Route::resource('media', MediaController::class);
     Route::resource('media', MediaController::class)->parameters([
         'media' => 'media'
     ]);
-    
+
+    Route::post('/media/upload', [MediaController::class, 'upload'])->name('media.upload');
+
     Route::get('/media/library/popup', [MediaController::class, 'popup'])->name('media.library.popup');
     Route::post('/media/popup/store', [MediaController::class, 'popupStore'])->name('media.popup.store');
 
@@ -160,7 +161,6 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/media/gallery/store', [MediaController::class, 'storeGallery'])->name('media.gallery.store');
 
     
-
     // Route::get('{type}/{id}/media', [MediaController::class, 'index'])->name('media.index');
     // Route::post('{type}/{id}/media', [MediaController::class, 'store'])->name('media.store');
     // Route::get('media/{media}', [MediaController::class, 'show'])->name('media.show');
