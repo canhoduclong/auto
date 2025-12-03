@@ -157,8 +157,9 @@ class MediaController extends Controller
     }
     public function upload(Request $request)
     {
+
         $request->validate([
-            'file' => 'required|image|mimes:jpeg,png,jpg,gif|max:4048',
+            'file' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048',
         ]);
 
         $path = $request->file('file')->store('media', 'public');
@@ -169,7 +170,7 @@ class MediaController extends Controller
             'mime_type'   => $request->file('file')->getMimeType(),
             'file_size'   => $request->file('file')->getSize(),
             'uploaded_by' => auth()->id(),
-        ]);
+        ]); 
 
         $url = asset('storage/'.$media->file_path);
         return response()->json([
