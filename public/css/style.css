@@ -730,13 +730,13 @@ ol {
           border-color: #fff; }
   .owl-carousel.home-slider {
     position: relative;
-    height: 700px;
+    height: 800px;
     z-index: 0; }
     .owl-carousel.home-slider .slider-item {
       background-size: cover;
       background-repeat: no-repeat;
       background-position: center center;
-      height: 700px;
+      height: 800px;
       position: relative;
       z-index: 0;
       overflow: hidden; }
