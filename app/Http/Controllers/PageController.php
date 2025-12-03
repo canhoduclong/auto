@@ -26,7 +26,9 @@ class PageController extends Controller
         $settings = Cache::remember('settings', 60, function () {
             return Setting::all()->keyBy('key');
         }); 
-        return view('pages.about', compact('settings'));
+
+        $pages = Page::search("gioi-thieu")->get();
+        return view('pages.about', compact('settings', 'pages'));
     }
 
     public function contact()

@@ -40,4 +40,29 @@ class Page extends Model
         });
 
     }
+    public function scopeSearch($query, $keyword)
+    {
+        if (empty($keyword)) {
+            return $query;
+        }
+
+        $keyword = trim($keyword);
+
+        return $query->where(function ($q) use ($keyword) {
+            // Tìm theo ID nếu từ khóa là số
+            if (is_numeric($keyword)) {
+                $q->orWhere('id', $keyword);
+            }
+
+            // Tìm theo slug
+            $q->orWhere('slug', 'LIKE', "%{$keyword}%");
+
+            // Tìm theo title
+            $q->orWhere('title', 'LIKE', "%{$keyword}%");
+
+            // Tìm theo nội dung
+            $q->orWhere('content', 'LIKE', "%{$keyword}%");
+        });
+    }
+
 }

@@ -9,7 +9,7 @@
 
 @section('content')
     <div class="container">
-        <h1>Giới thiệu</h1>
-        <p>This is the about page.</p>
+        <h1>{{ $pages->first()->title ?? 'Giới thiệu' }}</h1>
+        <p>{!! $pages->first()->content ?? 'This is the about page.' !!}</p>
     </div>
 @endsection
