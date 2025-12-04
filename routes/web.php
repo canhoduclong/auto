@@ -48,7 +48,8 @@ Route::middleware('guest')->group(function () {
     Route::get('/register', [AuthController::class, 'showRegistrationForm'])->name('register');
     Route::post('/register', [AuthController::class, 'register']);
 
-
+    Route::post('/media/upload', [MediaController::class, 'upload'])->name('media.upload');
+    
     //----
     Route::get('/product/{product:slug}', [PageController::class, 'productDetail'])->name('pages.product_detail');
     
@@ -152,7 +153,7 @@ Route::middleware(['auth'])->group(function () {
         'media' => 'media'
     ]);
 
-    Route::post('/media/upload', [MediaController::class, 'upload'])->name('media.upload');
+    // Route::post('/media/upload', [MediaController::class, 'upload'])->name('media.upload');
 
     Route::get('/media/library/popup', [MediaController::class, 'popup'])->name('media.library.popup');
     Route::post('/media/popup/store', [MediaController::class, 'popupStore'])->name('media.popup.store');
