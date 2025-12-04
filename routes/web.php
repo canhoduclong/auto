@@ -39,6 +39,8 @@ use App\Http\Controllers\CartController;
 Route::get('/', [HomeController::class, 'index'])->name('home');
 Route::get('/variants', [HomeController::class, 'variants'])->name('site.variants');
 Route::get('/products/search', [ProductController::class, 'search'])->name('products.search');
+Route::post('/media/upload', [MediaController::class, 'upload'])->name('media.upload');
+Route::get('/media/browse', [MediaController::class, 'browse'])->name('media.browse');
 
 // Auth pages
 Route::middleware('guest')->group(function () {
@@ -48,8 +50,8 @@ Route::middleware('guest')->group(function () {
     Route::get('/register', [AuthController::class, 'showRegistrationForm'])->name('register');
     Route::post('/register', [AuthController::class, 'register']);
 
-    Route::post('/media/upload', [MediaController::class, 'upload'])->name('media.upload');
     
+
     //----
     Route::get('/product/{product:slug}', [PageController::class, 'productDetail'])->name('pages.product_detail');
     

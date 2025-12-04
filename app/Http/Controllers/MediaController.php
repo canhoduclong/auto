@@ -155,39 +155,47 @@ class MediaController extends Controller
 
         return redirect()->route('media.index')->with('success', 'Media updated successfully!');
     }
+
     public function upload(Request $request)
     {
-
+        // CKEditor 4 gửi file bằng name="upload"
         $request->validate([
-            'file' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'upload' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048',
         ]);
 
-        $file = $request->file('upload') ?? $request->file('file');
+        if ($request->hasFile('upload')) {
 
-        if (!$file) {
-            return response()->json(['error' => 'File not found in request'], 422);
+            $file = $request->file('upload');
+
+            $filename = time() . '_' . $file->getClientOriginalName();
+            $path = $file->storeAs('uploads', $filename, 'public');
+
+            // Lưu vào DB
+            $media = Media::create([
+                'file_name'   => $filename,
+                'file_path'   => $path,
+                'mime_type'   => $file->getMimeType(),
+                'file_size'   => $file->getSize(),
+                'uploaded_by' => auth()->id(),
+            ]);
+
+            // CKEditor response format
+            return response()->json([
+                'uploaded' => 1,
+                'fileName' => $filename,
+                'url'      => asset('storage/' . $path)
+            ]);
         }
-
-        $path = $file->store('media', 'public');
-
-        //$path = $request->file('file')->store('media', 'public');
-
-        $media = Media::create([
-            'file_name'   => $request->file('file')->getClientOriginalName(),
-            'file_path'   => $path,
-            'mime_type'   => $request->file('file')->getMimeType(),
-            'file_size'   => $request->file('file')->getSize(),
-            'uploaded_by' => auth()->id(),
-        ]); 
-
-        $url = asset('storage/'.$media->file_path);
-        return response()->json([
-            'id'  => $media->id,
-            'location' => $url, // TinyMCE yêu cầu key "location"
-            'url' => $url,
-            'path' => $url,
-        ]);
     }
+    public function browse(Request $request)
+    {
+        $CKEditorFuncNum = $request->input('CKEditorFuncNum');
+
+        $files = Media::latest()->get(); // Lấy tất cả file trong DB (hoặc phân trang nếu nhiều)
+
+        return view('media.browse', compact('files', 'CKEditorFuncNum'));
+    }
+
     public function destroy(Media $media)
     {
         Storage::disk('public')->delete($media->file_path);

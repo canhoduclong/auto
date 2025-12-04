@@ -20,22 +20,21 @@
                 <label for="content">Content</label>
                 <textarea id="editor" name="content" class="form-control" rows="10">
                     {{ old('content', $page->content ?? '') }}
-                </textarea>
-                <script src="https://cdn.ckeditor.com/ckeditor5/41.2.0/classic/ckeditor.js"></script>
+                </textarea> 
+                <script>
+                    CKEDITOR.replace('editor', {
+                        height: 400,
+                        filebrowserBrowseUrl: '/media/browse',  
+                        filebrowserImageBrowseUrl: '/media/browse?type=image',
+                        filebrowserUploadUrl: '/media/upload?_token={{ csrf_token() }}',
+                        filebrowserImageUploadUrl: '/media/upload?type=image&_token={{ csrf_token() }}'
+                    });
+                </script>
+
             </div>            
             <button type="submit" class="btn btn-primary">Update</button>
         </form>
     </div>
-<script>
-ClassicEditor
-    .create(document.querySelector('#editor'), {
-        ckfinder: {
-            uploadUrl: "{{ route('media.upload') }}?_token={{ csrf_token() }}"
-        }
-    })
-    .catch(error => {
-        console.error(error);
-    });
-</script>
+ 
 
 @endsection

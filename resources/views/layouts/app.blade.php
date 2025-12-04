@@ -23,9 +23,9 @@
 	<script src="{{ asset('assets/js/vendor/visualization/d3/d3.min.js') }}"></script>
 	<script src="{{ asset('assets/js/vendor/visualization/d3/d3_tooltip.js') }}"></script>
 
-
-        @vite(['resources/css/app.css', 'resources/js/app.js'])
- 	
+   
+    <script src="{{ asset('ckeditor/ckeditor.js') }}"></script>
+    @vite(['resources/css/app.css', 'resources/js/app.js']) 
 
     @stack('styles')
 </head>
