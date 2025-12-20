@@ -18,6 +18,10 @@
     RewriteCond %{REQUEST_URI} (.+)/$
     RewriteRule ^ %1 [L,R=301]
 
+    # === ƯU TIÊN INDEX.HTML ===
+    RewriteCond %{DOCUMENT_ROOT}/index.html -f
+    RewriteRule ^$ index.html [L]
+
     # Send Requests To Front Controller...
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_FILENAME} !-f
