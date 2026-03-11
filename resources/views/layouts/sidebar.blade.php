@@ -128,9 +128,27 @@
 						</li>
 						
 						<li class="nav-item ">
-							<a href="{{ route('users.index') }}" class="nav-link">
-								<i class="ph-note-blank"></i>
-								<span>{{ __('menu.users') }}</span>
+							<a href="{{ route('users.index') }}" class="nav-link{{ request()->routeIs('users.*') ? ' active' : '' }}">
+								<i class="ph-user-gear"></i>
+								<span>Quan tri user & gan kho</span>
+							</a>
+						</li>
+						<li class="nav-item ">
+							<a href="{{ route('warehouses.index') }}" class="nav-link{{ request()->routeIs('warehouses.*') ? ' active' : '' }}">
+								<i class="ph-storefront"></i>
+								<span>Quan tri kho hang</span>
+							</a>
+						</li>
+						<li class="nav-item ">
+							<a href="{{ route('inventory-documents.index') }}" class="nav-link{{ request()->routeIs('inventory-documents.*') ? ' active' : '' }}">
+								<i class="ph-files"></i>
+								<span>Nhap xuat kho hang</span>
+							</a>
+						</li>
+						<li class="nav-item ">
+							<a href="{{ route('inventories.index') }}" class="nav-link{{ request()->routeIs('inventories.*') ? ' active' : '' }}">
+								<i class="ph-chart-bar"></i>
+								<span>Bao cao ton kho</span>
 							</a>
 						</li>
 						<li class="nav-item ">
@@ -158,42 +176,7 @@
 							</a>
 						</li>
 						
-						<!--li class="nav-item ">
-							<a href="{{ route('warehouses.index') }}" class="nav-link{{ request()->routeIs('warehouses.*') ? ' active' : '' }}">
-								<i class="ph-storefront"></i>
-								<span>{{ __('menu.warehouses') }}</span>
-							</a>
-						</li>
-						<li class="nav-item ">
-							<a href="{{ route('inventories.index') }}" class="nav-link{{ request()->routeIs('inventories.*') ? ' active' : '' }}">
-								<i class="ph-package"></i>
-								<span>{{ __('menu.inventories') }}</span>
-							</a>
-						</li>
-						<li class="nav-item ">
-							<a href="{{ route('inventory-movements.index') }}" class="nav-link{{ request()->routeIs('inventory-movements.*') ? ' active' : '' }}">
-								<i class="ph-arrows-left-right"></i>
-								<span>{{ __('menu.inventory_movements') }}</span>
-							</a>
-						</li>
-						<li class="nav-item ">
-							<a href="{{ route('inventory-documents.index') }}" class="nav-link{{ request()->routeIs('inventory-documents.*') ? ' active' : '' }}">
-								<i class="ph-files"></i>
-								<span>{{ __('menu.inventory_documents') }}</span>
-							</a>
-						</li>
-						<li class="nav-item ">
-							<a href="{{ route('inventory-adjustments.index') }}" class="nav-link{{ request()->routeIs('inventory-adjustments.*') ? ' active' : '' }}">
-								<i class="ph-wrench"></i>
-								<span>{{ __('menu.inventory_adjustments') }}</span>
-							</a>
-						</li>
-						<li class="nav-item ">
-							<a href="{{ route('inventory-reservations.index') }}" class="nav-link{{ request()->routeIs('inventory-reservations.*') ? ' active' : '' }}">
-								<i class="ph-timer"></i>
-								<span>{{ __('menu.inventory_reservations') }}</span>
-							</a>
-						</li-->
+						
 						<li class="nav-item ">
 							<a href="{{ route('customertype.index') }}" class="nav-link{{ request()->routeIs('customertype.*') ? ' active' : '' }}">
 								<i class="ph-note-blank"></i>
@@ -223,6 +206,12 @@
 							<a href="{{ route('orders.index') }}" class="nav-link{{ request()->routeIs('orders.*') ? ' active' : '' }}">
 								<i class="ph-note-blank"></i>
 								<span>{{ __('menu.orders') }}</span>
+							</a>
+						</li>
+						<li class="nav-item ">
+							<a href="{{ route('approval-workflows.index') }}" class="nav-link{{ request()->routeIs('approval-workflows.*') ? ' active' : '' }}">
+								<i class="ph-flow-arrow"></i>
+								<span>Tạo quy trình</span>
 							</a>
 						</li>
 						<li class="nav-item ">

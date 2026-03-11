@@ -39,6 +39,14 @@ class ProductController extends Controller
             $query->where('category_id', $request->input('category_id'));
         }
 
+        // Lọc theo trạng thái sản phẩm (active/deleted)
+        $statusFilter = $request->input('status_filter', 'active');
+        if ($statusFilter === 'active') {
+            $query->where('status', true);
+        } elseif ($statusFilter === 'deleted') {
+            $query->where('status', false);
+        }
+
         // Sắp xếp sản phẩm
         $sort_by = $request->get('sort_by', 'name'); // mặc định là 'name'
         $sort_direction = $request->get('sort_direction', 'asc'); // mặc định là asc
@@ -58,7 +66,7 @@ class ProductController extends Controller
 
         $categories = Category::all();
 
-        return view('products.index', compact('products', 'categories', 'sort_by', 'sort_direction','perPage', 'page','pageCount'));
+        return view('products.index', compact('products', 'categories', 'sort_by', 'sort_direction','perPage', 'page','pageCount', 'statusFilter'));
     }
     public function create()
     {
@@ -351,49 +359,68 @@ class ProductController extends Controller
 
     public function destroy(Product $product)
     {
-        // 1. Kiểm tra quyền xoá bằng Policy
-        // => sẽ gọi ProductPolicy::delete($user, $product)
         $this->authorize('delete', $product);
 
+        // Chỉ admin mới được quyền thực hiện xóa mềm sản phẩm.
+        if (!auth()->check() || !auth()->user()->hasRole('admin')) {
+            abort(403, 'Chỉ admin mới được phép xóa sản phẩm.');
+        }
+
         try {
-            // 2. Nếu có ảnh chính => xoá file trong storage
-            if ($product->image) {
-                \Storage::disk('public')->delete($product->image);
-            }
+            DB::transaction(function () use ($product): void {
+                $product->update(['status' => false]);
 
-            // 3. Nếu có album ảnh => xoá luôn
-            if ($product->album && is_array($product->album)) {
-                foreach ($product->album as $img) {
-                    \Storage::disk('public')->delete($img);
-                }
-            }
+                // Đồng bộ trạng thái biến thể, tránh hiển thị ngoài frontend.
+                ProductVariant::where('product_id', $product->id)->update(['status' => false]);
+            });
 
-            // 4. Xoá record trong DB
-            $product->delete();
-
-            // 5. Trả về redirect hoặc JSON
             if (request()->wantsJson()) {
                 return response()->json([
                     'status'  => 'success',
-                    'message' => 'Sản phẩm đã được xoá thành công!',
+                    'message' => 'Sản phẩm đã được chuyển sang trạng thái đã xóa.',
                 ]);
             }
 
             return redirect()
                 ->route('products.index')
-                ->with('success', 'Sản phẩm đã được xoá thành công!');
+                ->with('success', 'Sản phẩm đã được chuyển sang trạng thái đã xóa.');
         } catch (\Exception $e) {
-            // Nếu có lỗi xảy ra
             if (request()->wantsJson()) {
                 return response()->json([
                     'status'  => 'error',
-                    'message' => 'Không thể xoá sản phẩm. Lỗi: ' . $e->getMessage(),
+                    'message' => 'Không thể cập nhật trạng thái sản phẩm. Lỗi: ' . $e->getMessage(),
                 ], 500);
             }
 
             return redirect()
                 ->route('products.index')
-                ->with('error', 'Không thể xoá sản phẩm!');
+                ->with('error', 'Không thể cập nhật trạng thái sản phẩm!');
+        }
+    }
+
+    public function restore(Product $product)
+    {
+        $this->authorize('update', $product);
+
+        if (!auth()->check() || !auth()->user()->hasRole('admin')) {
+            abort(403, 'Chỉ admin mới được phép khôi phục sản phẩm.');
+        }
+
+        try {
+            DB::transaction(function () use ($product): void {
+                $product->update(['status' => true]);
+
+                // Khôi phục lại trạng thái biến thể đã xóa mềm cùng sản phẩm.
+                ProductVariant::where('product_id', $product->id)->update(['status' => true]);
+            });
+
+            return redirect()
+                ->route('products.index')
+                ->with('success', 'Sản phẩm đã được khôi phục thành công.');
+        } catch (\Exception $e) {
+            return redirect()
+                ->route('products.index')
+                ->with('error', 'Không thể khôi phục sản phẩm: ' . $e->getMessage());
         }
     }
 

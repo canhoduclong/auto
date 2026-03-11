@@ -21,6 +21,11 @@
                     </option>
                 @endforeach
             </select>
+            <select name="status_filter" class="form-control">
+                <option value="all" {{ ($statusFilter ?? 'active') === 'all' ? 'selected' : '' }}>Tất cả sản phẩm</option>
+                <option value="active" {{ ($statusFilter ?? 'active') === 'active' ? 'selected' : '' }}>Sản phẩm đang hoạt động</option>
+                <option value="deleted" {{ ($statusFilter ?? 'active') === 'deleted' ? 'selected' : '' }}>Sản phẩm đã xóa</option>
+            </select>
             <div class="input-group-append">
                 <button class="btn btn-primary" type="submit">{{ __('admin.product.search') }}</button>
             </div>
@@ -70,6 +75,7 @@
                         </th>
                         <th>Brand</th>
                         <th>Category</th>
+                        <th>Trạng thái</th>
                 <th>
                     <span class="d-flex align-items-center padding-cell pl-0">
                         <span>{{ __('admin.product.stock') }}</span>
@@ -111,6 +117,13 @@
                     </td>
                     <td>{{ $product->brand->name ?? '' }}</td>
                     <td>{{ $product->category->name ?? '' }}</td>
+                <td>
+                    @if($product->status)
+                        <span class="badge bg-success">Đang hoạt động</span>
+                    @else
+                        <span class="badge bg-danger">Đã xóa</span>
+                    @endif
+                </td>
                 <td id="product-stock-{{ $product->id }}">{{ $product->stock ?? '' }}</td>
                 <td>
                     <div class="d-flex justify-content-end list-actions"> 
@@ -134,6 +147,7 @@
                         @endcan
 
                         @can('delete', $product)
+                        @if(auth()->user()->hasRole('admin') && $product->status)
                             <form action="{{ route('products.destroy', ['product' => $product->id, 'page' =>  request()->page, 'perPage' => $perPage ]) }}" method="POST" style="display:inline;">
                                 @csrf
                                 @method('DELETE')
@@ -141,6 +155,18 @@
                                     <i class="ph ph-trash"></i>
                                 </button>
                             </form>
+                        @endif
+                        @endcan
+
+                        @can('update', $product)
+                        @if(auth()->user()->hasRole('admin') && !$product->status)
+                            <form action="{{ route('products.restore', ['product' => $product->id]) }}" method="POST" style="display:inline;">
+                                @csrf
+                                <button type="submit" class="btn btn-success btn-sm" onclick="return confirm('Bạn có chắc chắn muốn khôi phục sản phẩm này không?')">
+                                    <i class="ph ph-arrow-counter-clockwise"></i>
+                                </button>
+                            </form>
+                        @endif
                         @endcan
                     </div>
                 </td>

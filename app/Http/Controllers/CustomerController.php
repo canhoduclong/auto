@@ -115,8 +115,8 @@ class CustomerController extends Controller
     {
         $data = $request->validate([
             'name' => 'required|string|max:255',
-            'phone' => 'nullable|string|max:30|unique:customers,phone',
-            'email' => 'nullable|email|unique:customers,email',
+            'phone' => 'nullable|string|max:30',
+            'email' => 'nullable|email',
             'website' => 'nullable|url|max:255',
             'gender' => 'nullable|in:male,female,other',
             'dob' => 'nullable|date',
@@ -136,6 +136,29 @@ class CustomerController extends Controller
             'truck_station_phone' => 'nullable|string|max:30',
             'truck_fee' => 'nullable|integer',
         ]);
+
+        $duplicateCustomer = Customer::query()
+            ->where(function ($query) use ($data) {
+                if (!empty($data['email'])) {
+                    $query->orWhereRaw('LOWER(email) = ?', [strtolower($data['email'])]);
+                }
+
+                if (!empty($data['phone'])) {
+                    $query->orWhere('phone', $data['phone']);
+                    $query->orWhere(function ($subQuery) use ($data) {
+                        $subQuery->where('name', $data['name'])
+                            ->where('phone', $data['phone']);
+                    });
+                }
+            })
+            ->first();
+
+        if ($duplicateCustomer) {
+            return back()
+                ->withInput()
+                ->with('error', 'Khach hang da ton tai (ID: ' . $duplicateCustomer->id . ', Ten: ' . $duplicateCustomer->name . '). Vui long kiem tra lai so dien thoai/email.');
+        }
+
         $customer = Customer::create($data);
 
         if ($request->filled('address')) {

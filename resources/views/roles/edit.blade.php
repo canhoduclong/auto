@@ -14,7 +14,13 @@
         </div>
 
         <div class="mb-3">
-            <label class="form-label">Phân quyền chi tiết (Permissions)</label>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <label class="form-label mb-0">Phân quyền chi tiết (Permissions)</label>
+                <div>
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="checkAllPermissions">Check All</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="resetPermissions">Reset</button>
+                </div>
+            </div>
             <div class="row">
                 @php
                     // Nhóm permissions theo tính năng
@@ -33,6 +39,7 @@
                                        value="{{ $permission->id }}"
                                        id="perm_{{ $permission->id }}"
                                        class="form-check-input"
+                                       data-initial-checked="{{ $role->permissions->contains($permission->id) ? '1' : '0' }}"
                                        {{ $role->permissions->contains($permission->id) ? 'checked' : '' }}>
                                 <label class="form-check-label" for="perm_{{ $permission->id }}">
                                     {{ $permission->name }}
@@ -49,3 +56,29 @@
     </form>
 </div>
 @endsection
+
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const permissionCheckboxes = document.querySelectorAll('input[name="permissions[]"]');
+    const checkAllButton = document.getElementById('checkAllPermissions');
+    const resetButton = document.getElementById('resetPermissions');
+
+    if (checkAllButton) {
+        checkAllButton.addEventListener('click', function () {
+            permissionCheckboxes.forEach(function (checkbox) {
+                checkbox.checked = true;
+            });
+        });
+    }
+
+    if (resetButton) {
+        resetButton.addEventListener('click', function () {
+            permissionCheckboxes.forEach(function (checkbox) {
+                checkbox.checked = checkbox.dataset.initialChecked === '1';
+            });
+        });
+    }
+});
+</script>
+@endpush

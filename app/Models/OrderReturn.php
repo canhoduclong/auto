@@ -12,8 +12,23 @@ class OrderReturn extends Model
     protected $fillable = [
         'order_id',
         'customer_id',
+        'warehouse_id',
+        'created_by',
+        'ship_confirmed_by',
+        'ship_confirmed_at',
+        'warehouse_confirmed_by',
+        'warehouse_confirmed_at',
         'status',
         'reason',
+        'note',
+        'refund_amount',
+        'return_scope',
+    ];
+
+    protected $casts = [
+        'ship_confirmed_at' => 'datetime',
+        'warehouse_confirmed_at' => 'datetime',
+        'refund_amount' => 'decimal:2',
     ];
 
     public function order()
@@ -26,8 +41,33 @@ class OrderReturn extends Model
         return $this->belongsTo(Customer::class);
     }
 
+    public function warehouse()
+    {
+        return $this->belongsTo(Warehouse::class);
+    }
+
+    public function creator()
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function shipConfirmer()
+    {
+        return $this->belongsTo(User::class, 'ship_confirmed_by');
+    }
+
+    public function warehouseConfirmer()
+    {
+        return $this->belongsTo(User::class, 'warehouse_confirmed_by');
+    }
+
     public function returnItems()
     {
         return $this->hasMany(ReturnItem::class);
+    }
+
+    public function refundTransaction()
+    {
+        return $this->hasOne(Transaction::class, 'order_return_id');
     }
 }

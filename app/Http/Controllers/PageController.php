@@ -134,7 +134,12 @@ class PageController extends Controller
             return Setting::all()->keyBy('key');
         });
         $categories = Category::all();
-        $query = ProductVariant::query()->where('stock', '>', 0);
+        $query = ProductVariant::query()
+            ->where('stock', '>', 0)
+            ->where('status', true)
+            ->whereHas('product', function ($q) {
+                $q->where('status', true);
+            });
 
         if ($request->filled('date')) {
             $query->whereDate('created_at', $request->date);
@@ -154,10 +159,11 @@ class PageController extends Controller
 
         if ($category) {
             $query->whereHas('product', function ($q) use ($category) {
-                $q->where('category_id', $category->id);
+                $q->where('category_id', $category->id)
+                    ->where('status', true);
             });
         }
-        $variants = $query->with('product', 'latestPriceRule')->paginate(10);
+        $variants = $query->with('product.avatar.media', 'product.gallery.media', 'latestPriceRule')->paginate(10);
         return view('site.products_by_category', compact('variants', 'settings', 'categories', 'category'));
     }
 
@@ -167,7 +173,7 @@ class PageController extends Controller
             return Setting::all()->keyBy('key');
         });
         $categories = Category::all();
-        $query = Product::query();
+        $query = Product::query()->where('status', true);
 
         if ($category) {
             $query->where('category_id', $category->id);
@@ -280,14 +286,43 @@ class PageController extends Controller
         $settings = Cache::remember('settings', 60, function () {
             return Setting::all()->keyBy('key');
         });
-        $user = auth()->user();
-        $orders = \App\Models\Order::with('customer')->where('user_id', $user->id)->latest()->paginate(10);
 
-        return view('site.my_orders', compact('settings', 'user', 'orders'));
+        if (!auth()->check()) {
+            return redirect()->route('login')->with('error', 'Bạn cần đăng nhập để xem đơn hàng của mình.');
+        }
+
+        $user = auth()->user();
+        $query = \App\Models\Order::with('customer')->where('user_id', $user->id);
+
+        $customers = Customer::query()
+            ->whereIn('id', function ($subQuery) use ($user) {
+                $subQuery->select('customer_id')
+                    ->from('orders')
+                    ->where('user_id', $user->id)
+                    ->whereNotNull('customer_id');
+            })
+            ->orderBy('name')
+            ->get();
+
+        if ($request->filled('from_date') && $request->filled('to_date')) {
+            $query->whereBetween('created_at', [$request->from_date, $request->to_date]);
+        }
+
+        if ($request->filled('customer_id')) {
+            $query->where('customer_id', $request->customer_id);
+        }
+
+        $orders = $query->latest()->paginate(10);
+
+        return view('site.my_orders', compact('settings', 'user', 'orders', 'customers'));
     }
 
     public function myCustomer(Request $request)
     {
+        $settings = Cache::remember('settings', 60, function () {
+            return Setting::all()->keyBy('key');
+        });
+
         $perPage = $request->input('per_page', 10);
         $search = $request->input('search');
 
@@ -298,33 +333,64 @@ class PageController extends Controller
             })
             ->paginate($perPage);
 
-        return view('site.my_customer.index', compact('customers', 'search'));
+        return view('site.my_customer.index', compact('customers', 'search', 'settings'));
     }
 
     public function myCustomerCreate()
     {
-        return view('site.my_customer.create');
+        $settings = Cache::remember('settings', 60, function () {
+            return Setting::all()->keyBy('key');
+        });
+        return view('site.my_customer.create', compact('settings'));
     }
 
     public function myCustomerEdit(Customer $customer)
     {
-        return view('site.my_customer.edit', compact('customer'));
+        $settings = Cache::remember('settings', 60, function () {
+            return Setting::all()->keyBy('key');
+        });
+        return view('site.my_customer.edit', compact('customer', 'settings'));
     }
 
     public function myCustomerImportForm()
     {
-        return view('site.my_customer.import');
+        $settings = Cache::remember('settings', 60, function () {
+            return Setting::all()->keyBy('key');
+        });
+        return view('site.my_customer.import', compact('settings'));
     }
 
     public function myCustomerStore(Request $request)
     {
-        $request->validate([
+        $data = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:customers,email',
+            'email' => 'required|email',
             'phone' => 'nullable|string|max:20',
         ]);
 
-        Customer::create($request->all());
+        $duplicateCustomer = Customer::query()
+            ->where(function ($query) use ($data) {
+                if (!empty($data['email'])) {
+                    $query->orWhereRaw('LOWER(email) = ?', [strtolower($data['email'])]);
+                }
+
+                if (!empty($data['phone'])) {
+                    $query->orWhere('phone', $data['phone']);
+                    $query->orWhere(function ($subQuery) use ($data) {
+                        $subQuery->where('name', $data['name'])
+                            ->where('phone', $data['phone']);
+                    });
+                }
+            })
+            ->first();
+
+        if ($duplicateCustomer) {
+            return back()
+                ->withInput()
+                ->with('error', 'Khach hang da ton tai (ID: ' . $duplicateCustomer->id . ', Ten: ' . $duplicateCustomer->name . '). Vui long kiem tra lai so dien thoai/email.');
+        }
+
+        Customer::create($data);
 
         return back()->with('success', 'Customer created successfully.');
     }
@@ -390,7 +456,10 @@ class PageController extends Controller
 
     public function myCustomerShow(Customer $customer)
     {
-        return view('site.my_customer.show', compact('customer'));
+        $settings = Cache::remember('settings', 60, function () {
+            return Setting::all()->keyBy('key');
+        });
+        return view('site.my_customer.show', compact('customer', 'settings'));
     }
 
     public function myCustomerOrderCreate(Customer $customer)
@@ -417,6 +486,12 @@ class PageController extends Controller
         ], $request->variants);
 
         return redirect()->route('orders.show', $order)->with('success', 'Order created successfully.');
+    }
+
+    public function myCustomerOrdersQuickView(Customer $customer)
+    {
+        $customer->load(['orders.items.product', 'orders.items.variant']);
+        return view('site.my_customer._orders_quick_view', ['orders' => $customer->orders]);
     }
 
     public function myOrderDetail(\App\Models\Order $order)

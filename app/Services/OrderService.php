@@ -3,87 +3,79 @@
 namespace App\Services;
 
 use App\Models\Order;
-use App\Models\OrderApproval;
-use App\Workflows\OrderWorkflow;
 use App\Enums\OrderStatus;
-use App\Models\User;
 use App\Models\ProductVariant;
+use App\Models\Customer;
+use Exception;
+use Illuminate\Support\Facades\DB; 
 
 class OrderService
 {
+    public function __construct(
+        protected ApprovalService $approvalService
+    ) {
+    }
+
     public function createOrder(array $orderData, array $variants): Order
     {
-        $variants = array_filter($variants, function ($variant) {
-            return isset($variant['quantity']) && $variant['quantity'] > 0;
-        });
+        return DB::transaction(function () use ($orderData, $variants) {
 
-        if (empty($variants)) {
-            throw new \Exception("No products selected.");
-        }
+            $variants = collect($variants)
+                ->filter(fn ($v) => isset($v['quantity']) && $v['quantity'] > 0);
 
-        $totalAmount = 0;
-        $orderItems = [];
+            if ($variants->isEmpty()) {
+                throw new \Exception('No products selected.');
+            }
 
-        foreach ($variants as $variantData) {
-            $variant = ProductVariant::with('latestPriceRule', 'product')->find($variantData['id']);
-            if ($variant) {
-                $price = $variant->latestPriceRule->price ?? $variant->price;
+            $customer = Customer::findOrFail($orderData['customer_id']);
+
+            $order = Order::create([
+                'customer_id'     => $customer->id,
+                'sale_id'         => auth()->id(),
+                'status'          => OrderStatus::PendingManagerApproval,
+                'discount_rate'   => $customer->discount_rate,
+                'commission_rate' => $customer->commission_rate,
+                'code'            => $this->generateOrderCode(),
+                'note'            => $orderData['note'] ?? null,
+            ]);
+
+            $subtotal = 0;
+
+            foreach ($variants as $variantData) {
+
+                $variant = ProductVariant::with('product')
+                    ->where('id', $variantData['id'])
+                    ->where('is_active', true)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                $price = $this->resolvePrice($variant, $customer);
                 $total = $price * $variantData['quantity'];
-                $totalAmount += $total; 
-                $orderItems[] = [
-                    'product_id' => $variant->product->id,
-                    'product_variant_id' => $variant->id,
-                    'quantity' => $variantData['quantity'],
-                    'price' => $price,
-                    'total' => $total,
-                ];
+
+                $subtotal += $total;
+
+                $order->items()->create([
+                    'product_id'         => $variant->product_id,
+                    'product_variant_id'=> $variant->id,
+                    'quantity'           => $variantData['quantity'],
+                    'price'              => $price,
+                    'total'              => $total,
+                ]);
             }
-        }
 
-        $orderData['total_amount'] = $totalAmount ?? 0;
-        $orderData['code'] = 'ORD-' . strtoupper(uniqid());
-        $order = Order::create($orderData);
+            $discount = $subtotal * ($customer->discount_rate / 100);
 
-        if ($order) {
-            foreach ($orderItems as $item) {
-                $order->items()->create($item);
-            }
-        }
+            $order->update([
+                'subtotal' => $subtotal,
+                'discount' => $discount,
+                'total'    => $subtotal - $discount,
+            ]);
 
-        return $order;
+            $this->approvalService->initOrderApproval($order);
+
+            return $order;
+        });
     }
 
-    public function updateStatus(Order $order, string $newStatus, User $user): Order
-    {
-        $workflow = new OrderWorkflow();
-
-        // Kiểm tra transition hợp lệ
-        if (! $workflow->canTransition($order->status, $newStatus)) {
-            throw new \Exception("Không thể chuyển trạng thái từ {$order->status} sang {$newStatus}");
-        }
-
-        // Kiểm tra role
-        if ($newStatus === OrderStatus::LeaderConfirmed->value && ! $user->hasRole('leader')) {
-            throw new \Exception("Chỉ Leader mới được quyền xác nhận");
-        }
-
-        if ($newStatus === OrderStatus::ManagerConfirmed->value && ! $user->hasRole('manager')) {
-            throw new \Exception("Chỉ Manager mới được quyền xác nhận");
-        }
-
-        // Cập nhật trạng thái
-        $order->status = $newStatus;
-        $order->save();
-
-        // Lưu log vào bảng approvals
-        OrderApproval::create([
-            'order_id' => $order->id,
-            'user_id'  => $user->id,
-            'role' => $user->roles()->first()->name ?? 'no-role',
-            'status'   => $newStatus,
-            'note'     => null,
-        ]);
-
-        return $order;
-    }
+    
 }

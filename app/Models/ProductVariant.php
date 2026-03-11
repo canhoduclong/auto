@@ -24,9 +24,15 @@ class ProductVariant extends Model
         });
     }
 
-    public function avatar()
+    public function mediaLink()
     {
         return $this->morphOne(MediaLink::class, 'model')->where('role', 'variant');
+    }
+
+    public function avatar()
+    {
+        // Backward-compatible alias used in some legacy flows.
+        return $this->mediaLink();
     }
 
     public function product()

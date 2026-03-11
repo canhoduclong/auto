@@ -8,6 +8,7 @@ use App\Models\Setting;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\Post;
+use App\Models\Media;
 use Illuminate\Support\Facades\Cache;
 
 class HomeController extends Controller
@@ -17,14 +18,39 @@ class HomeController extends Controller
         $settings = Cache::remember('settings', 60, function () {
             return Setting::all()->keyBy('key');
         });
+
+        $sliderIds = collect(range(1, 5))
+            ->map(fn ($i) => $settings['slider_' . $i]->value ?? null)
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->values();
+
+        $sliderMedia = collect();
+        if ($sliderIds->isNotEmpty()) {
+            $mediaById = Media::query()
+                ->whereIn('id', $sliderIds->all())
+                ->get()
+                ->keyBy('id');
+
+            // Keep configured order from settings (slider_1 -> slider_5).
+            $sliderMedia = $sliderIds
+                ->map(fn ($id) => $mediaById->get($id))
+                ->filter()
+                ->values();
+        }
+
         $categories = Category::all();
         $variants = \App\Models\ProductVariant::where('stock', '>', 0)
+            ->where('status', true)
+            ->whereHas('product', function ($query) {
+                $query->where('status', true);
+            })
             ->with(['product.avatar.media', 'product.gallery.media', 'latestPriceRule', 'avatar.media'])
             ->latest()
             ->take(12)
             ->get();
         $posts = Post::latest()->take(5)->get();
-        return view('welcome', compact('settings', 'categories', 'variants', 'posts'));
+        return view('welcome', compact('settings', 'categories', 'variants', 'posts', 'sliderMedia'));
     }
 
     public function variants(Request $request)
@@ -33,7 +59,12 @@ class HomeController extends Controller
             return Setting::all()->keyBy('key');
         });
         $categories = \App\Models\Category::all();
-        $query = \App\Models\ProductVariant::query()->where('stock', '>', 0);
+        $query = \App\Models\ProductVariant::query()
+            ->where('stock', '>', 0)
+            ->where('status', true)
+            ->whereHas('product', function ($q) {
+                $q->where('status', true);
+            });
 
         if ($request->filled('date')) {
             $query->whereDate('created_at', $request->date);

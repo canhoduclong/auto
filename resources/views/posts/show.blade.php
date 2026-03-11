@@ -1,5 +1,47 @@
 @extends('layouts.site')
 
+@push('styles')
+<style>
+.post-detail-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    padding: 22px;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+}
+
+.post-hero-image {
+    width: 100%;
+    max-height: 420px;
+    object-fit: cover;
+    border-radius: 12px;
+    margin-bottom: 16px;
+}
+
+.post-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    color: #4b5563;
+    font-size: 14px;
+    margin-bottom: 12px;
+}
+
+.post-content {
+    line-height: 1.8;
+    color: #1f2937;
+}
+
+.post-content p {
+    margin-bottom: 12px;
+}
+
+.social-sharing .btn {
+    margin-bottom: 8px;
+}
+</style>
+@endpush
+
 @section('breadcrumb')
 <div class="breadcrumb-option set-bg mb-4 pb-4" data-setbg="{{ asset('img/breadcrumb-bg.jpg') }}" style="background-image: url(&quot;{{ asset('img/breadcrumb-bg.jpg') }}&quot;);">
         <div class="container">
@@ -23,12 +65,26 @@
     <div class="container">
         <div class="row">
             <div class="col-md-8">
-                <h1>{{ $post->title }}</h1>
-                <p>{{ $post->content }}</p>
+                <article class="post-detail">
+                    @if($post->image)
+                        <img src="{{ asset('storage/' . $post->image) }}" alt="{{ $post->title }}" class="post-hero-image">
+                    @endif
+
+                    <h1 class="mb-3">{{ $post->title }}</h1>
+
+                    <div class="post-meta">
+                        <span><i class="fa fa-folder-open-o"></i> {{ $post->category->name ?? 'Chưa phân loại' }}</span>
+                        <span><i class="fa fa-calendar"></i> {{ optional($post->created_at)->format('d/m/Y H:i') }}</span>
+                        <span><i class="fa fa-user"></i> {{ $post->author->name ?? 'Admin' }}</span>
+                    </div>
+
+                    <div class="post-content">
+                        {!! nl2br(e($post->content)) !!}
+                    </div>
+                </article>
 
                 <hr>
-                <div class="social-sharing">
-                    <h5>Share this post:</h5>
+                <div class="social-sharing"> 
                     <a href="https://www.facebook.com/sharer/sharer.php?u={{ urlencode(route('posts.show', $post)) }}" target="_blank" class="btn btn-primary btn-sm"><i class="fa fa-facebook"></i> Facebook</a>
                     <a href="https://twitter.com/intent/tweet?url={{ urlencode(route('posts.show', $post)) }}&text={{ urlencode($post->title) }}" target="_blank" class="btn btn-info btn-sm"><i class="fa fa-twitter"></i> Twitter</a>
                     <a href="https://www.linkedin.com/shareArticle?mini=true&url={{ urlencode(route('posts.show', $post)) }}&title={{ urlencode($post->title) }}" target="_blank" class="btn btn-primary btn-sm"><i class="fa fa-linkedin"></i> LinkedIn</a>
@@ -36,24 +92,24 @@
                 </div>
                 <hr>
                 <div class="related-posts mt-4">
-                    <h3>Tin tức khác</h3>
+                    <div class="title mb-4">
+                        <span>Bản tin hàng ngày</span>
+                        <h3 class="mb-0">Tin tức khác</h3>
+                    </div>
                     <div class="row">
                         @foreach($otherPosts as $otherPost)
-                            <div class="col-md-6">
-                                <div class="card mb-4">
+                            <div class="col-lg-6 col-md-6 mb-4">
+                                <div class="latest__blog__item h-100">
                                     @if($otherPost->image)
-                                        <a href="{{ route('posts.show', $otherPost) }}">
-                                            <img src="{{ asset('storage/' . $otherPost->image) }}" class="card-img-top" alt="{{ $otherPost->title }}" style="height: 150px; object-fit: cover;">
-                                        </a>
+                                        <div class="latest__blog__item__pic set-bg" data-setbg="{{ asset('storage/' . $otherPost->image) }}" style="background-image: url('{{ asset('storage/' . $otherPost->image) }}');"></div>
                                     @else
-                                         <a href="{{ route('posts.show', $otherPost) }}">
-                                            <img src="https://via.placeholder.com/300x200" class="card-img-top" alt="{{ $otherPost->title }}" style="height: 150px; object-fit: cover;">
-                                        </a>
+                                        <div class="latest__blog__item__pic set-bg" data-setbg="{{ asset('img/latest-blog/lb-1.jpg') }}" style="background-image: url('{{ asset('img/latest-blog/lb-1.jpg') }}');"></div>
                                     @endif
-                                    <div class="card-body">
-                                        <h5 class="card-title" style="min-height: 50px;"><a href="{{ route('posts.show', $otherPost) }}">{{ Str::limit($otherPost->title, 50) }}</a></h5>
-                                        <p class="card-text"><small class="text-muted">{{ $otherPost->created_at->format('d/m/Y') }}</small></p>
-                                        <a href="{{ route('posts.show', $otherPost) }}" class="btn btn-sm btn-outline-primary">Xem thêm</a>
+                                    <div class="latest__blog__item__text">
+                                        <h5>{{ $otherPost->title }}</h5>
+                                        <p class="mb-2"><small class="text-muted"><i class="fa fa-calendar"></i> {{ optional($otherPost->created_at)->format('d/m/Y') }} | <i class="fa fa-folder-open-o"></i> {{ $otherPost->category->name ?? 'Tin tức' }} | <i class="fa fa-user"></i> {{ $otherPost->author->name ?? 'Admin' }}</small></p>
+                                        <p>{{ \Illuminate\Support\Str::limit(strip_tags($otherPost->excerpt ?: $otherPost->content), 120) }}</p>
+                                        <a href="{{ route('posts.show', $otherPost) }}">Xem thêm <i class="fa fa-long-arrow-right"></i></a>
                                     </div>
                                 </div>
                             </div>

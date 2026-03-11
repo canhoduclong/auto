@@ -33,6 +33,10 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\MyCustomerController;
 use App\Http\Controllers\CartController;
+use App\Http\Controllers\OrderApprovalController;
+use App\Http\Controllers\ApprovalWorkflowController;
+use App\Http\Controllers\AdminNotificationController;
+use App\Http\Controllers\AdminEventController;
 
 
 
@@ -64,6 +68,7 @@ Route::middleware(['auth'])->group(function () {
 
     // Quản lý sản phẩm
     Route::resource('products', ProductController::class)->middleware('permission');
+    Route::post('products/{product}/restore', [ProductController::class, 'restore'])->name('products.restore')->middleware('permission');
     Route::get('products/{product}/quick-edit-form', [ProductController::class, 'getQuickEditForm'])->name('products.getQuickEditForm');
     // Quản trị biến thể sản phẩm
     Route::resource('product-variants', ProductVariantController::class)->only(['index', 'create', 'store', 'edit', 'update']);
@@ -90,6 +95,11 @@ Route::middleware(['auth'])->group(function () {
     
     Route::post('/ai/generate-description', [AIController::class, 'generateDescription'])->name('ai.generateDescription');
 
+    Route::get('admin/notifications', [AdminNotificationController::class, 'index'])->name('admin.notifications.index');
+    Route::post('admin/notifications/read-all', [AdminNotificationController::class, 'markAllAsRead'])->name('admin.notifications.read_all');
+    Route::post('admin/notifications/{notificationId}/read', [AdminNotificationController::class, 'markAsRead'])->name('admin.notifications.read');
+    Route::get('admin/events', [AdminEventController::class, 'index'])->name('admin.events.index');
+
 
     // Quản lý đơn hàng
     Route::get('orders/list-ajax', [OrderController::class, 'listAjax'])->name('orders.list-ajax');
@@ -104,7 +114,20 @@ Route::middleware(['auth'])->group(function () {
     Route::post('orders/{order}/add-variant', [OrderController::class, 'addVariant']);
     Route::post('orders/{order}/remove-variant', [OrderController::class, 'removeVariant']);
     Route::post('/orders/{order}/confirm', [OrderController::class, 'confirm'])->name('orders.confirm');
+    Route::post('/orders/{order}/picking', [OrderController::class, 'picking'])->name('orders.picking');
+    Route::post('/orders/{order}/pickup', [OrderController::class, 'pickup'])->name('orders.pickup');
+    Route::post('/orders/{order}/ship', [OrderController::class, 'ship'])->name('orders.ship');
+    Route::post('/orders/{order}/complete', [OrderController::class, 'complete'])->name('orders.complete');
+    Route::post('/orders/{order}/cancel', [OrderController::class, 'cancel'])->name('orders.cancel');
+    Route::post('/orders/{order}/approve', [OrderApprovalController::class, 'approve'])->name('orders.approve');
+    Route::post('/orders/{order}/reject', [OrderApprovalController::class, 'reject'])->name('orders.reject');
     Route::resource('orders', OrderController::class)->middleware('permission');
+
+    Route::get('approval-workflows', [ApprovalWorkflowController::class, 'index'])->name('approval-workflows.index');
+    Route::get('approval-workflows/create', [ApprovalWorkflowController::class, 'create'])->name('approval-workflows.create');
+    Route::post('approval-workflows', [ApprovalWorkflowController::class, 'store'])->name('approval-workflows.store');
+    Route::get('approval-workflows/{approvalWorkflow}/edit', [ApprovalWorkflowController::class, 'edit'])->name('approval-workflows.edit');
+    Route::put('approval-workflows/{approvalWorkflow}', [ApprovalWorkflowController::class, 'update'])->name('approval-workflows.update');
 
     // Quản lý danh mục
     Route::resource('categories', CategoryController::class)->middleware('permission');
@@ -140,6 +163,10 @@ Route::middleware(['auth'])->group(function () {
     Route::resource('inventory-documents', InventoryDocumentController::class)->middleware('permission');
     Route::resource('inventory-adjustments', InventoryAdjustmentController::class)->middleware('permission');
     Route::resource('inventory-reservations', InventoryReservationController::class)->middleware('permission');
+    Route::get('/my-orders/{order}/returns/create', [OrderReturnController::class, 'createForMyOrder'])->name('site.order-returns.create');
+    Route::post('/my-orders/{order}/returns', [OrderReturnController::class, 'storeForMyOrder'])->name('site.order-returns.store');
+    Route::post('order-returns/{orderReturn}/ship-confirm', [OrderReturnController::class, 'shipConfirm'])->name('order-returns.ship-confirm')->middleware('permission');
+    Route::post('order-returns/{orderReturn}/warehouse-confirm', [OrderReturnController::class, 'warehouseConfirm'])->name('order-returns.warehouse-confirm')->middleware('permission');
     Route::resource('order-returns', OrderReturnController::class)->middleware('permission');
     
     // Route list toàn bộ địa chỉ (không cần customerId)
@@ -198,6 +225,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/my-customer/{customer}', [PageController::class, 'myCustomerShow'])->name('my_customer.show');
     Route::get('/my-customer/{customer}/order', [PageController::class, 'myCustomerOrderCreate'])->name('my_customer.order.create');
     Route::post('/my-customer/{customer}/order', [PageController::class, 'myCustomerOrderStore'])->name('my_customer.order.store');
+Route::get('/my-customer/{customer}/orders-quick-view', [PageController::class, 'myCustomerOrdersQuickView'])->name('my_customer.orders_quick_view');
 });
 
 
@@ -231,8 +259,8 @@ Route::get('/danh-sach-san-pham/{category:slug?}', [PageController::class, 'prod
 Route::get('/variant/{variant:slug}', [PageController::class, 'variantDetail'])->name('pages.variant_detail');
 Route::get('/my-profile', [PageController::class, 'myDashboard'])->name('pages.my_dashboard');
 Route::post('/my-profile', [PageController::class, 'updateProfile'])->name('pages.update_profile');
-Route::get('/my-orders', [PageController::class, 'myOrders'])->name('pages.my_orders');
-Route::get('/my-orders/{order}', [PageController::class, 'myOrderDetail'])->name('site.orders.show');
+Route::get('/my-orders', [PageController::class, 'myOrders'])->name('pages.my_orders')->middleware('auth');
+Route::get('/my-orders/{order}', [PageController::class, 'myOrderDetail'])->name('site.orders.show')->middleware('auth');
 
 Route::get('/page/{slug}', [PageController::class, 'show'])->name('pages.show');
 

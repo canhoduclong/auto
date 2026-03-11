@@ -4,6 +4,7 @@
 <div class="container">
     <h2>Danh sách Người dùng</h2>
     <a href="{{ route('users.create') }}" class="btn btn-primary mb-3">+ Thêm User</a>
+                <th>Kho duoc assign</th>
 
     @if(session('success'))
         <div class="alert alert-success">{{ session('success') }}</div>
@@ -17,6 +18,7 @@
                 <th>Email</th>
                 <th>Quyền</th>
                 <th>Hành động</th>
+                    <td>{{ $u->warehouse->name ?? 'Chua gan' }}</td>
             </tr>
         </thead>
         <tbody>

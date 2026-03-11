@@ -2,8 +2,13 @@
 
 @section('content')
 <div class="container">
-    <h4>Quản lý đơn hàng</h4>
-    <a href="{{ route('orders.create') }}" class="btn btn-success mb-3">+ Thêm đơn hàng</a>
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <h4 class="mb-0">Quản lý đơn hàng</h4>
+        <div>
+            <a href="{{ route('approval-workflows.create') }}" class="btn btn-outline-primary">Tạo quy trình</a>
+            <a href="{{ route('orders.create') }}" class="btn btn-success">+ Thêm đơn hàng</a>
+        </div>
+    </div>
 
     <div class="card mb-3">
         <div class="card-header">
@@ -69,6 +74,12 @@
                             <input type="date" name="to_date" id="to_date" class="form-control" value="{{ request('to_date') }}">
                         </div>
                     </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" name="my_pending_approval" id="my_pending_approval" value="1" {{ request('my_pending_approval') ? 'checked' : '' }}>
+                            <label class="form-check-label" for="my_pending_approval">Chỉ hiện đơn chờ tôi duyệt</label>
+                        </div>
+                    </div>
                 </div>
                 <button type="submit" class="btn btn-primary">Lọc</button>
                 <a href="{{ route('orders.index') }}" class="btn btn-secondary">Xóa bộ lọc</a>
@@ -113,6 +124,7 @@
                     <th>Trạng thái thanh toán</th>
                     <th>Đã thanh toán</th>
                     <th>Ngày tạo</th>
+                    <th>Duyệt</th>
                     <th>Thao tác</th>
                     <th>QR Code</th>
                 </tr>
@@ -144,6 +156,40 @@
                     <td>{{ $order->created_at }}</td>
                     <td>
                         @php
+                            $currentApproval = $currentStepByOrder[$order->id] ?? null;
+                            $canApprove = $canApproveByOrder[$order->id] ?? false;
+                        @endphp
+
+                        @if($order->status === \App\Enums\OrderStatus::Approved->value)
+                            <span class="badge bg-success">Đã duyệt</span>
+                        @elseif($order->status === \App\Enums\OrderStatus::Rejected->value)
+                            <span class="badge bg-danger">Đã từ chối</span>
+                        @elseif($currentApproval && $currentApproval->step)
+                            <div class="mb-2">
+                                <span class="badge bg-info text-dark">
+                                    B{{ $currentApproval->step->step_order }} - {{ $currentApproval->step->role_slug }}
+                                </span>
+                            </div>
+                            @if($canApprove)
+                                <form method="POST" action="{{ route('orders.approve', $order) }}" class="d-inline">
+                                    @csrf
+                                    <input type="hidden" name="note" value="Duyệt nhanh từ danh sách đơn hàng">
+                                    <button type="submit" class="btn btn-sm btn-success">Approve</button>
+                                </form>
+                                <form method="POST" action="{{ route('orders.reject', $order) }}" class="d-inline ms-1">
+                                    @csrf
+                                    <input type="hidden" name="note" value="Từ chối nhanh từ danh sách đơn hàng">
+                                    <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Bạn có chắc muốn từ chối đơn này?')">Reject</button>
+                                </form>
+                            @else
+                                <small class="text-muted d-block">Không đúng vai trò duyệt</small>
+                            @endif
+                        @else
+                            <small class="text-muted">Không có bước duyệt chờ</small>
+                        @endif
+                    </td>
+                    <td>
+                        @php
                             $paid = $order->transactions->where('type', 'payment')->sum('amount') - $order->transactions->where('type', 'refund')->sum('amount');
                         @endphp
                         @if(!$order->isPaid())
@@ -155,6 +201,9 @@
                     </td>
                     <td>
                         <a href="{{ route('orders.show', $order) }}" class="btn btn-sm btn-info">xem</a>
+                        @if(in_array($order->status, ['picked_up', 'shipping', 'completed'], true))
+                            <a href="{{ route('order-returns.create', ['order_id' => $order->id]) }}" class="btn btn-warning btn-sm">Tra hang</a>
+                        @endif
                         @if(!$order->isPaid() && $order->status !== \App\Models\Order::STATUS_COMPLETED)
                             <a href="{{ route('orders.edit', $order->id) }}" class="btn btn-info btn-sm">Sửa</a>
                         @endif

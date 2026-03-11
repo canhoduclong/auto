@@ -55,6 +55,22 @@
         </div>
 
         <div class="mb-3">
+            <label class="form-label">Footer Logo</label>
+            <div class="mb-2" id="footer-logo-preview">
+                @if(isset($settings['footer_logo']) && $settings['footer_logo']->value)
+                    @php
+                        $media = App\Models\Media::find($settings['footer_logo']->value);
+                    @endphp
+                    @if($media)
+                        <img src="{{ asset('storage/' . $media->file_path) }}" width="120" class="img-thumbnail">
+                    @endif
+                @endif
+            </div>
+            <input type="hidden" name="footer_logo" id="footer-logo-media-id" value="{{ $settings['footer_logo']->value ?? '' }}">
+            <button type="button" class="btn btn-info" id="btnSelectFooterLogo">Chọn ảnh từ thư viện</button>
+        </div>
+
+        <div class="mb-3">
             <label for="address" class="form-label">Address</label>
             <textarea class="form-control" id="address" name="address" rows="3">{{ $settings['address']->value ?? '' }}</textarea>
         </div>
@@ -148,6 +164,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     setupMediaSelector('btnSelectLogo', 'logo-preview', 'logo-media-id');
     setupMediaSelector('btnSelectBanner', 'banner-preview', 'banner-media-id');
+    setupMediaSelector('btnSelectFooterLogo', 'footer-logo-preview', 'footer-logo-media-id');
     @for ($i = 1; $i <= 5; $i++)
         setupMediaSelector('btnSelectSlider{{ $i }}', 'slider_{{ $i }}-preview', 'slider_{{ $i }}-media-id');
     @endfor

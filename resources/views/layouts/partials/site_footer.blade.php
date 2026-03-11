@@ -1,28 +1,22 @@
  @yield('footer')
+ @php
+    $footerLogo = null;
+    if (isset($settings['footer_logo']) && !empty($settings['footer_logo']->value)) {
+        $footerLogo = App\Models\Media::find($settings['footer_logo']->value);
+    }
+ @endphp
  <footer class="footer set-bg" data-setbg="{{ asset('img/footer-bg.jpg') }}" style="background-image: url(&quot;{{ asset('img/footer-bg.jpg') }}&quot;);">
     <div class="container">
-            <div class="footer__contact">
-                <div class="row">
-                    <div class="col-lg-6 col-md-6">
-                        <div class="footer__contact__title">
-                            <h2>HOTLINE CỨU HỘ 24/7</h2>
-                        </div>
-                    </div>
-                    <div class="col-lg-6 col-md-6">
-                        <div class="footer__contact__option">
-                            <div class="option__item"><i class="fa fa-phone"></i> (+84) 093 820 5979</div>
-                            <div class="option__item email"><i class="fa fa-envelope-o"></i> autotaybac@gmail.com</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
             <div class="row">
                 <div class="col-lg-9 col-md-9">
                     <div class="footer__about">
                         <div class="footer__logo mb-4">
-                            <a href="./"> 
-                                <img src="{{ asset('storage/media/auto-logo-footer.png' ) }}" alt="logo" height="60">
-                                   
+                            <a href="{{ route('home') }}">
+                                @if($footerLogo)
+                                    <img src="{{ asset('storage/' . $footerLogo->file_path) }}" alt="footer logo" height="56">
+                                @else
+                                    {{ $settings['brand_name']->value ?? 'Footer Logo' }}
+                                @endif
                             </a>
                         </div>  
                          <ul class="mx-0 px-0 list-unstyled color-white"> 

@@ -2,6 +2,12 @@
 
 namespace App\Providers;
 
+use App\Models\Customer;
+use App\Models\Order;
+use App\Models\Product;
+use App\Observers\CustomerObserver;
+use App\Observers\OrderObserver;
+use App\Observers\ProductObserver;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Database\Eloquent\Relations\Relation;
 
@@ -17,6 +23,10 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Paginator::useBootstrap();
+
+        Product::observe(ProductObserver::class);
+        Customer::observe(CustomerObserver::class);
+        Order::observe(OrderObserver::class);
 
         Relation::morphMap([
             'product'           => \App\Models\Product::class,

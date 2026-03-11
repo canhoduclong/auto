@@ -38,6 +38,10 @@ class DatabaseSeeder extends Seeder
             InventoryReservationSeeder::class,
             OrderReturnSeeder::class,
             ReturnItemSeeder::class,
+
+            ApprovalFlowSeeder::class,
+            ApprovalStepSeeder::class,
+            ApprovalOrderSeeder::class,
         ]);
     }
 }

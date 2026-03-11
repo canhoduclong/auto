@@ -16,19 +16,32 @@ class InventoryDocumentController extends Controller
 {
     public function index()
     {
-        $inventoryDocuments = InventoryDocument::with('warehouse', 'user')->latest()->paginate(10);
+        $this->assertWarehouseAssignment();
+
+        $query = InventoryDocument::with('warehouse', 'user')->latest();
+
+        $managedWarehouseId = $this->getManagedWarehouseId();
+        if ($managedWarehouseId) {
+            $query->where('warehouse_id', $managedWarehouseId);
+        }
+
+        $inventoryDocuments = $query->paginate(10);
         return view('inventory-documents.index', compact('inventoryDocuments'));
     }
 
     public function create()
     {
-        $warehouses = Warehouse::all();
+        $this->assertWarehouseAssignment();
+
+        $warehouses = $this->getAllowedWarehouses();
         $productVariants = ProductVariant::with('product')->get();
         return view('inventory-documents.create', compact('warehouses', 'productVariants'));
     }
 
     public function store(Request $request)
     {
+        $this->assertWarehouseAssignment();
+
         $validated = $request->validate([
             'document_date' => 'required|date',
             'type' => 'required|string|in:import,export,adjustment',
@@ -41,13 +54,15 @@ class InventoryDocumentController extends Controller
             'items.*.unit_cost' => 'required|numeric|min:0',
         ]);
 
-        DB::transaction(function () use ($validated, $request) {
+        DB::transaction(function () use ($validated) {
+            $warehouseId = $this->resolveWarehouseId($validated['warehouse_id']);
+
             $document = InventoryDocument::create([
                 'document_date' => $validated['document_date'],
                 'type' => $validated['type'],
-                'warehouse_id' => $validated['warehouse_id'],
+                'warehouse_id' => $warehouseId,
                 'shipping_fee' => $validated['shipping_fee'] ?? 0,
-                'notes' => $validated['notes'],
+                'notes' => $validated['notes'] ?? null,
                 'user_id' => Auth::id(),
             ]);
 
@@ -57,13 +72,17 @@ class InventoryDocumentController extends Controller
                 $inventory = Inventory::firstOrCreate(
                     [
                         'product_variant_id' => $itemData['product_variant_id'],
-                        'warehouse_id' => $validated['warehouse_id'],
+                        'warehouse_id' => $warehouseId,
                     ],
                     ['quantity' => 0]
                 );
 
                 $quantityChange = $itemData['quantity'];
                 if ($validated['type'] == 'export') {
+                    $availableQty = max(0, (int) $inventory->quantity - (int) $inventory->reserved_quantity);
+                    if ($availableQty < $itemData['quantity']) {
+                        throw new \RuntimeException('So luong ton kho khong du de xuat kho.');
+                    }
                     $quantityChange = -$quantityChange;
                 }
 
@@ -78,6 +97,8 @@ class InventoryDocumentController extends Controller
 
                 $inventory->quantity += $quantityChange;
                 $inventory->save();
+
+                $this->syncVariantStockFromInventories((int) $itemData['product_variant_id']);
             }
         });
 
@@ -92,7 +113,14 @@ class InventoryDocumentController extends Controller
 
     public function edit(InventoryDocument $inventoryDocument)
     {
-        $warehouses = Warehouse::all();
+        $this->assertWarehouseAssignment();
+
+        $managedWarehouseId = $this->getManagedWarehouseId();
+        if ($managedWarehouseId && (int) $inventoryDocument->warehouse_id !== $managedWarehouseId) {
+            abort(403, 'Ban khong duoc phep sua chung tu cua kho khac.');
+        }
+
+        $warehouses = $this->getAllowedWarehouses();
         $productVariants = ProductVariant::with('product')->get();
         $inventoryDocument->load('items');
         return view('inventory-documents.edit', compact('inventoryDocument', 'warehouses', 'productVariants'));
@@ -100,6 +128,8 @@ class InventoryDocumentController extends Controller
 
     public function update(Request $request, InventoryDocument $inventoryDocument)
     {
+        $this->assertWarehouseAssignment();
+
         // For simplicity, we will delete and recreate the items and movements.
         // A more robust solution would compare and update existing items.
         DB::transaction(function () use ($request, $inventoryDocument) {
@@ -115,6 +145,8 @@ class InventoryDocumentController extends Controller
                     }
                     $inventory->quantity -= $quantityChange;
                     $inventory->save();
+
+                    $this->syncVariantStockFromInventories((int) $item->product_variant_id);
                 }
             }
             InventoryMovement::where('reference_id', $inventoryDocument->id)
@@ -135,12 +167,14 @@ class InventoryDocumentController extends Controller
                 'items.*.unit_cost' => 'required|numeric|min:0',
             ]);
 
+            $warehouseId = $this->resolveWarehouseId($validated['warehouse_id']);
+
             $inventoryDocument->update([
                 'document_date' => $validated['document_date'],
                 'type' => $validated['type'],
-                'warehouse_id' => $validated['warehouse_id'],
+                'warehouse_id' => $warehouseId,
                 'shipping_fee' => $validated['shipping_fee'] ?? 0,
-                'notes' => $validated['notes'],
+                'notes' => $validated['notes'] ?? null,
             ]);
 
             foreach ($validated['items'] as $itemData) {
@@ -149,13 +183,17 @@ class InventoryDocumentController extends Controller
                 $inventory = Inventory::firstOrCreate(
                     [
                         'product_variant_id' => $itemData['product_variant_id'],
-                        'warehouse_id' => $validated['warehouse_id'],
+                        'warehouse_id' => $warehouseId,
                     ],
                     ['quantity' => 0]
                 );
 
                 $quantityChange = $itemData['quantity'];
                 if ($validated['type'] == 'export') {
+                    $availableQty = max(0, (int) $inventory->quantity - (int) $inventory->reserved_quantity);
+                    if ($availableQty < $itemData['quantity']) {
+                        throw new \RuntimeException('So luong ton kho khong du de xuat kho.');
+                    }
                     $quantityChange = -$quantityChange;
                 }
 
@@ -170,6 +208,8 @@ class InventoryDocumentController extends Controller
 
                 $inventory->quantity += $quantityChange;
                 $inventory->save();
+
+                $this->syncVariantStockFromInventories((int) $itemData['product_variant_id']);
             }
         });
 
@@ -178,6 +218,13 @@ class InventoryDocumentController extends Controller
 
     public function destroy(InventoryDocument $inventoryDocument)
     {
+        $this->assertWarehouseAssignment();
+
+        $managedWarehouseId = $this->getManagedWarehouseId();
+        if ($managedWarehouseId && (int) $inventoryDocument->warehouse_id !== $managedWarehouseId) {
+            abort(403, 'Ban khong duoc phep xoa chung tu cua kho khac.');
+        }
+
         DB::transaction(function () use ($inventoryDocument) {
             // Revert movements before deleting
             foreach ($inventoryDocument->items as $item) {
@@ -191,11 +238,57 @@ class InventoryDocumentController extends Controller
                     }
                     $inventory->quantity -= $quantityChange;
                     $inventory->save();
+
+                    $this->syncVariantStockFromInventories((int) $item->product_variant_id);
                 }
             }
             $inventoryDocument->delete(); // Items and movements will be deleted by cascade or manually
         });
 
         return redirect()->route('inventory-documents.index')->with('success', 'Inventory document deleted successfully.');
+    }
+
+    private function getManagedWarehouseId(): ?int
+    {
+        $user = Auth::user();
+        if (!$user || !$user->hasRole('warehouse')) {
+            return null;
+        }
+
+        return $user->warehouse_id ? (int) $user->warehouse_id : null;
+    }
+
+    private function assertWarehouseAssignment(): void
+    {
+        $user = Auth::user();
+        if ($user && $user->hasRole('warehouse') && !$user->warehouse_id) {
+            abort(403, 'Tai khoan warehouse chua duoc assign kho.');
+        }
+    }
+
+    private function getAllowedWarehouses()
+    {
+        $managedWarehouseId = $this->getManagedWarehouseId();
+        if ($managedWarehouseId) {
+            return Warehouse::where('id', $managedWarehouseId)->get();
+        }
+
+        return Warehouse::all();
+    }
+
+    private function resolveWarehouseId(int $requestedWarehouseId): int
+    {
+        $managedWarehouseId = $this->getManagedWarehouseId();
+        if ($managedWarehouseId) {
+            return $managedWarehouseId;
+        }
+
+        return $requestedWarehouseId;
+    }
+
+    private function syncVariantStockFromInventories(int $variantId): void
+    {
+        $totalStock = (int) Inventory::where('product_variant_id', $variantId)->sum('quantity');
+        ProductVariant::where('id', $variantId)->update(['stock' => $totalStock]);
     }
 }

@@ -24,7 +24,7 @@ class CategoryPolicy
 
     public function delete(User $user, Category $category)
     {
-        return $user->hasPermission('categories.delete');
+        return $user->hasRole('admin') || $user->hasPermission('categories.delete');
     }
     
 }

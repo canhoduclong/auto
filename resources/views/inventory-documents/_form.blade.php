@@ -27,11 +27,22 @@
     <div class="col-md-6">
         <div class="form-group mb-3">
             <label for="warehouse_id" class="form-label">Warehouse</label>
-            <select name="warehouse_id" id="warehouse_id" class="form-control @error('warehouse_id') is-invalid @enderror" required>
-                @foreach($warehouses as $warehouse)
-                    <option value="{{ $warehouse->id }}" {{ (old('warehouse_id', $inventoryDocument->warehouse_id ?? '') == $warehouse->id) ? 'selected' : '' }}>{{ $warehouse->name }}</option>
-                @endforeach
-            </select>
+            @php
+                $currentUser = auth()->user();
+                $isWarehouseUser = $currentUser && $currentUser->hasRole('warehouse');
+                $selectedWarehouseId = old('warehouse_id', $inventoryDocument->warehouse_id ?? ($currentUser->warehouse_id ?? ''));
+            @endphp
+
+            @if($isWarehouseUser)
+                <input type="hidden" name="warehouse_id" value="{{ $selectedWarehouseId }}">
+                <input type="text" class="form-control" value="{{ optional($warehouses->first())->name ?? 'Kho chua duoc gan' }}" readonly>
+            @else
+                <select name="warehouse_id" id="warehouse_id" class="form-control @error('warehouse_id') is-invalid @enderror" required>
+                    @foreach($warehouses as $warehouse)
+                        <option value="{{ $warehouse->id }}" {{ ((string) $selectedWarehouseId === (string) $warehouse->id) ? 'selected' : '' }}>{{ $warehouse->name }}</option>
+                    @endforeach
+                </select>
+            @endif
             @error('warehouse_id')
                 <div class="invalid-feedback">{{ $message }}</div>
             @enderror

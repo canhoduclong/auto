@@ -30,7 +30,13 @@ class PostController extends Controller
         $settings = Cache::remember('settings', 60, function () {
             return Setting::all()->keyBy('key');
         });
-        $otherPosts = Post::where('is_published', true)->where('id', '!=', $post->id)->latest()->paginate(5);
+        $post->load(['category', 'author', 'tags']);
+
+        $otherPosts = Post::where('is_published', true)
+            ->where('id', '!=', $post->id)
+            ->with(['category', 'author'])
+            ->latest()
+            ->paginate(5);
         $categories = PostCategory::withCount('posts')->get();
         $tags = Tag::all();
 

@@ -15,12 +15,12 @@ class SettingSeeder extends Seeder
     {
         $settings = [
             ['key' => 'logo', 'value' => ''],
-            ['key' => 'slogan', 'value' => 'Auto Tây Bắc – Nơi chất lượng làm nên giá trị'],
+            ['key' => 'slogan', 'value' => 'Chất lượng làm nên thương hiệu'],
             ['key' => 'brand_name', 'value' => 'Your Brand'],
-            ['key' => 'address', 'value' => '307 Tỉnh Lộ 8, Xã Tân An Hội, Thành phố Hồ Chí Minh, Việt Nam'],
-            ['key' => 'hotline', 'value' => '093 820 5979'],
-            ['key' => 'email', 'value' => 'ntchungtas@gmail.com'],
-            ['key' => 'tax_number', 'value' => '0319183943'],
+            ['key' => 'address', 'value' => '177c CChiến Lược, Bình Trị Đông, TP. HCM'],
+            ['key' => 'hotline', 'value' =>'0901 184 222'],
+            ['key' => 'email', 'value' => 'huyhoanglongtnt@gmail.com'],
+            ['key' => 'tax_number', 'value' => '0901 184 222'],
         ];
 
         foreach ($settings as $setting) {

@@ -9,17 +9,23 @@
             <form action="{{ route('my_customer.store') }}" method="POST">
                 @csrf
                 <div class="modal-body">
+                    @if(session('error'))
+                        <div class="alert alert-danger">
+                            {{ session('error') }}
+                        </div>
+                    @endif
+
                     <div class="mb-3">
                         <label for="name" class="form-label">Tên</label>
-                        <input type="text" class="form-control" id="name" name="name" required>
+                        <input type="text" class="form-control" id="name" name="name" value="{{ old('name') }}" required>
                     </div>
                     <div class="mb-3">
                         <label for="email" class="form-label">Email</label>
-                        <input type="email" class="form-control" id="email" name="email" required>
+                        <input type="email" class="form-control" id="email" name="email" value="{{ old('email') }}" required>
                     </div>
                     <div class="mb-3">
                         <label for="phone" class="form-label">Điện thoại</label>
-                        <input type="text" class="form-control" id="phone" name="phone">
+                        <input type="text" class="form-control" id="phone" name="phone" value="{{ old('phone') }}">
                     </div>
                 </div>
                 <div class="modal-footer">

@@ -3,7 +3,7 @@
     <div class="offcanvas__widget">
         <a href="#"><i class="fa fa-cart-plus"></i></a>
         <a href="#" class="search-switch"><i class="fa fa-search"></i></a>
-        <a href="#" class="primary-btn">Add Car</a>
+        <a href="#" class="primary-btn">Thêm</a>
     </div>
     <div class="offcanvas__logo">
         <a href="{{ route('home') }}"><img src="{{ asset('img/logo-auto-taybac.png') }}" alt=""></a>
@@ -11,11 +11,11 @@
     <div id="mobile-menu-wrap"></div>
     <ul class="offcanvas__widget__add">
         <li><i class="fa fa-clock-o"></i> Week day: 08:00 am to 18:00 pm</li>
-        <li><i class="fa fa-envelope-o"></i> autotaybac@gmail.com</li>
+        <li><i class="fa fa-envelope-o"></i> email@gmail.com</li>
     </ul>
     <div class="offcanvas__phone__num">
         <i class="fa fa-phone"></i>
-        <span>093 820 5979</span>
+        <span>0909 990 909</span>
     </div>
     <div class="offcanvas__social">
         <a href="#"><i class="fa fa-facebook"></i></a>
@@ -31,7 +31,7 @@
                 <div class="col-lg-7">
                     <ul class="header__top__widget">
                         <li><i class="fa fa-clock-o"></i>{{ $settings['slogan']->value ?? 'Your slogan here' }}</li>
-                        <li><i class="fa fa-phone"></i>  {{ $settings['HOTLINE']->value ?? '093 820 5979' }}</li>
+                        <li><i class="fa fa-phone"></i>  {{ $settings['HOTLINE']->value ?? '0909 990 909' }}</li>
                     </ul>
                 </div>
                 <div class="col-lg-5  d-flex justify-content-end align-items-center">
@@ -49,7 +49,7 @@
     </div> 
      <div class="container">
         <div class="row">
-            <div class="col-lg-3">
+            <div class="col-lg-4">
                 <div class="header__logo"> 
                     <a href="{{ route('home') }}">
                         @if(isset($settings['logo']) && $settings['logo']->value)
@@ -60,12 +60,12 @@
                                 <img src="{{ asset('storage/' . $media->file_path) }}" alt="logo" height="50">
                             @endif
                         @else
-                            <h2>{{ $settings['brand_name']->value ?? 'Auto Tây Bắc' }}</h2>
+                            <h2>{{ $settings['brand_name']->value ?? 'Logo ' }}</h2>
                         @endif
                     </a>
                 </div>
             </div>
-            <div class="col-lg-9 d-flex justify-content-end align-items-center">
+            <div class="col-lg-8 d-flex justify-content-end align-items-center">
                 <div class="header__nav ">
                     <nav class="header__menu "> 
                         <ul class="mb-0 ml-0 pb-0 pl-0">
@@ -87,7 +87,7 @@
                             <x-cart-widget :cartCount="count(session('cart', []))" class="me-3" /> 
                             @auth
                                 <div class="dropdown">
-                                    <a href="#" class="d-block link-white text-decoration-none dropdown-toggle primary-btn" id="dropdownUser1" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <a href="#" class="d-block link-white text-decoration-none dropdown-toggle btn btn-outline-primary" id="dropdownUser1" data-bs-toggle="dropdown" aria-expanded="false">
                                         {{ Auth::user()->name }}
                                     </a>
                                     <ul class="dropdown-menu text-small" aria-labelledby="dropdownUser1">
@@ -109,7 +109,7 @@
                                     </ul>
                                 </div>
                             @else
-                                <a href="{{ route('login') }}" class="primary-btn">Đăng nhập</a>
+                                <a href="{{ route('login') }}" class="btn btn-outline-primary">Đăng nhập</a>
                             @endauth
 
                              

@@ -1,5 +1,7 @@
 <?php
 namespace App\Models;
+
+use App\Models\ApprovalOrder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -14,7 +16,7 @@ class Order extends Model
     
     public function approvals()
     {
-        return $this->hasMany(OrderApproval::class);
+        return $this->hasMany(ApprovalOrder::class);
     }
 
     public function transactions() { return $this->hasMany(Transaction::class); }

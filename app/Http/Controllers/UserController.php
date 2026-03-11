@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Models\Role;
+use App\Models\Warehouse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 
@@ -11,14 +12,15 @@ class UserController extends Controller
 {
     public function index()
     {
-        $users = User::with('roles')->paginate(10);
+        $users = User::with('roles', 'warehouse')->paginate(10);
         return view('users.index', compact('users'));
     }
 
     public function create()
     {
         $roles = Role::all();
-        return view('users.create', compact('roles'));
+        $warehouses = Warehouse::orderBy('name')->get();
+        return view('users.create', compact('roles', 'warehouses'));
     }
 
     public function store(Request $request)
@@ -27,13 +29,15 @@ class UserController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users',
             'password' => 'required|min:6|confirmed',
-            'roles' => 'array'
+            'roles' => 'array',
+            'warehouse_id' => 'nullable|exists:warehouses,id',
         ]);
 
         $user = User::create([
             'name'     => $request->name,
             'email'    => $request->email,
             'password' => Hash::make($request->password),
+            'warehouse_id' => $request->warehouse_id,
         ]);
 
         if ($request->roles) {
@@ -51,7 +55,8 @@ class UserController extends Controller
     public function edit(User $user)
     {
         $roles = Role::all();
-        return view('users.edit', compact('user','roles'));
+        $warehouses = Warehouse::orderBy('name')->get();
+        return view('users.edit', compact('user','roles', 'warehouses'));
     }
 
     public function update(Request $request, User $user)
@@ -60,13 +65,15 @@ class UserController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email,'.$user->id,
             'password' => 'nullable|min:6|confirmed',
-            'roles' => 'array'
+            'roles' => 'array',
+            'warehouse_id' => 'nullable|exists:warehouses,id',
         ]);
 
         $user->update([
             'name'     => $request->name,
             'email'    => $request->email,
             'password' => $request->password ? Hash::make($request->password) : $user->password,
+            'warehouse_id' => $request->warehouse_id,
         ]);
 
         $user->roles()->sync($request->roles ?? []);

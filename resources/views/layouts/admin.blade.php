@@ -39,6 +39,46 @@
         <div class="content-wrapper">
             <div class="navbar navbar-expand-lg navbar-static shadow">
 				<div class="container-fluid">
+                    @php
+                        $currentUser = auth()->user();
+                        $hasNotificationsTable = \Illuminate\Support\Facades\Schema::hasTable('notifications');
+                        $unreadNotificationsCount = $hasNotificationsTable ? ($currentUser?->unreadNotifications()->count() ?? 0) : 0;
+                        $latestNotifications = $hasNotificationsTable ? ($currentUser?->notifications()->latest()->take(5)->get() ?? collect()) : collect();
+                    @endphp
+
+                    <div class="ms-auto d-flex align-items-center gap-2 py-2">
+                        <div class="dropdown">
+                            <button class="btn btn-light btn-sm position-relative" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="ph ph-bell"></i>
+                                @if($unreadNotificationsCount > 0)
+                                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                                        {{ $unreadNotificationsCount > 99 ? '99+' : $unreadNotificationsCount }}
+                                    </span>
+                                @endif
+                            </button>
+                            <div class="dropdown-menu dropdown-menu-end p-0" style="width: 360px; max-height: 420px; overflow-y: auto;">
+                                <div class="d-flex justify-content-between align-items-center p-2 border-bottom">
+                                    <strong>Thong bao</strong>
+                                    <a href="{{ route('admin.notifications.index') }}" class="small">Xem tat ca</a>
+                                </div>
+                                @forelse($latestNotifications as $notification)
+                                    <form action="{{ route('admin.notifications.read', $notification->id) }}" method="POST" class="border-bottom">
+                                        @csrf
+                                        <button type="submit" class="dropdown-item py-2 {{ is_null($notification->read_at) ? 'bg-light' : '' }}">
+                                            <div class="fw-semibold">{{ $notification->data['title'] ?? 'Thong bao' }}</div>
+                                            <div class="small text-muted">{{ \Illuminate\Support\Str::limit($notification->data['message'] ?? '-', 80) }}</div>
+                                            <div class="small text-muted">{{ optional($notification->created_at)->diffForHumans() }}</div>
+                                        </button>
+                                    </form>
+                                @empty
+                                    <div class="p-3 text-muted text-center">Chua co thong bao</div>
+                                @endforelse
+                                <div class="p-2 border-top text-center">
+                                    <a href="{{ route('admin.events.index') }}" class="small">Xem nhat ky su kien</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     </div>
 			</div>
 

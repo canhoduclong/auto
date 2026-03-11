@@ -25,13 +25,13 @@ class ProductPolicy
     }
 
     public function update(User $user, Product $product) {
-        return $user->hasPermission('products.update');
+        return $user->hasRole('admin') || $user->hasPermission('products.update');
     }
     public function edit(User $user, Product $product) {
         return $user->hasPermission('products.edit');
     } 
     public function delete(User $user, Product $product) {
-        return $user->hasPermission('products.delete');
+        return $user->hasRole('admin') || $user->hasPermission('products.delete');
     }
 }
 

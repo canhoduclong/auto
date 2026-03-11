@@ -5,8 +5,11 @@ namespace App\Http\Controllers;
 use App\Models\Order;
 use App\Models\ProductVariant;
 use App\Models\Customer;
+use App\Models\Inventory;
+use App\Models\InventoryMovement;
+use App\Models\InventoryReservation;
 use App\Models\User;
-use App\Services\OrderService;
+use App\Services\ApprovalService;
 use Illuminate\Http\Request;
 use App\Enums\DeliveryStatus;
 use App\Enums\OrderStatus;
@@ -89,7 +92,7 @@ class OrderController extends Controller
         ]);
     }
 
-    public function storeANewOrder(Request $request, OrderService $orderService)
+    public function storeANewOrder(Request $request, ApprovalService $approvalService)
     {
         $request->validate([
             'items' => 'required|array|min:1',
@@ -98,31 +101,32 @@ class OrderController extends Controller
             'customer_id' => 'required|exists:customers,id',
         ]);
 
-        $orderItems = [];
-        foreach ($request->input('items') as $item) {
-            $variant = ProductVariant::find($item['variant_id']);
-            if ($variant->stock < $item['quantity']) {
-                return back()->with('error', "Not enough stock for variant {$variant->sku}. Only {$variant->stock} left.")
-                             ->withInput();
-            }
-            $orderItems[] = [
-                'id' => $item['variant_id'],
-                'quantity' => $item['quantity']
+        $items = collect($request->input('items'))->map(function ($item) {
+            return [
+                'variant_id' => (int) $item['variant_id'],
+                'quantity' => (int) $item['quantity'],
             ];
-        }
+        })->values()->all();
 
-        $order = $orderService->createOrder([
-            'customer_id' => $request->input('customer_id'),
-            'user_id' => auth()->id(),
-            'status' => OrderStatus::Pending->value,
-            'payment_status' => PaymentStatus::Unpaid->value,
-            'delivery_status' => DeliveryStatus::NotShipped->value,
-            'total_amount' => 0, // Service will calculate
-        ], $orderItems);
+        try {
+            $order = $this->createOrderWithUnifiedStockFlow(
+                items: $items,
+                orderData: [
+                    'customer_id' => (int) $request->input('customer_id'),
+                    'user_id' => auth()->id(),
+                    'status' => OrderStatus::Pending->value,
+                    'payment_status' => PaymentStatus::Unpaid->value,
+                    'delivery_status' => DeliveryStatus::NotShipped->value,
+                ],
+                approvalService: $approvalService
+            );
+        } catch (\Throwable $e) {
+            return back()->with('error', $e->getMessage())->withInput();
+        }
 
         return redirect()->route('site.orders.show', $order)->with('success', 'Order created successfully.');
     }
-    public function storeNewOrder(Request $request, OrderService $orderService)
+    public function storeNewOrder(Request $request, ApprovalService $approvalService)
     {
         $request->validate([
             'items' => 'required|array|min:1',
@@ -131,32 +135,33 @@ class OrderController extends Controller
             'customer_id' => 'required|exists:customers,id',
         ]);
 
-        $orderItems = [];
-        foreach ($request->input('items') as $item) {
-            $variant = ProductVariant::find($item['variant_id']);
-            if ($variant->stock < $item['quantity']) {
-                return back()->with('error', "Not enough stock for variant {$variant->sku}. Only {$variant->stock} left.")
-                             ->withInput();
-            }
-            $orderItems[] = [
-                'id' => $item['variant_id'],
-                'quantity' => $item['quantity']
+        $items = collect($request->input('items'))->map(function ($item) {
+            return [
+                'variant_id' => (int) $item['variant_id'],
+                'quantity' => (int) $item['quantity'],
             ];
-        }
+        })->values()->all();
 
-        $order = $orderService->createOrder([
-            'customer_id' => $request->input('customer_id'),
-            'user_id' => auth()->id(),
-            'status' => OrderStatus::Pending->value,
-            'payment_status' => PaymentStatus::Unpaid->value,
-            'delivery_status' => DeliveryStatus::NotShipped->value,
-            'total_amount' => 0, // Service will calculate
-        ], $orderItems);
+        try {
+            $order = $this->createOrderWithUnifiedStockFlow(
+                items: $items,
+                orderData: [
+                    'customer_id' => (int) $request->input('customer_id'),
+                    'user_id' => auth()->id(),
+                    'status' => OrderStatus::Pending->value,
+                    'payment_status' => PaymentStatus::Unpaid->value,
+                    'delivery_status' => DeliveryStatus::NotShipped->value,
+                ],
+                approvalService: $approvalService
+            );
+        } catch (\Throwable $e) {
+            return back()->with('error', $e->getMessage())->withInput();
+        }
 
         return redirect()->route('orders.show', $order)->with('success', 'Order created successfully.');
     }
 
-    public function storeFromCart(Request $request)
+    public function storeFromCart(Request $request, ApprovalService $approvalService)
     {
         if (!auth()->check()) {
             return redirect()->route('login')->with('error', 'Bạn cần đăng nhập để tạo đơn hàng.');
@@ -172,92 +177,42 @@ class OrderController extends Controller
             return redirect()->route('cart.show')->with('error', 'Giỏ hàng trống');
         }
 
-        
+        if (auth()->user()->hasRole('warehouse') && !auth()->user()->warehouse_id) {
+            return redirect()->route('cart.show')->with('error', 'Tai khoan warehouse chua duoc assign kho.');
+        }
 
-            $total = 0;
-            $variants = [];
-            $stockErrors = [];
+        $items = [];
+        foreach ($cart as $variantId => $details) {
+            $items[] = [
+                'variant_id' => (int) $variantId,
+                'quantity' => (int) ($details['quantity'] ?? 0),
+                'price' => $details['price'] ?? null,
+            ];
+        }
 
-            // Kiểm tra tồn kho trước khi bắt đầu giao dịch
-            foreach ($cart as $variantId => $details) {
-                $variant = ProductVariant::find($variantId);
-                if (!$variant) {
-                    return redirect()->route('cart.show')->with('error', "Sản phẩm không tồn tại");
-                }
+        try {
+            $order = $this->createOrderWithUnifiedStockFlow(
+                items: $items,
+                orderData: [
+                    'customer_id' => auth()->id() ?? null,
+                    'user_id' => auth()->id() ?? null,
+                    'recipient_name' => $request->recipient_name,
+                    'recipient_phone' => $request->recipient_phone,
+                    'recipient_address' => $request->recipient_address,
+                    'note' => $request->note,
+                    'status' => OrderStatus::Pending->value,
+                    'payment_status' => PaymentStatus::Unpaid->value,
+                    'delivery_status' => DeliveryStatus::NotShipped->value,
+                ],
+                approvalService: $approvalService
+            );
+        } catch (\Throwable $e) {
+            return redirect()->route('cart.show')->with('error', $e->getMessage());
+        }
 
-                // Kiểm tra tồn kho ngay từ đầu
-                if ($variant->stock < $details['quantity']) {
-                    $stockErrors[] = "Sản phẩm {$variant->product->name} (SKU: {$variant->sku}) không đủ số lượng. Hiện chỉ còn {$variant->stock} sản phẩm.";
-                }
-            }
+        session()->forget('cart');
 
-            // Nếu có lỗi tồn kho, return ngay
-            if (!empty($stockErrors)) {
-                return redirect()->route('cart.show')->with('error', implode("<br>", $stockErrors));
-            }
-
-            // Nếu đủ tồn kho, bắt đầu xử lý với lock
-            foreach ($cart as $variantId => $details) {
-                $variant = ProductVariant::lockForUpdate()->find($variantId);
-                
-                // Kiểm tra lại một lần nữa sau khi lock
-                if ($variant->stock < $details['quantity']) {
-                    DB::rollBack();
-                    return redirect()->route('cart.show')->with('error', "Số lượng đã thay đổi cho {$variant->product->name} (SKU: {$variant->sku}). Vui lòng thử lại.");
-                }
-
-                $price = $variant->latestPriceRule?->price ?? $details['price'];
-                $variants[$variantId] = [
-                    'variant' => $variant,
-                    'quantity' => $details['quantity'],
-                    'price' => $price,
-                ];
-
-                $total += $price * $details['quantity'];
-            }
-
-            // create order
-            $order = new \App\Models\Order();
-            $order->customer_id = auth()->id() ?? null;
-            $order->user_id = auth()->id() ?? null;
-            $order->recipient_name = $request->recipient_name;
-            $order->recipient_phone = $request->recipient_phone;
-            $order->recipient_address = $request->recipient_address;
-            $order->note = $request->note;
-            $order->status = \App\Enums\OrderStatus::Pending->value;
-            $order->payment_status = \App\Enums\PaymentStatus::Unpaid->value;
-            $order->delivery_status = \App\Enums\DeliveryStatus::NotShipped->value;
-            $order->total = $total;
-            $order->save();
-
-            // Tạo order items và cập nhật tồn kho
-            foreach ($variants as $variantId => $info) {
-                 
-                    // Tạo order item
-                    $orderItem = new \App\Models\OrderItem();
-                    $orderItem->order_id = $order->id;
-                    $orderItem->product_variant_id = $variantId;
-                    $orderItem->quantity = $info['quantity'];
-                    $orderItem->price = $info['price'];
-                    $orderItem->save();
-
-                    // Cập nhật tồn kho với điều kiện kiểm tra
-                    $updated = \App\Models\ProductVariant::where('id', $variantId)
-                        ->where('stock', '>=', $info['quantity'])
-                        ->update(['stock' => DB::raw('stock - ' . $info['quantity'])]);
-
-                    if (!$updated) {
-                        throw new \Exception("Không thể cập nhật tồn kho cho sản phẩm SKU: " . $info['variant']->sku);
-                    }
-                 
-            }
-
-            DB::commit();
-
-            // Clear cart
-            session()->forget('cart');
-
-            return redirect()->route('site.orders.show', $order->id)->with('success', 'Đơn hàng đã tạo thành công');
+        return redirect()->route('site.orders.show', $order->id)->with('success', 'Đơn hàng đã tạo thành công');
         
     }
     public function test(Request $request)
@@ -266,7 +221,32 @@ class OrderController extends Controller
     }
     public function index(Request $request)
     {
-        $query = Order::with('customer', 'user');
+        $query = Order::with('customer', 'user', 'transactions', 'approvals.step');
+
+        if ($request->boolean('my_pending_approval') && auth()->check()) {
+            $roleNames = auth()->user()->roles()->pluck('name')->map(fn ($role) => strtolower((string) $role))->values();
+
+            if ($roleNames->isNotEmpty()) {
+                $query->whereExists(function ($sub) use ($roleNames) {
+                    $sub->select(DB::raw(1))
+                        ->from('approval_orders as ao')
+                        ->join('approval_steps as aps', 'aps.id', '=', 'ao.approval_step_id')
+                        ->whereColumn('ao.order_id', 'orders.id')
+                        ->where('ao.status', 'pending')
+                        ->whereIn(DB::raw('LOWER(aps.role_slug)'), $roleNames->toArray())
+                        ->whereNotExists(function ($prev) {
+                            $prev->select(DB::raw(1))
+                                ->from('approval_orders as ao_prev')
+                                ->join('approval_steps as aps_prev', 'aps_prev.id', '=', 'ao_prev.approval_step_id')
+                                ->whereColumn('ao_prev.order_id', 'ao.order_id')
+                                ->where('ao_prev.status', 'pending')
+                                ->whereColumn('aps_prev.step_order', '<', 'aps.step_order');
+                        });
+                });
+            } else {
+                $query->whereRaw('1 = 0');
+            }
+        }
 
         // Filtering
         if ($request->filled('customer_name')) {
@@ -292,6 +272,30 @@ class OrderController extends Controller
 
         $orders = $query->latest()->paginate(15);
 
+        $currentStepByOrder = [];
+        $canApproveByOrder = [];
+        $authUser = auth()->user();
+        $authUser?->loadMissing('roles');
+
+        foreach ($orders as $order) {
+            $currentStep = $order->approvals
+                ->where('status', 'pending')
+                ->sortBy(fn ($approval) => $approval->step->step_order ?? PHP_INT_MAX)
+                ->first();
+
+            $currentStepByOrder[$order->id] = $currentStep;
+
+            $canApprove = false;
+            if ($authUser && $currentStep?->step) {
+                $requiredRole = strtolower((string) $currentStep->step->role_slug);
+                $canApprove = $authUser->roles->contains(
+                    fn ($role) => strtolower((string) $role->name) === $requiredRole
+                );
+            }
+
+            $canApproveByOrder[$order->id] = $canApprove;
+        }
+
         $users = \App\Models\User::all();
         $statusOptions = collect(OrderStatus::cases())->mapWithKeys(function ($case) {
             return [$case->value => $case->name];
@@ -306,13 +310,361 @@ class OrderController extends Controller
             'totalOutstandingAmount',
             'fullyPaidOrders',
             'unpaidOrders',
-            'partiallyPaidOrders'
+            'partiallyPaidOrders',
+            'currentStepByOrder',
+            'canApproveByOrder'
         ));
     }
 
     public function show(Order $order)
     {
-        $order->load('items.variant.product', 'customer');
-        return view('orders.show', compact('order'));
+        $order->load('items.variant.product', 'customer', 'approvals.step', 'approvals.approver');
+
+        $approvalService = app(ApprovalService::class);
+        $currentPendingApproval = $approvalService->getCurrentPendingStep($order);
+        $canApproveCurrentStep = auth()->check()
+            ? $approvalService->canApproveCurrentStep($order, auth()->user())
+            : false;
+
+        return view('orders.show', compact('order', 'currentPendingApproval', 'canApproveCurrentStep'));
+    }
+
+    public function confirm(Order $order)
+    {
+        $this->assertValidTransition($order, ['pending'], 'confirmed');
+        $order->update(['status' => 'confirmed']);
+
+        return back()->with('success', 'Don hang da duoc xac nhan.');
+    }
+
+    public function picking(Order $order)
+    {
+        $this->assertValidTransition($order, ['confirmed'], 'picking');
+        $order->update(['status' => 'picking']);
+
+        return back()->with('success', 'Don hang da chuyen sang trang thai picking.');
+    }
+
+    public function pickup(Order $order)
+    {
+        $this->assertValidTransition($order, ['picking', 'confirmed'], 'picked_up');
+
+        DB::transaction(function () use ($order) {
+            $this->deductReservedStockForOrder($order);
+            $order->update(['status' => 'picked_up']);
+        });
+
+        return back()->with('success', 'Da tru ton kho thuc te khi shipper lay hang.');
+    }
+
+    public function ship(Order $order)
+    {
+        $this->assertValidTransition($order, ['picked_up'], 'shipping');
+        $order->update(['status' => 'shipping']);
+
+        return back()->with('success', 'Don hang dang duoc giao.');
+    }
+
+    public function complete(Order $order)
+    {
+        $this->assertValidTransition($order, ['shipping'], 'completed');
+        $order->update(['status' => 'completed']);
+
+        return back()->with('success', 'Don hang da hoan tat.');
+    }
+
+    public function cancel(Order $order)
+    {
+        $this->assertValidTransition($order, ['pending', 'confirmed', 'picking'], 'cancelled');
+
+        DB::transaction(function () use ($order) {
+            $this->releaseReservedStockForOrder($order);
+            $order->update(['status' => 'cancelled']);
+        });
+
+        return back()->with('success', 'Don hang da bi huy va da giai phong hang booking.');
+    }
+
+    public function toggleStatus(Request $request, Order $order)
+    {
+        $request->validate([
+            'status' => 'nullable|string',
+        ]);
+
+        $targetStatus = $request->input('status');
+        if (!$targetStatus) {
+            $targetStatus = match ($order->status) {
+                'pending' => 'confirmed',
+                'confirmed' => 'picking',
+                'picking' => 'picked_up',
+                'picked_up' => 'shipping',
+                'shipping' => 'completed',
+                default => $order->status,
+            };
+        }
+
+        return match ($targetStatus) {
+            'confirmed' => $this->confirm($order),
+            'picking' => $this->picking($order),
+            'picked_up' => $this->pickup($order),
+            'shipping' => $this->ship($order),
+            'completed' => $this->complete($order),
+            'cancelled' => $this->cancel($order),
+            default => back()->with('error', 'Khong the chuyen trang thai don hang.'),
+        };
+    }
+
+    private function getManagedWarehouseId(): ?int
+    {
+        $user = auth()->user();
+        if (!$user || !$user->hasRole('warehouse')) {
+            return null;
+        }
+
+        return $user->warehouse_id ? (int) $user->warehouse_id : null;
+    }
+
+    private function getAvailableStock(int $variantId, ?int $warehouseId): int
+    {
+        if ($warehouseId) {
+            $inventory = Inventory::where('product_variant_id', $variantId)
+                ->where('warehouse_id', $warehouseId)
+                ->first();
+
+            if (!$inventory) {
+                return 0;
+            }
+
+            return max(0, (int) $inventory->quantity - (int) $inventory->reserved_quantity);
+        }
+
+        $availableSum = (int) Inventory::where('product_variant_id', $variantId)
+            ->selectRaw('COALESCE(SUM(quantity - reserved_quantity), 0) as available_sum')
+            ->value('available_sum');
+
+        if ($availableSum > 0) {
+            return $availableSum;
+        }
+
+        return (int) ProductVariant::where('id', $variantId)->value('stock');
+    }
+
+    private function syncVariantStockFromInventories(int $variantId): void
+    {
+        $totalStock = (int) Inventory::where('product_variant_id', $variantId)->sum('quantity');
+        ProductVariant::where('id', $variantId)->update(['stock' => $totalStock]);
+    }
+
+    private function createOrderWithUnifiedStockFlow(array $items, array $orderData, ApprovalService $approvalService): Order
+    {
+        if (auth()->check() && auth()->user()->hasRole('warehouse') && !auth()->user()->warehouse_id) {
+            throw new \RuntimeException('Tai khoan warehouse chua duoc assign kho.');
+        }
+
+        return DB::transaction(function () use ($items, $orderData, $approvalService) {
+            $items = collect($items)
+                ->filter(fn ($item) => (int) ($item['quantity'] ?? 0) > 0)
+                ->values();
+
+            if ($items->isEmpty()) {
+                throw new \RuntimeException('Khong co san pham hop le trong don.');
+            }
+
+            $managedWarehouseId = $this->getManagedWarehouseId();
+            $variantsData = [];
+            $total = 0;
+
+            foreach ($items as $item) {
+                $variantId = (int) $item['variant_id'];
+                $quantity = (int) $item['quantity'];
+
+                $variant = ProductVariant::with('product')->lockForUpdate()->find($variantId);
+                if (!$variant) {
+                    throw new \RuntimeException('San pham khong ton tai.');
+                }
+
+                $availableQty = $this->getAvailableStock($variantId, $managedWarehouseId);
+                if ($availableQty < $quantity) {
+                    throw new \RuntimeException('San pham ' . $variant->sku . ' khong du ton kho. Con lai: ' . $availableQty);
+                }
+
+                $price = isset($item['price']) && $item['price'] !== null
+                    ? (float) $item['price']
+                    : (float) ($variant->latestPriceRule?->price ?? 0);
+
+                $variantsData[] = [
+                    'variant' => $variant,
+                    'variant_id' => $variantId,
+                    'quantity' => $quantity,
+                    'price' => $price,
+                ];
+
+                $total += $price * $quantity;
+            }
+
+            $order = new Order();
+            $order->customer_id = $orderData['customer_id'] ?? null;
+            $order->user_id = $orderData['user_id'] ?? auth()->id();
+            $order->recipient_name = $orderData['recipient_name'] ?? null;
+            $order->recipient_phone = $orderData['recipient_phone'] ?? null;
+            $order->recipient_address = $orderData['recipient_address'] ?? null;
+            $order->note = $orderData['note'] ?? null;
+            $order->status = $orderData['status'] ?? OrderStatus::Pending->value;
+            $order->payment_status = $orderData['payment_status'] ?? PaymentStatus::Unpaid->value;
+            $order->delivery_status = $orderData['delivery_status'] ?? DeliveryStatus::NotShipped->value;
+            $order->total = $total;
+            $order->save();
+
+            foreach ($variantsData as $info) {
+                $order->items()->create([
+                    'product_id' => $info['variant']->product_id,
+                    'product_variant_id' => $info['variant_id'],
+                    'quantity' => $info['quantity'],
+                    'price' => $info['price'],
+                    'total' => $info['quantity'] * $info['price'],
+                ]);
+            }
+
+            // OMS flow: create order => reserve stock only, not deduct on-hand yet.
+            $this->reserveStockForOrder($order, $managedWarehouseId);
+
+            $approvalService->initOrderApproval($order);
+
+            return $order;
+        });
+    }
+
+    private function reserveStockForOrder(Order $order, ?int $managedWarehouseId): void
+    {
+        $order->loadMissing('items.variant');
+
+        foreach ($order->items as $item) {
+            $variantId = (int) $item->product_variant_id;
+            $reserveQty = (int) $item->quantity;
+
+            if ($managedWarehouseId) {
+                $inventory = Inventory::lockForUpdate()
+                    ->where('product_variant_id', $variantId)
+                    ->where('warehouse_id', $managedWarehouseId)
+                    ->first();
+
+                if (!$inventory) {
+                    throw new \RuntimeException('Khong tim thay ton kho de booking cho SKU: ' . ($item->variant->sku ?? $variantId));
+                }
+
+                $available = max(0, (int) $inventory->quantity - (int) $inventory->reserved_quantity);
+                if ($available < $reserveQty) {
+                    throw new \RuntimeException('Khong du available stock de booking cho SKU: ' . ($item->variant->sku ?? $variantId));
+                }
+
+                $inventory->reserved_quantity += $reserveQty;
+                $inventory->save();
+
+                InventoryReservation::create([
+                    'order_item_id' => $item->id,
+                    'inventory_id' => $inventory->id,
+                    'quantity' => $reserveQty,
+                ]);
+            } else {
+                $inventories = Inventory::lockForUpdate()
+                    ->where('product_variant_id', $variantId)
+                    ->orderByDesc('quantity')
+                    ->get();
+
+                if ($inventories->isEmpty()) {
+                    throw new \RuntimeException('Chua cau hinh ton kho theo kho cho SKU: ' . ($item->variant->sku ?? $variantId));
+                }
+
+                $remaining = $reserveQty;
+                foreach ($inventories as $inventory) {
+                    if ($remaining <= 0) {
+                        break;
+                    }
+
+                    $available = max(0, (int) $inventory->quantity - (int) $inventory->reserved_quantity);
+                    if ($available <= 0) {
+                        continue;
+                    }
+
+                    $reservedNow = min($available, $remaining);
+                    $inventory->reserved_quantity += $reservedNow;
+                    $inventory->save();
+
+                    InventoryReservation::create([
+                        'order_item_id' => $item->id,
+                        'inventory_id' => $inventory->id,
+                        'quantity' => $reservedNow,
+                    ]);
+
+                    $remaining -= $reservedNow;
+                }
+
+                if ($remaining > 0) {
+                    throw new \RuntimeException('Khong du available stock de booking cho SKU: ' . ($item->variant->sku ?? $variantId));
+                }
+            }
+        }
+    }
+
+    private function deductReservedStockForOrder(Order $order): void
+    {
+        $order->loadMissing('items.variant');
+
+        foreach ($order->items as $item) {
+            $reservations = InventoryReservation::where('order_item_id', $item->id)->lockForUpdate()->get();
+
+            foreach ($reservations as $reservation) {
+                $inventory = Inventory::lockForUpdate()->find($reservation->inventory_id);
+                if (!$inventory) {
+                    continue;
+                }
+
+                if ($inventory->quantity < $reservation->quantity || $inventory->reserved_quantity < $reservation->quantity) {
+                    throw new \RuntimeException('Du lieu ton kho booking khong hop le de tru kho.');
+                }
+
+                $inventory->quantity -= $reservation->quantity;
+                $inventory->reserved_quantity -= $reservation->quantity;
+                $inventory->save();
+
+                InventoryMovement::create([
+                    'inventory_id' => $inventory->id,
+                    'quantity' => -$reservation->quantity,
+                    'type' => 'export',
+                    'reference_id' => $order->id,
+                    'reference_type' => Order::class,
+                    'user_id' => auth()->id(),
+                ]);
+
+                $this->syncVariantStockFromInventories((int) $inventory->product_variant_id);
+            }
+
+            InventoryReservation::where('order_item_id', $item->id)->delete();
+        }
+    }
+
+    private function releaseReservedStockForOrder(Order $order): void
+    {
+        $order->loadMissing('items');
+
+        foreach ($order->items as $item) {
+            $reservations = InventoryReservation::where('order_item_id', $item->id)->lockForUpdate()->get();
+            foreach ($reservations as $reservation) {
+                $inventory = Inventory::lockForUpdate()->find($reservation->inventory_id);
+                if ($inventory) {
+                    $inventory->reserved_quantity = max(0, (int) $inventory->reserved_quantity - (int) $reservation->quantity);
+                    $inventory->save();
+                }
+            }
+
+            InventoryReservation::where('order_item_id', $item->id)->delete();
+        }
+    }
+
+    private function assertValidTransition(Order $order, array $allowedCurrentStatuses, string $targetStatus): void
+    {
+        if (!in_array((string) $order->status, $allowedCurrentStatuses, true)) {
+            abort(422, 'Khong the chuyen trang thai tu ' . $order->status . ' sang ' . $targetStatus . '.');
+        }
     }
 }

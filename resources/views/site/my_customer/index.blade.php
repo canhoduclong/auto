@@ -10,6 +10,12 @@
         </div>
     @endif
 
+    @if(session('error'))
+        <div class="alert alert-danger">
+            {{ session('error') }}
+        </div>
+    @endif
+
     
         <div class="card">
             <div class="card-header">
@@ -50,8 +56,7 @@
                 </div>
             </div>
 
-            <form id="bulkDeleteForm" action="{{ route('my_customer.bulk_delete') }}" method="POST">
-                @csrf
+            
                 <table class="table table-striped">
                     <thead>
                         <tr>
@@ -59,40 +64,43 @@
                             <th>Tên</th>
                             <th>Email</th>
                             <th>Điện thoại</th>
-                            <th>Đơn hàng</th>
-                            <th>Hành động</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach($customers as $customer)
-                            <tr>
-                                <td><input type="checkbox" name="ids[]" value="{{ $customer->id }}" class="customer-checkbox"></td>
-                                <td>{{ $customer->name }}</td>
-                                <td>{{ $customer->email }}</td>
-                                <td>{{ $customer->phone }}</td>
-                                <td>
-                                    @if($customer->orders_count > 0)
-                                        <a href="{{ route('my_customer.show', $customer) }}" class="btn btn-info btn-sm">Xem đơn hàng</a>
-                                    @endif
-                                </td>
-                                <td>
-                                    <a href="{{ route('my_customer.show', $customer) }}" class="btn btn-primary btn-sm">Xem</a>
-                                    <a href="{{ route('my_customer.order.create', $customer) }}" class="btn btn-success btn-sm">Lên đơn</a>
-                                    <a href="{{ route('my_customer.edit', $customer) }}" class="btn btn-warning btn-sm">Sửa</a>
-                                    <form action="{{ route('my_customer.destroy', $customer) }}" method="POST" class="d-inline">
-                                        @csrf
-                                        @method('DELETE')
-                                        <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure?')">Xóa</button>
-                                    </form>
-                                </td>
-                            </tr>
-                        @endforeach
-                    </tbody>
-                </table>
-            </form>             
-        </div>
+                                                            <th>Hành động</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach($customers as $customer)
+                                                        <tr>
+                                                            <td><input type="checkbox" name="ids[]" value="{{ $customer->id }}" class="customer-checkbox"></td>
+                                                            <td>{{ $customer->name }}</td>
+                                                            <td>{{ $customer->email }}</td>
+                                                            <td>{{ $customer->phone }}</td>
+                                                            <td>
+                                                                @if($customer->orders_count > 0)
+                                                                    <a href="{{ route('my_customer.show', $customer) }}" class="btn btn-info btn-sm">Xem đơn hàng</a>
+                                                                @endif
+                                                            </td>
+                                                            <td>
+                                                                <button class="btn btn-info btn-sm quick-view-btn" data-id="{{ $customer->id }}">Xem nhanh đơn hàng</button>
+                                                                <a href="{{ route('my_customer.show', $customer) }}" class="btn btn-primary btn-sm">Xem</a>
+                                                                <a href="{{ route('my_customer.order.create', $customer) }}" class="btn btn-success btn-sm">Lên đơn</a>
+                                                                <a href="{{ route('my_customer.edit', $customer) }}" class="btn btn-warning btn-sm">Sửa</a>
+                                                                <form action="{{ route('my_customer.destroy', $customer) }}" method="POST" class="d-inline">
+                                                                    @csrf
+                                                                    @method('DELETE')
+                                                                    <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure?')">Xóa</button>
+                                                                </form>
+                                                            </td>
+                                                        </tr>
+                                                        <tr class="d-none" id="orders-quick-view-{{ $customer->id }}">
+                                                            <td colspan="6"></td>
+                                                        </tr>
+                                                    @endforeach
+                                                </tbody>
+                                            </table>
+                                       
+            </div>
         </div> 
-</div>
+    </div>
 
 @endsection
 
@@ -133,6 +141,30 @@
         if (confirm('Bạn có chắc chắn muốn xóa các khách hàng đã chọn không?')) {
             document.getElementById('bulkDeleteForm').submit();
         }
+    });
+
+    document.querySelectorAll('.quick-view-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const customerId = this.dataset.id;
+            const quickViewRow = document.getElementById('orders-quick-view-' + customerId);
+            const quickViewCell = quickViewRow.querySelector('td');
+
+            quickViewRow.classList.toggle('d-none');
+
+            if (!quickViewRow.classList.contains('d-none')) {
+                // Load content via AJAX
+                quickViewCell.innerHTML = 'Loading...';
+                fetch(`/my-customer/${customerId}/orders-quick-view`)
+                    .then(response => response.text())
+                    .then(html => {
+                        quickViewCell.innerHTML = html;
+                    })
+                    .catch(error => {
+                        console.error('Error fetching orders:', error);
+                        quickViewCell.innerHTML = 'Error loading orders.';
+                    });
+            }
+        });
     });
 </script>
 @endpush

@@ -37,6 +37,17 @@
             </div>
         </div>
 
+        <div class="mb-3">
+            <label class="form-label">Kho duoc assign</label>
+            <select name="warehouse_id" class="form-control">
+                <option value="">-- Chua gan kho --</option>
+                @foreach($warehouses as $warehouse)
+                    <option value="{{ $warehouse->id }}">{{ $warehouse->name }}</option>
+                @endforeach
+            </select>
+            <small class="text-muted">User role warehouse se chi thao tac tren kho duoc gan.</small>
+        </div>
+
         <button type="submit" class="btn btn-success">Tạo</button>
         <a href="{{ route('users.index') }}" class="btn btn-secondary">Hủy</a>
     </form>

@@ -8,9 +8,10 @@ class Transaction extends Model
 {
     use HasFactory;
     protected $fillable = [
-        'order_id', 'customer_id', 'amount', 'type', 'method', 'note'
+        'order_id', 'order_return_id', 'customer_id', 'amount', 'type', 'method', 'note'
     ];
 
     public function order() { return $this->belongsTo(Order::class); }
+    public function orderReturn() { return $this->belongsTo(OrderReturn::class); }
     public function customer() { return $this->belongsTo(Customer::class); }
 }
