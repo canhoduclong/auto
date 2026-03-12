@@ -38,6 +38,17 @@
         </div>
 
         <div class="mb-3">
+            <label class="form-label">Team</label>
+            <select name="team_id" class="form-control">
+                <option value="">-- Chưa gán team --</option>
+                @foreach($teams as $team)
+                    <option value="{{ $team->id }}">{{ $team->name }}</option>
+                @endforeach
+            </select>
+            <small class="text-muted">Leader/Manager sẽ xem đơn theo team được gán.</small>
+        </div>
+
+        <div class="mb-3">
             <label class="form-label">Kho duoc assign</label>
             <select name="warehouse_id" class="form-control">
                 <option value="">-- Chua gan kho --</option>

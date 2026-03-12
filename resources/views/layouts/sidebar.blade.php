@@ -209,6 +209,12 @@
 							</a>
 						</li>
 						<li class="nav-item ">
+							<a href="{{ route('teams.index') }}" class="nav-link{{ request()->routeIs('teams.*') ? ' active' : '' }}">
+								<i class="ph-users-three"></i>
+								<span>Teams</span>
+							</a>
+						</li>
+						<li class="nav-item ">
 							<a href="{{ route('approval-workflows.index') }}" class="nav-link{{ request()->routeIs('approval-workflows.*') ? ' active' : '' }}">
 								<i class="ph-flow-arrow"></i>
 								<span>Tạo quy trình</span>

@@ -3,6 +3,8 @@ namespace App\Http\Controllers;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use App\Models\Customer;
 use App\Models\CustomerType;
+use App\Models\Order;
+use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -101,6 +103,57 @@ class CustomerController extends Controller
         }
 
         return view('customers.index', compact('customers', 'types', 'users'));
+    }
+
+    public function report(Request $request, Customer $customer)
+    {
+        $this->authorize('view', $customer);
+
+        $validated = $request->validate([
+            'from_date' => 'nullable|date',
+            'to_date' => 'nullable|date|after_or_equal:from_date',
+            'per_page' => 'nullable|integer|min:5|max:100',
+        ]);
+
+        $ordersBaseQuery = Order::query()
+            ->where('customer_id', $customer->id);
+
+        if (!empty($validated['from_date'])) {
+            $ordersBaseQuery->whereDate('created_at', '>=', $validated['from_date']);
+        }
+
+        if (!empty($validated['to_date'])) {
+            $ordersBaseQuery->whereDate('created_at', '<=', $validated['to_date']);
+        }
+
+        $ordersQuery = (clone $ordersBaseQuery)
+            ->with(['user', 'transactions'])
+            ->latest();
+
+        $orders = $ordersQuery
+            ->paginate((int) ($validated['per_page'] ?? 15))
+            ->appends($request->query());
+
+        $orderIds = (clone $ordersBaseQuery)->pluck('id');
+        $totalInvoiceAmount = (float) (clone $ordersBaseQuery)->sum('total');
+        $totalPaidAmount = (float) Transaction::query()
+            ->whereIn('order_id', $orderIds)
+            ->where('type', 'payment')
+            ->sum('amount')
+            - (float) Transaction::query()
+                ->whereIn('order_id', $orderIds)
+                ->where('type', 'refund')
+                ->sum('amount');
+
+        $totalOutstandingAmount = max($totalInvoiceAmount - $totalPaidAmount, 0);
+
+        return view('customers.report', compact(
+            'customer',
+            'orders',
+            'totalInvoiceAmount',
+            'totalPaidAmount',
+            'totalOutstandingAmount'
+        ));
     }
 
     // Form create

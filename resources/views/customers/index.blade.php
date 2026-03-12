@@ -119,6 +119,7 @@
                     <td class="text-nowrap"> 
                         <a href="{{ route('customers.edit', $customer) }}" class="btn btn-sm btn-warning">Sửa</a>
                         <a href="{{ route('customers.addresses.index', $customer->id) }}" class="btn btn-sm btn-info">Địa chỉ</a>
+                        <a href="{{ route('customers.report', $customer) }}" class="btn btn-sm btn-primary">Báo cáo</a>
                         <form action="{{ route('customers.destroy', $customer) }}" method="POST" class="d-inline" onsubmit="return confirm('Xác nhận xóa khách hàng này?')">
                             @csrf @method('DELETE')
                             <button class="btn btn-sm btn-danger">Xóa</button>

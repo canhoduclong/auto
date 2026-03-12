@@ -37,6 +37,7 @@ use App\Http\Controllers\OrderApprovalController;
 use App\Http\Controllers\ApprovalWorkflowController;
 use App\Http\Controllers\AdminNotificationController;
 use App\Http\Controllers\AdminEventController;
+use App\Http\Controllers\TeamController;
 
 
 
@@ -115,8 +116,12 @@ Route::middleware(['auth'])->group(function () {
     Route::post('orders/{order}/remove-variant', [OrderController::class, 'removeVariant']);
     Route::post('/orders/{order}/confirm', [OrderController::class, 'confirm'])->name('orders.confirm');
     Route::post('/orders/{order}/picking', [OrderController::class, 'picking'])->name('orders.picking');
+    Route::post('/orders/{order}/complete-packing', [OrderController::class, 'completePacking'])->name('orders.complete-packing');
     Route::post('/orders/{order}/pickup', [OrderController::class, 'pickup'])->name('orders.pickup');
     Route::post('/orders/{order}/ship', [OrderController::class, 'ship'])->name('orders.ship');
+    Route::post('/orders/{order}/delivered', [OrderController::class, 'markDelivered'])->name('orders.delivered');
+    Route::post('/orders/{order}/complete-payment', [OrderController::class, 'completePayment'])->name('orders.complete-payment');
+    Route::post('/orders/{order}/refund', [OrderController::class, 'refund'])->name('orders.refund');
     Route::post('/orders/{order}/complete', [OrderController::class, 'complete'])->name('orders.complete');
     Route::post('/orders/{order}/cancel', [OrderController::class, 'cancel'])->name('orders.cancel');
     Route::post('/orders/{order}/approve', [OrderApprovalController::class, 'approve'])->name('orders.approve');
@@ -141,12 +146,16 @@ Route::middleware(['auth'])->group(function () {
     Route::resource('permissions', PermissionController::class)->middleware('permission');
 
     // Quản lý người dùng
+    Route::get('users/bulk-assign-team', [UserController::class, 'bulkAssignTeamForm'])->name('users.bulk-assign-team.form')->middleware('permission');
+    Route::post('users/bulk-assign-team', [UserController::class, 'bulkAssignTeam'])->name('users.bulk-assign-team')->middleware('permission');
     Route::resource('users', UserController::class)->middleware('permission');
+    Route::resource('teams', TeamController::class)->middleware('permission');
 
     // Ví dụ: khi sau này bạn thêm Customer
     Route::get('customers/export', [CustomerController::class, 'export'])->name('customers.export')->middleware('permission');
     Route::get('customers/import', [CustomerController::class, 'importForm'])->name('customers.import.form')->middleware('permission');
     Route::post('customers/import', [CustomerController::class, 'import'])->name('customers.import')->middleware('permission');
+    Route::get('customers/{customer}/report', [CustomerController::class, 'report'])->name('customers.report')->middleware('permission');
     Route::resource('customers', CustomerController::class)->middleware('permission');
 
     // Xóa nhiều khách hàng
@@ -198,7 +207,9 @@ Route::middleware(['auth'])->group(function () {
 
 
     
-    Route::post('/logout', [AuthController::class, 'logout'])->name('logout'); 
+    Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+    // Compatibility: allow direct GET /logout from address bar/legacy links.
+    Route::get('/logout', [AuthController::class, 'logout']);
 
     Route::group(['prefix' => 'admin', 'as' => 'admin.'], function () {
         Route::get('settings', [SettingController::class, 'index'])->name('settings.index');

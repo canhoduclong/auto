@@ -11,6 +11,19 @@ use Illuminate\Support\Facades\DB;
 
 class ApprovalService
 {
+    private function mapPendingStatusByRole(?string $roleSlug): string
+    {
+        $role = strtolower((string) $roleSlug);
+
+        return match (true) {
+            in_array($role, ['leader_sale', 'leader', 'sale_manager'], true) => 'pending_leader_approval',
+            in_array($role, ['manager_sale', 'manager', 'director'], true) => 'pending_manager_approval',
+            in_array($role, ['warehouse', 'kho'], true) => 'pending_warehouse_approval',
+            in_array($role, ['shipper', 'giao_hang'], true) => 'pending_shipper_approval',
+            default => OrderStatus::Pending->value,
+        };
+    }
+
     public function initOrderApproval(Order $order): void
     {
         DB::transaction(function () use ($order): void {
@@ -37,7 +50,8 @@ class ApprovalService
                 );
             }
 
-            $order->update(['status' => OrderStatus::Pending->value]);
+            $firstStep = $workflow->steps->sortBy('step_order')->first();
+            $order->update(['status' => $this->mapPendingStatusByRole($firstStep?->role_slug)]);
         });
     }
 
@@ -88,7 +102,11 @@ class ApprovalService
         $hasPending = $order->approvals()->where('status', 'pending')->exists();
         if (!$hasPending) {
             $order->update(['status' => OrderStatus::Approved->value]);
+            return;
         }
+
+        $nextPending = $this->getCurrentPendingStep($order);
+        $order->update(['status' => $this->mapPendingStatusByRole($nextPending?->step?->role_slug)]);
     }
 
     public function reject(Order $order, User $user, ?string $note = null): void

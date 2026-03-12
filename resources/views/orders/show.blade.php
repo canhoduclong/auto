@@ -1,65 +1,119 @@
 @extends('layouts.app')
 @section('content')
 <div class="container">
-    <h4>Chi tiết đơn hàng #{{ $order->code }}</h4>
-    <a href="{{ route('orders.index') }}" class="btn btn-secondary mb-3">Quay lại danh sách</a>
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <h4 class="mb-0">Chi tiết đơn hàng #{{ $order->code }}</h4>
+        <a href="{{ route('orders.index') }}" class="btn btn-secondary">Quay lại danh sách</a>
+    </div>
+
     <div class="card mb-3">
         <div class="card-body">
-            <p><strong>Khách hàng:</strong> {{ $order->customer->name ?? '' }}</p>
-            <p><strong>Nhân viên:</strong> {{ $order->user->name ?? '' }}</p>
-            <p><strong>Tổng tiền:</strong> {{ number_format($order->total, 0, ',', '.') }} đ</p> 
-            <p><strong>Ngày tạo:</strong> {{ $order->created_at }}</p>
-            <p><strong>Trạng thái hiện tại:</strong> {{ $order->status }}</p>
-            @if($currentPendingApproval && $currentPendingApproval->step)
-                <p><strong>Đang chờ duyệt:</strong> Bước {{ $currentPendingApproval->step->step_order }} (Role: {{ $currentPendingApproval->step->role_slug }})</p>
-            @endif
+            <div class="row">
+                <div class="col-md-6">
+                    <p><strong>Khách hàng:</strong> {{ $order->customer->name ?? '' }}</p>
+                    <p><strong>Nhân viên:</strong> {{ $order->user->name ?? '' }}</p>
+                    <p><strong>Tổng tiền:</strong> {{ number_format($order->total, 0, ',', '.') }} đ</p>
+                    <p><strong>Ngày tạo:</strong> {{ $order->created_at }}</p>
+                </div>
+                <div class="col-md-6">
+                    <p><strong>Trạng thái hiện tại:</strong> {{ $statusLabels[$order->status] ?? $order->status }}</p>
+                    <p><strong>Thanh toán:</strong> {{ $order->payment_status }}</p>
+                    <p><strong>Giao hàng:</strong> {{ $order->delivery_status }}</p>
+                    @if($currentPendingApproval && $currentPendingApproval->step)
+                        <p><strong>Đang chờ duyệt:</strong> Bước {{ $currentPendingApproval->step->step_order }} (Role: {{ $currentPendingApproval->step->role_slug }})</p>
+                    @endif
+                </div>
+            </div>
         </div>
-        
+
         <div class="card-footer">
-            @if($order->status === 'draft')
-                <form action="{{ route('orders.confirm', $order->id) }}" method="POST" style="display:inline;">
+            @if($order->status === 'approved' && $canWarehouse)
+                <form action="{{ route('orders.picking', $order->id) }}" method="POST" class="d-inline">
                     @csrf
-                    <input type="hidden" name="status" value="pending">
-                    <button type="submit" class="btn btn-primary">Lên đơn</button>
+                    <button type="submit" class="btn btn-warning">Xác nhận đóng hàng</button>
                 </form>
             @endif
-            @if($order->status === 'pending')
-                <form action="{{ route('orders.confirm', $order->id) }}" method="POST" style="display:inline;">
+
+            @if($order->status === 'packing' && $canWarehouse)
+                <form action="{{ route('orders.complete-packing', $order->id) }}" method="POST" enctype="multipart/form-data" class="row g-2 mt-2">
                     @csrf
-                    <input type="hidden" name="status" value="confirmed">
-                    <button type="submit" class="btn btn-primary">Xác nhận đơn hàng</button>
+                    <div class="col-md-4">
+                        <input type="file" name="packed_image" class="form-control" required>
+                    </div>
+                    <div class="col-md-5">
+                        <input type="text" name="note" class="form-control" placeholder="Ghi chú đóng hàng (optional)">
+                    </div>
+                    <div class="col-md-3">
+                        <button type="submit" class="btn btn-success w-100">Hoàn thiện đóng hàng</button>
+                    </div>
                 </form>
             @endif
-            @if($order->status === 'confirmed')
-                <form action="{{ route('orders.picking', $order->id) }}" method="POST" style="display:inline;">
+
+            @if($order->status === 'packed' && $canShipper)
+                <form action="{{ route('orders.pickup', $order->id) }}" method="POST" class="d-inline mt-2">
                     @csrf
-                    <button type="submit" class="btn btn-warning">Bắt đầu Picking</button>
+                    <button type="submit" class="btn btn-primary">Lấy hàng</button>
                 </form>
             @endif
-            @if($order->status === 'picking')
-                <form action="{{ route('orders.pickup', $order->id) }}" method="POST" style="display:inline;">
+
+            @if($order->status === 'shipping' && $canShipper)
+                <form action="{{ route('orders.delivered', $order->id) }}" method="POST" enctype="multipart/form-data" class="row g-2 mt-2">
                     @csrf
-                    <button type="submit" class="btn btn-warning">Shipper lấy hàng (Trừ kho thật)</button>
+                    <div class="col-md-4">
+                        <input type="file" name="delivered_image" class="form-control" required>
+                    </div>
+                    <div class="col-md-5">
+                        <input type="text" name="note" class="form-control" placeholder="Ghi chú giao hàng (optional)">
+                    </div>
+                    <div class="col-md-3">
+                        <button type="submit" class="btn btn-info w-100">Đã giao hàng</button>
+                    </div>
                 </form>
             @endif
-            @if($order->status === 'picked_up')
-                <form action="{{ route('orders.ship', $order->id) }}" method="POST" style="display:inline;">
-                    @csrf
-                    <button type="submit" class="btn btn-info">Đang giao hàng</button>
-                </form>
+
+            @if($order->status === 'delivered' && $canShipper)
+                <div class="row g-2 mt-2">
+                    <div class="col-md-6">
+                        <form action="{{ route('orders.complete-payment', $order->id) }}" method="POST" enctype="multipart/form-data" class="border rounded p-2">
+                            @csrf
+                            <h6 class="mb-2">Thanh toán</h6>
+                            <div class="mb-2">
+                                <input type="number" step="0.01" min="0" name="amount" class="form-control" placeholder="Số tiền thanh toán" required>
+                            </div>
+                            <div class="mb-2">
+                                <input type="file" name="receipt_image" class="form-control" required>
+                                <small class="text-muted">Ảnh biên lai thanh toán</small>
+                            </div>
+                            <div class="mb-2">
+                                <input type="file" name="delivery_image" class="form-control">
+                                <small class="text-muted">Ảnh giao hàng (nếu cần bổ sung)</small>
+                            </div>
+                            <div class="mb-2">
+                                <input type="text" name="note" class="form-control" placeholder="Ghi chú (optional)">
+                            </div>
+                            <button type="submit" class="btn btn-success">Hoàn thiện đơn hàng</button>
+                        </form>
+                    </div>
+                    <div class="col-md-6">
+                        <form action="{{ route('orders.refund', $order->id) }}" method="POST" class="border rounded p-2 h-100 d-flex flex-column justify-content-between">
+                            @csrf
+                            <div>
+                                <h6 class="mb-2">Refund</h6>
+                                <p class="text-muted mb-2">Tạo đơn hoàn trả liên kết với đơn gốc nếu khách không nhận hàng hoặc trả hàng.</p>
+                            </div>
+                            <button type="submit" class="btn btn-danger" onclick="return confirm('Xác nhận tạo yêu cầu hoàn trả cho đơn này?')">Refund</button>
+                        </form>
+                    </div>
+                </div>
             @endif
-            @if($order->status === 'shipping')
-                <form action="{{ route('orders.complete', $order->id) }}" method="POST" style="display:inline;">
-                    @csrf
-                    <button type="submit" class="btn btn-success">Hoàn tất đơn hàng</button>
-                </form>
-            @endif
-            @if(in_array($order->status, ['pending','confirmed','picking']))
-                <form action="{{ route('orders.cancel', $order->id) }}" method="POST" style="display:inline; margin-left:8px;">
+
+            @if(in_array($order->status, ['pending_leader_approval', 'pending_manager_approval', 'approved', 'packing'], true))
+                <form action="{{ route('orders.cancel', $order->id) }}" method="POST" class="d-inline ms-2">
                     @csrf
                     <button type="submit" class="btn btn-danger" onclick="return confirm('Hủy đơn sẽ release hàng đã booking. Bạn chắc chắn?')">Hủy đơn</button>
                 </form>
             @endif
+        </div>
     </div>
 
     <div class="card mb-3">
@@ -89,6 +143,46 @@
             @else
                 <p class="mb-0 text-muted">Bạn không có quyền duyệt bước hiện tại hoặc đơn đã không còn ở trạng thái chờ duyệt.</p>
             @endif
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header">
+            <h5 class="card-title mb-0">Lịch sử xử lý đơn hàng</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-bordered mb-0">
+                    <thead>
+                        <tr>
+                            <th>Thời gian</th>
+                            <th>Người dùng</th>
+                            <th>Vai trò</th>
+                            <th>Hành động</th>
+                            <th>Trạng thái trước</th>
+                            <th>Trạng thái sau</th>
+                            <th>Ghi chú</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse($order->histories->sortBy('created_at') as $history)
+                            <tr>
+                                <td>{{ $history->created_at }}</td>
+                                <td>{{ $history->user->name ?? '-' }}</td>
+                                <td>{{ $history->role ?? '-' }}</td>
+                                <td>{{ $history->action }}</td>
+                                <td>{{ $history->status_before ?? '-' }}</td>
+                                <td>{{ $history->status_after ?? '-' }}</td>
+                                <td>{{ $history->note ?? '-' }}</td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="7" class="text-center">Chưa có dữ liệu lịch sử xử lý.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 
@@ -144,8 +238,8 @@
         <tbody>
             @foreach($order->items as $item)
             <tr>
-                <td>{{ $item->product_variant->product->name ?? '' }}</td>
-                <td>{{ $item->product_variant->variant_name ?? '' }}</td>
+                <td>{{ $item->variant->product->name ?? '' }}</td>
+                <td>{{ $item->variant->variant_name ?? ($item->variant->sku ?? '') }}</td>
                 <td>{{ $item->quantity }}</td>
                 <td>{{ number_format($item->price, 0, ',', '.') }} đ</td>
                 <td>{{ number_format($item->price * $item->quantity, 0, ',', '.') }} đ</td>

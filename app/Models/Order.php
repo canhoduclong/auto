@@ -2,6 +2,7 @@
 namespace App\Models;
 
 use App\Models\ApprovalOrder;
+use App\Models\OrderHistory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -11,7 +12,7 @@ class Order extends Model
     protected $fillable = [
         'customer_id', 'user_id', 'code', 'total', 'status',
         'amount_paid', 'amount_due', 'payment_method', 'payment_status',
-        'qr_code'
+        'qr_code', 'packed_image_path', 'delivered_image_path', 'has_return_order'
     ];
     
     public function approvals()
@@ -20,6 +21,7 @@ class Order extends Model
     }
 
     public function transactions() { return $this->hasMany(Transaction::class); }
+    public function histories() { return $this->hasMany(OrderHistory::class); }
 
     // Trạng thái đơn hàng chuẩn
     const STATUS_ORDER_PLACED = 'order_placed';

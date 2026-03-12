@@ -42,6 +42,17 @@
                     </div>
                     <div class="col-md-3">
                         <div class="mb-3">
+                            <label for="team_id" class="form-label">Team</label>
+                            <select name="team_id" id="team_id" class="form-select">
+                                <option value="">Tất cả</option>
+                                @foreach($teams as $team)
+                                    <option value="{{ $team->id }}" {{ (string) request('team_id') === (string) $team->id ? 'selected' : '' }}>{{ $team->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="mb-3">
                             <label for="payment_status" class="form-label">Trạng thái thanh toán</label>
                             <select name="payment_status" id="payment_status" class="form-select">
                                 <option value="">Tất cả</option>

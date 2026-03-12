@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use App\Models\Customer;
+use App\Models\Team;
 use App\Models\Warehouse;
 
 class User extends Authenticatable
@@ -25,6 +26,7 @@ class User extends Authenticatable
         'password',
         'avatar',
         'warehouse_id',
+        'team_id',
     ];
 
     /**
@@ -72,6 +74,11 @@ class User extends Authenticatable
     public function warehouse()
     {
         return $this->belongsTo(Warehouse::class);
+    }
+
+    public function team()
+    {
+        return $this->belongsTo(Team::class);
     }
 
      //die( $permissionName);

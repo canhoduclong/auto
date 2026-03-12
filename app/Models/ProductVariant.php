@@ -56,20 +56,43 @@ class ProductVariant extends Model
     public function latestPriceRule()
     {
         return $this->hasOne(ProductPriceRule::class, 'product_variant_id')
-            ->where(function($q) {
-                $q->whereNull('end_date')
-                  ->orWhere('end_date', '>=', now());
+            ->where(function ($q) {
+                $q->whereNull('start_date')
+                    ->orWhereDate('start_date', '<=', now()->toDateString());
             })
-            ->latest('start_date');
+            ->where(function ($q) {
+                $q->whereNull('end_date')
+                    ->orWhereDate('end_date', '>=', now()->toDateString());
+            })
+            ->orderByDesc('start_date')
+            ->orderByDesc('id');
     }
 
     // helper: lấy giá cuối cùng
     public function getFinalPriceAttribute()
     {
-         return $this->priceRules()
-                ->whereNull('end_date')
-                ->latest('start_date')
-                ->value('price');
+        $activeRulePrice = $this->priceRules()
+            ->where(function ($q) {
+                $q->whereNull('start_date')
+                    ->orWhereDate('start_date', '<=', now()->toDateString());
+            })
+            ->where(function ($q) {
+                $q->whereNull('end_date')
+                    ->orWhereDate('end_date', '>=', now()->toDateString());
+            })
+            ->orderByDesc('start_date')
+            ->orderByDesc('id')
+            ->value('price');
+
+        if ($activeRulePrice !== null) {
+            return (float) $activeRulePrice;
+        }
+
+        if (array_key_exists('price', $this->attributes) && $this->attributes['price'] !== null) {
+            return (float) $this->attributes['price'];
+        }
+
+        return (float) ($this->product?->default_price ?? $this->product?->price ?? 0);
     }
 
 

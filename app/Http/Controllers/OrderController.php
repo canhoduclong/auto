@@ -2,23 +2,130 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Order;
-use App\Models\ProductVariant;
+use App\Enums\DeliveryStatus;
+use App\Enums\OrderStatus;
+use App\Enums\PaymentStatus;
 use App\Models\Customer;
 use App\Models\Inventory;
 use App\Models\InventoryMovement;
 use App\Models\InventoryReservation;
+use App\Models\Order;
+use App\Models\OrderHistory;
+use App\Models\ProductVariant;
+use App\Models\Team;
+use App\Models\Transaction;
 use App\Models\User;
 use App\Services\ApprovalService;
 use Illuminate\Http\Request;
-use App\Enums\DeliveryStatus;
-use App\Enums\OrderStatus;
-use App\Enums\PaymentStatus;
-
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
 class OrderController extends Controller
 {
+    private function hasAnyRole(User $user, array $roles): bool
+    {
+        $roleNames = $user->roles->pluck('name')->map(fn ($name) => strtolower((string) $name))->all();
+        foreach ($roles as $role) {
+            if (in_array(strtolower($role), $roleNames, true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function currentRoleLabel(?User $user = null): ?string
+    {
+        $actor = $user ?: auth()->user();
+        if (!$actor) {
+            return null;
+        }
+
+        return $actor->roles->pluck('name')->first();
+    }
+
+    private function logOrderHistory(Order $order, string $action, ?string $statusBefore, ?string $statusAfter, ?string $note = null, ?User $user = null): void
+    {
+        $actor = $user ?: auth()->user();
+
+        OrderHistory::create([
+            'order_id' => $order->id,
+            'action' => $action,
+            'user_id' => $actor?->id,
+            'role' => $this->currentRoleLabel($actor),
+            'status_before' => $statusBefore,
+            'status_after' => $statusAfter,
+            'note' => $note,
+        ]);
+    }
+
+    private function applyRoleScope(Builder $query, User $user): void
+    {
+        if ($this->hasAnyRole($user, ['admin'])) {
+            return;
+        }
+
+        if ($this->hasAnyRole($user, ['sale'])) {
+            $query->where('user_id', $user->id);
+            return;
+        }
+
+        if ($this->hasAnyRole($user, ['leader_sale', 'leader', 'sale_manager'])) {
+            $teamId = $user->team_id;
+            if (!$teamId) {
+                $query->whereRaw('1 = 0');
+                return;
+            }
+
+            $query->where(function (Builder $sub) use ($user) {
+                $sub->where('status', 'pending_leader_approval')
+                    ->orWhereHas('approvals', function (Builder $q) use ($user) {
+                        $q->where('approved_by', $user->id);
+                    })
+                    ->orWhereHas('user.roles', function (Builder $q) {
+                        $q->where('name', 'sale');
+                    });
+            });
+
+            $query->whereHas('user', function (Builder $q) use ($teamId) {
+                $q->where('team_id', $teamId);
+            });
+            return;
+        }
+
+        if ($this->hasAnyRole($user, ['manager_sale', 'manager', 'director'])) {
+            $teamId = $user->team_id;
+            if (!$teamId) {
+                $query->whereRaw('1 = 0');
+                return;
+            }
+
+            $query->where(function (Builder $sub) use ($user) {
+                $sub->whereIn('status', ['pending_manager_approval', 'approved', 'packing', 'packed', 'shipping', 'delivered', 'completed'])
+                    ->orWhereHas('approvals', function (Builder $q) use ($user) {
+                        $q->where('approved_by', $user->id);
+                    });
+            });
+
+            $query->whereHas('user', function (Builder $q) use ($teamId) {
+                $q->where('team_id', $teamId);
+            });
+            return;
+        }
+
+        if ($this->hasAnyRole($user, ['warehouse'])) {
+            $query->whereIn('status', ['pending_warehouse_approval', 'approved', 'packing', 'packed']);
+            return;
+        }
+
+        if ($this->hasAnyRole($user, ['shipper'])) {
+            $query->whereIn('status', ['pending_shipper_approval', 'packed', 'shipping', 'delivered', 'completed', 'returned']);
+            return;
+        }
+
+        $query->where('user_id', $user->id);
+    }
+
     public function createNewOrderForm(Request $request)
     {
         
@@ -181,6 +288,37 @@ class OrderController extends Controller
             return redirect()->route('cart.show')->with('error', 'Tai khoan warehouse chua duoc assign kho.');
         }
 
+        $authUser = auth()->user();
+        $customerQuery = Customer::query()->where('user_id', $authUser->id);
+        if (!empty($authUser->email)) {
+            $customerQuery->orWhere('email', $authUser->email);
+        }
+
+        $customer = $customerQuery->first();
+
+        if (!$customer) {
+            $customer = Customer::create([
+                'user_id' => $authUser->id,
+                'name' => $authUser->name,
+                'email' => $authUser->email,
+                'phone' => $request->recipient_phone,
+                'address' => $request->recipient_address,
+            ]);
+        } else {
+            $customer->fill([
+                'user_id' => $customer->user_id ?: $authUser->id,
+                'name' => $customer->name ?: $authUser->name,
+                'phone' => $customer->phone ?: $request->recipient_phone,
+                'address' => $customer->address ?: $request->recipient_address,
+            ]);
+
+            if (empty($customer->email) && !empty($authUser->email)) {
+                $customer->email = $authUser->email;
+            }
+
+            $customer->save();
+        }
+
         $items = [];
         foreach ($cart as $variantId => $details) {
             $items[] = [
@@ -194,7 +332,7 @@ class OrderController extends Controller
             $order = $this->createOrderWithUnifiedStockFlow(
                 items: $items,
                 orderData: [
-                    'customer_id' => auth()->id() ?? null,
+                    'customer_id' => $customer->id,
                     'user_id' => auth()->id() ?? null,
                     'recipient_name' => $request->recipient_name,
                     'recipient_phone' => $request->recipient_phone,
@@ -222,6 +360,10 @@ class OrderController extends Controller
     public function index(Request $request)
     {
         $query = Order::with('customer', 'user', 'transactions', 'approvals.step');
+
+        if (auth()->check()) {
+            $this->applyRoleScope($query, auth()->user());
+        }
 
         if ($request->boolean('my_pending_approval') && auth()->check()) {
             $roleNames = auth()->user()->roles()->pluck('name')->map(fn ($role) => strtolower((string) $role))->values();
@@ -260,6 +402,33 @@ class OrderController extends Controller
                 $q->where('phone', 'like', '%' . $request->input('phone_number') . '%');
             });
         }
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->input('status'));
+        }
+
+        if ($request->filled('payment_status')) {
+            $query->where('payment_status', $request->input('payment_status'));
+        }
+
+        if ($request->filled('user_id')) {
+            $query->where('user_id', $request->input('user_id'));
+        }
+
+        if ($request->filled('team_id')) {
+            $teamId = (int) $request->input('team_id');
+            $query->whereHas('user', function (Builder $sub) use ($teamId) {
+                $sub->where('team_id', $teamId);
+            });
+        }
+
+        if ($request->filled('from_date')) {
+            $query->whereDate('created_at', '>=', $request->input('from_date'));
+        }
+
+        if ($request->filled('to_date')) {
+            $query->whereDate('created_at', '<=', $request->input('to_date'));
+        }
         
         // Statistics
         $statsQuery = clone $query;
@@ -296,7 +465,8 @@ class OrderController extends Controller
             $canApproveByOrder[$order->id] = $canApprove;
         }
 
-        $users = \App\Models\User::all();
+        $users = User::orderBy('name')->get();
+        $teams = Team::orderBy('name')->get(['id', 'name']);
         $statusOptions = collect(OrderStatus::cases())->mapWithKeys(function ($case) {
             return [$case->value => $case->name];
         });
@@ -304,6 +474,7 @@ class OrderController extends Controller
         return view('orders.index', compact(
             'orders',
             'users',
+            'teams',
             'statusOptions',
             'totalInvoiceAmount',
             'totalPaidAmount',
@@ -318,7 +489,7 @@ class OrderController extends Controller
 
     public function show(Order $order)
     {
-        $order->load('items.variant.product', 'customer', 'approvals.step', 'approvals.approver');
+        $order->load('items.variant.product', 'customer', 'approvals.step', 'approvals.approver', 'transactions', 'histories.user');
 
         $approvalService = app(ApprovalService::class);
         $currentPendingApproval = $approvalService->getCurrentPendingStep($order);
@@ -326,7 +497,25 @@ class OrderController extends Controller
             ? $approvalService->canApproveCurrentStep($order, auth()->user())
             : false;
 
-        return view('orders.show', compact('order', 'currentPendingApproval', 'canApproveCurrentStep'));
+        $authUser = auth()->user();
+        $canWarehouse = $authUser ? $this->hasAnyRole($authUser, ['warehouse', 'admin']) : false;
+        $canShipper = $authUser ? $this->hasAnyRole($authUser, ['shipper', 'admin']) : false;
+
+        $statusLabels = [
+            'pending_leader_approval' => 'Pending Leader Approval',
+            'pending_manager_approval' => 'Pending Manager Approval',
+            'approved' => 'Approved',
+            'packing' => 'Warehouse Dang Dong Hang',
+            'packed' => 'Packed',
+            'shipping' => 'Dang Giao Hang',
+            'delivered' => 'Da Giao Hang',
+            'completed' => 'Completed',
+            'rejected' => 'Rejected',
+            'returned' => 'Returned',
+            'cancelled' => 'Cancelled',
+        ];
+
+        return view('orders.show', compact('order', 'currentPendingApproval', 'canApproveCurrentStep', 'canWarehouse', 'canShipper', 'statusLabels'));
     }
 
     public function confirm(Order $order)
@@ -339,48 +528,212 @@ class OrderController extends Controller
 
     public function picking(Order $order)
     {
-        $this->assertValidTransition($order, ['confirmed'], 'picking');
-        $order->update(['status' => 'picking']);
+        if (!auth()->check() || !$this->hasAnyRole(auth()->user(), ['warehouse', 'admin'])) {
+            abort(403, 'Chi co kho duoc phep xac nhan dong hang.');
+        }
 
-        return back()->with('success', 'Don hang da chuyen sang trang thai picking.');
+        $this->assertValidTransition($order, ['approved'], 'packing');
+        $statusBefore = (string) $order->status;
+        $order->update(['status' => 'packing']);
+        $this->logOrderHistory($order, 'warehouse_confirm_pack', $statusBefore, 'packing', 'Kho xac nhan bat dau dong hang');
+
+        return back()->with('success', 'Kho da xac nhan bat dau dong hang.');
+    }
+
+    public function completePacking(Request $request, Order $order)
+    {
+        if (!auth()->check() || !$this->hasAnyRole(auth()->user(), ['warehouse', 'admin'])) {
+            abort(403, 'Chi co kho duoc phep hoan tat dong hang.');
+        }
+
+        $request->validate([
+            'packed_image' => 'required|image|max:5120',
+            'note' => 'nullable|string|max:1000',
+        ]);
+
+        $this->assertValidTransition($order, ['packing'], 'packed');
+        $statusBefore = (string) $order->status;
+        $packedImagePath = $request->file('packed_image')->store('orders/packed', 'public');
+
+        $order->update([
+            'status' => 'packed',
+            'packed_image_path' => $packedImagePath,
+        ]);
+
+        $this->logOrderHistory(
+            $order,
+            'warehouse_complete_packing',
+            $statusBefore,
+            'packed',
+            $request->input('note')
+        );
+
+        return back()->with('success', 'Da hoan thien dong hang. Don san sang cho shipper lay.');
     }
 
     public function pickup(Order $order)
     {
-        $this->assertValidTransition($order, ['picking', 'confirmed'], 'picked_up');
+        if (!auth()->check() || !$this->hasAnyRole(auth()->user(), ['shipper', 'admin'])) {
+            abort(403, 'Chi shipper duoc phep lay hang.');
+        }
+
+        $this->assertValidTransition($order, ['packed'], 'shipping');
+        $statusBefore = (string) $order->status;
 
         DB::transaction(function () use ($order) {
             $this->deductReservedStockForOrder($order);
-            $order->update(['status' => 'picked_up']);
+            $order->update([
+                'status' => 'shipping',
+                'delivery_status' => DeliveryStatus::Shipping->value,
+            ]);
         });
 
-        return back()->with('success', 'Da tru ton kho thuc te khi shipper lay hang.');
+        $this->logOrderHistory($order, 'shipper_pickup', $statusBefore, 'shipping', 'Shipper da lay hang');
+
+        return back()->with('success', 'Shipper da lay hang va don chuyen sang dang giao hang.');
     }
 
     public function ship(Order $order)
     {
-        $this->assertValidTransition($order, ['picked_up'], 'shipping');
-        $order->update(['status' => 'shipping']);
+        if (!auth()->check() || !$this->hasAnyRole(auth()->user(), ['shipper', 'admin'])) {
+            abort(403, 'Chi shipper duoc phep cap nhat giao hang.');
+        }
+
+        $this->assertValidTransition($order, ['packed'], 'shipping');
+        $statusBefore = (string) $order->status;
+        $order->update([
+            'status' => 'shipping',
+            'delivery_status' => DeliveryStatus::Shipping->value,
+        ]);
+        $this->logOrderHistory($order, 'shipper_start_shipping', $statusBefore, 'shipping', 'Shipper bat dau giao hang');
 
         return back()->with('success', 'Don hang dang duoc giao.');
     }
 
+    public function markDelivered(Request $request, Order $order)
+    {
+        if (!auth()->check() || !$this->hasAnyRole(auth()->user(), ['shipper', 'admin'])) {
+            abort(403, 'Chi shipper duoc phep xac nhan da giao hang.');
+        }
+
+        $request->validate([
+            'delivered_image' => 'required|image|max:5120',
+            'note' => 'nullable|string|max:1000',
+        ]);
+
+        $this->assertValidTransition($order, ['shipping'], 'delivered');
+        $statusBefore = (string) $order->status;
+        $deliveredImagePath = $request->file('delivered_image')->store('orders/delivered', 'public');
+
+        $order->update([
+            'status' => 'delivered',
+            'delivery_status' => DeliveryStatus::Delivered->value,
+            'delivered_image_path' => $deliveredImagePath,
+        ]);
+
+        $this->logOrderHistory($order, 'shipper_delivered', $statusBefore, 'delivered', $request->input('note'));
+
+        return back()->with('success', 'Da xac nhan giao hang thanh cong.');
+    }
+
+    public function completePayment(Request $request, Order $order)
+    {
+        if (!auth()->check() || !$this->hasAnyRole(auth()->user(), ['shipper', 'admin'])) {
+            abort(403, 'Chi shipper duoc phep hoan tat thanh toan.');
+        }
+
+        $request->validate([
+            'amount' => 'required|numeric|min:0.01',
+            'receipt_image' => 'required|image|max:5120',
+            'delivery_image' => 'nullable|image|max:5120',
+            'note' => 'nullable|string|max:255',
+        ]);
+
+        $this->assertValidTransition($order, ['delivered'], 'completed');
+
+        $netPaid = (float) $order->transactions()->where('type', 'payment')->sum('amount')
+            - (float) $order->transactions()->where('type', 'refund')->sum('amount');
+        $amount = (float) $request->input('amount');
+        $totalAfterPayment = $netPaid + $amount;
+
+        if ($totalAfterPayment + 0.0001 < (float) $order->total) {
+            return back()->with('error', 'Can thanh toan du de hoan tat don hang.');
+        }
+
+        $receiptImagePath = $request->file('receipt_image')->store('orders/receipts', 'public');
+        $deliveryImagePath = $request->hasFile('delivery_image')
+            ? $request->file('delivery_image')->store('orders/delivery-proof', 'public')
+            : $order->delivered_image_path;
+
+        $statusBefore = (string) $order->status;
+
+        DB::transaction(function () use ($order, $amount, $request, $receiptImagePath, $deliveryImagePath) {
+            Transaction::create([
+                'order_id' => $order->id,
+                'customer_id' => $order->customer_id,
+                'amount' => $amount,
+                'type' => 'payment',
+                'method' => 'shipper_collection',
+                'note' => $request->input('note'),
+                'receipt_image_path' => $receiptImagePath,
+                'delivery_image_path' => $deliveryImagePath,
+            ]);
+
+            $netPaid = (float) $order->transactions()->where('type', 'payment')->sum('amount')
+                - (float) $order->transactions()->where('type', 'refund')->sum('amount');
+
+            $order->update([
+                'status' => 'completed',
+                'payment_status' => PaymentStatus::Paid->value,
+                'amount_paid' => $netPaid,
+                'amount_due' => max((float) $order->total - $netPaid, 0),
+                'delivered_image_path' => $deliveryImagePath,
+            ]);
+        });
+
+        $this->logOrderHistory($order->fresh(), 'shipper_complete_payment', $statusBefore, 'completed', $request->input('note'));
+
+        return back()->with('success', 'Da ghi nhan thanh toan va hoan tat don hang.');
+    }
+
+    public function refund(Order $order)
+    {
+        if (!auth()->check() || !$this->hasAnyRole(auth()->user(), ['shipper', 'admin'])) {
+            abort(403, 'Chi shipper duoc phep tao yeu cau hoan tra.');
+        }
+
+        if (!in_array((string) $order->status, ['delivered', 'shipping'], true)) {
+            return back()->with('error', 'Chi duoc tao refund sau khi don da giao hoac dang giao.');
+        }
+
+        $statusBefore = (string) $order->status;
+        $order->update(['has_return_order' => true]);
+        $this->logOrderHistory($order, 'shipper_refund_request', $statusBefore, $statusBefore, 'Tao don hoan tra tu don goc');
+
+        return redirect()->route('order-returns.create', ['order_id' => $order->id]);
+    }
+
     public function complete(Order $order)
     {
-        $this->assertValidTransition($order, ['shipping'], 'completed');
+        $this->assertValidTransition($order, ['shipping', 'delivered'], 'completed');
+        $statusBefore = (string) $order->status;
         $order->update(['status' => 'completed']);
+        $this->logOrderHistory($order, 'manual_complete', $statusBefore, 'completed', 'Cap nhat hoan tat thu cong');
 
         return back()->with('success', 'Don hang da hoan tat.');
     }
 
     public function cancel(Order $order)
     {
-        $this->assertValidTransition($order, ['pending', 'confirmed', 'picking'], 'cancelled');
+        $this->assertValidTransition($order, ['pending_leader_approval', 'pending_manager_approval', 'approved', 'packing', 'pending', 'confirmed', 'picking'], 'cancelled');
+        $statusBefore = (string) $order->status;
 
         DB::transaction(function () use ($order) {
             $this->releaseReservedStockForOrder($order);
             $order->update(['status' => 'cancelled']);
         });
+
+        $this->logOrderHistory($order, 'cancel_order', $statusBefore, 'cancelled', 'Huy don hang va giai phong booking');
 
         return back()->with('success', 'Don hang da bi huy va da giai phong hang booking.');
     }
@@ -529,6 +882,9 @@ class OrderController extends Controller
             $this->reserveStockForOrder($order, $managedWarehouseId);
 
             $approvalService->initOrderApproval($order);
+
+            $order->refresh();
+            $this->logOrderHistory($order, 'create_order', null, (string) $order->status, 'Sale tao don hang');
 
             return $order;
         });

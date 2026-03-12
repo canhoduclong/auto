@@ -183,7 +183,7 @@
                                 @if($variant->sku)
                                     <p class="product-meta">Mã sản phẩm: {{ $variant->sku }}</p>
                                 @endif
-                                <p class="product-price">{{ number_format($variant->latestPriceRule?->price ?? 0, 0, '.', ',') }} VNĐ</p>
+                                <p class="product-price">{{ number_format($variant->final_price ?? 0, 0, '.', ',') }} VNĐ</p>
                                 <div class="btn-group">
                                     <a href="{{ route('pages.variant_detail', $variant->slug) }}" class="btn btn-info btn-sm">Chi tiết</a>
                                     <button class="btn btn-warning btn-sm add-to-cart" data-variant-id="{{ $variant->id }}">
