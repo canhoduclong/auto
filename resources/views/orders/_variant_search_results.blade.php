@@ -1,12 +1,12 @@
 @if($variants->isEmpty())
-    <p class="text-center p-3">No products found.</p>
+    <p class="text-center p-3">{{ __('orders.empty.no_products_found') }}</p>
 @else
     <div class="d-flex justify-content-between align-items-center mt-2">
         <p class="text-muted mb-0">
-            Showing {{ $variants->firstItem() }} to {{ $variants->lastItem() }} of {{ $variants->total() }} results
+            {{ __('orders.variant_search.showing', ['from' => $variants->firstItem(), 'to' => $variants->lastItem(), 'total' => $variants->total()]) }}
         </p>
         <div class="d-flex align-items-center">
-            <label for="per-page-select" class="form-label me-2 mb-0">Per Page:</label>
+            <label for="per-page-select" class="form-label me-2 mb-0">{{ __('orders.variant_search.per_page') }}:</label>
             <select class="form-select form-select-sm" id="per-page-select" style="width: auto;">
                 <option value="5" {{ $variants->perPage() == 5 ? 'selected' : '' }}>5</option>
                 <option value="10" {{ $variants->perPage() == 10 ? 'selected' : '' }}>10</option>
@@ -30,7 +30,7 @@
                     <img src="{{ $imageUrl }}" alt="{{ $variant->product->name }}" width="60" class="me-3 rounded">
                     <div>
                         <h6 class="my-0">{{ $variant->product->name }}</h6>
-                        <small class="text-muted">SKU: {{ $variant->sku }} | Price: {{ number_format($variant->latestPriceRule?->price ?? 0) }} | Stock: {{ $variant->stock }}</small>
+                        <small class="text-muted">SKU: {{ $variant->sku }} | {{ __('orders.labels.unit_price') }}: {{ number_format($variant->latestPriceRule?->price ?? 0) }} | {{ __('orders.labels.stock') }}: {{ $variant->stock }}</small>
                     </div>
                 </div>
                 <a
@@ -42,7 +42,7 @@
                     data-variant-price="{{ $variant->latestPriceRule?->price ?? 0 }}"
                     data-variant-stock="{{ $variant->stock }}"
                     data-variant-image="{{ $imageUrl }}">
-                    Add
+                    {{ __('inventory.buttons.add_item') }}
                 </a>
             </li>
         @endforeach

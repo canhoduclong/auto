@@ -56,7 +56,7 @@ class CustomerController extends Controller
                 }
                 return redirect()->route('customers.import.form')->with(['import_failures' => $errors]);
             }
-            return redirect()->route('customers.import.form')->with(['import_success' => 'Import khách hàng thành công!']);
+            return redirect()->route('customers.import.form')->with(['import_success' => __('customers.messages.import_success')]);
         } catch (\Exception $e) {
             return redirect()->route('customers.import.form')->with(['import_errors' => [['row' => '-', 'attribute' => '-', 'errors' => [$e->getMessage()], 'values' => []]]]);
         }
@@ -209,7 +209,10 @@ class CustomerController extends Controller
         if ($duplicateCustomer) {
             return back()
                 ->withInput()
-                ->with('error', 'Khach hang da ton tai (ID: ' . $duplicateCustomer->id . ', Ten: ' . $duplicateCustomer->name . '). Vui long kiem tra lai so dien thoai/email.');
+                ->with('error', __('customers.messages.duplicate', [
+                    'id' => $duplicateCustomer->id,
+                    'name' => $duplicateCustomer->name,
+                ]));
         }
 
         $customer = Customer::create($data);
@@ -221,7 +224,7 @@ class CustomerController extends Controller
             ]);
         }
 
-        return redirect()->route('customers.index')->with('success', 'Thêm khách hàng thành công.');
+        return redirect()->route('customers.index')->with('success', __('customers.messages.created'));
     }
 
     // Form edit
@@ -266,14 +269,14 @@ class CustomerController extends Controller
             );
         }
 
-        return redirect()->route('customers.index')->with('success', 'Cập nhật khách hàng thành công.');
+        return redirect()->route('customers.index')->with('success', __('customers.messages.updated'));
     }
 
     // Delete
     public function destroy(Customer $customer)
     {
         $customer->delete();
-        return redirect()->route('customers.index')->with('success', 'Xóa khách hàng thành công.');
+        return redirect()->route('customers.index')->with('success', __('customers.messages.deleted'));
     }
 
     // Bulk Delete
@@ -287,6 +290,6 @@ class CustomerController extends Controller
 
         Customer::whereIn('id', $ids)->delete();
 
-        return redirect()->route('customers.index')->with('success', 'Đã xóa các khách hàng đã chọn.');
+        return redirect()->route('customers.index')->with('success', __('customers.messages.bulk_deleted'));
     }
 }

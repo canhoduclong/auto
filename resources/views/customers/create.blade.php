@@ -2,7 +2,7 @@
 
 @section('content')
 <div class="container">
-    <h2>Thêm khách hàng mới</h2>
+    <h2>{{ __('customers.create.title') }}</h2>
 
     @if(session('error'))
         <div class="alert alert-danger">
@@ -24,8 +24,8 @@
         @csrf
         @include('customers._form', ['customer' => null, 'types' => $types])
         <div class="mt-3">
-            <button class="btn btn-success">Lưu</button>
-            <a href="{{ route('customers.index') }}" class="btn btn-secondary">Hủy</a>
+            <button class="btn btn-success">{{ __('common.actions.save') }}</button>
+            <a href="{{ route('customers.index') }}" class="btn btn-secondary">{{ __('common.actions.cancel') }}</a>
         </div>
     </form>
 </div>

@@ -15,6 +15,6 @@
         <input type="number" step="0.01" name="items[{{ $key }}][unit_cost]" class="form-control" value="{{ $item['unit_cost'] ?? 0 }}" required min="0">
     </td>
     <td>
-        <button type="button" class="btn btn-danger btn-sm remove-item-btn">Remove</button>
+        <button type="button" class="btn btn-danger btn-sm remove-item-btn">{{ __('inventory.buttons.delete') }}</button>
     </td>
 </tr>

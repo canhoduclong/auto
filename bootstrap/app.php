@@ -12,11 +12,12 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware) {
     $middleware->web(append: [
-        //
+        \App\Http\Middleware\SetLocale::class,
     ]);
 
     $middleware->alias([
         'permission' => \App\Http\Middleware\PermissionMiddleware::class,
+        'setLocale' => \App\Http\Middleware\SetLocale::class,
     ]);
 })
     //->withMiddleware(function (Middleware $middleware): void {

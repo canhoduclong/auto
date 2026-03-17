@@ -2,15 +2,15 @@
 
 @section('content')
 <div class="container">
-    <h1>Inventory Reservations</h1>
+    <h1>{{ __('inventory.titles.reservations') }}</h1>
     <table class="table">
         <thead>
             <tr>
                 <th>ID</th>
-                <th>Order Item ID</th>
-                <th>Inventory ID</th>
-                <th>Quantity</th>
-                <th>Reserved At</th>
+                <th>{{ __('inventory.labels.order_item_id') }}</th>
+                <th>{{ __('inventory.labels.inventory_id') }}</th>
+                <th>{{ __('inventory.labels.quantity') }}</th>
+                <th>{{ __('inventory.labels.reserved_at') }}</th>
             </tr>
         </thead>
         <tbody>

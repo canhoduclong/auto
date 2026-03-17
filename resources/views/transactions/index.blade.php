@@ -1,8 +1,8 @@
 @extends('layouts.app')
 @section('content')
 <div class="container">
-    <h2>Danh sách giao dịch</h2>
-    <a href="{{ route('transactions.create') }}" class="btn btn-success mb-3">+ Thêm giao dịch</a>
+    <h2>{{ __('transactions.titles.index') }}</h2>
+    <a href="{{ route('transactions.create') }}" class="btn btn-success mb-3">+ {{ __('transactions.buttons.add') }}</a>
     @if(session('success'))
         <div class="alert alert-success">{{ session('success') }}</div>
     @endif
@@ -10,13 +10,13 @@
         <thead>
             <tr>
                 <th>ID</th>
-                <th>Đơn hàng</th>
-                <th>Khách hàng</th>
-                <th>Số tiền</th>
-                <th>Loại</th>
-                <th>Phương thức</th>
-                <th>Ghi chú</th>
-                <th>Thời gian</th>
+                <th>{{ __('transactions.labels.order') }}</th>
+                <th>{{ __('transactions.labels.customer') }}</th>
+                <th>{{ __('transactions.labels.amount') }}</th>
+                <th>{{ __('transactions.labels.type') }}</th>
+                <th>{{ __('transactions.labels.method') }}</th>
+                <th>{{ __('transactions.labels.note') }}</th>
+                <th>{{ __('transactions.labels.created_at') }}</th>
             </tr>
         </thead>
         <tbody>

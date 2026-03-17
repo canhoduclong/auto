@@ -19,9 +19,44 @@ use App\Services\ApprovalService;
 use Illuminate\Http\Request;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class OrderController extends Controller
 {
+    private static array $tableColumnsCache = [];
+    protected $settings;
+
+    public function __construct()
+    {
+        $this->settings = Cache::remember('settings', 60, function () {
+            return Setting::all()->keyBy('key');
+        });
+    }
+    private function tableColumns(string $table): array
+    {
+        if (!array_key_exists($table, self::$tableColumnsCache)) {
+            self::$tableColumnsCache[$table] = Schema::getColumnListing($table);
+        }
+
+        return self::$tableColumnsCache[$table];
+    }
+
+    private function hasColumn(string $table, string $column): bool
+    {
+        return in_array($column, $this->tableColumns($table), true);
+    }
+
+    private function filterExistingColumns(string $table, array $data): array
+    {
+        $columns = array_flip($this->tableColumns($table));
+
+        return array_filter(
+            $data,
+            static fn ($key): bool => isset($columns[$key]),
+            ARRAY_FILTER_USE_KEY
+        );
+    }
+
     private function hasAnyRole(User $user, array $roles): bool
     {
         $roleNames = $user->roles->pluck('name')->map(fn ($name) => strtolower((string) $name))->all();
@@ -73,7 +108,12 @@ class OrderController extends Controller
         if ($this->hasAnyRole($user, ['leader_sale', 'leader', 'sale_manager'])) {
             $teamId = $user->team_id;
             if (!$teamId) {
-                $query->whereRaw('1 = 0');
+                $query->where(function (Builder $sub) use ($user) {
+                    $sub->where('status', 'pending_leader_approval')
+                        ->orWhereHas('approvals', function (Builder $q) use ($user) {
+                            $q->where('approved_by', $user->id);
+                        });
+                });
                 return;
             }
 
@@ -96,7 +136,12 @@ class OrderController extends Controller
         if ($this->hasAnyRole($user, ['manager_sale', 'manager', 'director'])) {
             $teamId = $user->team_id;
             if (!$teamId) {
-                $query->whereRaw('1 = 0');
+                $query->where(function (Builder $sub) use ($user) {
+                    $sub->whereIn('status', ['pending_manager_approval', 'approved', 'packing', 'packed', 'shipping', 'delivered', 'completed'])
+                        ->orWhereHas('approvals', function (Builder $q) use ($user) {
+                            $q->where('approved_by', $user->id);
+                        });
+                });
                 return;
             }
 
@@ -128,25 +173,25 @@ class OrderController extends Controller
 
     public function createNewOrderForm(Request $request)
     {
-        
+        $settings   = $this->settings;
         $variantId = $request->input('variant_id');
         
         if (!$variantId) {
-            return redirect()->route('orders.index')->with('error', 'No variant ID provided.');
+            return redirect()->route('orders.index')->with('error', __('orders.messages.no_variant_id'));
         }
 
         
         $variant = ProductVariant::with(['product', 'media'])->find($variantId);
 
         if (!$variant) {
-            return redirect()->route('orders.index')->with('error', 'Variant not found.');
+            return redirect()->route('orders.index')->with('error', __('orders.messages.variant_not_found'));
         }
         $customers = Customer::paginate(10);
 
         // IMPORTANT: Set the base path for the pagination links to our AJAX endpoint.
         $customers->setPath(route('orders.ajax_customer_search'));
 
-        return view('orders.create_new', compact('variant', 'customers'));
+        return view('orders.create_new', compact('variant', 'customers', 'settings' ));
     }
 
     public function ajaxCustomerSearch(Request $request)
@@ -231,7 +276,7 @@ class OrderController extends Controller
             return back()->with('error', $e->getMessage())->withInput();
         }
 
-        return redirect()->route('site.orders.show', $order)->with('success', 'Order created successfully.');
+        return redirect()->route('site.orders.show', $order)->with('success', __('orders.messages.created'));
     }
     public function storeNewOrder(Request $request, ApprovalService $approvalService)
     {
@@ -265,57 +310,74 @@ class OrderController extends Controller
             return back()->with('error', $e->getMessage())->withInput();
         }
 
-        return redirect()->route('orders.show', $order)->with('success', 'Order created successfully.');
+        return redirect()->route('orders.show', $order)->with('success', __('orders.messages.created'));
     }
 
     public function storeFromCart(Request $request, ApprovalService $approvalService)
     {
         if (!auth()->check()) {
-            return redirect()->route('login')->with('error', 'Bạn cần đăng nhập để tạo đơn hàng.');
+            return redirect()->route('login')->with('error', __('orders.messages.login_required'));
         }
         $request->validate([
             'recipient_name' => 'required|string|max:255',
             'recipient_phone' => 'required|string|max:50',
             'recipient_address' => 'required|string|max:1000',
+            'recipient_email' => 'nullable|email|max:255',
+            'customer_id' => 'nullable|integer|exists:customers,id',
         ]);
 
         $cart = session()->get('cart', []);
         if (empty($cart)) {
-            return redirect()->route('cart.show')->with('error', 'Giỏ hàng trống');
+            return redirect()->route('cart.show')->with('error', __('orders.messages.cart_empty'));
         }
 
         if (auth()->user()->hasRole('warehouse') && !auth()->user()->warehouse_id) {
-            return redirect()->route('cart.show')->with('error', 'Tai khoan warehouse chua duoc assign kho.');
+            return redirect()->route('cart.show')->with('error', __('orders.messages.warehouse_unassigned'));
         }
 
         $authUser = auth()->user();
-        $customerQuery = Customer::query()->where('user_id', $authUser->id);
-        if (!empty($authUser->email)) {
-            $customerQuery->orWhere('email', $authUser->email);
+        $customer = null;
+
+        $selectedCustomerId = (int) $request->input('customer_id', 0);
+        if ($selectedCustomerId > 0) {
+            $selectedCustomer = Customer::query()
+                ->where('id', $selectedCustomerId)
+                ->where(function ($q) use ($authUser) {
+                    $q->where('user_id', $authUser->id)
+                        ->orWhere('assigned_to', $authUser->id);
+                })
+                ->first();
+
+            if ($selectedCustomer) {
+                // If user selected a valid customer from their own list, always use it.
+                $customer = $selectedCustomer;
+            }
         }
 
-        $customer = $customerQuery->first();
-
         if (!$customer) {
-            $customer = Customer::create([
-                'user_id' => $authUser->id,
-                'name' => $authUser->name,
-                'email' => $authUser->email,
-                'phone' => $request->recipient_phone,
-                'address' => $request->recipient_address,
-            ]);
-        } else {
-            $customer->fill([
-                'user_id' => $customer->user_id ?: $authUser->id,
-                'name' => $customer->name ?: $authUser->name,
-                'phone' => $customer->phone ?: $request->recipient_phone,
-                'address' => $customer->address ?: $request->recipient_address,
-            ]);
+            // user_id is unique on customers table, so fallback to one customer per user.
+            $customer = Customer::firstOrNew(['user_id' => $authUser->id]);
 
-            if (empty($customer->email) && !empty($authUser->email)) {
-                $customer->email = $authUser->email;
+            $incomingEmail = trim((string) ($request->input('recipient_email') ?: $authUser->email ?: ''));
+            if ($incomingEmail !== '') {
+                $emailTakenByOther = Customer::query()
+                    ->where('email', $incomingEmail)
+                    ->when($customer->exists, function ($q) use ($customer) {
+                        $q->where('id', '!=', $customer->id);
+                    })
+                    ->exists();
+
+                if (!$emailTakenByOther) {
+                    $customer->email = $incomingEmail;
+                }
             }
 
+            $customer->user_id = $authUser->id;
+            $customer->assigned_to = $authUser->id;
+            $customer->name = $request->input('recipient_name');
+            $customer->phone = $request->input('recipient_phone');
+            $customer->address = $request->input('recipient_address');
+            $customer->note = $request->input('note');
             $customer->save();
         }
 
@@ -344,13 +406,14 @@ class OrderController extends Controller
                 ],
                 approvalService: $approvalService
             );
+            
         } catch (\Throwable $e) {
             return redirect()->route('cart.show')->with('error', $e->getMessage());
         }
 
         session()->forget('cart');
 
-        return redirect()->route('site.orders.show', $order->id)->with('success', 'Đơn hàng đã tạo thành công');
+        return redirect()->route('site.orders.show', $order->id)->with('success', __('orders.messages.created'));
         
     }
     public function test(Request $request)
@@ -468,7 +531,7 @@ class OrderController extends Controller
         $users = User::orderBy('name')->get();
         $teams = Team::orderBy('name')->get(['id', 'name']);
         $statusOptions = collect(OrderStatus::cases())->mapWithKeys(function ($case) {
-            return [$case->value => $case->name];
+            return [$case->value => __('orders.statuses.' . $case->value)];
         });
 
         return view('orders.index', compact(
@@ -489,6 +552,8 @@ class OrderController extends Controller
 
     public function show(Order $order)
     {
+        $settings   = $this->settings;
+         $order->load('items.variant.product', 'customer', 'approvals.step', 'approvals.approver', 'transactions', 'histories.user');
         $order->load('items.variant.product', 'customer', 'approvals.step', 'approvals.approver', 'transactions', 'histories.user');
 
         $approvalService = app(ApprovalService::class);
@@ -502,20 +567,20 @@ class OrderController extends Controller
         $canShipper = $authUser ? $this->hasAnyRole($authUser, ['shipper', 'admin']) : false;
 
         $statusLabels = [
-            'pending_leader_approval' => 'Pending Leader Approval',
-            'pending_manager_approval' => 'Pending Manager Approval',
-            'approved' => 'Approved',
-            'packing' => 'Warehouse Dang Dong Hang',
-            'packed' => 'Packed',
-            'shipping' => 'Dang Giao Hang',
-            'delivered' => 'Da Giao Hang',
-            'completed' => 'Completed',
-            'rejected' => 'Rejected',
-            'returned' => 'Returned',
-            'cancelled' => 'Cancelled',
+            'pending_leader_approval' => __('orders.statuses.pending_leader_approval'),
+            'pending_manager_approval' => __('orders.statuses.pending_manager_approval'),
+            'approved' => __('orders.statuses.approved'),
+            'packing' => __('orders.statuses.packing'),
+            'packed' => __('orders.statuses.packed'),
+            'shipping' => __('orders.statuses.shipping'),
+            'delivered' => __('orders.statuses.delivered'),
+            'completed' => __('orders.statuses.completed'),
+            'rejected' => __('orders.statuses.rejected'),
+            'returned' => __('orders.statuses.returned'),
+            'cancelled' => __('orders.statuses.cancelled'),
         ];
 
-        return view('orders.show', compact('order', 'currentPendingApproval', 'canApproveCurrentStep', 'canWarehouse', 'canShipper', 'statusLabels'));
+        return view('orders.show', compact('order', 'currentPendingApproval', 'canApproveCurrentStep', 'canWarehouse', 'canShipper', 'statusLabels','settings'));
     }
 
     public function confirm(Order $order)
@@ -523,13 +588,13 @@ class OrderController extends Controller
         $this->assertValidTransition($order, ['pending'], 'confirmed');
         $order->update(['status' => 'confirmed']);
 
-        return back()->with('success', 'Don hang da duoc xac nhan.');
+        return back()->with('success', __('orders.messages.confirmed'));
     }
 
     public function picking(Order $order)
     {
         if (!auth()->check() || !$this->hasAnyRole(auth()->user(), ['warehouse', 'admin'])) {
-            abort(403, 'Chi co kho duoc phep xac nhan dong hang.');
+            abort(403, __('orders.messages.forbidden_warehouse_picking'));
         }
 
         $this->assertValidTransition($order, ['approved'], 'packing');
@@ -537,13 +602,13 @@ class OrderController extends Controller
         $order->update(['status' => 'packing']);
         $this->logOrderHistory($order, 'warehouse_confirm_pack', $statusBefore, 'packing', 'Kho xac nhan bat dau dong hang');
 
-        return back()->with('success', 'Kho da xac nhan bat dau dong hang.');
+        return back()->with('success', __('orders.messages.picking_started'));
     }
 
     public function completePacking(Request $request, Order $order)
     {
         if (!auth()->check() || !$this->hasAnyRole(auth()->user(), ['warehouse', 'admin'])) {
-            abort(403, 'Chi co kho duoc phep hoan tat dong hang.');
+            abort(403, __('orders.messages.forbidden_warehouse_complete_packing'));
         }
 
         $request->validate([
@@ -568,13 +633,13 @@ class OrderController extends Controller
             $request->input('note')
         );
 
-        return back()->with('success', 'Da hoan thien dong hang. Don san sang cho shipper lay.');
+        return back()->with('success', __('orders.messages.packing_completed'));
     }
 
     public function pickup(Order $order)
     {
         if (!auth()->check() || !$this->hasAnyRole(auth()->user(), ['shipper', 'admin'])) {
-            abort(403, 'Chi shipper duoc phep lay hang.');
+            abort(403, __('orders.messages.forbidden_shipper_pickup'));
         }
 
         $this->assertValidTransition($order, ['packed'], 'shipping');
@@ -590,13 +655,13 @@ class OrderController extends Controller
 
         $this->logOrderHistory($order, 'shipper_pickup', $statusBefore, 'shipping', 'Shipper da lay hang');
 
-        return back()->with('success', 'Shipper da lay hang va don chuyen sang dang giao hang.');
+        return back()->with('success', __('orders.messages.pickup_confirmed'));
     }
 
     public function ship(Order $order)
     {
         if (!auth()->check() || !$this->hasAnyRole(auth()->user(), ['shipper', 'admin'])) {
-            abort(403, 'Chi shipper duoc phep cap nhat giao hang.');
+            abort(403, __('orders.messages.forbidden_shipper_shipping'));
         }
 
         $this->assertValidTransition($order, ['packed'], 'shipping');
@@ -607,13 +672,13 @@ class OrderController extends Controller
         ]);
         $this->logOrderHistory($order, 'shipper_start_shipping', $statusBefore, 'shipping', 'Shipper bat dau giao hang');
 
-        return back()->with('success', 'Don hang dang duoc giao.');
+        return back()->with('success', __('orders.messages.shipping_started'));
     }
 
     public function markDelivered(Request $request, Order $order)
     {
         if (!auth()->check() || !$this->hasAnyRole(auth()->user(), ['shipper', 'admin'])) {
-            abort(403, 'Chi shipper duoc phep xac nhan da giao hang.');
+            abort(403, __('orders.messages.forbidden_shipper_delivered'));
         }
 
         $request->validate([
@@ -633,13 +698,13 @@ class OrderController extends Controller
 
         $this->logOrderHistory($order, 'shipper_delivered', $statusBefore, 'delivered', $request->input('note'));
 
-        return back()->with('success', 'Da xac nhan giao hang thanh cong.');
+        return back()->with('success', __('orders.messages.delivered_confirmed'));
     }
 
     public function completePayment(Request $request, Order $order)
     {
         if (!auth()->check() || !$this->hasAnyRole(auth()->user(), ['shipper', 'admin'])) {
-            abort(403, 'Chi shipper duoc phep hoan tat thanh toan.');
+            abort(403, __('orders.messages.forbidden_shipper_complete_payment'));
         }
 
         $request->validate([
@@ -657,7 +722,7 @@ class OrderController extends Controller
         $totalAfterPayment = $netPaid + $amount;
 
         if ($totalAfterPayment + 0.0001 < (float) $order->total) {
-            return back()->with('error', 'Can thanh toan du de hoan tat don hang.');
+            return back()->with('error', __('orders.messages.insufficient_payment_to_complete'));
         }
 
         $receiptImagePath = $request->file('receipt_image')->store('orders/receipts', 'public');
@@ -693,17 +758,17 @@ class OrderController extends Controller
 
         $this->logOrderHistory($order->fresh(), 'shipper_complete_payment', $statusBefore, 'completed', $request->input('note'));
 
-        return back()->with('success', 'Da ghi nhan thanh toan va hoan tat don hang.');
+        return back()->with('success', __('orders.messages.payment_completed'));
     }
 
     public function refund(Order $order)
     {
         if (!auth()->check() || !$this->hasAnyRole(auth()->user(), ['shipper', 'admin'])) {
-            abort(403, 'Chi shipper duoc phep tao yeu cau hoan tra.');
+            abort(403, __('orders.messages.forbidden_shipper_refund'));
         }
 
         if (!in_array((string) $order->status, ['delivered', 'shipping'], true)) {
-            return back()->with('error', 'Chi duoc tao refund sau khi don da giao hoac dang giao.');
+            return back()->with('error', __('orders.messages.refund_only_after_shipping_or_delivered'));
         }
 
         $statusBefore = (string) $order->status;
@@ -720,7 +785,7 @@ class OrderController extends Controller
         $order->update(['status' => 'completed']);
         $this->logOrderHistory($order, 'manual_complete', $statusBefore, 'completed', 'Cap nhat hoan tat thu cong');
 
-        return back()->with('success', 'Don hang da hoan tat.');
+        return back()->with('success', __('orders.messages.completed'));
     }
 
     public function cancel(Order $order)
@@ -735,7 +800,7 @@ class OrderController extends Controller
 
         $this->logOrderHistory($order, 'cancel_order', $statusBefore, 'cancelled', 'Huy don hang va giai phong booking');
 
-        return back()->with('success', 'Don hang da bi huy va da giai phong hang booking.');
+        return back()->with('success', __('orders.messages.cancelled_and_released'));
     }
 
     public function toggleStatus(Request $request, Order $order)
@@ -763,7 +828,7 @@ class OrderController extends Controller
             'shipping' => $this->ship($order),
             'completed' => $this->complete($order),
             'cancelled' => $this->cancel($order),
-            default => back()->with('error', 'Khong the chuyen trang thai don hang.'),
+            default => back()->with('error', __('orders.messages.transition_not_supported')),
         };
     }
 
@@ -811,7 +876,7 @@ class OrderController extends Controller
     private function createOrderWithUnifiedStockFlow(array $items, array $orderData, ApprovalService $approvalService): Order
     {
         if (auth()->check() && auth()->user()->hasRole('warehouse') && !auth()->user()->warehouse_id) {
-            throw new \RuntimeException('Tai khoan warehouse chua duoc assign kho.');
+            throw new \RuntimeException(__('orders.runtime.warehouse_unassigned'));
         }
 
         return DB::transaction(function () use ($items, $orderData, $approvalService) {
@@ -820,7 +885,7 @@ class OrderController extends Controller
                 ->values();
 
             if ($items->isEmpty()) {
-                throw new \RuntimeException('Khong co san pham hop le trong don.');
+                throw new \RuntimeException(__('orders.runtime.no_valid_items'));
             }
 
             $managedWarehouseId = $this->getManagedWarehouseId();
@@ -833,12 +898,15 @@ class OrderController extends Controller
 
                 $variant = ProductVariant::with('product')->lockForUpdate()->find($variantId);
                 if (!$variant) {
-                    throw new \RuntimeException('San pham khong ton tai.');
+                    throw new \RuntimeException(__('orders.runtime.product_not_found'));
                 }
 
                 $availableQty = $this->getAvailableStock($variantId, $managedWarehouseId);
                 if ($availableQty < $quantity) {
-                    throw new \RuntimeException('San pham ' . $variant->sku . ' khong du ton kho. Con lai: ' . $availableQty);
+                    throw new \RuntimeException(__('orders.runtime.insufficient_stock', [
+                        'sku' => $variant->sku,
+                        'available' => $availableQty,
+                    ]));
                 }
 
                 $price = isset($item['price']) && $item['price'] !== null
@@ -855,27 +923,37 @@ class OrderController extends Controller
                 $total += $price * $quantity;
             }
 
+            $orderInsert = $this->filterExistingColumns('orders', [
+                'customer_id' => $orderData['customer_id'] ?? null,
+                'user_id' => $orderData['user_id'] ?? auth()->id(),
+                'recipient_name' => $orderData['recipient_name'] ?? null,
+                'recipient_phone' => $orderData['recipient_phone'] ?? null,
+                'recipient_address' => $orderData['recipient_address'] ?? null,
+                'note' => $orderData['note'] ?? null,
+                'status' => $orderData['status'] ?? OrderStatus::Pending->value,
+                'payment_status' => $orderData['payment_status'] ?? PaymentStatus::Unpaid->value,
+                'delivery_status' => $orderData['delivery_status'] ?? DeliveryStatus::NotShipped->value,
+                'total' => $total,
+            ]);
+
+            if ($this->hasColumn('orders', 'code')) {
+                $orderInsert['code'] = 'ORD-' . strtoupper(substr(bin2hex(random_bytes(5)), 0, 10));
+            }
+
             $order = new Order();
-            $order->customer_id = $orderData['customer_id'] ?? null;
-            $order->user_id = $orderData['user_id'] ?? auth()->id();
-            $order->recipient_name = $orderData['recipient_name'] ?? null;
-            $order->recipient_phone = $orderData['recipient_phone'] ?? null;
-            $order->recipient_address = $orderData['recipient_address'] ?? null;
-            $order->note = $orderData['note'] ?? null;
-            $order->status = $orderData['status'] ?? OrderStatus::Pending->value;
-            $order->payment_status = $orderData['payment_status'] ?? PaymentStatus::Unpaid->value;
-            $order->delivery_status = $orderData['delivery_status'] ?? DeliveryStatus::NotShipped->value;
-            $order->total = $total;
+            $order->forceFill($orderInsert);
             $order->save();
 
             foreach ($variantsData as $info) {
-                $order->items()->create([
+                $itemInsert = $this->filterExistingColumns('order_items', [
                     'product_id' => $info['variant']->product_id,
                     'product_variant_id' => $info['variant_id'],
                     'quantity' => $info['quantity'],
                     'price' => $info['price'],
                     'total' => $info['quantity'] * $info['price'],
                 ]);
+
+                $order->items()->create($itemInsert);
             }
 
             // OMS flow: create order => reserve stock only, not deduct on-hand yet.
@@ -905,12 +983,16 @@ class OrderController extends Controller
                     ->first();
 
                 if (!$inventory) {
-                    throw new \RuntimeException('Khong tim thay ton kho de booking cho SKU: ' . ($item->variant->sku ?? $variantId));
+                    throw new \RuntimeException(__('orders.runtime.no_inventory_for_booking', [
+                        'sku' => $item->variant->sku ?? $variantId,
+                    ]));
                 }
 
                 $available = max(0, (int) $inventory->quantity - (int) $inventory->reserved_quantity);
                 if ($available < $reserveQty) {
-                    throw new \RuntimeException('Khong du available stock de booking cho SKU: ' . ($item->variant->sku ?? $variantId));
+                    throw new \RuntimeException(__('orders.runtime.no_available_stock_for_booking', [
+                        'sku' => $item->variant->sku ?? $variantId,
+                    ]));
                 }
 
                 $inventory->reserved_quantity += $reserveQty;
@@ -928,7 +1010,9 @@ class OrderController extends Controller
                     ->get();
 
                 if ($inventories->isEmpty()) {
-                    throw new \RuntimeException('Chua cau hinh ton kho theo kho cho SKU: ' . ($item->variant->sku ?? $variantId));
+                    throw new \RuntimeException(__('orders.runtime.inventory_not_configured', [
+                        'sku' => $item->variant->sku ?? $variantId,
+                    ]));
                 }
 
                 $remaining = $reserveQty;
@@ -956,7 +1040,9 @@ class OrderController extends Controller
                 }
 
                 if ($remaining > 0) {
-                    throw new \RuntimeException('Khong du available stock de booking cho SKU: ' . ($item->variant->sku ?? $variantId));
+                    throw new \RuntimeException(__('orders.runtime.no_available_stock_for_booking', [
+                        'sku' => $item->variant->sku ?? $variantId,
+                    ]));
                 }
             }
         }
@@ -976,7 +1062,7 @@ class OrderController extends Controller
                 }
 
                 if ($inventory->quantity < $reservation->quantity || $inventory->reserved_quantity < $reservation->quantity) {
-                    throw new \RuntimeException('Du lieu ton kho booking khong hop le de tru kho.');
+                    throw new \RuntimeException(__('orders.runtime.invalid_booking_data'));
                 }
 
                 $inventory->quantity -= $reservation->quantity;
@@ -1020,7 +1106,7 @@ class OrderController extends Controller
     private function assertValidTransition(Order $order, array $allowedCurrentStatuses, string $targetStatus): void
     {
         if (!in_array((string) $order->status, $allowedCurrentStatuses, true)) {
-            abort(422, 'Khong the chuyen trang thai tu ' . $order->status . ' sang ' . $targetStatus . '.');
+            abort(422, __('orders.messages.invalid_transition', ['from' => $order->status, 'to' => $targetStatus]));
         }
     }
 }

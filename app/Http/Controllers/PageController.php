@@ -21,22 +21,30 @@ use Illuminate\Support\Facades\Cache;
 
 class PageController extends Controller
 {
+    protected $settings;
+
+    public function __construct()
+    {
+        $this->settings = Cache::remember('settings', 60, function () {
+            return Setting::all()->keyBy('key');
+        });
+    }
+
     public function about()
     {
-        $settings = Cache::remember('settings', 60, function () {
-            return Setting::all()->keyBy('key');
-        }); 
-
         $pages = Page::search("gioi-thieu")->get();
-        return view('pages.about', compact('settings', 'pages'));
+
+        return view('pages.about', [
+            'settings' => $this->settings,
+            'pages' => $pages
+        ]);
     }
 
     public function contact()
     {
-        $settings = Cache::remember('settings', 60, function () {
-            return Setting::all()->keyBy('key');
-        }); 
-        return view('pages.contact', compact('settings'));
+        return view('pages.contact', [
+            'settings' => $this->settings
+        ]);
     }
 
     public function storeContact(Request $request)
@@ -51,31 +59,22 @@ class PageController extends Controller
 
         return redirect()->back()->with('success', 'Your message has been sent successfully!');
     }
-    /**
-     * Display a listing of the resource.
-     */
+
     public function index()
     {
         $pages = Page::all();
         return view('admin.pages.index', compact('pages'));
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
     public function create()
     {
         return view('admin.pages.create');
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
     public function store(Request $request)
     {
         $request->validate([
             'title' => 'required',
-            //'slug' => 'required|unique:pages',
             'content' => 'required',
         ]);
 
@@ -87,22 +86,19 @@ class PageController extends Controller
     
     public function show(Request $request)
     {
-        $slug = $request->slug;
-        $page = Page::where('slug', $slug)->firstOrFail();    
-        return view('pages.show', compact('page'));
+        $page = Page::where('slug', $request->slug)->firstOrFail();
+
+        return view('pages.show', [
+            'page' => $page,
+            'settings' => $this->settings
+        ]);
     }
 
-    /**
-     * Show the form for editing the specified resource.
-     */
     public function edit(Page $page)
     {
         return view('admin.pages.edit', compact('page'));
     }
 
-    /**
-     * Update the specified resource in storage.
-     */
     public function update(Request $request, Page $page)
     {
         $request->validate([
@@ -117,9 +113,6 @@ class PageController extends Controller
             ->with('success', 'Page updated successfully.');
     }
 
-    /**
-     * Remove the specified resource from storage.
-     */
     public function destroy(Page $page)
     {
         $page->delete();
@@ -130,50 +123,46 @@ class PageController extends Controller
 
     public function productsByCategory(Request $request, Category $category = null)
     {
-        $settings = Cache::remember('settings', 60, function () {
-            return Setting::all()->keyBy('key');
-        });
         $categories = Category::all();
+
         $query = ProductVariant::query()
             ->where('stock', '>', 0)
             ->where('status', true)
-            ->whereHas('product', function ($q) {
-                $q->where('status', true);
-            });
+            ->whereHas('product', fn($q) => $q->where('status', true));
 
         if ($request->filled('date')) {
             $query->whereDate('created_at', $request->date);
         }
 
         if ($request->filled('min_price')) {
-            $query->whereHas('latestPriceRule', function ($q) use ($request) {
-                $q->where('price', '>=', $request->min_price);
-            });
+            $query->whereHas('latestPriceRule', fn($q) => $q->where('price', '>=', $request->min_price));
         }
 
         if ($request->filled('max_price')) {
-            $query->whereHas('latestPriceRule', function ($q) use ($request) {
-                $q->where('price', '<=', $request->max_price);
-            });
+            $query->whereHas('latestPriceRule', fn($q) => $q->where('price', '<=', $request->max_price));
         }
 
         if ($category) {
-            $query->whereHas('product', function ($q) use ($category) {
-                $q->where('category_id', $category->id)
-                    ->where('status', true);
-            });
+            $query->whereHas('product', fn($q) =>
+                $q->where('category_id', $category->id)->where('status', true)
+            );
         }
+
         $variants = $query->with('product.avatar.media', 'product.gallery.media', 'latestPriceRule')->paginate(10);
-        return view('site.products_by_category', compact('variants', 'settings', 'categories', 'category'));
+
+        return view('site.products_by_category', [
+            'variants' => $variants,
+            'settings' => $this->settings,
+            'categories' => $categories,
+            'category' => $category
+        ]);
     }
 
     public function productList(Request $request, Category $category = null)
     {
-        $settings = Cache::remember('settings', 60, function () {
-            return Setting::all()->keyBy('key');
-        });
         $categories = Category::all();
-        $query = Product::query()->where('status', true);
+
+        $query = Product::where('status', true);
 
         if ($category) {
             $query->where('category_id', $category->id);
@@ -181,16 +170,16 @@ class PageController extends Controller
 
         $products = $query->with('avatar.media')->paginate(10);
 
-        return view('site.product_list', compact('products', 'settings', 'categories', 'category'));
+        return view('site.product_list', [
+            'products' => $products,
+            'settings' => $this->settings,
+            'categories' => $categories,
+            'category' => $category
+        ]);
     }
 
     public function productDetail(Product $product)
     {
-        $settings = Cache::remember('settings', 60, function () {
-            return Setting::all()->keyBy('key');
-        });
-
-        // Eager load all the necessary relationships for the view and JS module
         $product->load([
             'brand',
             'gallery.media', 
@@ -199,34 +188,38 @@ class PageController extends Controller
             'variants.latestPriceRule'
         ]);
 
-        // Group variants by their attributes for easier handling in the view
         $attributes = $product->variants
             ->flatMap(fn($variant) => $variant->values)
             ->unique('id')
             ->groupBy('attribute.name');
 
-        return view('site.product_detail', compact('product', 'settings', 'attributes'));
+        return view('site.product_detail', [
+            'product' => $product,
+            'settings' => $this->settings,
+            'attributes' => $attributes
+        ]);
     }
 
-    public function myDashboard(Request $request)
+    public function myDashboard()
     {
-        $settings = Cache::remember('settings', 60, function () {
-            return Setting::all()->keyBy('key');
-        });
         $user = auth()->user();
-        
+
         $customer = Customer::updateOrCreate(
             ['email' => $user->email],
             ['user_id' => $user->id, 'name' => $user->name]
         );
 
-        return view('site.my_dashboard', compact('settings', 'user', 'customer'));
+        return view('site.my_dashboard', [
+            'settings' => $this->settings,
+            'user' => $user,
+            'customer' => $customer
+        ]);
     }
 
     public function updateProfile(Request $request)
     {
         $user = auth()->user();
-        $customer = $user->customer; 
+        $customer = $user->customer;
 
         $request->validate([
             'name' => 'required|string|max:255', 
@@ -234,24 +227,15 @@ class PageController extends Controller
             'dob' => 'nullable|date',
             'gender' => 'nullable|in:male,female,other',
             'note' => 'nullable|string',
-            'avatar' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
+            'avatar' => 'nullable|image|max:2048',
         ]);
 
-        $customerData = $request->only(['name', 'email', 'phone', 'dob', 'gender', 'note']);
+        $customer?->update($request->only(['name', 'email', 'phone', 'dob', 'gender', 'note']));
 
-        if ($customer) {
-            $customer->update($customerData);
-        }
-
-        $userData = [];
         if ($request->hasFile('avatar')) {
             $avatarName = time().'.'.$request->avatar->getClientOriginalExtension();
             $request->avatar->move(public_path('avatars'), $avatarName);
-            $userData['avatar'] = 'avatars/' . $avatarName;
-        }
-
-        if(count($userData) > 0){
-            $user->update($userData);
+            $user->update(['avatar' => 'avatars/' . $avatarName]);
         }
 
         return redirect()->route('pages.my_dashboard')->with('success', 'Profile updated successfully.');
@@ -259,50 +243,44 @@ class PageController extends Controller
 
     public function variantDetail(ProductVariant $variant)
     {
-        $settings = Cache::remember('settings', 60, function () {
-            return Setting::all()->keyBy('key');
-        });
         $variant->load('avatar.media', 'product.category');
+
         $product = $variant->product;
         $product->load('avatar.media', 'gallery.media');
 
-        // Fetch other product variants from the same category, excluding the current one
         $other_variants = ProductVariant::where('id', '!=', $variant->id)
-                                          ->whereHas('product', function ($query) use ($product) {
-                                              $query->where('category_id', $product->category_id);
-                                          })
-                                          ->with('product', 'avatar.media', 'latestPriceRule')
-                                          ->inRandomOrder()
-                                          ->take(6)
-                                          ->get();
+            ->whereHas('product', fn($q) => $q->where('category_id', $product->category_id))
+            ->with('product', 'avatar.media', 'latestPriceRule')
+            ->inRandomOrder()
+            ->take(6)
+            ->get();
 
         $categories = Category::withCount('products')->get();
 
-        return view('site.variant_detail', compact('variant', 'product', 'other_variants', 'settings', 'categories'));
+        return view('site.variant_detail', [
+            'variant' => $variant,
+            'product' => $product,
+            'other_variants' => $other_variants,
+            'settings' => $this->settings,
+            'categories' => $categories
+        ]);
     }
 
     public function myOrders(Request $request)
     {
-        $settings = Cache::remember('settings', 60, function () {
-            return Setting::all()->keyBy('key');
-        });
-
         if (!auth()->check()) {
             return redirect()->route('login')->with('error', 'Bạn cần đăng nhập để xem đơn hàng của mình.');
         }
 
         $user = auth()->user();
-        $query = \App\Models\Order::with('customer')->where('user_id', $user->id);
 
-        $customers = Customer::query()
-            ->whereIn('id', function ($subQuery) use ($user) {
-                $subQuery->select('customer_id')
-                    ->from('orders')
-                    ->where('user_id', $user->id)
-                    ->whereNotNull('customer_id');
-            })
-            ->orderBy('name')
-            ->get();
+        $query = Order::with('customer')->where('user_id', $user->id);
+
+        $customers = Customer::whereIn('id', function ($q) use ($user) {
+            $q->select('customer_id')->from('orders')
+              ->where('user_id', $user->id)
+              ->whereNotNull('customer_id');
+        })->orderBy('name')->get();
 
         if ($request->filled('from_date') && $request->filled('to_date')) {
             $query->whereBetween('created_at', [$request->from_date, $request->to_date]);
@@ -314,193 +292,83 @@ class PageController extends Controller
 
         $orders = $query->latest()->paginate(10);
 
-        return view('site.my_orders', compact('settings', 'user', 'orders', 'customers'));
+        return view('site.my_orders', [
+            'settings' => $this->settings,
+            'user' => $user,
+            'orders' => $orders,
+            'customers' => $customers
+        ]);
     }
 
     public function myCustomer(Request $request)
     {
-        $settings = Cache::remember('settings', 60, function () {
-            return Setting::all()->keyBy('key');
-        });
-
-        $perPage = $request->input('per_page', 10);
-        $search = $request->input('search');
-
         $customers = Customer::withCount('orders')
-            ->when($search, function ($query, $search) {
-                return $query->where('name', 'like', "%{$search}%")
-                             ->orWhere('email', 'like', "%{$search}%");
-            })
-            ->paginate($perPage);
+            ->when($request->search, fn($q, $s) =>
+                $q->where('name', 'like', "%$s%")->orWhere('email', 'like', "%$s%")
+            )
+            ->paginate($request->input('per_page', 10));
 
-        return view('site.my_customer.index', compact('customers', 'search', 'settings'));
+        return view('site.my_customer.index', [
+            'customers' => $customers,
+            'search' => $request->search,
+            'settings' => $this->settings
+        ]);
     }
 
     public function myCustomerCreate()
     {
-        $settings = Cache::remember('settings', 60, function () {
-            return Setting::all()->keyBy('key');
-        });
-        return view('site.my_customer.create', compact('settings'));
+        return view('site.my_customer.create', ['settings' => $this->settings]);
     }
 
     public function myCustomerEdit(Customer $customer)
     {
-        $settings = Cache::remember('settings', 60, function () {
-            return Setting::all()->keyBy('key');
-        });
-        return view('site.my_customer.edit', compact('customer', 'settings'));
+        return view('site.my_customer.edit', [
+            'customer' => $customer,
+            'settings' => $this->settings
+        ]);
     }
 
     public function myCustomerImportForm()
     {
-        $settings = Cache::remember('settings', 60, function () {
-            return Setting::all()->keyBy('key');
-        });
-        return view('site.my_customer.import', compact('settings'));
-    }
-
-    public function myCustomerStore(Request $request)
-    {
-        $data = $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|email',
-            'phone' => 'nullable|string|max:20',
-        ]);
-
-        $duplicateCustomer = Customer::query()
-            ->where(function ($query) use ($data) {
-                if (!empty($data['email'])) {
-                    $query->orWhereRaw('LOWER(email) = ?', [strtolower($data['email'])]);
-                }
-
-                if (!empty($data['phone'])) {
-                    $query->orWhere('phone', $data['phone']);
-                    $query->orWhere(function ($subQuery) use ($data) {
-                        $subQuery->where('name', $data['name'])
-                            ->where('phone', $data['phone']);
-                    });
-                }
-            })
-            ->first();
-
-        if ($duplicateCustomer) {
-            return back()
-                ->withInput()
-                ->with('error', 'Khach hang da ton tai (ID: ' . $duplicateCustomer->id . ', Ten: ' . $duplicateCustomer->name . '). Vui long kiem tra lai so dien thoai/email.');
-        }
-
-        Customer::create($data);
-
-        return back()->with('success', 'Customer created successfully.');
-    }
-
-    public function myCustomerUpdate(Request $request, Customer $customer)
-    {
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:customers,email,' . $customer->id,
-            'phone' => 'nullable|string|max:20',
-        ]);
-
-        $customer->update($request->all());
-
-        return back()->with('success', 'Customer updated successfully.');
-    }
-
-    public function myCustomerDestroy(Customer $customer)
-    {
-        $customer->delete();
-        return back()->with('success', 'Customer deleted successfully.');
-    }
-
-    public function myCustomerBulkDelete(Request $request)
-    {
-        $ids = explode(',', $request->input('_ids'));
-
-        if (empty($ids)) {
-            return back()->with('error', 'Không có khách hàng nào được chọn.');
-        }
-
-        Customer::whereIn('id', $ids)->delete();
-
-        return back()->with('success', 'Đã xóa thành công các khách hàng đã chọn.');
-    }
-
-    public function myCustomerImport(Request $request)
-    {
-        $request->validate([
-            'file' => 'required|mimes:xlsx,csv'
-        ]);
-
-        $file = $request->file('file');
-
-        $import = new \App\Imports\CustomerImport;
-        Excel::import($import, $file);
-
-        $importedCount = $import->getImportedCount();
-        $failedCount = $import->getFailedCount();
-        $failedRows = $import->getFailedRows();
-
-        $message = "Import completed. {$importedCount} rows imported successfully.";
-        if ($failedCount > 0) {
-            $message .= " {$failedCount} rows failed to import.";
-        }
-
-        return back()
-            ->with('success', $message)
-            ->with('importedCount', $importedCount)
-            ->with('failedCount', $failedCount)
-            ->with('failedRows', $failedRows);
+        return view('site.my_customer.import', ['settings' => $this->settings]);
     }
 
     public function myCustomerShow(Customer $customer)
     {
-        $settings = Cache::remember('settings', 60, function () {
-            return Setting::all()->keyBy('key');
-        });
-        return view('site.my_customer.show', compact('customer', 'settings'));
+        return view('site.my_customer.show', [
+            'customer' => $customer,
+            'settings' => $this->settings
+        ]);
     }
 
     public function myCustomerOrderCreate(Customer $customer)
-    {        
-        $products = Product::with('variants.latestPriceRule')->get();
-        return view('site.my_customer.order_create', compact('customer', 'products'));
-    }
-
-    public function myCustomerOrderStore(Request $request, Customer $customer, OrderService $orderService)
     {
-        $request->validate([
-            'variants' => 'required|array',
-            'variants.*.id' => 'required|exists:product_variants,id',
-            'variants.*.quantity' => 'nullable|integer|min:0',
+        $products = Product::with('variants.latestPriceRule')->get();
+
+        return view('site.my_customer.order_create', [
+            'customer' => $customer,
+            'products' => $products,
+            'settings' => $this->settings
         ]);
-
-        $order = $orderService->createOrder([
-            'customer_id' => $customer->id,
-            'user_id' => auth()->id(),
-            'status' => OrderStatus::Pending->value,
-            'payment_status' => PaymentStatus::Unpaid->value,
-            'delivery_status' => DeliveryStatus::NotShipped->value,
-            'total_amount' => 0, // Will be calculated by the service
-        ], $request->variants);
-
-        return redirect()->route('orders.show', $order)->with('success', 'Order created successfully.');
     }
 
     public function myCustomerOrdersQuickView(Customer $customer)
     {
         $customer->load(['orders.items.product', 'orders.items.variant']);
-        return view('site.my_customer._orders_quick_view', ['orders' => $customer->orders]);
+
+        return view('site.my_customer._orders_quick_view', [
+            'orders' => $customer->orders
+        ]);
     }
 
-    public function myOrderDetail(\App\Models\Order $order)
+    public function myOrderDetail(Order $order)
     {
-        // Add authorization check if needed
         if ($order->user_id !== auth()->id()) {
             abort(403);
         }
+
         $order->load('items.variant.product', 'customer');
+
         return view('site.orders.show', compact('order'));
     }
 }

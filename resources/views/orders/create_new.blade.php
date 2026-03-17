@@ -2,7 +2,7 @@
 
 @section('content')
 <div class="container">
-    <h1>Tạo đơn hàng mới</h1>
+    <h1>{{ __('orders.titles.create') }}</h1>
 
     @if(session('error'))
         <div class="alert alert-danger">
@@ -20,24 +20,24 @@
         </div>
     @endif
 
-    <form action="{{ route('orders.store_a_new') }}" method="POST" id="create-order-form">4
+    <form action="{{ route('orders.store_a_new') }}" method="POST" id="create-order-form">
         @csrf
 
         {{-- Product List (Cart) --}}
         <div class="card mb-3">
             <div class="card-header">
-                <h5 class="mb-0">Danh sách sản phẩm trong đơn</h5>
+                <h5 class="mb-0">{{ __('orders.titles.products') }}</h5>
             </div>
             <div class="card-body">
                 <table class="table table-bordered align-middle">
                     <thead>
                         <tr>
                             <th style="width: 10%;">Hình ảnh</th>
-                            <th style="width: 30%;">Sản phẩm</th>
+                            <th style="width: 30%;">{{ __('orders.titles.products') }}</th>
                             <th>SKU</th>
-                            <th>Giá</th>
-                            <th>Số lượng</th>
-                            <th>Thành tiền</th>
+                            <th>{{ __('orders.labels.unit_price') }}</th>
+                            <th>{{ __('orders.labels.quantity') }}</th>
+                            <th>{{ __('orders.labels.line_total') }}</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -73,19 +73,19 @@
                 </table>
             </div>
             <div class="card-footer d-flex justify-content-end">
-                <h5>Tổng cộng: <span id="cart-total">{{ number_format($variant->latestPriceRule?->price ?? 0) }}</span></h5>
+                <h5>{{ __('orders.labels.total') }}: <span id="cart-total">{{ number_format($variant->latestPriceRule?->price ?? 0) }}</span></h5>
             </div>
         </div>
 
         {{-- Add More Products --}}
         <div class="card mb-3">
             <div class="card-header">
-                <h5 class="mb-0">Thêm sản phẩm</h5>
+                <h5 class="mb-0">{{ __('inventory.buttons.add_item') }}</h5>
             </div>
             <div class="card-body">
                 <div class="input-group">
-                    <input type="text" id="variant-search" class="form-control" placeholder="Tìm sản phẩm theo tên hoặc SKU...">
-                    <button class="btn btn-outline-secondary" type="button" id="variant-search-button">Tìm</button>
+                    <input type="text" id="variant-search" class="form-control" placeholder="{{ __('orders.placeholders.search_variant') }}">
+                    <button class="btn btn-outline-secondary" type="button" id="variant-search-button">{{ __('orders.buttons.filter') }}</button>
                 </div>
                 <div id="variant-search-results" class="mt-3"></div>
             </div>
@@ -94,14 +94,14 @@
         {{-- Customer Selection --}}
         <div class="card">
             <div class="card-header">
-                <h5 class="mb-0">Thông tin khách hàng</h5>
+                <h5 class="mb-0">{{ __('orders.labels.customer') }}</h5>
             </div>
             <div class="card-body">
                 <div class="form-group">
-                    <h6>Chọn khách hàng</h6>
+                    <h6>{{ __('orders.labels.customer') }}</h6>
                     <div class="input-group mb-3">
-                        <input type="text" id="customer-search" class="form-control" placeholder="Tìm kiếm khách hàng...">
-                        <button class="btn btn-outline-secondary" type="button" id="customer-search-button">Tìm</button>
+                        <input type="text" id="customer-search" class="form-control" placeholder="{{ __('orders.placeholders.search_customer') }}">
+                        <button class="btn btn-outline-secondary" type="button" id="customer-search-button">{{ __('orders.buttons.filter') }}</button>
                     </div>
                     <div id="customer-list-container">
                         {{-- Customer list will be loaded here by AJAX --}}
@@ -111,7 +111,7 @@
         </div>
 
         <div class="mt-3 d-flex justify-content-end">
-            <button type="submit" class="btn btn-primary btn-lg">Tạo Đơn Hàng</button>
+            <button type="submit" class="btn btn-primary btn-lg">{{ __('orders.buttons.create') }}</button>
         </div>
 
     </form>
@@ -257,7 +257,7 @@ $(document).ready(function() {
     cartContainer.on('change', '.quantity-input', function() { updateCartTotal(); });
 
     updateCartTotal();
-});44
+});
 </script>
 @endpush
 

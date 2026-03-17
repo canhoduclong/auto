@@ -1,7 +1,7 @@
 <div class="row">
     <div class="col-md-6">
         <div class="form-group mb-3">
-            <label for="document_date" class="form-label">Date</label>
+            <label for="document_date" class="form-label">{{ __('inventory.labels.date') }}</label>
             <input type="date" name="document_date" id="document_date" class="form-control @error('document_date') is-invalid @enderror" value="{{ old('document_date', $inventoryDocument->document_date ?? date('Y-m-d')) }}" required>
             @error('document_date')
                 <div class="invalid-feedback">{{ $message }}</div>
@@ -10,11 +10,11 @@
     </div>
     <div class="col-md-6">
         <div class="form-group mb-3">
-            <label for="type" class="form-label">Type</label>
+            <label for="type" class="form-label">{{ __('inventory.labels.type') }}</label>
             <select name="type" id="type" class="form-control @error('type') is-invalid @enderror" required>
-                <option value="import" {{ (old('type', $inventoryDocument->type ?? '') == 'import') ? 'selected' : '' }}>Import</option>
-                <option value="export" {{ (old('type', $inventoryDocument->type ?? '') == 'export') ? 'selected' : '' }}>Export</option>
-                <option value="adjustment" {{ (old('type', $inventoryDocument->type ?? '') == 'adjustment') ? 'selected' : '' }}>Adjustment</option>
+                <option value="import" {{ (old('type', $inventoryDocument->type ?? '') == 'import') ? 'selected' : '' }}>{{ __('inventory.types.import') }}</option>
+                <option value="export" {{ (old('type', $inventoryDocument->type ?? '') == 'export') ? 'selected' : '' }}>{{ __('inventory.types.export') }}</option>
+                <option value="adjustment" {{ (old('type', $inventoryDocument->type ?? '') == 'adjustment') ? 'selected' : '' }}>{{ __('inventory.types.adjustment') }}</option>
             </select>
             @error('type')
                 <div class="invalid-feedback">{{ $message }}</div>
@@ -26,7 +26,7 @@
 <div class="row">
     <div class="col-md-6">
         <div class="form-group mb-3">
-            <label for="warehouse_id" class="form-label">Warehouse</label>
+            <label for="warehouse_id" class="form-label">{{ __('inventory.labels.warehouse') }}</label>
             @php
                 $currentUser = auth()->user();
                 $isWarehouseUser = $currentUser && $currentUser->hasRole('warehouse');
@@ -35,7 +35,7 @@
 
             @if($isWarehouseUser)
                 <input type="hidden" name="warehouse_id" value="{{ $selectedWarehouseId }}">
-                <input type="text" class="form-control" value="{{ optional($warehouses->first())->name ?? 'Kho chua duoc gan' }}" readonly>
+                <input type="text" class="form-control" value="{{ optional($warehouses->first())->name ?? __('inventory.default.warehouse_not_assigned') }}" readonly>
             @else
                 <select name="warehouse_id" id="warehouse_id" class="form-control @error('warehouse_id') is-invalid @enderror" required>
                     @foreach($warehouses as $warehouse)
@@ -50,7 +50,7 @@
     </div>
     <div class="col-md-6">
         <div class="form-group mb-3">
-            <label for="shipping_fee" class="form-label">Shipping Fee</label>
+            <label for="shipping_fee" class="form-label">{{ __('inventory.labels.shipping_fee') }}</label>
             <input type="number" step="0.01" name="shipping_fee" id="shipping_fee" class="form-control @error('shipping_fee') is-invalid @enderror" value="{{ old('shipping_fee', $inventoryDocument->shipping_fee ?? 0) }}">
             @error('shipping_fee')
                 <div class="invalid-feedback">{{ $message }}</div>
@@ -60,7 +60,7 @@
 </div>
 
 <div class="form-group mb-3">
-    <label for="notes" class="form-label">Notes</label>
+    <label for="notes" class="form-label">{{ __('inventory.labels.notes') }}</label>
     <textarea name="notes" id="notes" class="form-control @error('notes') is-invalid @enderror">{{ old('notes', $inventoryDocument->notes ?? '') }}</textarea>
     @error('notes')
         <div class="invalid-feedback">{{ $message }}</div>
@@ -69,14 +69,14 @@
 
 <hr>
 
-<h4>Items</h4>
+<h4>{{ __('inventory.labels.items') }}</h4>
 
 <table class="table table-bordered">
     <thead>
         <tr>
-            <th>Product Variant</th>
-            <th>Quantity</th>
-            <th>Unit Cost</th>
+            <th>{{ __('inventory.labels.product_variant') }}</th>
+            <th>{{ __('inventory.labels.quantity') }}</th>
+            <th>{{ __('inventory.labels.unit_cost') }}</th>
             <th></th>
         </tr>
     </thead>
@@ -93,12 +93,12 @@
     </tbody>
 </table>
 
-<button type="button" id="add-item-btn" class="btn btn-success btn-sm">Add Item</button>
+<button type="button" id="add-item-btn" class="btn btn-success btn-sm">{{ __('inventory.buttons.add_item') }}</button>
 
 <hr>
 
-<button type="submit" class="btn btn-primary">Save Document</button>
-<a href="{{ route('inventory-documents.index') }}" class="btn btn-secondary">Cancel</a>
+<button type="submit" class="btn btn-primary">{{ __('inventory.buttons.save_document') }}</button>
+<a href="{{ route('inventory-documents.index') }}" class="btn btn-secondary">{{ __('inventory.buttons.cancel') }}</a>
 
 @push('scripts')
 <script>

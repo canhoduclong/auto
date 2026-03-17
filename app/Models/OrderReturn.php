@@ -20,6 +20,7 @@ class OrderReturn extends Model
         'warehouse_confirmed_at',
         'status',
         'reason',
+        'evidence_image_path',
         'note',
         'refund_amount',
         'return_scope',

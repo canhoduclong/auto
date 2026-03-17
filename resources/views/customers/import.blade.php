@@ -1,32 +1,32 @@
 @extends('layouts.app')
 @section('content')
 <div class="container">
-    <h2>Import khách hàng từ Excel</h2>
+    <h2>{{ __('customers.import.title') }}</h2>
     <div class="alert alert-info">
-        <b>Hướng dẫn file Excel import:</b><br>
-        - Hàng đầu tiên phải có các cột: <b>name</b> (bắt buộc), <b>phone</b> (bắt buộc, dạng chuỗi), <b>address</b> (bắt buộc), <b>email</b> (email, không bắt buộc), <b>gender</b> (male/female/other), <b>dob</b> (YYYY-MM-DD), <b>customer_type_id</b> (ID loại KH), <b>note</b> (ghi chú).<br>
-        - Cột <b>address</b> không được để trống.<br>
-        - Cột <b>phone</b> nên để dạng chuỗi, ví dụ: '0123456789'.<br>
-        - Nếu thiếu cột hoặc sai tên cột sẽ báo lỗi.<br>
-        <a href="/sample/customer_import_sample.xlsx" target="_blank">Tải file mẫu</a>
+        <b>{{ __('customers.import.guide_title') }}</b><br>
+        - {{ __('customers.import.guide_line_1') }}<br>
+        - {{ __('customers.import.guide_line_2') }}<br>
+        - {{ __('customers.import.guide_line_3') }}<br>
+        - {{ __('customers.import.guide_line_4') }}<br>
+        <a href="/sample/customer_import_sample.xlsx" target="_blank">{{ __('customers.import.download_sample') }}</a>
     </div>
     <form action="{{ route('customers.import') }}" method="POST" enctype="multipart/form-data" class="mb-4">
         @csrf
         <input type="file" name="file" accept=".xlsx,.xls" required>
-        <button class="btn btn-primary">Import</button>
+        <button class="btn btn-primary">{{ __('customers.index.import_excel') }}</button>
     </form>
     @if(isset($success))
         <div class="alert alert-success">{{ $success }}</div>
     @endif
     @if(isset($import_failures) && count($import_failures))
         <div class="alert alert-danger">
-            <strong>Các dòng lỗi khi import:</strong>
+            <strong>{{ __('customers.import.errors_title') }}</strong>
             <ul>
                 @foreach($import_failures as $err)
                     <li>
-                        <b>Dòng:</b> {{ $err['row'] }} | <b>Cột:</b> {{ $err['attribute'] }}<br>
-                        <b>Lỗi:</b> {{ implode('; ', $err['errors']) }}<br>
-                        <b>Giá trị:</b> {{ json_encode($err['values']) }}
+                        <b>{{ __('customers.import.row') }}:</b> {{ $err['row'] }} | <b>{{ __('customers.import.column') }}:</b> {{ $err['attribute'] }}<br>
+                        <b>{{ __('customers.import.error') }}:</b> {{ implode('; ', $err['errors']) }}<br>
+                        <b>{{ __('customers.import.value') }}:</b> {{ json_encode($err['values']) }}
                     </li>
                 @endforeach
             </ul>
@@ -34,21 +34,21 @@
     @endif
     @if(isset($imported) && count($imported))
         <div class="alert alert-info mt-3">
-            <strong>Kết quả import từng dòng:</strong>
+            <strong>{{ __('customers.import.result_each_row') }}</strong>
             <ul>
                 @foreach($imported as $rec)
                     <li>
                         @if($rec['status']==='success')
-                            <span class="text-success">✔</span> Thành công: {{ json_encode($rec['row']) }}
+                            <span class="text-success">✔</span> {{ __('customers.import.success') }}: {{ json_encode($rec['row']) }}
                         @else
-                            <span class="text-danger">✖</span> Thất bại: {{ json_encode($rec['row']) }}<br>
-                            <b>Lỗi:</b> {{ $rec['error'] ?? '' }}
+                            <span class="text-danger">✖</span> {{ __('customers.import.failed') }}: {{ json_encode($rec['row']) }}<br>
+                            <b>{{ __('customers.import.error') }}:</b> {{ $rec['error'] ?? '' }}
                         @endif
                     </li>
                 @endforeach
             </ul>
         </div>
     @endif
-    <a href="{{ route('customers.index') }}" class="btn btn-secondary mt-2">Quay lại danh sách khách hàng</a>
+    <a href="{{ route('customers.index') }}" class="btn btn-secondary mt-2">{{ __('customers.import.back_to_list') }}</a>
 </div>
 @endsection

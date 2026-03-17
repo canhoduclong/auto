@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>@yield('title','Đăng nhập')</title>
+    <title>@yield('title', __('auth.login_title'))</title>
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
     
@@ -48,7 +48,20 @@
                         $latestNotifications = ($isAdmin && $hasNotificationsTable)
                             ? ($currentUser?->notifications()->latest()->take(5)->get() ?? collect())
                             : collect();
+                        $currentLocale = app()->getLocale();
                     @endphp
+
+                    <div class="ms-auto d-flex align-items-center gap-2 py-2">
+                        <div class="dropdown">
+                            <button class="btn btn-light btn-sm" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                {{ __('common.language.label') }}: {{ strtoupper($currentLocale) }}
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li><a class="dropdown-item {{ $currentLocale === 'vi' ? 'active' : '' }}" href="{{ route('locale.switch', 'vi') }}">{{ __('common.language.vi') }}</a></li>
+                                <li><a class="dropdown-item {{ $currentLocale === 'en' ? 'active' : '' }}" href="{{ route('locale.switch', 'en') }}">{{ __('common.language.en') }}</a></li>
+                            </ul>
+                        </div>
+                    </div>
 
                     @if($isAdmin)
                         <div class="ms-auto d-flex align-items-center gap-2 py-2">
@@ -63,23 +76,23 @@
                                 </button>
                                 <div class="dropdown-menu dropdown-menu-end p-0" style="width: 360px; max-height: 420px; overflow-y: auto;">
                                     <div class="d-flex justify-content-between align-items-center p-2 border-bottom">
-                                        <strong>Thong bao</strong>
-                                        <a href="{{ route('admin.notifications.index') }}" class="small">Xem tat ca</a>
+                                        <strong>{{ __('common.notifications.title') }}</strong>
+                                        <a href="{{ route('admin.notifications.index') }}" class="small">{{ __('common.actions.view_all') }}</a>
                                     </div>
                                     @forelse($latestNotifications as $notification)
                                         <form action="{{ route('admin.notifications.read', $notification->id) }}" method="POST" class="border-bottom">
                                             @csrf
                                             <button type="submit" class="dropdown-item py-2 {{ is_null($notification->read_at) ? 'bg-light' : '' }}">
-                                                <div class="fw-semibold">{{ $notification->data['title'] ?? 'Thong bao' }}</div>
+                                                <div class="fw-semibold">{{ $notification->data['title'] ?? __('common.notifications.title') }}</div>
                                                 <div class="small text-muted">{{ \Illuminate\Support\Str::limit($notification->data['message'] ?? '-', 80) }}</div>
                                                 <div class="small text-muted">{{ optional($notification->created_at)->diffForHumans() }}</div>
                                             </button>
                                         </form>
                                     @empty
-                                        <div class="p-3 text-muted text-center">Chua co thong bao</div>
+                                        <div class="p-3 text-muted text-center">{{ __('common.notifications.empty') }}</div>
                                     @endforelse
                                     <div class="p-2 border-top text-center">
-                                        <a href="{{ route('admin.events.index') }}" class="small">Xem nhat ky su kien</a>
+                                        <a href="{{ route('admin.events.index') }}" class="small">{{ __('common.notifications.event_log') }}</a>
                                     </div>
                                 </div>
                             </div>
@@ -139,10 +152,14 @@
             headerClass = 'bg-danger text-white';
         }
 
+        const toastLabels = @json(__('common.toast_types'));
+        const closeLabel = @json(__('common.actions.close'));
+        const typeLabel = toastLabels[type] || type;
+
         toastEl.innerHTML = `
             <div class="toast-header ${headerClass}">
-                <strong class="me-auto">${type.charAt(0).toUpperCase() + type.slice(1)}</strong>
-                <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+                <strong class="me-auto">${typeLabel}</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="${closeLabel}"></button>
             </div>
             <div class="toast-body">
                 ${message}

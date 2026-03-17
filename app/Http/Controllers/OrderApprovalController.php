@@ -10,9 +10,29 @@ use Illuminate\Http\Request;
 
 class OrderApprovalController extends Controller
 {
+    protected $settings;
+
+    public function __construct()
+    {
+        $this->settings = Cache::remember('settings', 60, function () {
+            return Setting::all()->keyBy('key');
+        });
+    }
+
     private function isApproverRole(string $role): bool
     {
-        return in_array(strtolower($role), ['leader_sale', 'leader', 'sale_manager', 'manager_sale', 'manager', 'director', 'warehouse', 'shipper', 'admin'], true);
+        return in_array(strtolower($role), ['leader_sale', 'leader', 'sale_manager', 'manager_sale', 'manager', 'director', 'admin'], true);
+    }
+
+    private function userCanApprove(?\App\Models\User $user): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        return $user->roles->pluck('name')
+            ->map(fn ($role) => strtolower((string) $role))
+            ->contains(fn ($role) => $this->isApproverRole($role));
     }
 
     private function logOrderHistory(Order $order, string $action, ?string $before, ?string $after, ?string $note = null): void
@@ -37,9 +57,8 @@ class OrderApprovalController extends Controller
         ]);
 
         $user = $request->user();
-        $primaryRole = strtolower((string) $user?->roles->pluck('name')->first());
-        if (!$this->isApproverRole($primaryRole)) {
-            return back()->with('error', 'Ban khong co quyen duyet don hang.');
+        if (!$this->userCanApprove($user)) {
+            return back()->with('error', __('orders.approval.no_permission'));
         }
 
         try {
@@ -47,7 +66,7 @@ class OrderApprovalController extends Controller
             $approvalService->approve($order, $request->user(), $request->input('note'));
             $order->refresh();
             $this->logOrderHistory($order, 'approve_order', $statusBefore, (string) $order->status, $request->input('note'));
-            return back()->with('success', 'Đã duyệt bước hiện tại thành công.');
+            return back()->with('success', __('orders.messages.confirmed'));
         } catch (\Throwable $e) {
             return back()->with('error', $e->getMessage());
         }
@@ -60,9 +79,8 @@ class OrderApprovalController extends Controller
         ]);
 
         $user = $request->user();
-        $primaryRole = strtolower((string) $user?->roles->pluck('name')->first());
-        if (!$this->isApproverRole($primaryRole)) {
-            return back()->with('error', 'Ban khong co quyen tu choi don hang.');
+        if (!$this->userCanApprove($user)) {
+            return back()->with('error', __('orders.approval.no_permission'));
         }
 
         try {
@@ -70,7 +88,7 @@ class OrderApprovalController extends Controller
             $approvalService->reject($order, $request->user(), $request->input('note'));
             $order->refresh();
             $this->logOrderHistory($order, 'reject_order', $statusBefore, (string) $order->status, $request->input('note'));
-            return back()->with('success', 'Đơn hàng đã bị từ chối.');
+            return back()->with('success', __('orders.statuses.rejected'));
         } catch (\Throwable $e) {
             return back()->with('error', $e->getMessage());
         }

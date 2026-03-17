@@ -81,7 +81,7 @@ class InventoryDocumentController extends Controller
                 if ($validated['type'] == 'export') {
                     $availableQty = max(0, (int) $inventory->quantity - (int) $inventory->reserved_quantity);
                     if ($availableQty < $itemData['quantity']) {
-                        throw new \RuntimeException('So luong ton kho khong du de xuat kho.');
+                        throw new \RuntimeException(__('inventory.messages.insufficient_stock_for_export'));
                     }
                     $quantityChange = -$quantityChange;
                 }
@@ -102,7 +102,7 @@ class InventoryDocumentController extends Controller
             }
         });
 
-        return redirect()->route('inventory-documents.index')->with('success', 'Inventory document created successfully.');
+        return redirect()->route('inventory-documents.index')->with('success', __('inventory.messages.created'));
     }
 
     public function show(InventoryDocument $inventoryDocument)
@@ -117,7 +117,7 @@ class InventoryDocumentController extends Controller
 
         $managedWarehouseId = $this->getManagedWarehouseId();
         if ($managedWarehouseId && (int) $inventoryDocument->warehouse_id !== $managedWarehouseId) {
-            abort(403, 'Ban khong duoc phep sua chung tu cua kho khac.');
+            abort(403, __('inventory.messages.forbidden_edit_other_warehouse'));
         }
 
         $warehouses = $this->getAllowedWarehouses();
@@ -192,7 +192,7 @@ class InventoryDocumentController extends Controller
                 if ($validated['type'] == 'export') {
                     $availableQty = max(0, (int) $inventory->quantity - (int) $inventory->reserved_quantity);
                     if ($availableQty < $itemData['quantity']) {
-                        throw new \RuntimeException('So luong ton kho khong du de xuat kho.');
+                        throw new \RuntimeException(__('inventory.messages.insufficient_stock_for_export'));
                     }
                     $quantityChange = -$quantityChange;
                 }
@@ -213,7 +213,7 @@ class InventoryDocumentController extends Controller
             }
         });
 
-        return redirect()->route('inventory-documents.index')->with('success', 'Inventory document updated successfully.');
+        return redirect()->route('inventory-documents.index')->with('success', __('inventory.messages.updated'));
     }
 
     public function destroy(InventoryDocument $inventoryDocument)
@@ -222,7 +222,7 @@ class InventoryDocumentController extends Controller
 
         $managedWarehouseId = $this->getManagedWarehouseId();
         if ($managedWarehouseId && (int) $inventoryDocument->warehouse_id !== $managedWarehouseId) {
-            abort(403, 'Ban khong duoc phep xoa chung tu cua kho khac.');
+            abort(403, __('inventory.messages.forbidden_delete_other_warehouse'));
         }
 
         DB::transaction(function () use ($inventoryDocument) {
@@ -245,7 +245,7 @@ class InventoryDocumentController extends Controller
             $inventoryDocument->delete(); // Items and movements will be deleted by cascade or manually
         });
 
-        return redirect()->route('inventory-documents.index')->with('success', 'Inventory document deleted successfully.');
+        return redirect()->route('inventory-documents.index')->with('success', __('inventory.messages.deleted'));
     }
 
     private function getManagedWarehouseId(): ?int
@@ -262,7 +262,7 @@ class InventoryDocumentController extends Controller
     {
         $user = Auth::user();
         if ($user && $user->hasRole('warehouse') && !$user->warehouse_id) {
-            abort(403, 'Tai khoan warehouse chua duoc assign kho.');
+            abort(403, __('inventory.messages.warehouse_unassigned'));
         }
     }
 

@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
 @section('content')
-    <h1>User Dashboard</h1>
-    <p>Chào mừng {{ auth()->user()->name }}!</p>
+    <h1>{{ __('dashboard.user.title') }}</h1>
+    <p>{{ __('dashboard.user.welcome', ['name' => auth()->user()->name]) }}</p>
 @endsection

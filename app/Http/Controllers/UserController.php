@@ -84,8 +84,8 @@ class UserController extends Controller
         ]);
 
         $message = empty($validated['team_id'])
-            ? 'Đã bỏ gán team cho các user đã chọn.'
-            : 'Đã gán team cho các user đã chọn.';
+            ? __('users.messages.bulk_unassigned_team')
+            : __('users.messages.bulk_assigned_team');
 
         return redirect()->route('users.bulk-assign-team.form')->with('success', $message);
     }
@@ -126,7 +126,7 @@ class UserController extends Controller
         }
         */
 
-        return redirect()->route('users.index')->with('success', 'Tạo user thành công');
+        return redirect()->route('users.index')->with('success', __('users.messages.created'));
     }
 
     public function edit(User $user)
@@ -158,13 +158,13 @@ class UserController extends Controller
 
         $user->roles()->sync($request->roles ?? []);
 
-        return redirect()->route('users.index')->with('success', 'Cập nhật user thành công');
+        return redirect()->route('users.index')->with('success', __('users.messages.updated'));
     }
 
     public function destroy(User $user)
     {
         $user->roles()->detach();
         $user->delete();
-        return redirect()->route('users.index')->with('success', 'Xóa user thành công');
+        return redirect()->route('users.index')->with('success', __('users.messages.deleted'));
     }
 }

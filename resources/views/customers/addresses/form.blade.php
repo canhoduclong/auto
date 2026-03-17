@@ -1,68 +1,68 @@
-<h5>Địa chỉ nhà phố</h5>
+<h5>{{ __('customers.address.street_house_title') }}</h5>
 <div class="row">
     <div class="col-md-6">
-        <label>Số nhà</label>
+        <label>{{ __('customers.address.house_number') }}</label>
         <input type="text" name="house_number" value="{{ old('house_number', $address->house_number ?? '') }}" class="form-control">
     </div>
     <div class="col-md-6">
-        <label>Số nhà tạm</label>
+        <label>{{ __('customers.address.temporary_number') }}</label>
         <input type="text" name="temporary_number" value="{{ old('temporary_number', $address->temporary_number ?? '') }}" class="form-control">
     </div>
 </div> 
 
 <hr>
 
-<h5>Địa chỉ căn hộ / chung cư</h5>
+<h5>{{ __('customers.address.apartment_title') }}</h5>
 <div class="row">
     <div class="col-md-6">
-        <label>Tên dự án</label>
+        <label>{{ __('customers.address.project_name') }}</label>
         <input type="text" name="project_name" value="{{ old('project_name', $address->project_name ?? '') }}" class="form-control">
     </div>
     <div class="col-md-6">
-        <label>Block</label>
+        <label>{{ __('customers.address.block') }}</label>
         <input type="text" name="block" value="{{ old('block', $address->block ?? '') }}" class="form-control">
     </div>
 </div>
 <div class="row">
     <div class="col-md-6">
-        <label>Tầng</label>
+        <label>{{ __('customers.address.floor') }}</label>
         <input type="text" name="floor" value="{{ old('floor', $address->floor ?? '') }}" class="form-control">
     </div>
     <div class="col-md-6">
-        <label>Số căn</label>
+        <label>{{ __('customers.address.unit_number') }}</label>
         <input type="text" name="unit_number" value="{{ old('unit_number', $address->unit_number ?? '') }}" class="form-control">
     </div>
 </div>
 
 <hr>
 
-<h5>Thông tin chung</h5>
+<h5>{{ __('customers.address.common_title') }}</h5>
 <div class="row">
     <div class="col-md-6">
-        <label>Tên đường</label>
+        <label>{{ __('customers.address.street') }}</label>
         <input type="text" name="street" value="{{ old('street', $address->street ?? '') }}" class="form-control">
     </div> 
     <div class="col-md-6">
-        <label>Phường/Xã</label>
+        <label>{{ __('customers.address.ward') }}</label>
         <input type="text" name="ward" value="{{ old('ward', $address->ward ?? '') }}" class="form-control">
     </div>
     <div class="col-md-6">
-        <label>Quận/Huyện</label>
+        <label>{{ __('customers.address.district') }}</label>
         <input type="text" name="district" value="{{ old('district', $address->district ?? '') }}" class="form-control">
     </div> 
     <div class="col-md-6">
-        <label>Tỉnh/Thành phố</label>
+        <label>{{ __('customers.address.city_full') }}</label>
         <input type="text" name="city" value="{{ old('city', $address->city ?? '') }}" class="form-control">
     </div>
     <div class="col-md-6">
-        <label>Địa chỉ mặc định</label><br>
+        <label>{{ __('customers.address.is_default') }}</label><br>
         <input type="checkbox" name="is_default" value="1" {{ old('is_default', $address->is_default ?? false) ? 'checked' : '' }}>
     </div>
 </div>
 
 <div class="row mt-3">
     <div class="col-md-12">
-        <label>Ghi chú</label>
+        <label>{{ __('customers.form.note') }}</label>
         <textarea name="note" class="form-control">{{ old('note', $address->note ?? '') }}</textarea>
     </div>
 </div>

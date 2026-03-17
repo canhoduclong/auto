@@ -2,9 +2,9 @@
 <table class="table table-bordered table-hover">
     <thead>
         <tr>
-            <th>Tên</th>
-            <th>SĐT</th>
-            <th>Email</th>
+            <th>{{ __('customers.popup.name') }}</th>
+            <th>{{ __('customers.popup.phone') }}</th>
+            <th>{{ __('customers.popup.email') }}</th>
             <th></th>
         </tr>
     </thead>
@@ -15,7 +15,7 @@
             <td>{{ $customer->phone }}</td>
             <td>{{ $customer->email }}</td>
             <td>
-                <button class="btn btn-sm btn-primary btn-select-customer" data-id="{{ $customer->id }}" data-name="{{ $customer->name }}">Chọn</button>
+                <button class="btn btn-sm btn-primary btn-select-customer" data-id="{{ $customer->id }}" data-name="{{ $customer->name }}">{{ __('customers.popup.select') }}</button>
             </td>
         </tr>
         @endforeach
@@ -25,5 +25,5 @@
     {!! $customers->appends(request()->except('page'))->links('customers.popup_pagination') !!}
 </div>
 @else
-<p>Không tìm thấy khách hàng phù hợp.</p>
+<p>{{ __('customers.popup.empty') }}</p>
 @endif

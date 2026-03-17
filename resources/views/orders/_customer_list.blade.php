@@ -1,10 +1,10 @@
 <table class="table table-bordered">
     <thead>
         <tr>
-            <th>Chọn</th>
-            <th>Tên</th>
+            <th>{{ __('orders.labels.actions') }}</th>
+            <th>{{ __('orders.labels.customer') }}</th>
             <th>Email</th>
-            <th>Số điện thoại</th>
+            <th>{{ __('orders.labels.phone') }}</th>
         </tr>
     </thead>
     <tbody>

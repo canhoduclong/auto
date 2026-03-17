@@ -42,6 +42,13 @@ use App\Http\Controllers\TeamController;
 
 
 Route::get('/', [HomeController::class, 'index'])->name('home');
+Route::get('/locale/{locale}', function (string $locale) {
+    abort_unless(in_array($locale, ['vi', 'en'], true), 404);
+
+    session(['locale' => $locale]);
+
+    return back();
+})->name('locale.switch');
 Route::get('/variants', [HomeController::class, 'variants'])->name('site.variants');
 Route::get('/products/search', [ProductController::class, 'search'])->name('products.search');
 Route::post('/media/upload', [MediaController::class, 'upload'])->name('media.upload');
@@ -280,8 +287,9 @@ Route::get('/page/{slug}', [PageController::class, 'show'])->name('pages.show');
 // Posts
 // Cart Routes
 Route::get('/cart', [CartController::class, 'show'])->name('cart.show');
-Route::get('/cart/checkout', [CartController::class, 'checkout'])->name('cart.checkout');
-Route::post('/orders/store-from-cart', [OrderController::class, 'storeFromCart'])->name('orders.store_from_cart');
+Route::get('/cart/checkout', [CartController::class, 'checkout'])->middleware('auth')->name('cart.checkout');
+Route::get('/cart/customers/search', [CartController::class, 'searchCustomers'])->middleware('auth')->name('cart.customers.search');
+Route::post('/orders/store-from-cart', [OrderController::class, 'storeFromCart'])->middleware('auth')->name('orders.store_from_cart');
 Route::post('/cart/add', [CartController::class, 'add'])->name('cart.add');
 Route::delete('/cart/remove/{id}', [CartController::class, 'remove'])->name('cart.remove');
 Route::patch('/cart/update/{id}', [CartController::class, 'updateQuantity'])->name('cart.update');

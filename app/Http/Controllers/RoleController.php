@@ -41,7 +41,7 @@ class RoleController extends Controller
         $role = Role::create($request->only(['name', 'description']));
         $role->permissions()->sync($request->permissions ?? []);
         
-        return redirect()->route('roles.index')->with('success', 'Thêm role thành công!');
+        return redirect()->route('roles.index')->with('success', __('roles.messages.created'));
     }
 
     /**
@@ -84,7 +84,7 @@ class RoleController extends Controller
         // gán quyền cho role
         $role->permissions()->sync($request->permissions ?? []);
 
-        return redirect()->route('roles.index')->with('success', 'Cập nhật vai trò thành công!');
+        return redirect()->route('roles.index')->with('success', __('roles.messages.updated'));
     }
 
 
@@ -93,8 +93,9 @@ class RoleController extends Controller
      */
     public function destroy(string $id)
     {
+        $role = Role::findOrFail($id);
         $role->permissions()->detach();
         $role->delete();
-        return redirect()->route('roles.index')->with('success', 'Xóa role thành công');
+        return redirect()->route('roles.index')->with('success', __('roles.messages.deleted'));
     }
 }

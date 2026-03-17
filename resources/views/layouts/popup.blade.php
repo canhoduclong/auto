@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>@yield('title','Đăng nhập')</title>
+    <title>@yield('title', __('auth.login_title'))</title>
 
     
 	<!-- Global stylesheets -->

@@ -3,16 +3,16 @@ use App\Models\Setting;
 @endphp
 
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 
 <head>
     <meta charset="UTF-8">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>{{ Setting::get('brand_name', 'Nhà máy') }}</title>
+    <title>{{ Setting::get('brand_name', __('site.logo_fallback')) }}</title>
 
 
-    <meta name="description" content="AUTO TAY BAC">
-    <meta name="keywords" content="AUTO TAY BAC">
+    <meta name="description" content="{{ __('common.meta.default_description') }}">
+    <meta name="keywords" content="{{ __('common.meta.default_keywords') }}">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     
@@ -54,6 +54,8 @@ use App\Models\Setting;
     @yield('content')
 
     @include('layouts.partials.site_footer')
+
+     
 
     <script src="{{ asset('js/jquery-3.3.1.min.js') }}"></script>
     <script src="{{ asset('js/bootstrap.min.js') }}"></script>

@@ -6,7 +6,7 @@ return [
         'create' => 'Tạo sản phẩm',
         'name'   => 'Tên sản phẩm',
         'edit'   => 'Chỉnh sửa sản phẩm',
-        'search' => 'Search product', 
+        'search' => 'Tìm kiếm',
         'delete' => 'Xóa sản phẩm',
         'category' => 'Danh mục sản phẩm',
         'brand' => 'Thương hiệu',
@@ -51,13 +51,9 @@ return [
         'featured' => 'Nổi bật',
         'yes_featured' => 'Có, nổi bật',
         'no_featured' => 'Không, không nổi bật',
-        'search_placeholder' => 'Tìm kiếm theo tên sản phẩm, SKU hoặc mô tả', 
+        'search_placeholder' => 'Tìm kiếm theo tên sản phẩm, SKU hoặc mô tả',
         'actions' => 'Hành động',
         'view' => 'Xem',
-        'edit' => 'Chỉnh sửa',
-        'delete' => 'Xóa',
-        'search' => 'Tìm kiếm',
-
-
+        'search_empty' => 'Chưa có dữ liệu',
     ],
 ];

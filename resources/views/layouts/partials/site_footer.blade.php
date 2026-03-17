@@ -15,24 +15,24 @@
                                 @if($footerLogo)
                                     <img src="{{ asset('storage/' . $footerLogo->file_path) }}" alt="footer logo" height="56">
                                 @else
-                                    {{ $settings['brand_name']->value ?? 'Footer Logo' }}
+                                    {{ $settings['brand_name']->value ?? __('site.footer_logo_fallback') }}
                                 @endif
                             </a>
                         </div>  
                          <ul class="mx-0 px-0 list-unstyled color-white"> 
-                                <li class="color-white">Mã số thuế: {{ $settings['tax_number']->value ?? 'Chưa có' }}</li> 
-                                <li class="color-white">Địa chỉ: {{ $settings['address']->value ?? '' }}</li>
-                                <li class="color-white">Hotline: {{ $settings['hotline']->value ?? '' }}</li>
-                                <li class="color-white">Email: {{ $settings['email']->value ?? '' }}</li>
+                                <li class="color-white">{{ __('site.tax_code') }}: {{ $settings['tax_number']->value ?? __('site.not_available') }}</li>
+                                <li class="color-white">{{ __('site.address') }}: {{ $settings['address']->value ?? '' }}</li>
+                                <li class="color-white">{{ __('site.hotline') }}: {{ $settings['hotline']->value ?? '' }}</li>
+                                <li class="color-white">{{ __('site.email') }}: {{ $settings['email']->value ?? '' }}</li>
                          </ul>
                     </div>
                 </div> 
                  
                 <div class="col-md-3">
                     <div class="footer__widget">
-                        <h5>Chính sách</h5>
-                        <p><a href="{{ $settings['policy_page']->value ?? '#' }}">Chính sách và quy định</a></p>
-                        <h5 class="mt-4 pb-3">Kênh chính thức</h5>
+                        <h5>{{ __('site.policy') }}</h5>
+                        <p><a href="{{ $settings['policy_page']->value ?? '#' }}">{{ __('site.policy_and_terms') }}</a></p>
+                        <h5 class="mt-4 pb-3">{{ __('site.official_channels') }}</h5>
                         <div class="footer__social">
                             <a href="#" class="facebook"><i class="fa fa-facebook"></i></a>
                             <a href="#" class="twitter"><i class="fa fa-twitter"></i></a>
@@ -45,7 +45,7 @@
             </div>
             <!-- Link back to Colorlib can't be removed. Template is licensed under CC BY 3.0. -->
             <div class="footer__copyright__text">
-                <p>Copyright ©<script>document.write(new Date().getFullYear());</script>2025 All rights reserved  </p>
+                <p>Copyright ©<script>document.write(new Date().getFullYear());</script> {{ __('site.copyright') }}</p>
             </div>
             <!-- Link back to Colorlib can't be removed. Template is licensed under CC BY 3.0. -->
         </div>

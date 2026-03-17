@@ -61,6 +61,6 @@ class TransactionController extends Controller
             $order->save();
         }
 
-        return redirect()->route('transactions.index')->with('success', 'Giao dịch đã được ghi nhận.');
+        return redirect()->route('transactions.index')->with('success', __('transactions.messages.created'));
     }
 }

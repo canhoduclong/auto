@@ -3,7 +3,7 @@ use App\Models\Setting;
 @endphp
 
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 
 <head>
     <meta charset="UTF-8">
@@ -11,8 +11,8 @@ use App\Models\Setting;
     <title>{{ Setting::get('brand_name', 'AUTO TAY BAC') }}</title>
 
 
-    <meta name="description" content="AUTO TAY BAC">
-    <meta name="keywords" content="AUTO TAY BAC">
+    <meta name="description" content="{{ __('common.meta.default_description') }}">
+    <meta name="keywords" content="{{ __('common.meta.default_keywords') }}">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     
@@ -69,15 +69,10 @@ use App\Models\Setting;
     
     <script src="{{ asset('js/main.js') }}"></script>
 
- 
-</body>
-</html>
-
-
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     @stack('scripts')
-    
-</head>
-<body>
-     
+
+ 
+</body>
+</html>

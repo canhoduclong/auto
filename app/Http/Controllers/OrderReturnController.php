@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Inventory;
 use App\Models\InventoryMovement;
 use App\Models\Order;
+use App\Models\OrderHistory;
 use App\Models\OrderReturn;
 use App\Models\ReturnItem;
 use App\Models\Transaction;
@@ -15,6 +16,21 @@ use Illuminate\Support\Facades\DB;
 
 class OrderReturnController extends Controller
 {
+    private function logOrderHistory(Order $order, string $action, ?string $statusBefore, ?string $statusAfter, ?string $note = null): void
+    {
+        $user = Auth::user();
+
+        OrderHistory::create([
+            'order_id' => $order->id,
+            'action' => $action,
+            'user_id' => $user?->id,
+            'role' => $user?->roles->pluck('name')->first(),
+            'status_before' => $statusBefore,
+            'status_after' => $statusAfter,
+            'note' => $note,
+        ]);
+    }
+
     /**
      * Display a listing of the resource.
      */
@@ -132,6 +148,7 @@ class OrderReturnController extends Controller
             'order_id' => 'required|exists:orders,id',
             'warehouse_id' => 'required|exists:warehouses,id',
             'reason' => 'nullable|string|max:2000',
+            'evidence_image' => 'required|image|max:5120',
             'note' => 'nullable|string|max:2000',
             'items' => 'required|array|min:1',
             'items.*.product_variant_id' => 'required|exists:product_variants,id',
@@ -143,7 +160,7 @@ class OrderReturnController extends Controller
         $this->authorizeReturnCreation($order);
 
         if (!$order->customer_id) {
-            return back()->with('error', 'Don hang chua co khach hang, khong the tao don tra hang.')->withInput();
+            return back()->with('error', __('order_returns.messages.no_customer'))->withInput();
         }
 
         $orderedByVariant = $order->items
@@ -167,16 +184,19 @@ class OrderReturnController extends Controller
         foreach ($requestedByVariant as $variantId => $requestedQty) {
             $orderedQty = (int) ($orderedByVariant[$variantId] ?? 0);
             if ($orderedQty <= 0) {
-                return back()->with('error', 'San pham tra hang khong ton tai trong don goc.')->withInput();
+                return back()->with('error', __('order_returns.messages.item_not_in_order'))->withInput();
             }
 
             $alreadyReturned = (int) ($alreadyReturnedByVariant[$variantId] ?? 0);
             if (($alreadyReturned + $requestedQty) > $orderedQty) {
-                return back()->with('error', 'So luong tra khong duoc vuot qua so luong da mua.')->withInput();
+                return back()->with('error', __('order_returns.messages.qty_exceeds'))->withInput();
             }
         }
 
-        DB::transaction(function () use ($data, $order) {
+        $evidenceImagePath = $request->file('evidence_image')->store('orders/returns', 'public');
+
+        $createdReturn = null;
+        DB::transaction(function () use ($data, $order, $evidenceImagePath, &$createdReturn) {
             $orderReturn = OrderReturn::create([
                 'order_id' => $order->id,
                 'customer_id' => $order->customer_id,
@@ -184,6 +204,7 @@ class OrderReturnController extends Controller
                 'created_by' => Auth::id(),
                 'status' => 'requested',
                 'reason' => $data['reason'] ?? null,
+                'evidence_image_path' => $evidenceImagePath,
                 'note' => $data['note'] ?? null,
             ]);
 
@@ -195,9 +216,16 @@ class OrderReturnController extends Controller
                     'condition' => $item['condition'] ?? null,
                 ]);
             }
+
+            $createdReturn = $orderReturn;
         });
 
-        return redirect()->route('order-returns.index')->with('success', 'Da tao don tra hang. Cho ship xac nhan.');
+        if ($createdReturn && $order->exists) {
+            $status = (string) $order->status;
+            $this->logOrderHistory($order, 'create_return_request', $status, $status, 'Tao yeu cau tra hang #' . $createdReturn->id);
+        }
+
+        return redirect()->route('order-returns.index')->with('success', __('order_returns.messages.created'));
     }
 
     public function storeForMyOrder(Request $request, Order $order)
@@ -255,10 +283,13 @@ class OrderReturnController extends Controller
     public function shipConfirm(OrderReturn $orderReturn)
     {
         $user = Auth::user();
-        abort_unless($user && ($user->hasRole('ship') || $user->hasRole('admin')), 403);
+        abort_unless($user && ($user->hasRole('shipper') || $user->hasRole('ship') || $user->hasRole('admin')), 403);
+
+        $order = $orderReturn->order;
+        $statusBefore = $order ? (string) $order->status : null;
 
         if (!in_array($orderReturn->status, ['requested'], true)) {
-            return back()->with('error', 'Trang thai don tra hang khong hop le de ship xac nhan.');
+            return back()->with('error', __('order_returns.messages.invalid_status_ship_confirm'));
         }
 
         $orderReturn->update([
@@ -267,7 +298,11 @@ class OrderReturnController extends Controller
             'ship_confirmed_at' => now(),
         ]);
 
-        return back()->with('success', 'Ship da xac nhan don tra hang. Cho kho nhap hang.');
+        if ($order && $statusBefore !== null) {
+            $this->logOrderHistory($order, 'return_ship_confirmed', $statusBefore, (string) $order->status, 'Ship xac nhan don tra hang #' . $orderReturn->id);
+        }
+
+        return back()->with('success', __('order_returns.messages.ship_confirmed'));
     }
 
     public function warehouseConfirm(OrderReturn $orderReturn)
@@ -276,14 +311,16 @@ class OrderReturnController extends Controller
         abort_unless($user && ($user->hasRole('warehouse') || $user->hasRole('admin')), 403);
 
         if ($user->hasRole('warehouse') && (!$user->warehouse_id || (int) $user->warehouse_id !== (int) $orderReturn->warehouse_id)) {
-            return back()->with('error', 'Ban khong duoc phep xac nhan don tra hang nay.');
+            return back()->with('error', __('order_returns.messages.not_allowed_warehouse_confirm'));
         }
 
         if (!in_array($orderReturn->status, ['ship_confirmed'], true)) {
-            return back()->with('error', 'Trang thai don tra hang khong hop le de kho xac nhan.');
+            return back()->with('error', __('order_returns.messages.invalid_status_warehouse_confirm'));
         }
 
-        DB::transaction(function () use ($orderReturn, $user) {
+        $statusBefore = $orderReturn->order ? (string) $orderReturn->order->status : null;
+
+        DB::transaction(function () use ($orderReturn, $user, $statusBefore) {
             $orderReturn->loadMissing(['order.items', 'returnItems.productVariant']);
 
             $refundAmount = 0;
@@ -375,10 +412,18 @@ class OrderReturnController extends Controller
                     $order->status = Order::STATUS_RETURNED;
                 }
                 $order->save();
+
+                $this->logOrderHistory(
+                    $order,
+                    'return_warehouse_confirmed',
+                    $statusBefore,
+                    (string) $order->status,
+                    'Kho xac nhan tra hang #' . $orderReturn->id . ', refund ' . number_format($refundAmount, 2, '.', '')
+                );
             }
         });
 
-        return back()->with('success', 'Kho da xac nhan va nhap hang tra ve kho thanh cong.');
+        return back()->with('success', __('order_returns.messages.warehouse_confirmed'));
     }
 
     private function authorizeReturnCreation(?Order $order = null): void
@@ -388,7 +433,7 @@ class OrderReturnController extends Controller
             abort(403);
         }
 
-        $isInternal = $user->hasRole('ship') || $user->hasRole('sale') || $user->hasRole('admin');
+        $isInternal = $user->hasRole('shipper') || $user->hasRole('ship') || $user->hasRole('sale') || $user->hasRole('admin');
         $isOwner = $order && ((int) $order->user_id === (int) $user->id);
 
         abort_unless($isInternal || $isOwner, 403);

@@ -28,7 +28,7 @@ class TeamController extends Controller
 
         Team::create($data);
 
-        return redirect()->route('teams.index')->with('success', 'Tạo team thành công.');
+        return redirect()->route('teams.index')->with('success', __('teams.messages.created'));
     }
 
     public function edit(Team $team)
@@ -51,17 +51,17 @@ class TeamController extends Controller
 
         $team->update($data);
 
-        return redirect()->route('teams.index')->with('success', 'Cập nhật team thành công.');
+        return redirect()->route('teams.index')->with('success', __('teams.messages.updated'));
     }
 
     public function destroy(Team $team)
     {
         if ($team->users()->exists()) {
-            return back()->with('error', 'Không thể xóa team đang có user.');
+            return back()->with('error', __('teams.messages.delete_blocked_has_users'));
         }
 
         $team->delete();
 
-        return redirect()->route('teams.index')->with('success', 'Xóa team thành công.');
+        return redirect()->route('teams.index')->with('success', __('teams.messages.deleted'));
     }
 }

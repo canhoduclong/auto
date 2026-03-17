@@ -3,37 +3,37 @@
 @section('content')
 <div class="container">
     <div class="d-flex align-items-center justify-content-between mb-3">
-        <h4 class="mb-0">Quản lý đơn hàng</h4>
+        <h4 class="mb-0">{{ __('orders.titles.index') }}</h4>
         <div>
-            <a href="{{ route('approval-workflows.create') }}" class="btn btn-outline-primary">Tạo quy trình</a>
-            <a href="{{ route('orders.create') }}" class="btn btn-success">+ Thêm đơn hàng</a>
+            <a href="{{ route('approval-workflows.create') }}" class="btn btn-outline-primary">{{ __('orders.buttons.create_workflow') }}</a>
+            <a href="{{ route('orders.create') }}" class="btn btn-success">+ {{ __('orders.buttons.add_order') }}</a>
         </div>
     </div>
 
     <div class="card mb-3">
         <div class="card-header">
-            <h5 class="card-title mb-0">Bộ lọc</h5>
+            <h5 class="card-title mb-0">{{ __('orders.labels.filter') }}</h5>
         </div>
         <div class="card-body">
             <form method="GET" action="{{ route('orders.index') }}">
                 <div class="row">
                     <div class="col-md-3">
                         <div class="mb-3">
-                            <label for="customer_name" class="form-label">Tên khách hàng</label>
+                            <label for="customer_name" class="form-label">{{ __('orders.labels.customer') }}</label>
                             <input type="text" name="customer_name" id="customer_name" class="form-control" value="{{ request('customer_name') }}">
                         </div>
                     </div>
                     <div class="col-md-3">
                         <div class="mb-3">
-                            <label for="phone_number" class="form-label">Số điện thoại</label>
+                            <label for="phone_number" class="form-label">{{ __('orders.labels.phone') }}</label>
                             <input type="text" name="phone_number" id="phone_number" class="form-control" value="{{ request('phone_number') }}">
                         </div>
                     </div>
                     <div class="col-md-3">
                         <div class="mb-3">
-                            <label for="user_id" class="form-label">Người cập nhật</label>
+                            <label for="user_id" class="form-label">{{ __('orders.labels.updated_by') }}</label>
                             <select name="user_id" id="user_id" class="form-select">
-                                <option value="">Tất cả</option>
+                                <option value="">{{ __('orders.labels.all') }}</option>
                                 @foreach($users as $user)
                                     <option value="{{ $user->id }}" {{ request('user_id') == $user->id ? 'selected' : '' }}>{{ $user->name }}</option>
                                 @endforeach
@@ -42,9 +42,9 @@
                     </div>
                     <div class="col-md-3">
                         <div class="mb-3">
-                            <label for="team_id" class="form-label">Team</label>
+                            <label for="team_id" class="form-label">{{ __('orders.labels.team') }}</label>
                             <select name="team_id" id="team_id" class="form-select">
-                                <option value="">Tất cả</option>
+                                <option value="">{{ __('orders.labels.all') }}</option>
                                 @foreach($teams as $team)
                                     <option value="{{ $team->id }}" {{ (string) request('team_id') === (string) $team->id ? 'selected' : '' }}>{{ $team->name }}</option>
                                 @endforeach
@@ -53,20 +53,20 @@
                     </div>
                     <div class="col-md-3">
                         <div class="mb-3">
-                            <label for="payment_status" class="form-label">Trạng thái thanh toán</label>
+                            <label for="payment_status" class="form-label">{{ __('orders.labels.payment_status') }}</label>
                             <select name="payment_status" id="payment_status" class="form-select">
-                                <option value="">Tất cả</option>
-                                <option value="paid" {{ request('payment_status') == 'paid' ? 'selected' : '' }}>Đã thanh toán</option>
-                                <option value="unpaid" {{ request('payment_status') == 'unpaid' ? 'selected' : '' }}>Chưa thanh toán</option>
-                                <option value="partially_paid" {{ request('payment_status') == 'partially_paid' ? 'selected' : '' }}>Thanh toán một phần</option>
+                                <option value="">{{ __('orders.labels.all') }}</option>
+                                <option value="paid" {{ request('payment_status') == 'paid' ? 'selected' : '' }}>{{ __('orders.payment_statuses.paid') }}</option>
+                                <option value="unpaid" {{ request('payment_status') == 'unpaid' ? 'selected' : '' }}>{{ __('orders.payment_statuses.unpaid') }}</option>
+                                <option value="partially_paid" {{ request('payment_status') == 'partially_paid' ? 'selected' : '' }}>{{ __('orders.payment_statuses.partially_paid') }}</option>
                             </select>
                         </div>
                     </div>
                     <div class="col-md-3">
                         <div class="mb-3">
-                            <label for="status" class="form-label">Trạng thái đơn hàng</label>
+                            <label for="status" class="form-label">{{ __('orders.labels.status') }}</label>
                             <select name="status" id="status" class="form-select">
-                                <option value="">Tất cả</option>
+                                <option value="">{{ __('orders.labels.all') }}</option>
                                 @foreach($statusOptions as $value => $label)
                                     <option value="{{ $value }}" {{ request('status') == $value ? 'selected' : '' }}>{{ $label }}</option>
                                 @endforeach
@@ -75,48 +75,48 @@
                     </div>
                     <div class="col-md-3">
                         <div class="mb-3">
-                            <label for="from_date" class="form-label">Từ ngày</label>
+                            <label for="from_date" class="form-label">{{ __('orders.labels.from_date') }}</label>
                             <input type="date" name="from_date" id="from_date" class="form-control" value="{{ request('from_date') }}">
                         </div>
                     </div>
                     <div class="col-md-3">
                         <div class="mb-3">
-                            <label for="to_date" class="form-label">Đến ngày</label>
+                            <label for="to_date" class="form-label">{{ __('orders.labels.to_date') }}</label>
                             <input type="date" name="to_date" id="to_date" class="form-control" value="{{ request('to_date') }}">
                         </div>
                     </div>
                     <div class="col-md-3 d-flex align-items-end">
                         <div class="form-check mb-3">
                             <input class="form-check-input" type="checkbox" name="my_pending_approval" id="my_pending_approval" value="1" {{ request('my_pending_approval') ? 'checked' : '' }}>
-                            <label class="form-check-label" for="my_pending_approval">Chỉ hiện đơn chờ tôi duyệt</label>
+                            <label class="form-check-label" for="my_pending_approval">{{ __('orders.labels.my_pending_approval') }}</label>
                         </div>
                     </div>
                 </div>
-                <button type="submit" class="btn btn-primary">Lọc</button>
-                <a href="{{ route('orders.index') }}" class="btn btn-secondary">Xóa bộ lọc</a>
+                <button type="submit" class="btn btn-primary">{{ __('orders.buttons.filter') }}</button>
+                <a href="{{ route('orders.index') }}" class="btn btn-secondary">{{ __('orders.buttons.clear_filter') }}</a>
             </form>
         </div>
     </div>
 
     <div class="card">
         <div class="card-header">
-            <h5 class="card-title mb-0">Thống kê</h5>
+            <h5 class="card-title mb-0">{{ __('orders.labels.statistics') }}</h5>
         </div>
         <div class="card-body">
             <div class="row">
                 <div class="col-md-3">
-                    <p><strong>Tổng tiền hóa đơn:</strong> {{ number_format($totalInvoiceAmount, 0, ',', '.') }} đ</p>
+                    <p><strong>{{ __('orders.stats.total_invoice') }}:</strong> {{ number_format($totalInvoiceAmount, 0, ',', '.') }} đ</p>
                 </div>
                 <div class="col-md-3">
-                    <p><strong>Tổng đã thanh toán:</strong> {{ number_format($totalPaidAmount, 0, ',', '.') }} đ</p>
+                    <p><strong>{{ __('orders.stats.total_paid') }}:</strong> {{ number_format($totalPaidAmount, 0, ',', '.') }} đ</p>
                 </div>
                 <div class="col-md-3">
-                    <p><strong>Tổng còn nợ:</strong> {{ number_format($totalOutstandingAmount, 0, ',', '.') }} đ</p>
+                    <p><strong>{{ __('orders.stats.total_outstanding') }}:</strong> {{ number_format($totalOutstandingAmount, 0, ',', '.') }} đ</p>
                 </div>
                 <div class="col-md-3">
-                    <p><strong>Đơn đã thanh toán:</strong> {{ $fullyPaidOrders }}</p>
-                    <p><strong>Đơn chưa thanh toán:</strong> {{ $unpaidOrders }}</p>
-                    <p><strong>Đơn thanh toán một phần:</strong> {{ $partiallyPaidOrders }}</p>
+                    <p><strong>{{ __('orders.stats.paid_orders') }}:</strong> {{ $fullyPaidOrders }}</p>
+                    <p><strong>{{ __('orders.stats.unpaid_orders') }}:</strong> {{ $unpaidOrders }}</p>
+                    <p><strong>{{ __('orders.stats.partial_paid_orders') }}:</strong> {{ $partiallyPaidOrders }}</p>
                 </div>
             </div>
         </div>
@@ -127,17 +127,17 @@
             <thead>
                 <tr>
                     <th>ID</th>
-                    <th>Mã đơn</th>
-                    <th>Khách hàng</th>
-                    <th>Nhân viên</th>
-                    <th>Tổng tiền</th>
-                    <th>Trạng thái</th>
-                    <th>Trạng thái thanh toán</th>
-                    <th>Đã thanh toán</th>
-                    <th>Ngày tạo</th>
-                    <th>Duyệt</th>
-                    <th>Thao tác</th>
-                    <th>QR Code</th>
+                    <th>{{ __('orders.labels.code') }}</th>
+                    <th>{{ __('orders.labels.customer') }}</th>
+                    <th>{{ __('orders.labels.employee') }}</th>
+                    <th>{{ __('orders.labels.total') }}</th>
+                    <th>{{ __('orders.labels.status') }}</th>
+                    <th>{{ __('orders.labels.payment_status') }}</th>
+                    <th>{{ __('orders.labels.amount_paid') }}</th>
+                    <th>{{ __('orders.labels.created_at') }}</th>
+                    <th>{{ __('orders.labels.approval_column') }}</th>
+                    <th>{{ __('orders.labels.actions') }}</th>
+                    <th>{{ __('orders.labels.qrcode') }}</th>
                 </tr>
             </thead>
             <tbody>
@@ -155,13 +155,13 @@
                     </td>
                     <td>
                         @if($order->status === \App\Models\Order::STATUS_COMPLETED)
-                            <span class="badge bg-success">Đã hoàn thành</span>
+                            <span class="badge bg-success">{{ __('orders.payment_badges.completed') }}</span>
                         @elseif($order->isPaid())
-                            <span class="badge bg-success">Đã thanh toán đủ</span>
+                            <span class="badge bg-success">{{ __('orders.payment_badges.fully_paid') }}</span>
                         @elseif($order->isPartialPaid())
-                            <span class="badge bg-warning text-dark">Thanh toán một phần</span>
+                            <span class="badge bg-warning text-dark">{{ __('orders.payment_badges.partial_paid') }}</span>
                         @else
-                            <span class="badge bg-danger">Chưa thanh toán</span>
+                            <span class="badge bg-danger">{{ __('orders.payment_badges.unpaid') }}</span>
                         @endif
                     </td>
                     <td>{{ $order->created_at }}</td>
@@ -184,19 +184,19 @@
                             @if($canApprove)
                                 <form method="POST" action="{{ route('orders.approve', $order) }}" class="d-inline">
                                     @csrf
-                                    <input type="hidden" name="note" value="Duyệt nhanh từ danh sách đơn hàng">
-                                    <button type="submit" class="btn btn-sm btn-success">Approve</button>
+                                    <input type="hidden" name="note" value="{{ __('orders.approval.quick_approve_note') }}">
+                                    <button type="submit" class="btn btn-sm btn-success">{{ __('orders.buttons.approve') }}</button>
                                 </form>
                                 <form method="POST" action="{{ route('orders.reject', $order) }}" class="d-inline ms-1">
                                     @csrf
-                                    <input type="hidden" name="note" value="Từ chối nhanh từ danh sách đơn hàng">
-                                    <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Bạn có chắc muốn từ chối đơn này?')">Reject</button>
+                                    <input type="hidden" name="note" value="{{ __('orders.approval.quick_reject_note') }}">
+                                    <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('{{ __('orders.confirms.reject_order') }}')">{{ __('orders.buttons.reject') }}</button>
                                 </form>
                             @else
-                                <small class="text-muted d-block">Không đúng vai trò duyệt</small>
+                                <small class="text-muted d-block">{{ __('orders.approval.not_your_role') }}</small>
                             @endif
                         @else
-                            <small class="text-muted">Không có bước duyệt chờ</small>
+                            <small class="text-muted">{{ __('orders.approval.no_pending_step') }}</small>
                         @endif
                     </td>
                     <td>
@@ -205,26 +205,26 @@
                         @endphp
                         @if(!$order->isPaid())
                             <span class="text-primary fw-bold">{{ number_format($paid, 0, ',', '.') }} đ</span>
-                            <a href="{{ route('transactions.create', ['order_id' => $order->id]) }}" class="btn btn-success btn-sm ms-2">Thanh toán</a>
+                            <a href="{{ route('transactions.create', ['order_id' => $order->id]) }}" class="btn btn-success btn-sm ms-2">{{ __('orders.buttons.pay') }}</a>
                         @else
-                            <span class="text-success">Đã thanh toán đủ</span>
+                            <span class="text-success">{{ __('orders.payment_badges.fully_paid') }}</span>
                         @endif
                     </td>
                     <td>
-                        <a href="{{ route('orders.show', $order) }}" class="btn btn-sm btn-info">xem</a>
+                        <a href="{{ route('orders.show', $order) }}" class="btn btn-sm btn-info">{{ __('orders.buttons.view') }}</a>
                         @if(in_array($order->status, ['picked_up', 'shipping', 'completed'], true))
                             <a href="{{ route('order-returns.create', ['order_id' => $order->id]) }}" class="btn btn-warning btn-sm">Tra hang</a>
                         @endif
                         @if(!$order->isPaid() && $order->status !== \App\Models\Order::STATUS_COMPLETED)
-                            <a href="{{ route('orders.edit', $order->id) }}" class="btn btn-info btn-sm">Sửa</a>
+                            <a href="{{ route('orders.edit', $order->id) }}" class="btn btn-info btn-sm">{{ __('orders.buttons.edit') }}</a>
                         @endif
                         <form action="{{ route('orders.destroy', $order->id) }}" method="POST" class="d-inline">
                             @csrf
                             @method('DELETE')
-                            <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Xóa đơn hàng này?')">Xóa</button>
+                            <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('{{ __('orders.confirms.delete_order') }}')">{{ __('orders.buttons.delete') }}</button>
                         </form>
                         @if($order->status !== \App\Models\Order::STATUS_COMPLETED && !$order->isPaid())
-                            <a href="{{ route('transactions.create', ['order_id' => $order->id]) }}" class="btn btn-success btn-sm">Thanh toán</a>
+                            <a href="{{ route('transactions.create', ['order_id' => $order->id]) }}" class="btn btn-success btn-sm">{{ __('orders.buttons.pay') }}</a>
                         @endif
                     </td>
                     <td>

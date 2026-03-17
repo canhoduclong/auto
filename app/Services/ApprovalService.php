@@ -11,15 +11,33 @@ use Illuminate\Support\Facades\DB;
 
 class ApprovalService
 {
+    private function leaderRoleSlugs(): array
+    {
+        return ['leader_sale', 'leader', 'sale_manager'];
+    }
+
+    private function managerRoleSlugs(): array
+    {
+        return ['manager_sale', 'manager', 'director'];
+    }
+
+    private function approverRoleSlugs(): array
+    {
+        return array_merge($this->leaderRoleSlugs(), $this->managerRoleSlugs());
+    }
+
+    private function isApproverRole(?string $roleSlug): bool
+    {
+        return in_array(strtolower((string) $roleSlug), $this->approverRoleSlugs(), true);
+    }
+
     private function mapPendingStatusByRole(?string $roleSlug): string
     {
         $role = strtolower((string) $roleSlug);
 
         return match (true) {
-            in_array($role, ['leader_sale', 'leader', 'sale_manager'], true) => 'pending_leader_approval',
-            in_array($role, ['manager_sale', 'manager', 'director'], true) => 'pending_manager_approval',
-            in_array($role, ['warehouse', 'kho'], true) => 'pending_warehouse_approval',
-            in_array($role, ['shipper', 'giao_hang'], true) => 'pending_shipper_approval',
+            in_array($role, $this->leaderRoleSlugs(), true) => 'pending_leader_approval',
+            in_array($role, $this->managerRoleSlugs(), true) => 'pending_manager_approval',
             default => OrderStatus::Pending->value,
         };
     }
@@ -38,7 +56,22 @@ class ApprovalService
                 return;
             }
 
-            foreach ($workflow->steps as $step) {
+            $sortedSteps = $workflow->steps
+                ->sortBy('step_order')
+                ->values();
+
+            // Force approval flow into 2 business stages: leader -> manager.
+            $leaderStep = $sortedSteps->first(fn ($step) => in_array(strtolower((string) $step->role_slug), $this->leaderRoleSlugs(), true));
+            $managerStep = $sortedSteps->first(fn ($step) => in_array(strtolower((string) $step->role_slug), $this->managerRoleSlugs(), true));
+
+            $approverSteps = collect([$leaderStep, $managerStep])->filter()->values();
+
+            if ($approverSteps->isEmpty()) {
+                $order->update(['status' => OrderStatus::Approved->value]);
+                return;
+            }
+
+            foreach ($approverSteps as $step) {
                 ApprovalOrder::updateOrCreate(
                     [
                         'order_id' => $order->id,
@@ -50,7 +83,7 @@ class ApprovalService
                 );
             }
 
-            $firstStep = $workflow->steps->sortBy('step_order')->first();
+            $firstStep = $approverSteps->first();
             $order->update(['status' => $this->mapPendingStatusByRole($firstStep?->role_slug)]);
         });
     }
@@ -61,8 +94,11 @@ class ApprovalService
             ->where('order_id', $order->id)
             ->with('step')
             ->where('status', 'pending')
-            ->whereHas('step')
+            ->whereHas('step', function ($q) {
+                $q->whereIn(DB::raw('LOWER(role_slug)'), $this->approverRoleSlugs());
+            })
             ->join('approval_steps as aps', 'aps.id', '=', 'approval_orders.approval_step_id')
+            ->whereIn(DB::raw('LOWER(aps.role_slug)'), $this->approverRoleSlugs())
             ->orderBy('aps.step_order')
             ->select('approval_orders.*')
             ->first();
@@ -99,7 +135,12 @@ class ApprovalService
             'note'        => $note,
         ]);
 
-        $hasPending = $order->approvals()->where('status', 'pending')->exists();
+        $hasPending = $order->approvals()
+            ->where('status', 'pending')
+            ->whereHas('step', function ($q) {
+                $q->whereIn(DB::raw('LOWER(role_slug)'), $this->approverRoleSlugs());
+            })
+            ->exists();
         if (!$hasPending) {
             $order->update(['status' => OrderStatus::Approved->value]);
             return;
@@ -131,6 +172,9 @@ class ApprovalService
         $order->approvals()
             ->where('status', 'pending')
             ->where('id', '!=', $step->id)
+            ->whereHas('step', function ($q) {
+                $q->whereIn(DB::raw('LOWER(role_slug)'), $this->approverRoleSlugs());
+            })
             ->update([
                 'status' => 'rejected',
                 'note' => 'Tự động kết thúc do đơn đã bị từ chối ở bước trước.',

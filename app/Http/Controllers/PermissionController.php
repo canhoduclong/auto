@@ -27,7 +27,7 @@ class PermissionController extends Controller
 
         Permission::create($request->all());
 
-        return redirect()->route('permissions.index')->with('success', 'Thêm quyền thành công');
+        return redirect()->route('permissions.index')->with('success', __('permissions.messages.created'));
     }
 
     public function edit(Permission $permission)
@@ -45,12 +45,12 @@ class PermissionController extends Controller
 
         $permission->update($request->all());
 
-        return redirect()->route('permissions.index')->with('success', 'Cập nhật quyền thành công');
+        return redirect()->route('permissions.index')->with('success', __('permissions.messages.updated'));
     }
 
     public function destroy(Permission $permission)
     {
         $permission->delete();
-        return redirect()->route('permissions.index')->with('success', 'Xóa quyền thành công');
+        return redirect()->route('permissions.index')->with('success', __('permissions.messages.deleted'));
     }
 }

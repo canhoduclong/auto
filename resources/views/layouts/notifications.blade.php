@@ -7,8 +7,8 @@
         @if (session()->has($type))
             <div class="toast" role="alert" aria-live="assertive" aria-atomic="true">
                 <div class="toast-header">
-                    <strong class="me-auto">{{ ucfirst($type) }}</strong>
-                    <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+                    <strong class="me-auto">{{ __('common.toast_types.' . $type) }}</strong>
+                    <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="{{ __('common.actions.close') }}"></button>
                 </div>
                 <div class="toast-body">
                     {!! session($type) !!}

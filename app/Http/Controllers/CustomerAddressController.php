@@ -108,7 +108,7 @@ class CustomerAddressController extends Controller
         $customer->addresses()->create($data);
 
         return redirect()->route('customers.addresses.index', $customer->id)
-            ->with('success', 'Địa chỉ đã được thêm thành công.');
+            ->with('success', __('customers.messages.address_created'));
     }
 
     // Form sửa địa chỉ
@@ -151,7 +151,7 @@ class CustomerAddressController extends Controller
         $address->update($data);
 
         return redirect()->route('customers.addresses.index', $customer->id)
-            ->with('success', 'Địa chỉ đã được cập nhật thành công.');
+            ->with('success', __('customers.messages.address_updated'));
     }
 
     // Xóa địa chỉ
@@ -161,6 +161,6 @@ class CustomerAddressController extends Controller
         $address->delete();
 
         return redirect()->route('customers.addresses.index', $customerId)
-            ->with('success', 'Địa chỉ đã được xóa thành công.');
+            ->with('success', __('customers.messages.address_deleted'));
     }
 }
