@@ -18,6 +18,11 @@ class InventoryDocument extends Model
         'user_id',
     ];
 
+    protected $casts = [
+        'document_date' => 'date',
+        'shipping_fee' => 'decimal:2',
+    ];
+
     public function items()
     {
         return $this->hasMany(InventoryDocumentItem::class);

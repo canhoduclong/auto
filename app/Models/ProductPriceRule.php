@@ -10,7 +10,7 @@ class ProductPriceRule extends Model
     use HasFactory;
 
     protected $fillable = [
-        'product_id',
+        'product_variant_id',
         'reason',
         'price',
         'start_date',
@@ -18,9 +18,14 @@ class ProductPriceRule extends Model
         'created_by',
     ];
 
+    public function productVariant()
+    {
+        return $this->belongsTo(ProductVariant::class, 'product_variant_id');
+    }
+
     public function product()
     {
-        return $this->belongsTo(Product::class);
+        return $this->productVariant?->product;
     }
 
     public function creator()

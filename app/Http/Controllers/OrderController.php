@@ -15,11 +15,14 @@ use App\Models\ProductVariant;
 use App\Models\Team;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Models\Setting;
 use App\Services\ApprovalService;
 use Illuminate\Http\Request;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+ 
 
 class OrderController extends Controller
 {
@@ -77,6 +80,20 @@ class OrderController extends Controller
         }
 
         return $actor->roles->pluck('name')->first();
+    }
+
+    private function resolveOrderDeliveryTime(?int $customerId, ?string $requestedDeliveryTime): ?string
+    {
+        $requested = trim((string) ($requestedDeliveryTime ?? ''));
+        if ($requested !== '') {
+            return $requested;
+        }
+
+        if (!$customerId) {
+            return null;
+        }
+
+        return Customer::query()->where('id', $customerId)->value('delivery_time');
     }
 
     private function logOrderHistory(Order $order, string $action, ?string $statusBefore, ?string $statusAfter, ?string $note = null, ?User $user = null): void
@@ -251,7 +268,14 @@ class OrderController extends Controller
             'items.*.variant_id' => 'required|exists:product_variants,id',
             'items.*.quantity' => 'required|integer|min:1',
             'customer_id' => 'required|exists:customers,id',
+            'delivery_time' => 'nullable|string|max:255',
         ]);
+
+        $customerId = (int) $request->input('customer_id');
+        $orderDeliveryTime = $this->resolveOrderDeliveryTime(
+            $customerId,
+            $request->input('delivery_time')
+        );
 
         $items = collect($request->input('items'))->map(function ($item) {
             return [
@@ -264,8 +288,9 @@ class OrderController extends Controller
             $order = $this->createOrderWithUnifiedStockFlow(
                 items: $items,
                 orderData: [
-                    'customer_id' => (int) $request->input('customer_id'),
+                    'customer_id' => $customerId,
                     'user_id' => auth()->id(),
+                    'delivery_time' => $orderDeliveryTime,
                     'status' => OrderStatus::Pending->value,
                     'payment_status' => PaymentStatus::Unpaid->value,
                     'delivery_status' => DeliveryStatus::NotShipped->value,
@@ -285,7 +310,14 @@ class OrderController extends Controller
             'items.*.variant_id' => 'required|exists:product_variants,id',
             'items.*.quantity' => 'required|integer|min:1',
             'customer_id' => 'required|exists:customers,id',
+            'delivery_time' => 'nullable|string|max:255',
         ]);
+
+        $customerId = (int) $request->input('customer_id');
+        $orderDeliveryTime = $this->resolveOrderDeliveryTime(
+            $customerId,
+            $request->input('delivery_time')
+        );
 
         $items = collect($request->input('items'))->map(function ($item) {
             return [
@@ -298,8 +330,9 @@ class OrderController extends Controller
             $order = $this->createOrderWithUnifiedStockFlow(
                 items: $items,
                 orderData: [
-                    'customer_id' => (int) $request->input('customer_id'),
+                    'customer_id' => $customerId,
                     'user_id' => auth()->id(),
+                    'delivery_time' => $orderDeliveryTime,
                     'status' => OrderStatus::Pending->value,
                     'payment_status' => PaymentStatus::Unpaid->value,
                     'delivery_status' => DeliveryStatus::NotShipped->value,
@@ -324,6 +357,7 @@ class OrderController extends Controller
             'recipient_address' => 'required|string|max:1000',
             'recipient_email' => 'nullable|email|max:255',
             'customer_id' => 'nullable|integer|exists:customers,id',
+            'delivery_time' => 'nullable|string|max:255',
         ]);
 
         $cart = session()->get('cart', []);
@@ -378,8 +412,16 @@ class OrderController extends Controller
             $customer->phone = $request->input('recipient_phone');
             $customer->address = $request->input('recipient_address');
             $customer->note = $request->input('note');
+            if ($request->filled('delivery_time')) {
+                $customer->delivery_time = $request->input('delivery_time');
+            }
             $customer->save();
         }
+
+        $orderDeliveryTime = $this->resolveOrderDeliveryTime(
+            (int) $customer->id,
+            $request->input('delivery_time')
+        );
 
         $items = [];
         foreach ($cart as $variantId => $details) {
@@ -399,6 +441,7 @@ class OrderController extends Controller
                     'recipient_name' => $request->recipient_name,
                     'recipient_phone' => $request->recipient_phone,
                     'recipient_address' => $request->recipient_address,
+                    'delivery_time' => $orderDeliveryTime,
                     'note' => $request->note,
                     'status' => OrderStatus::Pending->value,
                     'payment_status' => PaymentStatus::Unpaid->value,
@@ -415,6 +458,49 @@ class OrderController extends Controller
 
         return redirect()->route('site.orders.show', $order->id)->with('success', __('orders.messages.created'));
         
+    }
+
+    public function updateDeliveryTime(Request $request, Order $order)
+    {
+        if (!$this->hasColumn('orders', 'delivery_time')) {
+            return back()->with('error', 'Hệ thống chưa có cột giờ giao hàng cho đơn hàng.');
+        }
+
+        $user = auth()->user();
+        if (!$user) {
+            abort(403);
+        }
+
+        $isAdmin = $this->hasAnyRole($user, ['admin']);
+        $isSale = $this->hasAnyRole($user, ['sale']);
+        $isLeaderOrManager = $this->hasAnyRole($user, ['leader_sale', 'leader', 'sale_manager', 'manager_sale', 'manager', 'director']);
+
+        if (!$isAdmin && !$isLeaderOrManager && !($isSale && (int) $order->user_id === (int) $user->id)) {
+            abort(403, 'Bạn không có quyền cập nhật giờ giao hàng cho đơn này.');
+        }
+
+        if (in_array((string) $order->status, ['completed', 'cancelled', 'returned', 'returned_completed'], true)) {
+            return back()->with('error', 'Đơn hàng đã kết thúc, không thể chỉnh giờ giao.');
+        }
+
+        $request->validate([
+            'delivery_time' => 'nullable|string|max:255',
+        ]);
+
+        $statusBefore = (string) $order->status;
+        $order->update($this->filterExistingColumns('orders', [
+            'delivery_time' => $request->input('delivery_time'),
+        ]));
+
+        $this->logOrderHistory(
+            $order,
+            'update_delivery_time',
+            $statusBefore,
+            $statusBefore,
+            'Cap nhat gio giao hang: ' . ((string) ($request->input('delivery_time') ?: 'de trong'))
+        );
+
+        return back()->with('success', 'Đã cập nhật giờ giao hàng cho đơn.');
     }
     public function test(Request $request)
     {
@@ -929,6 +1015,7 @@ class OrderController extends Controller
                 'recipient_name' => $orderData['recipient_name'] ?? null,
                 'recipient_phone' => $orderData['recipient_phone'] ?? null,
                 'recipient_address' => $orderData['recipient_address'] ?? null,
+                'delivery_time' => $orderData['delivery_time'] ?? null,
                 'note' => $orderData['note'] ?? null,
                 'status' => $orderData['status'] ?? OrderStatus::Pending->value,
                 'payment_status' => $orderData['payment_status'] ?? PaymentStatus::Unpaid->value,

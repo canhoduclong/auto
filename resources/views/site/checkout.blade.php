@@ -131,6 +131,17 @@
                         </div>
 
                         <div class="mb-3">
+                            <label for="delivery_time" class="form-label">Giờ giao hàng</label>
+                            <input type="text" class="form-control @error('delivery_time') is-invalid @enderror"
+                                id="delivery_time" name="delivery_time" value="{{ old('delivery_time') }}"
+                                placeholder="Ví dụ: 9h-11h hoặc sau 17h">
+                            @error('delivery_time')
+                                <div class="invalid-feedback">{{ $message }}</div>
+                            @enderror
+                            <small class="text-muted">Mặc định theo thông tin khách hàng, có thể chỉnh cho đơn này.</small>
+                        </div>
+
+                        <div class="mb-3">
                             <label for="note" class="form-label">Ghi chú</label>
                             <textarea class="form-control" id="note" name="note" rows="3">{{ old('note') }}</textarea>
                         </div>
@@ -231,6 +242,7 @@
     const recipientEmail = document.getElementById('recipient_email');
     const recipientPhone = document.getElementById('recipient_phone');
     const recipientAddress = document.getElementById('recipient_address');
+    const deliveryTimeInput = document.getElementById('delivery_time');
     const noteInput = document.getElementById('note');
 
     const state = {
@@ -258,12 +270,17 @@
         const email = customer.email || '';
         const phone = customer.phone || '';
         const address = customer.address || '';
+        const deliveryTime = customer.delivery_time || '';
         const note = customer.note || '';
 
         recipientName.value = name;
         recipientEmail.value = email;
         recipientPhone.value = phone;
         recipientAddress.value = address;
+        if (!deliveryTimeInput.value || deliveryTimeInput.dataset.autofilled === '1') {
+            deliveryTimeInput.value = deliveryTime;
+            deliveryTimeInput.dataset.autofilled = '1';
+        }
         noteInput.value = note;
 
         selectedCustomerIdInput.value = String(customer.id);
@@ -298,6 +315,7 @@
                 email: customer.email || '',
                 phone: customer.phone || '',
                 address: customer.address || '',
+                delivery_time: customer.delivery_time || '',
                 note: customer.note || '',
             }));
 
@@ -413,6 +431,9 @@
     });
 
     clearCustomerBtn.addEventListener('click', clearSelectedCustomer);
+    deliveryTimeInput.addEventListener('input', () => {
+        deliveryTimeInput.dataset.autofilled = '0';
+    });
 
     function escapeHtml(str) {
         return String(str)

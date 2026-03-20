@@ -60,6 +60,64 @@ class DashboardController extends Controller
         $totalCustomers = Customer::count();
         $newCustomers30d = Customer::where('created_at', '>=', Carbon::now()->subDays(30))->count();
 
+        $dailyProductPrices = ProductVariant::query()
+            ->with(['product.avatar.media', 'latestPriceRule'])
+            ->whereHas('product', function ($query) {
+                $query->where('status', true);
+            })
+            ->orderBy('product_id')
+            ->orderBy('sku')
+            ->get()
+            ->groupBy('product_id')
+            ->map(function ($variants) {
+                $product = $variants->first()?->product;
+                if (!$product) {
+                    return null;
+                }
+
+                $variantRows = $variants->map(function (ProductVariant $variant) {
+                    $price = (float) ($variant->latestPriceRule?->price ?? $variant->final_price);
+
+                    return [
+                        'variant_sku' => $variant->sku ?? '-',
+                        'price' => $price,
+                        'price_key' => number_format($price, 4, '.', ''),
+                    ];
+                })->values();
+
+                if ($variantRows->isEmpty()) {
+                    return null;
+                }
+
+                $groupedByPrice = $variantRows->groupBy('price_key');
+                $representativeGroup = $groupedByPrice->sortByDesc(function ($items) {
+                    return $items->count();
+                })->first();
+
+                $representativePrice = (float) ($representativeGroup[0]['price'] ?? 0);
+                $representativePriceKey = $representativeGroup[0]['price_key'] ?? number_format(0, 4, '.', '');
+
+                $differentVariants = $variantRows
+                    ->filter(function ($row) use ($representativePriceKey) {
+                        return $row['price_key'] !== $representativePriceKey;
+                    })
+                    ->values();
+
+                return [
+                    'product_name' => $product->name,
+                    'product_avatar_path' => $product->avatar?->media?->file_path,
+                    'representative_price' => $representativePrice,
+                    'representative_variants_count' => count($representativeGroup),
+                    'total_variants_count' => $variantRows->count(),
+                    'is_uniform_price' => $groupedByPrice->count() === 1,
+                    'different_variants' => $differentVariants,
+                ];
+            })
+            ->filter()
+            ->sortBy('product_name')
+            ->take(12)
+            ->values();
+
         $latestOrders = Order::with(['customer', 'user'])
             ->latest()
             ->take(8)
@@ -116,6 +174,7 @@ class DashboardController extends Controller
             'outOfStockVariants' => $outOfStockVariants,
             'totalCustomers' => $totalCustomers,
             'newCustomers30d' => $newCustomers30d,
+            'dailyProductPrices' => $dailyProductPrices,
             'latestOrders' => $latestOrders,
             'topProducts' => $topProducts,
             'dailyStats' => $dailyStats,

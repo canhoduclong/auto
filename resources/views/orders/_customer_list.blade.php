@@ -9,7 +9,7 @@
     </thead>
     <tbody>
         @foreach($customers as $customer)
-            <tr>
+            <tr data-delivery-time="{{ $customer->delivery_time }}">
                 <td>
                     <input class="form-check-input" type="radio" name="customer_id" id="customer_{{ $customer->id }}" value="{{ $customer->id }}" required>
                 </td>

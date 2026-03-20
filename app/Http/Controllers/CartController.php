@@ -87,6 +87,9 @@ class CartController extends Controller
         if ($this->hasCustomerColumn('address')) {
             $selectColumns[] = 'address';
         }
+        if ($this->hasCustomerColumn('delivery_time')) {
+            $selectColumns[] = 'delivery_time';
+        }
         if ($this->hasCustomerColumn('assigned_to')) {
             $selectColumns[] = 'assigned_to';
         }

@@ -1,6 +1,7 @@
 <?php 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\ProductPriceManagementController;
 use App\Http\Controllers\ProductVariantPriceController;
 use App\Http\Controllers\ProductVariantController;
 use App\Http\Controllers\CategoryController; 
@@ -38,6 +39,10 @@ use App\Http\Controllers\ApprovalWorkflowController;
 use App\Http\Controllers\AdminNotificationController;
 use App\Http\Controllers\AdminEventController;
 use App\Http\Controllers\TeamController;
+use App\Http\Controllers\RevenueReportController;
+use App\Http\Controllers\OrderMonitoringController;
+use App\Http\Controllers\WarehouseDashboardController;
+use App\Http\Controllers\ShipperDashboardController;
 
 
 
@@ -74,6 +79,56 @@ Route::middleware(['auth'])->group(function () {
     Route::get('orders/ajax/total', [OrderAjaxController::class, 'total'])->name('orders.ajax.total');
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
+    // ─── Warehouse module ───────────────────────────────────────────────────
+    Route::prefix('warehouse')->name('warehouse.')->middleware('role:warehouse,admin')->group(function () {
+        Route::get('/',            [WarehouseDashboardController::class, 'index'])->name('dashboard');
+        Route::get('/orders',      [WarehouseDashboardController::class, 'orders'])->name('orders');
+        Route::post('/orders/{order}/start-packing',    [WarehouseDashboardController::class, 'startPacking'])->name('orders.start-packing');
+        Route::post('/orders/{order}/complete-packing', [WarehouseDashboardController::class, 'completePacking'])->name('orders.complete-packing');
+        Route::get('/returns',     [WarehouseDashboardController::class, 'returns'])->name('returns');
+        Route::post('/returns/{order}/confirm', [WarehouseDashboardController::class, 'confirmReturn'])->name('returns.confirm');
+        
+        // Warehouse Management Features
+        Route::get('/stock-in',    [WarehouseDashboardController::class, 'stockIn'])->name('stock-in');
+        Route::get('/stock-out',   [WarehouseDashboardController::class, 'stockOut'])->name('stock-out');
+        Route::get('/inventory',   [WarehouseDashboardController::class, 'inventory'])->name('inventory');
+        Route::get('/products',    [WarehouseDashboardController::class, 'products'])->name('products');
+        Route::get('/reports',     [WarehouseDashboardController::class, 'reports'])->name('reports');
+    });
+
+    // ─── Shipper module ─────────────────────────────────────────────────────
+    Route::prefix('shipper')->name('shipper.')->middleware('role:shipper,admin')->group(function () {
+        Route::get('/',                                [ShipperDashboardController::class, 'index'])->name('dashboard');
+        Route::get('/available',                       [ShipperDashboardController::class, 'available'])->name('available');
+        Route::post('/available/{order}/accept',       [ShipperDashboardController::class, 'accept'])->name('accept');
+        Route::get('/my-orders',                       [ShipperDashboardController::class, 'myOrders'])->name('my-orders');
+        Route::get('/orders/{order}/delivered-form',   [ShipperDashboardController::class, 'deliveredForm'])->name('delivered-form');
+        Route::post('/orders/{order}/mark-delivered',  [ShipperDashboardController::class, 'markDelivered'])->name('mark-delivered');
+        Route::get('/orders/{order}/return-form',      [ShipperDashboardController::class, 'returnForm'])->name('return-form');
+        Route::post('/orders/{order}/store-return',    [ShipperDashboardController::class, 'storeReturn'])->name('store-return');
+        Route::get('/history',                         [ShipperDashboardController::class, 'history'])->name('history');
+    });
+    Route::get('reports/revenue', [RevenueReportController::class, 'index'])
+        ->name('reports.revenue')
+        ->middleware('permission');
+    Route::get('orders/monitoring', [OrderMonitoringController::class, 'index'])
+        ->name('orders.monitoring')
+        ->middleware('permission');
+    Route::get('orders/monitoring/data', [OrderMonitoringController::class, 'data'])
+        ->name('orders.monitoring.data')
+        ->middleware('permission');
+
+    // Quản lý giá sản phẩm theo ngày
+    Route::get('products/price-management', [ProductPriceManagementController::class, 'index'])
+        ->name('products.price-management.index')
+        ->middleware('permission');
+    Route::get('products/{product}/price-management', [ProductPriceManagementController::class, 'show'])
+        ->name('products.price-management.show')
+        ->middleware('permission');
+    Route::post('products/{product}/price-management', [ProductPriceManagementController::class, 'update'])
+        ->name('products.price-management.update')
+        ->middleware('permission');
+
     // Quản lý sản phẩm
     Route::resource('products', ProductController::class)->middleware('permission');
     Route::post('products/{product}/restore', [ProductController::class, 'restore'])->name('products.restore')->middleware('permission');
@@ -89,13 +144,13 @@ Route::middleware(['auth'])->group(function () {
 
 
 
-    Route::get('variants/{variant}/edit-price', [ProductVariantPriceController::class, 'edit'])->name('variants.edit-price');
-    Route::put('variants/{variant}/update-price', [ProductVariantPriceController::class, 'update'])->name('variants.update-price');
+    Route::get('variants/{variant}/edit-price', [ProductVariantPriceController::class, 'edit'])->name('variants.edit-price')->middleware('permission');
+    Route::put('variants/{variant}/update-price', [ProductVariantPriceController::class, 'update'])->name('variants.update-price')->middleware('permission');
 
     // Lịch sử giá (AJAX)
-    Route::get('variants/{id}/price-history', [ProductVariantPriceController::class, 'priceHistory'])->name('variants.price-history');
+    Route::get('variants/{id}/price-history', [ProductVariantPriceController::class, 'priceHistory'])->name('variants.price-history')->middleware('permission');
     // Cập nhật giá mới (AJAX)
-    Route::post('variants/{id}/update-price', [ProductVariantPriceController::class, 'updatePrice'])->name('variants.update-price-ajax');
+    Route::post('variants/{id}/update-price', [ProductVariantPriceController::class, 'updatePrice'])->name('variants.update-price-ajax')->middleware('permission');
 
     // Popup gallery chọn ảnh cho biến thể
     Route::get('variants/image-library', [MediaController::class, 'variantImageLibrary'])->name('variants.image-library');
@@ -127,6 +182,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/orders/{order}/pickup', [OrderController::class, 'pickup'])->name('orders.pickup');
     Route::post('/orders/{order}/ship', [OrderController::class, 'ship'])->name('orders.ship');
     Route::post('/orders/{order}/delivered', [OrderController::class, 'markDelivered'])->name('orders.delivered');
+    Route::post('/orders/{order}/delivery-time', [OrderController::class, 'updateDeliveryTime'])->name('orders.update-delivery-time');
     Route::post('/orders/{order}/complete-payment', [OrderController::class, 'completePayment'])->name('orders.complete-payment');
     Route::post('/orders/{order}/refund', [OrderController::class, 'refund'])->name('orders.refund');
     Route::post('/orders/{order}/complete', [OrderController::class, 'complete'])->name('orders.complete');
@@ -243,7 +299,17 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/my-customer/{customer}', [PageController::class, 'myCustomerShow'])->name('my_customer.show');
     Route::get('/my-customer/{customer}/order', [PageController::class, 'myCustomerOrderCreate'])->name('my_customer.order.create');
     Route::post('/my-customer/{customer}/order', [PageController::class, 'myCustomerOrderStore'])->name('my_customer.order.store');
-Route::get('/my-customer/{customer}/orders-quick-view', [PageController::class, 'myCustomerOrdersQuickView'])->name('my_customer.orders_quick_view');
+    Route::get('/my-customer/{customer}/orders-quick-view', [PageController::class, 'myCustomerOrdersQuickView'])->name('my_customer.orders_quick_view');
+
+    // Leader - duyệt đơn của sale trong team
+    Route::get('/my-tearm-orders', [PageController::class, 'myTearmOrders'])->name('pages.my_tearm_orders');
+    Route::get('/my-team-orders', [PageController::class, 'myTearmOrders'])->name('pages.my_team_orders');
+    Route::post('/my-tearm-orders/auto-approve', [PageController::class, 'myTearmOrdersAutoApprove'])->name('pages.my_tearm_orders.auto_approve');
+
+    // Manager - duyệt đơn của tất cả sale/leader
+    Route::get('/all-tearm-orders', [PageController::class, 'allTearmOrders'])->name('pages.all_tearm_orders');
+    Route::get('/all-team-orders', [PageController::class, 'allTearmOrders'])->name('pages.all_team_orders');
+    Route::post('/all-tearm-orders/auto-approve', [PageController::class, 'allTearmOrdersAutoApprove'])->name('pages.all_tearm_orders.auto_approve');
 });
 
 

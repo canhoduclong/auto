@@ -5,6 +5,7 @@
         $data = $adminData ?? [];
         $dailyStats = $data['dailyStats'] ?? collect();
         $latestOrders = $data['latestOrders'] ?? collect();
+        $dailyProductPrices = $data['dailyProductPrices'] ?? collect();
         $topProducts = $data['topProducts'] ?? collect();
         $ordersByStatus = $data['ordersByStatus'] ?? collect();
     @endphp
@@ -17,7 +18,10 @@
             </div>
             <div class="d-flex gap-2">
                 <a href="{{ route('orders.index') }}" class="btn btn-primary btn-sm">{{ __('dashboard.admin.quick_orders') }}</a>
+                <a href="{{ route('orders.monitoring') }}" class="btn btn-outline-secondary btn-sm">{{ __('dashboard.admin.quick_order_monitoring') }}</a>
                 <a href="{{ route('products.index') }}" class="btn btn-outline-primary btn-sm">{{ __('dashboard.admin.quick_products') }}</a>
+                <a href="{{ route('reports.revenue') }}" class="btn btn-outline-info btn-sm">{{ __('dashboard.admin.quick_revenue') }}</a>
+                <a href="{{ route('products.price-management.index') }}" class="btn btn-outline-success btn-sm">Quản lý giá</a>
                 <a href="{{ route('approval-workflows.index') }}" class="btn btn-outline-dark btn-sm">{{ __('dashboard.admin.quick_approval_workflows') }}</a>
             </div>
         </div>
@@ -165,6 +169,70 @@
                                     @empty
                                         <tr>
                                             <td colspan="6" class="text-center text-muted">{{ __('dashboard.admin.no_orders') }}</td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0">Bảng giá sản phẩm theo ngày</h6>
+                        <a href="{{ route('products.price-management.index') }}" class="btn btn-light btn-sm">Quản lý giá</a>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Ảnh</th>
+                                        <th>Sản phẩm</th>
+                                        <th>Giá bán</th>
+                                        <th>Ghi chú</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @forelse($dailyProductPrices as $row)
+                                        <tr>
+                                            <td>
+                                                @if(!empty($row['product_avatar_path']))
+                                                    <img
+                                                        src="{{ asset('storage/' . $row['product_avatar_path']) }}"
+                                                        alt="{{ $row['product_name'] }}"
+                                                        width="44"
+                                                        height="44"
+                                                        class="rounded object-fit-cover"
+                                                    >
+                                                @else
+                                                    <span class="text-muted">-</span>
+                                                @endif
+                                            </td>
+                                            <td>{{ $row['product_name'] }}</td>
+                                            <td>{{ number_format((float) $row['representative_price'], 0, ',', '.') }} đ</td>
+                                            <td>
+                                                @if($row['is_uniform_price'])
+                                                    Áp dụng cho toàn bộ {{ number_format((int) $row['total_variants_count']) }} biến thể
+                                                @else
+                                                    Giá đại diện cho {{ number_format((int) $row['representative_variants_count']) }}/{{ number_format((int) $row['total_variants_count']) }} biến thể
+                                                @endif
+                                            </td>
+                                        </tr>
+
+                                        @if(!$row['is_uniform_price'])
+                                            @foreach($row['different_variants'] as $variant)
+                                                <tr class="table-light">
+                                                    <td></td>
+                                                    <td class="ps-4">- Biến thể {{ $variant['variant_sku'] }}</td>
+                                                    <td>{{ number_format((float) $variant['price'], 0, ',', '.') }} đ</td>
+                                                    <td>Biến thể khác giá</td>
+                                                </tr>
+                                            @endforeach
+                                        @endif
+                                    @empty
+                                        <tr>
+                                            <td colspan="4" class="text-center text-muted">Chưa có dữ liệu bảng giá theo ngày.</td>
                                         </tr>
                                     @endforelse
                                 </tbody>

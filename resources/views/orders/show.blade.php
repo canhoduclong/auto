@@ -19,11 +19,41 @@
                     <p><strong>{{ __('orders.labels.current_status') }}:</strong> {{ $statusLabels[$order->status] ?? $order->status }}</p>
                     <p><strong>{{ __('orders.labels.payment_status') }}:</strong> {{ __('orders.payment_statuses.' . $order->payment_status) }}</p>
                     <p><strong>{{ __('orders.labels.delivery_status') }}:</strong> {{ __('orders.delivery_statuses.' . $order->delivery_status) }}</p>
+                    <p><strong>Giờ giao hàng:</strong> {{ $order->delivery_time ?: ($order->customer->delivery_time ?? '-') }}</p>
                     @if($currentPendingApproval && $currentPendingApproval->step)
                         <p><strong>{{ __('orders.labels.pending_approval') }}:</strong> {{ __('orders.labels.step') }} {{ $currentPendingApproval->step->step_order }} ({{ __('orders.labels.role') }}: {{ $currentPendingApproval->step->role_slug }})</p>
                     @endif
                 </div>
             </div>
+
+            @if(auth()->check() && (
+                auth()->user()->hasRole('admin')
+                || auth()->user()->hasRole('sale')
+                || auth()->user()->hasRole('leader_sale')
+                || auth()->user()->hasRole('leader')
+                || auth()->user()->hasRole('sale_manager')
+                || auth()->user()->hasRole('manager_sale')
+                || auth()->user()->hasRole('manager')
+            ))
+                <hr>
+                <form action="{{ route('orders.update-delivery-time', $order->id) }}" method="POST" class="row g-2 align-items-end">
+                    @csrf
+                    <div class="col-md-5">
+                        <label for="delivery_time" class="form-label mb-1">Điều chỉnh giờ giao hàng theo yêu cầu khách</label>
+                        <input
+                            type="text"
+                            id="delivery_time"
+                            name="delivery_time"
+                            class="form-control"
+                            value="{{ old('delivery_time', $order->delivery_time ?: ($order->customer->delivery_time ?? '')) }}"
+                            placeholder="Ví dụ: 9h-11h, sau 17h"
+                        >
+                    </div>
+                    <div class="col-md-3">
+                        <button type="submit" class="btn btn-outline-primary">Cập nhật giờ giao</button>
+                    </div>
+                </form>
+            @endif
         </div>
 
         <div class="card-footer">

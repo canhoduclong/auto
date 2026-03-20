@@ -34,6 +34,9 @@
     @can('create', App\Models\Product::class)
         <a href="{{ route('products.create') }}" class="btn btn-success mb-3">{{ __('admin.product.create') }}</a>
     @endcan
+    @if(auth()->check() && auth()->user()->hasPermission('edit'))
+        <a href="{{ route('products.price-management.index') }}" class="btn btn-outline-primary mb-3">Quản lý giá sản phẩm</a>
+    @endif
     <div class="card"> 
         <div class="card-header">
             <h5 class="mb-0">{{ __('admin.product.list') }}</h5>
@@ -76,6 +79,7 @@
                         <th>Brand</th>
                         <th>Category</th>
                         <th>Trạng thái</th>
+                        <th>Giá hiện tại</th>
                 <th>
                     <span class="d-flex align-items-center padding-cell pl-0">
                         <span>{{ __('admin.product.stock') }}</span>
@@ -124,6 +128,27 @@
                         <span class="badge bg-danger">Đã xóa</span>
                     @endif
                 </td>
+                <td>
+                    @php
+                        $variantPrices = $product->variants->map(function ($variant) {
+                            return $variant->latestPriceRule?->price ?? $variant->final_price;
+                        })->filter(function ($price) {
+                            return $price !== null;
+                        })->map(function ($price) {
+                            return (float) $price;
+                        });
+                        $minPrice = $variantPrices->min();
+                        $maxPrice = $variantPrices->max();
+                    @endphp
+
+                    @if($variantPrices->isEmpty())
+                        -
+                    @elseif($minPrice === $maxPrice)
+                        {{ number_format((float) $minPrice, 0, ',', '.') }} đ
+                    @else
+                        {{ number_format((float) $minPrice, 0, ',', '.') }} đ - {{ number_format((float) $maxPrice, 0, ',', '.') }} đ
+                    @endif
+                </td>
                 <td id="product-stock-{{ $product->id }}">{{ $product->stock ?? '' }}</td>
                 <td>
                     <div class="d-flex justify-content-end list-actions"> 
@@ -144,6 +169,10 @@
                     
                          @can('update', $product)
                             <a href="{{ route('products.edit', ['product' => $product->id, 'page' =>  request()->page, 'perPage' => $perPage ]) }}" class="btn btn-primary btn-sm">Sửa</a>
+                        @endcan
+
+                        @can('update', $product)
+                            <a href="{{ route('products.price-management.show', $product) }}" class="btn btn-outline-info btn-sm ms-1">Cập nhật giá</a>
                         @endcan
 
                         @can('delete', $product)

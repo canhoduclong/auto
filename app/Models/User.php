@@ -60,7 +60,9 @@ class User extends Authenticatable
     // có một vai trò
     public function hasRole($role)
     {
-        return $this->roles->contains('name', $role);
+        return $this->roles->contains(function ($assignedRole) use ($role) {
+            return strcasecmp((string) $assignedRole->name, (string) $role) === 0;
+        });
     }
     public function customer()
     {

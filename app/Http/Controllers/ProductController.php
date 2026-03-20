@@ -27,7 +27,7 @@ class ProductController extends Controller
         $this->authorize('viewAny', Product::class);
         
         // Bắt đầu với một query cơ bản
-        $query = Product::with('brand');
+        $query = Product::with(['brand', 'variants.latestPriceRule']);
 
         // Tìm kiếm theo tên sản phẩm
         if ($request->filled('name')) {
@@ -61,7 +61,7 @@ class ProductController extends Controller
         $page =(int) $request->get('page', 1);
         $perPage = (int) $request->get('perPage', 10);
         $perPage = in_array($perPage, [10, 25, 50, 100]) ? $perPage : 10;
-        $products = $query->paginate($perPage);
+        $products = $query->paginate($perPage)->appends($request->query());
         $pageCount = $products->lastPage();
 
         $categories = Category::all();

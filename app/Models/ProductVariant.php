@@ -39,6 +39,18 @@ class ProductVariant extends Model
     {
         return $this->belongsTo(Product::class);
     }
+
+    // Alias used by warehouse product page to load stock per variant.
+    public function inventory()
+    {
+        return $this->hasMany(Inventory::class, 'product_variant_id');
+    }
+
+    public function inventories()
+    {
+        return $this->hasMany(Inventory::class, 'product_variant_id');
+    }
+
     public function values()
     {
         return $this->belongsToMany(AttributeValue::class, 'product_variant_values', 'product_variant_id', 'product_attribute_value_id');

@@ -29,6 +29,11 @@ class ProductPriceLog extends Model
         return $this->belongsTo(Product::class);
     }
 
+    public function variant()
+    {
+        return $this->belongsTo(ProductVariant::class, 'product_variant_id');
+    }
+
     public function priceRule()
     {
         return $this->belongsTo(ProductPriceRule::class, 'price_rule_id');

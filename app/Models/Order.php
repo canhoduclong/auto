@@ -10,9 +10,15 @@ class Order extends Model
 {
     use HasFactory;
     protected $fillable = [
-        'customer_id', 'user_id', 'code', 'total', 'status',
+        'customer_id', 'user_id', 'shipper_id', 'code', 'total', 'status',
         'amount_paid', 'amount_due', 'payment_method', 'payment_status',
-        'qr_code', 'packed_image_path', 'delivered_image_path', 'has_return_order'
+        'qr_code', 'packed_image_path', 'delivered_image_path', 'has_return_order',
+        'collected_amount', 'delivered_at', 'return_reason', 'proof_images', 'shipper_note', 'delivery_time',
+    ];
+
+    protected $casts = [
+        'proof_images' => 'array',
+        'delivered_at' => 'datetime',
     ];
     
     public function approvals()
@@ -47,8 +53,17 @@ class Order extends Model
         ];
     }
 
+    // Warehouse & Shipper statuses
+    const STATUS_READY_TO_PACK    = 'ready_to_pack';
+    const STATUS_PACKING          = 'packing';
+    const STATUS_READY_TO_SHIP    = 'packed_waiting_pickup';
+    const STATUS_DELIVERING       = 'delivering';
+    const STATUS_RETURNING        = 'returning';
+    const STATUS_RETURNED_COMPLETED = 'returned_completed';
+
     public function customer() { return $this->belongsTo(Customer::class); }
     public function user() { return $this->belongsTo(User::class); }
+    public function shipper() { return $this->belongsTo(User::class, 'shipper_id'); }
     public function items() { return $this->hasMany(OrderItem::class); }
 
     public function getPaymentStatusTextAttribute()

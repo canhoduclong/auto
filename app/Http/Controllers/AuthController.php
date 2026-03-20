@@ -24,20 +24,16 @@ class AuthController extends Controller
             $request->session()->regenerate();
 
             $user = Auth::user();
-            $roleName = $user->roles->pluck('name')->first(); // lấy tên role đầu tiên
-            /*
-            switch ($roleName) {
-                case 'admin':
-                    return redirect()->route('dashboard');
-                case 'manager':
-                    return redirect()->route('dashboard');
-                case 'staff':
-                    return redirect()->route('dashboard');
-                default:
-                    return redirect()->route('products.index');
-            } 
-            */
-            //return redirect()->route('dashboard');
+            $roleName = strtolower($user->roles->pluck('name')->first() ?? '');
+
+            if ($roleName === 'warehouse') {
+                return redirect()->route('warehouse.dashboard');
+            }
+
+            if ($roleName === 'shipper') {
+                return redirect()->route('shipper.dashboard');
+            }
+
             return redirect()->route('pages.my_dashboard');
         }
 

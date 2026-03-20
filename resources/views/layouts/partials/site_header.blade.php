@@ -99,6 +99,16 @@
                                         <li><a class="dropdown-item" href="{{ route('pages.my_orders') }}">{{ __('site.my_orders') }}</a></li>
                                         <li><a class="dropdown-item" href="{{ route('pages.my_customer') }}">{{ __('site.my_customers') }}</a></li>
                                         <li><a class="dropdown-item" href="{{ url('/dashboard') }}">{{ __('site.dashboard') }}</a></li>
+                                        @auth
+                                            @if(Auth::user()->hasRole('leader'))
+                                                <li><hr class="dropdown-divider"></li>
+                                                <li><a class="dropdown-item" href="{{ route('pages.my_tearm_orders') }}"><i class="bi bi-check-circle"></i> Duyệt đơn của Team</a></li>
+                                            @endif
+                                            @if(Auth::user()->hasRole('manager'))
+                                                <li><hr class="dropdown-divider"></li>
+                                                <li><a class="dropdown-item" href="{{ route('pages.all_tearm_orders') }}"><i class="bi bi-check-circle"></i> Duyệt Đơn PKD</a></li>
+                                            @endif
+                                        @endauth
                                         <li><hr class="dropdown-divider"></li>
                                         <li>
                                             <a class="dropdown-item" href="{{ route('logout') }}"

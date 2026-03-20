@@ -97,6 +97,21 @@
                 <h5 class="mb-0">{{ __('orders.labels.customer') }}</h5>
             </div>
             <div class="card-body">
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label for="delivery_time" class="form-label">Giờ giao hàng</label>
+                        <input
+                            type="text"
+                            id="delivery_time"
+                            name="delivery_time"
+                            class="form-control"
+                            value="{{ old('delivery_time') }}"
+                            placeholder="Ví dụ: 9h-11h hoặc sau 17h"
+                        >
+                        <small class="text-muted">Mặc định lấy theo thông tin khách hàng, có thể chỉnh cho từng đơn.</small>
+                    </div>
+                </div>
+
                 <div class="form-group">
                     <h6>{{ __('orders.labels.customer') }}</h6>
                     <div class="input-group mb-3">
@@ -126,6 +141,7 @@ $(document).ready(function() {
     const customerListContainer = $('#customer-list-container');
     const customerSearchInput = $('#customer-search');
     const customerSearchButton = $('#customer-search-button');
+    const deliveryTimeInput = $('#delivery_time');
     const customerAjaxUrl = "{{ route('orders.ajax_customer_search') }}";
 
     function fetch_customer_data(url, data) {
@@ -145,7 +161,21 @@ $(document).ready(function() {
     customerSearchInput.on('keyup', function() { clearTimeout(customerSearchTimeout); customerSearchTimeout = setTimeout(performCustomerSearch, 300); });
     customerSearchButton.on('click', performCustomerSearch);
     customerListContainer.on('click', '.pagination a', function(e) { e.preventDefault(); const url = $(this).attr('href'); if (url) fetch_customer_data(url, {}); });
-    customerListContainer.on('click', 'tbody tr', function() { $(this).find('input[type=radio]').prop('checked', true); customerListContainer.find('tbody tr').removeClass('table-active'); $(this).addClass('table-active'); });
+    customerListContainer.on('click', 'tbody tr', function() {
+        $(this).find('input[type=radio]').prop('checked', true);
+        customerListContainer.find('tbody tr').removeClass('table-active');
+        $(this).addClass('table-active');
+
+        const customerDeliveryTime = String($(this).data('delivery-time') || '').trim();
+        if (!deliveryTimeInput.val() || deliveryTimeInput.data('autofilled') === true) {
+            deliveryTimeInput.val(customerDeliveryTime);
+            deliveryTimeInput.data('autofilled', true);
+        }
+    });
+
+    deliveryTimeInput.on('input', function() {
+        $(this).data('autofilled', false);
+    });
     fetch_customer_data(customerAjaxUrl, { page: 1, search: '' });
 
     // ---=== Variant Search & Cart Management ===---

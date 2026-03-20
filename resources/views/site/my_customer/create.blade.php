@@ -37,6 +37,10 @@
                     <label for="phone" class="form-label">Điện thoại</label>
                     <input type="text" class="form-control" id="phone" name="phone" value="{{ old('phone') }}">
                 </div>
+                <div class="mb-3">
+                    <label for="delivery_time" class="form-label">Giờ giao hàng</label>
+                    <input type="text" class="form-control" id="delivery_time" name="delivery_time" value="{{ old('delivery_time') }}" placeholder="Ví dụ: 8h-10h, sau 17h">
+                </div>
                 <button type="submit" class="btn btn-primary">Lưu</button>
                 <a href="{{ route('pages.my_customer') }}" class="btn btn-secondary">Hủy</a>
             </form>

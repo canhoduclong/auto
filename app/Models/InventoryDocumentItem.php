@@ -18,7 +18,7 @@ class InventoryDocumentItem extends Model
 
     public function document()
     {
-        return $this->belongsTo(InventoryDocument::class);
+        return $this->belongsTo(InventoryDocument::class, 'inventory_document_id');
     }
 
     public function productVariant()
