@@ -47,4 +47,14 @@ class Inventory extends Model
     {
         return $this->belongsTo(Warehouse::class);
     }
+
+    public function movements()
+    {
+        return $this->hasMany(InventoryMovement::class);
+    }
+
+    public function reservations()
+    {
+        return $this->hasMany(InventoryReservation::class);
+    }
 }

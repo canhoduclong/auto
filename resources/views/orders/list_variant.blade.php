@@ -17,7 +17,7 @@
             <td>{{ $item->quantity }}</td>
             <td>{{ number_format($item->price, 0, ',', '.') }} đ</td>
             <td>{{ number_format($item->quantity * $item->price, 0, ',', '.') }} đ</td>
-            <td><button type="button" class="btn btn-danger btn-sm remove-variant-btn" data-variant-id="{{ $item->variant_id }}">X</button></td>
+            <td><button type="button" class="btn btn-danger btn-sm remove-variant-btn" data-variant-id="{{ $item->product_variant_id }}">X</button></td>
         </tr>
         @endforeach
     </tbody>

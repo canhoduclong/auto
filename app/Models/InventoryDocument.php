@@ -11,6 +11,7 @@ class InventoryDocument extends Model
 
     protected $fillable = [
         'type',
+        'document_number',
         'warehouse_id',
         'document_date',
         'notes',
@@ -22,6 +23,23 @@ class InventoryDocument extends Model
         'document_date' => 'date',
         'shipping_fee' => 'decimal:2',
     ];
+
+    protected static function booted(): void
+    {
+        static::created(function (self $doc) {
+            if ($doc->document_number) {
+                return;
+            }
+            $prefix = match ($doc->type) {
+                'import' => 'PNK',
+                'export' => 'PXK',
+                default  => 'PDC',
+            };
+            $doc->updateQuietly([
+                'document_number' => $prefix . '-' . now()->format('Ymd') . '-' . str_pad($doc->id, 4, '0', STR_PAD_LEFT),
+            ]);
+        });
+    }
 
     public function items()
     {

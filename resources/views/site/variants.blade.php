@@ -82,7 +82,7 @@
                         <td>{{ $variant->sku }}</td>
                         <td>{{ $variant->production_date }}</td>
                         <td>{{ number_format($variant->latestPriceRule?->price ?? 0) }}</td>
-                        <td>{{ $variant->stock }}</td>
+                        <td>{{ $variant->available_stock }}</td>
                         <td>
                             <a href="{{ route('pages.variant_detail', $variant->slug) }}" class="btn btn-info btn-sm">View</a>
                             <button class="btn btn-success btn-sm order-btn" data-price="{{ $variant->latestPriceRule?->price ?? 0 }}">Order</button>

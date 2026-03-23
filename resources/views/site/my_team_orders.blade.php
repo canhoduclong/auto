@@ -40,6 +40,34 @@
     .tmo-status-rejected { background: #f8d7da; color: #842029; }
     .tmo-status-default { background: #e2e3e5; color: #41464b; }
     .tmo-actions form { display: inline-block; }
+    .tmo-auto {
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        background: #f8fafc;
+        padding: 1rem;
+    }
+    .tmo-auto-title {
+        font-weight: 700;
+        color: #0f172a;
+        margin-bottom: .75rem;
+    }
+    .tmo-auto-group {
+        border: 1px solid #dbe4ef;
+        border-radius: 10px;
+        background: #ffffff;
+        padding: .9rem;
+        height: 100%;
+    }
+    .tmo-auto-group h6 {
+        font-size: .9rem;
+        font-weight: 700;
+        color: #1e3a5f;
+        margin-bottom: .6rem;
+    }
+    .tmo-auto-note {
+        font-size: .8rem;
+        color: #64748b;
+    }
 
     @media (max-width: 767.98px) {
         .tmo-desktop { display: none; }
@@ -89,50 +117,122 @@
 
     <div class="card tmo-filter mb-3">
         <div class="card-body">
-            <h6 class="mb-3">Duyệt đơn tự động</h6>
-            <form method="POST" action="{{ route('pages.my_tearm_orders.auto_approve') }}" class="row g-2 align-items-end">
+            <div class="tmo-auto">
+            <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+                <div>
+                    <h6 class="tmo-auto-title mb-1">Duyệt đơn tự động</h6>
+                    <div class="small text-muted">Thiết lập điều kiện duyệt và chính sách discount theo sản lượng.</div>
+                </div>
+                <span class="badge bg-success-subtle text-success border">Leader Auto Approval</span>
+            </div>
+
+            <form method="POST" action="{{ route('pages.my_tearm_orders.auto_approve') }}" class="row g-3 align-items-end">
                 @csrf
                 <input type="hidden" name="from_date" value="{{ $fromDate }}">
                 <input type="hidden" name="to_date" value="{{ $toDate }}">
 
+                <div class="col-12 col-lg-6">
+                    <div class="tmo-auto-group">
+                        <h6>Điều kiện theo số lượng</h6>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="condition_item_qty" name="condition_item_qty" value="1" {{ old('condition_item_qty') ? 'checked' : '' }}>
+                            <label class="form-check-label" for="condition_item_qty">Bật điều kiện số lượng sản phẩm trong đơn</label>
+                        </div>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <label class="form-label mb-1">SL tối thiểu</label>
+                                <input type="number" min="1" class="form-control" name="min_item_qty" value="{{ old('min_item_qty') }}" placeholder="Ví dụ: 10">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label mb-1">SL tối đa</label>
+                                <input type="number" min="1" class="form-control" name="max_item_qty" value="{{ old('max_item_qty') }}" placeholder="Tuỳ chọn">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-lg-6">
+                    <div class="tmo-auto-group">
+                        <h6>Điều kiện theo giá trị đơn</h6>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="condition_order_total" name="condition_order_total" value="1" {{ old('condition_order_total') ? 'checked' : '' }}>
+                            <label class="form-check-label" for="condition_order_total">Bật điều kiện tổng giá trị đơn hàng</label>
+                        </div>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <label class="form-label mb-1">Giá trị tối thiểu</label>
+                                <input type="number" min="0" step="1000" class="form-control" name="min_order_total" value="{{ old('min_order_total') }}" placeholder="Ví dụ: 1000000">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label mb-1">Giá trị tối đa</label>
+                                <input type="number" min="0" step="1000" class="form-control" name="max_order_total" value="{{ old('max_order_total') }}" placeholder="Tuỳ chọn">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="col-12">
-                    <div class="form-check mb-1">
-                        <input class="form-check-input" type="checkbox" id="condition_item_qty" name="condition_item_qty" value="1" {{ old('condition_item_qty') ? 'checked' : '' }}>
-                        <label class="form-check-label" for="condition_item_qty">Điều kiện theo số lượng sản phẩm trong đơn</label>
+                    <div class="tmo-auto-group">
+                        <h6>Chính sách discount theo sản lượng</h6>
+                        <div class="row g-2">
+                            <div class="col-6 col-md-3">
+                                <label class="form-label mb-1">Từ 20 (freeship 5km)</label>
+                                <input type="number" min="0" step="1000" class="form-control" name="freeship_20_amount" value="{{ old('freeship_20_amount') }}" placeholder="Số tiền freeship">
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <label class="form-label mb-1">Từ 30</label>
+                                <input type="number" min="0" step="1000" class="form-control" name="discount_30_amount" value="{{ old('discount_30_amount') }}" placeholder="Discount">
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <label class="form-label mb-1">Từ 40</label>
+                                <input type="number" min="0" step="1000" class="form-control" name="discount_40_amount" value="{{ old('discount_40_amount') }}" placeholder="Discount">
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <label class="form-label mb-1">Từ 50</label>
+                                <input type="number" min="0" step="1000" class="form-control" name="discount_50_amount" value="{{ old('discount_50_amount') }}" placeholder="Discount">
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <label class="form-label mb-1">Từ 70</label>
+                                <input type="number" min="0" step="1000" class="form-control" name="discount_70_amount" value="{{ old('discount_70_amount') }}" placeholder="Discount">
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <label class="form-label mb-1">Từ 80</label>
+                                <input type="number" min="0" step="1000" class="form-control" name="discount_80_amount" value="{{ old('discount_80_amount') }}" placeholder="Discount">
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <label class="form-label mb-1">Từ 100</label>
+                                <input type="number" min="0" step="1000" class="form-control" name="discount_100_amount" value="{{ old('discount_100_amount') }}" placeholder="Discount">
+                            </div>
+                        </div>
+                        <div class="tmo-auto-note mt-2">Mốc discount sẽ lấy theo mốc cao nhất phù hợp với tổng số lượng.</div>
                     </div>
                 </div>
-                <div class="col-6 col-md-3">
-                    <label class="form-label mb-1">SL tối thiểu</label>
-                    <input type="number" min="1" class="form-control" name="min_item_qty" value="{{ old('min_item_qty') }}" placeholder="Ví dụ: 10">
-                </div>
-                <div class="col-6 col-md-3">
-                    <label class="form-label mb-1">SL tối đa (tuỳ chọn)</label>
-                    <input type="number" min="1" class="form-control" name="max_item_qty" value="{{ old('max_item_qty') }}" placeholder="Ví dụ: 100">
-                </div>
 
-                <div class="col-12 mt-2">
-                    <div class="form-check mb-1">
-                        <input class="form-check-input" type="checkbox" id="condition_order_total" name="condition_order_total" value="1" {{ old('condition_order_total') ? 'checked' : '' }}>
-                        <label class="form-check-label" for="condition_order_total">Điều kiện theo giá trị đơn hàng</label>
+                <div class="col-12 col-lg-7">
+                    <div class="tmo-auto-group">
+                        <h6>Khách hàng đặc biệt</h6>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="use_special_customer_discount" name="use_special_customer_discount" value="1" {{ old('use_special_customer_discount') ? 'checked' : '' }}>
+                            <label class="form-check-label" for="use_special_customer_discount">Bật discount riêng cho khách hàng đặc biệt</label>
+                        </div>
+                        <div class="row g-2">
+                            <div class="col-12 col-md-6">
+                                <label class="form-label mb-1">Mức discount khách đặc biệt</label>
+                                <input type="number" min="0" step="1000" class="form-control" name="special_customer_discount_amount" value="{{ old('special_customer_discount_amount') }}" placeholder="Tiền discount">
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <div class="col-6 col-md-3">
-                    <label class="form-label mb-1">Giá trị tối thiểu</label>
-                    <input type="number" min="0" step="1000" class="form-control" name="min_order_total" value="{{ old('min_order_total') }}" placeholder="Ví dụ: 1000000">
-                </div>
-                <div class="col-6 col-md-3">
-                    <label class="form-label mb-1">Giá trị tối đa (tuỳ chọn)</label>
-                    <input type="number" min="0" step="1000" class="form-control" name="max_order_total" value="{{ old('max_order_total') }}" placeholder="Ví dụ: 5000000">
-                </div>
 
-                <div class="col-12 col-md-3 d-flex align-items-end">
-                    <button type="submit" class="btn btn-success w-100">
+                <div class="col-12 col-lg-5 d-flex align-items-end">
+                    <button type="submit" class="btn btn-success w-100 py-2">
                         Duyệt đơn tự động
                     </button>
                 </div>
             </form>
-            <div class="small text-muted mt-2">
+            <div class="small text-muted mt-3">
                 Hệ thống chỉ duyệt các đơn đang tới lượt role leader của bạn theo workflow hiện tại.
+            </div>
             </div>
         </div>
     </div>
@@ -189,6 +289,7 @@
                         @php
                             $step = $currentStepByOrder[$order->id] ?? null;
                             $canApprove = $canApproveByOrder[$order->id] ?? false;
+                            $canProcess = $canApprove && optional($order->created_at)?->isToday();
                             $statusClass = match ($order->status) {
                                 'pending_leader_approval' => 'tmo-status-pending',
                                 'approved' => 'tmo-status-approved',
@@ -221,8 +322,8 @@
                                 @endif
                             </td>
                             <td class="text-end tmo-actions">
-                                <a href="{{ route('orders.show', $order) }}" class="btn btn-sm btn-outline-primary">Chi tiết</a>
-                                @if($canApprove)
+                                <a href="{{ route('pages.team_order_detail', $order) }}" class="btn btn-sm btn-outline-primary">Chi tiết</a>
+                                @if($canProcess)
                                     <form method="POST" action="{{ route('orders.approve', $order) }}" class="ms-1">
                                         @csrf
                                         <input type="hidden" name="note" value="Leader duyệt từ trang team orders">
@@ -251,6 +352,7 @@
             @php
                 $step = $currentStepByOrder[$order->id] ?? null;
                 $canApprove = $canApproveByOrder[$order->id] ?? false;
+                $canProcess = $canApprove && optional($order->created_at)?->isToday();
             @endphp
             <div class="card tmo-mobile-card mb-2">
                 <div class="card-body">
@@ -268,8 +370,8 @@
                         <div><strong>Bước duyệt:</strong> {{ $step?->step?->role_slug ?? 'Không có' }}</div>
                     </div>
                     <div class="d-flex gap-2 flex-wrap">
-                        <a href="{{ route('orders.show', $order) }}" class="btn btn-sm btn-outline-primary">Chi tiết</a>
-                        @if($canApprove)
+                        <a href="{{ route('pages.team_order_detail', $order) }}" class="btn btn-sm btn-outline-primary">Chi tiết</a>
+                        @if($canProcess)
                             <form method="POST" action="{{ route('orders.approve', $order) }}">
                                 @csrf
                                 <input type="hidden" name="note" value="Leader duyệt từ mobile team orders">

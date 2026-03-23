@@ -18,11 +18,15 @@ class PostController extends Controller
         $settings = Cache::remember('settings', 60, function () {
             return Setting::all()->keyBy('key');
         });
-        $posts = Post::where('is_published', true)->latest()->paginate(10);
-        $categories = PostCategory::all();
+        $posts = Post::where('is_published', true)
+            ->with(['category', 'author'])
+            ->latest()
+            ->paginate(9);
+        $categories = PostCategory::withCount(['posts' => fn($q) => $q->where('is_published', true)])->get();
         $tags = Tag::all();
+        $featured = $posts->first();
 
-        return view('posts.index', compact('posts', 'categories', 'tags','settings'));
+        return view('posts.index', compact('posts', 'categories', 'tags', 'settings', 'featured'));
     }
 
     public function show(Post $post)

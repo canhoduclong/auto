@@ -62,7 +62,7 @@
                             <td>{{ $variant->sku }}</td>
                             <td class="price" data-price="{{ $variant->latestPriceRule?->price ?? 0 }}">{{ number_format($variant->latestPriceRule?->price ?? 0) }}</td>
                             <td>
-                                <input type="number" name="items[0][quantity]" class="form-control quantity-input" value="1" min="1" max="{{ $variant->stock }}" required>
+                                <input type="number" name="items[0][quantity]" class="form-control quantity-input" value="1" min="1" max="{{ $variant->available_stock }}" required>
                             </td>
                             <td class="row-total">{{ number_format($variant->latestPriceRule?->price ?? 0) }}</td>
                             <td>

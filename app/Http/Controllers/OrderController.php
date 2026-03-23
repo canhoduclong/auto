@@ -198,11 +198,22 @@ class OrderController extends Controller
         }
 
         
-        $variant = ProductVariant::with(['product', 'media'])->find($variantId);
+        $variant = ProductVariant::query()
+            ->withAvailableStock()
+            ->with(['product', 'media'])
+            ->find($variantId);
 
         if (!$variant) {
             return redirect()->route('orders.index')->with('error', __('orders.messages.variant_not_found'));
         }
+
+        if ($variant->available_stock < 1) {
+            return redirect()->route('orders.index')->with('error', __('orders.runtime.insufficient_stock', [
+                'sku' => $variant->sku,
+                'available' => 0,
+            ]));
+        }
+
         $customers = Customer::paginate(10);
 
         // IMPORTANT: Set the base path for the pagination links to our AJAX endpoint.
@@ -239,7 +250,14 @@ class OrderController extends Controller
             $perPage = 50;
         }
 
-        $query = ProductVariant::with('product');
+        $query = ProductVariant::query()
+            ->withAvailableStock()
+            ->inStock()
+            ->with(['product.avatar.media', 'latestPriceRule', 'media'])
+            ->where('status', true)
+            ->whereHas('product', function ($productQuery) {
+                $productQuery->where('status', true);
+            });
 
         if ($request->has('search') && $request->input('search') != '') {
             $searchTerm = $request->input('search');
@@ -358,6 +376,11 @@ class OrderController extends Controller
             'recipient_email' => 'nullable|email|max:255',
             'customer_id' => 'nullable|integer|exists:customers,id',
             'delivery_time' => 'nullable|string|max:255',
+            'item_discount' => 'nullable|array',
+            'item_discount.*' => 'nullable|numeric|min:0',
+            'item_weight' => 'nullable|array',
+            'item_weight.*' => 'nullable|numeric|min:0',
+            'order_discount' => 'nullable|numeric|min:0',
         ]);
 
         $cart = session()->get('cart', []);
@@ -424,11 +447,31 @@ class OrderController extends Controller
         );
 
         $items = [];
+        $variantDefaults = ProductVariant::query()
+            ->whereIn('id', array_map('intval', array_keys($cart)))
+            ->get(['id', 'size'])
+            ->keyBy('id');
+
         foreach ($cart as $variantId => $details) {
+            $basePrice = (float) ($details['price'] ?? 0);
+            $unitDiscount = (float) $request->input('item_discount.' . $variantId, 0);
+            $unitDiscount = max(0, min($unitDiscount, $basePrice));
+
+            $defaultWeight = (float) ($details['unit_weight'] ?? 0);
+            if ($defaultWeight <= 0) {
+                $defaultWeight = $this->parseWeightToKg($variantDefaults->get((int) $variantId)?->size);
+            }
+
+            $unitWeight = (float) $request->input('item_weight.' . $variantId, $defaultWeight);
+            $unitWeight = max(0, round($unitWeight, 3));
+
             $items[] = [
                 'variant_id' => (int) $variantId,
                 'quantity' => (int) ($details['quantity'] ?? 0),
-                'price' => $details['price'] ?? null,
+                'base_price' => $basePrice,
+                'unit_discount' => $unitDiscount,
+                'price' => max($basePrice - $unitDiscount, 0),
+                'unit_weight' => $unitWeight,
             ];
         }
 
@@ -443,6 +486,7 @@ class OrderController extends Controller
                     'recipient_address' => $request->recipient_address,
                     'delivery_time' => $orderDeliveryTime,
                     'note' => $request->note,
+                    'order_discount' => (float) $request->input('order_discount', 0),
                     'status' => OrderStatus::Pending->value,
                     'payment_status' => PaymentStatus::Unpaid->value,
                     'delivery_status' => DeliveryStatus::NotShipped->value,
@@ -667,6 +711,105 @@ class OrderController extends Controller
         ];
 
         return view('orders.show', compact('order', 'currentPendingApproval', 'canApproveCurrentStep', 'canWarehouse', 'canShipper', 'statusLabels','settings'));
+    }
+
+    public function edit(Order $order)
+    {
+        $order->load('items.variant.product');
+
+        $customers = Customer::orderBy('name')->get();
+        $users = User::orderBy('name')->get();
+        $statusOptions = collect(OrderStatus::cases())->mapWithKeys(function ($case) {
+            return [$case->value => __('orders.statuses.' . $case->value)];
+        });
+
+        return view('orders.edit', compact('order', 'customers', 'users', 'statusOptions'));
+    }
+
+    public function update(Request $request, Order $order)
+    {
+        $validated = $request->validate([
+            'customer_id' => ['required', 'exists:customers,id'],
+            'user_id' => ['required', 'exists:users,id'],
+            'status' => ['nullable', 'string'],
+        ]);
+
+        $statusBefore = (string) $order->status;
+
+        $order->update([
+            'customer_id' => (int) $validated['customer_id'],
+            'user_id' => (int) $validated['user_id'],
+            'status' => $validated['status'] ?? $order->status,
+        ]);
+
+        $this->recalculateOrderTotals($order->fresh('items.variant.product'));
+        $this->logOrderHistory($order->fresh(), 'update_order', $statusBefore, (string) $order->fresh()->status, 'Cap nhat thong tin don hang');
+
+        return redirect()->route('orders.edit', $order)->with('success', __('orders.buttons.update'));
+    }
+
+    public function listVariant(Order $order)
+    {
+        $order->load('items.variant.product');
+        $items = $order->items;
+        $total = (float) $items->sum(function ($item) {
+            return (float) $item->quantity * (float) $item->price;
+        });
+
+        return view('orders.list_variant', compact('items', 'total'));
+    }
+
+    public function addVariant(Request $request, Order $order)
+    {
+        $validated = $request->validate([
+            'variant_id' => ['required', 'exists:product_variants,id'],
+        ]);
+
+        $variant = ProductVariant::with(['product', 'latestPriceRule'])->findOrFail((int) $validated['variant_id']);
+        $existingItem = $order->items()->where('product_variant_id', $variant->id)->first();
+
+        if ($existingItem) {
+            $existingItem->increment('quantity');
+            $existingItem->update([
+                'total_weight' => round((float) ($existingItem->unit_weight ?? 0) * (int) $existingItem->quantity, 3),
+                'total' => (float) $existingItem->price * (int) $existingItem->quantity,
+            ]);
+        } else {
+            $price = (float) ($variant->latestPriceRule?->price ?? $variant->final_price ?? $variant->product?->default_price ?? 0);
+            $unitWeight = $this->parseWeightToKg($variant->size);
+
+            $order->items()->create($this->filterExistingColumns('order_items', [
+                'product_id' => $variant->product_id,
+                'product_variant_id' => $variant->id,
+                'quantity' => 1,
+                'price' => $price,
+                'base_price' => $price,
+                'unit_discount' => 0,
+                'discount_total' => 0,
+                'unit_weight' => $unitWeight,
+                'total_weight' => round($unitWeight, 3),
+                'total' => $price,
+            ]));
+        }
+
+        $this->recalculateOrderTotals($order->fresh('items.variant.product'));
+
+        return response()->noContent();
+    }
+
+    public function removeVariant(Request $request, Order $order)
+    {
+        $validated = $request->validate([
+            'variant_id' => ['required', 'exists:product_variants,id'],
+        ]);
+
+        $item = $order->items()->where('product_variant_id', (int) $validated['variant_id'])->first();
+        if ($item) {
+            $item->delete();
+            $this->recalculateOrderTotals($order->fresh('items.variant.product'));
+        }
+
+        return response()->noContent();
     }
 
     public function confirm(Order $order)
@@ -942,15 +1085,9 @@ class OrderController extends Controller
             return max(0, (int) $inventory->quantity - (int) $inventory->reserved_quantity);
         }
 
-        $availableSum = (int) Inventory::where('product_variant_id', $variantId)
+        return (int) Inventory::where('product_variant_id', $variantId)
             ->selectRaw('COALESCE(SUM(quantity - reserved_quantity), 0) as available_sum')
             ->value('available_sum');
-
-        if ($availableSum > 0) {
-            return $availableSum;
-        }
-
-        return (int) ProductVariant::where('id', $variantId)->value('stock');
     }
 
     private function syncVariantStockFromInventories(int $variantId): void
@@ -976,7 +1113,10 @@ class OrderController extends Controller
 
             $managedWarehouseId = $this->getManagedWarehouseId();
             $variantsData = [];
-            $total = 0;
+            $subtotalBeforeDiscount = 0;
+            $subtotalAfterItemDiscount = 0;
+            $itemDiscountTotal = 0;
+            $totalWeight = 0;
 
             foreach ($items as $item) {
                 $variantId = (int) $item['variant_id'];
@@ -999,15 +1139,46 @@ class OrderController extends Controller
                     ? (float) $item['price']
                     : (float) ($variant->latestPriceRule?->price ?? 0);
 
+                $basePrice = isset($item['base_price']) && $item['base_price'] !== null
+                    ? (float) $item['base_price']
+                    : $price;
+
+                $unitDiscount = isset($item['unit_discount']) && $item['unit_discount'] !== null
+                    ? (float) $item['unit_discount']
+                    : max($basePrice - $price, 0);
+
+                $unitDiscount = max(0, min($unitDiscount, $basePrice));
+
+                $unitWeight = isset($item['unit_weight']) && $item['unit_weight'] !== null
+                    ? (float) $item['unit_weight']
+                    : $this->parseWeightToKg($variant->size);
+
+                $unitWeight = max(0, round($unitWeight, 3));
+                $lineDiscount = $unitDiscount * $quantity;
+                $lineWeight = $unitWeight * $quantity;
+
                 $variantsData[] = [
                     'variant' => $variant,
                     'variant_id' => $variantId,
                     'quantity' => $quantity,
+                    'base_price' => $basePrice,
+                    'unit_discount' => $unitDiscount,
+                    'discount_total' => $lineDiscount,
+                    'unit_weight' => $unitWeight,
+                    'total_weight' => $lineWeight,
                     'price' => $price,
                 ];
 
-                $total += $price * $quantity;
+                $subtotalBeforeDiscount += $basePrice * $quantity;
+                $subtotalAfterItemDiscount += $price * $quantity;
+                $itemDiscountTotal += $lineDiscount;
+                $totalWeight += $lineWeight;
             }
+
+            $orderLevelDiscount = max(0, (float) ($orderData['order_discount'] ?? 0));
+            $orderLevelDiscount = min($orderLevelDiscount, $subtotalAfterItemDiscount);
+            $total = max($subtotalAfterItemDiscount - $orderLevelDiscount, 0);
+            $totalDiscount = $itemDiscountTotal + $orderLevelDiscount;
 
             $orderInsert = $this->filterExistingColumns('orders', [
                 'customer_id' => $orderData['customer_id'] ?? null,
@@ -1021,6 +1192,12 @@ class OrderController extends Controller
                 'payment_status' => $orderData['payment_status'] ?? PaymentStatus::Unpaid->value,
                 'delivery_status' => $orderData['delivery_status'] ?? DeliveryStatus::NotShipped->value,
                 'total' => $total,
+                'subtotal_amount' => $subtotalBeforeDiscount,
+                'item_discount_total' => $itemDiscountTotal,
+                'extra_discount_total' => $orderLevelDiscount,
+                'total_discount' => $totalDiscount,
+                'order_discount' => $orderLevelDiscount,
+                'total_weight' => round($totalWeight, 3),
             ]);
 
             if ($this->hasColumn('orders', 'code')) {
@@ -1037,6 +1214,11 @@ class OrderController extends Controller
                     'product_variant_id' => $info['variant_id'],
                     'quantity' => $info['quantity'],
                     'price' => $info['price'],
+                    'base_price' => $info['base_price'],
+                    'unit_discount' => $info['unit_discount'],
+                    'discount_total' => $info['discount_total'],
+                    'unit_weight' => $info['unit_weight'],
+                    'total_weight' => round($info['total_weight'], 3),
                     'total' => $info['quantity'] * $info['price'],
                 ]);
 
@@ -1053,6 +1235,57 @@ class OrderController extends Controller
 
             return $order;
         });
+    }
+
+    private function parseWeightToKg(?string $value): float
+    {
+        if (!$value) {
+            return 0.0;
+        }
+
+        if (!preg_match('/([0-9]+(?:[\.,][0-9]+)?)/', $value, $matches)) {
+            return 0.0;
+        }
+
+        $weight = (float) str_replace(',', '.', $matches[1]);
+        $normalized = mb_strtolower($value);
+
+        if (str_contains($normalized, 'g') && !str_contains($normalized, 'kg')) {
+            return round($weight / 1000, 3);
+        }
+
+        return round($weight, 3);
+    }
+
+    private function recalculateOrderTotals(Order $order): void
+    {
+        $order->loadMissing('items');
+
+        $subtotalAmount = (float) $order->items->sum(function ($item) {
+            return (float) ($item->base_price ?? $item->price ?? 0) * (int) $item->quantity;
+        });
+
+        $itemDiscountTotal = (float) $order->items->sum(function ($item) {
+            return (float) ($item->discount_total ?? 0);
+        });
+
+        $subtotalAfterItemDiscount = (float) $order->items->sum(function ($item) {
+            return (float) $item->price * (int) $item->quantity;
+        });
+
+        $orderLevelDiscount = (float) ($order->order_discount ?? $order->extra_discount_total ?? 0);
+        $totalWeight = (float) $order->items->sum(function ($item) {
+            return (float) ($item->total_weight ?? 0);
+        });
+
+        $order->update($this->filterExistingColumns('orders', [
+            'subtotal_amount' => $subtotalAmount,
+            'item_discount_total' => $itemDiscountTotal,
+            'extra_discount_total' => $orderLevelDiscount,
+            'total_discount' => $itemDiscountTotal + $orderLevelDiscount,
+            'total_weight' => round($totalWeight, 3),
+            'total' => max($subtotalAfterItemDiscount - $orderLevelDiscount, 0),
+        ]));
     }
 
     private function reserveStockForOrder(Order $order, ?int $managedWarehouseId): void

@@ -133,37 +133,31 @@
 
             addToCart() {
                 if (!this.state.selectedVariant) {
-                    alert('Please select a variant.');
+                    showToast('Vui long chon bien the truoc khi them vao gio.', 'warning');
                     return;
                 }
 
                 const variantId = this.state.selectedVariant.id;
                 const quantity = parseInt(this.elements.quantityInput.value, 10);
 
-                fetch('/cart/add', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                    },
-                    body: JSON.stringify({
-                        variant_id: variantId,
-                        quantity: quantity
+                if (!window.siteCart || typeof window.siteCart.addVariant !== 'function') {
+                    showToast('Khong the ket noi gio hang luc nay.', 'error');
+                    return;
+                }
+
+                this.elements.addToCartBtn.disabled = true;
+
+                window.siteCart.addVariant(variantId, quantity)
+                    .then(data => {
+                        window.showToast(data.message || 'Da them san pham vao gio hang.', 'success');
                     })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        alert('Product added to cart!');
-                        // Optionally, update a cart counter in the UI
-                    } else {
-                        alert('Error adding product to cart: ' + data.message);
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('An error occurred while adding the product to the cart.');
-                });
+                    .catch(error => {
+                        console.error('Error:', error);
+                        window.showToast(error.message || 'Co loi xay ra khi them san pham vao gio hang.', 'error');
+                    })
+                    .finally(() => {
+                        this.elements.addToCartBtn.disabled = false;
+                    });
             },
 
             renderGallery(avatar,images) {
@@ -228,6 +222,8 @@
                 const variant = this.state.selectedVariant;
                 if (!variant) return;
 
+                const availableStock = Math.max(parseInt(variant.available_stock ?? 0, 10) || 0, 0);
+
                 // Update price and description
                 const price = variant.latest_price_rule ? variant.latest_price_rule.price : 0;
                 this.elements.variantPrice.textContent = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(price);
@@ -240,15 +236,24 @@
 
                 // Show and manage cart section
                 this.elements.addToCartSection.classList.remove('d-none');
-                this.elements.quantityInput.value = 1;
-                this.elements.quantityInput.max = variant.stock;
-                this.elements.addToCartBtn.disabled = false;
+                this.elements.quantityInput.value = availableStock > 0 ? 1 : 0;
+                this.elements.quantityInput.max = availableStock;
+                this.elements.quantityInput.disabled = availableStock < 1;
+                this.elements.addToCartBtn.disabled = availableStock < 1;
                 this.updateTotal();
             },
 
             updateTotal() {
                 if (!this.state.selectedVariant) return;
-                const quantity = parseInt(this.elements.quantityInput.value, 10);
+                const availableStock = Math.max(parseInt(this.state.selectedVariant.available_stock ?? 0, 10) || 0, 0);
+                let quantity = parseInt(this.elements.quantityInput.value, 10) || 0;
+                if (availableStock > 0) {
+                    quantity = Math.min(Math.max(quantity, 1), availableStock);
+                } else {
+                    quantity = 0;
+                }
+
+                this.elements.quantityInput.value = quantity;
                 const price = this.state.selectedVariant.latest_price_rule ? this.state.selectedVariant.latest_price_rule.price : 0;
                 const total = quantity * price;
                 this.elements.totalPriceDisplay.textContent = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(total);
@@ -258,6 +263,7 @@
                 this.state.selectedVariant = null;
                 this.elements.variantInfo.classList.add('d-none');
                 this.elements.addToCartSection.classList.add('d-none');
+                this.elements.quantityInput.disabled = false;
                 this.elements.addToCartBtn.disabled = true;
             },
 

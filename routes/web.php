@@ -83,14 +83,20 @@ Route::middleware(['auth'])->group(function () {
     Route::prefix('warehouse')->name('warehouse.')->middleware('role:warehouse,admin')->group(function () {
         Route::get('/',            [WarehouseDashboardController::class, 'index'])->name('dashboard');
         Route::get('/orders',      [WarehouseDashboardController::class, 'orders'])->name('orders');
+        Route::post('/orders/{order}/logistics',        [WarehouseDashboardController::class, 'updateLogistics'])->name('orders.logistics');
         Route::post('/orders/{order}/start-packing',    [WarehouseDashboardController::class, 'startPacking'])->name('orders.start-packing');
         Route::post('/orders/{order}/complete-packing', [WarehouseDashboardController::class, 'completePacking'])->name('orders.complete-packing');
+        Route::post('/orders/{order}/reopen-packing',   [WarehouseDashboardController::class, 'reopenPacking'])->name('orders.reopen-packing');
         Route::get('/returns',     [WarehouseDashboardController::class, 'returns'])->name('returns');
         Route::post('/returns/{order}/confirm', [WarehouseDashboardController::class, 'confirmReturn'])->name('returns.confirm');
         
         // Warehouse Management Features
-        Route::get('/stock-in',    [WarehouseDashboardController::class, 'stockIn'])->name('stock-in');
-        Route::get('/stock-out',   [WarehouseDashboardController::class, 'stockOut'])->name('stock-out');
+        Route::get('/stock-in',          [WarehouseDashboardController::class, 'stockIn'])->name('stock-in');
+        Route::post('/stock-in',         [WarehouseDashboardController::class, 'storeStockIn'])->name('stock-in.store');
+        Route::get('/stock-in/{document}', [WarehouseDashboardController::class, 'showDocument'])->name('stock-in.show');
+        Route::get('/stock-out',         [WarehouseDashboardController::class, 'stockOut'])->name('stock-out');
+        Route::post('/stock-out',        [WarehouseDashboardController::class, 'storeStockOut'])->name('stock-out.store');
+        Route::get('/stock-out/{document}', [WarehouseDashboardController::class, 'showDocument'])->name('stock-out.show');
         Route::get('/inventory',   [WarehouseDashboardController::class, 'inventory'])->name('inventory');
         Route::get('/products',    [WarehouseDashboardController::class, 'products'])->name('products');
         Route::get('/reports',     [WarehouseDashboardController::class, 'reports'])->name('reports');
@@ -110,6 +116,9 @@ Route::middleware(['auth'])->group(function () {
     });
     Route::get('reports/revenue', [RevenueReportController::class, 'index'])
         ->name('reports.revenue')
+        ->middleware('permission');
+    Route::get('reports/revenue/export', [RevenueReportController::class, 'export'])
+        ->name('reports.revenue.export')
         ->middleware('permission');
     Route::get('orders/monitoring', [OrderMonitoringController::class, 'index'])
         ->name('orders.monitoring')
@@ -218,6 +227,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('customers/export', [CustomerController::class, 'export'])->name('customers.export')->middleware('permission');
     Route::get('customers/import', [CustomerController::class, 'importForm'])->name('customers.import.form')->middleware('permission');
     Route::post('customers/import', [CustomerController::class, 'import'])->name('customers.import')->middleware('permission');
+    Route::post('customers/{customer}/payments', [CustomerController::class, 'storePayment'])->name('customers.payments.store')->middleware('permission');
     Route::get('customers/{customer}/report', [CustomerController::class, 'report'])->name('customers.report')->middleware('permission');
     Route::resource('customers', CustomerController::class)->middleware('permission');
 
@@ -297,6 +307,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/my-customer/import', [PageController::class, 'myCustomerImportForm'])->name('my_customer.import_form');
     Route::post('/my-customer/import', [PageController::class, 'myCustomerImport'])->name('my_customer.import');
     Route::get('/my-customer/{customer}', [PageController::class, 'myCustomerShow'])->name('my_customer.show');
+    Route::post('/my-customer/{customer}/payments', [PageController::class, 'myCustomerStorePayment'])->name('my_customer.payments.store');
     Route::get('/my-customer/{customer}/order', [PageController::class, 'myCustomerOrderCreate'])->name('my_customer.order.create');
     Route::post('/my-customer/{customer}/order', [PageController::class, 'myCustomerOrderStore'])->name('my_customer.order.store');
     Route::get('/my-customer/{customer}/orders-quick-view', [PageController::class, 'myCustomerOrdersQuickView'])->name('my_customer.orders_quick_view');
@@ -310,6 +321,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/all-tearm-orders', [PageController::class, 'allTearmOrders'])->name('pages.all_tearm_orders');
     Route::get('/all-team-orders', [PageController::class, 'allTearmOrders'])->name('pages.all_team_orders');
     Route::post('/all-tearm-orders/auto-approve', [PageController::class, 'allTearmOrdersAutoApprove'])->name('pages.all_tearm_orders.auto_approve');
+    Route::get('/team-orders/{order}', [PageController::class, 'teamOrderDetail'])->name('pages.team_order_detail');
 });
 
 
@@ -341,8 +353,8 @@ Route::get('/san-pham/{category:slug?}', [PageController::class, 'productsByCate
 Route::get('/danh-sach-san-pham/{category:slug?}', [PageController::class, 'productList'])->name('pages.product_list');
 //Route::get('/product/{product:slug}', [PageController::class, 'productDetail'])->name('pages.product_detail');
 Route::get('/variant/{variant:slug}', [PageController::class, 'variantDetail'])->name('pages.variant_detail');
-Route::get('/my-profile', [PageController::class, 'myDashboard'])->name('pages.my_dashboard');
-Route::post('/my-profile', [PageController::class, 'updateProfile'])->name('pages.update_profile');
+Route::get('/my-profile', [PageController::class, 'myDashboard'])->name('pages.my_dashboard')->middleware('auth');
+Route::post('/my-profile', [PageController::class, 'updateProfile'])->name('pages.update_profile')->middleware('auth');
 Route::get('/my-orders', [PageController::class, 'myOrders'])->name('pages.my_orders')->middleware('auth');
 Route::get('/my-orders/{order}', [PageController::class, 'myOrderDetail'])->name('site.orders.show')->middleware('auth');
 

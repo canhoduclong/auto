@@ -119,7 +119,7 @@
                     <td class="text-nowrap"> 
                         <a href="{{ route('customers.edit', $customer) }}" class="btn btn-sm btn-warning">{{ __('common.actions.edit') }}</a>
                         <a href="{{ route('customers.addresses.index', $customer->id) }}" class="btn btn-sm btn-info">{{ __('customers.index.addresses') }}</a>
-                        <a href="{{ route('customers.report', $customer) }}" class="btn btn-sm btn-primary">{{ __('customers.index.report') }}</a>
+                        <a href="{{ route('customers.show', $customer) }}" class="btn btn-sm btn-primary">{{ __('customers.index.report') }}</a>
                         <form action="{{ route('customers.destroy', $customer) }}" method="POST" class="d-inline" onsubmit="return confirm('{{ __('customers.index.delete_confirm') }}')">
                             @csrf @method('DELETE')
                             <button class="btn btn-sm btn-danger">{{ __('common.actions.delete') }}</button>

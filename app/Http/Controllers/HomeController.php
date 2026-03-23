@@ -40,7 +40,9 @@ class HomeController extends Controller
         }
 
         $categories = Category::all();
-        $variants = \App\Models\ProductVariant::where('stock', '>', 0)
+        $variants = \App\Models\ProductVariant::query()
+            ->withAvailableStock()
+            ->inStock()
             ->where('status', true)
             ->whereHas('product', function ($query) {
                 $query->where('status', true);
@@ -60,7 +62,8 @@ class HomeController extends Controller
         });
         $categories = \App\Models\Category::all();
         $query = \App\Models\ProductVariant::query()
-            ->where('stock', '>', 0)
+            ->withAvailableStock()
+            ->inStock()
             ->where('status', true)
             ->whereHas('product', function ($q) {
                 $q->where('status', true);

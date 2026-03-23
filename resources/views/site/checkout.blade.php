@@ -1,225 +1,823 @@
 @extends('layouts.site')
 
+@php
+    $cart = session('cart', []);
+    $summarySubtotal = 0;
+    $summaryItemDiscount = 0;
+    $summaryOrderDiscount = max(0, (float) old('order_discount', 0));
+    $summaryDiscount = 0;
+    $summaryTotal = 0;
+    $summaryWeight = 0;
+
+    foreach ($cart as $id => $details) {
+        $unitPrice = (float) ($details['price'] ?? 0);
+        $quantity = (int) ($details['quantity'] ?? 0);
+        $inputDiscount = (float) old('item_discount.' . $id, 0);
+        $defaultWeight = (float) ($details['unit_weight'] ?? 0);
+        $inputWeight = (float) old('item_weight.' . $id, $defaultWeight);
+        $unitDiscount = max(0, min($inputDiscount, $unitPrice));
+        $unitWeight = max(0, round($inputWeight, 3));
+        $lineSubtotal = $unitPrice * $quantity;
+        $lineDiscount = $unitDiscount * $quantity;
+        $lineTotal = max($lineSubtotal - $lineDiscount, 0);
+        $lineWeight = $unitWeight * $quantity;
+
+        $summarySubtotal += $lineSubtotal;
+        $summaryItemDiscount += $lineDiscount;
+        $summaryTotal += $lineTotal;
+        $summaryWeight += $lineWeight;
+    }
+
+    $summaryOrderDiscount = min($summaryOrderDiscount, $summaryTotal);
+    $summaryDiscount = $summaryItemDiscount + $summaryOrderDiscount;
+    $summaryTotal = max($summaryTotal - $summaryOrderDiscount, 0);
+@endphp
+
+@push('styles')
+<style>
+    .checkout-page {
+        --checkout-ink: #0f172a;
+        --checkout-muted: #64748b;
+        --checkout-line: rgba(148, 163, 184, 0.28);
+        --checkout-surface: #ffffff;
+        --checkout-accent: #0f766e;
+        --checkout-accent-soft: #ecfeff;
+        --checkout-warm: #f59e0b;
+        background:
+            radial-gradient(circle at top left, rgba(20, 184, 166, 0.1), transparent 26%),
+            radial-gradient(circle at top right, rgba(245, 158, 11, 0.08), transparent 26%),
+            linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+        padding: 34px 0 48px;
+    }
+
+    .checkout-shell {
+        max-width: 1240px;
+    }
+
+    .checkout-hero {
+        border: 1px solid rgba(255, 255, 255, 0.22);
+        border-radius: 22px;
+        background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(15, 118, 110, 0.86));
+        color: #f8fafc;
+        box-shadow: 0 18px 44px rgba(15, 23, 42, 0.14);
+        padding: 22px 24px;
+        margin-bottom: 18px;
+    }
+
+    .checkout-hero h1 {
+        margin: 8px 0 6px;
+        font-size: clamp(1.4rem, 2.5vw, 2rem);
+        font-weight: 900;
+        letter-spacing: -0.02em;
+    }
+
+    .checkout-hero p {
+        margin: 0;
+        color: rgba(248, 250, 252, 0.82);
+        font-size: 0.92rem;
+    }
+
+    .checkout-eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 999px;
+        padding: 6px 10px;
+        background: rgba(255, 255, 255, 0.08);
+    }
+
+    .checkout-panel {
+        background: var(--checkout-surface);
+        border: 1px solid var(--checkout-line);
+        border-radius: 20px;
+        box-shadow: 0 14px 36px rgba(15, 23, 42, 0.06);
+    }
+
+    .checkout-panel-body {
+        padding: 20px;
+    }
+
+    .checkout-panel-title {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 800;
+        color: var(--checkout-ink);
+    }
+
+    .checkout-panel-subtitle {
+        margin: 6px 0 0;
+        color: var(--checkout-muted);
+        font-size: 0.86rem;
+        line-height: 1.5;
+    }
+
+    .checkout-block-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+
+    .checkout-form-group {
+        margin-bottom: 14px;
+    }
+
+    .checkout-form-label {
+        font-weight: 700;
+        color: var(--checkout-ink);
+        margin-bottom: 6px;
+    }
+
+    .checkout-form-group .form-control,
+    .checkout-form-group .form-select {
+        border-radius: 12px;
+        border: 1px solid var(--checkout-line);
+        min-height: 44px;
+    }
+
+    .checkout-form-group .form-control:focus,
+    .checkout-form-group .form-select:focus {
+        border-color: rgba(20, 184, 166, 0.75);
+        box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.14);
+    }
+
+    .checkout-customer-panel {
+        border-radius: 14px;
+        background: #f8fafc;
+        border: 1px solid rgba(148, 163, 184, 0.25);
+    }
+
+    .checkout-table-wrap {
+        border: 1px solid var(--checkout-line);
+        border-radius: 14px;
+        overflow: hidden;
+    }
+
+    .checkout-table {
+        margin-bottom: 0;
+        vertical-align: middle;
+    }
+
+    .checkout-table thead th {
+        background: #f8fafc;
+        font-size: 0.82rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #334155;
+        border-bottom-width: 1px;
+        white-space: nowrap;
+    }
+
+    .checkout-product {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 250px;
+    }
+
+    .checkout-product img {
+        width: 48px;
+        height: 48px;
+        object-fit: cover;
+        border-radius: 10px;
+        background: #e2e8f0;
+        border: 1px solid rgba(148, 163, 184, 0.25);
+    }
+
+    .checkout-product-name {
+        margin: 0 0 2px;
+        font-size: 0.92rem;
+        font-weight: 700;
+        color: var(--checkout-ink);
+    }
+
+    .checkout-product-meta {
+        margin: 0;
+        font-size: 0.78rem;
+        color: var(--checkout-muted);
+    }
+
+    .checkout-price,
+    .checkout-line-total,
+    .checkout-qty {
+        font-weight: 700;
+        color: var(--checkout-ink);
+        white-space: nowrap;
+    }
+
+    .checkout-discount-input {
+        width: 130px;
+        min-width: 120px;
+    }
+
+    .checkout-discount-note {
+        display: block;
+        margin-top: 4px;
+        font-size: 0.74rem;
+        color: var(--checkout-muted);
+    }
+
+    .checkout-summary {
+        position: sticky;
+        top: 20px;
+    }
+
+    .checkout-summary-grid {
+        display: grid;
+        gap: 10px;
+        margin-bottom: 14px;
+    }
+
+    .checkout-kpi {
+        padding: 12px 14px;
+        border-radius: 12px;
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        background: #f8fafc;
+    }
+
+    .checkout-kpi-label {
+        display: block;
+        font-size: 0.74rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--checkout-muted);
+        margin-bottom: 4px;
+    }
+
+    .checkout-kpi-value {
+        font-size: 1.05rem;
+        font-weight: 800;
+        color: var(--checkout-ink);
+    }
+
+    .checkout-kpi-value.discount {
+        color: #b45309;
+    }
+
+    .checkout-kpi-value.total {
+        color: var(--checkout-accent);
+    }
+
+    .checkout-summary-line {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 10px;
+        color: #334155;
+        font-size: 0.9rem;
+    }
+
+    .checkout-summary-line strong {
+        color: var(--checkout-ink);
+    }
+
+    .checkout-breakdown {
+        margin-top: 10px;
+        padding: 12px;
+        border: 1px solid rgba(148, 163, 184, 0.24);
+        border-radius: 12px;
+        background: #f8fafc;
+    }
+
+    .checkout-breakdown-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        font-size: 0.9rem;
+        color: #334155;
+        margin-bottom: 8px;
+    }
+
+    .checkout-breakdown-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .checkout-breakdown-item strong {
+        color: var(--checkout-ink);
+    }
+
+    .checkout-breakdown-item.total {
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px dashed rgba(148, 163, 184, 0.45);
+    }
+
+    .checkout-breakdown-item.total strong:last-child {
+        color: var(--checkout-accent);
+        font-size: 1.05rem;
+    }
+
+    .checkout-summary-total {
+        margin-top: 4px;
+        padding-top: 10px;
+        border-top: 1px dashed rgba(148, 163, 184, 0.45);
+    }
+
+    .checkout-summary-total strong:last-child {
+        color: var(--checkout-accent);
+        font-size: 1.15rem;
+    }
+
+    .checkout-actions {
+        margin-top: 14px;
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .checkout-btn-submit {
+        min-height: 44px;
+        border-radius: 12px;
+        border: 0;
+        background: linear-gradient(135deg, #0f766e, #14b8a6);
+        color: #fff;
+        font-weight: 800;
+        box-shadow: 0 10px 22px rgba(15, 118, 110, 0.2);
+    }
+
+    .checkout-btn-submit:hover {
+        color: #fff;
+        background: linear-gradient(135deg, #115e59, #0f766e);
+    }
+
+    .checkout-note {
+        border-radius: 12px;
+        border: 1px solid rgba(15, 118, 110, 0.2);
+        background: var(--checkout-accent-soft);
+        color: #115e59;
+        padding: 10px 12px;
+        font-size: 0.82rem;
+        line-height: 1.45;
+    }
+
+    @media (max-width: 991.98px) {
+        .checkout-summary {
+            position: static;
+        }
+
+        .checkout-panel-body {
+            padding: 16px;
+        }
+    }
+</style>
+@endpush
+
 @section('content')
-<div class="container">
-    <div class="row">
-        <div class="col-md-8">
-            <h2>Thông tin đơn hàng</h2>
-
-            @if(session('success'))
-                <div class="alert alert-success alert-dismissible fade show" role="alert">
-                    {{ session('success') }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                </div>
-            @endif
-
-            @if(session('error'))
-                <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                    {{ session('error') }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                </div>
-            @endif
-
-            @if($errors->any())
-                <div class="alert alert-danger" role="alert">
-                    <div class="fw-bold mb-1">Không thể tạo đơn hàng:</div>
-                    <ul class="mb-0 ps-3">
-                        @foreach($errors->all() as $error)
-                            <li>{{ $error }}</li>
-                        @endforeach
-                    </ul>
-                </div>
-            @endif
-
-            <form action="{{ route('orders.store_from_cart') }}" method="POST">
-                @csrf
-                <input type="hidden" name="customer_id" id="selected_customer_id" value="{{ old('customer_id') }}">
-                <div class="card mb-4">
-                    <div class="card-body">
-                        <h5 class="card-title">Thông tin người nhận</h5>
-
-                        @auth
-                        <div class="mb-3">
-                            <button type="button" class="btn btn-outline-primary" id="btnToggleCustomerPicker">Chọn khách hàng</button>
-                            <button type="button" class="btn btn-outline-secondary" id="btnClearCustomer" style="display:none;">Bỏ chọn</button>
-                            <div id="selectedCustomerPreview" class="alert alert-info mt-2 mb-0" style="display:none;"></div>
-                        </div>
-
-                        <div id="customerPickerPanel" class="border rounded p-3 mb-3" style="display:none;">
-                            <div class="row g-2 align-items-end">
-                                <div class="col-md-8">
-                                    <label for="customer_search" class="form-label">Tìm khách hàng (tên, email hoặc số điện thoại)</label>
-                                    <input type="text" id="customer_search" class="form-control" placeholder="Nhập từ khóa tìm kiếm...">
-                                </div>
-                                <div class="col-md-2">
-                                    <label for="customer_per_page" class="form-label">Số dòng</label>
-                                    <select id="customer_per_page" class="form-select">
-                                        <option value="10">10</option>
-                                        <option value="15" selected>15</option>
-                                        <option value="20">20</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-2">
-                                    <button type="button" class="btn btn-primary w-100" id="btnSearchCustomer">Tìm</button>
-                                </div>
-                            </div>
-
-                            <div class="table-responsive mt-3">
-                                <table class="table table-sm table-bordered align-middle mb-0">
-                                    <thead>
-                                        <tr>
-                                            <th>Tên</th>
-                                            <th>Email</th>
-                                            <th>Số điện thoại</th>
-                                            <th>Địa chỉ</th>
-                                            <th>Ghi chú</th>
-                                            <th width="110">Thao tác</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="customerSearchResults">
-                                        <tr>
-                                            <td colspan="6" class="text-center text-muted">Nhập từ khóa để tìm khách hàng.</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-
-                            <div class="d-flex justify-content-between align-items-center mt-2">
-                                <div id="customerPaginationInfo" class="text-muted small"></div>
-                                <div class="btn-group" role="group">
-                                    <button type="button" class="btn btn-outline-secondary btn-sm" id="btnCustomerPrev">Trước</button>
-                                    <button type="button" class="btn btn-outline-secondary btn-sm" id="btnCustomerNext">Sau</button>
-                                </div>
-                            </div>
-                        </div>
-                        @endauth
-
-                        <div class="mb-3">
-                            <label for="recipient_name" class="form-label">Họ tên người nhận</label>
-                            <input type="text" class="form-control @error('recipient_name') is-invalid @enderror" 
-                                id="recipient_name" name="recipient_name" value="{{ old('recipient_name', auth()->user()->name ?? '') }}" required>
-                            @error('recipient_name')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="recipient_email" class="form-label">Email</label>
-                            <input type="email" class="form-control @error('recipient_email') is-invalid @enderror"
-                                id="recipient_email" name="recipient_email" value="{{ old('recipient_email', auth()->user()->email ?? '') }}">
-                            @error('recipient_email')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="recipient_phone" class="form-label">Số điện thoại</label>
-                            <input type="text" class="form-control @error('recipient_phone') is-invalid @enderror" 
-                                id="recipient_phone" name="recipient_phone" value="{{ old('recipient_phone') }}" required>
-                            @error('recipient_phone')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="recipient_address" class="form-label">Địa chỉ nhận hàng</label>
-                            <textarea class="form-control @error('recipient_address') is-invalid @enderror" 
-                                id="recipient_address" name="recipient_address" rows="3" required>{{ old('recipient_address') }}</textarea>
-                            @error('recipient_address')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="delivery_time" class="form-label">Giờ giao hàng</label>
-                            <input type="text" class="form-control @error('delivery_time') is-invalid @enderror"
-                                id="delivery_time" name="delivery_time" value="{{ old('delivery_time') }}"
-                                placeholder="Ví dụ: 9h-11h hoặc sau 17h">
-                            @error('delivery_time')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                            <small class="text-muted">Mặc định theo thông tin khách hàng, có thể chỉnh cho đơn này.</small>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="note" class="form-label">Ghi chú</label>
-                            <textarea class="form-control" id="note" name="note" rows="3">{{ old('note') }}</textarea>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="card mb-4">
-                    <div class="card-body">
-                        <h5 class="card-title">Đơn hàng của bạn</h5>
-                        <div class="table-responsive">
-                            <table class="table">
-                                <thead>
-                                    <tr>
-                                        <th>Sản phẩm</th>
-                                        <th>Đơn giá</th>
-                                        <th>Số lượng</th>
-                                        <th>Thành tiền</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @php $total = 0 @endphp
-                                    @foreach(session('cart') as $id => $details)
-                                        @php $total += $details['price'] * $details['quantity'] @endphp
-                                        <tr>
-                                            <td>
-                                                <div class="d-flex align-items-center">
-                                                    @if($details['image'])
-                                                        <img src="{{ asset('storage/' . $details['image']) }}" 
-                                                            alt="{{ $details['name'] }}" width="50" class="me-3">
-                                                    @endif
-                                                    <div>
-                                                        <h6 class="mb-0">{{ $details['name'] }}</h6>
-                                                        <small>SKU: {{ $details['sku'] }}</small>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td>{{ number_format($details['price']) }}đ</td>
-                                            <td>{{ $details['quantity'] }}</td>
-                                            <td>{{ number_format($details['price'] * $details['quantity']) }}đ</td>
-                                        </tr>
-                                    @endforeach
-                                </tbody>
-                                <tfoot>
-                                    <tr>
-                                        <td colspan="3" class="text-end"><strong>Tổng tiền:</strong></td>
-                                        <td><strong>{{ number_format($total) }}đ</strong></td>
-                                    </tr>
-                                </tfoot>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                    <a href="{{ route('cart.show') }}" class="btn btn-outline-secondary me-2">Quay lại giỏ hàng</a>
-                    <button type="submit" class="btn btn-primary">Đặt hàng</button>
-                </div>
-            </form>
+<section class="checkout-page">
+    <div class="container checkout-shell">
+        <div class="checkout-hero">
+            <span class="checkout-eyebrow"><i class="bi bi-cart-check"></i> Thanh toán đơn hàng</span>
+            <h1>Xác nhận đơn với discount giá bán và discount tổng đơn</h1>
+            <p>Nhập thông tin nhận hàng, discount theo giá bán từng sản phẩm, thêm discount tổng đơn và kiểm tra tổng thanh toán trước khi đặt đơn.</p>
         </div>
 
-        <div class="col-md-4">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title">Tóm tắt đơn hàng</h5>
-                    <div class="d-flex justify-content-between mb-2">
-                        <span>Tạm tính:</span>
-                        <span>{{ number_format($total) }}đ</span>
+        @if(session('success'))
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                {{ session('success') }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        @endif
+
+        @if(session('error'))
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                {{ session('error') }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        @endif
+
+        @if($errors->any())
+            <div class="alert alert-danger" role="alert">
+                <div class="fw-bold mb-1">Không thể tạo đơn hàng:</div>
+                <ul class="mb-0 ps-3">
+                    @foreach($errors->all() as $error)
+                        <li>{{ $error }}</li>
+                    @endforeach
+                </ul>
+            </div>
+        @endif
+
+        <form action="{{ route('orders.store_from_cart') }}" method="POST" id="checkoutForm">
+            @csrf
+            <input type="hidden" name="customer_id" id="selected_customer_id" value="{{ old('customer_id') }}">
+
+            <div class="row g-3 align-items-start">
+                <div class="col-lg-8">
+                    <div class="checkout-panel mb-3">
+                        <div class="checkout-panel-body">
+                            <div class="checkout-block-head">
+                                <div>
+                                    <h2 class="checkout-panel-title">Thông tin người nhận</h2>
+                                    <p class="checkout-panel-subtitle">Dùng khách hàng đã có hoặc nhập nhanh thông tin mới cho đơn hàng này.</p>
+                                </div>
+                            </div>
+
+                            @auth
+                            <div class="mb-3">
+                                <button type="button" class="btn btn-outline-primary btn-sm" id="btnToggleCustomerPicker">Chọn khách hàng</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" id="btnClearCustomer" style="display:none;">Bỏ chọn</button>
+                                <div id="selectedCustomerPreview" class="alert alert-info mt-2 mb-0 py-2 px-3" style="display:none;"></div>
+                            </div>
+
+                            <div id="customerPickerPanel" class="checkout-customer-panel p-3 mb-3" style="display:none;">
+                                <div class="row g-2 align-items-end">
+                                    <div class="col-md-8">
+                                        <label for="customer_search" class="form-label mb-1">Tìm khách hàng (tên, email, số điện thoại)</label>
+                                        <input type="text" id="customer_search" class="form-control" placeholder="Nhập từ khóa tìm kiếm...">
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label for="customer_per_page" class="form-label mb-1">Số dòng</label>
+                                        <select id="customer_per_page" class="form-select">
+                                            <option value="10">10</option>
+                                            <option value="15" selected>15</option>
+                                            <option value="20">20</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <button type="button" class="btn btn-primary w-100" id="btnSearchCustomer">Tìm</button>
+                                    </div>
+                                </div>
+
+                                <div class="table-responsive mt-3">
+                                    <table class="table table-sm table-bordered align-middle mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th>Tên</th>
+                                                <th>Email</th>
+                                                <th>Số điện thoại</th>
+                                                <th>Địa chỉ</th>
+                                                <th>Ghi chú</th>
+                                                <th width="100">Thao tác</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="customerSearchResults">
+                                            <tr>
+                                                <td colspan="6" class="text-center text-muted">Nhập từ khóa để tìm khách hàng.</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <div class="d-flex justify-content-between align-items-center mt-2">
+                                    <div id="customerPaginationInfo" class="text-muted small"></div>
+                                    <div class="btn-group" role="group">
+                                        <button type="button" class="btn btn-outline-secondary btn-sm" id="btnCustomerPrev">Trước</button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm" id="btnCustomerNext">Sau</button>
+                                    </div>
+                                </div>
+                            </div>
+                            @endauth
+
+                            <div class="row">
+                                <div class="col-md-6 checkout-form-group">
+                                    <label for="recipient_name" class="checkout-form-label">Họ tên người nhận</label>
+                                    <input type="text" class="form-control @error('recipient_name') is-invalid @enderror"
+                                        id="recipient_name" name="recipient_name" value="{{ old('recipient_name', auth()->user()->name ?? '') }}" required>
+                                    @error('recipient_name')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
+                                </div>
+
+                                <div class="col-md-6 checkout-form-group">
+                                    <label for="recipient_phone" class="checkout-form-label">Số điện thoại</label>
+                                    <input type="text" class="form-control @error('recipient_phone') is-invalid @enderror"
+                                        id="recipient_phone" name="recipient_phone" value="{{ old('recipient_phone') }}" required>
+                                    @error('recipient_phone')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
+                                </div>
+
+                                <div class="col-md-6 checkout-form-group">
+                                    <label for="recipient_email" class="checkout-form-label">Email</label>
+                                    <input type="email" class="form-control @error('recipient_email') is-invalid @enderror"
+                                        id="recipient_email" name="recipient_email" value="{{ old('recipient_email', auth()->user()->email ?? '') }}">
+                                    @error('recipient_email')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
+                                </div>
+
+                                <div class="col-md-6 checkout-form-group">
+                                    <label for="delivery_time" class="checkout-form-label">Giờ giao hàng</label>
+                                    <input type="text" class="form-control @error('delivery_time') is-invalid @enderror"
+                                        id="delivery_time" name="delivery_time" value="{{ old('delivery_time') }}"
+                                        placeholder="Ví dụ: 9h-11h hoặc sau 17h">
+                                    @error('delivery_time')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
+                                </div>
+
+                                <div class="col-12 checkout-form-group">
+                                    <label for="recipient_address" class="checkout-form-label">Địa chỉ nhận hàng</label>
+                                    <textarea class="form-control @error('recipient_address') is-invalid @enderror"
+                                        id="recipient_address" name="recipient_address" rows="3" required>{{ old('recipient_address') }}</textarea>
+                                    @error('recipient_address')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
+                                </div>
+
+                                <div class="col-12 checkout-form-group mb-0">
+                                    <label for="note" class="checkout-form-label">Ghi chú</label>
+                                    <textarea class="form-control" id="note" name="note" rows="3">{{ old('note') }}</textarea>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="d-flex justify-content-between mb-2">
-                        <strong>Tổng cộng:</strong>
-                        <strong>{{ number_format($total) }}đ</strong>
+
+                    <div class="checkout-panel">
+                        <div class="checkout-panel-body">
+                            <div class="checkout-block-head">
+                                <div>
+                                    <h2 class="checkout-panel-title">Sản phẩm trong đơn</h2>
+                                    <p class="checkout-panel-subtitle">Nhập discount theo giá bán từng sản phẩm. Khối lượng được tính tự động theo quy cách biến thể và số lượng trong giỏ hàng.</p>
+                                </div>
+                            </div>
+
+                            <div class="checkout-table-wrap">
+                                <div class="table-responsive">
+                                    <table class="table checkout-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Sản phẩm</th>
+                                                <th>Đơn giá</th> 
+                                                <th>CK Giá</th>
+                                                <th>SL</th>
+                                                <th>Kg</th>
+                                                <th>Thành tiền</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach($cart as $id => $details)
+                                                @php
+                                                    $unitPrice = (float) ($details['price'] ?? 0);
+                                                    $quantity = (int) ($details['quantity'] ?? 0);
+                                                    $inputDiscount = (float) old('item_discount.' . $id, 0);
+                                                    $defaultWeight = (float) ($details['unit_weight'] ?? 0);
+                                                    $unitDiscount = max(0, min($inputDiscount, $unitPrice));
+                                                    $unitWeight = max(0, round($defaultWeight, 3));
+                                                    $lineSubtotal = $unitPrice * $quantity;
+                                                    $lineTotal = max($lineSubtotal - ($unitDiscount * $quantity), 0);
+                                                @endphp
+                                                <tr class="checkout-item-row"
+                                                    data-unit-price="{{ $unitPrice }}"
+                                                    data-quantity="{{ $quantity }}"
+                                                    data-unit-weight="{{ $unitWeight }}"
+                                                    data-variant-id="{{ $id }}">
+                                                    <td>
+                                                        <div class="checkout-product">
+                                                            @if(!empty($details['image']))
+                                                                <img src="{{ asset('storage/' . $details['image']) }}" alt="{{ $details['name'] }}">
+                                                            @endif
+                                                            <div>
+                                                                <p class="checkout-product-name">{{ $details['name'] }}</p>
+                                                                <p class="checkout-product-meta">SKU: {{ $details['sku'] ?? '-' }}</p>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td class="checkout-price">{{ number_format($unitPrice, 0, ',', '.') }}đ</td>
+                                                    
+                                                    <td>
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            step="1000"
+                                                            max="{{ $unitPrice }}"
+                                                            class="form-control form-control-sm checkout-discount-input"
+                                                            name="item_discount[{{ $id }}]"
+                                                            value="{{ old('item_discount.' . $id, 0) }}"
+                                                            data-discount-input> 
+                                                    </td>
+                                                    <td class="checkout-qty">{{ $quantity }}</td>
+                                                    <td>
+                                                        <div class="checkout-weight">{{ number_format($unitWeight * $quantity, 1, ',', '.') }} </div>
+                                                         
+                                                    </td>
+                                                    <td class="checkout-line-total" data-line-total>{{ number_format($lineTotal, 0, ',', '.') }}đ</td>
+                                                </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
                     </div>
+                </div>
+
+                <div class="col-lg-4">
+                    <aside class="checkout-summary">
+                        <div class="checkout-panel">
+                            <div class="checkout-panel-body">
+                                <div class="checkout-block-head">
+                                    <div>
+                                        <h2 class="checkout-panel-title">Tóm tắt thanh toán</h2>
+                                        <p class="checkout-panel-subtitle">Kiểm tra lại tổng giá trị trước khi tạo đơn hàng.</p>
+                                    </div>
+                                </div>
+
+                                <div class="checkout-summary-grid">
+                                    <div class="checkout-kpi">
+                                        <span class="checkout-kpi-label">Tạm tính</span>
+                                        <span class="checkout-kpi-value" id="summarySubtotal">{{ number_format($summarySubtotal, 0, ',', '.') }}đ</span>
+                                    </div>
+                                    <div class="checkout-kpi">
+                                        <span class="checkout-kpi-label">Discount sản phẩm</span>
+                                        <span class="checkout-kpi-value discount" id="summaryItemDiscount">{{ number_format($summaryItemDiscount, 0, ',', '.') }}đ</span>
+                                    </div>
+                                    <div class="checkout-kpi">
+                                        <span class="checkout-kpi-label">Discount tổng đơn</span>
+                                        <div class="mt-1">
+                                            <input type="number" min="0" step="1000" class="form-control form-control-sm" id="orderDiscountInput" name="order_discount" value="{{ old('order_discount', 0) }}">
+                                            <small class="checkout-discount-note">Giảm trực tiếp trên tổng đơn sau discount sản phẩm.</small>
+                                        </div>
+                                    </div>
+                                    <div class="checkout-kpi">
+                                        <span class="checkout-kpi-label">Tổng discount</span>
+                                        <span class="checkout-kpi-value discount" id="summaryDiscount">{{ number_format($summaryDiscount, 0, ',', '.') }}đ</span>
+                                    </div>
+                                    <div class="checkout-kpi">
+                                        <span class="checkout-kpi-label">Thanh toán</span>
+                                        <span class="checkout-kpi-value total" id="summaryTotal">{{ number_format($summaryTotal, 0, ',', '.') }}đ</span>
+                                    </div>
+                                    <div class="checkout-kpi">
+                                        <span class="checkout-kpi-label">Tổng khối lượng</span>
+                                        <span class="checkout-kpi-value" id="summaryWeight">{{ number_format($summaryWeight, 3, ',', '.') }} kg</span>
+                                    </div>
+                                </div>
+
+                                <div class="checkout-summary-line">
+                                    <span>Số dòng sản phẩm</span>
+                                    <strong>{{ count($cart) }}</strong>
+                                </div>
+                                <div class="checkout-summary-line checkout-summary-total">
+                                    <strong>Tổng cộng</strong>
+                                    <strong id="summaryTotalFooter">{{ number_format($summaryTotal, 0, ',', '.') }}đ</strong>
+                                </div>
+
+                                <div class="checkout-breakdown">
+                                    <div class="checkout-breakdown-item">
+                                        <span>Tiền hàng</span>
+                                        <strong id="breakdownGoods">{{ number_format($summarySubtotal, 0, ',', '.') }}đ</strong>
+                                    </div>
+                                    <div class="checkout-breakdown-item">
+                                        <span>Tiền giảm (discount)</span>
+                                        <strong id="breakdownItemDiscount">{{ number_format($summaryItemDiscount, 0, ',', '.') }}đ</strong>
+                                    </div>
+                                    <div class="checkout-breakdown-item">
+                                        <span>Giảm thêm (discount ngoài)</span>
+                                        <strong id="breakdownExtraDiscount">{{ number_format($summaryOrderDiscount, 0, ',', '.') }}đ</strong>
+                                    </div>
+                                    <div class="checkout-breakdown-item total">
+                                        <strong>Tổng tiền cuối cùng</strong>
+                                        <strong id="breakdownFinalTotal">{{ number_format($summaryTotal, 0, ',', '.') }}đ</strong>
+                                    </div>
+                                </div>
+
+                                <div class="checkout-note mt-2">
+                                    Discount theo giá bán sản phẩm và discount tổng đơn sẽ được áp dụng và lưu trực tiếp vào đơn hàng.
+                                </div>
+
+                                <div class="checkout-actions">
+                                    <a href="{{ route('cart.show') }}" class="btn btn-outline-secondary flex-grow-1">Quay lại giỏ hàng</a>
+                                    <button type="submit" class="btn checkout-btn-submit flex-grow-1">Đặt hàng</button>
+                                </div>
+                            </div>
+                        </div>
+                    </aside>
                 </div>
             </div>
-        </div>
+        </form>
     </div>
-</div>
+</section>
 @endsection
+
+@push('scripts')
+<script>
+(() => {
+    const rows = Array.from(document.querySelectorAll('.checkout-item-row'));
+    const subtotalEl = document.getElementById('summarySubtotal');
+    const discountEl = document.getElementById('summaryDiscount');
+    const itemDiscountEl = document.getElementById('summaryItemDiscount');
+    const totalEl = document.getElementById('summaryTotal');
+    const weightEl = document.getElementById('summaryWeight');
+    const totalFooterEl = document.getElementById('summaryTotalFooter');
+    const orderDiscountInput = document.getElementById('orderDiscountInput');
+    const breakdownGoodsEl = document.getElementById('breakdownGoods');
+    const breakdownItemDiscountEl = document.getElementById('breakdownItemDiscount');
+    const breakdownExtraDiscountEl = document.getElementById('breakdownExtraDiscount');
+    const breakdownFinalTotalEl = document.getElementById('breakdownFinalTotal');
+
+    if (!rows.length || !subtotalEl || !itemDiscountEl || !discountEl || !totalEl || !weightEl || !totalFooterEl || !orderDiscountInput || !breakdownGoodsEl || !breakdownItemDiscountEl || !breakdownExtraDiscountEl || !breakdownFinalTotalEl) {
+        return;
+    }
+
+    const formatMoney = (value) => new Intl.NumberFormat('vi-VN').format(Math.max(0, value)) + 'đ';
+    const formatWeight = (value) => new Intl.NumberFormat('vi-VN', { minimumFractionDigits: 3, maximumFractionDigits: 3 }).format(Math.max(0, value)) + ' kg';
+
+    const sanitizeDiscount = (input, unitPrice) => {
+        let value = Number(input.value || 0);
+        if (Number.isNaN(value) || value < 0) {
+            value = 0;
+        }
+        if (value > unitPrice) {
+            value = unitPrice;
+        }
+        input.value = Math.round(value);
+        return Math.round(value);
+    };
+
+    const sanitizeOrderDiscount = (maxValue) => {
+        let value = Number(orderDiscountInput.value || 0);
+        if (Number.isNaN(value) || value < 0) {
+            value = 0;
+        }
+        if (value > maxValue) {
+            value = maxValue;
+        }
+        orderDiscountInput.value = Math.round(value);
+        return Math.round(value);
+    };
+
+    const recalc = () => {
+        let subtotal = 0;
+        let itemDiscount = 0;
+        let totalWeight = 0;
+
+        rows.forEach((row) => {
+            const unitPrice = Number(row.dataset.unitPrice || 0);
+            const quantity = Number(row.dataset.quantity || 0);
+            const discountInput = row.querySelector('[data-discount-input]');
+            const weightInput = row.querySelector('[data-weight-input]');
+            const lineTotalEl = row.querySelector('[data-line-total]');
+
+            if (!discountInput || !lineTotalEl) {
+                return;
+            }
+
+            const unitDiscount = sanitizeDiscount(discountInput, unitPrice);
+            let unitWeight = Number(row.dataset.unitWeight || 0);
+            if (weightInput) {
+                unitWeight = Math.max(0, Number(weightInput.value || 0));
+                weightInput.value = Number.isFinite(unitWeight) ? unitWeight.toFixed(3).replace(/\.000$/, '') : '0';
+            } else {
+                unitWeight = Math.max(0, Number.isFinite(unitWeight) ? unitWeight : 0);
+            }
+            const lineSubtotal = unitPrice * quantity;
+            const lineDiscount = unitDiscount * quantity;
+            const lineTotal = Math.max(lineSubtotal - lineDiscount, 0);
+            const lineWeight = unitWeight * quantity;
+
+            subtotal += lineSubtotal;
+            itemDiscount += lineDiscount;
+            totalWeight += lineWeight;
+            lineTotalEl.textContent = formatMoney(lineTotal);
+        });
+
+        const subtotalAfterItemDiscount = Math.max(subtotal - itemDiscount, 0);
+        const orderDiscount = sanitizeOrderDiscount(subtotalAfterItemDiscount);
+        const discount = itemDiscount + orderDiscount;
+        const total = Math.max(subtotalAfterItemDiscount - orderDiscount, 0);
+
+        subtotalEl.textContent = formatMoney(subtotal);
+        itemDiscountEl.textContent = formatMoney(itemDiscount);
+        discountEl.textContent = formatMoney(discount);
+        totalEl.textContent = formatMoney(total);
+        weightEl.textContent = formatWeight(totalWeight);
+        totalFooterEl.textContent = formatMoney(total);
+        breakdownGoodsEl.textContent = formatMoney(subtotal);
+        breakdownItemDiscountEl.textContent = formatMoney(itemDiscount);
+        breakdownExtraDiscountEl.textContent = formatMoney(orderDiscount);
+        breakdownFinalTotalEl.textContent = formatMoney(total);
+    };
+
+    rows.forEach((row) => {
+        const discountInput = row.querySelector('[data-discount-input]');
+        if (!discountInput) {
+            return;
+        }
+
+        discountInput.addEventListener('input', recalc);
+        discountInput.addEventListener('change', recalc);
+
+        const weightInput = row.querySelector('[data-weight-input]');
+        if (weightInput) {
+            weightInput.addEventListener('input', recalc);
+            weightInput.addEventListener('change', recalc);
+        }
+    });
+
+    orderDiscountInput.addEventListener('input', recalc);
+    orderDiscountInput.addEventListener('change', recalc);
+
+    recalc();
+})();
+</script>
+@endpush
 
 @auth
 @push('scripts')
@@ -236,6 +834,10 @@
     const prevBtn = document.getElementById('btnCustomerPrev');
     const nextBtn = document.getElementById('btnCustomerNext');
     const selectedPreview = document.getElementById('selectedCustomerPreview');
+
+    if (!pickerPanel || !togglePickerBtn || !clearCustomerBtn || !searchInput || !searchBtn || !perPageSelect || !resultsBody || !infoText || !prevBtn || !nextBtn || !selectedPreview) {
+        return;
+    }
 
     const selectedCustomerIdInput = document.getElementById('selected_customer_id');
     const recipientName = document.getElementById('recipient_name');

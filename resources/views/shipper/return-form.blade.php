@@ -4,22 +4,86 @@
 @section('subtitle', 'Đơn #{{ $order->code }}')
 
 @section('content')
+@php
+    $customerAddress = $order->customer?->address
+        ?? $order->customer?->addresses?->first()?->address
+        ?? 'Chưa có địa chỉ';
+    $deliveryTime = $order->delivery_time
+        ?? $order->customer?->delivery_time
+        ?? 'Chưa có khung giờ giao';
+@endphp
+<style>
+    .shipper-return-shell .card {
+        border-radius: 14px;
+    }
+    .shipper-meta-grid {
+        display: grid;
+        grid-template-columns: 132px 1fr;
+        gap: 8px 10px;
+        font-size: .92rem;
+    }
+    .shipper-meta-key {
+        color: #64748b;
+        font-weight: 600;
+    }
+    .shipper-customer-box {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 12px;
+        margin-top: 12px;
+    }
+    .shipper-customer-title {
+        font-size: .82rem;
+        color: #334155;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+        font-weight: 700;
+        margin-bottom: 8px;
+    }
+    .shipper-warning-note {
+        background: #fff1f2;
+        border: 1px solid #fecdd3;
+        color: #9f1239;
+        border-radius: 10px;
+        padding: 8px 10px;
+        font-size: .83rem;
+        margin-bottom: 12px;
+    }
+</style>
 <div class="row justify-content-center">
-    <div class="col-md-7 col-lg-6">
+    <div class="col-md-9 col-lg-8 shipper-return-shell">
+        @if($errors->any())
+            <div class="alert alert-danger border-0 shadow-sm">
+                <div class="fw-semibold mb-1">Không thể gửi trả hàng</div>
+                <ul class="mb-0 ps-3 small">
+                    @foreach($errors->all() as $error)
+                        <li>{{ $error }}</li>
+                    @endforeach
+                </ul>
+            </div>
+        @endif
+
         <div class="card border-0 shadow-sm mb-3">
             <div class="card-header bg-white fw-semibold">
                 <i class="bi bi-info-circle me-1 text-primary"></i>Thông tin đơn hàng
             </div>
             <div class="card-body">
-                <div class="row g-2 small">
-                    <div class="col-5 text-muted">Mã đơn:</div>
-                    <div class="col-7 fw-semibold">{{ $order->code }}</div>
-                    <div class="col-5 text-muted">Khách hàng:</div>
-                    <div class="col-7">{{ $order->customer?->name ?? '—' }}</div>
-                    <div class="col-5 text-muted">SĐT:</div>
-                    <div class="col-7">{{ $order->customer?->phone ?? '—' }}</div>
-                    <div class="col-5 text-muted">Tổng tiền:</div>
-                    <div class="col-7 fw-bold text-danger">{{ number_format($order->total) }}đ</div>
+                <div class="shipper-meta-grid">
+                    <div class="shipper-meta-key">Mã đơn:</div>
+                    <div class="fw-semibold">{{ $order->code }}</div>
+                    <div class="shipper-meta-key">Khách hàng:</div>
+                    <div>{{ $order->customer?->name ?? '—' }}</div>
+                    <div class="shipper-meta-key">Số điện thoại:</div>
+                    <div>{{ $order->customer?->phone ?? '—' }}</div>
+                    <div class="shipper-meta-key">Tổng tiền:</div>
+                    <div class="fw-bold text-danger">{{ number_format($order->total) }}đ</div>
+                </div>
+
+                <div class="shipper-customer-box">
+                    <div class="shipper-customer-title">Thông tin giao hàng</div>
+                    <div class="small mb-2"><i class="bi bi-geo-alt me-1"></i><strong>Địa chỉ:</strong> {{ $customerAddress }}</div>
+                    <div class="small"><i class="bi bi-clock me-1"></i><strong>Giờ giao:</strong> {{ $deliveryTime }}</div>
                 </div>
             </div>
         </div>
@@ -29,6 +93,10 @@
                 <i class="bi bi-arrow-return-left me-1"></i>Gửi trả hàng về kho
             </div>
             <div class="card-body">
+                <div class="shipper-warning-note">
+                    <i class="bi bi-exclamation-octagon me-1"></i>Chỉ gửi trả khi đã xác minh lý do với khách hàng và có ảnh bằng chứng.
+                </div>
+
                 <form action="{{ route('shipper.store-return', $order) }}" method="POST" enctype="multipart/form-data">
                     @csrf
 

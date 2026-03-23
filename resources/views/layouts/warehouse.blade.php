@@ -9,10 +9,19 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     @stack('styles')
     <style>
-        :root { --sidebar-width: 240px; --sidebar-bg: #1e293b; --sidebar-active: #3b82f6; }
+        :root {
+            --sidebar-width: 240px;
+            --theme-primary: #0f766e;
+            --theme-primary-hover: #115e59;
+            --theme-accent: #ffc107;
+            --theme-accent-hover: #e0a800;
+            --sidebar-bg: #0b5f59;
+            --sidebar-bg-strong: #084c47;
+            --sidebar-active: #ffc107;
+        }
         body {
             min-height: 100vh;
-            background: #f1f5f9;
+            background: #f7fbfb;
             font-family: 'Inter', system-ui, sans-serif;
             font-size: 1.04rem;
         }
@@ -21,25 +30,25 @@
             position: fixed; top: 0; left: 0; z-index: 200; display: flex; flex-direction: column;
         }
         .wh-brand {
-            padding: 1rem 1.25rem; background: #0f172a; color: #fff; font-weight: 700;
-            font-size: 1.02rem; display: flex; align-items: center; gap: .5rem; border-bottom: 1px solid #334155;
+            padding: 1rem 1.25rem; background: var(--sidebar-bg-strong); color: #fff; font-weight: 700;
+            font-size: 1.02rem; display: flex; align-items: center; gap: .5rem; border-bottom: 1px solid rgba(255,255,255,.15);
         }
-        .wh-brand .badge { font-size: .65rem; background: #3b82f6; }
+        .wh-brand .badge { font-size: .65rem; background: var(--theme-accent); color: #1f2937; }
         .wh-nav-section {
-            padding: .75rem 1.25rem .25rem; font-size: .78rem; color: #64748b;
+            padding: .75rem 1.25rem .25rem; font-size: .78rem; color: #fef3c7;
             text-transform: uppercase; letter-spacing: .08em; font-weight: 600;
         }
         .wh-nav-link {
             display: flex; align-items: center; gap: .6rem; padding: .55rem 1.25rem;
-            color: #94a3b8; font-size: .95rem; text-decoration: none;
+            color: #e6fffb; font-size: .95rem; text-decoration: none;
             border-left: 3px solid transparent; transition: all .15s;
         }
-        .wh-nav-link:hover { color: #e2e8f0; background: rgba(255,255,255,.04); border-left-color: #475569; }
-        .wh-nav-link.active { color: #fff; background: rgba(59,130,246,.15); border-left-color: var(--sidebar-active); }
+        .wh-nav-link:hover { color: #fff; background: rgba(255,255,255,.08); border-left-color: var(--theme-accent); }
+        .wh-nav-link.active { color: #fff; background: rgba(255,193,7,.16); border-left-color: var(--sidebar-active); }
         .wh-nav-link .badge { margin-left: auto; font-size: .65rem; }
         .wh-main { margin-left: var(--sidebar-width); min-height: 100vh; display: flex; flex-direction: column; }
         .wh-topbar {
-            background: #fff; border-bottom: 1px solid #e2e8f0; padding: .8rem 1.5rem;
+            background: #fff; border-bottom: 1px solid #d8ece9; padding: .8rem 1.5rem;
             display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100;
         }
         .wh-topbar .breadcrumb { margin-bottom: 0; font-size: .95rem; }
@@ -48,6 +57,107 @@
         .wh-content { padding: 1.5rem; flex: 1; }
         .stat-card { border: none; border-radius: .75rem; transition: transform .15s; }
         .stat-card:hover { transform: translateY(-2px); }
+
+        .btn-primary,
+        .btn-info,
+        .btn-success {
+            background-color: var(--theme-primary);
+            border-color: var(--theme-primary);
+        }
+
+        .btn-primary:hover,
+        .btn-primary:focus,
+        .btn-primary:active,
+        .btn-info:hover,
+        .btn-info:focus,
+        .btn-info:active,
+        .btn-success:hover,
+        .btn-success:focus,
+        .btn-success:active {
+            background-color: var(--theme-primary-hover);
+            border-color: var(--theme-primary-hover);
+        }
+
+        .btn-outline-primary,
+        .btn-outline-info,
+        .btn-outline-success {
+            color: var(--theme-primary);
+            border-color: var(--theme-primary);
+        }
+
+        .btn-outline-primary:hover,
+        .btn-outline-primary:focus,
+        .btn-outline-info:hover,
+        .btn-outline-info:focus,
+        .btn-outline-success:hover,
+        .btn-outline-success:focus {
+            color: #fff;
+            background-color: var(--theme-primary);
+            border-color: var(--theme-primary);
+        }
+
+        .btn-warning {
+            background-color: var(--theme-accent);
+            border-color: var(--theme-accent);
+            color: #1f2937;
+        }
+
+        .btn-warning:hover,
+        .btn-warning:focus,
+        .btn-warning:active {
+            background-color: var(--theme-accent-hover);
+            border-color: var(--theme-accent-hover);
+            color: #1f2937;
+        }
+
+        .btn-outline-warning {
+            color: #9a6700;
+            border-color: var(--theme-accent);
+        }
+
+        .btn-outline-warning:hover,
+        .btn-outline-warning:focus,
+        .btn-outline-warning:active {
+            color: #1f2937;
+            background-color: var(--theme-accent);
+            border-color: var(--theme-accent);
+        }
+
+        .text-primary,
+        .text-info,
+        .text-success {
+            color: var(--theme-primary) !important;
+        }
+
+        .bg-primary,
+        .bg-info,
+        .bg-success {
+            background-color: var(--theme-primary) !important;
+        }
+
+        .badge.bg-primary,
+        .badge.bg-info,
+        .badge.bg-success,
+        .badge.text-bg-primary,
+        .badge.text-bg-info,
+        .badge.text-bg-success {
+            background-color: var(--theme-primary) !important;
+            color: #fff !important;
+        }
+
+        .form-control:focus,
+        .form-select:focus {
+            border-color: rgba(15, 118, 110, 0.42);
+            box-shadow: 0 0 0 0.2rem rgba(15, 118, 110, 0.16);
+        }
+
+        a {
+            color: var(--theme-primary);
+        }
+
+        a:hover {
+            color: var(--theme-primary-hover);
+        }
         @media (max-width: 768px) {
             .wh-sidebar { transform: translateX(-100%); }
             .wh-main { margin-left: 0; }
@@ -55,6 +165,8 @@
     </style>
 </head>
 <body>
+    @include('layouts.notifications')
+
     <!-- Sidebar -->
     <aside class="wh-sidebar">
         <div class="wh-brand">
@@ -102,7 +214,7 @@
                 <i class="bi bi-person-circle text-secondary"></i>
                 <div class="small">
                     <div class="text-white fw-semibold" style="font-size:.95rem;">{{ auth()->user()->name }}</div>
-                    <div class="text-muted" style="font-size:.82rem;">Warehouse</div>
+                    <div style="color:#fef3c7;font-size:.82rem;">Warehouse</div>
                 </div>
             </div>
             <form method="POST" action="{{ route('logout') }}">
@@ -165,6 +277,63 @@
             if (el) el.textContent = new Date().toLocaleTimeString('vi-VN', {hour:'2-digit', minute:'2-digit'});
             setTimeout(tick, 60000);
         })();
+
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('notification-container');
+            if (!container) {
+                window.alert(message);
+                return;
+            }
+
+            const toastEl = document.createElement('div');
+            toastEl.classList.add('toast', 'border-0', 'shadow-lg', 'overflow-hidden');
+            toastEl.setAttribute('role', 'alert');
+            toastEl.setAttribute('aria-live', 'assertive');
+            toastEl.setAttribute('aria-atomic', 'true');
+
+            let headerClass = 'bg-success text-white';
+            if (type === 'error') {
+                headerClass = 'bg-danger text-white';
+            } else if (type === 'warning') {
+                headerClass = 'bg-warning text-dark';
+            } else if (type === 'info') {
+                headerClass = 'bg-info text-dark';
+            }
+
+            const toastLabels = @json(__('common.toast_types'));
+            const closeLabel = @json(__('common.actions.close'));
+            const typeLabel = toastLabels[type] || type;
+
+            toastEl.innerHTML = `
+                <div class="toast-header ${headerClass}">
+                    <strong class="me-auto">${typeLabel}</strong>
+                    <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="${closeLabel}"></button>
+                </div>
+                <div class="toast-body bg-white">${message}</div>
+            `;
+
+            container.appendChild(toastEl);
+            const toast = new bootstrap.Toast(toastEl, { delay: 5000 });
+            toast.show();
+            toastEl.addEventListener('hidden.bs.toast', function () {
+                toastEl.remove();
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const container = document.getElementById('notification-container');
+            if (!container) {
+                return;
+            }
+
+            container.querySelectorAll('.toast').forEach(function (toastEl) {
+                const toast = new bootstrap.Toast(toastEl, { delay: 5000 });
+                toast.show();
+                toastEl.addEventListener('hidden.bs.toast', function () {
+                    toastEl.remove();
+                });
+            });
+        });
     </script>
     @stack('scripts')
 </body>

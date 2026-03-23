@@ -1,3 +1,141 @@
+<style>
+/* ========= Header: Account / Login ========= */
+.hdr-login-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 18px;
+    border-radius: 9px;
+    border: 1px solid var(--theme-primary, #0f766e);
+    background: transparent;
+    color: var(--theme-primary, #0f766e);
+    font-weight: 700;
+    font-size: 13.5px;
+    letter-spacing: 0.02em;
+    text-decoration: none;
+    transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+    white-space: nowrap;
+}
+.hdr-login-btn:hover {
+    background: var(--theme-primary, #0f766e);
+    color: #fff !important;
+    box-shadow: 0 6px 18px rgba(15,118,110,0.22);
+}
+.hdr-login-btn i { font-size: 16px; }
+
+.hdr-account-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 12px 4px 4px;
+    border-radius: 9px;
+    border: 1.5px solid rgba(15,118,110,0.35);
+    background: rgba(15,118,110,0.06);
+    color: #0f172a;
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    white-space: nowrap;
+    max-width: 200px;
+}
+.hdr-account-btn:hover,
+.hdr-account-btn.show {
+    border-color: var(--theme-primary, #0f766e);
+    background: rgba(15,118,110,0.12);
+    color: #0f766e;
+}
+.hdr-account-btn::after { display: none; }
+.hdr-account-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(255,255,255,0.9);
+    box-shadow: 0 2px 8px rgba(15,118,110,0.18);
+    flex-shrink: 0;
+}
+.hdr-account-name {
+    max-width: 110px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.hdr-account-chevron {
+    font-size: 11px;
+    opacity: 0.65;
+    transition: transform 0.2s ease;
+}
+.hdr-account-btn.show .hdr-account-chevron { transform: rotate(180deg); }
+
+.hdr-account-menu {
+    min-width: 230px;
+    border-radius: 16px;
+    padding: 0;
+    border: 1px solid rgba(148,163,184,0.22);
+    box-shadow: 0 16px 40px rgba(15,23,42,0.12);
+    overflow: hidden;
+    margin-top: 8px !important;
+}
+.hdr-account-menu__info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    background: linear-gradient(135deg, rgba(15,118,110,0.08), rgba(15,23,42,0.04));
+}
+.hdr-account-menu__avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    object-fit: cover;
+    border: 2px solid rgba(255,255,255,0.9);
+    box-shadow: 0 4px 10px rgba(15,118,110,0.15);
+    flex-shrink: 0;
+}
+.hdr-account-menu__name {
+    font-size: 14px;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.2;
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.hdr-account-menu__email {
+    font-size: 12px;
+    color: #64748b;
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.hdr-account-menu .dropdown-item {
+    padding: 9px 16px;
+    font-size: 13.5px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    color: #334155;
+    transition: background 0.15s, color 0.15s;
+}
+.hdr-account-menu .dropdown-item i {
+    width: 18px;
+    text-align: center;
+    font-size: 15px;
+    color: #64748b;
+}
+.hdr-account-menu .dropdown-item:hover {
+    background: rgba(15,118,110,0.06);
+    color: #0f766e;
+}
+.hdr-account-menu .dropdown-item:hover i { color: #0f766e; }
+.hdr-account-logout { color: #ef4444 !important; }
+.hdr-account-logout i { color: #ef4444 !important; }
+.hdr-account-logout:hover { background: rgba(239,68,68,0.07) !important; color: #dc2626 !important; }
+</style>
+
 <div class="offcanvas-menu-overlay"></div>
 <div class="offcanvas-menu-wrapper">
     <div class="offcanvas__widget">
@@ -88,42 +226,72 @@
                     <div class="header__nav__widget">
                         <div class="header__nav__widget__btn  d-flex justify-content-end align-items-center">
 
-                            <x-cart-widget :cartCount="count(session('cart', []))" class="me-3" /> 
+                            <x-cart-widget :cartCount="count(session('cart', []))" class="me-3" />
                             @auth
-                                <div class="dropdown">
-                                    <a href="#" class="d-block link-white text-decoration-none dropdown-toggle btn btn-outline-primary" id="dropdownUser1" data-bs-toggle="dropdown" aria-expanded="false">
-                                        {{ Auth::user()->name }}
-                                    </a>
-                                    <ul class="dropdown-menu text-small" aria-labelledby="dropdownUser1">
-                                        <li><a class="dropdown-item" href="{{ route('pages.my_dashboard') }}">{{ __('site.profile') }}</a></li>
-                                        <li><a class="dropdown-item" href="{{ route('pages.my_orders') }}">{{ __('site.my_orders') }}</a></li>
-                                        <li><a class="dropdown-item" href="{{ route('pages.my_customer') }}">{{ __('site.my_customers') }}</a></li>
-                                        <li><a class="dropdown-item" href="{{ url('/dashboard') }}">{{ __('site.dashboard') }}</a></li>
-                                        @auth
-                                            @if(Auth::user()->hasRole('leader'))
-                                                <li><hr class="dropdown-divider"></li>
-                                                <li><a class="dropdown-item" href="{{ route('pages.my_tearm_orders') }}"><i class="bi bi-check-circle"></i> Duyệt đơn của Team</a></li>
-                                            @endif
-                                            @if(Auth::user()->hasRole('manager'))
-                                                <li><hr class="dropdown-divider"></li>
-                                                <li><a class="dropdown-item" href="{{ route('pages.all_tearm_orders') }}"><i class="bi bi-check-circle"></i> Duyệt Đơn PKD</a></li>
-                                            @endif
-                                        @endauth
-                                        <li><hr class="dropdown-divider"></li>
-                                        <li>
-                                            <a class="dropdown-item" href="{{ route('logout') }}"
-                                                onclick="event.preventDefault();
-                                                                document.getElementById('logout-form').submit();">
-                                                {{ __('site.logout') }}
+                                @php
+                                    $hdrAvatarUrl = Auth::user()->avatar
+                                        ? asset(Auth::user()->avatar)
+                                        : 'https://ui-avatars.com/api/?name=' . urlencode(Auth::user()->name ?? 'U') . '&background=0f766e&color=fff&size=80&bold=true';
+                                @endphp
+                                <div class="dropdown hdr-account-dropdown">
+                                    <button type="button"
+                                        class="hdr-account-btn dropdown-toggle"
+                                        id="hdrAccountBtn"
+                                        data-bs-toggle="dropdown"
+                                        aria-expanded="false">
+                                        <img src="{{ $hdrAvatarUrl }}" alt="avatar" class="hdr-account-avatar">
+                                        <span class="hdr-account-name">{{ Str::limit(Auth::user()->name, 14) }}</span>
+                                        <i class="bi bi-chevron-down hdr-account-chevron"></i>
+                                    </button>
+                                    <div class="dropdown-menu dropdown-menu-end hdr-account-menu" aria-labelledby="hdrAccountBtn">
+                                        <div class="hdr-account-menu__info">
+                                            <img src="{{ $hdrAvatarUrl }}" alt="avatar" class="hdr-account-menu__avatar">
+                                            <div>
+                                                <div class="hdr-account-menu__name">{{ Auth::user()->name }}</div>
+                                                <div class="hdr-account-menu__email">{{ Auth::user()->email }}</div>
+                                            </div>
+                                        </div>
+                                        <div class="dropdown-divider my-0"></div>
+                                        <a class="dropdown-item" href="{{ route('pages.my_dashboard') }}">
+                                            <i class="bi bi-person-circle"></i> {{ __('site.profile') }}
+                                        </a>
+                                        <a class="dropdown-item" href="{{ route('pages.my_orders') }}">
+                                            <i class="bi bi-bag-check"></i> {{ __('site.my_orders') }}
+                                        </a>
+                                        <a class="dropdown-item" href="{{ route('pages.my_customer') }}">
+                                            <i class="bi bi-people"></i> {{ __('site.my_customers') }}
+                                        </a>
+                                        <a class="dropdown-item" href="{{ url('/dashboard') }}">
+                                            <i class="bi bi-speedometer2"></i> {{ __('site.dashboard') }}
+                                        </a>
+                                        @if(Auth::user()->hasRole('leader'))
+                                            <div class="dropdown-divider my-0"></div>
+                                            <a class="dropdown-item" href="{{ route('pages.my_tearm_orders') }}">
+                                                <i class="bi bi-check-circle"></i> Duyệt đơn của Team
                                             </a>
-                                            <form id="logout-form" action="{{ route('logout') }}" method="POST" class="d-none">
-                                                @csrf
-                                            </form>
-                                        </li>
-                                    </ul>
+                                        @endif
+                                        @if(Auth::user()->hasRole('manager'))
+                                            <div class="dropdown-divider my-0"></div>
+                                            <a class="dropdown-item" href="{{ route('pages.all_tearm_orders') }}">
+                                                <i class="bi bi-check-circle"></i> Duyệt Đơn PKD
+                                            </a>
+                                        @endif
+                                        <div class="dropdown-divider my-0"></div>
+                                        <a class="dropdown-item hdr-account-logout"
+                                            href="{{ route('logout') }}"
+                                            onclick="event.preventDefault(); document.getElementById('hdr-logout-form').submit();">
+                                            <i class="bi bi-box-arrow-right"></i> {{ __('site.logout') }}
+                                        </a>
+                                        <form id="hdr-logout-form" action="{{ route('logout') }}" method="POST" class="d-none">
+                                            @csrf
+                                        </form>
+                                    </div>
                                 </div>
                             @else
-                                <a href="{{ route('login') }}" class="btn btn-outline-primary">{{ __('site.login') }}</a>
+                                <a href="{{ route('login') }}" class="hdr-login-btn">
+                                    <i class="bi bi-person-fill"></i>
+                                    <span>{{ __('site.login') }}</span>
+                                </a>
                             @endauth
 
                              

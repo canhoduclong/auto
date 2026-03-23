@@ -30,7 +30,7 @@
                     <img src="{{ $imageUrl }}" alt="{{ $variant->product->name }}" width="60" class="me-3 rounded">
                     <div>
                         <h6 class="my-0">{{ $variant->product->name }}</h6>
-                        <small class="text-muted">SKU: {{ $variant->sku }} | {{ __('orders.labels.unit_price') }}: {{ number_format($variant->latestPriceRule?->price ?? 0) }} | {{ __('orders.labels.stock') }}: {{ $variant->stock }}</small>
+                        <small class="text-muted">SKU: {{ $variant->sku }} | {{ __('orders.labels.unit_price') }}: {{ number_format($variant->latestPriceRule?->price ?? 0) }} | {{ __('orders.labels.stock') }}: {{ $variant->available_stock }}</small>
                     </div>
                 </div>
                 <a
@@ -40,7 +40,7 @@
                     data-variant-name="{{ $variant->product->name }}"
                     data-variant-sku="{{ $variant->sku }}"
                     data-variant-price="{{ $variant->latestPriceRule?->price ?? 0 }}"
-                    data-variant-stock="{{ $variant->stock }}"
+                    data-variant-stock="{{ $variant->available_stock }}"
                     data-variant-image="{{ $imageUrl }}">
                     {{ __('inventory.buttons.add_item') }}
                 </a>

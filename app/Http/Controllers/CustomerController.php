@@ -6,9 +6,13 @@ use App\Models\CustomerType;
 use App\Models\Order;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\AdminActivityService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Schema;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Imports\CustomerImport;
 use App\Exports\CustomerExport;
@@ -16,6 +20,22 @@ use App\Exports\CustomerExport;
 
 class CustomerController extends Controller
 {
+    private static ?array $orderColumnsCache = null;
+
+    private function orderColumns(): array
+    {
+        if (self::$orderColumnsCache === null) {
+            self::$orderColumnsCache = Schema::getColumnListing('orders');
+        }
+
+        return self::$orderColumnsCache;
+    }
+
+    private function hasOrderColumn(string $column): bool
+    {
+        return in_array($column, $this->orderColumns(), true);
+    }
+
     // Export excel
     public function export()
     {
@@ -107,53 +127,388 @@ class CustomerController extends Controller
 
     public function report(Request $request, Customer $customer)
     {
+        return redirect()->route('customers.show', array_merge(
+            ['customer' => $customer],
+            $request->query(),
+            ['tab' => 'reports']
+        ));
+    }
+
+    public function show(Request $request, Customer $customer)
+    {
         $this->authorize('view', $customer);
 
         $validated = $request->validate([
+            'tab' => 'nullable|in:info,debt,orders,payments,reports',
+            'period' => 'nullable|in:today,week,month,custom',
             'from_date' => 'nullable|date',
             'to_date' => 'nullable|date|after_or_equal:from_date',
-            'per_page' => 'nullable|integer|min:5|max:100',
+            'order_status' => 'nullable|string|max:50',
+            'orders_per_page' => 'nullable|integer|min:5|max:100',
+            'debt_per_page' => 'nullable|integer|min:5|max:100',
+            'payments_per_page' => 'nullable|integer|min:5|max:100',
         ]);
 
-        $ordersBaseQuery = Order::query()
-            ->where('customer_id', $customer->id);
+        [$fromDate, $toDate] = $this->resolveDateRange(
+            (string) ($validated['period'] ?? 'month'),
+            $validated['from_date'] ?? null,
+            $validated['to_date'] ?? null
+        );
 
-        if (!empty($validated['from_date'])) {
-            $ordersBaseQuery->whereDate('created_at', '>=', $validated['from_date']);
+        $customer->load(['type', 'assignedTo', 'addresses']);
+
+        $ordersBaseQuery = Order::query()->where('customer_id', $customer->id);
+
+        if (!empty($validated['order_status'])) {
+            $ordersBaseQuery->where('status', $validated['order_status']);
         }
 
-        if (!empty($validated['to_date'])) {
-            $ordersBaseQuery->whereDate('created_at', '<=', $validated['to_date']);
-        }
+        $ordersBaseQuery->whereBetween('created_at', [
+            $fromDate->copy()->startOfDay(),
+            $toDate->copy()->endOfDay(),
+        ]);
 
-        $ordersQuery = (clone $ordersBaseQuery)
+        $ordersPerPage = (int) ($validated['orders_per_page'] ?? 10);
+        $debtPerPage = (int) ($validated['debt_per_page'] ?? 10);
+        $paymentsPerPage = (int) ($validated['payments_per_page'] ?? 10);
+
+        $orders = (clone $ordersBaseQuery)
             ->with(['user', 'transactions'])
-            ->latest();
-
-        $orders = $ordersQuery
-            ->paginate((int) ($validated['per_page'] ?? 15))
+            ->latest()
+            ->paginate($ordersPerPage, ['*'], 'orders_page')
             ->appends($request->query());
 
-        $orderIds = (clone $ordersBaseQuery)->pluck('id');
-        $totalInvoiceAmount = (float) (clone $ordersBaseQuery)->sum('total');
+        $filteredOrderCount = (clone $ordersBaseQuery)->count();
+        $filteredOrderTotal = (float) (clone $ordersBaseQuery)->sum('total');
+        $filteredSubtotalAmount = $this->hasOrderColumn('subtotal_amount')
+            ? (float) (clone $ordersBaseQuery)->sum('subtotal_amount')
+            : $filteredOrderTotal;
+        $filteredItemDiscountTotal = $this->hasOrderColumn('item_discount_total')
+            ? (float) (clone $ordersBaseQuery)->sum('item_discount_total')
+            : 0.0;
+        $filteredExtraDiscountTotal = $this->hasOrderColumn('extra_discount_total')
+            ? (float) (clone $ordersBaseQuery)->sum('extra_discount_total')
+            : (float) (clone $ordersBaseQuery)->sum('order_discount');
+
+        $debtOrders = (clone $ordersBaseQuery)
+            ->with('transactions')
+            ->latest()
+            ->paginate($debtPerPage, ['*'], 'debt_page')
+            ->appends($request->query());
+
+        $paymentsBaseQuery = Transaction::query()
+            ->where('customer_id', $customer->id)
+            ->where('type', 'payment')
+            ->whereBetween('created_at', [
+                $fromDate->copy()->startOfDay(),
+                $toDate->copy()->endOfDay(),
+            ]);
+
+        $payments = (clone $paymentsBaseQuery)
+            ->with('order')
+            ->latest()
+            ->paginate($paymentsPerPage, ['*'], 'payments_page')
+            ->appends($request->query());
+
+        $eventLogs = DB::table('admin_events')
+            ->where('event_type', 'customer_payment')
+            ->where('action', 'create')
+            ->where('subject_type', $customer->getMorphClass())
+            ->where('subject_id', $customer->id)
+            ->orderByDesc('id')
+            ->get();
+
+        $transactionActorIds = [];
+        foreach ($eventLogs as $eventLog) {
+            $metadata = json_decode((string) ($eventLog->metadata ?? '{}'), true);
+            if (!empty($metadata['transaction_id'])) {
+                $transactionActorIds[(int) $metadata['transaction_id']] = (int) ($eventLog->actor_id ?? 0);
+            }
+        }
+
+        $actorNames = [];
+        if (!empty($transactionActorIds)) {
+            $actorNames = User::query()
+                ->whereIn('id', array_values(array_unique($transactionActorIds)))
+                ->pluck('name', 'id')
+                ->toArray();
+        }
+
+        $orderIdsSubQuery = (clone $ordersBaseQuery)->select('id');
+        $totalOrderAmount = (float) (clone $ordersBaseQuery)->sum('total');
+        $totalSubtotalAmount = $this->hasOrderColumn('subtotal_amount')
+            ? (float) (clone $ordersBaseQuery)->sum('subtotal_amount')
+            : $totalOrderAmount;
+        $totalItemDiscountAmount = $this->hasOrderColumn('item_discount_total')
+            ? (float) (clone $ordersBaseQuery)->sum('item_discount_total')
+            : 0.0;
+        $totalExtraDiscountAmount = $this->hasOrderColumn('extra_discount_total')
+            ? (float) (clone $ordersBaseQuery)->sum('extra_discount_total')
+            : (float) (clone $ordersBaseQuery)->sum('order_discount');
         $totalPaidAmount = (float) Transaction::query()
-            ->whereIn('order_id', $orderIds)
+            ->whereIn('order_id', $orderIdsSubQuery)
             ->where('type', 'payment')
             ->sum('amount')
             - (float) Transaction::query()
-                ->whereIn('order_id', $orderIds)
+                ->whereIn('order_id', (clone $ordersBaseQuery)->select('id'))
+                ->where('type', 'refund')
+                ->sum('amount');
+        $totalOutstandingAmount = max($totalOrderAmount - $totalPaidAmount, 0);
+
+        $reportOrders = Order::query()
+            ->where('customer_id', $customer->id)
+            ->whereBetween('created_at', [
+                $fromDate->copy()->startOfDay(),
+                $toDate->copy()->endOfDay(),
+            ])
+            ->with('transactions')
+            ->orderBy('created_at')
+            ->get();
+
+        $reportByMonth = $reportOrders
+            ->groupBy(fn (Order $order) => optional($order->created_at)->format('Y-m'))
+            ->map(function ($monthlyOrders, $period) {
+                $orderTotal = (float) $monthlyOrders->sum('total');
+                $subtotalAmount = (float) $monthlyOrders->sum(function (Order $order) {
+                    return (float) ($order->subtotal_amount ?? $order->total ?? 0);
+                });
+                $itemDiscountTotal = (float) $monthlyOrders->sum(function (Order $order) {
+                    return (float) ($order->item_discount_total ?? 0);
+                });
+                $extraDiscountTotal = (float) $monthlyOrders->sum(function (Order $order) {
+                    return (float) ($order->extra_discount_total ?? $order->order_discount ?? 0);
+                });
+                $paidTotal = (float) $monthlyOrders->sum(function (Order $order) {
+                    return (float) $order->transactions->where('type', 'payment')->sum('amount')
+                        - (float) $order->transactions->where('type', 'refund')->sum('amount');
+                });
+
+                return [
+                    'period' => $period,
+                    'order_count' => (int) $monthlyOrders->count(),
+                    'subtotal_amount' => $subtotalAmount,
+                    'item_discount_total' => $itemDiscountTotal,
+                    'extra_discount_total' => $extraDiscountTotal,
+                    'order_total' => $orderTotal,
+                    'paid_total' => $paidTotal,
+                    'outstanding_total' => max($orderTotal - $paidTotal, 0),
+                ];
+            })
+            ->sortBy('period')
+            ->values();
+
+        $orderStatuses = (clone Order::query())
+            ->select('status')
+            ->distinct()
+            ->orderBy('status')
+            ->pluck('status')
+            ->filter()
+            ->values();
+
+        return view('customers.show', [
+            'customer' => $customer,
+            'orders' => $orders,
+            'debtOrders' => $debtOrders,
+            'payments' => $payments,
+            'filteredOrderCount' => $filteredOrderCount,
+            'filteredOrderTotal' => $filteredOrderTotal,
+            'filteredSubtotalAmount' => $filteredSubtotalAmount,
+            'filteredItemDiscountTotal' => $filteredItemDiscountTotal,
+            'filteredExtraDiscountTotal' => $filteredExtraDiscountTotal,
+            'reportByMonth' => $reportByMonth,
+            'transactionActorIds' => $transactionActorIds,
+            'actorNames' => $actorNames,
+            'totalOrderAmount' => $totalOrderAmount,
+            'totalSubtotalAmount' => $totalSubtotalAmount,
+            'totalItemDiscountAmount' => $totalItemDiscountAmount,
+            'totalExtraDiscountAmount' => $totalExtraDiscountAmount,
+            'totalPaidAmount' => $totalPaidAmount,
+            'totalOutstandingAmount' => $totalOutstandingAmount,
+            'period' => (string) ($validated['period'] ?? 'month'),
+            'fromDate' => $fromDate,
+            'toDate' => $toDate,
+            'activeTab' => (string) ($validated['tab'] ?? 'info'),
+            'orderStatuses' => $orderStatuses,
+        ]);
+    }
+
+    public function storePayment(Request $request, Customer $customer)
+    {
+        $this->authorize('update', $customer);
+
+        $validated = $request->validate([
+            'amount' => 'required|numeric|min:0.01',
+            'method' => 'required|in:cash,bank_transfer',
+            'note' => 'nullable|string|max:255',
+            'receipt_image' => 'nullable|image|max:5120',
+            'period' => 'nullable|in:today,week,month,custom',
+            'from_date' => 'nullable|date',
+            'to_date' => 'nullable|date|after_or_equal:from_date',
+            'tab' => 'nullable|in:info,debt,orders,payments,reports',
+            'order_status' => 'nullable|string|max:50',
+            'orders_per_page' => 'nullable|integer|min:5|max:100',
+            'debt_per_page' => 'nullable|integer|min:5|max:100',
+            'payments_per_page' => 'nullable|integer|min:5|max:100',
+        ]);
+
+        $allOrdersQuery = Order::query()->where('customer_id', $customer->id);
+        $allOrderIdsSubQuery = (clone $allOrdersQuery)->select('id');
+        $totalOrderAmount = (float) (clone $allOrdersQuery)->sum('total');
+        $totalPaidAmount = (float) Transaction::query()
+            ->whereIn('order_id', $allOrderIdsSubQuery)
+            ->where('type', 'payment')
+            ->sum('amount')
+            - (float) Transaction::query()
+                ->whereIn('order_id', (clone $allOrdersQuery)->select('id'))
                 ->where('type', 'refund')
                 ->sum('amount');
 
-        $totalOutstandingAmount = max($totalInvoiceAmount - $totalPaidAmount, 0);
+        $outstandingAmount = max($totalOrderAmount - $totalPaidAmount, 0);
+        $amount = (float) $validated['amount'];
 
-        return view('customers.report', compact(
-            'customer',
-            'orders',
-            'totalInvoiceAmount',
-            'totalPaidAmount',
-            'totalOutstandingAmount'
-        ));
+        if ($amount - $outstandingAmount > 0.0001) {
+            return back()
+                ->withErrors(['amount' => 'Số tiền thanh toán không được vượt quá công nợ hiện tại.'])
+                ->withInput();
+        }
+
+        if ($outstandingAmount <= 0) {
+            return back()
+                ->withErrors(['amount' => 'Khách hàng này không còn công nợ để thanh toán.'])
+                ->withInput();
+        }
+
+        $receiptImagePath = $request->hasFile('receipt_image')
+            ? $request->file('receipt_image')->store('customer-payments/receipts', 'public')
+            : null;
+
+        $unpaidOrders = Order::query()
+            ->where('customer_id', $customer->id)
+            ->with('transactions')
+            ->orderBy('created_at')
+            ->get();
+
+        $createdTransactions = [];
+        $remainingAmount = $amount;
+
+        DB::transaction(function () use (
+            $request,
+            $validated,
+            $customer,
+            $receiptImagePath,
+            $unpaidOrders,
+            &$createdTransactions,
+            &$remainingAmount
+        ) {
+            foreach ($unpaidOrders as $order) {
+                if ($remainingAmount <= 0.0001) {
+                    break;
+                }
+
+                $paid = (float) $order->transactions->where('type', 'payment')->sum('amount')
+                    - (float) $order->transactions->where('type', 'refund')->sum('amount');
+                $outstanding = max((float) $order->total - $paid, 0);
+
+                if ($outstanding <= 0.0001) {
+                    continue;
+                }
+
+                $allocateAmount = min($remainingAmount, $outstanding);
+
+                $transaction = Transaction::create([
+                    'order_id' => $order->id,
+                    'customer_id' => $customer->id,
+                    'amount' => $allocateAmount,
+                    'type' => 'payment',
+                    'method' => $validated['method'],
+                    'note' => $validated['note'] ?? null,
+                    'receipt_image_path' => $receiptImagePath,
+                ]);
+
+                $createdTransactions[] = $transaction;
+
+                $freshPaid = (float) $order->transactions()->where('type', 'payment')->sum('amount')
+                    - (float) $order->transactions()->where('type', 'refund')->sum('amount');
+
+                if ($freshPaid >= (float) $order->total) {
+                    $orderPaymentStatus = 'paid';
+                } elseif ($freshPaid > 0) {
+                    $orderPaymentStatus = 'partial';
+                } else {
+                    $orderPaymentStatus = 'unpaid';
+                }
+
+                $order->update([
+                    'amount_paid' => $freshPaid,
+                    'amount_due' => max((float) $order->total - $freshPaid, 0),
+                    'payment_status' => $orderPaymentStatus,
+                ]);
+
+                AdminActivityService::record(
+                    'customer_payment',
+                    'create',
+                    $customer,
+                    'Tạo thanh toán khách hàng',
+                    'Đã tạo thanh toán cho đơn #' . ($order->code ?: $order->id),
+                    [
+                        'transaction_id' => $transaction->id,
+                        'order_id' => $order->id,
+                        'customer_id' => $customer->id,
+                        'amount' => $allocateAmount,
+                        'method' => $validated['method'],
+                    ],
+                    route('customers.show', ['customer' => $customer, 'tab' => 'payments'])
+                );
+
+                $remainingAmount -= $allocateAmount;
+            }
+        });
+
+        if (empty($createdTransactions)) {
+            return back()
+                ->withErrors(['amount' => 'Không tìm thấy đơn hàng còn nợ để phân bổ thanh toán.'])
+                ->withInput();
+        }
+
+        return redirect()
+            ->route('customers.show', [
+                'customer' => $customer,
+                'tab' => 'payments',
+                'period' => $validated['period'] ?? $request->input('period', 'month'),
+                'from_date' => $validated['from_date'] ?? $request->input('from_date'),
+                'to_date' => $validated['to_date'] ?? $request->input('to_date'),
+                'order_status' => $validated['order_status'] ?? $request->input('order_status'),
+                'orders_per_page' => $validated['orders_per_page'] ?? $request->input('orders_per_page', 10),
+                'debt_per_page' => $validated['debt_per_page'] ?? $request->input('debt_per_page', 10),
+                'payments_per_page' => $validated['payments_per_page'] ?? $request->input('payments_per_page', 10),
+            ])
+            ->with('success', 'Đã ghi nhận thanh toán thành công.');
+    }
+
+    private function resolveDateRange(string $period, ?string $fromDateInput, ?string $toDateInput): array
+    {
+        $today = Carbon::today();
+
+        if ($period === 'today') {
+            return [$today->copy(), $today->copy()];
+        }
+
+        if ($period === 'week') {
+            return [$today->copy()->startOfWeek(), $today->copy()->endOfWeek()];
+        }
+
+        if ($period === 'custom') {
+            $fromDate = $fromDateInput ? Carbon::parse($fromDateInput) : $today->copy()->startOfMonth();
+            $toDate = $toDateInput ? Carbon::parse($toDateInput) : $today->copy()->endOfMonth();
+
+            if ($fromDate->greaterThan($toDate)) {
+                [$fromDate, $toDate] = [$toDate, $fromDate];
+            }
+
+            return [$fromDate, $toDate];
+        }
+
+        return [$today->copy()->startOfMonth(), $today->copy()->endOfMonth()];
     }
 
     // Form create

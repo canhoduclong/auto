@@ -15,23 +15,152 @@ use App\Models\Team;
 use App\Services\OrderService;
 use App\Services\ApprovalService;
 use App\Models\Order;
+use App\Models\Transaction;
+use App\Services\AdminActivityService;
+use Carbon\Carbon;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Enums\DeliveryStatus;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentStatus;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 
 class PageController extends Controller
 {
     protected $settings;
+    private static ?array $orderColumnsCache = null;
 
     public function __construct()
     {
         $this->settings = Cache::remember('settings', 60, function () {
             return Setting::all()->keyBy('key');
         });
+    }
+
+    private function orderColumns(): array
+    {
+        if (self::$orderColumnsCache === null) {
+            self::$orderColumnsCache = Schema::getColumnListing('orders');
+        }
+
+        return self::$orderColumnsCache;
+    }
+
+    private function hasOrderColumn(string $column): bool
+    {
+        return in_array($column, $this->orderColumns(), true);
+    }
+
+    private function discountConfigFromRequest(array $validated): array
+    {
+        return [
+            'freeship_20_amount' => (float) ($validated['freeship_20_amount'] ?? 0),
+            'tier_amounts' => [
+                30 => (float) ($validated['discount_30_amount'] ?? 0),
+                40 => (float) ($validated['discount_40_amount'] ?? 0),
+                50 => (float) ($validated['discount_50_amount'] ?? 0),
+                70 => (float) ($validated['discount_70_amount'] ?? 0),
+                80 => (float) ($validated['discount_80_amount'] ?? 0),
+                100 => (float) ($validated['discount_100_amount'] ?? 0),
+            ],
+            'use_special_customer_discount' => (bool) ($validated['use_special_customer_discount'] ?? false),
+            'special_customer_discount_amount' => (float) ($validated['special_customer_discount_amount'] ?? 0),
+        ];
+    }
+
+    private function isSpecialCustomer(?Customer $customer): bool
+    {
+        if (!$customer) {
+            return false;
+        }
+
+        $typeName = mb_strtolower((string) optional($customer->type)->name);
+        $note = mb_strtolower((string) $customer->note);
+
+        return str_contains($typeName, 'dac biet')
+            || str_contains($typeName, 'đặc biệt')
+            || str_contains($typeName, 'special')
+            || str_contains($note, 'dac biet')
+            || str_contains($note, 'đặc biệt')
+            || str_contains($note, 'special');
+    }
+
+    private function applyAutoApproveDiscount(Order $order, array $config): array
+    {
+        $totalItemQty = (int) $order->items->sum('quantity');
+
+        $freeshipDiscount = $totalItemQty >= 20 ? max(0, (float) ($config['freeship_20_amount'] ?? 0)) : 0;
+
+        $tierDiscount = 0;
+        $tierLabel = null;
+        foreach ([100, 80, 70, 50, 40, 30] as $tier) {
+            $amount = max(0, (float) (($config['tier_amounts'][$tier] ?? 0)));
+            if ($totalItemQty >= $tier && $amount > 0) {
+                $tierDiscount = $amount;
+                $tierLabel = $tier;
+                break;
+            }
+        }
+
+        $specialDiscount = 0;
+        if (($config['use_special_customer_discount'] ?? false) && $this->isSpecialCustomer($order->customer)) {
+            $specialDiscount = max(0, (float) ($config['special_customer_discount_amount'] ?? 0));
+        }
+
+        $totalDiscount = $freeshipDiscount + $tierDiscount + $specialDiscount;
+
+        if ($totalDiscount > 0) {
+            $currentTotal = (float) $order->total;
+            $newTotal = max($currentTotal - $totalDiscount, 0);
+
+            $updates = [];
+            if ($this->hasOrderColumn('total')) {
+                $updates['total'] = $newTotal;
+            }
+
+            if ($this->hasOrderColumn('amount_due')) {
+                $paid = $this->hasOrderColumn('amount_paid') ? (float) ($order->amount_paid ?? 0) : 0;
+                $updates['amount_due'] = max($newTotal - $paid, 0);
+            }
+
+            if (!empty($updates)) {
+                $order->update($updates);
+                $order->refresh();
+            }
+        }
+
+        return [
+            'item_qty' => $totalItemQty,
+            'freeship_discount' => $freeshipDiscount,
+            'tier_discount' => $tierDiscount,
+            'tier_label' => $tierLabel,
+            'special_discount' => $specialDiscount,
+            'total_discount' => $totalDiscount,
+        ];
+    }
+
+    private function discountNoteFromResult(array $discount): string
+    {
+        if (($discount['total_discount'] ?? 0) <= 0) {
+            return 'Khong ap dung discount.';
+        }
+
+        $parts = [];
+        if (($discount['freeship_discount'] ?? 0) > 0) {
+            $parts[] = 'Freeship(>=20): ' . number_format((float) $discount['freeship_discount'], 0, ',', '.') . 'd';
+        }
+        if (($discount['tier_discount'] ?? 0) > 0) {
+            $tier = $discount['tier_label'] ?? '?';
+            $parts[] = 'Discount mốc ' . $tier . ': ' . number_format((float) $discount['tier_discount'], 0, ',', '.') . 'd';
+        }
+        if (($discount['special_discount'] ?? 0) > 0) {
+            $parts[] = 'Khach dac biet: ' . number_format((float) $discount['special_discount'], 0, ',', '.') . 'd';
+        }
+        $parts[] = 'Tong giam: ' . number_format((float) $discount['total_discount'], 0, ',', '.') . 'd';
+
+        return implode(' | ', $parts);
     }
 
     public function about()
@@ -127,10 +256,14 @@ class PageController extends Controller
 
     public function productsByCategory(Request $request, Category $category = null)
     {
-        $categories = Category::all();
+        $categories = Category::query()
+            ->withCount(['products' => fn($q) => $q->where('status', true)])
+            ->orderBy('name')
+            ->get();
 
         $query = ProductVariant::query()
-            ->where('stock', '>', 0)
+            ->withAvailableStock()
+            ->inStock()
             ->where('status', true)
             ->whereHas('product', fn($q) => $q->where('status', true));
 
@@ -164,7 +297,10 @@ class PageController extends Controller
 
     public function productList(Request $request, Category $category = null)
     {
-        $categories = Category::all();
+        $categories = Category::query()
+            ->withCount(['products' => fn($q) => $q->where('status', true)])
+            ->orderBy('name')
+            ->get();
 
         $query = Product::where('status', true);
 
@@ -189,8 +325,13 @@ class PageController extends Controller
             'gallery.media', 
             'variants.values.attribute', 
             'variants.media', 
-            'variants.latestPriceRule'
+            'variants.latestPriceRule',
+            'variants.inventories'
         ]);
+
+        $product->variants->each(function ($variant) {
+            $variant->setAttribute('available_stock', $variant->available_stock);
+        });
 
         $attributes = $product->variants
             ->flatMap(fn($variant) => $variant->values)
@@ -208,10 +349,42 @@ class PageController extends Controller
     {
         $user = auth()->user();
 
-        $customer = Customer::updateOrCreate(
-            ['email' => $user->email],
-            ['user_id' => $user->id, 'name' => $user->name]
-        );
+        if (!$user) {
+            return redirect()->route('login');
+        }
+
+        // customers.user_id is unique, so always resolve profile by user_id first.
+        $customer = Customer::where('user_id', $user->id)->first();
+
+        if (!$customer) {
+            $customerByEmail = null;
+            if (!empty($user->email)) {
+                $customerByEmail = Customer::where('email', $user->email)->first();
+            }
+
+            if ($customerByEmail && (empty($customerByEmail->user_id) || (int) $customerByEmail->user_id === (int) $user->id)) {
+                $customerByEmail->user_id = $user->id;
+                $customerByEmail->name = $customerByEmail->name ?: $user->name;
+                $customerByEmail->assigned_to = $customerByEmail->assigned_to ?: $user->id;
+                $customerByEmail->save();
+                $customer = $customerByEmail;
+            } else {
+                $email = null;
+                if (!empty($user->email)) {
+                    $emailUsed = Customer::where('email', $user->email)
+                        ->where('user_id', '!=', $user->id)
+                        ->exists();
+                    $email = $emailUsed ? null : $user->email;
+                }
+
+                $customer = Customer::create([
+                    'user_id' => $user->id,
+                    'assigned_to' => $user->id,
+                    'name' => $user->name,
+                    'email' => $email,
+                ]);
+            }
+        }
 
         return view('site.my_dashboard', [
             'settings' => $this->settings,
@@ -223,10 +396,16 @@ class PageController extends Controller
     public function updateProfile(Request $request)
     {
         $user = auth()->user();
+
+        if (!$user) {
+            return redirect()->route('login');
+        }
+
         $customer = $user->customer;
 
         $request->validate([
             'name' => 'required|string|max:255', 
+            'email' => ['nullable', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
             'phone' => 'nullable|string|max:20',
             'dob' => 'nullable|date',
             'gender' => 'nullable|in:male,female,other',
@@ -234,7 +413,15 @@ class PageController extends Controller
             'avatar' => 'nullable|image|max:2048',
         ]);
 
-        $customer?->update($request->only(['name', 'email', 'phone', 'dob', 'gender', 'note']));
+        $payload = $request->only(['name', 'email', 'phone', 'dob', 'gender', 'note']);
+
+        $customer?->update($payload);
+
+        $user->name = $request->input('name');
+        if ($request->filled('email')) {
+            $user->email = $request->input('email');
+        }
+        $user->save();
 
         if ($request->hasFile('avatar')) {
             $avatarName = time().'.'.$request->avatar->getClientOriginalExtension();
@@ -247,12 +434,16 @@ class PageController extends Controller
 
     public function variantDetail(ProductVariant $variant)
     {
-        $variant->load('avatar.media', 'product.category');
+        $variant->load('avatar.media', 'product.category', 'inventories');
+        $variant->setAttribute('available_stock', $variant->available_stock);
 
         $product = $variant->product;
         $product->load('avatar.media', 'gallery.media');
 
-        $other_variants = ProductVariant::where('id', '!=', $variant->id)
+        $other_variants = ProductVariant::query()
+            ->withAvailableStock()
+            ->inStock()
+            ->where('id', '!=', $variant->id)
             ->whereHas('product', fn($q) => $q->where('category_id', $product->category_id))
             ->with('product', 'avatar.media', 'latestPriceRule')
             ->inRandomOrder()
@@ -442,7 +633,18 @@ class PageController extends Controller
             'condition_order_total' => 'nullable|in:1',
             'min_order_total' => 'nullable|numeric|min:0',
             'max_order_total' => 'nullable|numeric|min:0',
+            'freeship_20_amount' => 'nullable|numeric|min:0',
+            'discount_30_amount' => 'nullable|numeric|min:0',
+            'discount_40_amount' => 'nullable|numeric|min:0',
+            'discount_50_amount' => 'nullable|numeric|min:0',
+            'discount_70_amount' => 'nullable|numeric|min:0',
+            'discount_80_amount' => 'nullable|numeric|min:0',
+            'discount_100_amount' => 'nullable|numeric|min:0',
+            'use_special_customer_discount' => 'nullable|in:1',
+            'special_customer_discount_amount' => 'nullable|numeric|min:0',
         ]);
+
+        $discountConfig = $this->discountConfigFromRequest($validated);
 
         $useItemQty = $request->boolean('condition_item_qty');
         $useOrderTotal = $request->boolean('condition_order_total');
@@ -473,7 +675,7 @@ class PageController extends Controller
             ->map(fn ($role) => strtolower((string) $role))
             ->values();
 
-        $query = Order::with(['items', 'approvals.step', 'user.roles'])
+        $query = Order::with(['items', 'approvals.step', 'user.roles', 'customer.type'])
             ->when(!$user->hasRole('admin'), function ($q) use ($user) {
                 $q->whereHas('user', function ($sub) use ($user) {
                     $sub->where('team_id', $user->team_id)
@@ -539,7 +741,11 @@ class PageController extends Controller
         foreach ($eligibleOrders as $order) {
             try {
                 if ($approvalService->canApproveCurrentStep($order, $user)) {
-                    $approvalService->approve($order, $user, 'Duyệt tự động theo điều kiện leader.');
+                    $discountResult = $this->applyAutoApproveDiscount($order, $discountConfig);
+                    $note = 'Duyet tu dong theo dieu kien leader. '
+                        . $this->discountNoteFromResult($discountResult);
+
+                    $approvalService->approve($order, $user, $note);
                     $approvedCount++;
                 } else {
                     $failedCount++;
@@ -706,7 +912,18 @@ class PageController extends Controller
             'condition_sale_price' => 'nullable|in:1',
             'min_sale_price' => 'nullable|numeric|min:0',
             'max_sale_price' => 'nullable|numeric|min:0',
+            'freeship_20_amount' => 'nullable|numeric|min:0',
+            'discount_30_amount' => 'nullable|numeric|min:0',
+            'discount_40_amount' => 'nullable|numeric|min:0',
+            'discount_50_amount' => 'nullable|numeric|min:0',
+            'discount_70_amount' => 'nullable|numeric|min:0',
+            'discount_80_amount' => 'nullable|numeric|min:0',
+            'discount_100_amount' => 'nullable|numeric|min:0',
+            'use_special_customer_discount' => 'nullable|in:1',
+            'special_customer_discount_amount' => 'nullable|numeric|min:0',
         ]);
+
+        $discountConfig = $this->discountConfigFromRequest($validated);
 
         $useItemQty = $request->boolean('condition_item_qty');
         $useSalePrice = $request->boolean('condition_sale_price');
@@ -739,7 +956,7 @@ class PageController extends Controller
 
         $allowedCreatorRoles = ['sale', 'leader', 'leader_sale', 'sale_manager'];
 
-        $query = Order::with(['items', 'approvals.step', 'user.roles'])
+        $query = Order::with(['items', 'approvals.step', 'user.roles', 'customer.type'])
             ->whereHas('user.roles', function ($q) use ($allowedCreatorRoles) {
                 $q->whereIn(DB::raw('LOWER(name)'), $allowedCreatorRoles);
             })
@@ -809,7 +1026,11 @@ class PageController extends Controller
         foreach ($eligibleOrders as $order) {
             try {
                 if ($approvalService->canApproveCurrentStep($order, $user)) {
-                    $approvalService->approve($order, $user, 'Manager duyệt tự động theo điều kiện PKD.');
+                    $discountResult = $this->applyAutoApproveDiscount($order, $discountConfig);
+                    $note = 'Manager duyet tu dong theo dieu kien PKD. '
+                        . $this->discountNoteFromResult($discountResult);
+
+                    $approvalService->approve($order, $user, $note);
                     $approvedCount++;
                 } else {
                     $failedCount++;
@@ -831,6 +1052,77 @@ class PageController extends Controller
         }
 
         return back()->with('success', $message);
+    }
+
+    public function teamOrderDetail(Order $order)
+    {
+        if (!auth()->check()) {
+            return redirect()->route('login')->with('error', 'Bạn cần đăng nhập để xem chi tiết đơn hàng.');
+        }
+
+        $user = auth()->user();
+
+        $order->load([
+            'customer',
+            'user.roles',
+            'user.team',
+            'items.variant.product',
+            'approvals.step',
+        ]);
+
+        $isAdmin = $user->hasRole('admin');
+        $isManager = $user->hasRole('manager') || $user->hasRole('manager_sale') || $user->hasRole('director');
+        $isLeader = $user->hasRole('leader') || $user->hasRole('leader_sale') || $user->hasRole('sale_manager');
+        $isSale = $user->hasRole('sale');
+
+        if (!$isAdmin && !$isManager && !$isLeader && !$isSale) {
+            abort(403, 'Bạn không có quyền truy cập trang chi tiết đơn hàng này.');
+        }
+
+        $creatorRoles = $order->user?->roles
+            ?->pluck('name')
+            ->map(fn ($role) => strtolower((string) $role))
+            ->values() ?? collect();
+
+        $isAllowed = false;
+
+        if ($isAdmin) {
+            $isAllowed = true;
+        } elseif ($isManager) {
+            $allowedCreatorRoles = ['sale', 'leader', 'leader_sale', 'sale_manager'];
+            $isAllowed = $creatorRoles->intersect($allowedCreatorRoles)->isNotEmpty();
+        } elseif ($isLeader) {
+            $sameTeam = (int) ($order->user?->team_id ?? 0) === (int) ($user->team_id ?? -1);
+            $isAllowed = $sameTeam && $creatorRoles->contains('sale');
+        } elseif ($isSale) {
+            $isAllowed = (int) $order->user_id === (int) $user->id;
+        }
+
+        if (!$isAllowed) {
+            abort(403, 'Bạn không có quyền xem đơn hàng này.');
+        }
+
+        $roleNames = $user->roles->pluck('name')
+            ->map(fn ($role) => strtolower((string) $role))
+            ->values();
+
+        $currentStep = $order->approvals
+            ->where('status', 'pending')
+            ->sortBy(fn ($approval) => $approval->step->step_order ?? PHP_INT_MAX)
+            ->first();
+
+        $canApprove = false;
+        if ($currentStep?->step) {
+            $requiredRole = strtolower((string) $currentStep->step->role_slug);
+            $canApprove = $roleNames->contains($requiredRole);
+        }
+
+        return view('site.orders.team_detail', [
+            'settings' => $this->settings,
+            'order' => $order,
+            'currentStep' => $currentStep,
+            'canApprove' => $canApprove,
+        ]);
     }
 
     public function myCustomer(Request $request)
@@ -923,14 +1215,363 @@ class PageController extends Controller
         return view('site.my_customer.import', ['settings' => $this->settings]);
     }
 
-    public function myCustomerShow(Customer $customer)
+    public function myCustomerShow(Customer $customer, Request $request)
     {
         $this->ensureManagedCustomer($customer);
 
+        $validated = $request->validate([
+            'tab' => 'nullable|in:info,debt,orders,payments,reports',
+            'period' => 'nullable|in:today,week,month,custom',
+            'from_date' => 'nullable|date',
+            'to_date' => 'nullable|date|after_or_equal:from_date',
+            'order_status' => 'nullable|string|max:50',
+            'orders_per_page' => 'nullable|integer|min:5|max:100',
+            'debt_per_page' => 'nullable|integer|min:5|max:100',
+            'payments_per_page' => 'nullable|integer|min:5|max:100',
+        ]);
+
+        [$fromDate, $toDate] = $this->resolveMyCustomerDateRange(
+            (string) ($validated['period'] ?? 'month'),
+            $validated['from_date'] ?? null,
+            $validated['to_date'] ?? null
+        );
+
+        $customer->load(['type', 'assignedTo', 'addresses']);
+
+        $ordersBaseQuery = $customer->orders()->getQuery();
+
+        if (!empty($validated['order_status'])) {
+            $ordersBaseQuery->where('status', $validated['order_status']);
+        }
+
+        $ordersBaseQuery->whereBetween('created_at', [
+            $fromDate->copy()->startOfDay(),
+            $toDate->copy()->endOfDay(),
+        ]);
+
+        $ordersPerPage = (int) ($validated['orders_per_page'] ?? 10);
+        $debtPerPage = (int) ($validated['debt_per_page'] ?? 10);
+        $paymentsPerPage = (int) ($validated['payments_per_page'] ?? 10);
+
+        $orders = (clone $ordersBaseQuery)
+            ->with(['user', 'transactions'])
+            ->latest()
+            ->paginate($ordersPerPage, ['*'], 'orders_page')
+            ->appends($request->query());
+
+        $recentOrders = (clone $ordersBaseQuery)
+            ->with(['transactions'])
+            ->latest()
+            ->limit(5)
+            ->get();
+
+        $debtOrders = (clone $ordersBaseQuery)
+            ->with('transactions')
+            ->latest()
+            ->paginate($debtPerPage, ['*'], 'debt_page')
+            ->appends($request->query());
+
+        $paymentsBaseQuery = Transaction::query()
+            ->where('customer_id', $customer->id)
+            ->where('type', 'payment')
+            ->whereBetween('created_at', [
+                $fromDate->copy()->startOfDay(),
+                $toDate->copy()->endOfDay(),
+            ]);
+
+        $payments = (clone $paymentsBaseQuery)
+            ->with('order')
+            ->latest()
+            ->paginate($paymentsPerPage, ['*'], 'payments_page')
+            ->appends($request->query());
+
+        $recentPayments = (clone $paymentsBaseQuery)
+            ->with('order')
+            ->latest()
+            ->limit(5)
+            ->get();
+
+        $eventLogs = DB::table('admin_events')
+            ->where('event_type', 'customer_payment')
+            ->where('action', 'create')
+            ->where('subject_type', $customer->getMorphClass())
+            ->where('subject_id', $customer->id)
+            ->orderByDesc('id')
+            ->get();
+
+        $transactionActorIds = [];
+        foreach ($eventLogs as $eventLog) {
+            $metadata = json_decode((string) ($eventLog->metadata ?? '{}'), true);
+            if (!empty($metadata['transaction_id'])) {
+                $transactionActorIds[(int) $metadata['transaction_id']] = (int) ($eventLog->actor_id ?? 0);
+            }
+        }
+
+        $actorNames = [];
+        if (!empty($transactionActorIds)) {
+            $actorNames = \App\Models\User::query()
+                ->whereIn('id', array_values(array_unique($transactionActorIds)))
+                ->pluck('name', 'id')
+                ->toArray();
+        }
+
+        $filteredOrderCount = (clone $ordersBaseQuery)->count();
+        $filteredOrderTotal = (float) (clone $ordersBaseQuery)->sum('total');
+        $filteredSubtotalAmount = $this->hasOrderColumn('subtotal_amount')
+            ? (float) (clone $ordersBaseQuery)->sum('subtotal_amount')
+            : $filteredOrderTotal;
+        $filteredItemDiscountTotal = $this->hasOrderColumn('item_discount_total')
+            ? (float) (clone $ordersBaseQuery)->sum('item_discount_total')
+            : 0.0;
+        $filteredExtraDiscountTotal = $this->hasOrderColumn('extra_discount_total')
+            ? (float) (clone $ordersBaseQuery)->sum('extra_discount_total')
+            : ($this->hasOrderColumn('order_discount') ? (float) (clone $ordersBaseQuery)->sum('order_discount') : 0.0);
+        $orderIdsSubQuery = (clone $ordersBaseQuery)->select('id');
+        $filteredPaidTotal = (float) Transaction::query()
+            ->whereIn('order_id', $orderIdsSubQuery)
+            ->where('type', 'payment')
+            ->sum('amount')
+            - (float) Transaction::query()
+                ->whereIn('order_id', (clone $ordersBaseQuery)->select('id'))
+                ->where('type', 'refund')
+                ->sum('amount');
+
+        $allOrdersQuery = $customer->orders()->getQuery();
+        $allOrderIdsSubQuery = (clone $allOrdersQuery)->select('id');
+        $totalOrderAmount = (float) (clone $allOrdersQuery)->sum('total');
+        $totalSubtotalAmount = $this->hasOrderColumn('subtotal_amount')
+            ? (float) (clone $allOrdersQuery)->sum('subtotal_amount')
+            : $totalOrderAmount;
+        $totalItemDiscountAmount = $this->hasOrderColumn('item_discount_total')
+            ? (float) (clone $allOrdersQuery)->sum('item_discount_total')
+            : 0.0;
+        $totalExtraDiscountAmount = $this->hasOrderColumn('extra_discount_total')
+            ? (float) (clone $allOrdersQuery)->sum('extra_discount_total')
+            : ($this->hasOrderColumn('order_discount') ? (float) (clone $allOrdersQuery)->sum('order_discount') : 0.0);
+        $totalPaidAmount = (float) Transaction::query()
+            ->whereIn('order_id', $allOrderIdsSubQuery)
+            ->where('type', 'payment')
+            ->sum('amount')
+            - (float) Transaction::query()
+                ->whereIn('order_id', (clone $allOrdersQuery)->select('id'))
+                ->where('type', 'refund')
+                ->sum('amount');
+        $totalDebtAmount = max($totalOrderAmount - $totalPaidAmount, 0);
+
+        $reportOrders = Order::query()
+            ->where('customer_id', $customer->id)
+            ->whereBetween('created_at', [
+                $fromDate->copy()->startOfDay(),
+                $toDate->copy()->endOfDay(),
+            ])
+            ->with('transactions')
+            ->orderBy('created_at')
+            ->get();
+
+        $reportByMonth = $reportOrders
+            ->groupBy(fn (Order $order) => optional($order->created_at)->format('Y-m'))
+            ->map(function ($monthlyOrders, $period) {
+                $orderTotal = (float) $monthlyOrders->sum('total');
+                $subtotalAmount = (float) $monthlyOrders->sum(function (Order $order) {
+                    return (float) ($order->subtotal_amount ?? $order->total ?? 0);
+                });
+                $itemDiscountTotal = (float) $monthlyOrders->sum(function (Order $order) {
+                    return (float) ($order->item_discount_total ?? 0);
+                });
+                $extraDiscountTotal = (float) $monthlyOrders->sum(function (Order $order) {
+                    return (float) ($order->extra_discount_total ?? $order->order_discount ?? 0);
+                });
+                $paidTotal = (float) $monthlyOrders->sum(function (Order $order) {
+                    return (float) $order->transactions->where('type', 'payment')->sum('amount')
+                        - (float) $order->transactions->where('type', 'refund')->sum('amount');
+                });
+
+                return [
+                    'period' => $period,
+                    'order_count' => (int) $monthlyOrders->count(),
+                    'subtotal_amount' => $subtotalAmount,
+                    'item_discount_total' => $itemDiscountTotal,
+                    'extra_discount_total' => $extraDiscountTotal,
+                    'order_total' => $orderTotal,
+                    'paid_total' => $paidTotal,
+                    'outstanding_total' => max($orderTotal - $paidTotal, 0),
+                ];
+            })
+            ->sortBy('period')
+            ->values();
+
+        $orderStatuses = Order::query()
+            ->select('status')
+            ->whereNotNull('status')
+            ->distinct()
+            ->orderBy('status')
+            ->pluck('status')
+            ->values();
+
         return view('site.my_customer.show', [
             'customer' => $customer,
+            'orders' => $orders,
+            'recentOrders' => $recentOrders,
+            'debtOrders' => $debtOrders,
+            'payments' => $payments,
+            'recentPayments' => $recentPayments,
+            'reportByMonth' => $reportByMonth,
+            'transactionActorIds' => $transactionActorIds,
+            'actorNames' => $actorNames,
+            'totalOrderAmount' => $totalOrderAmount,
+            'totalSubtotalAmount' => $totalSubtotalAmount,
+            'totalItemDiscountAmount' => $totalItemDiscountAmount,
+            'totalExtraDiscountAmount' => $totalExtraDiscountAmount,
+            'totalPaidAmount' => $totalPaidAmount,
+            'totalDebtAmount' => $totalDebtAmount,
+            'filteredOrderCount' => $filteredOrderCount,
+            'filteredOrderTotal' => $filteredOrderTotal,
+            'filteredSubtotalAmount' => $filteredSubtotalAmount,
+            'filteredItemDiscountTotal' => $filteredItemDiscountTotal,
+            'filteredExtraDiscountTotal' => $filteredExtraDiscountTotal,
+            'filteredPaidTotal' => $filteredPaidTotal,
+            'period' => (string) ($validated['period'] ?? 'month'),
+            'fromDate' => $fromDate,
+            'toDate' => $toDate,
+            'activeTab' => (string) ($validated['tab'] ?? 'info'),
+            'orderStatuses' => $orderStatuses,
             'settings' => $this->settings
         ]);
+    }
+
+    public function myCustomerStorePayment(Customer $customer, Request $request)
+    {
+        $this->ensureManagedCustomer($customer);
+
+        $validated = $request->validate([
+            'amount' => 'required|numeric|min:0.01',
+            'method' => 'required|in:cash,bank_transfer',
+            'note' => 'nullable|string|max:255',
+            'receipt_image' => 'nullable|image|max:5120',
+            'period' => 'nullable|in:today,week,month,custom',
+            'from_date' => 'nullable|date',
+            'to_date' => 'nullable|date|after_or_equal:from_date',
+            'order_status' => 'nullable|string|max:50',
+            'orders_per_page' => 'nullable|integer|min:5|max:100',
+            'debt_per_page' => 'nullable|integer|min:5|max:100',
+            'payments_per_page' => 'nullable|integer|min:5|max:100',
+        ]);
+
+        $allOrdersQuery = Order::query()->where('customer_id', $customer->id);
+        $allOrderIdsSubQuery = (clone $allOrdersQuery)->select('id');
+        $totalOrderAmount = (float) (clone $allOrdersQuery)->sum('total');
+        $totalPaidAmount = (float) Transaction::query()
+            ->whereIn('order_id', $allOrderIdsSubQuery)
+            ->where('type', 'payment')
+            ->sum('amount')
+            - (float) Transaction::query()
+                ->whereIn('order_id', (clone $allOrdersQuery)->select('id'))
+                ->where('type', 'refund')
+                ->sum('amount');
+
+        $outstandingAmount = max($totalOrderAmount - $totalPaidAmount, 0);
+        $amount = (float) $validated['amount'];
+
+        if ($outstandingAmount <= 0) {
+            return back()->withErrors(['amount' => 'Khach hang nay khong con cong no de thanh toan.'])->withInput();
+        }
+
+        if ($amount - $outstandingAmount > 0.0001) {
+            return back()->withErrors(['amount' => 'So tien thanh toan khong duoc vuot qua cong no hien tai.'])->withInput();
+        }
+
+        $receiptImagePath = $request->hasFile('receipt_image')
+            ? $request->file('receipt_image')->store('customer-payments/receipts', 'public')
+            : null;
+
+        $unpaidOrders = Order::query()
+            ->where('customer_id', $customer->id)
+            ->with('transactions')
+            ->orderBy('created_at')
+            ->get();
+
+        $remainingAmount = $amount;
+        $createdTransactions = [];
+
+        DB::transaction(function () use ($customer, $validated, $receiptImagePath, $unpaidOrders, &$remainingAmount, &$createdTransactions) {
+            foreach ($unpaidOrders as $order) {
+                if ($remainingAmount <= 0.0001) {
+                    break;
+                }
+
+                $paid = (float) $order->transactions->where('type', 'payment')->sum('amount')
+                    - (float) $order->transactions->where('type', 'refund')->sum('amount');
+                $outstanding = max((float) $order->total - $paid, 0);
+
+                if ($outstanding <= 0.0001) {
+                    continue;
+                }
+
+                $allocateAmount = min($remainingAmount, $outstanding);
+
+                $transaction = Transaction::create([
+                    'order_id' => $order->id,
+                    'customer_id' => $customer->id,
+                    'amount' => $allocateAmount,
+                    'type' => 'payment',
+                    'method' => $validated['method'],
+                    'note' => $validated['note'] ?? null,
+                    'receipt_image_path' => $receiptImagePath,
+                ]);
+
+                $createdTransactions[] = $transaction;
+
+                $freshPaid = (float) $order->transactions()->where('type', 'payment')->sum('amount')
+                    - (float) $order->transactions()->where('type', 'refund')->sum('amount');
+
+                $paymentStatus = 'unpaid';
+                if ($freshPaid >= (float) $order->total) {
+                    $paymentStatus = 'paid';
+                } elseif ($freshPaid > 0) {
+                    $paymentStatus = 'partial';
+                }
+
+                $order->update([
+                    'amount_paid' => $freshPaid,
+                    'amount_due' => max((float) $order->total - $freshPaid, 0),
+                    'payment_status' => $paymentStatus,
+                ]);
+
+                AdminActivityService::record(
+                    'customer_payment',
+                    'create',
+                    $customer,
+                    'Tao thanh toan khach hang',
+                    'Da ghi nhan thanh toan cho don #' . ($order->code ?: $order->id),
+                    [
+                        'transaction_id' => $transaction->id,
+                        'order_id' => $order->id,
+                        'customer_id' => $customer->id,
+                        'amount' => $allocateAmount,
+                        'method' => $validated['method'],
+                    ],
+                    route('my_customer.show', ['customer' => $customer, 'tab' => 'payments'])
+                );
+
+                $remainingAmount -= $allocateAmount;
+            }
+        });
+
+        if (empty($createdTransactions)) {
+            return back()->withErrors(['amount' => 'Khong tim thay don hang con no de phan bo thanh toan.'])->withInput();
+        }
+
+        return redirect()->route('my_customer.show', [
+            'customer' => $customer,
+            'tab' => 'payments',
+            'period' => $validated['period'] ?? $request->input('period', 'month'),
+            'from_date' => $validated['from_date'] ?? $request->input('from_date'),
+            'to_date' => $validated['to_date'] ?? $request->input('to_date'),
+            'order_status' => $validated['order_status'] ?? $request->input('order_status'),
+            'orders_per_page' => $validated['orders_per_page'] ?? $request->input('orders_per_page', 10),
+            'debt_per_page' => $validated['debt_per_page'] ?? $request->input('debt_per_page', 10),
+            'payments_per_page' => $validated['payments_per_page'] ?? $request->input('payments_per_page', 10),
+        ])->with('success', 'Da ghi nhan thanh toan thanh cong.');
     }
 
     public function myCustomerOrderCreate(Customer $customer)
@@ -955,12 +1596,39 @@ class PageController extends Controller
 
     public function myOrderDetail(Order $order)
     {
+        $settings = $this->settings;
         if ($order->user_id !== auth()->id()) {
             abort(403);
         }
 
         $order->load('items.variant.product', 'customer');
 
-        return view('site.orders.show', compact('order'));
+        return view('site.orders.show', compact('order', 'settings'));
+    }
+
+    private function resolveMyCustomerDateRange(string $period, ?string $fromDateInput, ?string $toDateInput): array
+    {
+        $today = Carbon::today();
+
+        if ($period === 'today') {
+            return [$today->copy(), $today->copy()];
+        }
+
+        if ($period === 'week') {
+            return [$today->copy()->startOfWeek(), $today->copy()->endOfWeek()];
+        }
+
+        if ($period === 'custom') {
+            $fromDate = $fromDateInput ? Carbon::parse($fromDateInput) : $today->copy()->startOfMonth();
+            $toDate = $toDateInput ? Carbon::parse($toDateInput) : $today->copy()->endOfMonth();
+
+            if ($fromDate->greaterThan($toDate)) {
+                [$fromDate, $toDate] = [$toDate, $fromDate];
+            }
+
+            return [$fromDate, $toDate];
+        }
+
+        return [$today->copy()->startOfMonth(), $today->copy()->endOfMonth()];
     }
 }

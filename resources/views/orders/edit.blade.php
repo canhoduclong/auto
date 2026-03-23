@@ -45,6 +45,8 @@
     </div>
     <button type="submit" class="btn btn-primary">{{ __('orders.buttons.update') }}</button>
     <a href="{{ route('orders.index') }}" class="btn btn-secondary">{{ __('orders.buttons.cancel') }}</a>
+</form>
+</div>
 @push('scripts')
 <script>
 let orderId = {{ $order->id }};
@@ -73,6 +75,4 @@ $(function() {
 });
 </script>
 @endpush
-    </form>
-</div>
 @endsection

@@ -48,7 +48,7 @@
                                 <td>{{ $variant->product->name }}</td>
                                 <td>{{ $variant->sku }}</td>
                                 <td>{{ number_format($variant->latestPriceRule?->price ?? 0) }}</td>
-                                <td>{{ $variant->stock }}</td>
+                                <td>{{ $variant->available_stock }}</td>
                                 <td>
                                     @if($variant->slug)
                                     <a href="{{ route('pages.variant_detail', $variant->slug) }}" class="btn btn-info btn-sm">View</a>

@@ -9,37 +9,147 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     @stack('styles')
     <style>
-        :root { --sidebar-width: 240px; --sidebar-bg: #064e3b; --sidebar-active: #10b981; }
-        body { min-height: 100vh; background: #f0fdf4; font-family: 'Inter', system-ui, sans-serif; }
+        :root {
+            --sidebar-width: 240px;
+            --theme-primary: #0f766e;
+            --theme-primary-hover: #115e59;
+            --theme-primary-soft: #ccfbf1;
+            --theme-accent: #ffc107;
+            --theme-accent-hover: #e0a800;
+            --sidebar-bg: #0b5f59;
+            --sidebar-bg-strong: #084c47;
+            --sidebar-active: #ffc107;
+        }
+        body { min-height: 100vh; background: #f7fbfb; font-family: 'Inter', system-ui, sans-serif; }
         .sp-sidebar {
             width: var(--sidebar-width); min-height: 100vh; background: var(--sidebar-bg);
             position: fixed; top: 0; left: 0; z-index: 200; display: flex; flex-direction: column;
         }
         .sp-brand {
-            padding: 1rem 1.25rem; background: #022c22; color: #fff; font-weight: 700;
-            font-size: .95rem; display: flex; align-items: center; gap: .5rem; border-bottom: 1px solid #065f46;
+            padding: 1rem 1.25rem; background: var(--sidebar-bg-strong); color: #fff; font-weight: 700;
+            font-size: .95rem; display: flex; align-items: center; gap: .5rem; border-bottom: 1px solid rgba(255, 255, 255, .15);
         }
-        .sp-brand .badge { font-size: .65rem; background: #10b981; }
+        .sp-brand .badge { font-size: .65rem; background: var(--theme-accent); color: #1f2937; }
         .sp-nav-section {
-            padding: .75rem 1.25rem .25rem; font-size: .7rem; color: #6ee7b7;
+            padding: .75rem 1.25rem .25rem; font-size: .7rem; color: #fef3c7;
             text-transform: uppercase; letter-spacing: .08em; font-weight: 600;
         }
         .sp-nav-link {
             display: flex; align-items: center; gap: .6rem; padding: .55rem 1.25rem;
-            color: #a7f3d0; font-size: .875rem; text-decoration: none;
+            color: #e6fffb; font-size: .875rem; text-decoration: none;
             border-left: 3px solid transparent; transition: all .15s;
         }
-        .sp-nav-link:hover { color: #fff; background: rgba(255,255,255,.06); border-left-color: #34d399; }
-        .sp-nav-link.active { color: #fff; background: rgba(16,185,129,.2); border-left-color: var(--sidebar-active); }
+        .sp-nav-link:hover { color: #fff; background: rgba(255,255,255,.08); border-left-color: var(--theme-accent); }
+        .sp-nav-link.active { color: #fff; background: rgba(255,193,7,.16); border-left-color: var(--sidebar-active); }
         .sp-nav-link .badge { margin-left: auto; font-size: .65rem; }
         .sp-main { margin-left: var(--sidebar-width); min-height: 100vh; display: flex; flex-direction: column; }
         .sp-topbar {
-            background: #fff; border-bottom: 1px solid #d1fae5; padding: .8rem 1.5rem;
+            background: #fff; border-bottom: 1px solid #d8ece9; padding: .8rem 1.5rem;
             display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100;
         }
         .sp-content { padding: 1.5rem; flex: 1; }
         .stat-card { border: none; border-radius: .75rem; transition: transform .15s; }
         .stat-card:hover { transform: translateY(-2px); }
+
+        .btn-primary {
+            background-color: var(--theme-primary);
+            border-color: var(--theme-primary);
+        }
+        .btn-primary:hover,
+        .btn-primary:focus,
+        .btn-primary:active {
+            background-color: var(--theme-primary-hover);
+            border-color: var(--theme-primary-hover);
+        }
+
+        .btn-success {
+            background-color: var(--theme-primary);
+            border-color: var(--theme-primary);
+        }
+        .btn-success:hover,
+        .btn-success:focus,
+        .btn-success:active {
+            background-color: var(--theme-primary-hover);
+            border-color: var(--theme-primary-hover);
+        }
+
+        .btn-outline-success,
+        .btn-outline-info,
+        .btn-outline-primary {
+            color: var(--theme-primary);
+            border-color: var(--theme-primary);
+        }
+        .btn-outline-success:hover,
+        .btn-outline-info:hover,
+        .btn-outline-primary:hover,
+        .btn-outline-success:focus,
+        .btn-outline-info:focus,
+        .btn-outline-primary:focus {
+            color: #fff;
+            background-color: var(--theme-primary);
+            border-color: var(--theme-primary);
+        }
+
+        .text-success,
+        .text-success-emphasis,
+        .text-info {
+            color: var(--theme-primary) !important;
+        }
+
+        .bg-info,
+        .bg-success {
+            background-color: var(--theme-primary) !important;
+        }
+
+        .badge.bg-info,
+        .badge.bg-success,
+        .badge.text-bg-info,
+        .badge.text-bg-success {
+            background-color: var(--theme-primary) !important;
+            color: #fff !important;
+        }
+
+        .btn-warning {
+            background-color: var(--theme-accent);
+            border-color: var(--theme-accent);
+            color: #1f2937;
+        }
+
+        .btn-warning:hover,
+        .btn-warning:focus,
+        .btn-warning:active {
+            background-color: var(--theme-accent-hover);
+            border-color: var(--theme-accent-hover);
+            color: #1f2937;
+        }
+
+        .btn-outline-warning {
+            color: #9a6700;
+            border-color: var(--theme-accent);
+        }
+
+        .btn-outline-warning:hover,
+        .btn-outline-warning:focus,
+        .btn-outline-warning:active {
+            background-color: var(--theme-accent);
+            border-color: var(--theme-accent);
+            color: #1f2937;
+        }
+
+        .form-control:focus,
+        .form-select:focus {
+            border-color: rgba(15, 118, 110, 0.42);
+            box-shadow: 0 0 0 0.2rem rgba(15, 118, 110, 0.16);
+        }
+
+        a {
+            color: var(--theme-primary);
+        }
+
+        a:hover {
+            color: var(--theme-primary-hover);
+        }
+
         @media (max-width: 768px) {
             .sp-sidebar { transform: translateX(-100%); }
             .sp-main { margin-left: 0; }
@@ -80,7 +190,7 @@
                 <i class="bi bi-person-circle text-success-emphasis"></i>
                 <div class="small">
                     <div class="text-white fw-semibold" style="font-size:.8rem;">{{ auth()->user()->name }}</div>
-                    <div style="color:#6ee7b7;font-size:.7rem;">Shipper</div>
+                    <div style="color:#fef3c7;font-size:.7rem;">Shipper</div>
                 </div>
             </div>
             <form method="POST" action="{{ route('logout') }}">

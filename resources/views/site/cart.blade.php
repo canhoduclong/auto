@@ -206,7 +206,7 @@
                             <div class="card-body">
                                 <div class="d-flex justify-content-between align-items-center mb-3">
                                     <h5 class="mb-0 fw-bold">San pham trong gio</h5>
-                                    <span class="badge text-bg-light border">{{ count(session('cart')) }} dong san pham</span>
+                                    <span class="badge text-bg-light border summary-line-badge">{{ count(session('cart')) }} dong san pham</span>
                                 </div>
 
                                 <div class="table-responsive cart-main-table">
@@ -242,7 +242,7 @@
                                                     <td>
                                                         <input type="number" value="{{ $details['quantity'] }}" class="form-control cart-qty update-cart" min="1">
                                                     </td>
-                                                    <td class="fw-semibold">{{ number_format($details['price'] * $details['quantity']) }}d</td>
+                                                    <td class="fw-semibold cart-line-subtotal">{{ number_format($details['price'] * $details['quantity']) }}d</td>
                                                     <td>
                                                         <button class="btn btn-outline-danger btn-sm remove-from-cart" title="Xoa san pham">
                                                             <i class="bi bi-trash"></i>
@@ -279,7 +279,7 @@
                                                 <span>So luong</span>
                                                 <input type="number" value="{{ $details['quantity'] }}" class="form-control cart-qty update-cart" min="1">
                                                 <span>Tam tinh</span>
-                                                <strong>{{ number_format($details['price'] * $details['quantity']) }}d</strong>
+                                                <strong class="cart-line-subtotal">{{ number_format($details['price'] * $details['quantity']) }}d</strong>
                                             </div>
                                         </div>
                                     @endforeach
@@ -294,16 +294,16 @@
                                 <h5 class="fw-bold mb-3">Tong quan don hang</h5>
                                 <div class="cart-summary-row">
                                     <span>So luong san pham</span>
-                                    <strong>{{ $itemCount }}</strong>
+                                    <strong class="summary-item-count">{{ $itemCount }}</strong>
                                 </div>
                                 <div class="cart-summary-row">
                                     <span>So dong gio hang</span>
-                                    <strong>{{ count(session('cart')) }}</strong>
+                                    <strong class="summary-line-count">{{ count(session('cart')) }}</strong>
                                 </div>
                                 <hr>
                                 <div class="cart-summary-row cart-summary-total">
                                     <span>Tong tam tinh</span>
-                                    <span>{{ number_format($total) }}d</span>
+                                    <span class="summary-total">{{ number_format($total) }}d</span>
                                 </div>
                                 <a href="{{ route('cart.checkout') }}" class="btn btn-success w-100 mt-2">
                                     <i class="bi bi-credit-card me-1"></i>Tien hanh dat hang
@@ -359,11 +359,51 @@ document.addEventListener('DOMContentLoaded', function() {
                     quantity: quantity
                 })
             })
-            .then(response => response.json())
-            .then(data => {
-                if(data.success) {
-                    location.reload();
+            .then(async response => {
+                const data = await response.json();
+
+                if (!response.ok || !data.success) {
+                    throw new Error(data.message || 'Khong the cap nhat so luong.');
                 }
+
+                return data;
+            })
+            .then(data => {
+                const sameItems = document.querySelectorAll(`[data-id="${id}"]`);
+                sameItems.forEach(function(itemContainer) {
+                    const qtyInput = itemContainer.querySelector('.update-cart');
+                    if (qtyInput) {
+                        qtyInput.value = data.item.quantity;
+                    }
+
+                    const lineSubtotal = itemContainer.querySelector('.cart-line-subtotal');
+                    if (lineSubtotal) {
+                        lineSubtotal.textContent = data.item.formatted_subtotal;
+                    }
+                });
+
+                const summaryItemCount = document.querySelector('.summary-item-count');
+                if (summaryItemCount) {
+                    summaryItemCount.textContent = data.summary.item_count;
+                }
+
+                const summaryLineCount = document.querySelector('.summary-line-count');
+                if (summaryLineCount) {
+                    summaryLineCount.textContent = data.summary.line_count;
+                }
+
+                const summaryTotal = document.querySelector('.summary-total');
+                if (summaryTotal) {
+                    summaryTotal.textContent = data.summary.formatted_total;
+                }
+
+                const summaryLineBadge = document.querySelector('.summary-line-badge');
+                if (summaryLineBadge) {
+                    summaryLineBadge.textContent = `${data.summary.line_count} dong san pham`;
+                }
+            })
+            .catch(error => {
+                alert(error.message || 'Khong the cap nhat gio hang.');
             });
         });
     });

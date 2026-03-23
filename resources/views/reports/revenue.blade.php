@@ -49,6 +49,13 @@
                 </div>
 
                 <div class="col-auto">
+                    <a
+                        href="{{ route('reports.revenue.export', request()->query()) }}"
+                        class="btn btn-warning"
+                    >Xuất Excel đơn hàng</a>
+                </div>
+
+                <div class="col-auto">
                     <a href="{{ route('reports.revenue') }}" class="btn btn-light">Đặt lại</a>
                 </div>
             </form>

@@ -2,9 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\OrderFinancialBreakdownExport;
+use App\Models\Order;
 use App\Models\Transaction;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
+use Maatwebsite\Excel\Facades\Excel;
 
 class RevenueReportController extends Controller
 {
@@ -62,6 +66,93 @@ class RevenueReportController extends Controller
             'dailySummary' => $dailySummary,
             'transactions' => $transactions,
         ]);
+    }
+
+    public function export(Request $request)
+    {
+        $type = $request->input('type', 'day');
+        if (!in_array($type, ['day', 'month', 'range'], true)) {
+            $type = 'day';
+        }
+
+        $today = Carbon::today();
+        $dayInput = $request->input('day', $today->toDateString());
+        $monthInput = $request->input('month', $today->format('Y-m'));
+        $fromInput = $request->input('from_date', $today->copy()->subDays(6)->toDateString());
+        $toInput = $request->input('to_date', $today->toDateString());
+
+        [$startDate, $endDate] = $this->resolveDateRange($type, $dayInput, $monthInput, $fromInput, $toInput);
+
+        $orders = Order::query()
+            ->with(['customer:id,name', 'user:id,name'])
+            ->whereBetween('created_at', [
+                $startDate->copy()->startOfDay(),
+                $endDate->copy()->endOfDay(),
+            ])
+            ->latest()
+            ->get();
+
+        $hasSubtotalAmount = Schema::hasColumn('orders', 'subtotal_amount');
+        $hasItemDiscountTotal = Schema::hasColumn('orders', 'item_discount_total');
+        $hasExtraDiscountTotal = Schema::hasColumn('orders', 'extra_discount_total');
+        $hasOrderDiscount = Schema::hasColumn('orders', 'order_discount');
+        $hasTotalDiscount = Schema::hasColumn('orders', 'total_discount');
+
+        $rows = $orders->map(function (Order $order) use (
+            $hasSubtotalAmount,
+            $hasItemDiscountTotal,
+            $hasExtraDiscountTotal,
+            $hasOrderDiscount,
+            $hasTotalDiscount
+        ) {
+            $subtotalAmount = $hasSubtotalAmount ? (float) ($order->subtotal_amount ?? 0) : (float) ($order->subtotal ?? 0);
+            $itemDiscountTotal = $hasItemDiscountTotal ? (float) ($order->item_discount_total ?? 0) : 0.0;
+
+            $extraDiscountTotal = 0.0;
+            if ($hasExtraDiscountTotal) {
+                $extraDiscountTotal = (float) ($order->extra_discount_total ?? 0);
+            } elseif ($hasOrderDiscount) {
+                $extraDiscountTotal = (float) ($order->order_discount ?? 0);
+            }
+
+            $combinedDiscount = $itemDiscountTotal + $extraDiscountTotal;
+            if ($combinedDiscount <= 0 && $hasTotalDiscount) {
+                $combinedDiscount = (float) ($order->total_discount ?? 0);
+            }
+
+            $statusLabel = is_string($order->status) && $order->status !== ''
+                ? $order->status
+                : ((string) ($order->status->value ?? $order->status ?? '-'));
+            $paymentStatusLabel = is_string($order->payment_status) && $order->payment_status !== ''
+                ? $order->payment_status
+                : ((string) ($order->payment_status->value ?? $order->payment_status ?? '-'));
+            $deliveryStatusLabel = is_string($order->delivery_status) && $order->delivery_status !== ''
+                ? $order->delivery_status
+                : ((string) ($order->delivery_status->value ?? $order->delivery_status ?? '-'));
+
+            return [
+                $order->code ?: ('#' . $order->id),
+                optional($order->created_at)->format('d/m/Y H:i'),
+                $order->customer?->name ?? '-',
+                $order->user?->name ?? '-',
+                $subtotalAmount,
+                $itemDiscountTotal,
+                $extraDiscountTotal,
+                $combinedDiscount,
+                (float) ($order->total ?? 0),
+                $statusLabel,
+                $paymentStatusLabel,
+                $deliveryStatusLabel,
+            ];
+        });
+
+        $filename = sprintf(
+            'bao-cao-tai-chinh-don-hang-%s-den-%s.xlsx',
+            $startDate->format('Ymd'),
+            $endDate->format('Ymd')
+        );
+
+        return Excel::download(new OrderFinancialBreakdownExport($rows), $filename);
     }
 
     private function resolveDateRange(string $type, string $dayInput, string $monthInput, string $fromInput, string $toInput): array

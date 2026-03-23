@@ -11,6 +11,9 @@ class Order extends Model
     use HasFactory;
     protected $fillable = [
         'customer_id', 'user_id', 'shipper_id', 'code', 'total', 'status',
+        'subtotal_amount', 'item_discount_total', 'extra_discount_total',
+        'total_discount', 'order_discount', 'total_weight', 'actual_weight', 'charge_shipping_fee', 'shipping_fee',
+        'charge_foam_box_fee', 'foam_box_price',
         'amount_paid', 'amount_due', 'payment_method', 'payment_status',
         'qr_code', 'packed_image_path', 'delivered_image_path', 'has_return_order',
         'collected_amount', 'delivered_at', 'return_reason', 'proof_images', 'shipper_note', 'delivery_time',
@@ -19,6 +22,12 @@ class Order extends Model
     protected $casts = [
         'proof_images' => 'array',
         'delivered_at' => 'datetime',
+        'total_weight' => 'decimal:3',
+        'actual_weight' => 'decimal:3',
+        'charge_shipping_fee' => 'boolean',
+        'shipping_fee' => 'decimal:2',
+        'charge_foam_box_fee' => 'boolean',
+        'foam_box_price' => 'decimal:2',
     ];
     
     public function approvals()

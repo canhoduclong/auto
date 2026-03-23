@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
@@ -10,6 +11,22 @@ class ProductVariant extends Model
 {
     use HasFactory;
     protected $fillable = ['product_id', 'sku', 'name', 'slug', 'size', 'quality', 'production_date', 'stock']; // đã có sku, giá xử lý qua priceRules
+
+    public function scopeWithAvailableStock(Builder $query): Builder
+    {
+        return $query->addSelect([
+            'available_stock' => Inventory::query()
+                ->selectRaw('COALESCE(SUM(quantity - reserved_quantity), 0)')
+                ->whereColumn('product_variant_id', 'product_variants.id'),
+        ]);
+    }
+
+    public function scopeInStock(Builder $query): Builder
+    {
+        return $query->whereHas('inventories', function ($inventoryQuery) {
+            $inventoryQuery->whereRaw('(quantity - reserved_quantity) > 0');
+        });
+    }
 
     protected static function boot()
     {
@@ -49,6 +66,23 @@ class ProductVariant extends Model
     public function inventories()
     {
         return $this->hasMany(Inventory::class, 'product_variant_id');
+    }
+
+    public function getAvailableStockAttribute(): int
+    {
+        if (array_key_exists('available_stock', $this->attributes)) {
+            return max(0, (int) $this->attributes['available_stock']);
+        }
+
+        if ($this->relationLoaded('inventories')) {
+            return (int) $this->inventories->sum(function (Inventory $inventory) {
+                return max(0, (int) $inventory->quantity - (int) $inventory->reserved_quantity);
+            });
+        }
+
+        return (int) $this->inventories()
+            ->selectRaw('COALESCE(SUM(quantity - reserved_quantity), 0) as available_sum')
+            ->value('available_sum');
     }
 
     public function values()

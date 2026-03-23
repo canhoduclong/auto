@@ -42,15 +42,46 @@ class ShipperDashboardController extends Controller
     /**
      * Orders ready to be picked up by a shipper.
      */
-    public function available()
+    public function available(Request $request)
     {
-        $orders = Order::with(['customer.addresses', 'items'])
+        $selectedDate = $request->filled('date')
+            ? Carbon::parse($request->input('date'))->toDateString()
+            : Carbon::today()->toDateString();
+
+        $today = Carbon::today();
+        $startDate = $today->copy()->subDays(6)->toDateString();
+
+        $dailyCounts = Order::query()
+            ->selectRaw('DATE(created_at) as day_key, COUNT(*) as total')
             ->where('status', Order::STATUS_READY_TO_SHIP)
             ->whereNull('shipper_id')
+            ->whereDate('created_at', '>=', $startDate)
+            ->whereDate('created_at', '<=', $today->toDateString())
+            ->groupBy('day_key')
+            ->pluck('total', 'day_key');
+
+        $quickDates = collect(range(0, 6))->map(function ($offset) use ($today, $dailyCounts, $selectedDate) {
+            $date = $today->copy()->subDays($offset);
+            $dateKey = $date->toDateString();
+            $count = (int) ($dailyCounts[$dateKey] ?? 0);
+
+            return [
+                'date' => $dateKey,
+                'label' => $offset === 0 ? 'Hôm nay' : $date->format('d/m'),
+                'count' => $count,
+                'available' => $count > 0,
+                'active' => $dateKey === $selectedDate,
+            ];
+        });
+
+        $orders = Order::with(['customer.addresses', 'items.variant.product'])
+            ->where('status', Order::STATUS_READY_TO_SHIP)
+            ->whereNull('shipper_id')
+            ->whereDate('created_at', $selectedDate)
             ->orderBy('created_at', 'asc')
             ->get();
 
-        return view('shipper.available', compact('orders'));
+        return view('shipper.available', compact('orders', 'selectedDate', 'quickDates'));
     }
 
     /**
@@ -62,6 +93,7 @@ class ShipperDashboardController extends Controller
             $fresh = Order::where('id', $order->id)
                 ->where('status', Order::STATUS_READY_TO_SHIP)
                 ->whereNull('shipper_id')
+                ->whereDate('created_at', Carbon::today()->toDateString())
                 ->lockForUpdate()
                 ->first();
 
@@ -88,7 +120,7 @@ class ShipperDashboardController extends Controller
         });
 
         if (!$accepted) {
-            return back()->with('error', 'Đơn hàng này đã được shipper khác nhận hoặc không còn khả dụng.');
+            return back()->with('error', 'Đơn hàng này không còn khả dụng hoặc không thuộc ngày lên đón hôm nay.');
         }
 
         return redirect()->route('shipper.my-orders')
@@ -100,7 +132,7 @@ class ShipperDashboardController extends Controller
      */
     public function myOrders()
     {
-        $orders = Order::with(['customer', 'items'])
+        $orders = Order::with(['customer.addresses', 'items.variant.product'])
             ->where('shipper_id', Auth::id())
             ->whereIn('status', [Order::STATUS_DELIVERING, Order::STATUS_COMPLETED])
             ->orderBy('created_at', 'asc')
@@ -116,6 +148,9 @@ class ShipperDashboardController extends Controller
     {
         $this->authorizeShipper($order);
         abort_if($order->status !== Order::STATUS_DELIVERING, 403, 'Đơn không đang giao.');
+
+        $order->load(['customer.addresses', 'items.variant.product']);
+
         return view('shipper.deliver-form', compact('order'));
     }
 
@@ -162,6 +197,9 @@ class ShipperDashboardController extends Controller
     {
         $this->authorizeShipper($order);
         abort_if($order->status !== Order::STATUS_DELIVERING, 403, 'Đơn không đang giao.');
+
+        $order->load(['customer.addresses', 'items.variant.product']);
+
         return view('shipper.return-form', compact('order'));
     }
 
@@ -204,15 +242,76 @@ class ShipperDashboardController extends Controller
     /**
      * Delivery history.
      */
-    public function history()
+    public function history(Request $request)
     {
-        $orders = Order::with('customer')
+        $date = $request->input('date');
+        $fromDate = $request->input('from_date');
+        $toDate = $request->input('to_date');
+        $period = $request->input('period');
+
+        // Default landing state: show today's deliveries when no filters are provided.
+        if (empty($date) && empty($fromDate) && empty($toDate) && empty($period)) {
+            $period = 'today';
+        }
+
+        if (empty($date) && !empty($period)) {
+            $today = Carbon::today();
+
+            if ($period === 'today') {
+                $date = $today->toDateString();
+            } elseif (in_array($period, ['7', '15', '30'], true)) {
+                $fromDate = $today->copy()->subDays(((int) $period) - 1)->toDateString();
+                $toDate = $today->toDateString();
+            }
+        }
+
+        $query = Order::with('customer')
             ->where('shipper_id', Auth::id())
             ->whereIn('status', ['delivered', Order::STATUS_RETURNING, Order::STATUS_RETURNED_COMPLETED, 'completed'])
+            ->when(!empty($date), function ($q) use ($date) {
+                $q->whereDate('updated_at', $date);
+            }, function ($q) use ($fromDate, $toDate) {
+                if (!empty($fromDate)) {
+                    $q->whereDate('updated_at', '>=', $fromDate);
+                }
+
+                if (!empty($toDate)) {
+                    $q->whereDate('updated_at', '<=', $toDate);
+                }
+            });
+
+        $summaryOrders = (clone $query)->get([
+            'status',
+            'shipping_fee',
+            'charge_shipping_fee',
+            'collected_amount',
+        ]);
+
+        $stats = [
+            'total' => $summaryOrders->count(),
+            'delivered' => $summaryOrders->where('status', 'delivered')->count(),
+            'returning' => $summaryOrders->where('status', Order::STATUS_RETURNING)->count(),
+            'completed' => $summaryOrders->where('status', 'completed')->count(),
+            'total_ship_fee' => $summaryOrders->sum(function ($order) {
+                return ($order->charge_shipping_fee ?? true) ? (float) ($order->shipping_fee ?? 0) : 0;
+            }),
+            'total_collected' => (float) $summaryOrders->sum(function ($order) {
+                return (float) ($order->collected_amount ?? 0);
+            }),
+        ];
+
+        $orders = $query
             ->orderByDesc('updated_at')
             ->paginate(20);
 
-        return view('shipper.history', compact('orders'));
+        $filters = [
+            'date' => $date,
+            'from_date' => $fromDate,
+            'to_date' => $toDate,
+            'period' => $period,
+        ];
+
+        return view('shipper.history', compact('orders', 'stats', 'filters'));
     }
 
     protected function authorizeShipper(Order $order): void

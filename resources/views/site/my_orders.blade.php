@@ -1,5 +1,16 @@
 @extends('layouts.site')
 
+@php
+    $useTeamDetailRoute = auth()->user()?->hasRole('sale')
+        || auth()->user()?->hasRole('leader')
+        || auth()->user()?->hasRole('leader_sale')
+        || auth()->user()?->hasRole('sale_manager')
+        || auth()->user()?->hasRole('manager')
+        || auth()->user()?->hasRole('manager_sale')
+        || auth()->user()?->hasRole('director')
+        || auth()->user()?->hasRole('admin');
+@endphp
+
 @push('styles')
 <style>
     .orders-page {
@@ -378,7 +389,7 @@
                                         </td>
                                         <td>
                                             <div class="orders-actions">
-                                                <a href="{{ route('site.orders.show', $order) }}" class="btn btn-outline-primary btn-sm">
+                                                <a href="{{ $useTeamDetailRoute ? route('pages.team_order_detail', $order) : route('site.orders.show', $order) }}" class="btn btn-outline-primary btn-sm">
                                                     <i class="fa fa-eye me-1"></i>Chi tiết
                                                 </a>
                                                 @if($canReturn)
@@ -433,7 +444,7 @@
                                     </div>
 
                                     <div class="orders-actions">
-                                        <a href="{{ route('site.orders.show', $order) }}" class="btn btn-outline-primary btn-sm">
+                                        <a href="{{ $useTeamDetailRoute ? route('pages.team_order_detail', $order) : route('site.orders.show', $order) }}" class="btn btn-outline-primary btn-sm">
                                             <i class="fa fa-eye me-1"></i>Chi tiết
                                         </a>
                                         @if($canReturn)
