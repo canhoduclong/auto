@@ -78,36 +78,39 @@ class ProductController extends Controller
 
     public function store(Request $request)
     {
-        $this->authorize('store', Product::class);
+        $this->authorize('create', Product::class);
         $data = $request->validate([
             'name' => 'required',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-            'description' => 'nullable',
-            'price' => 'required|numeric',
+            'description' => 'nullable', 
             'category_id' => 'required|numeric',
             'brand_id' => 'nullable|numeric',
             'stock' => 'required|numeric',
+            'media_id' => 'nullable|integer|exists:media,id',
         ]);
         $data['user_id'] = Auth::id();
+        
+        if (isset($data['price'])) {
+            $data['price'] = str_replace(',', '', $data['price']);
+        }else{
+            $data['price'] = 0;
+        }
+
+        $product = Product::create($data);
 
         if ($request->filled('media_id')) {
             MediaLink::updateOrCreate(
                 [
                     'model_type' => Product::class,
                     'model_id'   => $product->id,
-                    'role'       => 'thumbnail',
+                    'role'       => 'avatar',
                 ],
                 [
                     'media_id'   => $request->media_id,
                 ]
             );
         }
-        
-        if (isset($data['price'])) {
-            $data['price'] = str_replace(',', '', $data['price']);
-        }
 
-        Product::create($data);
         return redirect()->route('products.index')->with('success', 'Product created successfully!');
     }
 

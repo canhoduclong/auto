@@ -2,12 +2,12 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 use App\Models\Role;
 use App\Models\Team;
 use App\Models\User;
+use App\Models\Warehouse;
 
 class UsersSeeder extends Seeder
 {
@@ -16,103 +16,82 @@ class UsersSeeder extends Seeder
      */
     public function run(): void
     {
-        $saleTeam = Team::where('code', 'SALE-TEAM-1')->first();
-        $opsTeam = Team::where('code', 'OPS-TEAM-1')->first();
+        $snapshot = $this->loadSnapshot();
+        $users = $snapshot['users'] ?? [];
+        $roles = $snapshot['roles'] ?? [];
 
-        // Danh sách role
-        $roles = [
-            'admin',
-            'sale',
-            'leader_sale',
-            'manager_sale',
-            'shipper',
-            'leader',
-            'accountant',
-            'manager',
-            'warehouse',
-            'factory',
-        ];
+        foreach ($users as $userData) {
+            foreach (($userData['roles'] ?? []) as $roleName) {
+                if (!in_array($roleName, $roles, true)) {
+                    $roles[] = $roleName;
+                }
+            }
+        }
 
-        // Tạo role nếu chưa có
         $roleModels = [];
         foreach ($roles as $roleName) {
+            if (!is_string($roleName) || $roleName === '') {
+                continue;
+            }
+
             $roleModels[$roleName] = Role::firstOrCreate(['name' => $roleName]);
         }
 
-        // Tạo user cho từng role
-        $users = [
-            'sale' => [
-                'name' => 'Sale User',
-                'email' => 'sale@example.com',
-                'team_id' => $saleTeam?->id,
-            ],
-            'leader_sale' => [
-                'name' => 'Leader User',
-                'email' => 'leader@example.com',
-                'team_id' => $saleTeam?->id,
-            ],
-            'manager_sale' => [
-                'name' => 'Manager User',
-                'email' => 'manager@example.com',
-                'team_id' => $saleTeam?->id,
-            ],
-            'warehouse' => [
-                'name' => 'Thanh',
-                'email' => 'warehouse@example.com',
-                'team_id' => $opsTeam?->id,
-            ],
-            'shipper' => [
-                'name' => 'Ship - Dương',
-                'email' => 'duong@example.com',
-                'team_id' => $opsTeam?->id,
-            ],
-            'sale_extra' => [
-                'name' => 'Giang',
-                'email' => 'giang@hoanglongtnt.vn',
-                'team_id' => $saleTeam?->id,
-                'role' => 'sale',
-            ],
-            'warehouse_extra' => [
-                'name' => 'Linh - Kho chiến lược',
-                'email' => 'linh@example.com',
-                'team_id' => $opsTeam?->id,
-                'role' => 'warehouse',
-            ],
-            'admin' => [
-                'name' => 'Admin User',
-                'email' => 'admin@example.com',
-                'team_id' => null,
-            ],
-            'accountant' => [
-                'name' => 'Accountant User',
-                'email' => 'accountant@example.com',
-                'team_id' => $saleTeam?->id,
-            ],
-            'factory' => [
-                'name' => 'Factory User',
-                'email' => 'factory@example.com',
-                'team_id' => $opsTeam?->id,
-            ],
-        ];
+        $teamIdsByCode = Team::query()->pluck('id', 'code');
+        $warehouseIdsByName = Warehouse::query()->pluck('id', 'name');
 
-        foreach ($users as $role => $userData) {
-            $roleName = $userData['role'] ?? $role;
+        foreach ($users as $userData) {
+            if (!is_array($userData) || empty($userData['email'])) {
+                continue;
+            }
+
+            $teamId = null;
+            $warehouseId = null;
+
+            if (!empty($userData['team_code']) && $teamIdsByCode->has($userData['team_code'])) {
+                $teamId = $teamIdsByCode->get($userData['team_code']);
+            }
+
+            if (!empty($userData['warehouse_name']) && $warehouseIdsByName->has($userData['warehouse_name'])) {
+                $warehouseId = $warehouseIdsByName->get($userData['warehouse_name']);
+            }
+
             $user = User::firstOrCreate(
                 ['email' => $userData['email']],
                 [
-                    'name' => $userData['name'],
+                    'name' => (string) ($userData['name'] ?? $userData['email']),
                     'password' => Hash::make('123456'),
-                    'team_id' => $userData['team_id'] ?? null,
+                    'team_id' => $teamId,
+                    'warehouse_id' => $warehouseId,
                 ]
             );
 
             $user->update([
-                'name' => $userData['name'],
-                'team_id' => $userData['team_id'] ?? null,
+                'name' => (string) ($userData['name'] ?? $userData['email']),
+                'team_id' => $teamId,
+                'warehouse_id' => $warehouseId,
             ]);
 
-            // Gán role cho user
-            $user->roles()->sync([$roleModels[$roleName]->id]);
+            $roleIds = collect($userData['roles'] ?? [])
+                ->filter(fn ($name) => is_string($name) && isset($roleModels[$name]))
+                ->map(fn ($name) => $roleModels[$name]->id)
+                ->values()
+                ->all();
+
+            $user->roles()->sync($roleIds);
         }
+    }
+
+    private function loadSnapshot(): array
+    {
+        $snapshotPath = database_path('seeders/data/rbac_snapshot.json');
+
+        if (!file_exists($snapshotPath)) {
+            return [];
+        }
+
+        $decoded = json_decode((string) file_get_contents($snapshotPath), true);
+
+        return is_array($decoded) ? $decoded : [];
     }
 }

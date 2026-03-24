@@ -35,7 +35,7 @@ return [
         'en' => 'English',
     ],
     'meta' => [
-        'default_description' => 'AUTO TAY BAC',
-        'default_keywords' => 'AUTO TAY BAC',
+        'default_description' => 'Hoàng Long TNT',
+        'default_keywords' => 'Hoàng Long TNT',
     ],
 ];

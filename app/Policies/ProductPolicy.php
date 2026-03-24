@@ -9,29 +9,33 @@ use Illuminate\Auth\Access\Response;
 class ProductPolicy
 {
     public function viewAny(User $user) {  
-       return $user->hasPermission('products.index');
+       return $user->isAdmin() || $user->hasPermission('products.index');
     }
 
     public function view(User $user, Product $product) {
-        return $user->hasPermission('products.show');
+        return $user->isAdmin() || $user->hasPermission('products.show') || $user->hasPermission('products.view');
     }
 
     public function show(User $user, Product $product) {
-        return $user->hasPermission('products.show');
+        return $this->view($user, $product);
     }
 
     public function create(User $user) {
-        return $user->hasPermission('products.create');
+        return $user->isAdmin() || $user->hasPermission('products.create') || $user->hasPermission('products.store');
+    }
+
+    public function store(User $user) {
+        return $this->create($user);
     }
 
     public function update(User $user, Product $product) {
-        return $user->hasRole('admin') || $user->hasPermission('products.update');
+        return $user->isAdmin() || $user->hasPermission('products.update') || $user->hasPermission('products.edit');
     }
     public function edit(User $user, Product $product) {
-        return $user->hasPermission('products.edit');
+        return $this->update($user, $product);
     } 
     public function delete(User $user, Product $product) {
-        return $user->hasRole('admin') || $user->hasPermission('products.delete');
+        return $user->isAdmin() || $user->hasPermission('products.delete') || $user->hasPermission('products.destroy');
     }
 }
 

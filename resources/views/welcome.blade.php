@@ -179,6 +179,500 @@
 	border: none;
 	border-radius: 2px;
 }
+
+.mission-section {
+    position: relative;
+    padding: 52px 0 34px;
+    background:
+        radial-gradient(circle at top left, rgba(255, 214, 102, 0.12), transparent 24%),
+        linear-gradient(135deg, #0d2438 0%, #134967 52%, #0f766e 100%);
+}
+
+.mission-shell {
+    position: relative;
+    overflow: hidden;
+    border-radius: 0;
+    padding: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.mission-shell::before,
+.mission-shell::after {
+    content: "";
+    position: absolute;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    pointer-events: none;
+}
+
+.mission-shell::before {
+    width: 280px;
+    height: 280px;
+    top: -120px;
+    right: -90px;
+}
+
+.mission-shell::after {
+    width: 220px;
+    height: 220px;
+    bottom: -100px;
+    left: -60px;
+}
+
+.mission-pro {
+    position: relative;
+    z-index: 1;
+    padding: 32px;
+    border-radius: 0;
+    background: transparent;
+    border: 0;
+    backdrop-filter: none;
+}
+
+.mission-head span {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.14);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1.6px;
+    color: #f8fafc;
+    font-weight: 700;
+}
+
+.mission-head h2 {
+    margin: 18px 0 14px;
+    font-size: 38px;
+    line-height: 1.12;
+    color: #ffffff;
+}
+
+.mission-head p {
+    max-width: 640px;
+    color: rgba(248, 250, 252, 0.84);
+    margin-bottom: 22px;
+    font-size: 15px;
+}
+
+.mission-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 22px;
+}
+
+.mission-stat {
+    border-radius: 18px;
+    padding: 16px 18px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.mission-stat strong {
+    display: block;
+    color: #ffffff;
+    font-size: 28px;
+    line-height: 1;
+    margin-bottom: 8px;
+}
+
+.mission-stat span {
+    color: rgba(255, 255, 255, 0.72);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.mission-points {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.mission-point {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.08);
+    padding: 16px;
+    color: #f8fafc;
+    min-height: 100%;
+}
+
+.mission-point-index {
+    flex: 0 0 38px;
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 214, 102, 0.18);
+    color: #ffd666;
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.mission-point strong {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 15px;
+    color: #ffffff;
+}
+
+.mission-point span {
+    display: block;
+    font-size: 13px;
+    color: rgba(248, 250, 252, 0.78);
+}
+
+.mission-form {
+    border-radius: 24px;
+    background: #ffffff;
+    border: 1px solid rgba(207, 223, 238, 0.85);
+    box-shadow: 0 18px 36px rgba(6, 24, 44, 0.18);
+    padding: 22px;
+    height: 100%;
+}
+
+.mission-form-top {
+    padding-bottom: 16px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.mission-form-top span {
+    display: inline-block;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #0f766e;
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+
+.mission-form h5 {
+    margin-bottom: 8px;
+    color: #16324f;
+    font-size: 22px;
+}
+
+.mission-form p {
+    color: #475569;
+    font-size: 14px;
+    margin-bottom: 0;
+}
+
+.mission-trust-list {
+    display: grid;
+    gap: 10px;
+    margin-bottom: 18px;
+}
+
+.mission-trust-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-radius: 16px;
+    background: #f8fbff;
+    border: 1px solid #d9e6f2;
+    padding: 12px 14px;
+}
+
+.mission-trust-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #d8f3e8 0%, #e0f2fe 100%);
+    color: #0f766e;
+    font-weight: 800;
+}
+
+.mission-trust-item strong {
+    display: block;
+    font-size: 14px;
+    color: #0f172a;
+}
+
+.mission-trust-item span {
+    display: block;
+    font-size: 12px;
+    color: #64748b;
+}
+
+.mission-form .form-control {
+    border-radius: 14px;
+    border-color: #d0dbea;
+    min-height: 46px;
+    padding: 12px 14px;
+}
+
+.mission-form textarea.form-control {
+    min-height: 118px;
+}
+
+.mission-form .btn-group-mission {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.mission-form .btn-group-mission .site-btn,
+.mission-form .btn-group-mission .partner-btn {
+    padding: 12px 18px;
+    border-radius: 14px;
+    font-size: 14px;
+}
+
+.fresh-grid {
+    margin-top: 22px;
+}
+
+.fresh-card {
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.08);
+    padding: 16px 12px;
+    text-align: center;
+    transition: transform .2s ease, box-shadow .2s ease, background .2s ease;
+    box-shadow: 0 10px 24px rgba(6, 24, 44, 0.12);
+}
+
+.fresh-card:hover {
+    transform: translateY(-4px);
+    background: rgba(255, 255, 255, 0.12);
+    box-shadow: 0 16px 28px rgba(6, 24, 44, 0.16);
+}
+
+.fresh-card .feature__item__icon {
+    width: 66px;
+    height: 66px;
+    margin: 0 auto 10px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.16);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.fresh-card .feature__item__icon img {
+    width: 36px;
+    height: 36px;
+    object-fit: contain;
+}
+
+.fresh-card h6 {
+    margin: 0;
+    color: #ffffff;
+    font-size: 14px;
+}
+
+.latest-news-section {
+    position: relative;
+    padding: 72px 0 54px;
+    margin-top: 34px;
+    background:
+        linear-gradient(180deg, #f6f8fb 0%, #eef3f8 100%);
+}
+
+.latest-news-section::before {
+    content: "";
+    position: absolute;
+    top: -34px;
+    left: 0;
+    right: 0;
+    height: 68px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, #f6f8fb 100%);
+}
+
+.section-divider {
+    position: relative;
+    padding: 8px 0 0;
+}
+
+.section-divider::before {
+    content: "";
+    display: block;
+    width: min(180px, 40%);
+    height: 1px;
+    margin: 0 auto;
+    background: linear-gradient(90deg, rgba(148, 163, 184, 0) 0%, rgba(148, 163, 184, 0.8) 50%, rgba(148, 163, 184, 0) 100%);
+}
+
+.section-divider::after {
+    content: "";
+    display: block;
+    width: 14px;
+    height: 14px;
+    margin: -7px auto 0;
+    border-radius: 999px;
+    background: #f59e0b;
+    box-shadow: 0 0 0 8px #ffffff;
+}
+
+.latest-news-shell {
+    border-radius: 0;
+    padding: 8px 0 0;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+}
+
+.latest-pro-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: end;
+    gap: 16px;
+    margin-bottom: 22px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.latest-pro-head span {
+    display: inline-block;
+    margin-bottom: 10px;
+    color: #b45309;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-weight: 800;
+}
+
+.latest-pro-head h2 {
+    margin: 0 0 8px;
+    font-size: 36px;
+    color: #0f172a;
+    line-height: 1.15;
+}
+
+.latest-pro-head p {
+    margin: 0;
+    max-width: 640px;
+    color: #475569;
+    font-size: 15px;
+}
+
+.latest-pro-head .btn {
+    border-radius: 999px;
+    padding: 10px 18px;
+    font-weight: 700;
+}
+
+.latest-news-grid {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 18px;
+}
+
+.latest-news-col {
+    grid-column: span 4;
+}
+
+.latest-news-col.is-featured {
+    grid-column: span 6;
+}
+
+.latest-card {
+    display: flex;
+    flex-direction: column;
+    border-radius: 22px;
+    overflow: hidden;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 14px 28px rgba(15, 23, 42, 0.07);
+    height: 100%;
+    transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+}
+
+.latest-card:hover {
+    transform: translateY(-5px);
+    border-color: #d5dee9;
+    box-shadow: 0 22px 38px rgba(15, 23, 42, 0.12);
+}
+
+.latest-card .latest__blog__item__pic {
+    position: relative;
+    height: 220px;
+    background-size: cover;
+    background-position: center;
+}
+
+.latest-card .latest__blog__item__pic::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(15, 23, 42, 0) 40%, rgba(15, 23, 42, 0.18) 100%);
+}
+
+.latest-card .latest__blog__item__text {
+    padding: 18px 18px 20px;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+.news-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #64748b;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+    margin-bottom: 12px;
+}
+
+.news-meta::before {
+    content: "";
+    width: 26px;
+    height: 2px;
+    border-radius: 999px;
+    background: #f59e0b;
+}
+
+.latest-card h5 {
+    margin-bottom: 10px;
+    min-height: 58px;
+    color: #0f172a;
+    font-size: 21px;
+    line-height: 1.3;
+}
+
+.latest-card p {
+    color: #475569;
+    margin-bottom: 18px;
+    flex: 1;
+}
+
+.latest-card a {
+    color: #0f172a;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+.latest-news-col.is-featured .latest-card {
+    background: linear-gradient(180deg, #fffdf8 0%, #ffffff 100%);
+}
+
+.latest-news-col.is-featured .latest-card .latest__blog__item__pic {
+    height: 290px;
+}
+
+.latest-news-col.is-featured .latest-card h5 {
+    font-size: 28px;
+    min-height: auto;
+}
+
 @media (max-width: 768px) {
     .hero-wrap .slider-item {
         min-height: 420px;
@@ -197,6 +691,43 @@
         flex-direction: column;
         align-items: flex-start;
         gap: 10px;
+    }
+
+    .mission-shell,
+    .mission-pro,
+    .latest-news-shell {
+        padding: 16px;
+    }
+
+    .mission-shell,
+    .mission-pro,
+    .latest-news-shell {
+        border-radius: 0;
+    }
+
+    .mission-head h2,
+    .latest-pro-head h2 {
+        font-size: 26px;
+    }
+
+    .mission-stats,
+    .mission-points,
+    .latest-news-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .latest-news-col,
+    .latest-news-col.is-featured {
+        grid-column: span 12;
+    }
+
+    .latest-news-col.is-featured .latest-card .latest__blog__item__pic {
+        height: 220px;
+    }
+
+    .latest-news-section {
+        margin-top: 20px;
+        padding-top: 52px;
     }
 }
 </style>
@@ -306,87 +837,160 @@
     </div>
 </div>
 </section> 
-  <section class="feature py-4">
+  <section class="feature mission-section">
         <div class="container">
-            <div class="row">
-                <div class="col-lg-4">
-                    <div class="feature__text">
-                        <div class="section-title">
-                            <span>Về chúng tôi</span>
-                            <h2>SỨ MỆNH SẢN PHẨM TƯƠI SẠCH </h2>
+            <div class="mission-shell">
+                <div class="mission-pro">
+                    <div class="row g-4 align-items-stretch">
+                        <div class="col-lg-7">
+                            <div class="mission-head">
+                                <span>Cam kết thương hiệu</span>
+                                <h2>SỨ MỆNH SẢN PHẨM TƯƠI SẠCH</h2>
+                                <p>
+                                    Hoàng Long TNT xây dựng chuỗi cung ứng thực phẩm tươi sạch với mục tiêu rõ ràng:
+                                    minh bạch nguồn gốc, kiểm soát chất lượng đồng nhất và giao đúng chuẩn cho từng gia đình,
+                                    cửa hàng và bếp ăn chuyên nghiệp.
+                                </p>
+                            </div>
+
+                            <div class="mission-stats">
+                                <div class="mission-stat">
+                                    <strong>100%</strong>
+                                    <span>Truy xuất nguồn gốc</span>
+                                </div>
+                                <div class="mission-stat">
+                                    <strong>24h</strong>
+                                    <span>Luân chuyển hàng tươi</span>
+                                </div>
+                                <div class="mission-stat">
+                                    <strong>3 lớp</strong>
+                                    <span>Kiểm soát chất lượng</span>
+                                </div>
+                            </div>
+
+                            <div class="mission-points">
+                                <div class="mission-point">
+                                    <div class="mission-point-index">01</div>
+                                    <div>
+                                        <strong>Chọn nguồn chuẩn</strong>
+                                        <span>Hàng hóa được tuyển chọn từ nhà cung cấp rõ chứng từ và tiêu chuẩn an toàn.</span>
+                                    </div>
+                                </div>
+                                <div class="mission-point">
+                                    <div class="mission-point-index">02</div>
+                                    <div>
+                                        <strong>Bảo quản đồng bộ</strong>
+                                        <span>Duy trì nhiệt độ và điều kiện lưu trữ phù hợp trên toàn bộ hành trình sản phẩm.</span>
+                                    </div>
+                                </div>
+                                <div class="mission-point">
+                                    <div class="mission-point-index">03</div>
+                                    <div>
+                                        <strong>Giao hàng đúng nhịp</strong>
+                                        <span>Tối ưu thời gian xử lý đơn và giao theo khung giờ để hàng đến tay khách luôn tươi mới.</span>
+                                    </div>
+                                </div>
+                                <div class="mission-point">
+                                    <div class="mission-point-index">04</div>
+                                    <div>
+                                        <strong>Đồng hành lâu dài</strong>
+                                        <span>Phục vụ linh hoạt cho hộ gia đình, cửa hàng, nhà hàng và bếp ăn tập thể.</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row fresh-grid g-3">
+                                <div class="col-6 col-md-4">
+                                    <div class="fresh-card">
+                                        <div class="feature__item__icon"><img src="img/feature/feature-1.png" alt="Gà"></div>
+                                        <h6>Gà</h6>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <div class="fresh-card">
+                                        <div class="feature__item__icon"><img src="img/feature/feature-2.png" alt="Vịt"></div>
+                                        <h6>Vịt</h6>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <div class="fresh-card">
+                                        <div class="feature__item__icon"><img src="img/feature/feature-3.png" alt="Bò"></div>
+                                        <h6>Bò</h6>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <div class="fresh-card">
+                                        <div class="feature__item__icon"><img src="img/feature/feature-4.png" alt="Heo"></div>
+                                        <h6>Heo</h6>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <div class="fresh-card">
+                                        <div class="feature__item__icon"><img src="img/feature/feature-5.png" alt="Rau xanh"></div>
+                                        <h6>Rau xanh</h6>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <div class="fresh-card">
+                                        <div class="feature__item__icon"><img src="img/feature/feature-6.png" alt="Trái cây"></div>
+                                        <h6>Trái cây</h6>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div class="feature__text__desc">
-                           <p>Hoàng long TNT mang lại giải pháp thực phẩm tươi sạch cho hộ gia đình và doanh nghiệp giúp cuộc sống thêm an toàn </p>
-                            <div class="contact__form">
-                                <form action="#">
-                                    <div class="row">
-                                        <div class="col-lg-6">
-                                            <input type="text" placeholder="Name" name="fname">
-                                        </div>
-                                        <div class="col-lg-6">
-                                            <input type="text" placeholder="Email" name="email">
+
+                        <div class="col-lg-5">
+                            <div class="mission-form">
+                                <div class="mission-form-top">
+                                    <span>Hỗ trợ đặt hàng</span>
+                                    <h5>Tư vấn nhanh theo nhu cầu thực tế</h5>
+                                    <p>Đội ngũ của chúng tôi hỗ trợ lựa chọn nhóm hàng, quy cách và lịch giao phù hợp.</p>
+                                </div>
+
+                                <div class="mission-trust-list">
+                                    <div class="mission-trust-item">
+                                        <div class="mission-trust-icon">01</div>
+                                        <div>
+                                            <strong>Tư vấn nhóm sản phẩm phù hợp</strong>
+                                            <span>Thịt, gia cầm, rau củ, trái cây, hàng sơ chế và đơn theo nhu cầu.</span>
                                         </div>
                                     </div>
-                                    <input type="text" placeholder="Subject" name="subject">
-                                    <textarea placeholder="Your Question" name="question"></textarea>
-                                    <button type="submit" class="site-btn">GỬI LIÊN HỆ</button>
-                                    <button type="reset" class="site-btn partner-btn">NHẬP LẠI</button>
+                                    <div class="mission-trust-item">
+                                        <div class="mission-trust-icon">02</div>
+                                        <div>
+                                            <strong>Thiết kế lịch giao tối ưu</strong>
+                                            <span>Phù hợp cho đơn lẻ hằng ngày, đơn định kỳ và mô hình nhà hàng.</span>
+                                        </div>
+                                    </div>
+                                    <div class="mission-trust-item">
+                                        <div class="mission-trust-icon">03</div>
+                                        <div>
+                                            <strong>Kiểm soát chất lượng trước khi xuất</strong>
+                                            <span>Giảm rủi ro sai quy cách, thiếu hàng hoặc giao không đúng chuẩn mong muốn.</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <form action="#">
+                                    <div class="row g-2">
+                                        <div class="col-md-6">
+                                            <input type="text" class="form-control" placeholder="Họ và tên" name="fname">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <input type="email" class="form-control" placeholder="Email" name="email">
+                                        </div>
+                                    </div>
+                                    <div class="mt-2">
+                                        <input type="text" class="form-control" placeholder="Tiêu đề" name="subject">
+                                    </div>
+                                    <div class="mt-2">
+                                        <textarea class="form-control" placeholder="Nội dung cần tư vấn" name="question"></textarea>
+                                    </div>
+                                    <div class="btn-group-mission mt-3">
+                                        <button type="submit" class="site-btn">Gửi liên hệ</button>
+                                        <button type="reset" class="site-btn partner-btn">Nhập lại</button>
+                                    </div>
                                 </form>
-                            </div>
-
-
-                        </div>
-                        
-                    </div>
-                </div>
-                <div class="col-lg-4 offset-lg-4">
-                    <div class="row">
-                        <div class="col-lg-6 col-md-4 col-6">
-                            <div class="feature__item">
-                                <div class="feature__item__icon">
-                                    <img src="img/feature/feature-1.png" alt="">
-                                </div>
-                                <h6>Gà</h6>
-                            </div>
-                        </div>
-                        <div class="col-lg-6 col-md-4 col-6">
-                            <div class="feature__item">
-                                <div class="feature__item__icon">
-                                    <img src="img/feature/feature-2.png" alt="">
-                                </div>
-                                <h6>Vịt</h6>
-                            </div>
-                        </div>
-                        <div class="col-lg-6 col-md-4 col-6">
-                            <div class="feature__item">
-                                <div class="feature__item__icon">
-                                    <img src="img/feature/feature-3.png" alt="">
-                                </div>
-                                <h6>Bò</h6>
-                            </div>
-                        </div>
-                        <div class="col-lg-6 col-md-4 col-6">
-                            <div class="feature__item">
-                                <div class="feature__item__icon">
-                                    <img src="img/feature/feature-4.png" alt="">
-                                </div>
-                                <h6>Heo</h6>
-                            </div>
-                        </div>
-                        <div class="col-lg-6 col-md-4 col-6">
-                            <div class="feature__item">
-                                <div class="feature__item__icon">
-                                    <img src="img/feature/feature-5.png" alt="">
-                                </div>
-                                <h6>Rau xanh</h6>
-                            </div>
-                        </div>
-                        <div class="col-lg-6 col-md-4 col-6">
-                            <div class="feature__item">
-                                <div class="feature__item__icon">
-                                    <img src="img/feature/feature-6.png" alt="">
-                                </div>
-                                <h6>Trái cây</h6>
                             </div>
                         </div>
                     </div>
@@ -395,41 +999,46 @@
         </div>
     </section>
 
-    <section class="latest spad">
+    <div class="section-divider" aria-hidden="true"></div>
+
+    <section class="latest latest-news-section">
         <div class="container">
-            <div class="row">
-                <div class="col-lg-12">
-                    <div class="section-title">
-                        <span>Bản tin hàng ngày</span>
-                        <h2>TIN MỚI CẬP NHẬT</h2> 
+            <div class="latest-news-shell">
+                <div class="latest-pro-head">
+                    <div>
+                        <span>Newsroom</span>
+                        <h2>TIN MỚI CẬP NHẬT</h2>
+                        <p>Tổng hợp các bài viết mới về thị trường, sản phẩm, hoạt động vận hành và thông tin hữu ích để khách hàng theo dõi nhanh.</p>
                     </div>
+                    <a href="{{ route('posts.list') }}" class="btn btn-outline-dark btn-sm">Xem tất cả</a>
                 </div>
-            </div>
-            <div class="row"> 
-                @foreach($posts as $post) 
-                    <div class="col-lg-4 col-md-6">
-                        <div class="latest__blog__item">
-                            @if($post->image)
-                            <div class="latest__blog__item__pic set-bg" 
-                                data-setbg="{{ asset('storage/' . $post->image) }}" 
-                                style="background-image: url(&quot;{{ asset('storage/' . $post->image) }}&quot;);"
-                                > 
-                            @else
+                <div class="latest-news-grid"> 
+                    @foreach($posts as $post) 
+                        <div class="latest-news-col {{ $loop->first ? 'is-featured' : '' }}">
+                            <div class="latest__blog__item latest-card">
+                                @if($post->image)
                                 <div class="latest__blog__item__pic set-bg" 
-                                data-setbg="img/latest-blog/lb-1.jpg" 
-                                style="background-image: url(&quot;img/latest-blog/lb-1.jpg&quot;);"
-                                >
-                            @endif 
-                                
-                            </div>
-                            <div class="latest__blog__item__text">
-                                <h5>{{ $post->title }}</h5>
-                                <p>{{ $post->excerpt }}.</p>
-                                <a href="{{ route('posts.show', $post) }}">Xem thêm <i class="fa fa-long-arrow-right"></i></a>
+                                    data-setbg="{{ asset('storage/' . $post->image) }}" 
+                                    style="background-image: url(&quot;{{ asset('storage/' . $post->image) }}&quot;);"
+                                    > 
+                                @else
+                                    <div class="latest__blog__item__pic set-bg" 
+                                    data-setbg="img/latest-blog/lb-1.jpg" 
+                                    style="background-image: url(&quot;img/latest-blog/lb-1.jpg&quot;);"
+                                    >
+                                @endif 
+                                    
+                                </div>
+                                <div class="latest__blog__item__text">
+                                    <div class="news-meta">{{ optional($post->created_at)->format('d/m/Y') ?? 'Mới cập nhật' }}</div>
+                                    <h5>{{ $post->title }}</h5>
+                                    <p>{{ $post->excerpt }}.</p>
+                                    <a href="{{ route('posts.show', $post) }}">Xem thêm <i class="fa fa-long-arrow-right"></i></a>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                @endforeach  
+                    @endforeach  
+                </div>
             </div>
         </div>
     </section>

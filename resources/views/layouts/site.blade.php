@@ -8,7 +8,7 @@ use App\Models\Setting;
 <head>
     <meta charset="UTF-8">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>{{ Setting::get('brand_name', 'AUTO TAY BAC') }}</title>
+    <title>{{ Setting::get('brand_name', 'Hoàng Long TNT') }}</title>
 
 
     <meta name="description" content="{{ __('common.meta.default_description') }}">

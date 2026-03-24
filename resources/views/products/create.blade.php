@@ -66,14 +66,11 @@
                                 <button type="button" class="btn btn-primary" id="btnSelectAvatar">
                                     Chọn ảnh
                                 </button>
-                                <input type="hidden" name="avatar_id" id="avatar_id"
-                                    value="{{ old('avatar_id', $product->avatar->media_id ?? '') }}">
+                                <input type="hidden" name="media_id" id="media_id"
+                                    value="{{ old('media_id') }}">
                             </div>
                             <div id="avatarPreview" style="margin-top:10px;">
-                                @if(!empty($product->avatar) && $product->avatar->media)
-                                    <img src="{{ asset('storage/'.$product->avatar->media->file_path) }}"
-                                        width="120" class="img-thumbnail">
-                                @endif
+                                <span class="text-muted">Chưa chọn ảnh</span>
                             </div>
                         </div>
                         <div>
@@ -166,9 +163,45 @@
     </div>
 </div> 
 
+<div class="modal fade" id="mediaModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Chọn ảnh đại diện</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <iframe src="{{ route('media.library.popup') }}" frameborder="0" style="width:100%;height:500px;"></iframe>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 function openMediaPopup() {
     window.open("{{ route('media.library.popup') }}", "Chọn ảnh", "width=1000,height=600");
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    var btnSelectAvatar = document.getElementById('btnSelectAvatar');
+    if (btnSelectAvatar) {
+        btnSelectAvatar.addEventListener('click', function () {
+            var modal = new bootstrap.Modal(document.getElementById('mediaModal'));
+            modal.show();
+        });
+    }
+});
+
+function selectMedia(id, url) {
+    document.getElementById('media_id').value = id;
+    document.getElementById('avatarPreview').innerHTML =
+        `<img src="${url}" width="120" class="img-thumbnail">`;
+
+    var modalEl = document.getElementById('mediaModal');
+    var modal = bootstrap.Modal.getInstance(modalEl);
+    if (modal) {
+        modal.hide();
+    }
 }
 
 function setSelectedImages(ids) {

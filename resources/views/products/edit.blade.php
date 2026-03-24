@@ -235,7 +235,7 @@
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title">Chọn hình ảnh</h5>
-        <button type="button" class="close" data-dismiss="modal" aria-label="Close">×</button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" data-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
         <iframe src="{{ route('media.library.popup') }}" frameborder="0"
@@ -316,7 +316,17 @@ function selectMedia(id, url) {
     document.getElementById('media_id').value = id;
     document.getElementById('mediaPreview').innerHTML =
         `<img src="${url}" width="120" class="img-thumbnail">`;
-    $('#mediaModal').modal('hide');
+
+    if (window.bootstrap && document.getElementById('mediaModal')) {
+        const modalEl = document.getElementById('mediaModal');
+        const instance = bootstrap.Modal.getInstance(modalEl) || bootstrap.Modal.getOrCreateInstance(modalEl);
+        instance.hide();
+        return;
+    }
+
+    if (window.$ && typeof $('#mediaModal').modal === 'function') {
+        $('#mediaModal').modal('hide');
+    }
 }
 
 // Gallery xử lý chọn ảnh

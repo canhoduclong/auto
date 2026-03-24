@@ -21,6 +21,11 @@ class PermissionMiddleware
             abort(403, 'Bạn chưa đăng nhập.');
         }
 
+        // Admin luôn được phép truy cập các route có middleware permission.
+        if (method_exists($user, 'isAdmin') && $user->isAdmin()) {
+            return $next($request);
+        }
+
         // If a permission name is passed as an argument, check for that permission
         if ($permission) {
             if (!$user->hasPermission($permission)) {
@@ -37,12 +42,36 @@ class PermissionMiddleware
             return $next($request);
         }
 
-        // Nếu user không có quyền theo route name -> chặn
-        if (!$user->hasPermission($routeName)) {
-            abort(403, 'Bạn không có quyền truy cập route: ' . $routeName);
+        $permissionsToCheck = [$routeName];
+
+        // Hỗ trợ map quyền tương đương theo REST để tránh lệch tên quyền.
+        if (str_contains($routeName, '.')) {
+            [$resource, $action] = explode('.', $routeName, 2);
+
+            $aliases = [
+                'store' => 'create',
+                'create' => 'store',
+                'update' => 'edit',
+                'edit' => 'update',
+                'destroy' => 'delete',
+                'delete' => 'destroy',
+                'show' => 'view',
+                'view' => 'show',
+            ];
+
+            if (isset($aliases[$action])) {
+                $permissionsToCheck[] = $resource . '.' . $aliases[$action];
+            }
         }
 
-        return $next($request);
+        foreach (array_unique($permissionsToCheck) as $permissionName) {
+            if ($user->hasPermission($permissionName)) {
+                return $next($request);
+            }
+        }
+
+        abort(403, 'Bạn không có quyền truy cập route: ' . $routeName);
+
     }
 
 }

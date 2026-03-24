@@ -23,7 +23,7 @@ return new class extends Migration
             $table->string('name')->nullable();
             $table->string('slug')->unique(); // Dùng cho URL thân thiện
             $table->text('description')->nullable();
-            $table->decimal('price', 10, 2); // Giá sản phẩm
+            $table->decimal('price', 10, 2)->nullable(); // Giá sản phẩm
             $table->integer('stock')->default(0); // Số lượng tồn kho
             $table->string('image')->nullable(); // Đường dẫn hình ảnh chính
             $table->timestamps();

@@ -2,9 +2,9 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use App\Models\Permission;
+use App\Models\Role;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\DB;
 
@@ -26,6 +26,8 @@ class PermissionSeeder extends Seeder
                 [
                     'description' => $route->uri(),
                     'group' => $group,
+                    'uri' => $route->uri(),
+                    'method' => implode('|', $route->methods()),
                     'updated_at' => now(),
                     'created_at' => now(),
                 ]
@@ -159,47 +161,49 @@ class PermissionSeeder extends Seeder
             );
         }
 
-        $rolePermissionMap = [
-            'admin' => DB::table('permissions')->pluck('id', 'name')->keys()->all(),
-            'warehouse' => [
-                'warehouse.dashboard',
-                'warehouse.orders',
-                'warehouse.orders.start-packing',
-                'warehouse.orders.complete-packing',
-                'warehouse.returns',
-                'warehouse.returns.confirm',
-            ],
-            'Shipper' => [
-                'shipper.dashboard',
-                'shipper.available',
-                'shipper.accept',
-                'shipper.my-orders',
-                'shipper.delivered-form',
-                'shipper.mark-delivered',
-                'shipper.return-form',
-                'shipper.store-return',
-                'shipper.history',
-            ],
-        ];
+        $this->syncRolePermissions();
+    }
+
+    private function syncRolePermissions(): void
+    {
+        $snapshot = $this->loadSnapshot();
+        $rolePermissionMap = $snapshot['role_permissions'] ?? [];
+
+        if (!is_array($rolePermissionMap) || $rolePermissionMap === []) {
+            return;
+        }
 
         foreach ($rolePermissionMap as $roleName => $permissionNames) {
-            $role = DB::table('roles')->where('name', $roleName)->first();
-
-            if (! $role) {
+            if (!is_string($roleName) || $roleName === '') {
                 continue;
             }
 
-            $permissionIds = DB::table('permissions')
+            $role = Role::firstOrCreate(['name' => $roleName]);
+
+            if (!is_array($permissionNames) || $permissionNames === []) {
+                $role->permissions()->sync([]);
+                continue;
+            }
+
+            $permissionIds = Permission::query()
                 ->whereIn('name', $permissionNames)
                 ->pluck('id')
                 ->all();
 
-            foreach ($permissionIds as $permissionId) {
-                DB::table('permission_role')->updateOrInsert([
-                    'role_id' => $role->id,
-                    'permission_id' => $permissionId,
-                ]);
-            }
+            $role->permissions()->sync($permissionIds);
         }
+    }
+
+    private function loadSnapshot(): array
+    {
+        $snapshotPath = database_path('seeders/data/rbac_snapshot.json');
+
+        if (!file_exists($snapshotPath)) {
+            return [];
+        }
+
+        $decoded = json_decode((string) file_get_contents($snapshotPath), true);
+
+        return is_array($decoded) ? $decoded : [];
     }
 }
