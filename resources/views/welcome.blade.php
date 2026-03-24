@@ -837,160 +837,87 @@
     </div>
 </div>
 </section> 
-  <section class="feature mission-section">
+  <section class="feature py-4">
         <div class="container">
-            <div class="mission-shell">
-                <div class="mission-pro">
-                    <div class="row g-4 align-items-stretch">
-                        <div class="col-lg-7">
-                            <div class="mission-head">
-                                <span>Cam kết thương hiệu</span>
-                                <h2>SỨ MỆNH SẢN PHẨM TƯƠI SẠCH</h2>
-                                <p>
-                                    Hoàng Long TNT xây dựng chuỗi cung ứng thực phẩm tươi sạch với mục tiêu rõ ràng:
-                                    minh bạch nguồn gốc, kiểm soát chất lượng đồng nhất và giao đúng chuẩn cho từng gia đình,
-                                    cửa hàng và bếp ăn chuyên nghiệp.
-                                </p>
+            <div class="row">
+                <div class="col-lg-4">
+                    <div class="feature__text">
+                        <div class="section-title">
+                            <span>Về chúng tôi</span>
+                            <h2>SỨ MỆNH SẢN PHẨM TƯƠI SẠCH </h2>
+                        </div>
+                        <div class="feature__text__desc">
+                           <p>Hoàng long TNT mang lại giải pháp thực phẩm tươi sạch cho hộ gia đình và doanh nghiệp giúp cuộc sống thêm an toàn </p>
+                            <div class="contact__form">
+                                <form action="#">
+                                    <div class="row">
+                                        <div class="col-lg-6">
+                                            <input type="text" placeholder="Name" name="fname">
+                                        </div>
+                                        <div class="col-lg-6">
+                                            <input type="text" placeholder="Email" name="email">
+                                        </div>
+                                    </div>
+                                    <input type="text" placeholder="Subject" name="subject">
+                                    <textarea placeholder="Your Question" name="question"></textarea>
+                                    <button type="submit" class="site-btn">GỬI LIÊN HỆ</button>
+                                    <button type="reset" class="site-btn partner-btn">NHẬP LẠI</button>
+                                </form>
                             </div>
 
-                            <div class="mission-stats">
-                                <div class="mission-stat">
-                                    <strong>100%</strong>
-                                    <span>Truy xuất nguồn gốc</span>
-                                </div>
-                                <div class="mission-stat">
-                                    <strong>24h</strong>
-                                    <span>Luân chuyển hàng tươi</span>
-                                </div>
-                                <div class="mission-stat">
-                                    <strong>3 lớp</strong>
-                                    <span>Kiểm soát chất lượng</span>
-                                </div>
-                            </div>
 
-                            <div class="mission-points">
-                                <div class="mission-point">
-                                    <div class="mission-point-index">01</div>
-                                    <div>
-                                        <strong>Chọn nguồn chuẩn</strong>
-                                        <span>Hàng hóa được tuyển chọn từ nhà cung cấp rõ chứng từ và tiêu chuẩn an toàn.</span>
-                                    </div>
+                        </div>
+                        
+                    </div>
+                </div>
+                <div class="col-lg-4 offset-lg-4">
+                    <div class="row">
+                        <div class="col-lg-6 col-md-4 col-6">
+                            <div class="feature__item">
+                                <div class="feature__item__icon">
+                                    <img src="img/feature/feature-1.png" alt="">
                                 </div>
-                                <div class="mission-point">
-                                    <div class="mission-point-index">02</div>
-                                    <div>
-                                        <strong>Bảo quản đồng bộ</strong>
-                                        <span>Duy trì nhiệt độ và điều kiện lưu trữ phù hợp trên toàn bộ hành trình sản phẩm.</span>
-                                    </div>
-                                </div>
-                                <div class="mission-point">
-                                    <div class="mission-point-index">03</div>
-                                    <div>
-                                        <strong>Giao hàng đúng nhịp</strong>
-                                        <span>Tối ưu thời gian xử lý đơn và giao theo khung giờ để hàng đến tay khách luôn tươi mới.</span>
-                                    </div>
-                                </div>
-                                <div class="mission-point">
-                                    <div class="mission-point-index">04</div>
-                                    <div>
-                                        <strong>Đồng hành lâu dài</strong>
-                                        <span>Phục vụ linh hoạt cho hộ gia đình, cửa hàng, nhà hàng và bếp ăn tập thể.</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="row fresh-grid g-3">
-                                <div class="col-6 col-md-4">
-                                    <div class="fresh-card">
-                                        <div class="feature__item__icon"><img src="img/feature/feature-1.png" alt="Gà"></div>
-                                        <h6>Gà</h6>
-                                    </div>
-                                </div>
-                                <div class="col-6 col-md-4">
-                                    <div class="fresh-card">
-                                        <div class="feature__item__icon"><img src="img/feature/feature-2.png" alt="Vịt"></div>
-                                        <h6>Vịt</h6>
-                                    </div>
-                                </div>
-                                <div class="col-6 col-md-4">
-                                    <div class="fresh-card">
-                                        <div class="feature__item__icon"><img src="img/feature/feature-3.png" alt="Bò"></div>
-                                        <h6>Bò</h6>
-                                    </div>
-                                </div>
-                                <div class="col-6 col-md-4">
-                                    <div class="fresh-card">
-                                        <div class="feature__item__icon"><img src="img/feature/feature-4.png" alt="Heo"></div>
-                                        <h6>Heo</h6>
-                                    </div>
-                                </div>
-                                <div class="col-6 col-md-4">
-                                    <div class="fresh-card">
-                                        <div class="feature__item__icon"><img src="img/feature/feature-5.png" alt="Rau xanh"></div>
-                                        <h6>Rau xanh</h6>
-                                    </div>
-                                </div>
-                                <div class="col-6 col-md-4">
-                                    <div class="fresh-card">
-                                        <div class="feature__item__icon"><img src="img/feature/feature-6.png" alt="Trái cây"></div>
-                                        <h6>Trái cây</h6>
-                                    </div>
-                                </div>
+                                <h6>Gà</h6>
                             </div>
                         </div>
-
-                        <div class="col-lg-5">
-                            <div class="mission-form">
-                                <div class="mission-form-top">
-                                    <span>Hỗ trợ đặt hàng</span>
-                                    <h5>Tư vấn nhanh theo nhu cầu thực tế</h5>
-                                    <p>Đội ngũ của chúng tôi hỗ trợ lựa chọn nhóm hàng, quy cách và lịch giao phù hợp.</p>
+                        <div class="col-lg-6 col-md-4 col-6">
+                            <div class="feature__item">
+                                <div class="feature__item__icon">
+                                    <img src="img/feature/feature-2.png" alt="">
                                 </div>
-
-                                <div class="mission-trust-list">
-                                    <div class="mission-trust-item">
-                                        <div class="mission-trust-icon">01</div>
-                                        <div>
-                                            <strong>Tư vấn nhóm sản phẩm phù hợp</strong>
-                                            <span>Thịt, gia cầm, rau củ, trái cây, hàng sơ chế và đơn theo nhu cầu.</span>
-                                        </div>
-                                    </div>
-                                    <div class="mission-trust-item">
-                                        <div class="mission-trust-icon">02</div>
-                                        <div>
-                                            <strong>Thiết kế lịch giao tối ưu</strong>
-                                            <span>Phù hợp cho đơn lẻ hằng ngày, đơn định kỳ và mô hình nhà hàng.</span>
-                                        </div>
-                                    </div>
-                                    <div class="mission-trust-item">
-                                        <div class="mission-trust-icon">03</div>
-                                        <div>
-                                            <strong>Kiểm soát chất lượng trước khi xuất</strong>
-                                            <span>Giảm rủi ro sai quy cách, thiếu hàng hoặc giao không đúng chuẩn mong muốn.</span>
-                                        </div>
-                                    </div>
+                                <h6>Vịt</h6>
+                            </div>
+                        </div>
+                        <div class="col-lg-6 col-md-4 col-6">
+                            <div class="feature__item">
+                                <div class="feature__item__icon">
+                                    <img src="img/feature/feature-3.png" alt="">
                                 </div>
-
-                                <form action="#">
-                                    <div class="row g-2">
-                                        <div class="col-md-6">
-                                            <input type="text" class="form-control" placeholder="Họ và tên" name="fname">
-                                        </div>
-                                        <div class="col-md-6">
-                                            <input type="email" class="form-control" placeholder="Email" name="email">
-                                        </div>
-                                    </div>
-                                    <div class="mt-2">
-                                        <input type="text" class="form-control" placeholder="Tiêu đề" name="subject">
-                                    </div>
-                                    <div class="mt-2">
-                                        <textarea class="form-control" placeholder="Nội dung cần tư vấn" name="question"></textarea>
-                                    </div>
-                                    <div class="btn-group-mission mt-3">
-                                        <button type="submit" class="site-btn">Gửi liên hệ</button>
-                                        <button type="reset" class="site-btn partner-btn">Nhập lại</button>
-                                    </div>
-                                </form>
+                                <h6>Bò</h6>
+                            </div>
+                        </div>
+                        <div class="col-lg-6 col-md-4 col-6">
+                            <div class="feature__item">
+                                <div class="feature__item__icon">
+                                    <img src="img/feature/feature-4.png" alt="">
+                                </div>
+                                <h6>Heo</h6>
+                            </div>
+                        </div>
+                        <div class="col-lg-6 col-md-4 col-6">
+                            <div class="feature__item">
+                                <div class="feature__item__icon">
+                                    <img src="img/feature/feature-5.png" alt="">
+                                </div>
+                                <h6>Rau xanh</h6>
+                            </div>
+                        </div>
+                        <div class="col-lg-6 col-md-4 col-6">
+                            <div class="feature__item">
+                                <div class="feature__item__icon">
+                                    <img src="img/feature/feature-6.png" alt="">
+                                </div>
+                                <h6>Trái cây</h6>
                             </div>
                         </div>
                     </div>
