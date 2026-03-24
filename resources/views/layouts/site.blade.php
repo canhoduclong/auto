@@ -86,7 +86,7 @@ use App\Models\Setting;
             border-color: var(--theme-accent-hover);
             color: var(--theme-ink);
         }
-
+ 
         .text-primary {
             color: var(--theme-primary) !important;
         }
