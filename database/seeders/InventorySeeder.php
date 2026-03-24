@@ -44,7 +44,11 @@ class InventorySeeder extends Seeder
             ];
         }
 
-        // Insert the data
-        Inventory::insert($inventories);
+        // Use upsert so seeding can be re-run safely without unique key violations.
+        Inventory::upsert(
+            $inventories,
+            ['product_variant_id', 'warehouse_id'],
+            ['quantity', 'low_stock_threshold', 'updated_at']
+        );
     }
 }

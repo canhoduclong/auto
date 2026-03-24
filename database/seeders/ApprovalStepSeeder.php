@@ -9,9 +9,17 @@ class ApprovalStepSeeder extends Seeder
 {
     public function run(): void
     {
+        $flowId = DB::table('approval_flows')
+            ->where('code', 'order_default')
+            ->value('id');
+
+        if (!$flowId) {
+            return;
+        }
+
        DB::table('approval_steps')->updateOrInsert(
             [
-                'approval_flow_id' => 1,
+                'approval_flow_id' => $flowId,
                 'step_order'       => 1,
             ],
             [
@@ -24,7 +32,7 @@ class ApprovalStepSeeder extends Seeder
 
         DB::table('approval_steps')->updateOrInsert(
             [
-                'approval_flow_id' => 1,
+                'approval_flow_id' => $flowId,
                 'step_order'       => 2,
             ],
             [

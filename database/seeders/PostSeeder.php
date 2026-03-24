@@ -23,25 +23,31 @@ class PostSeeder extends Seeder
         $phpTag = Tag::where('slug', 'php')->first();
         $jsTag = Tag::where('slug', 'javascript')->first();
 
-        $post1 = Post::create([
+        $post1 = Post::updateOrCreate(
+            ['slug' => Str::slug('First Post')],
+            [
             'title' => 'First Post',
             'slug' => Str::slug('First Post'),
             'content' => 'This is the content of the first post.',
             'is_published' => true,
             'post_category_id' => $newsCategory->id,
             'user_id' => 1, // Assuming user with id 1 exists
-        ]);
+            ]
+        );
 
-        $post2 = Post::create([
+        $post2 = Post::updateOrCreate(
+            ['slug' => Str::slug('Second Post')],
+            [
             'title' => 'Second Post',
             'slug' => Str::slug('Second Post'),
             'content' => 'This is the content of the second post.',
             'is_published' => true,
             'post_category_id' => $tutorialsCategory->id,
             'user_id' => 1, // Assuming user with id 1 exists
-        ]);
+            ]
+        );
 
-        $post1->tags()->attach([$laravelTag->id, $phpTag->id]);
-        $post2->tags()->attach([$jsTag->id]);
+        $post1->tags()->syncWithoutDetaching([$laravelTag->id, $phpTag->id]);
+        $post2->tags()->syncWithoutDetaching([$jsTag->id]);
     }
 }

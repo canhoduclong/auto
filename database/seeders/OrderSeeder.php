@@ -1,11 +1,10 @@
 <?php
 namespace Database\Seeders;
+
 use App\Enums\OrderStatus;
+use App\Models\Customer;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
-use Carbon\Carbon;
-use App\Models\Customer;
-use SimpleSoftwareIO\QrCode\Facades\QrCode;
 
 class OrderSeeder extends Seeder
 {
@@ -59,6 +58,10 @@ class OrderSeeder extends Seeder
             $orderData['qr_code'] = base64_encode(\SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(200)->generate($qrCodeInfo));
         }
 
-        DB::table('orders')->insert($ordersData);
+        DB::table('orders')->upsert(
+            $ordersData,
+            ['id'],
+            ['customer_id', 'user_id', 'code', 'total', 'status', 'qr_code', 'updated_at']
+        );
     }
 }

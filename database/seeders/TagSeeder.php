@@ -14,19 +14,28 @@ class TagSeeder extends Seeder
      */
     public function run(): void
     {
-        Tag::create([
+        Tag::updateOrCreate(
+            ['slug' => Str::slug('Laravel')],
+            [
             'name' => 'Laravel',
             'slug' => Str::slug('Laravel'),
-        ]);
+            ]
+        );
 
-        Tag::create([
+        Tag::updateOrCreate(
+            ['slug' => Str::slug('PHP')],
+            [
             'name' => 'PHP',
             'slug' => Str::slug('PHP'),
-        ]);
+            ]
+        );
 
-        Tag::create([
+        Tag::updateOrCreate(
+            ['slug' => Str::slug('JavaScript')],
+            [
             'name' => 'JavaScript',
             'slug' => Str::slug('JavaScript'),
-        ]);
+            ]
+        );
     }
 }

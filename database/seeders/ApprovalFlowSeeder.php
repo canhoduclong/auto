@@ -9,15 +9,14 @@ class ApprovalFlowSeeder extends Seeder
 {
     public function run(): void
     {
-        DB::table('approval_flows')->insert([
+        DB::table('approval_flows')->updateOrInsert(
+            ['code' => 'order_default'],
             [
-                'id'         => 1,
-                'code'       => 'order_default',
-                'name'       => 'Luồng duyệt đơn hàng mặc định',
-                'is_active'  => true,
-                'created_at'=> now(),
-                'updated_at'=> now(),
-            ],
-        ]);
+                'name' => 'Luồng duyệt đơn hàng mặc định',
+                'is_active' => true,
+                'updated_at' => now(),
+                'created_at' => now(),
+            ]
+        );
     }
 }

@@ -14,14 +14,20 @@ class PostCategorySeeder extends Seeder
      */
     public function run(): void
     {
-        PostCategory::create([
+        PostCategory::updateOrCreate(
+            ['slug' => Str::slug('News')],
+            [
             'name' => 'News',
             'slug' => Str::slug('News'),
-        ]);
+            ]
+        );
 
-        PostCategory::create([
+        PostCategory::updateOrCreate(
+            ['slug' => Str::slug('Tutorials')],
+            [
             'name' => 'Tutorials',
             'slug' => Str::slug('Tutorials'),
-        ]);
+            ]
+        );
     }
 }
