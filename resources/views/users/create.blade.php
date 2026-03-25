@@ -40,7 +40,7 @@
         <div class="mb-3">
             <label class="form-label">Team</label>
             <select name="team_id" class="form-control">
-                <option value="">-- Chưa gán team --</option>
+                <option value="">-- --- team --</option>
                 @foreach($teams as $team)
                     <option value="{{ $team->id }}">{{ $team->name }}</option>
                 @endforeach

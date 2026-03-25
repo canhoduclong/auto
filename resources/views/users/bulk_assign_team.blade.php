@@ -87,7 +87,7 @@
                                     <span class="badge bg-info">{{ $role->name }}</span>
                                 @endforeach
                             </td>
-                            <td>{{ $user->team->name ?? 'Chưa gán' }}</td>
+                            <td>{{ $user->team->name ?? '---' }}</td>
                         </tr>
                     @empty
                         <tr>
