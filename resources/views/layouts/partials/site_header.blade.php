@@ -261,6 +261,9 @@
                                         <a class="dropdown-item" href="{{ route('pages.my_customer') }}">
                                             <i class="bi bi-people"></i> {{ __('site.my_customers') }}
                                         </a>
+                                        <a class="dropdown-item" href="{{ route('work-reports.index') }}">
+                                            <i class="bi bi-clipboard-data"></i> Báo cáo công việc
+                                        </a>
                                         <a class="dropdown-item" href="{{ url('/dashboard') }}">
                                             <i class="bi bi-speedometer2"></i> {{ __('site.dashboard') }}
                                         </a>

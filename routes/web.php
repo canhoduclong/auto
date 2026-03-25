@@ -75,6 +75,8 @@ Route::middleware('guest')->group(function () {
 });
 
 Route::middleware(['auth'])->group(function () {
+    // Báo cáo công việc cho user frontend
+    Route::get('work-reports', [\App\Http\Controllers\WorkReportController::class, 'index'])->name('work-reports.index');
     // AJAX lấy tổng tiền đơn hàng
     Route::get('orders/ajax/total', [OrderAjaxController::class, 'total'])->name('orders.ajax.total');
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
