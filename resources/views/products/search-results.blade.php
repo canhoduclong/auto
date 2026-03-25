@@ -36,7 +36,7 @@
                                             <p class="card-text">Thương hiệu: {{ $variant->product->brand->name }}</p>
                                         @endif 
                                         @if($variant->sku)
-                                            <p class="card-text">Mã sản phẩm: {{ $variant->sku }}</p>
+                                            <p class="card-text">{{ $variant->sku }}</p>
                                         @endif
                                         <p class="card-text">Giá: {{ number_format($variant->final_price, 0, '.', ',') }} VNĐ</p>
                                         <div class="car__item__prưice mt-2 mb-4"> 
