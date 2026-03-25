@@ -5,16 +5,23 @@ namespace App\Http\Controllers;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;  
 use Illuminate\Http\Request; 
 use App\Models\Category;
-use Illuminate\Support\Facades\Auth; 
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage; 
 
 class CategoryController extends Controller
 {
     use AuthorizesRequests;
+
     public function index(Request $request)
     {
         $this->authorize('viewAny', Category::class);
-        $categories = Category::whereNull('parent_id')->with('children')->get(); 
+
+        $categories = Category::whereNull('parent_id')
+            ->with('children')
+            ->orderByDesc('id')
+            ->paginate(15)
+            ->appends($request->query());
+
         return view('categories.index', compact('categories')); 
     }
     
@@ -73,9 +80,47 @@ class CategoryController extends Controller
         return redirect()->route('categories.index')->with('success', 'Cập nhật danh mục thành công!');
     }
 
-    public function destroy(Category $category)
+    public function bulkDelete(Request $request)
+    {
+        $validated = $request->validate([
+            'redirect_to' => 'nullable|string',
+            'category_ids' => 'required|array|min:1',
+            'category_ids.*' => 'required|integer|exists:categories,id',
+        ]);
+
+        $categoryIds = collect($validated['category_ids'])
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        $categories = Category::whereIn('id', $categoryIds)->get();
+
+        foreach ($categories as $category) {
+            $this->authorize('delete', $category);
+        }
+
+        DB::transaction(function () use ($categories) {
+            foreach ($categories as $category) {
+                $this->deleteCategorySafely($category);
+            }
+        });
+
+        return $this->redirectAfterDeletion($request, 'Đã xóa các danh mục đã chọn.');
+    }
+
+    public function destroy(Request $request, Category $category)
     {
         $this->authorize('delete', $category);
+
+        DB::transaction(function () use ($category) {
+            $this->deleteCategorySafely($category);
+        });
+
+        return $this->redirectAfterDeletion($request, 'Category deleted successfully.');
+    }
+
+    private function deleteCategorySafely(Category $category): void
+    {
 
         // Set category_id = null cho các sản phẩm đang dùng category này
         $category->products()->update(['category_id' => null]);
@@ -84,7 +129,21 @@ class CategoryController extends Controller
         $category->children()->update(['parent_id' => null]);
 
         $category->delete();
+    }
 
-        return redirect()->route('categories.index')->with('success', 'Category deleted successfully.');
+    private function redirectAfterDeletion(Request $request, string $message)
+    {
+        $redirectTo = $request->input('redirect_to');
+
+        if (is_string($redirectTo) && $redirectTo !== '') {
+            $redirectHost = parse_url($redirectTo, PHP_URL_HOST);
+            $appHost = parse_url(url('/'), PHP_URL_HOST);
+
+            if ($redirectHost === null || $redirectHost === $appHost) {
+                return redirect()->to($redirectTo)->with('success', $message);
+            }
+        }
+
+        return redirect()->route('categories.index')->with('success', $message);
     }
 }

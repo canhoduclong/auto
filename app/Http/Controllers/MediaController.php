@@ -63,23 +63,34 @@ class MediaController extends Controller
         if (!is_array($files)) {
             $files = [$files];
         }
+        $created = [];
+
         foreach ($files as $file) {
             $path = $file->store('media', 'public');
-            \App\Models\Media::create([
+            $media = \App\Models\Media::create([
                 'file_name'   => $file->getClientOriginalName(),
                 'file_path'   => $path,
                 'mime_type'   => $file->getMimeType(),
                 'file_size'   => $file->getSize(),
                 'uploaded_by' => auth()->id(),
             ]);
+
+            $created[] = [
+                'id' => $media->id,
+                'url' => asset('storage/' . $media->file_path),
+                'file_name' => $media->file_name,
+            ];
         }
+
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Media updated successfully!',
+                'items' => $created,
+            ]);
+        }
+
         return redirect()->route('media.library.popup')->with('success', 'Media updated successfully!');
-        
-        // Trả JSON để JS cập nhật ngay mà không reload
-        // return response()->json([
-        //    'id'  => $media->id,
-        //    'url' => asset('storage/'.$media->file_path),
-        //]);
     }
 
     public function storeGallery(Request $request)

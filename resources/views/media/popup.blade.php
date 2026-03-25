@@ -7,7 +7,7 @@
             <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
                 <div>
                     <h3 class="mb-1">Thư viện Media</h3>
-                    <p class="mb-0 text-muted">Chọn 1 ảnh để cập nhật nhanh cho sản phẩm.</p>
+                    <p class="mb-0 text-muted">Chọn 1 ảnh để cập nhật nhanh cho logo, banner hoặc slider. Upload xong danh sách sẽ tự làm mới để chọn ngay.</p>
                 </div>
                 <div class="d-flex align-items-center gap-2">
                     <span class="badge rounded-pill text-bg-light" id="selectedMediaHint">Chưa chọn ảnh</span>
@@ -37,7 +37,7 @@
                     <form action="{{ route('media.popup.store') }}" method="POST" enctype="multipart/form-data" class="d-flex gap-2" id="popupUploadForm">
                         @csrf
                         <input type="file" name="file[]" class="form-control" multiple required id="popupUploadInput" accept="image/*">
-                        <button type="submit" class="btn btn-primary text-nowrap">Upload</button>
+                        <button type="submit" class="btn btn-primary text-nowrap" id="popupUploadBtn">Upload</button>
                     </form>
                 </div>
             </div>
@@ -45,6 +45,7 @@
                 <div class="upload-preview-title">Ảnh sẽ upload:</div>
                 <div class="upload-preview-grid" id="uploadPreviewGrid"></div>
             </div>
+            <div class="small text-muted mt-2" id="popupUploadStatus">Sẵn sàng upload.</div>
         </div>
     </div>
 
@@ -224,12 +225,19 @@
     const dismissPopupBtn = document.getElementById('dismissPopupBtn');
     const closePopupBtn = document.getElementById('closePopupBtn');
     const uploadInput = document.getElementById('popupUploadInput');
+    const uploadForm = document.getElementById('popupUploadForm');
+    const uploadBtn = document.getElementById('popupUploadBtn');
+    const uploadStatus = document.getElementById('popupUploadStatus');
     const uploadPreviewWrap = document.getElementById('uploadPreviewWrap');
     const uploadPreviewGrid = document.getElementById('uploadPreviewGrid');
 
     let selectedMedia = null;
 
     function closeHostPopup() {
+        if (window.parent && window.parent !== window) {
+            window.parent.postMessage({ type: 'closeMediaPopup' }, '*');
+        }
+
         if (window.parent && window.parent !== window) {
             if (window.parent.bootstrap && window.parent.document.getElementById('mediaModal')) {
                 const modalEl = window.parent.document.getElementById('mediaModal');
@@ -334,6 +342,49 @@
 
     uploadInput.addEventListener('change', function() {
         renderUploadPreview(this.files);
+        if (this.files && this.files.length > 0) {
+            uploadStatus.textContent = 'Đã chọn ' + this.files.length + ' ảnh. Bấm Upload để tải lên.';
+        } else {
+            uploadStatus.textContent = 'Sẵn sàng upload.';
+        }
+    });
+
+    uploadForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        if (!uploadInput.files || uploadInput.files.length === 0) {
+            uploadStatus.textContent = 'Vui lòng chọn ít nhất 1 ảnh trước khi upload.';
+            return;
+        }
+
+        const formData = new FormData(uploadForm);
+        uploadBtn.disabled = true;
+        uploadBtn.textContent = 'Đang upload...';
+        uploadStatus.textContent = 'Đang tải ảnh lên, vui lòng chờ...';
+
+        try {
+            const response = await fetch(uploadForm.action, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: formData,
+                credentials: 'same-origin',
+            });
+
+            if (!response.ok) {
+                throw new Error('Upload failed');
+            }
+
+            uploadStatus.textContent = 'Upload thành công. Đang làm mới danh sách ảnh...';
+            window.location.reload();
+        } catch (error) {
+            uploadStatus.textContent = 'Upload thất bại, vui lòng thử lại.';
+        } finally {
+            uploadBtn.disabled = false;
+            uploadBtn.textContent = 'Upload';
+        }
     });
 
     searchInput.addEventListener('input', filterGrid);

@@ -207,6 +207,7 @@ Route::middleware(['auth'])->group(function () {
     Route::put('approval-workflows/{approvalWorkflow}', [ApprovalWorkflowController::class, 'update'])->name('approval-workflows.update');
 
     // Quản lý danh mục
+    Route::post('categories/bulk-delete', [CategoryController::class, 'bulkDelete'])->name('categories.bulk-delete')->middleware('permission');
     Route::resource('categories', CategoryController::class)->middleware('permission');
 
     // Quản lý vai trò
