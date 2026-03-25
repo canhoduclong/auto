@@ -324,12 +324,23 @@
                         <label for="to_date" class="form-label fw-bold">Đến ngày</label>
                         <input type="date" name="to_date" id="to_date" class="form-control" value="{{ request('to_date') }}">
                     </div>
-                    <div class="col-md-1 d-grid">
-                        <button type="submit" class="btn btn-primary">
+                    <div class="col-md-1 d-grid mb-2">
+                        <button type="submit" class="btn btn-primary mb-2">
                             <i class="fa fa-search"></i>
+                        </button>
+                        <button type="button" class="btn btn-outline-primary" onclick="setTodayOrders()" style="font-size:0.95rem;">
+                            Đơn hôm nay
                         </button>
                     </div>
                 </form>
+                <script>
+                    function setTodayOrders() {
+                        const today = new Date().toISOString().slice(0, 10);
+                        document.getElementById('from_date').value = today;
+                        document.getElementById('to_date').value = today;
+                        document.querySelector('.orders-filter form').submit();
+                    }
+                </script>
             </div>
         </div>
 
