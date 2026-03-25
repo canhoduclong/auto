@@ -78,8 +78,8 @@
                 <td>{{ $user->id }}</td>
                 <td>{{ $user->name }}</td>
                 <td>{{ $user->email }}</td>
-                <td>{{ $user->team->name ?? '---' }}</td>
-                <td>{{ $user->warehouse->name ?? '---' }}</td>
+                <td>{{ $user->team->name ?? '----' }}</td>
+                <td>{{ $user->warehouse->name ?? '----' }}</td>
                 <td>
                     @foreach($user->roles as $role)
                         <span class="badge bg-info">{{ $role->name }}</span>
