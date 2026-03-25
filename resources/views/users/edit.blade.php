@@ -28,6 +28,21 @@
             <input type="password" name="password_confirmation" class="form-control">
         </div>
 
+
+        <div class="mb-4">
+            <label class="form-label">Ảnh đại diện</label>
+            <div class="card p-3 d-flex flex-row align-items-center" style="max-width: 400px;">
+                <div class="me-3">
+                    <img id="avatarPreview" src="{{ $user->avatar ? asset($user->avatar) : 'https://ui-avatars.com/api/?name=' . urlencode($user->name ?? 'User') . '&background=0F172A&color=F8FAFC&size=150' }}" alt="Avatar" class="rounded-circle border" style="width: 100px; height: 100px; object-fit: cover;">
+                </div>
+                <div class="flex-grow-1">
+                    <input type="file" name="avatar" id="avatar" class="form-control mb-2" accept="image/*">
+                    <small class="text-muted">Ảnh vuông, tối đa 2MB.</small>
+                    @error('avatar') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
+                </div>
+            </div>
+        </div>
+
         <div class="mb-3">
             <label class="form-label">Vai trò</label>
             <div>
@@ -69,6 +84,29 @@
 
         <button type="submit" class="btn btn-primary">Cập nhật</button>
         <a href="{{ route('users.index') }}" class="btn btn-secondary">Hủy</a>
+
+    </form>
+
+    <script>
+        // Hiển thị preview ảnh khi chọn file mới
+        document.addEventListener('DOMContentLoaded', function () {
+            const avatarInput = document.getElementById('avatar');
+            const avatarPreview = document.getElementById('avatarPreview');
+            if (avatarInput && avatarPreview) {
+                avatarInput.addEventListener('change', function (event) {
+                    const [file] = event.target.files || [];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = function (e) {
+                        if (typeof e.target.result === 'string') {
+                            avatarPreview.src = e.target.result;
+                        }
+                    };
+                    reader.readAsDataURL(file);
+                });
+            }
+        });
+    </script>
     </form>
 </div>
 @endsection
