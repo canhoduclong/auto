@@ -35,7 +35,7 @@ return [
         'en' => 'Tiếng Anh',
     ],
     'meta' => [
-        'default_description' => 'AUTO TAY BAC',
-        'default_keywords' => 'AUTO TAY BAC',
+        'default_description' => 'Hoàng Long TNT - Nhà cung cấp giải pháp công nghệ hàng đầu tại Việt Nam',
+        'default_keywords' => 'Hoàng Long TNT, công nghệ, Việt Nam',
     ],
 ];
