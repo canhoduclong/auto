@@ -265,6 +265,41 @@
 </div>
 @endsection
 
+@push('scripts')
+<script>
+// Đảm bảo cập nhật nhanh ảnh đại diện sản phẩm khi chọn từ popup
+document.addEventListener('DOMContentLoaded', function () {
+    const btnSelectMedia = document.getElementById('btnSelectMedia');
+    const mediaPreview = document.getElementById('mediaPreview');
+    const mediaIdInput = document.getElementById('media_id');
+    let mediaModal = null;
+
+    if (btnSelectMedia) {
+        btnSelectMedia.addEventListener('click', function () {
+            // Mở modal chọn media
+            if (!mediaModal) {
+                mediaModal = new bootstrap.Modal(document.getElementById('mediaModal'));
+            }
+            mediaModal.show();
+        });
+    }
+
+    // Lắng nghe postMessage từ popup media
+    window.addEventListener('message', function (event) {
+        if (event.data && event.data.type === 'mediaSelected') {
+            // Cập nhật input và preview
+            if (mediaIdInput) mediaIdInput.value = event.data.mediaId;
+            if (mediaPreview) {
+                mediaPreview.innerHTML = `<img src="${event.data.url}" width="120" class="img-thumbnail">`;
+            }
+            // Đóng modal nếu có
+            if (mediaModal) mediaModal.hide();
+        }
+    });
+});
+</script>
+@endpush
+
 <script>
 // Thêm biến thể mới (có cột hình ảnh)
 

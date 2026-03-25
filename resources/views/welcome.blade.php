@@ -815,7 +815,7 @@
                             <div class="car__item__text__inner"> 
                                 <h5><a href="{{ route('pages.variant_detail', $variant) }}" class="text-uppercase">{{ $variant->product->name }} - {{ $variant->name }}</a></h5>
                                  @if($variant->sku)
-                                    <p class="product-meta">Mã sản phẩm: {{ $variant->sku }}</p>
+                                    <p class="product-meta">{{ $variant->sku }}</p>
                                 @endif
                                 <p class="product-price">{{ number_format($variant->final_price, 0, '.', ',') }} VNĐ</p>
                                 <div class="btn-group"> 

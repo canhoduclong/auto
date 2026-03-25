@@ -411,7 +411,7 @@
                                                 </a>
                                             </h5>
                                             @if($other_variant->sku)
-                                                <p class="product-meta">Mã sản phẩm: {{ $other_variant->sku }}</p>
+                                                <p class="product-meta">{{ $other_variant->sku }}</p>
                                             @endif
                                             <p class="product-price">{{ number_format($other_variant->latestPriceRule?->price ?? 0, 0, '.', ',') }} VNĐ</p>
                                             <div class="btn-group">
