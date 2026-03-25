@@ -220,6 +220,7 @@ Route::middleware(['auth'])->group(function () {
     // Quản lý người dùng
     Route::get('users/bulk-assign-team', [UserController::class, 'bulkAssignTeamForm'])->name('users.bulk-assign-team.form')->middleware('permission');
     Route::post('users/bulk-assign-team', [UserController::class, 'bulkAssignTeam'])->name('users.bulk-assign-team')->middleware('permission');
+    Route::post('users/bulk-delete', [UserController::class, 'bulkDelete'])->name('users.bulk-delete')->middleware('permission');
     Route::resource('users', UserController::class)->middleware('permission');
     Route::resource('teams', TeamController::class)->middleware('permission');
 

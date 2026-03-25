@@ -7,7 +7,9 @@ use App\Models\Role;
 use App\Models\Team;
 use App\Models\Warehouse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 
 class UserController extends Controller
 {
@@ -90,6 +92,33 @@ class UserController extends Controller
         return redirect()->route('users.bulk-assign-team.form')->with('success', $message);
     }
 
+    public function bulkDelete(Request $request)
+    {
+        $validated = $request->validate([
+            'redirect_to' => 'nullable|string',
+            'user_ids' => 'required|array|min:1',
+            'user_ids.*' => 'required|integer|exists:users,id',
+        ]);
+
+        $userIds = collect($validated['user_ids'])
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        DB::transaction(function () use ($userIds) {
+            $this->releaseUserReferences($userIds->all());
+
+            $users = User::whereIn('id', $userIds)->get();
+
+            foreach ($users as $user) {
+                $user->roles()->detach();
+                $user->delete();
+            }
+        });
+
+        return $this->redirectAfterDeletion($request, __('users.messages.bulk_deleted'));
+    }
+
     public function create()
     {
         $roles = Role::all();
@@ -161,10 +190,55 @@ class UserController extends Controller
         return redirect()->route('users.index')->with('success', __('users.messages.updated'));
     }
 
-    public function destroy(User $user)
+    public function destroy(Request $request, User $user)
     {
-        $user->roles()->detach();
-        $user->delete();
-        return redirect()->route('users.index')->with('success', __('users.messages.deleted'));
+        DB::transaction(function () use ($user) {
+            $this->releaseUserReferences([$user->id]);
+            $user->roles()->detach();
+            $user->delete();
+        });
+
+        return $this->redirectAfterDeletion($request, __('users.messages.deleted'));
+    }
+
+    private function redirectAfterDeletion(Request $request, string $message)
+    {
+        $redirectTo = $request->input('redirect_to');
+
+        if (is_string($redirectTo) && $redirectTo !== '') {
+            $redirectHost = parse_url($redirectTo, PHP_URL_HOST);
+            $appHost = parse_url(url('/'), PHP_URL_HOST);
+
+            if ($redirectHost === null || $redirectHost === $appHost) {
+                return redirect()->to($redirectTo)->with('success', $message);
+            }
+        }
+
+        return redirect()->route('users.index')->with('success', $message);
+    }
+
+    private function releaseUserReferences(array $userIds): void
+    {
+        if ($userIds === []) {
+            return;
+        }
+
+        if (Schema::hasTable('customers') && Schema::hasColumn('customers', 'assigned_to')) {
+            DB::table('customers')
+                ->whereIn('assigned_to', $userIds)
+                ->update(['assigned_to' => null]);
+        }
+
+        if (Schema::hasTable('companies') && Schema::hasColumn('companies', 'assigned_to')) {
+            DB::table('companies')
+                ->whereIn('assigned_to', $userIds)
+                ->update(['assigned_to' => null]);
+        }
+
+        if (Schema::hasTable('approval_orders') && Schema::hasColumn('approval_orders', 'approved_by')) {
+            DB::table('approval_orders')
+                ->whereIn('approved_by', $userIds)
+                ->update(['approved_by' => null]);
+        }
     }
 }
