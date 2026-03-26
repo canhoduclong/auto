@@ -346,7 +346,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             let id = container.dataset.id;
             let quantity = e.target.value;
-            
+
             fetch(`/cart/update/${id}`, {
                 method: 'PATCH',
                 credentials: 'same-origin',
@@ -360,12 +360,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 })
             })
             .then(async response => {
-                const data = await response.json();
-
+                let data;
+                try {
+                    data = await response.json();
+                } catch (err) {
+                    showReloadPopup();
+                    throw new Error('Session expired or server error.');
+                }
                 if (!response.ok || !data.success) {
                     throw new Error(data.message || 'Khong the cap nhat so luong.');
                 }
-
                 return data;
             })
             .then(data => {
@@ -378,6 +382,33 @@ document.addEventListener('DOMContentLoaded', function() {
 
                     const lineSubtotal = itemContainer.querySelector('.cart-line-subtotal');
                     if (lineSubtotal) {
+                        // ...existing code...
+                    }
+                });
+                // ...existing code...
+            })
+            .catch(function(error) {
+                showReloadPopup();
+            });
+        });
+    });
+
+    function showReloadPopup() {
+        if (window.Swal) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Phiên đăng nhập đã hết hạn hoặc có lỗi hệ thống',
+                text: 'Vui lòng tải lại trang để tiếp tục sử dụng.',
+                confirmButtonText: 'Tải lại trang',
+                allowOutsideClick: false
+            }).then(() => {
+                window.location.reload();
+            });
+        } else {
+            alert('Phiên đăng nhập đã hết hạn hoặc có lỗi hệ thống. Trang sẽ được tải lại.');
+            window.location.reload();
+        }
+    }
                         lineSubtotal.textContent = data.item.formatted_subtotal;
                     }
                 });
