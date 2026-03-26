@@ -305,7 +305,7 @@
                 </div>
 
                 <form action="{{ route('pages.my_orders') }}" method="GET" class="row g-3 align-items-end">
-                    <div class="col-md-5">
+                    <div class="col-md-4">
                         <label for="customer_id" class="form-label fw-bold">Khách hàng</label>
                         <select name="customer_id" id="customer_id" class="form-select">
                             <option value="">Tất cả khách hàng</option>
@@ -316,22 +316,25 @@
                             @endforeach
                         </select>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <label for="from_date" class="form-label fw-bold">Từ ngày</label>
                         <input type="date" name="from_date" id="from_date" class="form-control" value="{{ request('from_date') }}">
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <label for="to_date" class="form-label fw-bold">Đến ngày</label>
                         <input type="date" name="to_date" id="to_date" class="form-control" value="{{ request('to_date') }}">
                     </div>
-                    <div class="col-md-1 d-grid mb-2">
-                        <button type="submit" class="btn btn-primary mb-2">
-                            <i class="fa fa-search"></i>
-                        </button>
-                        <button type="button" class="btn btn-outline-primary" onclick="setTodayOrders()" style="font-size:0.95rem;">
+                     <div class="col-md-2">
+                        <button type="button" class="btn btn-outline-primary onclick="setTodayOrders()" style="font-size:0.95rem;">
                             Đơn hôm nay
                         </button>
+                    </div> 
+                    <div class="col-md-2 d-grid">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fa fa-search"></i>
+                        </button> 
                     </div>
+                    
                 </form>
                 <script>
                     function setTodayOrders() {

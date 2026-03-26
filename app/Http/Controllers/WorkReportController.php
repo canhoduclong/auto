@@ -34,19 +34,37 @@ class WorkReportController extends Controller
             $end = Carbon::parse($date)->endOfMonth();
         }
 
-        // Thống kê số lượng sản phẩm
-        $productCount = Product::whereBetween('created_at', [$start, $end])->count();
-        // Thống kê số lượng đơn hàng
-        $orders = Order::with('customer')->whereBetween('created_at', [$start, $end])->orderByDesc('created_at')->limit(30)->get();
+        $user = $request->user();
+
+        // Thống kê số lượng sản phẩm (nếu muốn chỉ sản phẩm của user thì thêm where user_id)
+        $productCount = Product::where('user_id', $user->id)->whereBetween('created_at', [$start, $end])->count();
+
+        // Thống kê số lượng đơn hàng của user
+        $orders = Order::with('customer')
+            ->where('user_id', $user->id)
+            ->whereBetween('created_at', [$start, $end])
+            ->orderByDesc('created_at')
+            ->limit(30)
+            ->get();
         $orderCount = $orders->count();
-        // Thống kê khách hàng mới
-        $newCustomers = Customer::whereBetween('created_at', [$start, $end])->orderByDesc('created_at')->limit(30)->get();
+
+        // Thống kê khách hàng mới của user
+        $newCustomers = Customer::where('user_id', $user->id)
+            ->whereBetween('created_at', [$start, $end])
+            ->orderByDesc('created_at')
+            ->limit(30)
+            ->get();
         $newCustomerCount = $newCustomers->count();
-        // Thống kê khách hàng cũ (có đơn trong khoảng này nhưng tạo trước đó)
-        $oldCustomerCount = Order::whereBetween('created_at', [$start, $end])
-            ->whereHas('customer', function($q) use ($start) {
-                $q->where('created_at', '<', $start);
-            })->distinct('customer_id')->count('customer_id');
+
+        // Thống kê khách hàng cũ (có đơn trong khoảng này nhưng tạo trước đó, của user)
+        $oldCustomerCount = Order::where('user_id', $user->id)
+            ->whereBetween('created_at', [$start, $end])
+            ->whereHas('customer', function($q) use ($start, $user) {
+                $q->where('created_at', '<', $start)
+                  ->where('user_id', $user->id);
+            })
+            ->distinct('customer_id')
+            ->count('customer_id');
 
         return view('site.work_report', [
             'type' => $type,
