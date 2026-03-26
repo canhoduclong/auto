@@ -373,19 +373,35 @@ document.addEventListener('DOMContentLoaded', function() {
                 return data;
             })
             .then(data => {
+                // Cập nhật số lượng và tạm tính từng dòng
                 const sameItems = document.querySelectorAll(`[data-id="${id}"]`);
                 sameItems.forEach(function(itemContainer) {
                     const qtyInput = itemContainer.querySelector('.update-cart');
                     if (qtyInput) {
                         qtyInput.value = data.item.quantity;
                     }
-
                     const lineSubtotal = itemContainer.querySelector('.cart-line-subtotal');
                     if (lineSubtotal) {
-                        // ...existing code...
+                        lineSubtotal.textContent = data.item.formatted_subtotal;
                     }
                 });
-                // ...existing code...
+                // Cập nhật tổng tiền, số lượng sản phẩm, số dòng
+                const summaryItemCount = document.querySelector('.summary-item-count');
+                if (summaryItemCount) {
+                    summaryItemCount.textContent = data.summary.item_count;
+                }
+                const summaryLineCount = document.querySelector('.summary-line-count');
+                if (summaryLineCount) {
+                    summaryLineCount.textContent = data.summary.line_count;
+                }
+                const summaryTotal = document.querySelector('.summary-total');
+                if (summaryTotal) {
+                    summaryTotal.textContent = data.summary.formatted_total;
+                }
+                const summaryLineBadge = document.querySelector('.summary-line-badge');
+                if (summaryLineBadge) {
+                    summaryLineBadge.textContent = `${data.summary.line_count} dong san pham`;
+                }
             })
             .catch(function(error) {
                 showReloadPopup();
@@ -409,35 +425,7 @@ document.addEventListener('DOMContentLoaded', function() {
             window.location.reload();
         }
     }
-                        lineSubtotal.textContent = data.item.formatted_subtotal;
-                    }
-                });
 
-                const summaryItemCount = document.querySelector('.summary-item-count');
-                if (summaryItemCount) {
-                    summaryItemCount.textContent = data.summary.item_count;
-                }
-
-                const summaryLineCount = document.querySelector('.summary-line-count');
-                if (summaryLineCount) {
-                    summaryLineCount.textContent = data.summary.line_count;
-                }
-
-                const summaryTotal = document.querySelector('.summary-total');
-                if (summaryTotal) {
-                    summaryTotal.textContent = data.summary.formatted_total;
-                }
-
-                const summaryLineBadge = document.querySelector('.summary-line-badge');
-                if (summaryLineBadge) {
-                    summaryLineBadge.textContent = `${data.summary.line_count} dong san pham`;
-                }
-            })
-            .catch(error => {
-                alert(error.message || 'Khong the cap nhat gio hang.');
-            });
-        });
-    });
 
     // Remove item
     document.querySelectorAll('.remove-from-cart').forEach(function(element) {
