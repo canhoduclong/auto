@@ -218,6 +218,14 @@ class CartController extends Controller
 
     public function remove(Request $request, $id)
     {
+        // Nếu session hết hạn hoặc không có cart, trả về JSON lỗi
+        if (!session()->has('cart')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Phiên làm việc đã hết hạn. Vui lòng tải lại trang.',
+                'cart_count' => 0,
+            ], 440); // 440: Login Timeout (custom)
+        }
         $cart = session()->get('cart', []);
         $itemId = $id ?: $request->input('id');
 
@@ -235,6 +243,15 @@ class CartController extends Controller
 
     public function updateQuantity(Request $request, $id)
     {
+        // Nếu session hết hạn hoặc không có cart, trả về JSON lỗi
+        if (!session()->has('cart')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Phiên làm việc đã hết hạn. Vui lòng tải lại trang.',
+                'item' => null,
+                'summary' => null,
+            ], 440); // 440: Login Timeout (custom)
+        }
         $quantity = (int) $request->input('quantity', 0);
         if ($quantity < 1) {
             return response()->json([

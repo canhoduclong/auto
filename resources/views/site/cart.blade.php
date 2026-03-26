@@ -367,6 +367,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     showReloadPopup();
                     throw new Error('Session expired or server error.');
                 }
+                // Nếu lỗi session hết hạn (status 440 hoặc message chứa "hết hạn")
+                if (response.status === 440 || (data && data.message && data.message.toLowerCase().includes('hết hạn'))) {
+                    showReloadPopup();
+                    throw new Error(data.message || 'Phiên làm việc đã hết hạn.');
+                }
                 if (!response.ok || !data.success) {
                     throw new Error(data.message || 'Khong the cap nhat so luong.');
                 }
@@ -445,9 +450,19 @@ document.addEventListener('DOMContentLoaded', function() {
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
                 }
             })
-            .then(response => response.json())
-            .then(data => {
-                if(data.success) {
+            .then(async response => {
+                let data;
+                try {
+                    data = await response.json();
+                } catch (err) {
+                    showReloadPopup();
+                    throw new Error('Session expired or server error.');
+                }
+                if (response.status === 440 || (data && data.message && data.message.toLowerCase().includes('hết hạn'))) {
+                    showReloadPopup();
+                    throw new Error(data.message || 'Phiên làm việc đã hết hạn.');
+                }
+                if (data.success) {
                     location.reload();
                 }
             });
