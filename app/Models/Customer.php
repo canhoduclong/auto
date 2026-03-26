@@ -10,6 +10,19 @@ class Customer extends Model
 {
     use HasFactory;
 
+    public function reminders()
+    {
+        return $this->hasMany(CustomerReminder::class);
+    }
+
+    // Placeholder for care logs relationship (to be implemented if care log model/table exists)
+    public function careLogs()
+    {
+        // Temporary: if CustomerCareLog does not exist, create a stub model or use a fallback
+        return $this->hasMany(\App\Models\CustomerCareLog::class);
+    }
+    use HasFactory;
+
     protected $fillable = [
         'user_id',
         'name',

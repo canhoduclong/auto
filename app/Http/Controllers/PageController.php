@@ -1188,6 +1188,19 @@ class PageController extends Controller
     {
         $this->ensureManagedCustomer($customer);
 
+        // Nếu có care_note thì tạo log mới, không validate name
+        if ($request->filled('care_note')) {
+            $request->validate([
+                'care_note' => ['required', 'string', 'max:2000'],
+            ]);
+            $customer->careLogs()->create([
+                'user_id' => auth()->id(),
+                'note' => $request->input('care_note'),
+            ]);
+            return redirect()->route('my_customer.show', $customer)->with('success', 'Đã thêm tình trạng/nhật ký chăm sóc!');
+        }
+
+        // Nếu không, cập nhật thông tin cơ bản
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['nullable', 'email', 'max:255', Rule::unique('customers', 'email')->ignore($customer->id)],
@@ -1195,7 +1208,6 @@ class PageController extends Controller
             'address' => ['nullable', 'string', 'max:1000'],
             'delivery_time' => ['nullable', 'string', 'max:255'],
         ]);
-
         $customer->update([
             'name' => $validated['name'],
             'email' => $validated['email'] ?? null,
@@ -1203,10 +1215,7 @@ class PageController extends Controller
             'address' => $validated['address'] ?? null,
             'delivery_time' => $validated['delivery_time'] ?? null,
         ]);
-
-        return redirect()
-            ->route('pages.my_customer')
-            ->with('success', 'Đã cập nhật thông tin khách hàng thành công.');
+        return redirect()->route('pages.my_customer')->with('success', 'Đã cập nhật thông tin khách hàng thành công.');
     }
 
     public function myCustomerImportForm()
@@ -1235,7 +1244,9 @@ class PageController extends Controller
             $validated['to_date'] ?? null
         );
 
-        $customer->load(['type', 'assignedTo', 'addresses']);
+        $customer->load(['type', 'assignedTo', 'addresses', 'reminders']);
+        // Load careLogs if implemented in future
+        $customer->setRelation('careLogs', $customer->careLogs);
 
         $ordersBaseQuery = $customer->orders()->getQuery();
 
@@ -1434,7 +1445,10 @@ class PageController extends Controller
             'toDate' => $toDate,
             'activeTab' => (string) ($validated['tab'] ?? 'info'),
             'orderStatuses' => $orderStatuses,
-            'settings' => $this->settings
+            'settings' => $this->settings,
+            // For Blade compatibility
+            'reminders' => $customer->reminders,
+            'careLogs' => $customer->careLogs,
         ]);
     }
 

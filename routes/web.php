@@ -75,6 +75,11 @@ Route::middleware('guest')->group(function () {
 });
 
 Route::middleware(['auth'])->group(function () {
+
+        // Customer Reminders
+        Route::post('/my-customer/{customer}/reminders', [\App\Http\Controllers\CustomerReminderController::class, 'store'])->name('customer_reminders.store');
+        Route::put('/my-customer/{customer}/reminders/{reminder}', [\App\Http\Controllers\CustomerReminderController::class, 'update'])->name('customer_reminders.update');
+        Route::delete('/my-customer/{customer}/reminders/{reminder}', [\App\Http\Controllers\CustomerReminderController::class, 'destroy'])->name('customer_reminders.destroy');
     // Báo cáo công việc cho user frontend
     Route::get('work-reports', [\App\Http\Controllers\WorkReportController::class, 'index'])->name('work-reports.index');
     // AJAX lấy tổng tiền đơn hàng

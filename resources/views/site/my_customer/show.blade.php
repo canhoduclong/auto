@@ -438,6 +438,9 @@
         font-weight: 800;
         color: #0f172a;
     }
+    .customer-border{
+        border: #dfdfdf 1px solid;
+    }
     @media (max-width: 991px) {
         .customer-summary-grid,
         .customer-report-grid,
@@ -518,38 +521,182 @@
 
 <div class="customer-detail-shell">
     <div class="customer-detail-container">
-        <div class="customer-hero">
-            <div class="customer-hero-top">
-                <div>
-                    <h1 class="customer-hero-title">{{ $customer->name }}</h1>
-                    <p class="customer-hero-subtitle">Trang chi tiet khach hang da duoc nang cap voi thong tin kinh doanh, cong no, don hang, thanh toan va bao cao nhanh de sale thao tac ngay tai /my-customer/{{ $customer->id }}.</p>
-                </div>
-                <div class="customer-action-group">
-                    <a href="{{ route('my_customer.edit', $customer) }}" class="customer-btn customer-btn-outline">Chinh sua</a>
-                    @if($customer->phone)
-                        <a href="tel:{{ preg_replace('/\D+/', '', $customer->phone) }}" class="customer-btn customer-btn-outline">Goi nhanh</a>
-                    @endif
-                    <a href="{{ route('my_customer.order.create', $customer) }}" class="customer-btn customer-btn-primary">Tao don moi</a>
-                    <a href="{{ route('pages.my_customer') }}" class="customer-btn customer-btn-soft">Quay lai</a>
+        <div class="row g-3 mb-4">
+            <!-- Card: Thông tin khách hàng -->
+            <div class="col-lg-6">
+                <div class="card shadow-sm border-0 mb-3">
+                    <div class="card-body">
+                        <h5 class="card-title mb-3" style="color:#0f766e;font-weight:700;">Thông tin khách hàng</h5>
+                        <div class="row g-2">
+                            <div class="col-6"><strong>Tên:</strong> {{ $customer->name }}</div>
+                            <div class="col-6"><strong>Điện thoại:</strong> {{ $customer->phone ?: '-' }}</div>
+                            <div class="col-6"><strong>Email:</strong> {{ $customer->email ?: '-' }}</div>
+                            <div class="col-6"><strong>Loại khách:</strong> {{ optional($customer->type)->name ?: 'Chưa phân loại' }}</div>
+                            <div class="col-12"><strong>Địa chỉ:</strong> {{ $fullAddress }}</div>
+                            <div class="col-6"><strong>Người phụ trách:</strong> {{ optional($customer->assignedTo)->name ?: auth()->user()->name }}</div>
+                        </div> 
+                        <h5 class="card-title my-3" style="color:#0f766e;font-weight:700;">Thống kê</h5>
+                        <div class="d-flex">
+                            <div class="customer-summary-label">Tong tien don hang</div>
+                            <div class="customer-summary ml-2"><strong>{{ number_format($totalOrderAmount, 0, ',', '.') }} đ</strong></div>
+                             
+                        </div>
+                        <div class="d-flex">
+                            <div class="customer-summary-label">Tong da thanh toan</div>
+                            <div class="customer-summary ml-2"><strong>{{ number_format($totalPaidAmount, 0, ',', '.') }} đ</strong></div>
+                            
+                        </div>  
+                        <div class="d-flex">                                 
+                            <div class="customer-summary-label">Cong no hien tai</div>
+                            <div class="customer-summary ml-2"><strong>{{ number_format($totalDebtAmount, 0, ',', '.') }} đ</strong></div> 
+                         </div>
+                    </div>
                 </div>
             </div>
-
-            <div class="customer-hero-meta">
-                <div class="customer-hero-meta-item">
-                    <span class="customer-hero-meta-label">Dien thoai</span>
-                    <div class="customer-hero-meta-value">{{ $customer->phone ?: '-' }}</div>
+            <!-- Card: Tình trạng & Nhật ký chăm sóc -->
+            <div class="col-lg-6">
+                <div class="card shadow-sm border-0 mb-3">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <h5 class="card-title mb-3" style="color:#0f766e;font-weight:700;">Tình trạng & Nhật ký chăm sóc</h5>
+                            <div class="mb-2">
+                                <span class="badge bg-info"><i class="bi bi-activity"></i> Trạng thái: {{ $customer->status }}</span>
+                                @if($customer->potential)
+                                    <span class="badge bg-warning text-dark ms-2">Khách tiềm năng</span>
+                                @endif
+                            </div>
+                        </div>
+                        <form method="POST" action="{{ route('my_customer.update', $customer) }}" class="mb-2">
+                            @csrf
+                            @method('PUT')
+                            <div class="mb-2">
+                                <textarea name="care_note" class="form-control form-control-sm" rows="2" placeholder="Nhập tình trạng hoặc nhật ký chăm sóc..."></textarea>
+                            </div>
+                            <div>
+                                <button class="btn btn-primary btn-sm" type="submit"><i class="bi bi-plus"></i> Lưu</button>
+                            </div>
+                        </form>
+                        <div style="max-height:120px;overflow:auto;">
+                            <ul class="list-unstyled mb-0">
+                                @foreach(($careLogs ?? $customer->careLogs ?? []) as $log)
+                                    <li class="small text-muted mb-1">
+                                        <i class="bi bi-clock"></i> <strong>{{ $log->created_at->format('d/m/Y H:i') }}</strong>
+                                        - <span class="fw-bold">{{ $log->user->name ?? '' }}</span>: {{ $log->note }}
+                                    </li>
+                                @endforeach
+                            </ul>
+                        </div>
+                    </div>
                 </div>
-                <div class="customer-hero-meta-item">
-                    <span class="customer-hero-meta-label">Email</span>
-                    <div class="customer-hero-meta-value">{{ $customer->email ?: '-' }}</div>
+            </div>
+            <!-- Card: Tần suất lấy hàng -->
+            <div class="col-lg-6">
+                <div class="card shadow-sm border-0 mb-3">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <h5 class="card-title mb-3" style="color:#0f766e;font-weight:700;">Tần suất lấy hàng</h5>
+                            <div class="mb-2">
+                                <span class="badge bg-success"><i class="bi bi-bar-chart"></i> Thực tế: {{ $customer->order_frequency_count ?? '?' }} lần/{{ $customer->order_frequency_type == 'week' ? 'tuần' : 'tháng' }}</span>
+                            </div>
+                        </div>
+                        <form method="POST" action="{{ route('my_customer.update', $customer) }}">
+                            @csrf
+                            @method('PUT')
+                            <div class="row g-2 align-items-end">
+                                <div class="col-auto">
+                                    <label class="form-label mb-1">Tần suất mong muốn</label>
+                                    <input type="number" name="order_frequency_count" class="form-control form-control-sm" min="1" value="{{ $customer->order_frequency_count ?? '' }}">
+                                </div>
+                                <div class="col-auto">
+                                    <label class="form-label mb-1">Đơn vị</label>
+                                    <select name="order_frequency_type" class="form-select form-select-sm">
+                                        <option value="week" {{ $customer->order_frequency_type == 'week' ? 'selected' : '' }}>Tuần</option>
+                                        <option value="month" {{ $customer->order_frequency_type == 'month' ? 'selected' : '' }}>Tháng</option>
+                                    </select>
+                                </div>
+                                <div class="col-auto">
+                                    <button class="btn btn-primary btn-sm" type="submit"><i class="bi bi-save"></i> Cập nhật</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
                 </div>
-                <div class="customer-hero-meta-item">
-                    <span class="customer-hero-meta-label">Loai khach</span>
-                    <div class="customer-hero-meta-value">{{ optional($customer->type)->name ?: 'Chua phan loai' }}</div>
-                </div>
-                <div class="customer-hero-meta-item">
-                    <span class="customer-hero-meta-label">Nguoi phu trach</span>
-                    <div class="customer-hero-meta-value">{{ optional($customer->assignedTo)->name ?: auth()->user()->name }}</div>
+            </div>
+            <!-- Card: Cuộc hẹn khách -->
+            <div class="col-lg-6">
+                <div class="card shadow-sm border-0 mb-3">
+                    <div class="card-body">
+                        <h5 class="card-title mb-3" style="color:#0f766e;font-weight:700;">Cuộc hẹn khách hàng</h5>
+                        <form method="POST" action="{{ route('customer_reminders.store', $customer) }}" class="mb-2">
+                            @csrf
+                            <div class="row g-2 align-items-end">
+                                <div class="col-auto">
+                                    <input type="text" name="title" class="form-control form-control-sm" placeholder="Nội dung cuộc hẹn...">
+                                </div>
+                                <div class="col-auto">
+                                    <input type="datetime-local" name="remind_at" class="form-control form-control-sm">
+                                </div>
+                                <div class="col-auto">
+                                    <button class="btn btn-success btn-sm" type="submit"><i class="bi bi-calendar-plus"></i> Thêm</button>
+                                </div>
+                            </div>
+                        </form>
+                        <div style="max-height:120px;overflow:auto;">
+                            @foreach(($reminders ?? $customer->reminders ?? []) as $reminder)
+                                <div class="small mb-1 d-flex align-items-center justify-content-between">
+                                    <div>
+                                        <i class="bi bi-calendar-event"></i> <span class="fw-bold">{{ $reminder->remind_at->format('d/m/Y H:i') }}</span> - {{ $reminder->title }}
+                                        @if($reminder->remind_at->isToday())
+                                            <span class="badge bg-danger ms-2"><i class="bi bi-bell"></i> Hôm nay</span>
+                                        @elseif($reminder->remind_at->isTomorrow())
+                                            <span class="badge bg-warning text-dark ms-2"><i class="bi bi-bell"></i> Nhắc trước 1 ngày</span>
+                                        @endif
+                                    </div>
+                                    <div>
+                                        <button type="button" class="btn btn-link btn-sm text-primary p-0 me-2" data-bs-toggle="modal" data-bs-target="#editReminderModal{{ $reminder->id }}"><i class="bi bi-pencil-square"></i></button>
+                                        <form method="POST" action="{{ route('customer_reminders.destroy', [$customer, $reminder]) }}" style="display:inline;">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="btn btn-link btn-sm text-danger p-0" onclick="return confirm('Xóa cuộc hẹn này?')"><i class="bi bi-trash"></i></button>
+                                        </form>
+                                    </div>
+                                </div>
+                                <!-- Edit Reminder Modal -->
+                                <div class="modal fade" id="editReminderModal{{ $reminder->id }}" tabindex="-1" aria-labelledby="editReminderModalLabel{{ $reminder->id }}" aria-hidden="true">
+                                    <div class="modal-dialog">
+                                        <div class="modal-content">
+                                            <form method="POST" action="{{ route('customer_reminders.update', [$customer, $reminder]) }}">
+                                                @csrf
+                                                @method('PUT')
+                                                <div class="modal-header">
+                                                    <h5 class="modal-title" id="editReminderModalLabel{{ $reminder->id }}">Sửa cuộc hẹn</h5>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                </div>
+                                                <div class="modal-body">
+                                                    <div class="mb-2">
+                                                        <label class="form-label">Nội dung cuộc hẹn</label>
+                                                        <input type="text" name="title" class="form-control" value="{{ $reminder->title }}" required>
+                                                    </div>
+                                                    <div class="mb-2">
+                                                        <label class="form-label">Thời gian nhắc</label>
+                                                        <input type="datetime-local" name="remind_at" class="form-control" value="{{ $reminder->remind_at->format('Y-m-d\TH:i') }}" required>
+                                                    </div>
+                                                    <div class="mb-2">
+                                                        <label class="form-label">Ghi chú</label>
+                                                        <textarea name="note" class="form-control">{{ $reminder->note }}</textarea>
+                                                    </div>
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+                                                    <button type="submit" class="btn btn-primary">Lưu</button>
+                                                </div>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -568,172 +715,123 @@
             </div>
         @endif
 
-        <div class="customer-grid">
-            <div class="customer-card customer-filter-card">
-                <div class="customer-card-body">
-                    <h2 class="customer-section-title">Bo loc du lieu</h2>
-                    <p class="customer-section-subtitle">Ap dung cho don hang, thanh toan va bao cao theo khach hang.</p>
-                    <form action="{{ route('my_customer.show', $customer) }}" method="GET" class="customer-form-grid">
-                        <input type="hidden" name="tab" value="{{ $activeTab }}">
-                        <div class="customer-field">
-                            <label class="customer-label">Khoang thoi gian</label>
-                            <select name="period" class="customer-select" onchange="toggleMyCustomerCustomRange(this.value)">
-                                <option value="today" {{ $period === 'today' ? 'selected' : '' }}>Hom nay</option>
-                                <option value="week" {{ $period === 'week' ? 'selected' : '' }}>Tuan nay</option>
-                                <option value="month" {{ $period === 'month' ? 'selected' : '' }}>Thang nay</option>
-                                <option value="custom" {{ $period === 'custom' ? 'selected' : '' }}>Khoang tuy chon</option>
-                            </select>
-                        </div>
-                        <div class="customer-field customer-custom-range" style="display: {{ $period === 'custom' ? 'block' : 'none' }};">
-                            <label class="customer-label">Tu ngay</label>
-                            <input type="date" name="from_date" class="customer-input" value="{{ $fromDate->toDateString() }}">
-                        </div>
-                        <div class="customer-field customer-custom-range" style="display: {{ $period === 'custom' ? 'block' : 'none' }};">
-                            <label class="customer-label">Den ngay</label>
-                            <input type="date" name="to_date" class="customer-input" value="{{ $toDate->toDateString() }}">
-                        </div>
-                        <div class="customer-field wide">
-                            <label class="customer-label">Trang thai don hang</label>
-                            <select name="order_status" class="customer-select">
-                                <option value="">Tat ca</option>
-                                @foreach($orderStatuses as $status)
-                                    <option value="{{ $status }}" {{ request('order_status') === $status ? 'selected' : '' }}>{{ $status }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div class="customer-field full">
-                            <div class="customer-inline-actions">
-                                <button type="submit" class="customer-btn customer-btn-primary" style="border:none;">Loc du lieu</button>
-                                <a href="{{ route('my_customer.show', $customer) }}" class="customer-btn customer-btn-soft">Reset</a>
-                                <span class="customer-muted">Bo loc hien tai: {{ $periodLabel }} ({{ $fromDate->format('d/m/Y') }} - {{ $toDate->format('d/m/Y') }})</span>
-                            </div>
-                        </div>
-                    </form>
-                </div>
-            </div>
 
-            <div class="customer-summary-grid">
-                <div class="customer-summary-card total">
-                    <span class="customer-summary-label">Tong tien don hang</span>
-                    <div class="customer-summary-value">{{ number_format($totalOrderAmount, 0, ',', '.') }} đ</div>
-                    <div class="customer-summary-note">Doanh thu toan bo cua khach hang</div>
+        <style>
+        .pro-filter-card {
+            background: linear-gradient(90deg, #f8fafc 60%, #e0e7ef 100%);
+            border-radius: 24px;
+            box-shadow: 0 4px 24px rgba(15,23,42,0.07);
+            margin-bottom: 0;
+            padding: 0;
+            border: none;
+        }
+        .pro-filter-form {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 18px;
+            padding: 22px 28px 12px 28px;
+        }
+        .pro-filter-group {
+            display: flex;
+            flex-direction: column;
+            min-width: 120px;
+            margin-bottom: 10px;
+        }
+        .pro-filter-label {
+            font-size: 12px;
+            color: #64748b;
+            font-weight: 600;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .pro-filter-input, .pro-filter-select {
+            border-radius: 16px;
+            border: 1px solid #cbd5e1;
+            min-height: 38px;
+            font-size: 15px;
+            padding: 0 12px;
+            background: #fff;
+            color: #0f172a;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .pro-filter-input:focus, .pro-filter-select:focus {
+            border-color: #2563eb;
+            box-shadow: 0 0 0 2px #dbeafe;
+            outline: none;
+        }
+        .pro-filter-btn {
+            border-radius: 16px;
+            min-width: 90px;
+            font-weight: 700;
+            font-size: 15px;
+            padding: 0 18px;
+        }
+        .pro-filter-summary {
+            font-size: 13px;
+            color: #64748b;
+            margin-left: 12px;
+            margin-top: 8px;
+        }
+        @media (max-width: 900px) {
+            .pro-filter-form { flex-direction: column; align-items: stretch; gap: 10px; padding: 18px 10px 8px 10px; }
+            .pro-filter-group { min-width: 100px; }
+        }
+        </style>
+        <div class="pro-filter-card">
+            <form action="{{ route('my_customer.show', $customer) }}" method="GET" class="pro-filter-form">
+                <input type="hidden" name="tab" value="{{ $activeTab }}">
+                <div class="pro-filter-group">
+                    <label class="pro-filter-label"><i class="bi bi-calendar2-week"></i> Thời gian</label>
+                    <select name="period" class="pro-filter-select" onchange="toggleMyCustomerCustomRange(this.value)">
+                        <option value="today" {{ $period === 'today' ? 'selected' : '' }}>Hôm nay</option>
+                        <option value="week" {{ $period === 'week' ? 'selected' : '' }}>Tuần</option>
+                        <option value="month" {{ $period === 'month' ? 'selected' : '' }}>Tháng</option>
+                        <option value="custom" {{ $period === 'custom' ? 'selected' : '' }}>Tùy chọn</option>
+                    </select>
                 </div>
-                <div class="customer-summary-card paid">
-                    <span class="customer-summary-label">Tong da thanh toan</span>
-                    <div class="customer-summary-value">{{ number_format($totalPaidAmount, 0, ',', '.') }} đ</div>
-                    <div class="customer-summary-note">Tat ca thanh toan da xac nhan</div>
+                <div class="pro-filter-group customer-custom-range" style="display: {{ $period === 'custom' ? 'flex' : 'none' }};">
+                    <label class="pro-filter-label"><i class="bi bi-arrow-right-circle"></i> Từ ngày</label>
+                    <input type="date" name="from_date" class="pro-filter-input" value="{{ $fromDate->toDateString() }}">
                 </div>
-                <div class="customer-summary-card debt">
-                    <span class="customer-summary-label">Cong no hien tai</span>
-                    <div class="customer-summary-value">{{ number_format($totalDebtAmount, 0, ',', '.') }} đ</div>
-                    <div class="customer-summary-note"><span class="customer-badge {{ $debtStatusClass }}">{{ $debtStatusLabel }}</span></div>
+                <div class="pro-filter-group customer-custom-range" style="display: {{ $period === 'custom' ? 'flex' : 'none' }};">
+                    <label class="pro-filter-label"><i class="bi bi-arrow-left-circle"></i> Đến ngày</label>
+                    <input type="date" name="to_date" class="pro-filter-input" value="{{ $toDate->toDateString() }}">
                 </div>
-            </div>
+                <div class="pro-filter-group">
+                    <label class="pro-filter-label"><i class="bi bi-list-check"></i> Trạng thái</label>
+                    <select name="order_status" class="pro-filter-select">
+                        <option value="">Tất cả</option>
+                        @foreach($orderStatuses as $status)
+                            <option value="{{ $status }}" {{ request('order_status') === $status ? 'selected' : '' }}>{{ $status }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary pro-filter-btn"><i class="bi bi-funnel"></i> Lọc</button>
+                <a href="{{ route('my_customer.show', $customer) }}" class="btn btn-light pro-filter-btn"><i class="bi bi-x-circle"></i> Reset</a>
+                <div class="pro-filter-summary">
+                    <i class="bi bi-calendar-range"></i> {{ $periodLabel }} ({{ $fromDate->format('d/m/Y') }} - {{ $toDate->format('d/m/Y') }})
+                </div>
+            </form>
         </div>
 
-        <div class="customer-tabs">
-            <a class="customer-tab {{ $activeTab === 'info' ? 'active' : '' }}" href="{{ route('my_customer.show', array_merge(['customer' => $customer, 'tab' => 'info'], $queryParams)) }}">Thong tin</a>
-            <a class="customer-tab {{ $activeTab === 'debt' ? 'active' : '' }}" href="{{ route('my_customer.show', array_merge(['customer' => $customer, 'tab' => 'debt'], $queryParams)) }}">Cong no<span class="customer-tab-count">{{ $debtOrders->total() }}</span></a>
-            <a class="customer-tab {{ $activeTab === 'orders' ? 'active' : '' }}" href="{{ route('my_customer.show', array_merge(['customer' => $customer, 'tab' => 'orders'], $queryParams)) }}">Don hang<span class="customer-tab-count">{{ $orders->total() }}</span></a>
-            <a class="customer-tab {{ $activeTab === 'payments' ? 'active' : '' }}" href="{{ route('my_customer.show', array_merge(['customer' => $customer, 'tab' => 'payments'], $queryParams)) }}">Thanh toan<span class="customer-tab-count">{{ $payments->total() }}</span></a>
-            <a class="customer-tab {{ $activeTab === 'reports' ? 'active' : '' }}" href="{{ route('my_customer.show', array_merge(['customer' => $customer, 'tab' => 'reports'], $queryParams)) }}">Bao cao</a>
+        <div class="customer-tabs mb-3" style="font-size:15px;"> 
+            <a class="customer-tab{{ $activeTab === 'orders' ? ' active' : '' }}" href="{{ route('my_customer.show', ['customer' => $customer, 'tab' => 'orders'] + $queryParams) }}">
+                <i class="bi bi-bag-check"></i> Đơn hàng <span class="customer-tab-count">{{ $orders->total() }}</span>
+            </a>
+            <a class="customer-tab{{ $activeTab === 'payments' ? ' active' : '' }}" href="{{ route('my_customer.show', ['customer' => $customer, 'tab' => 'payments'] + $queryParams) }}">
+                <i class="bi bi-credit-card"></i> Thanh toán <span class="customer-tab-count">{{ $payments->total() }}</span>
+            </a>
+             <a class="customer-tab{{ $activeTab === 'debt' ? ' active' : '' }}" href="{{ route('my_customer.show', ['customer' => $customer, 'tab' => 'debt'] + $queryParams) }}">
+                <i class="bi bi-cash-coin"></i> Công nợ <span class="customer-tab-count">{{ $debtOrders->total() }}</span>
+            </a>
+            <a class="customer-tab{{ $activeTab === 'reports' ? ' active' : '' }}" href="{{ route('my_customer.show', ['customer' => $customer, 'tab' => 'reports'] + $queryParams) }}">
+                <i class="bi bi-graph-up"></i> Báo cáo
+            </a>
         </div>
 
-        @if($activeTab === 'info')
-            <div class="customer-grid">
-                <div class="customer-card" style="grid-column: span 12;">
-                    <div class="customer-card-body">
-                        <h2 class="customer-section-title">Thong tin khach hang</h2>
-                        <p class="customer-section-subtitle">Tong hop ho so kinh doanh va thong tin lien he cua khach hang.</p>
-                        <div class="customer-info-grid">
-                            <div class="customer-info-item"><span class="customer-info-label">Ten khach hang</span><div class="customer-info-value">{{ $customer->name }}</div></div>
-                            <div class="customer-info-item"><span class="customer-info-label">So dien thoai</span><div class="customer-info-value">{{ $customer->phone ?: '-' }}</div></div>
-                            <div class="customer-info-item"><span class="customer-info-label">Email</span><div class="customer-info-value">{{ $customer->email ?: '-' }}</div></div>
-                            <div class="customer-info-item"><span class="customer-info-label">Loai khach</span><div class="customer-info-value">{{ optional($customer->type)->name ?: '-' }}</div></div>
-                            <div class="customer-info-item"><span class="customer-info-label">Khu vuc / tinh thanh</span><div class="customer-info-value">{{ $region ?: '-' }}</div></div>
-                            <div class="customer-info-item"><span class="customer-info-label">Nguoi phu trach</span><div class="customer-info-value">{{ optional($customer->assignedTo)->name ?: auth()->user()->name }}</div></div>
-                            <div class="customer-info-item"><span class="customer-info-label">Ngay tao khach</span><div class="customer-info-value">{{ optional($customer->created_at)->format('d/m/Y H:i') ?: '-' }}</div></div>
-                            <div class="customer-info-item"><span class="customer-info-label">Dia chi</span><div class="customer-info-value">{{ $fullAddress ?: '-' }}</div></div>
-                        </div>
-                    </div>
-                </div>
-                <div class="customer-two-column">
-                    <div class="customer-card">
-                        <div class="customer-card-body">
-                            <h2 class="customer-section-title">Danh sach don hang gan day</h2>
-                            <p class="customer-section-subtitle">5 don hang moi nhat theo bo loc hien tai.</p>
-                            <div class="customer-list-stack">
-                                @forelse($recentOrders as $order)
-                                    @php
-                                        $paid = (float) $order->transactions->where('type', 'payment')->sum('amount') - (float) $order->transactions->where('type', 'refund')->sum('amount');
-                                        $remaining = max((float) $order->total - $paid, 0);
-                                    @endphp
-                                    <div class="customer-list-item">
-                                        <div>
-                                            <div class="customer-list-item-title">{{ $order->code ?: ('#' . $order->id) }}</div>
-                                            <div class="customer-list-meta">
-                                                <span>{{ optional($order->created_at)->format('d/m/Y H:i') }}</span>
-                                                <span>{{ $order->status ?: '-' }}</span>
-                                                <span>Con lai: {{ number_format($remaining, 0, ',', '.') }} đ</span>
-                                            </div>
-                                        </div>
-                                        <div class="customer-list-amount">
-                                            <div>{{ number_format((float) $order->total, 0, ',', '.') }} đ</div>
-                                            <a class="customer-link" href="{{ route('site.orders.show', $order) }}">Xem don</a>
-                                        </div>
-                                    </div>
-                                @empty
-                                    <div class="customer-empty">Chua co don hang nao trong khoang loc.</div>
-                                @endforelse
-                            </div>
-                            <div class="customer-inline-actions">
-                                <a class="customer-btn customer-btn-soft" href="{{ route('my_customer.show', array_merge(['customer' => $customer, 'tab' => 'orders'], $queryParams)) }}">Xem tat ca don hang</a>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="customer-card">
-                        <div class="customer-card-body">
-                            <h2 class="customer-section-title">Thanh toan gan day</h2>
-                            <p class="customer-section-subtitle">5 giao dich thanh toan moi nhat cua khach hang.</p>
-                            <div class="customer-list-stack">
-                                @forelse($recentPayments as $payment)
-                                    @php
-                                        $methodLabel = match($payment->method) {
-                                            'cash' => 'Tien mat',
-                                            'bank_transfer' => 'Chuyen khoan',
-                                            default => $payment->method ?: '-',
-                                        };
-                                        $actorId = $transactionActorIds[$payment->id] ?? null;
-                                        $actorName = $actorId ? ($actorNames[$actorId] ?? '-') : '-';
-                                    @endphp
-                                    <div class="customer-list-item">
-                                        <div>
-                                            <div class="customer-list-item-title">{{ $payment->order?->code ?: 'Khong gan don' }}</div>
-                                            <div class="customer-list-meta">
-                                                <span>{{ optional($payment->created_at)->format('d/m/Y H:i') }}</span>
-                                                <span>{{ $methodLabel }}</span>
-                                                <span>{{ $actorName }}</span>
-                                            </div>
-                                        </div>
-                                        <div class="customer-list-amount" style="color:#15803d;">
-                                            <div>{{ number_format((float) $payment->amount, 0, ',', '.') }} đ</div>
-                                            @if($payment->receipt_image_path)
-                                                <a class="customer-link" target="_blank" href="{{ asset('storage/' . $payment->receipt_image_path) }}">Chung tu</a>
-                                            @endif
-                                        </div>
-                                    </div>
-                                @empty
-                                    <div class="customer-empty">Chua co thanh toan nao trong khoang loc.</div>
-                                @endforelse
-                            </div>
-                            <div class="customer-inline-actions">
-                                <a class="customer-btn customer-btn-soft" href="{{ route('my_customer.show', array_merge(['customer' => $customer, 'tab' => 'payments'], $queryParams)) }}">Xem tat ca thanh toan</a>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        @endif
 
         @if($activeTab === 'debt')
             <div class="customer-grid">
