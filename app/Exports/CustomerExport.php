@@ -13,11 +13,11 @@ class CustomerExport implements FromCollection, WithHeadings
             $join->on('customers.id', '=', 'customer_addresses.customer_id')
                  ->where('customer_addresses.is_default', '=', 1);
         })
-        ->select('customers.id','customers.name','customers.phone','customers.email','customers.website','customers.gender','customers.dob','customers.customer_type_id','customers.note', 'customer_addresses.note as address')
+        ->select('customers.id','customers.name','customers.phone','customers.email','customers.website','customers.gender','customers.dob','customers.customer_type_id','customers.note','customers.size','customers.production', 'customer_addresses.note as address')
         ->get();
     }
     public function headings(): array
     {
-        return ['id','name','phone','email','website','gender','dob','customer_type_id','note','address'];
+        return ['id','name','phone','email','website','gender','dob','customer_type_id','note','size','production','address'];
     }
 }

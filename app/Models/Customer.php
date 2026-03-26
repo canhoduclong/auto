@@ -35,6 +35,8 @@ class Customer extends Model
         'customer_type_id',
         'note',
         'delivery_time',
+        'size',
+        'production',
         'foam_box_required',
         'foam_box_price',
         'use_truck_station',

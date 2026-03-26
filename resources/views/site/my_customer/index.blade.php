@@ -115,6 +115,8 @@
                                     <th>Tên khách hàng</th>
                                     <th>Email</th>
                                     <th>Điện thoại</th>
+                                    <th>Size</th>
+                                    <th>Sản lượng</th>
                                     <th>Giờ giao hàng</th>
                                     <th class="text-center">Số đơn</th>
                                     <th>Trạng thái</th>
@@ -135,6 +137,12 @@
                                         </td>
                                         <td>
                                             {{ $customer->phone ?: '-' }}
+                                        </td>
+                                        <td>
+                                            <span class="text-muted">{{ $customer->size ?: '-' }}</span>
+                                        </td>
+                                        <td>
+                                            <span class="text-muted">{{ $customer->production ?: '-' }}</span>
                                         </td>
                                         <td>
                                             <span class="text-muted">{{ $customer->delivery_time ?: '-' }}</span>

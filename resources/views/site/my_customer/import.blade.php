@@ -14,7 +14,7 @@
                     <input type="file" class="form-control" id="file" name="file" accept=".xlsx, .csv" required>
                 </div>
                 <button type="submit" class="btn btn-primary">Import</button>
-                <a href="{{ asset('sample/customer_import_template.xlsx') }}" class="btn btn-link">Tải file mẫu</a>
+                <a href="{{ asset('sample/customer_import_template.xlsx') }}" class="btn btn-link" download>Tải file mẫu (.xlsx)</a>
                 <a href="{{ route('pages.my_customer') }}" class="btn btn-secondary">Quay lại</a>
             </form>
         </div>

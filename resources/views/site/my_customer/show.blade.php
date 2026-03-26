@@ -532,6 +532,8 @@
                             <div class="col-6"><strong>Điện thoại:</strong> {{ $customer->phone ?: '-' }}</div>
                             <div class="col-6"><strong>Email:</strong> {{ $customer->email ?: '-' }}</div>
                             <div class="col-6"><strong>Loại khách:</strong> {{ optional($customer->type)->name ?: 'Chưa phân loại' }}</div>
+                            <div class="col-6"><strong>Size:</strong> {{ $customer->size ?: '-' }}</div>
+                            <div class="col-6"><strong>Sản lượng:</strong> {{ $customer->production ?: '-' }}</div>
                             <div class="col-12"><strong>Địa chỉ:</strong> {{ $fullAddress }}</div>
                             <div class="col-6"><strong>Người phụ trách:</strong> {{ optional($customer->assignedTo)->name ?: auth()->user()->name }}</div>
                         </div> 

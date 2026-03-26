@@ -39,6 +39,8 @@ class CustomerImportWithErrorReport implements ToModel, WithHeadingRow, WithVali
                 'dob' => $row['dob'] ?? null,
                 'customer_type_id' => $row['customer_type_id'] ?? null,
                 'note' => $row['note'] ?? null,
+                'size' => $row['size'] ?? null,
+                'production' => $row['sản lượng'] ?? $row['production'] ?? null,
                 'assigned_to' => $this->userId,
             ]);
             $customer->save();

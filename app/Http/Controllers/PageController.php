@@ -1206,6 +1206,8 @@ class PageController extends Controller
             'phone' => ['nullable', 'string', 'max:50'],
             'address' => ['nullable', 'string', 'max:1000'],
             'delivery_time' => ['nullable', 'string', 'max:255'],
+            'size' => ['nullable', 'string', 'max:255'],
+            'production' => ['nullable', 'numeric'],
         ]);
         $customer->update([
             'name' => $validated['name'],
@@ -1213,6 +1215,8 @@ class PageController extends Controller
             'phone' => $validated['phone'] ?? null,
             'address' => $validated['address'] ?? null,
             'delivery_time' => $validated['delivery_time'] ?? null,
+            'size' => $validated['size'] ?? null,
+            'production' => $validated['production'] ?? null,
         ]);
         return redirect()->route('pages.my_customer')->with('success', 'Đã cập nhật thông tin khách hàng thành công.');
     }
@@ -1659,6 +1663,8 @@ class PageController extends Controller
             'phone' => 'nullable|string|max:50',
             'address' => 'nullable|string|max:1000',
             'delivery_time' => 'nullable|string|max:255',
+            'size' => 'nullable|string|max:255',
+            'production' => 'nullable|numeric',
         ]);
 
         $customer = new \App\Models\Customer();
@@ -1668,6 +1674,8 @@ class PageController extends Controller
         $customer->phone = $validated['phone'] ?? null;
         $customer->address = $validated['address'] ?? null;
         $customer->delivery_time = $validated['delivery_time'] ?? null;
+        $customer->size = $validated['size'] ?? null;
+        $customer->production = $validated['production'] ?? null;
         $customer->save();
 
         return redirect()->route('pages.my_customer')->with('success', 'Đã thêm khách hàng thành công!');

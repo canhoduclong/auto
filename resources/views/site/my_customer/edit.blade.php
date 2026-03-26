@@ -1,3 +1,12 @@
+                            <div class="mb-3">
+                                <label for="size" class="form-label mc-form-label">Size</label>
+                                <input type="text" class="form-control mc-form-control" id="size" name="size" value="{{ old('size', $customer->size) }}" placeholder="Nhập size (nếu có)">
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="production" class="form-label mc-form-label">Sản lượng</label>
+                                <input type="number" step="any" class="form-control mc-form-control" id="production" name="production" value="{{ old('production', $customer->production) }}" placeholder="Nhập sản lượng (nếu có)">
+                            </div>
 @extends('layouts.site')
 
 @section('content')
