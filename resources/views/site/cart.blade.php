@@ -348,13 +348,14 @@ document.addEventListener('DOMContentLoaded', function() {
             let quantity = e.target.value;
 
             fetch(`/cart/update/${id}`, {
-                method: 'PATCH',
+                method: 'POST',
                 credentials: 'same-origin',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
                 },
                 body: JSON.stringify({
+                    _method: 'PATCH',
                     id: id,
                     quantity: quantity
                 })
