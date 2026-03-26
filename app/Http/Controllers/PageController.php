@@ -1,32 +1,4 @@
-    /**
-     * Lưu khách hàng mới từ form /my-customer/create
-     */
-    public function myCustomerStore(Request $request)
-    {
-        $user = auth()->user();
-        if (!$user) {
-            return redirect()->route('login');
-        }
-
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'nullable|email|max:255|unique:customers,email',
-            'phone' => 'nullable|string|max:50',
-            'address' => 'nullable|string|max:1000',
-            'delivery_time' => 'nullable|string|max:255',
-        ]);
-
-        $customer = new \App\Models\Customer();
-        $customer->user_id = $user->id;
-        $customer->name = $validated['name'];
-        $customer->email = $validated['email'] ?? null;
-        $customer->phone = $validated['phone'] ?? null;
-        $customer->address = $validated['address'] ?? null;
-        $customer->delivery_time = $validated['delivery_time'] ?? null;
-        $customer->save();
-
-        return redirect()->route('pages.my_customer')->with('success', 'Đã thêm khách hàng thành công!');
-    }
+  
 <?php
 namespace App\Http\Controllers;
 
@@ -1672,5 +1644,34 @@ class PageController extends Controller
         }
 
         return [$today->copy()->startOfMonth(), $today->copy()->endOfMonth()];
+    }
+      /**
+     * Lưu khách hàng mới từ form /my-customer/create
+     */
+    public function myCustomerStore(Request $request)
+    {
+        $user = auth()->user();
+        if (!$user) {
+            return redirect()->route('login');
+        }
+
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'nullable|email|max:255|unique:customers,email',
+            'phone' => 'nullable|string|max:50',
+            'address' => 'nullable|string|max:1000',
+            'delivery_time' => 'nullable|string|max:255',
+        ]);
+
+        $customer = new \App\Models\Customer();
+        $customer->user_id = $user->id;
+        $customer->name = $validated['name'];
+        $customer->email = $validated['email'] ?? null;
+        $customer->phone = $validated['phone'] ?? null;
+        $customer->address = $validated['address'] ?? null;
+        $customer->delivery_time = $validated['delivery_time'] ?? null;
+        $customer->save();
+
+        return redirect()->route('pages.my_customer')->with('success', 'Đã thêm khách hàng thành công!');
     }
 }
