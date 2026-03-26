@@ -1,12 +1,4 @@
-                            <div class="mb-3">
-                                <label for="size" class="form-label mc-form-label">Size</label>
-                                <input type="text" class="form-control mc-form-control" id="size" name="size" value="{{ old('size') }}" placeholder="Nhập size (nếu có)">
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="production" class="form-label mc-form-label">Sản lượng</label>
-                                <input type="number" step="any" class="form-control mc-form-control" id="production" name="production" value="{{ old('production') }}" placeholder="Nhập sản lượng (nếu có)">
-                            </div>
+                            
 @extends('layouts.site')
 
 @section('content')
@@ -149,7 +141,15 @@
                                 >{{ old('address') }}</textarea>
                                 <div class="mc-help mt-1">Địa chỉ này dùng làm mặc định khi tạo đơn cho khách nếu chưa nhập địa chỉ giao riêng.</div>
                             </div>
+                            <div class="mb-3">
+                                <label for="size" class="form-label mc-form-label">Size</label>
+                                <input type="text" class="form-control mc-form-control" id="size" name="size" value="{{ old('size') }}" placeholder="Nhập size (nếu có)">
+                            </div>
 
+                            <div class="mb-3">
+                                <label for="production" class="form-label mc-form-label">Sản lượng</label>
+                                <input type="number" step="any" class="form-control mc-form-control" id="production" name="production" value="{{ old('production') }}" placeholder="Nhập sản lượng (nếu có)">
+                            </div>
                             <div class="mb-3">
                                 <label for="delivery_time" class="form-label mc-form-label">Giờ giao hàng</label>
                                 <input type="text" class="form-control mc-form-control" id="delivery_time" name="delivery_time" value="{{ old('delivery_time') }}" placeholder="Ví dụ: 8h-10h, 14h-16h, sau 17h">

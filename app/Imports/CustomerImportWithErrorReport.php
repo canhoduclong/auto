@@ -24,29 +24,52 @@ class CustomerImportWithErrorReport implements ToModel, WithHeadingRow, WithVali
     public function model(array $row)
     {
         try {
-            // Ép kiểu phone về string
-            $row['phone'] = isset($row['phone']) ? (string)$row['phone'] : null;
-            // Kiểm tra address rõ ràng
-            if (!isset($row['address']) || trim($row['address']) === '') {
-                throw new \Exception('Trường address (địa chỉ) là bắt buộc và không được để trống.');
+            // Map Vietnamese/English column names to internal keys
+            $map = [
+                'tên khách hàng' => 'name',
+                'email' => 'email',
+                'số điện thoại' => 'phone',
+                'địa chỉ' => 'address',
+                'thời gian giao hàng' => 'delivery_time',
+                'size' => 'size',
+                'sản lượng' => 'production',
+                // English fallback
+                'name' => 'name',
+                'phone' => 'phone',
+                'address' => 'address',
+                'delivery_time' => 'delivery_time',
+                'production' => 'production',
+            ];
+            $data = [];
+            foreach ($map as $col => $key) {
+                if (isset($row[$col])) {
+                    $data[$key] = $row[$col];
+                }
+            }
+            // Ensure phone is string
+            if (isset($data['phone'])) {
+                $data['phone'] = (string)$data['phone'];
+            }
+            // Validate required fields
+            if (empty($data['name'])) {
+                throw new \Exception('Trường "Tên khách hàng" (name) là bắt buộc.');
+            }
+            if (empty($data['address'])) {
+                throw new \Exception('Trường "Địa chỉ" (address) là bắt buộc.');
             }
             $customer = new Customer([
-                'name' => $row['name'] ?? null,
-                'phone' => $row['phone'] ?? null,
-                'email' => $row['email'] ?? null,
-                'website' => $row['website'] ?? null,
-                'gender' => $row['gender'] ?? null,
-                'dob' => $row['dob'] ?? null,
-                'customer_type_id' => $row['customer_type_id'] ?? null,
-                'note' => $row['note'] ?? null,
-                'size' => $row['size'] ?? null,
-                'production' => $row['sản lượng'] ?? $row['production'] ?? null,
+                'name' => $data['name'] ?? null,
+                'phone' => $data['phone'] ?? null,
+                'email' => $data['email'] ?? null,
+                'delivery_time' => $data['delivery_time'] ?? null,
+                'size' => $data['size'] ?? null,
+                'production' => $data['production'] ?? null,
                 'assigned_to' => $this->userId,
             ]);
             $customer->save();
-            CustomerAddress::create([
+            \App\Models\CustomerAddress::create([
                 'customer_id' => $customer->id,
-                'note' => $row['address'],
+                'note' => $data['address'],
                 'is_default' => 1,
             ]);
             $this->imported[] = [
@@ -67,12 +90,20 @@ class CustomerImportWithErrorReport implements ToModel, WithHeadingRow, WithVali
 
     public function rules(): array
     {
+        // Accept both Vietnamese and English column names
         return [
-            '*.name' => 'required|string|max:255',
-            '*.phone' => 'required|string|max:30',
-            '*.address' => 'required|string',
+            '*.tên khách hàng' => 'required|string|max:255',
+            '*.name' => 'required_without:tên khách hàng|string|max:255',
+            '*.số điện thoại' => 'nullable|string|max:30',
+            '*.phone' => 'nullable|string|max:30',
+            '*.địa chỉ' => 'required|string',
+            '*.address' => 'required_without:địa chỉ|string',
             '*.email' => 'nullable|email|unique:customers,email',
-            '*.website' => 'nullable|url',
+            '*.thời gian giao hàng' => 'nullable|string|max:255',
+            '*.delivery_time' => 'nullable|string|max:255',
+            '*.size' => 'nullable|string|max:255',
+            '*.sản lượng' => 'nullable|numeric',
+            '*.production' => 'nullable|numeric',
         ];
     }
     public function getImported()
