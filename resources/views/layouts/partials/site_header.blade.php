@@ -142,6 +142,36 @@
         <a href="#"><i class="fa fa-cart-plus"></i></a>
         <a href="#" class="search-switch"><i class="fa fa-search"></i></a>
         <a href="#" class="primary-btn">{{ __('site.add') }}</a>
+        @auth
+            <div class="mt-3">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    @php
+                        $avatar = Auth::user()->avatar ?? null;
+                        $avatarUrl = $avatar ? asset($avatar) : 'https://ui-avatars.com/api/?name=' . urlencode(Auth::user()->name ?? 'U') . '&background=0f766e&color=fff&size=40&bold=true';
+                    @endphp
+                    <img src="{{ $avatarUrl }}" alt="avatar" class="rounded-circle" width="36" height="36">
+                    <div>
+                        <div class="fw-semibold">{{ Auth::user()->name }}</div>
+                        <div class="text-muted small">{{ Auth::user()->email }}</div>
+                    </div>
+                </div>
+                <ul class="list-unstyled mb-2">
+                    <li><a href="{{ route('pages.my_dashboard') }}" class="d-block py-1"><i class="bi bi-person-circle me-1"></i> {{ __('site.profile') }}</a></li>
+                    <li><a href="{{ route('pages.my_orders') }}" class="d-block py-1"><i class="bi bi-bag-check me-1"></i> {{ __('site.my_orders') }}</a></li>
+                    <li><a href="{{ route('pages.my_customer') }}" class="d-block py-1"><i class="bi bi-people me-1"></i> {{ __('site.my_customers') }}</a></li>
+                    <li><a href="{{ route('work-reports.index') }}" class="d-block py-1"><i class="bi bi-clipboard-data me-1"></i> Báo cáo công việc</a></li>
+                    <li><a href="{{ url('/dashboard') }}" class="d-block py-1"><i class="bi bi-speedometer2 me-1"></i> {{ __('site.dashboard') }}</a></li>
+                </ul>
+                <form id="offcanvas-logout-form" action="{{ route('logout') }}" method="POST" class="d-inline">
+                    @csrf
+                    <button type="submit" class="btn btn-link text-danger p-0"><i class="bi bi-box-arrow-right me-1"></i> {{ __('site.logout') }}</button>
+                </form>
+            </div>
+        @else
+            <div class="mt-3">
+                <a href="{{ route('login') }}" class="btn btn-primary w-100 mb-2"><i class="bi bi-person-fill me-1"></i> {{ __('site.login') }}</a>
+            </div>
+        @endauth
     </div>
     <div class="offcanvas__logo">
         <a href="{{ route('home') }}"><img src="{{ asset('img/logo-auto-taybac.png') }}" alt=""></a>

@@ -265,6 +265,7 @@
 </div>
 @endsection
 
+
 @push('scripts')
 <script>
 // Đảm bảo cập nhật nhanh ảnh đại diện sản phẩm khi chọn từ popup
@@ -276,7 +277,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (btnSelectMedia) {
         btnSelectMedia.addEventListener('click', function () {
-            // Mở modal chọn media
             if (!mediaModal) {
                 mediaModal = new bootstrap.Modal(document.getElementById('mediaModal'));
             }
@@ -284,10 +284,9 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // Lắng nghe postMessage từ popup media
+    // Lắng nghe postMessage từ popup media (ổn định, không phụ thuộc window.selectMedia)
     window.addEventListener('message', function (event) {
         if (event.data && event.data.type === 'mediaSelected') {
-            // Cập nhật input và preview
             if (mediaIdInput) mediaIdInput.value = event.data.mediaId;
             if (mediaPreview) {
                 mediaPreview.innerHTML = `<img src="${event.data.url}" width="120" class="img-thumbnail">`;
