@@ -375,7 +375,7 @@
                                 <th>Shipper</th>
                                 <th>Timeline xử lý</th>
                                 <th class="text-end">Tổng tiền</th>
-                                <th class="text-end">Thao tác</th>
+                                
                             </tr>
                         </thead>
                         <tbody>
@@ -435,9 +435,7 @@
                                         </div>
                                     </td>
                                     <td class="text-end fw-bold">{{ number_format($order->total ?? 0) }}đ</td>
-                                    <td class="text-end">
-                                        <a href="{{ route('site.orders.show', $order) }}" class="btn btn-outline-primary btn-sm">Chi tiết</a>
-                                    </td>
+                                    
                                 </tr>
                             @endforeach
                         </tbody>
