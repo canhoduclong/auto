@@ -111,6 +111,88 @@
     .mo-status.success { background: #ecfdf5; color: #047857; }
     .mo-status.danger { background: #fef2f2; color: #b91c1c; }
     .mo-status.muted { background: #f1f5f9; color: #475569; }
+    .mo-timeline {
+        min-width: 320px;
+    }
+    .mo-timeline-track {
+        position: relative;
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 8px;
+        padding: 0 4px;
+    }
+    .mo-timeline-track::before {
+        content: '';
+        position: absolute;
+        top: 8px;
+        left: 12px;
+        right: 12px;
+        height: 3px;
+        border-radius: 999px;
+        background: #dbe4ef;
+    }
+    .mo-timeline-progress {
+        position: absolute;
+        top: 8px;
+        left: 12px;
+        height: 3px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #0e7490, #2563eb);
+        transition: width .3s ease;
+    }
+    .mo-timeline-dot {
+        position: relative;
+        z-index: 1;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        border: 2px solid #c5d3e5;
+        background: #fff;
+    }
+    .mo-timeline-dot.done {
+        border-color: #0e7490;
+        background: #0e7490;
+        box-shadow: 0 0 0 4px rgba(14, 116, 144, 0.14);
+    }
+    .mo-timeline-dot.current {
+        border-color: #2563eb;
+        background: #2563eb;
+        box-shadow: 0 0 0 5px rgba(37, 99, 235, 0.16);
+        animation: moPulse 1.6s infinite;
+    }
+    .mo-timeline.returning .mo-timeline-progress,
+    .mo-timeline.returned .mo-timeline-progress {
+        background: linear-gradient(90deg, #ef4444, #f59e0b);
+    }
+    .mo-timeline.cancelled .mo-timeline-progress {
+        background: #ef4444;
+    }
+    .mo-timeline.cancelled .mo-timeline-dot.done,
+    .mo-timeline.returning .mo-timeline-dot.done,
+    .mo-timeline.returned .mo-timeline-dot.done {
+        border-color: #ef4444;
+        background: #ef4444;
+        box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.12);
+    }
+    .mo-timeline-labels {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 6px;
+    }
+    .mo-timeline-label {
+        text-align: center;
+        font-size: .68rem;
+        line-height: 1.2;
+        color: #64748b;
+        font-weight: 600;
+    }
+    .mo-timeline-label.active {
+        color: #0f172a;
+    }
+    @keyframes moPulse {
+        0% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.3); }
+        100% { box-shadow: 0 0 0 8px rgba(37, 99, 235, 0); }
+    }
     .mo-empty {
         padding: 44px 24px 52px;
         text-align: center;
@@ -160,6 +242,30 @@
         \App\Models\Order::STATUS_CANCELLED => 'danger',
         'shipping' => 'progress',
         'picked_up' => 'progress',
+    ];
+
+    $timelineSteps = ['Đặt đơn', 'Duyệt', 'Kho', 'Vận chuyển', 'Hoàn tất'];
+    $timelineMap = [
+        \\App\\Models\\Order::STATUS_ORDER_PLACED => 0,
+        'pending_leader_approval' => 1,
+        'pending_manager_approval' => 1,
+        'pending_warehouse_approval' => 1,
+        \\App\\Models\\Order::STATUS_ORDER_CONFIRMED => 1,
+        \\App\\Models\\Order::STATUS_APPROVED => 1,
+        \\App\\Models\\Order::STATUS_READY_TO_PACK => 2,
+        \\App\\Models\\Order::STATUS_PACKING => 2,
+        \\App\\Models\\Order::STATUS_PACKED => 2,
+        \\App\\Models\\Order::STATUS_READY_TO_SHIP => 3,
+        \\App\\Models\\Order::STATUS_DELIVERING => 3,
+        \\App\\Models\\Order::STATUS_IN_DELIVERY => 3,
+        'shipping' => 3,
+        'picked_up' => 3,
+        \\App\\Models\\Order::STATUS_DELIVERED => 4,
+        \\App\\Models\\Order::STATUS_COMPLETED => 4,
+        \\App\\Models\\Order::STATUS_RETURNING => 3,
+        \\App\\Models\\Order::STATUS_RETURNED_COMPLETED => 4,
+        \\App\\Models\\Order::STATUS_RETURNED => 4,
+        \\App\\Models\\Order::STATUS_CANCELLED => 1,
     ];
 @endphp
 
@@ -267,9 +373,8 @@
                                 <th>Khách hàng</th>
                                 <th>Sale</th>
                                 <th>Shipper</th>
-                                <th>Trạng thái</th>
+                                <th>Timeline xử lý</th>
                                 <th class="text-end">Tổng tiền</th>
-                                <th>Ngày tạo</th>
                                 <th class="text-end">Thao tác</th>
                             </tr>
                         </thead>
@@ -277,6 +382,16 @@
                             @foreach($orders as $order)
                                 @php
                                     $statusClass = $statusClasses[$order->status] ?? 'muted';
+                                    $timelineIndex = $timelineMap[$order->status] ?? 0;
+                                    $timelinePercent = ($timelineIndex / 4) * 100;
+                                    $timelineFlowClass = 'normal';
+                                    if (in_array($order->status, [\\App\\Models\\Order::STATUS_RETURNING], true)) {
+                                        $timelineFlowClass = 'returning';
+                                    } elseif (in_array($order->status, [\\App\\Models\\Order::STATUS_RETURNED_COMPLETED, \\App\\Models\\Order::STATUS_RETURNED], true)) {
+                                        $timelineFlowClass = 'returned';
+                                    } elseif (in_array($order->status, [\\App\\Models\\Order::STATUS_CANCELLED, \\App\\Models\\Order::STATUS_REJECTED], true)) {
+                                        $timelineFlowClass = 'cancelled';
+                                    }
                                 @endphp
                                 <tr>
                                     <td>
@@ -294,13 +409,32 @@
                                         <div class="fw-semibold">{{ $order->shipper?->name ?? 'Chưa gán' }}</div>
                                     </td>
                                     <td>
-                                        <span class="mo-status {{ $statusClass }}">{{ $statusLabels[$order->status] ?? ucfirst((string) $order->status) }}</span>
+                                        <div class="mo-timeline {{ $timelineFlowClass }}">
+                                            <div class="mo-timeline-track">
+                                                <div class="mo-timeline-progress" style="width: {{ $timelinePercent }}%;"></div>
+                                                @foreach($timelineSteps as $stepIndex => $stepName)
+                                                    @php
+                                                        $dotClass = '';
+                                                        if ($stepIndex < $timelineIndex) {
+                                                            $dotClass = 'done';
+                                                        } elseif ($stepIndex === $timelineIndex) {
+                                                            $dotClass = 'current';
+                                                        }
+                                                    @endphp
+                                                    <span class="mo-timeline-dot {{ $dotClass }}" title="{{ $stepName }}"></span>
+                                                @endforeach
+                                            </div>
+                                            <div class="mo-timeline-labels">
+                                                @foreach($timelineSteps as $stepIndex => $stepName)
+                                                    <span class="mo-timeline-label {{ $stepIndex <= $timelineIndex ? 'active' : '' }}">{{ $stepName }}</span>
+                                                @endforeach
+                                            </div>
+                                            <div class="mt-2">
+                                                <span class="mo-status {{ $statusClass }}">{{ $statusLabels[$order->status] ?? ucfirst((string) $order->status) }}</span>
+                                            </div>
+                                        </div>
                                     </td>
                                     <td class="text-end fw-bold">{{ number_format($order->total ?? 0) }}đ</td>
-                                    <td>
-                                        <div>{{ $order->created_at?->format('d/m/Y') }}</div>
-                                        <div class="mo-subtle">{{ $order->created_at?->format('H:i') }}</div>
-                                    </td>
                                     <td class="text-end">
                                         <a href="{{ route('site.orders.show', $order) }}" class="btn btn-outline-primary btn-sm">Chi tiết</a>
                                     </td>
