@@ -599,6 +599,92 @@ class PageController extends Controller
         ]);
     }
 
+    public function myOrdersMonitoring(Request $request)
+    {
+        if (!auth()->check()) {
+            return redirect()->route('login')->with('error', 'Bạn cần đăng nhập để theo dõi đơn hàng.');
+        }
+
+        $user = auth()->user();
+
+        $query = Order::query()
+            ->with(['customer', 'user', 'shipper'])
+            ->latest('created_at');
+
+        $keyword = trim((string) $request->input('keyword', ''));
+        if ($keyword !== '') {
+            $query->where(function ($sub) use ($keyword) {
+                $sub->where('code', 'like', "%{$keyword}%")
+                    ->orWhereHas('customer', function ($customerQuery) use ($keyword) {
+                        $customerQuery->where('name', 'like', "%{$keyword}%")
+                            ->orWhere('phone', 'like', "%{$keyword}%");
+                    })
+                    ->orWhereHas('user', function ($userQuery) use ($keyword) {
+                        $userQuery->where('name', 'like', "%{$keyword}%");
+                    })
+                    ->orWhereHas('shipper', function ($shipperQuery) use ($keyword) {
+                        $shipperQuery->where('name', 'like', "%{$keyword}%");
+                    });
+            });
+        }
+
+        if ($request->filled('status')) {
+            $query->where('status', (string) $request->input('status'));
+        }
+
+        $fromDate = $request->input('from_date');
+        $toDate = $request->input('to_date');
+
+        if ($fromDate && $toDate) {
+            $from = Carbon::parse($fromDate)->startOfDay();
+            $to = Carbon::parse($toDate)->endOfDay();
+
+            if ($from->gt($to)) {
+                [$from, $to] = [$to, $from];
+            }
+
+            $query->whereBetween('created_at', [$from, $to]);
+        } elseif ($fromDate) {
+            $query->whereDate('created_at', '>=', $fromDate);
+        } elseif ($toDate) {
+            $query->whereDate('created_at', '<=', $toDate);
+        }
+
+        $allowedPerPage = [10, 20, 50, 100];
+        $perPage = (int) $request->input('per_page', 20);
+        if (!in_array($perPage, $allowedPerPage, true)) {
+            $perPage = 20;
+        }
+
+        $statsQuery = clone $query;
+        $stats = [
+            'total_orders' => (clone $statsQuery)->count(),
+            'delivering_orders' => (clone $statsQuery)->where('status', Order::STATUS_DELIVERING)->count(),
+            'returning_orders' => (clone $statsQuery)->where('status', Order::STATUS_RETURNING)->count(),
+            'completed_orders' => (clone $statsQuery)
+                ->whereIn('status', [Order::STATUS_COMPLETED, Order::STATUS_DELIVERED])
+                ->count(),
+            'total_value' => (clone $statsQuery)->sum('total'),
+            'today_orders' => (clone $statsQuery)->whereDate('created_at', now()->toDateString())->count(),
+        ];
+
+        $orders = $query
+            ->paginate($perPage)
+            ->appends($request->query());
+
+        return view('site.orders.monitoring', [
+            'settings' => $this->settings,
+            'user' => $user,
+            'orders' => $orders,
+            'stats' => $stats,
+            'perPage' => $perPage,
+            'keyword' => $keyword,
+            'fromDate' => $fromDate,
+            'toDate' => $toDate,
+            'selectedStatus' => (string) $request->input('status', ''),
+        ]);
+    }
+
     public function myOrderCustomersAjax(Request $request)
     {
         if (!auth()->check()) {
