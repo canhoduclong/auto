@@ -16,6 +16,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class WarehouseDashboardController extends Controller
 {
@@ -447,12 +448,14 @@ class WarehouseDashboardController extends Controller
      */
     public function returns()
     {
-        $orders = Order::with(['customer', 'shipper', 'items'])
+        $managedWarehouseId = Auth::user()->warehouse_id ? (int) Auth::user()->warehouse_id : null;
+
+        $orders = Order::with(['customer', 'shipper', 'items', 'warehouse', 'returnWarehouse'])
             ->where('status', Order::STATUS_RETURNING)
             ->orderBy('updated_at', 'desc')
             ->get();
 
-        return view('warehouse.returns.index', compact('orders'));
+        return view('warehouse.returns.index', compact('orders', 'managedWarehouseId'));
     }
 
     /**
@@ -464,13 +467,24 @@ class WarehouseDashboardController extends Controller
             return back()->with('error', 'Đơn hàng không đang ở trạng thái Đang trả hàng.');
         }
 
-        DB::transaction(function () use ($order) {
+        $managedWarehouseId = Auth::user()->warehouse_id ? (int) Auth::user()->warehouse_id : null;
+        $returnWarehouseId = $this->resolveReturnWarehouseId($order);
+
+        if ($managedWarehouseId && (!$returnWarehouseId || $managedWarehouseId !== $returnWarehouseId)) {
+            return back()->with('error', 'Bạn chỉ có thể xác nhận đơn trả về đúng kho mình quản lý.');
+        }
+
+        if (!$returnWarehouseId) {
+            return back()->with('error', 'Đơn trả này chưa xác định kho nhận. Vui lòng yêu cầu shipper chọn kho trả về.');
+        }
+
+        DB::transaction(function () use ($order, $returnWarehouseId) {
             $order->update(['status' => Order::STATUS_RETURNED_COMPLETED]);
 
             // Restore inventory for each item
             foreach ($order->items as $item) {
                 Inventory::where('product_variant_id', $item->product_variant_id)
-                    ->where('warehouse_id', Auth::user()->warehouse_id)
+                    ->where('warehouse_id', $returnWarehouseId)
                     ->increment('quantity', $item->quantity);
             }
 
@@ -481,11 +495,24 @@ class WarehouseDashboardController extends Controller
                 'role'          => 'warehouse',
                 'status_before' => Order::STATUS_RETURNING,
                 'status_after'  => Order::STATUS_RETURNED_COMPLETED,
-                'note'          => 'Kho xác nhận đã nhận hàng trả – Tồn kho đã cập nhật',
+                'note'          => 'Kho xác nhận đã nhận hàng trả vào kho ID ' . $returnWarehouseId . ' – Tồn kho đã cập nhật',
             ]);
         });
 
         return back()->with('success', 'Đã xác nhận nhập kho hàng trả – Đơn #' . $order->code);
+    }
+
+    protected function resolveReturnWarehouseId(Order $order): ?int
+    {
+        if (Schema::hasColumn('orders', 'return_warehouse_id') && !empty($order->return_warehouse_id)) {
+            return (int) $order->return_warehouse_id;
+        }
+
+        if (Schema::hasColumn('orders', 'warehouse_id') && !empty($order->warehouse_id)) {
+            return (int) $order->warehouse_id;
+        }
+
+        return null;
     }
 
     /**

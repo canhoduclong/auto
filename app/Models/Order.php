@@ -84,6 +84,7 @@ class Order extends Model
     public function user() { return $this->belongsTo(User::class); }
     public function shipper() { return $this->belongsTo(User::class, 'shipper_id'); }
     public function warehouse() { return $this->belongsTo(Warehouse::class); }
+    public function returnWarehouse() { return $this->belongsTo(Warehouse::class, 'return_warehouse_id'); }
     public function items() { return $this->hasMany(OrderItem::class); }
 
     public function getPaymentStatusTextAttribute()

@@ -27,6 +27,7 @@
                     <th>Khách hàng</th>
                     <th>Shipper</th>
                     <th>Lý do trả</th>
+                    <th>Kho trả về</th>
                     <th>Ghi chú shipper</th>
                     <th>Sản phẩm</th>
                     <th>Tổng tiền</th>
@@ -36,6 +37,12 @@
             </thead>
             <tbody>
                 @foreach($orders as $i => $order)
+                @php
+                    $returnWarehouse = $order->returnWarehouse ?? $order->warehouse;
+                    $returnWarehouseId = $returnWarehouse?->id;
+                    $canConfirm = !$managedWarehouseId
+                        || ($returnWarehouseId && (int) $managedWarehouseId === (int) $returnWarehouseId);
+                @endphp
                 <tr>
                     <td class="text-muted">{{ $i + 1 }}</td>
                     <td class="fw-semibold">{{ $order->code }}</td>
@@ -57,6 +64,15 @@
                             {{ $reasons[$order->return_reason] ?? $order->return_reason ?? '—' }}
                         </span>
                     </td>
+                    <td>
+                        @if($returnWarehouse)
+                            <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25">
+                                {{ $returnWarehouse->name }}
+                            </span>
+                        @else
+                            <span class="text-muted small">Chưa xác định</span>
+                        @endif
+                    </td>
                     <td class="text-muted small">{{ $order->shipper_note ?? '—' }}</td>
                     <td class="small">{{ $order->items->sum('quantity') }} sp</td>
                     <td class="fw-semibold">{{ number_format($order->total) }}đ</td>
@@ -65,10 +81,14 @@
                         <form action="{{ route('warehouse.returns.confirm', $order) }}" method="POST"
                               onsubmit="return confirm('Xác nhận đã nhận hàng trả từ đơn #{{ $order->code }}?')">
                             @csrf
-                            <button class="btn btn-success btn-sm">
+                            <button class="btn btn-success btn-sm" {{ $canConfirm ? '' : 'disabled' }}
+                                title="{{ $canConfirm ? 'Xác nhận nhập kho' : 'Đơn này không thuộc kho bạn quản lý' }}">
                                 <i class="bi bi-check2-circle me-1"></i>Xác nhận nhập kho
                             </button>
                         </form>
+                        @if(!$canConfirm)
+                            <div class="text-muted" style="font-size:.7rem;">Không đúng kho quản lý</div>
+                        @endif
                     </td>
                 </tr>
                 @endforeach
