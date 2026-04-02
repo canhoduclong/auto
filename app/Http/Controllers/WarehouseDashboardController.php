@@ -455,6 +455,13 @@ class WarehouseDashboardController extends Controller
             ->orderBy('updated_at', 'desc')
             ->get();
 
+        $orders->each(function (Order $order) {
+            $resolvedWarehouse = $this->resolveReturnWarehouse($order);
+
+            $order->setAttribute('resolved_return_warehouse_id', $resolvedWarehouse?->id);
+            $order->setAttribute('resolved_return_warehouse_name', $resolvedWarehouse?->name);
+        });
+
         return view('warehouse.returns.index', compact('orders', 'managedWarehouseId'));
     }
 
@@ -468,7 +475,8 @@ class WarehouseDashboardController extends Controller
         }
 
         $managedWarehouseId = Auth::user()->warehouse_id ? (int) Auth::user()->warehouse_id : null;
-        $returnWarehouseId = $this->resolveReturnWarehouseId($order);
+        $resolvedReturnWarehouse = $this->resolveReturnWarehouse($order);
+        $returnWarehouseId = $resolvedReturnWarehouse?->id;
 
         if ($managedWarehouseId && (!$returnWarehouseId || $managedWarehouseId !== $returnWarehouseId)) {
             return back()->with('error', 'Bạn chỉ có thể xác nhận đơn trả về đúng kho mình quản lý.');
@@ -495,11 +503,45 @@ class WarehouseDashboardController extends Controller
                 'role'          => 'warehouse',
                 'status_before' => Order::STATUS_RETURNING,
                 'status_after'  => Order::STATUS_RETURNED_COMPLETED,
-                'note'          => 'Kho xác nhận đã nhận hàng trả vào kho ID ' . $returnWarehouseId . ' – Tồn kho đã cập nhật',
+                'note'          => 'Kho xác nhận đã nhận hàng trả vào kho ' . ($resolvedReturnWarehouse?->name ?? ('ID ' . $returnWarehouseId)) . ' – Tồn kho đã cập nhật',
             ]);
         });
 
         return back()->with('success', 'Đã xác nhận nhập kho hàng trả – Đơn #' . $order->code);
+    }
+
+    protected function resolveReturnWarehouse(Order $order): ?Warehouse
+    {
+        if ($order->relationLoaded('returnWarehouse') && $order->returnWarehouse) {
+            return $order->returnWarehouse;
+        }
+
+        if ($order->relationLoaded('warehouse') && $order->warehouse) {
+            return $order->warehouse;
+        }
+
+        $warehouseId = $this->resolveReturnWarehouseId($order);
+        if ($warehouseId) {
+            return Warehouse::find($warehouseId);
+        }
+
+        $warehouseName = $this->extractReturnWarehouseName((string) ($order->shipper_note ?? ''));
+
+        if (!$warehouseName) {
+            $returnHistoryNote = OrderHistory::query()
+                ->where('order_id', $order->id)
+                ->where('action', 'return_request')
+                ->latest('id')
+                ->value('note');
+
+            $warehouseName = $this->extractReturnWarehouseName((string) ($returnHistoryNote ?? ''));
+        }
+
+        if (!$warehouseName) {
+            return null;
+        }
+
+        return Warehouse::query()->where('name', $warehouseName)->first();
     }
 
     protected function resolveReturnWarehouseId(Order $order): ?int
@@ -513,6 +555,21 @@ class WarehouseDashboardController extends Controller
         }
 
         return null;
+    }
+
+    protected function extractReturnWarehouseName(string $text): ?string
+    {
+        if (trim($text) === '') {
+            return null;
+        }
+
+        if (preg_match('/Kho trả về:\s*([^|]+)/u', $text, $matches) !== 1) {
+            return null;
+        }
+
+        $warehouseName = trim((string) ($matches[1] ?? ''));
+
+        return $warehouseName !== '' ? $warehouseName : null;
     }
 
     /**

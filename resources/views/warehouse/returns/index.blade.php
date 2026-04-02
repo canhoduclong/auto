@@ -38,8 +38,8 @@
             <tbody>
                 @foreach($orders as $i => $order)
                 @php
-                    $returnWarehouse = $order->returnWarehouse ?? $order->warehouse;
-                    $returnWarehouseId = $returnWarehouse?->id;
+                    $returnWarehouseName = $order->resolved_return_warehouse_name;
+                    $returnWarehouseId = $order->resolved_return_warehouse_id;
                     $canConfirm = !$managedWarehouseId
                         || ($returnWarehouseId && (int) $managedWarehouseId === (int) $returnWarehouseId);
                 @endphp
@@ -65,9 +65,9 @@
                         </span>
                     </td>
                     <td>
-                        @if($returnWarehouse)
+                        @if($returnWarehouseName)
                             <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25">
-                                {{ $returnWarehouse->name }}
+                                {{ $returnWarehouseName }}
                             </span>
                         @else
                             <span class="text-muted small">Chưa xác định</span>
