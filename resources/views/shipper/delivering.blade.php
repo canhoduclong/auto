@@ -149,6 +149,15 @@
         $deliveryAddress = $order->recipient_address ?: ($order->customer?->address ?? null);
         $customerMainAddress = $order->customer?->address;
         $customerDeliveryTime = $order->delivery_time ?: $order->customer?->delivery_time;
+        $sourceWarehouseName = $order->warehouse?->name;
+
+        if (!$sourceWarehouseName) {
+            $packingHistory = $order->histories
+                ->whereIn('action', ['complete_packing', 'warehouse_complete_packing'])
+                ->sortByDesc('id')
+                ->first();
+            $sourceWarehouseName = $packingHistory?->user?->warehouse?->name;
+        }
 
         $normalizedDeliveryAddress = $deliveryAddress ? mb_strtolower(trim($deliveryAddress)) : null;
         $normalizedCustomerAddress = $customerMainAddress ? mb_strtolower(trim($customerMainAddress)) : null;
@@ -211,6 +220,7 @@
                         <div class="text-muted small"><i class="bi bi-pin-map me-1"></i>Địa chỉ KH khác: {{ $alternateAddress }}</div>
                     @endif
                     <div class="text-muted small"><i class="bi bi-clock me-1"></i>Giờ giao hàng: {{ $customerDeliveryTime ?: 'Chưa cập nhật' }}</div>
+                    <div class="text-muted small"><i class="bi bi-box-seam me-1"></i>Từ kho: {{ $sourceWarehouseName ?: 'Chưa xác định' }}</div>
                 </div>
  
 

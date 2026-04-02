@@ -4,190 +4,255 @@
 
 @push('styles')
 <style>
-/* ── Stat cards ───────────────────────────── */
+/* Clean and compact inventory UI */
 .inv-stat {
     background: #fff;
-    border-radius: 16px;
-    padding: 22px 24px;
-    box-shadow: 0 4px 18px rgba(15,23,42,.07);
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 14px 16px;
     display: flex;
     align-items: center;
-    gap: 16px;
-    border-left: 4px solid transparent;
-    transition: box-shadow .2s, transform .2s;
+    gap: 12px;
+    min-height: 92px;
 }
-.inv-stat:hover { box-shadow: 0 10px 30px rgba(15,23,42,.11); transform: translateY(-2px); }
-.inv-stat.blue  { border-left-color: #0ea5e9; }
-.inv-stat.amber { border-left-color: #f59e0b; }
-.inv-stat.red   { border-left-color: #ef4444; }
+.inv-stat.blue { border-left: 3px solid #0ea5e9; }
+.inv-stat.amber { border-left: 3px solid #f59e0b; }
+.inv-stat.red { border-left: 3px solid #ef4444; }
 .inv-stat__icon {
-    width: 50px; height: 50px; border-radius: 12px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 1.3rem; flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    flex-shrink: 0;
 }
-.blue  .inv-stat__icon { background: #e0f2fe; color: #0ea5e9; }
-.amber .inv-stat__icon { background: #fef3c7; color: #f59e0b; }
-.red   .inv-stat__icon { background: #fee2e2; color: #ef4444; }
-.inv-stat__num { font-size: 1.8rem; font-weight: 900; color: #0f172a; line-height: 1; }
-.inv-stat__lbl { font-size: .78rem; color: #64748b; margin-top: 4px; font-weight: 500; }
-
-/* ── Filter card ──────────────────────────── */
-.filter-card {
-    background: #fff;
-    border-radius: 14px;
-    padding: 20px 22px;
-    box-shadow: 0 4px 18px rgba(15,23,42,.06);
+.blue .inv-stat__icon { background: #e0f2fe; color: #0284c7; }
+.amber .inv-stat__icon { background: #fef3c7; color: #b45309; }
+.red .inv-stat__icon { background: #fee2e2; color: #dc2626; }
+.inv-stat__num {
+    font-size: 1.4rem;
+    line-height: 1;
+    font-weight: 800;
+    color: #0f172a;
+}
+.inv-stat__lbl {
+    margin-top: 3px;
+    font-size: .76rem;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+}
+.inv-stat__sub {
+    margin-top: 3px;
+    font-size: .74rem;
+    color: #94a3b8;
 }
 
-/* ── Table card ───────────────────────────── */
+.filter-card,
 .inv-table-wrap {
     background: #fff;
-    border-radius: 16px;
-    box-shadow: 0 4px 18px rgba(15,23,42,.07);
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+}
+.filter-card {
+    padding: 14px 16px;
+}
+.daily-note {
+    margin-bottom: 12px;
+    border: 1px solid #dbeafe;
+    background: #f8fbff;
+    border-radius: 10px;
+    color: #1e3a8a;
+    font-size: .8rem;
+    padding: 8px 10px;
+}
+
+.inv-table-wrap {
     overflow: hidden;
 }
-.inv-table-wrap .table { margin: 0; font-size: .875rem; }
-.inv-table-wrap thead { background: #f8fafc; }
+.inv-table-wrap .table {
+    margin: 0;
+    font-size: .84rem;
+}
 .inv-table-wrap thead th {
-    padding: 12px 14px;
-    font-size: .72rem;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: .06em;
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
     color: #64748b;
-    border-bottom: 2px solid #e2e8f0;
+    font-size: .69rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    padding: 10px 12px;
     white-space: nowrap;
 }
 .inv-table-wrap tbody td {
-    padding: 13px 14px;
+    padding: 11px 12px;
     border-bottom: 1px solid #f1f5f9;
     vertical-align: middle;
 }
-.inv-table-wrap tbody tr:last-child td { border-bottom: 0; }
-.inv-table-wrap tbody tr:hover { background: #f8fafc; }
+.inv-table-wrap tbody tr:last-child td {
+    border-bottom: 0;
+}
 
-/* ── Product cell ─────────────────────────── */
 .prod-avatar {
-    width: 40px; height: 40px; border-radius: 10px;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
     background: #e2e8f0;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 1rem; color: #94a3b8; flex-shrink: 0; overflow: hidden;
-}
-.prod-avatar img { width: 100%; height: 100%; object-fit: cover; }
-.prod-name { font-weight: 700; color: #0f172a; font-size: .875rem; line-height: 1.3; }
-.prod-sku  { font-size: .72rem; color: #94a3b8; font-family: monospace; }
-.prod-summary {
+    color: #94a3b8;
     display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-    margin-top: 8px;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    flex-shrink: 0;
 }
-.variant-badge {
-    display: inline-block;
-    background: #f1f5f9;
-    color: #475569;
-    font-size: .7rem;
-    padding: 2px 8px;
-    border-radius: 20px;
-    font-weight: 600;
+.prod-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
 }
-.variant-name {
-    font-size: .83rem;
-    font-weight: 800;
+.prod-name {
+    font-size: .85rem;
+    font-weight: 700;
     color: #0f172a;
-    line-height: 1.35;
+    line-height: 1.3;
 }
+.prod-sku {
+    font-size: .71rem;
+    color: #94a3b8;
+    font-family: monospace;
+}
+.prod-summary,
+.warehouse-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 7px;
+}
+
 .variant-detail {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
+    gap: 8px;
     flex-wrap: wrap;
+}
+.variant-name {
+    font-size: .82rem;
+    font-weight: 700;
+    color: #0f172a;
 }
 .variant-subtext {
-    font-size: .72rem;
+    font-size: .71rem;
     color: #64748b;
-    margin-top: 4px;
+    margin-top: 3px;
 }
-.warehouse-badges {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-    margin-top: 8px;
+.variant-badge {
+    display: inline-block;
+    border-radius: 999px;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    color: #475569;
+    font-size: .68rem;
+    font-weight: 600;
+    padding: 2px 8px;
+}
+
+.group-start td {
+    background: #fcfdff;
 }
 .variant-divider td {
     border-top: 1px dashed #e2e8f0;
 }
-.group-start td {
-    background: linear-gradient(180deg, rgba(248,250,252,.95), rgba(255,255,255,1));
-}
-.inv-stat__sub {
-    font-size: .72rem;
-    color: #94a3b8;
-    margin-top: 4px;
-}
-.daily-note {
-    background: #eff6ff;
-    border: 1px solid #bfdbfe;
-    color: #1e3a8a;
-    border-radius: 12px;
-    padding: 10px 12px;
-    font-size: .82rem;
-    margin-bottom: 14px;
-}
 
-/* ── Qty cells ────────────────────────────── */
 .qty-pill {
-    display: inline-flex; align-items: center; justify-content: center;
-    min-width: 42px; padding: 4px 10px;
-    border-radius: 20px; font-weight: 800; font-size: .82rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 38px;
+    border-radius: 999px;
+    padding: 3px 9px;
+    font-size: .78rem;
+    font-weight: 700;
 }
-.qty-primary  { background: #dbeafe; color: #1d4ed8; }
+.qty-primary { background: #e0f2fe; color: #075985; }
 .qty-reserved { background: #fef3c7; color: #92400e; }
-.qty-avail    { background: #d1fae5; color: #065f46; }
+.qty-avail { background: #dcfce7; color: #166534; }
 
-/* ── Stock progress ───────────────────────── */
-.stock-bar-wrap { min-width: 90px; }
-.stock-bar-bg {
-    height: 6px; border-radius: 4px; background: #e2e8f0; overflow: hidden;
-}
-.stock-bar-fill { height: 100%; border-radius: 4px; transition: width .4s; }
-.stock-bar-fill.good    { background: #10b981; }
-.stock-bar-fill.warning { background: #f59e0b; }
-.stock-bar-fill.danger  { background: #ef4444; }
-.stock-bar-label { font-size: .7rem; color: #94a3b8; margin-top: 3px; }
-
-/* ── Status badge ─────────────────────────── */
-.status-chip {
-    display: inline-flex; align-items: center; gap: 4px;
-    padding: 4px 10px; border-radius: 20px;
-    font-size: .72rem; font-weight: 700;
-}
-.status-chip.good    { background: #d1fae5; color: #065f46; }
-.status-chip.warning { background: #fef3c7; color: #92400e; }
-.status-chip.danger  { background: #fee2e2; color: #991b1b; }
-.status-chip i { font-size: .8rem; }
 .daily-chip {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: 3px;
     border-radius: 999px;
-    padding: 2px 8px;
-    font-size: .72rem;
+    padding: 2px 7px;
+    font-size: .69rem;
     font-weight: 700;
 }
 .daily-chip.import { background: #dcfce7; color: #166534; }
 .daily-chip.export { background: #fee2e2; color: #991b1b; }
 .daily-chip.reserve { background: #fef3c7; color: #92400e; }
 
-/* ── Empty state ──────────────────────────── */
+.stock-bar-wrap {
+    min-width: 88px;
+}
+.stock-bar-bg {
+    height: 5px;
+    border-radius: 999px;
+    background: #e2e8f0;
+    overflow: hidden;
+}
+.stock-bar-fill {
+    height: 100%;
+    border-radius: 999px;
+}
+.stock-bar-fill.good { background: #22c55e; }
+.stock-bar-fill.warning { background: #f59e0b; }
+.stock-bar-fill.danger { background: #ef4444; }
+
+.status-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border-radius: 999px;
+    padding: 3px 8px;
+    font-size: .69rem;
+    font-weight: 700;
+}
+.status-chip.good { background: #dcfce7; color: #166534; }
+.status-chip.warning { background: #fef3c7; color: #92400e; }
+.status-chip.danger { background: #fee2e2; color: #991b1b; }
+
 .empty-state {
-    padding: 60px 24px;
+    padding: 44px 24px;
     text-align: center;
     color: #94a3b8;
 }
-.empty-state i { font-size: 3rem; display: block; margin-bottom: 12px; }
-.empty-state h6 { color: #475569; font-weight: 700; }
+.empty-state i {
+    display: block;
+    font-size: 2.2rem;
+    margin-bottom: 10px;
+}
+.empty-state h6 {
+    font-weight: 700;
+    color: #475569;
+}
+
+@media (max-width: 992px) {
+    .inv-stat {
+        min-height: 84px;
+    }
+}
+
+@media (max-width: 768px) {
+    .filter-card {
+        padding: 12px;
+    }
+    .inv-table-wrap {
+        overflow-x: auto;
+    }
+}
 </style>
 @endpush
 
@@ -196,7 +261,7 @@
 {{-- Header --}}
 <div class="d-flex align-items-center justify-content-between mb-4 gap-3 flex-wrap">
     <div>
-        <h4 class="fw-900 mb-0" style="color:#0f172a;">
+        <h4 class="fw-bold mb-0" style="color:#0f172a;">
             <i class="bi bi-boxes text-primary me-2"></i>Quản lý Tồn Kho
         </h4>
         <p class="text-muted small mb-0 mt-1">Theo dõi số lượng tồn, đặt cọc và cảnh báo ngưỡng</p>

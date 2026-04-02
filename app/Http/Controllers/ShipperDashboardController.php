@@ -2,12 +2,19 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Inventory;
+use App\Models\InventoryDocument;
+use App\Models\InventoryMovement;
+use App\Models\InventoryReservation;
 use App\Models\Order;
 use App\Models\OrderHistory;
+use App\Models\ProductVariant;
+use App\Models\Warehouse;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 
 class ShipperDashboardController extends Controller
@@ -101,19 +108,16 @@ class ShipperDashboardController extends Controller
             if (!$fresh) {
                 return false;
             }
+
             $packingHistory = $fresh->histories()
                                     ->with('user')
-                                    ->where('action', 'complete_packing')
+                                    ->whereIn('action', ['complete_packing', 'warehouse_complete_packing'])
                                     ->latest('id')
                                     ->first();
 
-            $packerName = $packingHistory?->user?->name;
-            $packingUserId = $packingHistory?->user?->id;
-            $warehouse_id = $packingHistory?->user?->warehouse_id;
-            
-            //echo $packerName;
-            //echo $packingUserId;
-            //echo $warehouse_id;
+            $warehouseId = (int) ($fresh->warehouse_id
+                ?: $packingHistory?->user?->warehouse_id
+                ?: 0);
 
             $fresh->update([
                 'shipper_id' => Auth::id(),
@@ -130,25 +134,29 @@ class ShipperDashboardController extends Controller
                 'note'          => 'Shipper nhận đơn để giao',
             ]);
 
-            if (!$warehouse_id) {
-                throw new \Exception('Không xác định được kho xuất (user đóng hàng chưa gán kho hoặc chưa có lịch sử warehouse_complete_packing).');
+            if ($warehouseId <= 0) {
+                throw new \RuntimeException('Không xác định được kho xuất cho đơn hàng này.');
             }
 
-            $document = \App\Models\InventoryDocument::create([
+            $document = InventoryDocument::create([
                 'type'          => 'export',
                 'document_date' => now()->toDateString(),
-                'warehouse_id'  => $warehouse_id,
+                'warehouse_id'  => $warehouseId,
                 'notes'         => 'Xuất kho cho đơn #' . $fresh->code,
+                'shipping_fee'  => (float) ($fresh->shipping_fee ?? 0),
                 'user_id'       => Auth::id(),
             ]);
 
+            $fresh->loadMissing('items');
+
             foreach ($fresh->items as $item) {
-                \App\Models\InventoryDocumentItem::create([
-                    'inventory_document_id' => $document->id,
-                    'product_variant_id'    => $item->product_variant_id,
-                    'quantity'              => $item->quantity,
-                    'unit_cost'             => $item->price ?? 0,
+                $document->items()->create([
+                    'product_variant_id' => $item->product_variant_id,
+                    'quantity'           => $item->quantity,
+                    'unit_cost'          => $item->price ?? 0,
                 ]);
+
+                $this->deductStockForAcceptedOrderItem($fresh, $document, $item, $warehouseId);
             }
 
             return true;
@@ -168,7 +176,7 @@ class ShipperDashboardController extends Controller
      */
     public function myOrders()
     {
-        $orders = Order::with(['customer.addresses', 'items.variant.product'])
+        $orders = Order::with(['customer.addresses', 'items.variant.product', 'warehouse', 'histories.user.warehouse'])
             ->where('shipper_id', Auth::id())
             ->whereIn('status', [Order::STATUS_DELIVERING, Order::STATUS_COMPLETED])
             ->orderBy('created_at', 'asc')
@@ -234,9 +242,11 @@ class ShipperDashboardController extends Controller
         $this->authorizeShipper($order);
         abort_if($order->status !== Order::STATUS_DELIVERING, 403, 'Đơn không đang giao.');
 
-        $order->load(['customer.addresses', 'items.variant.product']);
+        $order->load(['customer.addresses', 'items.variant.product', 'warehouse', 'histories.user.warehouse']);
+        $warehouses = Warehouse::query()->orderBy('name')->get();
+        $sourceWarehouse = $this->resolveOrderWarehouse($order);
 
-        return view('shipper.return-form', compact('order'));
+        return view('shipper.return-form', compact('order', 'warehouses', 'sourceWarehouse'));
     }
 
     /**
@@ -251,16 +261,32 @@ class ShipperDashboardController extends Controller
             'return_reason' => 'required|string',
             'return_note'   => 'nullable|string|max:500',
             'return_image'  => 'required|image|max:5120',
+            'return_warehouse_id' => 'required|exists:warehouses,id',
         ]);
 
         $imagePath = $request->file('return_image')->store('order-returns-proof', 'public');
+        $returnWarehouse = Warehouse::query()->findOrFail((int) $request->input('return_warehouse_id'));
 
-        $order->update([
+        $shipperNote = trim((string) $request->input('return_note', ''));
+        $warehouseNote = 'Kho trả về: ' . $returnWarehouse->name;
+        $shipperNote = $shipperNote !== '' ? $shipperNote . ' | ' . $warehouseNote : $warehouseNote;
+
+        $updateData = [
             'status'        => Order::STATUS_RETURNING,
             'return_reason' => $request->return_reason,
-            'shipper_note'  => $request->return_note,
+            'shipper_note'  => $shipperNote,
             'proof_images'  => [$imagePath],
-        ]);
+        ];
+
+        if (Schema::hasColumn('orders', 'return_warehouse_id')) {
+            $updateData['return_warehouse_id'] = $returnWarehouse->id;
+        }
+
+        if (Schema::hasColumn('orders', 'warehouse_id')) {
+            $updateData['warehouse_id'] = $returnWarehouse->id;
+        }
+
+        $order->update($updateData);
 
         OrderHistory::create([
             'order_id'      => $order->id,
@@ -269,7 +295,7 @@ class ShipperDashboardController extends Controller
             'role'          => 'shipper',
             'status_before' => Order::STATUS_DELIVERING,
             'status_after'  => Order::STATUS_RETURNING,
-            'note'          => 'Shipper gửi trả hàng: ' . $request->return_reason,
+            'note'          => 'Shipper gửi trả hàng: ' . $request->return_reason . ' | ' . $warehouseNote,
         ]);
 
         return redirect()->route('shipper.my-orders')->with('success', 'Đã gửi yêu cầu trả hàng về kho.');
@@ -355,5 +381,124 @@ class ShipperDashboardController extends Controller
         if ($order->shipper_id !== Auth::id() && !Auth::user()->hasRole('admin')) {
             abort(403, 'Bạn không có quyền thực hiện hành động này.');
         }
+    }
+
+    protected function resolveOrderWarehouse(Order $order): ?Warehouse
+    {
+        if ($order->warehouse) {
+            return $order->warehouse;
+        }
+
+        $packingHistory = $order->histories
+            ->whereIn('action', ['complete_packing', 'warehouse_complete_packing'])
+            ->sortByDesc('id')
+            ->first();
+
+        return $packingHistory?->user?->warehouse;
+    }
+
+    private function deductStockForAcceptedOrderItem(Order $order, InventoryDocument $document, $item, int $warehouseId): void
+    {
+        $remaining = (int) $item->quantity;
+
+        $reservations = InventoryReservation::query()
+            ->where('order_item_id', $item->id)
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($reservations as $reservation) {
+            if ($remaining <= 0) {
+                break;
+            }
+
+            $inventory = Inventory::query()->lockForUpdate()->find($reservation->inventory_id);
+            if (!$inventory) {
+                continue;
+            }
+
+            $deductQty = min($remaining, (int) $reservation->quantity);
+            if ($deductQty <= 0) {
+                continue;
+            }
+
+            if ((int) $inventory->quantity < $deductQty || (int) $inventory->reserved_quantity < $deductQty) {
+                throw new \RuntimeException('Dữ liệu tồn kho đặt trước không hợp lệ khi xuất kho.');
+            }
+
+            $inventory->quantity -= $deductQty;
+            $inventory->reserved_quantity -= $deductQty;
+            $inventory->save();
+
+            InventoryMovement::create([
+                'inventory_id'   => $inventory->id,
+                'quantity'       => -$deductQty,
+                'type'           => 'export',
+                'reference_id'   => $document->id,
+                'reference_type' => InventoryDocument::class,
+                'user_id'        => Auth::id(),
+            ]);
+
+            $remaining -= $deductQty;
+            $reservation->quantity -= $deductQty;
+
+            if ((int) $reservation->quantity <= 0) {
+                $reservation->delete();
+            } else {
+                $reservation->save();
+            }
+        }
+
+        if ($remaining > 0) {
+            $inventories = Inventory::query()
+                ->where('product_variant_id', $item->product_variant_id)
+                ->where('warehouse_id', $warehouseId)
+                ->orderByDesc('quantity')
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($inventories as $inventory) {
+                if ($remaining <= 0) {
+                    break;
+                }
+
+                $available = max(0, (int) $inventory->quantity - (int) $inventory->reserved_quantity);
+                if ($available <= 0) {
+                    continue;
+                }
+
+                $deductQty = min($remaining, $available);
+
+                $inventory->quantity -= $deductQty;
+                $inventory->save();
+
+                InventoryMovement::create([
+                    'inventory_id'   => $inventory->id,
+                    'quantity'       => -$deductQty,
+                    'type'           => 'export',
+                    'reference_id'   => $document->id,
+                    'reference_type' => InventoryDocument::class,
+                    'user_id'        => Auth::id(),
+                ]);
+
+                $remaining -= $deductQty;
+            }
+        }
+
+        if ($remaining > 0) {
+            throw new \RuntimeException('Không đủ tồn kho khả dụng để xuất cho đơn #' . ($order->code ?: $order->id));
+        }
+
+        $this->syncVariantStockFromInventories((int) $item->product_variant_id);
+    }
+
+    private function syncVariantStockFromInventories(int $variantId): void
+    {
+        $totalStock = (int) Inventory::query()
+            ->where('product_variant_id', $variantId)
+            ->sum('quantity');
+
+        ProductVariant::query()
+            ->where('id', $variantId)
+            ->update(['stock' => $totalStock]);
     }
 }

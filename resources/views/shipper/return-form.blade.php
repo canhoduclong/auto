@@ -11,6 +11,9 @@
     $deliveryTime = $order->delivery_time
         ?? $order->customer?->delivery_time
         ?? 'Chưa có khung giờ giao';
+    $sourceWarehouseName = $sourceWarehouse?->name ?? 'Chưa xác định';
+    $selectedReturnWarehouseId = old('return_warehouse_id', $sourceWarehouse?->id);
+    $selectedReturnWarehouseName = optional($warehouses->firstWhere('id', (int) $selectedReturnWarehouseId))->name ?? 'Chưa chọn';
 @endphp
 <style>
     .shipper-return-shell .card {
@@ -50,6 +53,15 @@
         font-size: .83rem;
         margin-bottom: 12px;
     }
+    .shipper-selected-warehouse {
+        margin-top: 8px;
+        padding: 8px 10px;
+        border: 1px solid #dbeafe;
+        background: #f8fbff;
+        border-radius: 8px;
+        font-size: .85rem;
+        color: #1e3a8a;
+    }
 </style>
 <div class="row justify-content-center">
     <div class="col-md-9 col-lg-8 shipper-return-shell">
@@ -83,7 +95,8 @@
                 <div class="shipper-customer-box">
                     <div class="shipper-customer-title">Thông tin giao hàng</div>
                     <div class="small mb-2"><i class="bi bi-geo-alt me-1"></i><strong>Địa chỉ:</strong> {{ $customerAddress }}</div>
-                    <div class="small"><i class="bi bi-clock me-1"></i><strong>Giờ giao:</strong> {{ $deliveryTime }}</div>
+                    <div class="small mb-2"><i class="bi bi-clock me-1"></i><strong>Giờ giao:</strong> {{ $deliveryTime }}</div>
+                    <div class="small"><i class="bi bi-box-seam me-1"></i><strong>Từ kho:</strong> {{ $sourceWarehouseName }}</div>
                 </div>
             </div>
         </div>
@@ -99,6 +112,24 @@
 
                 <form action="{{ route('shipper.store-return', $order) }}" method="POST" enctype="multipart/form-data">
                     @csrf
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Trả về kho <span class="text-danger">*</span></label>
+                        <select name="return_warehouse_id" class="form-select" required id="returnWarehouseSelect">
+                            <option value="">-- Chọn kho nhận trả --</option>
+                            @foreach($warehouses as $warehouse)
+                                <option value="{{ $warehouse->id }}"
+                                    {{ (string) old('return_warehouse_id', $sourceWarehouse?->id) === (string) $warehouse->id ? 'selected' : '' }}>
+                                    {{ $warehouse->name }}
+                                </option>
+                            @endforeach
+                        </select>
+                        <div class="shipper-selected-warehouse">
+                            <i class="bi bi-building me-1"></i>
+                            <strong>Kho trả về:</strong>
+                            <span id="selectedReturnWarehouseText">{{ $selectedReturnWarehouseName }}</span>
+                        </div>
+                    </div>
 
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Lý do trả hàng <span class="text-danger">*</span></label>
@@ -161,6 +192,16 @@ document.getElementById('returnPreviewInput').addEventListener('change', functio
     };
     reader.readAsDataURL(file);
 });
+
+const returnWarehouseSelect = document.getElementById('returnWarehouseSelect');
+const selectedReturnWarehouseText = document.getElementById('selectedReturnWarehouseText');
+
+if (returnWarehouseSelect && selectedReturnWarehouseText) {
+    returnWarehouseSelect.addEventListener('change', function () {
+        const selectedText = this.options[this.selectedIndex]?.text?.trim() || 'Chưa chọn';
+        selectedReturnWarehouseText.textContent = selectedText;
+    });
+}
 </script>
 @endpush
 @endsection

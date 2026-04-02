@@ -12,6 +12,7 @@ class Order extends Model
     protected $fillable = [
         'customer_id', 'user_id', 'shipper_id', 'code', 'total', 'status',
         'copied_from_order_id',
+        'warehouse_id', 'return_warehouse_id',
         'recipient_name', 'recipient_phone', 'recipient_email', 'recipient_address', 'note',
         'subtotal_amount', 'item_discount_total', 'extra_discount_total',
         'total_discount', 'order_discount', 'total_weight', 'actual_weight', 'charge_shipping_fee', 'shipping_fee',
@@ -82,6 +83,7 @@ class Order extends Model
     public function customer() { return $this->belongsTo(Customer::class); }
     public function user() { return $this->belongsTo(User::class); }
     public function shipper() { return $this->belongsTo(User::class, 'shipper_id'); }
+    public function warehouse() { return $this->belongsTo(Warehouse::class); }
     public function items() { return $this->hasMany(OrderItem::class); }
 
     public function getPaymentStatusTextAttribute()
