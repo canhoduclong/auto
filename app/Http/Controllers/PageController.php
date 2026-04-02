@@ -26,6 +26,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
+use Illuminate\Database\Eloquent\Builder;
 
 class PageController extends Controller
 {
@@ -51,6 +52,16 @@ class PageController extends Controller
     private function hasOrderColumn(string $column): bool
     {
         return in_array($column, $this->orderColumns(), true);
+    }
+
+    private function myOrderCustomersBaseQuery(int $userId): Builder
+    {
+        return Customer::query()->whereIn('id', function ($q) use ($userId) {
+            $q->select('customer_id')
+                ->from('orders')
+                ->where('user_id', $userId)
+                ->whereNotNull('customer_id');
+        });
     }
 
     private function discountConfigFromRequest(array $validated): array
@@ -308,7 +319,12 @@ class PageController extends Controller
             $query->where('category_id', $category->id);
         }
 
-        $products = $query->with('avatar.media')->paginate(10);
+        $products = $query->with([
+            'avatar.media',
+            'variants.values.attribute',
+            'variants.mediaLink.media',
+            'variants.latestPriceRule',
+        ])->paginate(10);
 
         return view('site.product_list', [
             'products' => $products,
@@ -324,7 +340,7 @@ class PageController extends Controller
             'brand',
             'gallery.media', 
             'variants.values.attribute', 
-            'variants.media', 
+            'variants.mediaLink.media', 
             'variants.latestPriceRule',
             'variants.inventories'
         ]);
@@ -471,27 +487,151 @@ class PageController extends Controller
 
         $query = Order::with('customer')->where('user_id', $user->id);
 
-        $customers = Customer::whereIn('id', function ($q) use ($user) {
-            $q->select('customer_id')->from('orders')
-              ->where('user_id', $user->id)
-              ->whereNotNull('customer_id');
-        })->orderBy('name')->get();
+        $selectedCustomerIds = collect($request->input('customer_ids', []))
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->unique()
+            ->values();
 
-        if ($request->filled('from_date') && $request->filled('to_date')) {
-            $query->whereBetween('created_at', [$request->from_date, $request->to_date]);
+        if ($selectedCustomerIds->isEmpty()) {
+            $legacySelectedCustomerId = (int) $request->input('customer_id', 0);
+            if ($legacySelectedCustomerId > 0) {
+                $selectedCustomerIds = collect([$legacySelectedCustomerId]);
+            }
         }
 
-        if ($request->filled('customer_id')) {
-            $query->where('customer_id', $request->customer_id);
+        $customerSearch = trim((string) $request->input('customer_query', ''));
+
+        $customers = $this->myOrderCustomersBaseQuery($user->id)
+            ->when($customerSearch !== '', function ($q) use ($customerSearch) {
+                $q->where(function ($sub) use ($customerSearch) {
+                    $sub->where('name', 'like', "%{$customerSearch}%")
+                        ->orWhere('phone', 'like', "%{$customerSearch}%")
+                        ->orWhere('email', 'like', "%{$customerSearch}%");
+                });
+            })
+            ->orderBy('name')
+            ->paginate(15, ['*'], 'customer_page')
+            ->appends($request->except('customer_page'));
+
+        if ($selectedCustomerIds->isNotEmpty()) {
+            $query->whereIn('customer_id', $selectedCustomerIds->all());
         }
 
-        $orders = $query->latest()->paginate(10);
+        $fromDate = $request->input('from_date');
+        $toDate = $request->input('to_date');
+
+        if ($fromDate && $toDate) {
+            $from = Carbon::parse($fromDate)->startOfDay();
+            $to = Carbon::parse($toDate)->endOfDay();
+
+            if ($from->gt($to)) {
+                [$from, $to] = [$to, $from];
+            }
+
+            $query->whereBetween('created_at', [$from, $to]);
+        } elseif ($fromDate) {
+            $query->whereDate('created_at', '>=', $fromDate);
+        } elseif ($toDate) {
+            $query->whereDate('created_at', '<=', $toDate);
+        }
+
+        if ($request->filled('payment_status')) {
+            $query->where('payment_status', $request->input('payment_status'));
+        }
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->input('status'));
+        }
+
+        $allowedPerPage = [10, 20, 50, 100];
+        $perPage = (int) $request->input('per_page', 10);
+        if (!in_array($perPage, $allowedPerPage, true)) {
+            $perPage = 10;
+        }
+
+        $allowedSortBy = ['code', 'customer_name', 'total', 'status', 'payment_status', 'created_at'];
+        $sortBy = (string) $request->input('sort_by', 'created_at');
+        if (!in_array($sortBy, $allowedSortBy, true)) {
+            $sortBy = 'created_at';
+        }
+
+        $sortDir = strtolower((string) $request->input('sort_dir', 'desc'));
+        $sortDir = in_array($sortDir, ['asc', 'desc'], true) ? $sortDir : 'desc';
+
+        if ($sortBy === 'customer_name') {
+            $query->orderBy(
+                Customer::query()
+                    ->select('name')
+                    ->whereColumn('customers.id', 'orders.customer_id')
+                    ->limit(1),
+                $sortDir
+            );
+        } else {
+            $query->orderBy($sortBy, $sortDir);
+        }
+
+        $orders = $query->paginate($perPage)->appends($request->query());
+
+        if ($request->ajax() || $request->boolean('ajax')) {
+            $html = view('site.orders.partials.orders_listing', [
+                'orders' => $orders,
+                'user' => $user,
+                'sortBy' => $sortBy,
+                'sortDir' => $sortDir,
+            ])->render();
+
+            return response()->json([
+                'html' => $html,
+            ]);
+        }
 
         return view('site.my_orders', [
             'settings' => $this->settings,
             'user' => $user,
             'orders' => $orders,
-            'customers' => $customers
+            'customers' => $customers,
+            'customerSearch' => $customerSearch,
+            'selectedCustomerIds' => $selectedCustomerIds->all(),
+            'perPage' => $perPage,
+            'sortBy' => $sortBy,
+            'sortDir' => $sortDir,
+        ]);
+    }
+
+    public function myOrderCustomersAjax(Request $request)
+    {
+        if (!auth()->check()) {
+            abort(401);
+        }
+
+        $user = auth()->user();
+        $search = trim((string) $request->input('q', ''));
+        $selectedCustomerIds = collect(explode(',', (string) $request->input('selected_ids', '')))
+            ->map(fn ($id) => (int) trim($id))
+            ->filter(fn ($id) => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        $customers = $this->myOrderCustomersBaseQuery($user->id)
+            ->when($search !== '', function ($q) use ($search) {
+                $q->where(function ($sub) use ($search) {
+                    $sub->where('name', 'like', "%{$search}%")
+                        ->orWhere('phone', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%");
+                });
+            })
+            ->orderBy('name')
+            ->paginate(15, ['*'], 'page');
+
+        $html = view('site.orders.partials.customer_listing', [
+            'customers' => $customers,
+            'selectedCustomerIds' => $selectedCustomerIds,
+        ])->render();
+
+        return response()->json([
+            'html' => $html,
         ]);
     }
 
@@ -515,10 +655,14 @@ class PageController extends Controller
         $query = Order::with(['customer', 'user.roles', 'user.team', 'approvals.step'])
             ->when(!$user->hasRole('admin'), function ($q) use ($user) {
                 $q->whereHas('user', function ($sub) use ($user) {
-                    $sub->where('team_id', $user->team_id)
-                        ->whereHas('roles', function ($roleQuery) {
-                            $roleQuery->whereRaw('LOWER(name) = ?', ['sale']);
-                        });
+                    $sub->where(function ($scope) use ($user) {
+                        $scope->where(function ($teamSale) use ($user) {
+                            $teamSale->where('team_id', $user->team_id)
+                                ->whereHas('roles', function ($roleQuery) {
+                                    $roleQuery->whereRaw('LOWER(name) = ?', ['sale']);
+                                });
+                        })->orWhere('id', $user->id);
+                    });
                 });
             });
 
@@ -678,10 +822,14 @@ class PageController extends Controller
         $query = Order::with(['items', 'approvals.step', 'user.roles', 'customer.type'])
             ->when(!$user->hasRole('admin'), function ($q) use ($user) {
                 $q->whereHas('user', function ($sub) use ($user) {
-                    $sub->where('team_id', $user->team_id)
-                        ->whereHas('roles', function ($roleQuery) {
-                            $roleQuery->whereRaw('LOWER(name) = ?', ['sale']);
-                        });
+                    $sub->where(function ($scope) use ($user) {
+                        $scope->where(function ($teamSale) use ($user) {
+                            $teamSale->where('team_id', $user->team_id)
+                                ->whereHas('roles', function ($roleQuery) {
+                                    $roleQuery->whereRaw('LOWER(name) = ?', ['sale']);
+                                });
+                        })->orWhere('id', $user->id);
+                    });
                 });
             })
             ->whereDate('created_at', '>=', $fromDate)
@@ -1619,9 +1767,264 @@ class PageController extends Controller
             abort(403);
         }
 
-        $order->load('items.variant.product', 'customer');
+        $order->load([
+            'customer',
+            'items.variant.mediaLink.media',
+            'items.variant.product.avatar.media',
+        ]);
 
         return view('site.orders.show', compact('order', 'settings'));
+    }
+
+    public function myOrderEdit(Order $order)
+    {
+        $user = auth()->user();
+
+        if (!$user || $order->user_id !== $user->id) {
+            abort(403);
+        }
+
+        $isEditable = $order->status === Order::STATUS_PENDING_LEADER_APPROVAL
+            && $order->created_at?->isToday();
+
+        if (!$isEditable) {
+            return redirect()->route('pages.my_orders')
+                ->with('error', 'Chi duoc sua don cho duyet leader duoc tao trong ngay.');
+        }
+
+        $customerIds = Order::query()
+            ->where('user_id', $user->id)
+            ->whereNotNull('customer_id')
+            ->pluck('customer_id')
+            ->unique()
+            ->values();
+
+        $customers = Customer::query()
+            ->whereIn('id', $customerIds)
+            ->orderBy('name')
+            ->get();
+
+        $order->load('items.variant.product', 'customer');
+
+        return view('site.orders.edit', [
+            'settings' => $this->settings,
+            'order' => $order,
+            'customers' => $customers,
+        ]);
+    }
+
+    public function myOrderUpdate(Request $request, Order $order)
+    {
+        $user = auth()->user();
+
+        if (!$user || $order->user_id !== $user->id) {
+            abort(403);
+        }
+
+        $isEditable = $order->status === Order::STATUS_PENDING_LEADER_APPROVAL
+            && $order->created_at?->isToday();
+
+        if (!$isEditable) {
+            return redirect()->route('pages.my_orders')
+                ->with('error', 'Don hang khong con du dieu kien de sua.');
+        }
+
+        $customerIds = Order::query()
+            ->where('user_id', $user->id)
+            ->whereNotNull('customer_id')
+            ->pluck('customer_id')
+            ->unique()
+            ->values()
+            ->toArray();
+
+        $sanitizedItems = collect($request->input('items', []))
+            ->map(function ($item) {
+                if (!is_array($item)) {
+                    return null;
+                }
+
+                $variantId = (int) ($item['variant_id'] ?? 0);
+                $quantity = (int) ($item['quantity'] ?? 0);
+
+                if ($variantId <= 0 || $quantity <= 0) {
+                    return null;
+                }
+
+                return [
+                    'variant_id' => $variantId,
+                    'quantity' => $quantity,
+                ];
+            })
+            ->filter()
+            ->values()
+            ->all();
+
+        $request->merge([
+            'items' => $sanitizedItems,
+        ]);
+
+        $validated = $request->validate([
+            'customer_id' => ['required', Rule::in($customerIds)],
+            'recipient_name' => ['required', 'string', 'max:255'],
+            'recipient_phone' => ['required', 'string', 'max:50'],
+            'recipient_email' => ['nullable', 'email', 'max:255'],
+            'recipient_address' => ['required', 'string', 'max:1000'],
+            'delivery_time' => ['nullable', 'string', 'max:255'],
+            'note' => ['nullable', 'string', 'max:1000'],
+            'shipper_note' => ['nullable', 'string', 'max:1000'],
+            'order_discount' => ['nullable', 'numeric', 'min:0'],
+            'item_discount' => ['nullable', 'array'],
+            'item_discount.*' => ['nullable', 'numeric', 'min:0'],
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.variant_id' => ['required', 'integer', 'exists:product_variants,id'],
+            'items.*.quantity' => ['required', 'integer', 'min:1'],
+        ]);
+
+        $itemsInput = collect($validated['items'] ?? [])->values();
+
+        if ($itemsInput->isEmpty()) {
+            return back()->withErrors([
+                'items' => 'Don hang phai co it nhat 1 san pham.',
+            ])->withInput();
+        }
+
+        $variantIds = $itemsInput->pluck('variant_id')->unique()->values()->all();
+        $variants = ProductVariant::query()
+            ->with(['latestPriceRule'])
+            ->whereIn('id', $variantIds)
+            ->get()
+            ->keyBy('id');
+
+        foreach ($itemsInput as $item) {
+            $variant = $variants->get($item['variant_id']);
+            if (!$variant) {
+                return back()->withErrors([
+                    'items' => 'Co san pham khong ton tai trong don hang.',
+                ])->withInput();
+            }
+
+            if ($variant->available_stock < $item['quantity']) {
+                return back()->withErrors([
+                    'items' => 'Ton kho khong du cho SKU ' . ($variant->sku ?: $variant->id) . '.',
+                ])->withInput();
+            }
+        }
+
+        DB::transaction(function () use ($order, $validated, $itemsInput, $variants): void {
+            $order->items()->delete();
+
+            $subtotalAmount = 0;
+            $itemDiscountTotal = 0;
+            $totalBeforeOrderDiscount = 0;
+            $orderDiscountInput = max(0, (float) ($validated['order_discount'] ?? 0));
+            $itemDiscountInput = collect($validated['item_discount'] ?? []);
+
+            foreach ($itemsInput as $item) {
+                $variant = $variants->get($item['variant_id']);
+                $price = (float) ($variant->latestPriceRule?->price ?? $variant->final_price ?? 0);
+                $quantity = (int) $item['quantity'];
+                $lineSubtotal = round($price * $quantity, 2);
+                $requestedUnitDiscount = (float) $itemDiscountInput->get((string) $variant->id, 0);
+                $unitDiscount = max(0, min($requestedUnitDiscount, $price));
+                $lineDiscount = round($unitDiscount * $quantity, 2);
+                $lineTotal = max($lineSubtotal - $lineDiscount, 0);
+
+                $order->items()->create([
+                    'product_id' => $variant->product_id,
+                    'product_variant_id' => $variant->id,
+                    'quantity' => $quantity,
+                    'price' => $price,
+                    'base_price' => $price,
+                    'unit_discount' => $unitDiscount,
+                    'discount_total' => $lineDiscount,
+                    'unit_weight' => 0,
+                    'total_weight' => 0,
+                    'total' => $lineTotal,
+                ]);
+
+                $subtotalAmount += $lineSubtotal;
+                $itemDiscountTotal += $lineDiscount;
+                $totalBeforeOrderDiscount += $lineTotal;
+            }
+
+            $orderDiscount = min($orderDiscountInput, $totalBeforeOrderDiscount);
+            $newTotal = max($totalBeforeOrderDiscount - $orderDiscount, 0);
+            $totalDiscount = $itemDiscountTotal + $orderDiscount;
+
+            $paid = (float) $order->transactions()->where('type', 'payment')->sum('amount')
+                - (float) $order->transactions()->where('type', 'refund')->sum('amount');
+
+            $orderUpdateData = [
+                'customer_id' => (int) $validated['customer_id'],
+                'copied_from_order_id' => null,
+                'recipient_name' => $validated['recipient_name'],
+                'recipient_phone' => $validated['recipient_phone'],
+                'recipient_email' => $validated['recipient_email'] ?? null,
+                'recipient_address' => $validated['recipient_address'],
+                'delivery_time' => $validated['delivery_time'] ?? null,
+                'note' => $validated['note'] ?? null,
+                'shipper_note' => $validated['shipper_note'] ?? null,
+                'subtotal_amount' => $subtotalAmount,
+                'item_discount_total' => $itemDiscountTotal,
+                'extra_discount_total' => $orderDiscount,
+                'order_discount' => $orderDiscount,
+                'total_discount' => $totalDiscount,
+                'total' => $newTotal,
+                'amount_due' => max($newTotal - $paid, 0),
+            ];
+
+            $order->update(array_filter(
+                $orderUpdateData,
+                fn (string $column): bool => $this->hasOrderColumn($column),
+                ARRAY_FILTER_USE_KEY
+            ));
+
+            // Sau khi sửa đơn, reset lại luồng duyệt tương tự tạo mới.
+            $order->approvals()->delete();
+            app(ApprovalService::class)->initOrderApproval($order->fresh());
+        });
+
+        return redirect()->route('site.orders.show', $order)
+            ->with('success', 'Da cap nhat don hang thanh cong.');
+    }
+    
+    public function copyOrder($id)
+    {
+       $user = auth()->user();
+
+        $oldOrder = Order::with('items')
+            ->where('user_id', $user->id) // bảo mật
+            ->findOrFail($id);
+
+        // clone order
+        $newOrder = $oldOrder->replicate();
+
+ 
+        // reset các field quan trọng
+        $newOrder->customer_id = $oldOrder->customer_id;
+        $newOrder->code = 'OD' . time();
+        $newOrder->status = Order::STATUS_PENDING_LEADER_APPROVAL;
+        $newOrder->payment_status = 'unpaid';
+        $newOrder->created_at = now();
+        $newOrder->updated_at = now();
+        if ($this->hasOrderColumn('copied_from_order_id')) {
+            $newOrder->copied_from_order_id = $oldOrder->id;
+        }
+        //echo '<pre>'; print_r($newOrder->toArray()); echo '</pre>'; die('---');
+        $newOrder->save();
+
+        // clone items
+        foreach ($oldOrder->items as $item) {
+            $newItem = $item->replicate();
+            $newItem->order_id = $newOrder->id;
+            $newItem->save();
+        }
+
+        // Khởi tạo lại workflow duyệt để đơn copy có bước pending rõ ràng.
+        app(ApprovalService::class)->initOrderApproval($newOrder);
+
+        return redirect()->route('pages.my_orders')
+            ->with('success', 'Đã copy đơn #' . $oldOrder->code);
     }
 
     private function resolveMyCustomerDateRange(string $period, ?string $fromDateInput, ?string $toDateInput): array

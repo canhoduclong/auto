@@ -73,7 +73,7 @@ class HomeController extends Controller
             $query->whereDate('created_at', $request->date);
         }
 
-        $variants = $query->with(['product.avatar.media', 'latestPriceRule', 'media'])->paginate(10);
+        $variants = $query->with(['product.avatar.media', 'latestPriceRule', 'mediaLink.media'])->paginate(10);
 
         return view('site.variants_list', compact('variants', 'settings', 'categories'));
     }

@@ -32,6 +32,8 @@
     $orderExtraDiscount = (float) ($order->extra_discount_total ?? $order->order_discount ?? 0);
     $orderTotalDiscount = (float) ($order->total_discount ?? ($orderItemDiscount + $orderExtraDiscount));
     $orderTotalWeight = (float) ($order->total_weight ?? $order->items->sum('total_weight'));
+    $canEdit = $order->status === \App\Models\Order::STATUS_PENDING_LEADER_APPROVAL
+        && $order->created_at?->isToday();
 @endphp
 
 @push('styles')
@@ -356,6 +358,7 @@
                     <table class="table order-table">
                         <thead>
                             <tr>
+                                <th>Ảnh</th>
                                 <th>Sản phẩm</th>
                                 <th>Biến thể</th>
                                 <th>SL</th>
@@ -367,7 +370,17 @@
                         </thead>
                         <tbody>
                             @foreach($order->items as $item)
+                            @php
+                                $variant = $item->variant;
+                                $imageUrl = $variant?->media_url
+                                    ?? ($variant?->product?->avatar?->media
+                                        ? asset('storage/' . $variant->product->avatar->media->file_path)
+                                        : 'https://via.placeholder.com/56');
+                            @endphp
                             <tr>
+                                <td>
+                                    <img src="{{ $imageUrl }}" alt="{{ optional(optional($item->variant)->product)->name ?? 'Product' }}" width="56" class="rounded border">
+                                </td>
                                 <td class="order-product">
                                     <strong>{{ optional(optional($item->variant)->product)->name ?? 'N/A' }}</strong>
                                     <small>SKU: {{ optional($item->variant)->sku ?? 'N/A' }}</small>
@@ -383,7 +396,7 @@
                         </tbody>
                         <tfoot>
                             <tr>
-                                <td colspan="6" class="text-end"><strong>Tổng cộng</strong></td>
+                                <td colspan="7" class="text-end"><strong>Tổng cộng</strong></td>
                                 <td class="order-money"><strong>{{ number_format((float) $order->total, 0, ',', '.') }}đ</strong></td>
                             </tr>
                         </tfoot>
@@ -392,6 +405,9 @@
             </div>
 
             <div class="order-actions">
+                @if($canEdit)
+                    <a href="{{ route('site.orders.edit', $order) }}" class="btn btn-primary me-2"><i class="fa fa-pencil me-1"></i> Sửa đơn</a>
+                @endif
                 <a href="{{ route('pages.my_orders') }}" class="btn btn-outline-primary">Quay lại danh sách đơn</a>
             </div>
         </div>

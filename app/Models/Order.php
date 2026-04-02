@@ -11,6 +11,8 @@ class Order extends Model
     use HasFactory;
     protected $fillable = [
         'customer_id', 'user_id', 'shipper_id', 'code', 'total', 'status',
+        'copied_from_order_id',
+        'recipient_name', 'recipient_phone', 'recipient_email', 'recipient_address', 'note',
         'subtotal_amount', 'item_discount_total', 'extra_discount_total',
         'total_discount', 'order_discount', 'total_weight', 'actual_weight', 'charge_shipping_fee', 'shipping_fee',
         'charge_foam_box_fee', 'foam_box_price',
@@ -38,6 +40,13 @@ class Order extends Model
     public function transactions() { return $this->hasMany(Transaction::class); }
     public function histories() { return $this->hasMany(OrderHistory::class); }
 
+    const STATUS_PENDING_LEADER_APPROVAL = 'pending_leader_approval';
+    const STATUS_PENDING_MANAGER_APPROVAL = 'pending_manager_approval';
+    const STATUS_APPROVED = 'approved'; 
+    const STATUS_SHIPPING = 'shipping'; 
+    const STATUS_REJECTED = 'rejected';
+
+
     // Trạng thái đơn hàng chuẩn
     const STATUS_ORDER_PLACED = 'order_placed';
     const STATUS_ORDER_CONFIRMED = 'order_confirmed';
@@ -61,7 +70,7 @@ class Order extends Model
             self::STATUS_CANCELLED => 'Đã hủy',
         ];
     }
-
+    
     // Warehouse & Shipper statuses
     const STATUS_READY_TO_PACK    = 'ready_to_pack';
     const STATUS_PACKING          = 'packing';

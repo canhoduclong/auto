@@ -75,11 +75,120 @@
                                     @endif
                                 </td>
                                 <td>{{ $product->name }}</td>
-                                <td></td>
+                                <td>{{ $product->price }}</td>
                                 <td>
                                     <a href="{{ route('pages.product_detail', $product->slug) }}" class="btn btn-info btn-sm">View Details</a>
                                 </td>
                             </tr>
+                            @if($product->variants->count())
+                                <tr>
+                                    <td colspan="4" style="background:#f9fafb; padding:0 0 12px 0;">
+                                        @php
+                                            $sizes = $product->variants->map(function($v){
+                                                $size = $v->values->firstWhere('attribute.code', 'size')?->value;
+                                                return $size ?: null;
+                                            })->filter()->unique()->values();
+                                        @endphp
+                                        @if($sizes->count())
+                                            <div class="product-size-selector mb-2">
+                                                <strong>Chọn size:</strong>
+                                                @foreach($sizes as $size)
+                                                    <button type="button" class="btn btn-outline-primary btn-sm size-btn me-1 mb-1" data-product-id="{{ $product->id }}" data-size="{{ $size }}">{{ $size }}</button>
+                                                @endforeach
+                                            </div>
+                                            <div class="variant-list-by-size" id="variant-list-by-size-{{ $product->id }}"></div>
+                                        @else
+                                            <div class="variant-list-by-size" id="variant-list-by-size-{{ $product->id }}">
+                                                @foreach($product->variants as $variant)
+                                                    <div class="row align-items-center border-bottom py-2">
+                                                        <div class="col">
+                                                            <div><b>{{ $variant->name ?? $product->name }}</b></div>
+                                                            <div class="text-muted small">SKU: {{ $variant->sku ?? '' }}</div>
+                                                            <div class="text-muted small">Trọng lượng: {{ $variant->weight ? $variant->weight . 'g' : '--' }}</div>
+                                                        </div>
+                                                        <div class="col-auto">
+                                                            <div class="fw-bold text-danger mb-1">{{ number_format($variant->final_price ?? 0, 0, ',', '.') }} VNĐ</div>
+                                                            <button class="btn btn-warning btn-sm add-to-cart-direct" data-variant-id="{{ $variant->id }}"><i class="bi bi-cart-plus"></i> Thêm vào giỏ</button>
+                                                        </div>
+                                                    </div>
+                                                @endforeach
+                                            </div>
+                                        @endif
+                                    </td>
+                                </tr>
+                            @endif
+                            @php
+                            // Chuẩn bị dữ liệu variantsByProductId cho JS, tránh lỗi blade/JS phức tạp
+                            $variantsByProductId = $products->mapWithKeys(function($p) {
+                                return [$p->id => $p->variants->map(function($v) use ($p) {
+                                    return [
+                                        'id' => $v->id,
+                                        'name' => $v->name,
+                                        'sku' => $v->sku,
+                                        'weight' => $v->weight ?? null,
+                                        'final_price' => $v->final_price,
+                                        'media' => $v->media_url,
+                                        'size' => $v->values->firstWhere('attribute.code', 'size')?->value,
+                                        'product_name' => $p->name,
+                                        'product_avatar' => $p->avatar && $p->avatar->media ? asset('storage/' . $p->avatar->media->file_path) : 'https://via.placeholder.com/80',
+                                    ];
+                                })];
+                            });
+                            @endphp
+                            @push('scripts')
+                            <script>
+                            $(function() {
+                                var variants = @json($variantsByProductId, JSON_UNESCAPED_UNICODE);
+                                // Khi click size, render danh sách biến thể theo size
+                                $('.size-btn').on('click', function() {
+                                    var $btn = $(this);
+                                    var productId = $btn.data('product-id');
+                                    var size = $btn.data('size');
+                                    var $container = $('#variant-list-by-size-' + productId);
+                                    var html = '';
+                                    if (variants[productId]) {
+                                        variants[productId].forEach(function(variant) {
+                                            if (variant.size == size) {
+                                                html += `<div class="row align-items-center border-bottom py-2">
+                                                    <div class="col">
+                                                        <div><b>${variant.name || variant.product_name}</b></div>
+                                                        <div class="text-muted small">SKU: ${variant.sku || ''}</div>
+                                                        <div class="text-muted small">Trọng lượng: ${variant.weight ? variant.weight + 'g' : '--'}</div>
+                                                    </div>
+                                                    <div class="col-auto">
+                                                        <div class="fw-bold text-danger mb-1">${(variant.final_price || 0).toLocaleString('vi-VN')} VNĐ</div>
+                                                        <button class="btn btn-warning btn-sm add-to-cart-direct" data-variant-id="${variant.id}"><i class="bi bi-cart-plus"></i> Thêm vào giỏ</button>
+                                                    </div>
+                                                </div>`;
+                                            }
+                                        });
+                                    }
+                                    $container.html(html);
+                                });
+                                // Thêm vào giỏ hàng bằng AJAX
+                                $(document).on('click', '.add-to-cart-direct', function() {
+                                    var variantId = $(this).data('variant-id');
+                                    var $btn = $(this);
+                                    $btn.prop('disabled', true);
+                                    if (window.siteCart && typeof window.siteCart.addVariant === 'function') {
+                                        window.siteCart.addVariant(variantId, 1)
+                                            .then(function(data) {
+                                                if (window.showToast) window.showToast(data.message || 'Đã thêm sản phẩm vào giỏ hàng.', 'success');
+                                            })
+                                            .catch(function(error) {
+                                                if (window.showToast) window.showToast(error.message || 'Không thể thêm sản phẩm vào giỏ hàng.', 'error');
+                                            })
+                                            .finally(function() {
+                                                $btn.prop('disabled', false);
+                                            });
+                                    } else {
+                                        if (window.showToast) window.showToast('Không thể kết nối giỏ hàng.', 'error');
+                                        $btn.prop('disabled', false);
+                                    }
+                                });
+                            });
+                            </script>
+                            @endpush
                             @endforeach
                         </tbody>
                     </table>

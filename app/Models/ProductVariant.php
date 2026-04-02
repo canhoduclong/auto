@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Builder;
@@ -40,18 +39,7 @@ class ProductVariant extends Model
             }
         });
     }
-
-    public function mediaLink()
-    {
-        return $this->morphOne(MediaLink::class, 'model')->where('role', 'variant');
-    }
-
-    public function avatar()
-    {
-        // Backward-compatible alias used in some legacy flows.
-        return $this->mediaLink();
-    }
-
+ 
     public function product()
     {
         return $this->belongsTo(Product::class);
@@ -140,7 +128,34 @@ class ProductVariant extends Model
 
         return (float) ($this->product?->default_price ?? $this->product?->price ?? 0);
     }
+    public function mediaLinks()
+    {
+        return $this->morphMany(MediaLink::class, 'model');
+    }
 
+    public function mediaLink()
+    {
+        return $this->morphOne(MediaLink::class, 'model')->where('role', 'variant')->with('media');
+    }
 
+    public function avatar()
+    {
+        return $this->mediaLink();
+    }
+
+    public function getMediaAttribute()
+    {
+        return $this->mediaLink?->media;
+    }
+
+    public function getMediaIdAttribute()
+    {
+        return $this->mediaLink?->media_id;
+    }
+
+    public function getMediaUrlAttribute()
+    {
+        return $this->media?->url;
+    }
 
 }

@@ -82,7 +82,7 @@
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
             <div>
                 <h4 class="mb-1">Duyệt Đơn Của Team</h4>
-                <div class="opacity-75">Danh sách đơn hàng của sale trong team bạn đang quản lý</div>
+                <div class="opacity-75">Danh sách đơn của bạn và đơn của sale trong team bạn đang quản lý</div>
             </div>
             <div class="small opacity-75">Leader: {{ $user->name }}</div>
         </div>

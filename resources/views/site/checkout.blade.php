@@ -547,27 +547,28 @@
                                                 <th>Sản phẩm</th>
                                                 <th>Đơn giá</th> 
                                                 <th>CK Giá</th>
-                                                <th>SL</th>
-                                                <th>Kg</th>
-                                                <th>Thành tiền</th>
+                                                <th>Số lượng</th>
+                                                <th>Size</th>
+                                                <th>Tạm tính</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             @foreach($cart as $id => $details)
                                                 @php
+                                                   // echo "<pre>";  print_r($details);   echo "</pre>";
+
                                                     $unitPrice = (float) ($details['price'] ?? 0);
                                                     $quantity = (int) ($details['quantity'] ?? 0);
                                                     $inputDiscount = (float) old('item_discount.' . $id, 0);
-                                                    $defaultWeight = (float) ($details['unit_weight'] ?? 0);
-                                                    $unitDiscount = max(0, min($inputDiscount, $unitPrice));
-                                                    $unitWeight = max(0, round($defaultWeight, 3));
+                                                    $unitSize = (float) ($details['unit_weight'] ?? 0);
+                                                    $unitDiscount = max(0, min($inputDiscount, $unitPrice)); 
                                                     $lineSubtotal = $unitPrice * $quantity;
                                                     $lineTotal = max($lineSubtotal - ($unitDiscount * $quantity), 0);
                                                 @endphp
                                                 <tr class="checkout-item-row"
                                                     data-unit-price="{{ $unitPrice }}"
                                                     data-quantity="{{ $quantity }}"
-                                                    data-unit-weight="{{ $unitWeight }}"
+                                                    data-unit-size="{{ $unitSize }}"
                                                     data-variant-id="{{ $id }}">
                                                     <td>
                                                         <div class="checkout-product">
@@ -595,7 +596,7 @@
                                                     </td>
                                                     <td class="checkout-qty">{{ $quantity }}</td>
                                                     <td>
-                                                        <div class="checkout-weight">{{ number_format($unitWeight * $quantity, 1, ',', '.') }} </div>
+                                                        <div class="checkout-weight">{{ $unitSize }} </div>
                                                          
                                                     </td>
                                                     <td class="checkout-line-total" data-line-total>{{ number_format($lineTotal, 0, ',', '.') }}đ</td>
@@ -700,6 +701,8 @@
 <script>
 (() => {
     const rows = Array.from(document.querySelectorAll('.checkout-item-row'));
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+
     const subtotalEl = document.getElementById('summarySubtotal');
     const discountEl = document.getElementById('summaryDiscount');
     const itemDiscountEl = document.getElementById('summaryItemDiscount');
@@ -712,80 +715,59 @@
     const breakdownExtraDiscountEl = document.getElementById('breakdownExtraDiscount');
     const breakdownFinalTotalEl = document.getElementById('breakdownFinalTotal');
 
-    if (!rows.length || !subtotalEl || !itemDiscountEl || !discountEl || !totalEl || !weightEl || !totalFooterEl || !orderDiscountInput || !breakdownGoodsEl || !breakdownItemDiscountEl || !breakdownExtraDiscountEl || !breakdownFinalTotalEl) {
-        return;
-    }
+    if (!rows.length) return;
 
-    const formatMoney = (value) => new Intl.NumberFormat('vi-VN').format(Math.max(0, value)) + 'đ';
-    const formatWeight = (value) => new Intl.NumberFormat('vi-VN', { minimumFractionDigits: 3, maximumFractionDigits: 3 }).format(Math.max(0, value)) + ' kg';
+    const formatMoney = value =>
+        new Intl.NumberFormat('vi-VN').format(Math.max(0, value)) + 'đ';
 
-    const sanitizeDiscount = (input, unitPrice) => {
-        let value = Number(input.value || 0);
-        if (Number.isNaN(value) || value < 0) {
-            value = 0;
-        }
-        if (value > unitPrice) {
-            value = unitPrice;
-        }
-        input.value = Math.round(value);
-        return Math.round(value);
-    };
+    const formatWeight = value =>
+        new Intl.NumberFormat('vi-VN', {
+            minimumFractionDigits: 3,
+            maximumFractionDigits: 3
+        }).format(Math.max(0, value)) + ' kg';
 
-    const sanitizeOrderDiscount = (maxValue) => {
-        let value = Number(orderDiscountInput.value || 0);
-        if (Number.isNaN(value) || value < 0) {
-            value = 0;
-        }
-        if (value > maxValue) {
-            value = maxValue;
-        }
-        orderDiscountInput.value = Math.round(value);
-        return Math.round(value);
-    };
-
-    const recalc = () => {
+    function recalcLocal() {
         let subtotal = 0;
         let itemDiscount = 0;
         let totalWeight = 0;
 
-        rows.forEach((row) => {
+        rows.forEach(row => {
             const unitPrice = Number(row.dataset.unitPrice || 0);
             const quantity = Number(row.dataset.quantity || 0);
+            const unitSize = Number(row.dataset.unitSize || 0);
+
             const discountInput = row.querySelector('[data-discount-input]');
-            const weightInput = row.querySelector('[data-weight-input]');
             const lineTotalEl = row.querySelector('[data-line-total]');
 
-            if (!discountInput || !lineTotalEl) {
-                return;
-            }
+            if (!discountInput || !lineTotalEl) return;
 
-            const unitDiscount = sanitizeDiscount(discountInput, unitPrice);
-            let unitWeight = Number(row.dataset.unitWeight || 0);
-            if (weightInput) {
-                unitWeight = Math.max(0, Number(weightInput.value || 0));
-                weightInput.value = Number.isFinite(unitWeight) ? unitWeight.toFixed(3).replace(/\.000$/, '') : '0';
-            } else {
-                unitWeight = Math.max(0, Number.isFinite(unitWeight) ? unitWeight : 0);
-            }
+            let unitDiscount = Number(discountInput.value || 0);
+            unitDiscount = Math.max(0, Math.min(unitDiscount, unitPrice));
+            discountInput.value = Math.round(unitDiscount);
+
             const lineSubtotal = unitPrice * quantity;
             const lineDiscount = unitDiscount * quantity;
             const lineTotal = Math.max(lineSubtotal - lineDiscount, 0);
-            const lineWeight = unitWeight * quantity;
 
             subtotal += lineSubtotal;
             itemDiscount += lineDiscount;
-            totalWeight += lineWeight;
+            totalWeight += unitSize * quantity;
+
             lineTotalEl.textContent = formatMoney(lineTotal);
         });
 
+        let orderDiscount = Number(orderDiscountInput.value || 0);
         const subtotalAfterItemDiscount = Math.max(subtotal - itemDiscount, 0);
-        const orderDiscount = sanitizeOrderDiscount(subtotalAfterItemDiscount);
-        const discount = itemDiscount + orderDiscount;
+
+        orderDiscount = Math.max(0, Math.min(orderDiscount, subtotalAfterItemDiscount));
+        orderDiscountInput.value = Math.round(orderDiscount);
+
+        const totalDiscount = itemDiscount + orderDiscount;
         const total = Math.max(subtotalAfterItemDiscount - orderDiscount, 0);
 
         subtotalEl.textContent = formatMoney(subtotal);
         itemDiscountEl.textContent = formatMoney(itemDiscount);
-        discountEl.textContent = formatMoney(discount);
+        discountEl.textContent = formatMoney(totalDiscount);
         totalEl.textContent = formatMoney(total);
         weightEl.textContent = formatWeight(totalWeight);
         totalFooterEl.textContent = formatMoney(total);
@@ -793,28 +775,70 @@
         breakdownItemDiscountEl.textContent = formatMoney(itemDiscount);
         breakdownExtraDiscountEl.textContent = formatMoney(orderDiscount);
         breakdownFinalTotalEl.textContent = formatMoney(total);
-    };
+    }
 
-    rows.forEach((row) => {
-        const discountInput = row.querySelector('[data-discount-input]');
-        if (!discountInput) {
-            return;
+    async function syncDiscountAjax() {
+        const itemDiscount = {};
+
+        rows.forEach(row => {
+            const variantId = row.dataset.variantId;
+            const discountInput = row.querySelector('[data-discount-input]');
+            if (variantId && discountInput) {
+                itemDiscount[variantId] = discountInput.value;
+            }
+        });
+
+        try {
+            const response = await fetch('/checkout/update-discount', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    item_discount: itemDiscount,
+                    order_discount: orderDiscountInput.value
+                })
+            });
+
+            const data = await response.json();
+
+            if (!data.success) return;
+
+            subtotalEl.textContent = data.summary.formatted_subtotal;
+            itemDiscountEl.textContent = data.summary.formatted_item_discount;
+            discountEl.textContent = data.summary.formatted_discount;
+            totalEl.textContent = data.summary.formatted_total;
+            weightEl.textContent = data.summary.formatted_weight;
+            totalFooterEl.textContent = data.summary.formatted_total;
+            breakdownGoodsEl.textContent = data.summary.formatted_subtotal;
+            breakdownItemDiscountEl.textContent = data.summary.formatted_item_discount;
+            breakdownExtraDiscountEl.textContent = data.summary.formatted_order_discount;
+            breakdownFinalTotalEl.textContent = data.summary.formatted_total;
+
+        } catch (e) {
+            console.error(e);
         }
+    }
 
-        discountInput.addEventListener('input', recalc);
-        discountInput.addEventListener('change', recalc);
+    function triggerUpdate() {
+        recalcLocal();
+        syncDiscountAjax();
+    }
 
-        const weightInput = row.querySelector('[data-weight-input]');
-        if (weightInput) {
-            weightInput.addEventListener('input', recalc);
-            weightInput.addEventListener('change', recalc);
+    rows.forEach(row => {
+        const discountInput = row.querySelector('[data-discount-input]');
+        if (discountInput) {
+            discountInput.addEventListener('input', triggerUpdate);
+            discountInput.addEventListener('change', triggerUpdate);
         }
     });
 
-    orderDiscountInput.addEventListener('input', recalc);
-    orderDiscountInput.addEventListener('change', recalc);
+    orderDiscountInput.addEventListener('input', triggerUpdate);
+    orderDiscountInput.addEventListener('change', triggerUpdate);
 
-    recalc();
+    recalcLocal();
 })();
 </script>
 @endpush

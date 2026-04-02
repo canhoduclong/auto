@@ -42,7 +42,8 @@ class ProductVariantController extends Controller
     }
     public function edit($id)
     {
-        $variant = \App\Models\ProductVariant::findOrFail($id);
+        $variant = \App\Models\ProductVariant::with('mediaLink.media')->findOrFail($id);
+        
         $products = \App\Models\Product::orderBy('name')->get();
         return view('product_variants.edit', compact('variant', 'products'));
     }

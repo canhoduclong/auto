@@ -90,7 +90,8 @@ class ShipperDashboardController extends Controller
     public function accept(Order $order)
     {
         $accepted = DB::transaction(function () use ($order) {
-            $fresh = Order::where('id', $order->id)
+            $fresh = Order::with('items')
+                ->where('id', $order->id)
                 ->where('status', Order::STATUS_READY_TO_SHIP)
                 ->whereNull('shipper_id')
                 ->whereDate('created_at', Carbon::today()->toDateString())
@@ -100,6 +101,19 @@ class ShipperDashboardController extends Controller
             if (!$fresh) {
                 return false;
             }
+            $packingHistory = $fresh->histories()
+                                    ->with('user')
+                                    ->where('action', 'complete_packing')
+                                    ->latest('id')
+                                    ->first();
+
+            $packerName = $packingHistory?->user?->name;
+            $packingUserId = $packingHistory?->user?->id;
+            $warehouse_id = $packingHistory?->user?->warehouse_id;
+            
+            //echo $packerName;
+            //echo $packingUserId;
+            //echo $warehouse_id;
 
             $fresh->update([
                 'shipper_id' => Auth::id(),
@@ -116,9 +130,31 @@ class ShipperDashboardController extends Controller
                 'note'          => 'Shipper nhận đơn để giao',
             ]);
 
-            return true;
-        });
+            if (!$warehouse_id) {
+                throw new \Exception('Không xác định được kho xuất (user đóng hàng chưa gán kho hoặc chưa có lịch sử warehouse_complete_packing).');
+            }
 
+            $document = \App\Models\InventoryDocument::create([
+                'type'          => 'export',
+                'document_date' => now()->toDateString(),
+                'warehouse_id'  => $warehouse_id,
+                'notes'         => 'Xuất kho cho đơn #' . $fresh->code,
+                'user_id'       => Auth::id(),
+            ]);
+
+            foreach ($fresh->items as $item) {
+                \App\Models\InventoryDocumentItem::create([
+                    'inventory_document_id' => $document->id,
+                    'product_variant_id'    => $item->product_variant_id,
+                    'quantity'              => $item->quantity,
+                    'unit_cost'             => $item->price ?? 0,
+                ]);
+            }
+
+            return true;
+
+        });
+        
         if (!$accepted) {
             return back()->with('error', 'Đơn hàng này không còn khả dụng hoặc không thuộc ngày lên đón hôm nay.');
         }

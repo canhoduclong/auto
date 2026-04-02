@@ -194,7 +194,7 @@
     .team-item-table-head,
     .team-item-table-row {
         display: grid;
-        grid-template-columns: minmax(0, 2fr) 64px 100px 120px;
+        grid-template-columns: minmax(0, 2fr) 64px 56px 58px 87px;
         gap: 8px;
         align-items: center;
     }
@@ -385,8 +385,9 @@
                         </div>
                         <div class="p-3">
                             <div class="team-item-table-head">
-                                <div>Sản phẩm</div>
-                                <div class="text-end">SL</div>
+                                <div>Sản phẩm</div>                                
+                                <div class="text-end">Số Lượng</div>
+                                <div class="text-center text-muted small">Size</div>
                                 <div class="text-end">Đơn giá</div>
                                 <div class="text-end">Thành tiền</div>
                             </div>
@@ -405,7 +406,9 @@
                                                     <span class="text-muted small">({{ $item->variant->sku }})</span>
                                                 @endif
                                             </div>
+                                            
                                             <div class="team-item-cell"><strong>{{ number_format($qty, 0, ',', '.') }}</strong></div>
+                                            <div class="text-center text-muted small">{{ isset($item->size) ? ($item->size . 'kg') : '-' }}</div> 
                                             <div class="team-item-cell">{{ number_format($price, 0, ',', '.') }} đ</div>
                                             <div class="team-item-cell"><strong>{{ number_format($lineTotal, 0, ',', '.') }} đ</strong></div>
                                         </div>

@@ -362,10 +362,15 @@ Route::get('/san-pham/{category:slug?}', [PageController::class, 'productsByCate
 Route::get('/danh-sach-san-pham/{category:slug?}', [PageController::class, 'productList'])->name('pages.product_list');
 //Route::get('/product/{product:slug}', [PageController::class, 'productDetail'])->name('pages.product_detail');
 Route::get('/variant/{variant:slug}', [PageController::class, 'variantDetail'])->name('pages.variant_detail');
+
 Route::get('/my-profile', [PageController::class, 'myDashboard'])->name('pages.my_dashboard')->middleware('auth');
 Route::post('/my-profile', [PageController::class, 'updateProfile'])->name('pages.update_profile')->middleware('auth');
 Route::get('/my-orders', [PageController::class, 'myOrders'])->name('pages.my_orders')->middleware('auth');
+Route::get('/my-orders/customers/ajax', [PageController::class, 'myOrderCustomersAjax'])->name('site.orders.customers.ajax')->middleware('auth');
 Route::get('/my-orders/{order}', [PageController::class, 'myOrderDetail'])->name('site.orders.show')->middleware('auth');
+Route::get('/my-orders/{order}/edit', [PageController::class, 'myOrderEdit'])->name('site.orders.edit')->middleware('auth');
+Route::put('/my-orders/{order}', [PageController::class, 'myOrderUpdate'])->name('site.orders.update')->middleware('auth');
+Route::get('/my-orders/{id}/copy', [PageController::class, 'copyOrder'])->name('site.orders.copy')->middleware('auth');
 
 Route::get('/page/{slug}', [PageController::class, 'show'])->name('pages.show');
 
@@ -375,6 +380,7 @@ Route::get('/page/{slug}', [PageController::class, 'show'])->name('pages.show');
 // Cart Routes
 Route::get('/cart', [CartController::class, 'show'])->name('cart.show');
 Route::get('/cart/checkout', [CartController::class, 'checkout'])->middleware('auth')->name('cart.checkout');
+Route::post('/checkout/update-discount', [CartController::class, 'updateDiscount']);
 Route::get('/cart/customers/search', [CartController::class, 'searchCustomers'])->middleware('auth')->name('cart.customers.search');
 Route::post('/orders/store-from-cart', [OrderController::class, 'storeFromCart'])->middleware('auth')->name('orders.store_from_cart');
 Route::post('/cart/add', [CartController::class, 'add'])->name('cart.add');

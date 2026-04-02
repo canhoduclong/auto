@@ -15,8 +15,8 @@ return new class extends Migration
             $table->id();
             $table->foreignId('product_id')->constrained()->cascadeOnDelete();
             $table->string('sku')->nullable()->unique();
-            $table->string('size')->nullable();       // ví dụ: 1kg, 1.5kg
-            $table->string('quality')->nullable();   // ví dụ: Loại 1, Loại 2
+            $table->float('size')->nullable();       // ví dụ: 1kg, 1.5kg
+            $table->integer('quality')->nullable();   // ví dụ: Loại 1, Loại 2
             $table->date('production_date')->nullable(); // ngày sản xuất 
             $table->integer('stock')->default(0);    // số lượng tồn
             $table->decimal('price', 12, 2)->nullable()->default(null); // giá mặc định, cho phép null

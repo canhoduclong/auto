@@ -200,7 +200,7 @@ class OrderController extends Controller
         
         $variant = ProductVariant::query()
             ->withAvailableStock()
-            ->with(['product', 'media'])
+            ->with(['product.avatar.media', 'mediaLink.media'])
             ->find($variantId);
 
         if (!$variant) {
@@ -253,7 +253,7 @@ class OrderController extends Controller
         $query = ProductVariant::query()
             ->withAvailableStock()
             ->inStock()
-            ->with(['product.avatar.media', 'latestPriceRule', 'media'])
+            ->with(['product.avatar.media', 'latestPriceRule', 'mediaLink.media'])
             ->where('status', true)
             ->whereHas('product', function ($productQuery) {
                 $productQuery->where('status', true);

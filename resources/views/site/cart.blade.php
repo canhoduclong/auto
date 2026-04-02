@@ -11,134 +11,12 @@
 <style>
     .cart-page {
         background: radial-gradient(circle at 20% -20%, #e6f0ff 0%, #f8fbff 45%, #f4f7fb 100%);
-        padding: 2rem 0 2.5rem;
-    }
-    .cart-head {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-end;
-        gap: 1rem;
-        margin-bottom: 1.25rem;
-    }
-    .cart-title {
-        margin: 0;
-        font-size: 2rem;
-        font-weight: 800;
-        color: #0f172a;
-        letter-spacing: -0.02em;
-    }
-    .cart-subtitle {
-        margin: 0.35rem 0 0;
-        color: #64748b;
-    }
-    .cart-chip {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.45rem;
-        padding: 0.4rem 0.8rem;
-        border-radius: 999px;
-        font-size: 0.82rem;
-        font-weight: 700;
-        background: #dbeafe;
-        color: #1e40af;
-    }
-    .cart-main-card,
-    .cart-summary-card {
-        border: 0;
-        border-radius: 16px;
-        box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
-        background: #fff;
-    }
-    .cart-main-card .card-body,
-    .cart-summary-card .card-body {
-        padding: 1.2rem;
-    }
-    .cart-table th {
-        border-top: 0;
-        color: #475569;
-        text-transform: uppercase;
-        font-size: 0.76rem;
-        letter-spacing: 0.04em;
-        font-weight: 700;
-        background: #f8fafc;
-    }
-    .cart-table td {
-        vertical-align: middle;
-        border-color: #eef2f7;
-    }
-    .cart-item-name {
-        font-weight: 700;
-        color: #0f172a;
-    }
-    .cart-item-sku {
-        color: #64748b;
-        font-size: 0.82rem;
-    }
-    .cart-thumb {
-        width: 56px;
-        height: 56px;
-        object-fit: cover;
-        border-radius: 12px;
-        border: 1px solid #e2e8f0;
-        background: #f8fafc;
-    }
-    .cart-qty {
-        width: 90px;
-        border-radius: 10px;
-        border-color: #cbd5e1;
     }
     .cart-mobile-list {
         display: none;
     }
-    .cart-mobile-item {
-        border: 1px solid #e5eaf3;
-        border-radius: 14px;
-        padding: 0.9rem;
-        margin-bottom: 0.8rem;
-        background: #fff;
-    }
-    .cart-mobile-top {
-        display: flex;
-        gap: 0.75rem;
-    }
-    .cart-mobile-meta {
-        display: grid;
-        grid-template-columns: 1fr auto;
-        row-gap: 0.3rem;
-        margin-top: 0.65rem;
-        color: #475569;
-        font-size: 0.9rem;
-    }
-    .cart-summary-row {
-        display: flex;
-        justify-content: space-between;
-        gap: 1rem;
-        margin-bottom: 0.65rem;
-        color: #334155;
-    }
-    .cart-summary-total {
-        font-size: 1.2rem;
-        font-weight: 800;
-        color: #0f172a;
-    }
-    .cart-empty {
-        text-align: center;
-        padding: 3rem 1.2rem;
-        border-radius: 16px;
-        background: #fff;
-        box-shadow: 0 12px 30px rgba(15, 23, 42, 0.07);
-    }
-    .cart-empty i {
-        font-size: 2.7rem;
-        color: #94a3b8;
-    }
-    @media (max-width: 991.98px) {
-        .cart-main-table {
-            display: none;
-        }
-        .cart-mobile-list {
-            display: block;
-        }
+    .cart-main-table {
+        display: block;
     }
     @media (max-width: 767.98px) {
         .cart-title {
@@ -148,22 +26,280 @@
             flex-direction: column;
             align-items: flex-start;
         }
+        .cart-main-table {
+            display: none !important;
+        }
+        .cart-mobile-list {
+            display: block !important;
+            margin: 0 -10px;
+        }
+        .cart-mobile-item {
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+            margin-bottom: 16px;
+            padding: 14px 10px 10px 10px;
+        }
+        .cart-mobile-top {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+        .cart-mobile-top .cart-thumb {
+            width: 60px;
+            height: 60px;
+        }
+        .cart-mobile-top .cart-item-name {
+            font-size: 1.1rem;
+        }
+        .cart-mobile-meta {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px 12px;
+            font-size: 0.98rem;
+            margin-top: 8px;
+        }
+        .cart-mobile-meta span {
+            color: #888;
+        }
+        .cart-mobile-meta input[type="number"] {
+            width: 60px;
+            font-size: 1rem;
+            padding: 2px 6px;
+        }
+        .cart-mobile-meta strong {
+            font-size: 1.08rem;
+            color: #e53935;
+        }
+        .cart-mobile-item .btn-sm {
+            padding: 4px 10px;
+            font-size: 1.1rem;
+        }
+        .cart-summary-card {
+            margin-top: 18px;
+        }
     }
+    .cart-thumb {
+        width: 80px;
+        height: 80px;
+        object-fit: cover;
+        border-radius: 4px;
+    }
+    .cart-item-name {
+        font-weight: 500;
+    }
+    .cart-item-sku {
+        font-size: 0.875rem;
+        color: #555;
+    }
+    .cart-item-weight input {
+        width: 80px;
+    }
+    .cart-line-subtotal {
+        font-size: 1.1rem;
+        color: #333;
+    }
+    .cart-summary-row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 0.5rem;
+    }
+    .cart-summary-total {
+        font-size: 1.25rem;
+        font-weight: 500;
+        color: #e53935;
+    }
+    .cart-empty {
+        text-align: center;
+        padding: 60px 20px;
+        color: #555;
+    }
+    .cart-empty i {
+        font-size: 3rem;
+        color: #ccc;
+    }
+    
 </style>
+<script>  
+document.addEventListener('DOMContentLoaded', function () {
+    const csrfTokenTag = document.querySelector('meta[name="csrf-token"]');
+    const csrfToken = csrfTokenTag ? csrfTokenTag.content : '';
 
-<div class="cart-page">
+    function getContainer(element) {
+        return element.closest('[data-id]');
+    }
+
+    function showReloadPopup() {
+        if (window.Swal) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Phiên làm việc hết hạn hoặc có lỗi',
+                text: 'Vui lòng tải lại trang.',
+                confirmButtonText: 'Tải lại trang',
+                allowOutsideClick: false
+            }).then(() => window.location.reload());
+        } else {
+            alert('Có lỗi xảy ra. Trang sẽ được tải lại.');
+
+            // window.location.reload();
+        }
+    }
+
+ 
+    function removeItem(id) {
+        return fetch(`/cart/remove/${id}`, {
+            method: 'DELETE',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken
+            }
+        })
+        .then(async response => {
+            const data = await response.json().catch(() => ({}));
+
+            if (response.ok && data.success) {
+                // Xóa tất cả item cùng data-id
+                const sameItems = document.querySelectorAll(`[data-id="${id}"]`);
+                sameItems.forEach(item => item.remove());
+
+                // Update summary
+                const summaryTotal = document.querySelector('.summary-total');
+                if (summaryTotal) {
+                    summaryTotal.textContent = data.summary.formatted_total;
+                }
+
+                const summaryItemCount = document.querySelector('.summary-item-count');
+                if (summaryItemCount) {
+                    summaryItemCount.textContent = data.summary.item_count;
+                }
+
+                const summaryLineCount = document.querySelector('.summary-line-count');
+                if (summaryLineCount) {
+                    summaryLineCount.textContent = data.summary.line_count;
+                }
+
+                // Nếu giỏ hàng rỗng
+                const remainingItems = document.querySelectorAll('[data-id]');
+                if (remainingItems.length === 0) {
+                    const cartContainer = document.querySelector('.cart-container');
+                    if (cartContainer) {
+                        cartContainer.innerHTML =
+                            '<div class="text-center py-5">Giỏ hàng trống</div>';
+                    }
+                }
+
+            } else {
+                showReloadPopup();
+            }
+        })
+        .catch(showReloadPopup);
+    }
+ 
+
+
+    function updateCartItem(id, quantity) {
+        fetch(`/cart/update/${id}`, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken
+            },
+            body: JSON.stringify({
+                _method: 'PATCH',
+                id: id,
+                quantity: quantity
+            })
+        })
+        .then(async response => {
+            let data;
+            try {
+                data = await response.json();
+            } catch (err) {
+                throw new Error('JSON error');
+            }
+
+            if (!response.ok || response.status === 440) {
+                throw new Error(data.message || 'Update failed');
+            }
+
+            return data;
+        })
+        .then(data => {
+            const sameItems = document.querySelectorAll(`[data-id="${id}"]`);
+
+            sameItems.forEach(itemContainer => {
+                const qtyInput = itemContainer.querySelector('.update-cart');
+                if (qtyInput) qtyInput.value = data.item.quantity;
+
+                const lineSubtotal = itemContainer.querySelector('.cart-line-total-money');
+                if (lineSubtotal) {
+                    lineSubtotal.textContent = data.item.formatted_subtotal;
+                }
+
+                const formula = itemContainer.querySelector('.cart-line-formula');
+                if (formula) {
+                    formula.textContent =
+                        `${data.item.quantity} × ${data.item.unit_weight}kg × ${data.item.formatted_unit_price} = `;
+                }
+            });
+
+            const summaryTotal = document.querySelector('.summary-total');
+            if (summaryTotal) summaryTotal.textContent = data.summary.formatted_total;
+
+            const summaryItemCount = document.querySelector('.summary-item-count');
+            if (summaryItemCount) summaryItemCount.textContent = data.summary.item_count;
+
+            const summaryLineCount = document.querySelector('.summary-line-count');
+            if (summaryLineCount) summaryLineCount.textContent = data.summary.line_count;
+        })
+        .catch(error => {
+            console.error(error);
+            showReloadPopup();
+        });
+    }
+
+    document.addEventListener('change', function (e) {
+        if (e.target.classList.contains('update-cart')) {
+            const container = getContainer(e.target);
+            if (!container) return;
+
+            const id = container.dataset.id;
+            let quantity = parseInt(e.target.value, 10);
+
+            if (quantity <= 0) {
+                removeItem(id);
+                return;
+            }
+
+            updateCartItem(id, quantity);
+        }
+    });
+
+    document.addEventListener('click', function (e) {
+        const removeBtn = e.target.closest('.remove-from-cart');
+        if (removeBtn) {
+            const container = getContainer(removeBtn);
+            if (container) {
+                removeItem(container.dataset.id);
+            }
+        }
+    });
+}); 
+
+</script>
+
+
+<div class="cart-page py-5">
     <div class="container">
         <div class="cart-head">
             <div>
-                <span class="cart-chip"><i class="bi bi-bag-check"></i> Gio hang cua ban</span>
-                <h1 class="cart-title">Shopping Cart</h1>
-                <p class="cart-subtitle">Kiem tra san pham va xac nhan don hang truoc khi dat.</p>
+                <span class="cart-chip  text-uppercase"><i class="bi bi-bag-check"></i> Giỏ hàng</span>
+                <h1 class="cart-title text-uppercase">Giỏ hàng của bạn</h1>
+                <p class="cart-subtitle">Kiểm tra sản phẩm và xác nhận đơn hàng trước khi đặt.</p>
             </div>
-            @if(session('cart') && count(session('cart')) > 0)
-                <a href="{{ route('cart.checkout') }}" class="btn btn-success">
-                    <i class="bi bi-credit-card me-1"></i>Tao don hang
-                </a>
-            @endif
         </div>
 
             @if(session('success'))
@@ -195,7 +331,8 @@
                     $total = 0;
                     $itemCount = 0;
                     foreach (session('cart') as $details) {
-                        $total += $details['price'] * $details['quantity'];
+                        $size = isset($details['size']) && $details['size'] > 0 ? $details['size'] : 1;
+                        $total += (int)$details['price'] * (int)$details['quantity'] * (int) $size;
                         $itemCount += (int) $details['quantity'];
                     }
                 @endphp
@@ -205,23 +342,30 @@
                         <div class="card cart-main-card">
                             <div class="card-body">
                                 <div class="d-flex justify-content-between align-items-center mb-3">
-                                    <h5 class="mb-0 fw-bold">San pham trong gio</h5>
-                                    <span class="badge text-bg-light border summary-line-badge">{{ count(session('cart')) }} dong san pham</span>
+                                    <h5 class="mb-0 fw-bold  text-uppercase">Sản phẩm trong giỏ</h5>
+                                    <span class="badge text-bg-light border summary-line-badge">{{ count(session('cart')) }} dòng sản phẩm</span>
                                 </div>
 
                                 <div class="table-responsive cart-main-table">
                                     <table class="table cart-table">
                                         <thead>
                                             <tr>
-                                                <th>San pham</th>
-                                                <th>Don gia</th>
-                                                <th>So luong</th>
-                                                <th>Tam tinh</th>
-                                                <th></th>
+                                                <th>Sản phẩm</th>
+                                                <th>Đơn giá</th>
+                                                <th>Số lượng</th>
+                                                <td>Size</td>
+                                                <th>Tạm tính</th>
+                                                <th>Xóa</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             @foreach(session('cart') as $id => $details)
+                                                @php
+                                                    $unitWeight = isset($details['size']) && $details['size'] > 0 ?  (float)$details['size'] : 1;
+                                                    $quantity = (int) $details['quantity'];
+                                                    $price = (float) $details['price'];
+                                                    $lineTotal = $quantity * $unitWeight * $price;
+                                                @endphp
                                                 <tr data-id="{{ $id }}">
                                                     <td>
                                                         <div class="d-flex align-items-center gap-3">
@@ -234,15 +378,20 @@
                                                             @endif
                                                             <div>
                                                                 <div class="cart-item-name">{{ $details['name'] }}</div>
-                                                                <div class="cart-item-sku">SKU: {{ $details['sku'] }}</div>
+                                                                <div class="cart-item-sku">SKU: {{ $details['sku'] }}</div> 
                                                             </div>
                                                         </div>
                                                     </td>
-                                                    <td>{{ number_format($details['price']) }}d</td>
+                                                    <td>{{ number_format($price) }}d</td>
                                                     <td>
-                                                        <input type="number" value="{{ $details['quantity'] }}" class="form-control cart-qty update-cart" min="1">
+                                                        <input type="number" value="{{ $quantity }}" class="form-control cart-qty update-cart" min="1">
                                                     </td>
-                                                    <td class="fw-semibold cart-line-subtotal">{{ number_format($details['price'] * $details['quantity']) }}d</td>
+                                                    <td>
+                                                        <div class="cart-item-weight text-muted small">{{ $details['size'] }}kg</div>
+                                                    </td>
+                                                    <td class="fw-semibold cart-line-subtotal"> 
+                                                        <span class="cart-line-total-money">{{ number_format($lineTotal) }}d</span>
+                                                    </td>
                                                     <td>
                                                         <button class="btn btn-outline-danger btn-sm remove-from-cart" title="Xoa san pham">
                                                             <i class="bi bi-trash"></i>
@@ -256,6 +405,12 @@
 
                                 <div class="cart-mobile-list">
                                     @foreach(session('cart') as $id => $details)
+                                        @php
+                                            $unitWeight = isset($details['unit_weight']) && $details['unit_weight'] > 0 ? $details['unit_weight'] : 1;
+                                            $quantity = (int) $details['quantity'];
+                                            $price = (float) $details['price'];
+                                            $lineTotal = $quantity * $unitWeight * $price;
+                                        @endphp
                                         <div class="cart-mobile-item" data-id="{{ $id }}">
                                             <div class="cart-mobile-top">
                                                 @if($details['image'])
@@ -268,6 +423,7 @@
                                                 <div class="flex-grow-1">
                                                     <div class="cart-item-name">{{ $details['name'] }}</div>
                                                     <div class="cart-item-sku">SKU: {{ $details['sku'] }}</div>
+                                                    <div class="cart-item-weight text-muted small" data-weight="{{ $unitWeight }}">{{ $unitWeight }} kg</div>
                                                 </div>
                                                 <button class="btn btn-outline-danger btn-sm remove-from-cart">
                                                     <i class="bi bi-trash"></i>
@@ -275,11 +431,13 @@
                                             </div>
                                             <div class="cart-mobile-meta">
                                                 <span>Don gia</span>
-                                                <strong>{{ number_format($details['price']) }}d</strong>
+                                                <strong>{{ number_format($price) }}d</strong>
                                                 <span>So luong</span>
-                                                <input type="number" value="{{ $details['quantity'] }}" class="form-control cart-qty update-cart" min="1">
-                                                <span>Tam tinh</span>
-                                                <strong class="cart-line-subtotal">{{ number_format($details['price'] * $details['quantity']) }}d</strong>
+                                                <input type="number" value="{{ $quantity }}" class="form-control cart-qty update-cart" min="1">
+                                                <span>Thành tiền</span>
+                                                <strong class="cart-line-subtotal"> 
+                                                    <span class="cart-line-total-money">{{ number_format($lineTotal) }}d</span>
+                                                </strong>
                                             </div>
                                         </div>
                                     @endforeach
@@ -291,25 +449,25 @@
                     <div class="col-12 col-lg-4">
                         <div class="card cart-summary-card sticky-lg-top" style="top: 20px;">
                             <div class="card-body">
-                                <h5 class="fw-bold mb-3">Tong quan don hang</h5>
+                                <h5 class="fw-bold mb-3 text-uppercase">Tổng quan đơn hàng</h5>
                                 <div class="cart-summary-row">
-                                    <span>So luong san pham</span>
+                                    <span>Số lượng sản phẩm</span>
                                     <strong class="summary-item-count">{{ $itemCount }}</strong>
                                 </div>
                                 <div class="cart-summary-row">
-                                    <span>So dong gio hang</span>
+                                    <span>Số dòng giỏ hàng</span>
                                     <strong class="summary-line-count">{{ count(session('cart')) }}</strong>
                                 </div>
                                 <hr>
                                 <div class="cart-summary-row cart-summary-total">
-                                    <span>Tong tam tinh</span>
+                                    <span>Tổng tạm tính</span>
                                     <span class="summary-total">{{ number_format($total) }}d</span>
                                 </div>
                                 <a href="{{ route('cart.checkout') }}" class="btn btn-success w-100 mt-2">
-                                    <i class="bi bi-credit-card me-1"></i>Tien hanh dat hang
+                                    <i class="bi bi-credit-card me-1"></i>Tiến hành đặt hàng
                                 </a>
                                 <a href="{{ route('home') }}" class="btn btn-outline-secondary w-100 mt-2">
-                                    <i class="bi bi-arrow-left me-1"></i>Tiep tuc mua sam
+                                    <i class="bi bi-arrow-left me-1"></i>Tiếp tục mua sắm
                                 </a>
                             </div>
                         </div>
@@ -318,157 +476,14 @@
             @else
                 <div class="cart-empty">
                     <i class="bi bi-cart-x"></i>
-                    <h4 class="mt-3 mb-2">Gio hang dang trong</h4>
-                    <p class="text-muted mb-3">Hay them san pham vao gio de bat dau tao don hang.</p>
+                    <h4 class="mt-3 mb-2">Giỏ hàng đang trống</h4>
+                    <p class="text-muted mb-3">Hãy thêm sản phẩm vào giỏ để bắt đầu tạo đơn hàng.</p>
                     <a href="{{ route('home') }}" class="btn btn-primary">
-                        <i class="bi bi-bag-plus me-1"></i>Kham pha san pham
+                        <i class="bi bi-bag-plus me-1"></i>Khám phá sản phẩm
                     </a>
                 </div>
             @endif
     </div>
 </div>
 @endsection
-
-@push('scripts')
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    function getContainer(element) {
-        return element.closest('[data-id]');
-    }
-
-    // Update quantity
-    document.querySelectorAll('.update-cart').forEach(function(element) {
-        element.addEventListener('change', function(e) {
-            const container = getContainer(e.target);
-            if (!container) {
-                return;
-            }
-
-            let id = container.dataset.id;
-            let quantity = e.target.value;
-
-            fetch(`/cart/update/${id}`, {
-                method: 'POST',
-                credentials: 'same-origin',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
-                },
-                body: JSON.stringify({
-                    _method: 'PATCH',
-                    id: id,
-                    quantity: quantity
-                })
-            })
-            .then(async response => {
-                let data;
-                try {
-                    data = await response.json();
-                } catch (err) {
-                    showReloadPopup();
-                    throw new Error('Session expired or server error.');
-                }
-                // Nếu lỗi session hết hạn (status 440 hoặc message chứa "hết hạn")
-                if (response.status === 440 || (data && data.message && data.message.toLowerCase().includes('hết hạn'))) {
-                    showReloadPopup();
-                    throw new Error(data.message || 'Phiên làm việc đã hết hạn.');
-                }
-                if (!response.ok || !data.success) {
-                    throw new Error(data.message || 'Khong the cap nhat so luong.');
-                }
-                return data;
-            })
-            .then(data => {
-                // Cập nhật số lượng và tạm tính từng dòng
-                const sameItems = document.querySelectorAll(`[data-id="${id}"]`);
-                sameItems.forEach(function(itemContainer) {
-                    const qtyInput = itemContainer.querySelector('.update-cart');
-                    if (qtyInput) {
-                        qtyInput.value = data.item.quantity;
-                    }
-                    const lineSubtotal = itemContainer.querySelector('.cart-line-subtotal');
-                    if (lineSubtotal) {
-                        lineSubtotal.textContent = data.item.formatted_subtotal;
-                    }
-                });
-                // Cập nhật tổng tiền, số lượng sản phẩm, số dòng
-                const summaryItemCount = document.querySelector('.summary-item-count');
-                if (summaryItemCount) {
-                    summaryItemCount.textContent = data.summary.item_count;
-                }
-                const summaryLineCount = document.querySelector('.summary-line-count');
-                if (summaryLineCount) {
-                    summaryLineCount.textContent = data.summary.line_count;
-                }
-                const summaryTotal = document.querySelector('.summary-total');
-                if (summaryTotal) {
-                    summaryTotal.textContent = data.summary.formatted_total;
-                }
-                const summaryLineBadge = document.querySelector('.summary-line-badge');
-                if (summaryLineBadge) {
-                    summaryLineBadge.textContent = `${data.summary.line_count} dong san pham`;
-                }
-            })
-            .catch(function(error) {
-                showReloadPopup();
-            });
-        });
-    });
-
-    function showReloadPopup() {
-        if (window.Swal) {
-            Swal.fire({
-                icon: 'warning',
-                title: 'Phiên đăng nhập đã hết hạn hoặc có lỗi hệ thống',
-                text: 'Vui lòng tải lại trang để tiếp tục sử dụng.',
-                confirmButtonText: 'Tải lại trang',
-                allowOutsideClick: false
-            }).then(() => {
-                window.location.reload();
-            });
-        } else {
-            alert('Phiên đăng nhập đã hết hạn hoặc có lỗi hệ thống. Trang sẽ được tải lại.');
-            window.location.reload();
-        }
-    }
-
-
-    // Remove item
-    document.querySelectorAll('.remove-from-cart').forEach(function(element) {
-        element.addEventListener('click', function(e) {
-            const container = getContainer(e.target);
-            if (!container) {
-                return;
-            }
-
-            let id = container.dataset.id;
-            
-            fetch(`/cart/remove/${id}`, {
-                method: 'DELETE',
-                credentials: 'same-origin',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
-                }
-            })
-            .then(async response => {
-                let data;
-                try {
-                    data = await response.json();
-                } catch (err) {
-                    showReloadPopup();
-                    throw new Error('Session expired or server error.');
-                }
-                if (response.status === 440 || (data && data.message && data.message.toLowerCase().includes('hết hạn'))) {
-                    showReloadPopup();
-                    throw new Error(data.message || 'Phiên làm việc đã hết hạn.');
-                }
-                if (data.success) {
-                    location.reload();
-                }
-            });
-        });
-    });
-});
-</script>
-@endpush
+ 

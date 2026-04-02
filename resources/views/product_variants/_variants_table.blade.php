@@ -20,8 +20,8 @@
             <td><input type="checkbox" class="variant-checkbox" value="{{ $v->id }}"></td>
             <td>{{ $v->id }}</td>
             <td> 
-                @if($v->media)
-                    <img src="{{ asset('storage/' . $v->media->file_path) }}" width="50" class="rounded">
+                @if($v->media_url)
+                    <img src="{{ $v->media_url }}" width="50" class="rounded" alt="{{ $v->sku }}">
                 @endif
             </td>
             <td>{{ $v->sku }}</td>

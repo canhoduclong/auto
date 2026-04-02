@@ -1,16 +1,5 @@
 @extends('layouts.site')
 
-@php
-    $useTeamDetailRoute = auth()->user()?->hasRole('sale')
-        || auth()->user()?->hasRole('leader')
-        || auth()->user()?->hasRole('leader_sale')
-        || auth()->user()?->hasRole('sale_manager')
-        || auth()->user()?->hasRole('manager')
-        || auth()->user()?->hasRole('manager_sale')
-        || auth()->user()?->hasRole('director')
-        || auth()->user()?->hasRole('admin');
-@endphp
-
 @push('styles')
 <style>
     .orders-page {
@@ -82,6 +71,61 @@
         height: 48px;
         border-radius: 14px;
         font-weight: 700;
+    }
+    .customer-picker {
+        border: 1px solid #e5eaf3;
+        border-radius: 16px;
+        background: #f8fafc;
+        padding: 14px;
+    }
+    .customer-collapse-toggle {
+        height: 40px !important;
+        border-radius: 12px !important;
+        font-weight: 700;
+    }
+    .customer-collapse-toggle .customer-collapse-icon {
+        transition: transform .2s ease;
+    }
+    .customer-collapse-toggle[aria-expanded="true"] .customer-collapse-icon {
+        transform: rotate(180deg);
+    }
+    .customer-list-scroll {
+        max-height: 280px;
+        overflow-y: auto;
+        border: 1px solid #e5eaf3;
+        border-radius: 12px;
+        background: #fff;
+        padding: 8px;
+    }
+    .customer-list-item {
+        border: 1px solid #d8deea;
+        background: #fff;
+        border-radius: 10px;
+        padding: 8px 10px;
+        white-space: normal;
+        transition: all .2s ease;
+        cursor: pointer;
+        margin-bottom: 6px;
+    }
+    .customer-list-item:last-child {
+        margin-bottom: 0;
+    }
+    .customer-list-item .form-check-input {
+        margin-top: 3px;
+    }
+    .customer-list-name {
+        display: block;
+        font-size: .93rem;
+        line-height: 1.25;
+        color: #0f172a;
+    }
+    .customer-list-item:hover {
+        border-color: #91a4c7;
+    }
+    .customer-list-item.active {
+        border-color: #1d4ed8;
+        box-shadow: inset 0 0 0 1px rgba(29, 78, 216, 0.18);
+        background: #eff6ff;
     }
     .orders-section-head {
         padding: 22px 24px 0;
@@ -210,6 +254,9 @@
             flex: 1 1 auto;
             text-align: center;
         }
+        .customer-list-scroll {
+            max-height: 220px;
+        }
     }
 </style>
 @endpush
@@ -252,6 +299,25 @@
     $returnableCount = $pageOrders->filter(function ($order) {
         return in_array($order->status, ['picked_up', 'shipping', 'completed'], true);
     })->count();
+
+    $currentSortBy = $sortBy ?? request('sort_by', 'created_at');
+    $currentSortDir = strtolower($sortDir ?? request('sort_dir', 'desc'));
+
+    $sortDirFor = function (string $field) use ($currentSortBy, $currentSortDir): string {
+        if ($currentSortBy === $field && $currentSortDir === 'asc') {
+            return 'desc';
+        }
+
+        return 'asc';
+    };
+
+    $sortIconFor = function (string $field) use ($currentSortBy, $currentSortDir): string {
+        if ($currentSortBy !== $field) {
+            return 'fa-sort text-muted';
+        }
+
+        return $currentSortDir === 'asc' ? 'fa-sort-asc' : 'fa-sort-desc';
+    };
 @endphp
 
 <section class="orders-page">
@@ -292,203 +358,359 @@
 
         <div class="orders-panel mb-4">
             <div class="orders-filter">
+                @php
+                    $hasCustomerTargetFilter = !empty($selectedCustomerIds ?? []) || !empty($customerSearch ?? '');
+                @endphp
+
                 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
                     <div>
                         <h2 class="h5 mb-1 fw-bold">Bộ lọc đơn hàng</h2>
                         <p class="mb-0 text-muted">Rút gọn danh sách theo khách hàng và khoảng thời gian.</p>
                     </div>
-                    @if(request()->filled('customer_id') || request()->filled('from_date') || request()->filled('to_date'))
+                    @if(request()->filled('customer_id') || !empty(request('customer_ids', [])) || request()->filled('customer_query') || request()->filled('payment_status') || request()->filled('status') || request()->filled('from_date') || request()->filled('to_date'))
                         <a href="{{ route('pages.my_orders') }}" class="btn btn-outline-secondary">
                             <i class="fa fa-refresh me-2"></i>Xóa bộ lọc
                         </a>
                     @endif
                 </div>
 
-                <form action="{{ route('pages.my_orders') }}" method="GET" class="row g-3 align-items-end">
-                    <div class="col-md-4">
-                        <label for="customer_id" class="form-label fw-bold">Khách hàng</label>
-                        <select name="customer_id" id="customer_id" class="form-select">
-                            <option value="">Tất cả khách hàng</option>
-                            @foreach($customers as $customer)
-                                <option value="{{ $customer->id }}" {{ (string) request('customer_id') === (string) $customer->id ? 'selected' : '' }}>
-                                    {{ $customer->name }}
-                                </option>
-                            @endforeach
+                <form action="{{ route('pages.my_orders') }}" method="GET" class="row g-3 align-items-end" id="ordersFilterForm">
+                    <input type="hidden" name="customer_query" id="customer_query" value="{{ $customerSearch ?? '' }}">
+                    <input type="hidden" name="sort_by" value="{{ $currentSortBy }}">
+                    <input type="hidden" name="sort_dir" value="{{ $currentSortDir }}">
+                    <div id="selectedCustomerInputs">
+                        @foreach(($selectedCustomerIds ?? []) as $selectedCustomerId)
+                            <input type="hidden" name="customer_ids[]" value="{{ (int) $selectedCustomerId }}">
+                        @endforeach
+                    </div>
+                    <div class="col-md-2">
+                        <label for="payment_status" class="form-label fw-bold">Thanh toán</label>
+                        <select name="payment_status" id="payment_status" class="form-select">
+                            <option value="">Tất cả</option>
+                            <option value="unpaid" {{ request('payment_status') === 'unpaid' ? 'selected' : '' }}>Chưa thanh toán</option>
+                            <option value="partial" {{ request('payment_status') === 'partial' ? 'selected' : '' }}>Thanh toán một phần</option>
+                            <option value="paid" {{ request('payment_status') === 'paid' ? 'selected' : '' }}>Đã thanh toán</option>
                         </select>
                     </div>
                     <div class="col-md-2">
+                        <label for="status" class="form-label fw-bold">Trạng thái</label>
+                        <select name="status" id="status" class="form-select">
+                            <option value="">Tất cả</option>
+                            @foreach($statusLabels as $statusKey => $statusName)
+                                <option value="{{ $statusKey }}" {{ request('status') === $statusKey ? 'selected' : '' }}>{{ $statusName }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="col-md-1">
                         <label for="from_date" class="form-label fw-bold">Từ ngày</label>
                         <input type="date" name="from_date" id="from_date" class="form-control" value="{{ request('from_date') }}">
                     </div>
-                    <div class="col-md-2">
+                    <div class="col-md-1">
                         <label for="to_date" class="form-label fw-bold">Đến ngày</label>
                         <input type="date" name="to_date" id="to_date" class="form-control" value="{{ request('to_date') }}">
                     </div>
+                    <div class="col-md-2">
+                        <label for="per_page" class="form-label fw-bold">Hiển thị</label>
+                        <select name="per_page" id="per_page" class="form-select">
+                            @foreach([10, 20, 50, 100] as $size)
+                                <option value="{{ $size }}" {{ (int) ($perPage ?? request('per_page', 10)) === $size ? 'selected' : '' }}>{{ $size }} / trang</option>
+                            @endforeach
+                        </select>
+                    </div>
                      <div class="col-md-2">
-                        <button type="button" class="btn btn-outline-primary onclick="setTodayOrders()" style="font-size:0.95rem;">
+                        <button type="button" class="btn btn-outline-primary" onclick="setTodayOrders()" style="font-size:0.95rem;">
                             Đơn hôm nay
                         </button>
                     </div> 
-                    <div class="col-md-2 d-grid">
+                    <div class="col-md-2">
                         <button type="submit" class="btn btn-primary">
-                            <i class="fa fa-search"></i>
+                            <i class="fa fa-search me-1"></i>Lọc đơn
                         </button> 
                     </div>
                     
                 </form>
+                <div class="mt-3">
+                    <button
+                        type="button"
+                        class="btn btn-outline-secondary customer-collapse-toggle {{ $hasCustomerTargetFilter ? '' : 'collapsed' }}"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#customerTargetFilterCollapse"
+                        aria-expanded="{{ $hasCustomerTargetFilter ? 'true' : 'false' }}"
+                        aria-controls="customerTargetFilterCollapse"
+                    >
+                        <i class="fa fa-users me-1"></i>
+                        Lọc khách hàng mục tiêu
+                        <i class="fa fa-chevron-down ms-2 customer-collapse-icon"></i>
+                    </button>
+                </div>
+
+                <div id="customerTargetFilterCollapse" class="collapse {{ $hasCustomerTargetFilter ? 'show' : '' }}">
+                    <div class="customer-picker mt-3">
+                        <div class="row g-3">
+                            <div class="col-lg-6">
+                                <label for="customerSearchInput" class="form-label fw-bold">Tìm khách hàng</label>
+                                <input
+                                    type="text"
+                                    id="customerSearchInput"
+                                    class="form-control"
+                                    value="{{ $customerSearch ?? '' }}"
+                                    placeholder="Tìm theo tên, SĐT hoặc email"
+                                >
+                            </div>
+                            <div class="col-lg-6 d-flex align-items-end">
+                                <div class="d-flex align-items-center justify-content-between gap-2 w-100">
+                                    <div class="small text-muted" id="selectedCustomerLabel">
+                                        @if(!empty($selectedCustomerIds ?? []))
+                                            Đã chọn: <strong>{{ count($selectedCustomerIds) }} khách hàng</strong>
+                                        @else
+                                            Đã chọn: <strong>Tất cả khách hàng</strong>
+                                        @endif
+                                    </div>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" id="clearCustomerSelection">
+                                        Bỏ chọn
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-3" id="customerListingContainer">
+                            @include('site.orders.partials.customer_listing', [
+                                'customers' => $customers,
+                                'selectedCustomerIds' => $selectedCustomerIds ?? [],
+                            ])
+                        </div>
+                    </div>
+                </div>
                 <script>
                     function setTodayOrders() {
                         const today = new Date().toISOString().slice(0, 10);
                         document.getElementById('from_date').value = today;
                         document.getElementById('to_date').value = today;
+                        if (typeof window.refreshOrdersList === 'function') {
+                            window.refreshOrdersList(1);
+                            return;
+                        }
                         document.querySelector('.orders-filter form').submit();
                     }
+
+                    (function () {
+                        const endpoint = @json(route('site.orders.customers.ajax'));
+                        const searchInput = document.getElementById('customerSearchInput');
+                        const selectedInputsContainer = document.getElementById('selectedCustomerInputs');
+                        const customerQueryInput = document.getElementById('customer_query');
+                        const listingContainer = document.getElementById('customerListingContainer');
+                        const selectedCustomerLabel = document.getElementById('selectedCustomerLabel');
+                        const clearCustomerSelectionButton = document.getElementById('clearCustomerSelection');
+                        const selectedIds = new Set(@json(array_map('intval', $selectedCustomerIds ?? [])));
+                        let debounceTimer = null;
+
+                        const syncSelectedInputs = () => {
+                            selectedInputsContainer.innerHTML = '';
+                            Array.from(selectedIds).sort((a, b) => a - b).forEach((id) => {
+                                const input = document.createElement('input');
+                                input.type = 'hidden';
+                                input.name = 'customer_ids[]';
+                                input.value = String(id);
+                                selectedInputsContainer.appendChild(input);
+                            });
+                        };
+
+                        const updateSelectedLabel = () => {
+                            const count = selectedIds.size;
+                            if (count > 0) {
+                                selectedCustomerLabel.innerHTML = 'Đã chọn: <strong>' + count + ' khách hàng</strong>';
+                            } else {
+                                selectedCustomerLabel.innerHTML = 'Đã chọn: <strong>Tất cả khách hàng</strong>';
+                            }
+                        };
+
+                        const loadCustomers = (page = 1) => {
+                            const params = new URLSearchParams();
+                            params.set('q', searchInput.value || '');
+                            params.set('page', String(page));
+                            params.set('selected_ids', Array.from(selectedIds).join(','));
+
+                            fetch(endpoint + '?' + params.toString(), {
+                                headers: {
+                                    'X-Requested-With': 'XMLHttpRequest'
+                                }
+                            })
+                                .then((response) => response.json())
+                                .then((data) => {
+                                    listingContainer.innerHTML = data.html || '';
+                                    customerQueryInput.value = searchInput.value || '';
+                                })
+                                .catch(() => {
+                                    listingContainer.innerHTML = '<div class="small text-danger">Không thể tải danh sách khách hàng.</div>';
+                                });
+                        };
+
+                        searchInput.addEventListener('input', function () {
+                            clearTimeout(debounceTimer);
+                            debounceTimer = setTimeout(() => loadCustomers(1), 300);
+                        });
+
+                        listingContainer.addEventListener('click', function (event) {
+                            const pageButton = event.target.closest('[data-customer-page]');
+                            if (pageButton) {
+                                const page = parseInt(pageButton.getAttribute('data-customer-page') || '1', 10);
+                                loadCustomers(page > 0 ? page : 1);
+                            }
+                        });
+
+                        listingContainer.addEventListener('change', function (event) {
+                            const checkbox = event.target.closest('.customer-checkbox');
+                            if (!checkbox) {
+                                return;
+                            }
+
+                            const customerId = parseInt(checkbox.getAttribute('data-customer-id') || '0', 10);
+                            const listItem = checkbox.closest('.customer-list-item');
+
+                            if (customerId === 0) {
+                                selectedIds.clear();
+                                loadCustomers();
+                                syncSelectedInputs();
+                                updateSelectedLabel();
+                                if (typeof window.refreshOrdersList === 'function') {
+                                    window.refreshOrdersList(1);
+                                }
+                                return;
+                            }
+
+                            if (checkbox.checked) {
+                                selectedIds.add(customerId);
+                            } else {
+                                selectedIds.delete(customerId);
+                            }
+
+                            if (listItem) {
+                                listItem.classList.toggle('active', checkbox.checked);
+                            }
+
+                            syncSelectedInputs();
+                            updateSelectedLabel();
+                            if (typeof window.refreshOrdersList === 'function') {
+                                window.refreshOrdersList(1);
+                            }
+                        });
+
+                        clearCustomerSelectionButton.addEventListener('click', function () {
+                            selectedIds.clear();
+                            syncSelectedInputs();
+                            updateSelectedLabel();
+                            loadCustomers(1);
+                            if (typeof window.refreshOrdersList === 'function') {
+                                window.refreshOrdersList(1);
+                            }
+                        });
+
+                        syncSelectedInputs();
+                        updateSelectedLabel();
+                    })();
                 </script>
             </div>
         </div>
 
-        <div class="orders-panel">
-            <div class="orders-section-head d-flex flex-wrap justify-content-between align-items-center gap-2">
-                <div>
-                    <h2 class="h5 mb-1 fw-bold">Danh sách đơn hàng</h2>
-                    <p class="mb-0 text-muted">Hiển thị {{ $orders->firstItem() ?? 0 }} - {{ $orders->lastItem() ?? 0 }} trên tổng {{ $orders->total() }} đơn.</p>
-                </div>
-                <div class="text-muted small">
-                    Có thể trả hàng: <strong class="text-dark">{{ $returnableCount }}</strong>
-                </div>
-            </div>
-
-            @if($orders->count() > 0)
-                <div class="orders-table-wrap">
-                    <div class="table-responsive">
-                        <table class="table orders-table align-middle">
-                            <thead>
-                                <tr>
-                                    <th>Mã đơn</th>
-                                    <th>Khách hàng</th>
-                                    <th>Tổng tiền</th>
-                                    <th>Trạng thái</th>
-                                    <th>Ngày tạo</th>
-                                    <th class="text-end">Hành động</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach($orders as $order)
-                                    @php
-                                        $statusLabel = $statusLabels[$order->status] ?? ucfirst(str_replace('_', ' ', $order->status));
-                                        $statusClass = $statusClasses[$order->status] ?? 'status-muted';
-                                        $canReturn = in_array($order->status, ['picked_up', 'shipping', 'completed'], true);
-                                    @endphp
-                                    <tr>
-                                        <td>
-                                            <div class="orders-code">{{ $order->code }}</div>
-                                            <div class="orders-subtle">{{ $order->payment_status ?: 'pending payment' }}</div>
-                                        </td>
-                                        <td>
-                                            <div class="fw-bold text-dark">{{ $order->customer->name ?? 'Không có khách hàng' }}</div>
-                                            <div class="orders-subtle">Nhân viên: {{ $user->name }}</div>
-                                        </td>
-                                        <td>
-                                            <div class="orders-total">{{ number_format($order->total, 0, ',', '.') }}đ</div>
-                                            <div class="orders-subtle">{{ $order->payment_status_text }}</div>
-                                        </td>
-                                        <td>
-                                            <span class="status-pill {{ $statusClass }}">
-                                                <i class="fa fa-circle" style="font-size:8px;"></i>{{ $statusLabel }}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <div class="fw-bold text-dark">{{ $order->created_at->format('d/m/Y') }}</div>
-                                            <div class="orders-subtle">{{ $order->created_at->format('H:i') }}</div>
-                                        </td>
-                                        <td>
-                                            <div class="orders-actions">
-                                                <a href="{{ $useTeamDetailRoute ? route('pages.team_order_detail', $order) : route('site.orders.show', $order) }}" class="btn btn-outline-primary btn-sm">
-                                                    <i class="fa fa-eye me-1"></i>Chi tiết
-                                                </a>
-                                                @if($canReturn)
-                                                    <a href="{{ route('site.order-returns.create', $order) }}" class="btn btn-warning btn-sm text-dark">
-                                                        <i class="fa fa-undo me-1"></i>Trả hàng
-                                                    </a>
-                                                @endif
-                                            </div>
-                                        </td>
-                                    </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <div class="orders-mobile-list">
-                    <div class="row g-3">
-                        @foreach($orders as $order)
-                            @php
-                                $statusLabel = $statusLabels[$order->status] ?? ucfirst(str_replace('_', ' ', $order->status));
-                                $statusClass = $statusClasses[$order->status] ?? 'status-muted';
-                                $canReturn = in_array($order->status, ['picked_up', 'shipping', 'completed'], true);
-                            @endphp
-                            <div class="col-12">
-                                <div class="orders-mobile-card">
-                                    <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
-                                        <div>
-                                            <div class="orders-code">{{ $order->code }}</div>
-                                            <div class="orders-subtle">{{ $order->customer->name ?? 'Không có khách hàng' }}</div>
-                                        </div>
-                                        <span class="status-pill {{ $statusClass }}">{{ $statusLabel }}</span>
-                                    </div>
-
-                                    <div class="orders-mobile-grid mb-3">
-                                        <div class="orders-mobile-item">
-                                            <span>Tổng tiền</span>
-                                            <strong>{{ number_format($order->total, 0, ',', '.') }}đ</strong>
-                                        </div>
-                                        <div class="orders-mobile-item">
-                                            <span>Thanh toán</span>
-                                            <strong>{{ $order->payment_status_text }}</strong>
-                                        </div>
-                                        <div class="orders-mobile-item">
-                                            <span>Ngày tạo</span>
-                                            <strong>{{ $order->created_at->format('d/m/Y') }}</strong>
-                                        </div>
-                                        <div class="orders-mobile-item">
-                                            <span>Giờ tạo</span>
-                                            <strong>{{ $order->created_at->format('H:i') }}</strong>
-                                        </div>
-                                    </div>
-
-                                    <div class="orders-actions">
-                                        <a href="{{ $useTeamDetailRoute ? route('pages.team_order_detail', $order) : route('site.orders.show', $order) }}" class="btn btn-outline-primary btn-sm">
-                                            <i class="fa fa-eye me-1"></i>Chi tiết
-                                        </a>
-                                        @if($canReturn)
-                                            <a href="{{ route('site.order-returns.create', $order) }}" class="btn btn-warning btn-sm text-dark">
-                                                <i class="fa fa-undo me-1"></i>Trả hàng
-                                            </a>
-                                        @endif
-                                    </div>
-                                </div>
-                            </div>
-                        @endforeach
-                    </div>
-                </div>
-
-                <div class="px-4 pb-4">
-                    {{ $orders->appends(request()->input())->links('pagination::bootstrap-5') }}
-                </div>
-            @else
-                <div class="orders-empty">
-                    <div class="mb-3" style="font-size:3rem;color:#cbd5e1;">
-                        <i class="fa fa-inbox"></i>
-                    </div>
-                    <h3 class="h5 fw-bold text-dark mb-2">Chưa có đơn hàng phù hợp</h3>
-                    <p class="mb-3">Hãy thử thay đổi bộ lọc hoặc quay lại sau khi có đơn mới được tạo.</p>
-                    <a href="{{ route('pages.my_orders') }}" class="btn btn-outline-primary rounded-pill px-4">
-                        Xem tất cả đơn hàng
-                    </a>
-                </div>
-            @endif
+        <div id="ordersListingContainer">
+            @include('site.orders.partials.orders_listing', [
+                'orders' => $orders,
+                'user' => $user,
+                'sortBy' => $currentSortBy,
+                'sortDir' => $currentSortDir,
+            ])
         </div>
+
+        <script>
+            (function () {
+                const ordersEndpoint = @json(route('pages.my_orders'));
+                const ordersFilterForm = document.getElementById('ordersFilterForm');
+                const ordersListingContainer = document.getElementById('ordersListingContainer');
+                const sortByInput = ordersFilterForm.querySelector('input[name="sort_by"]');
+                const sortDirInput = ordersFilterForm.querySelector('input[name="sort_dir"]');
+
+                const buildFormParams = () => {
+                    const formData = new FormData(ordersFilterForm);
+                    const params = new URLSearchParams();
+                    formData.forEach((value, key) => {
+                        if (value !== null && String(value).trim() !== '') {
+                            params.append(key, String(value));
+                        }
+                    });
+
+                    return params;
+                };
+
+                const loadOrders = (page = 1) => {
+                    const params = buildFormParams();
+                    params.set('page', String(page));
+
+                    const ajaxParams = new URLSearchParams(params.toString());
+                    ajaxParams.set('ajax', '1');
+
+                    fetch(ordersEndpoint + '?' + ajaxParams.toString(), {
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    })
+                        .then((response) => response.json())
+                        .then((data) => {
+                            ordersListingContainer.innerHTML = data.html || '';
+                            const nextUrl = ordersEndpoint + '?' + params.toString();
+                            window.history.replaceState({}, '', nextUrl);
+                        })
+                        .catch(() => {
+                            // keep existing UI if request fails
+                        });
+                };
+
+                window.refreshOrdersList = loadOrders;
+
+                window.setTodayOrders = function () {
+                    const today = new Date().toISOString().slice(0, 10);
+                    document.getElementById('from_date').value = today;
+                    document.getElementById('to_date').value = today;
+                    loadOrders(1);
+                };
+
+                ordersFilterForm.addEventListener('submit', function (event) {
+                    event.preventDefault();
+                    loadOrders(1);
+                });
+
+                ['payment_status', 'status', 'from_date', 'to_date', 'per_page'].forEach((fieldId) => {
+                    const field = document.getElementById(fieldId);
+                    if (field) {
+                        field.addEventListener('change', function () {
+                            loadOrders(1);
+                        });
+                    }
+                });
+
+                ordersListingContainer.addEventListener('click', function (event) {
+                    const sortLink = event.target.closest('[data-order-sort-link]');
+                    if (sortLink) {
+                        event.preventDefault();
+                        const url = new URL(sortLink.getAttribute('href'), window.location.origin);
+                        const sortBy = url.searchParams.get('sort_by') || 'created_at';
+                        const sortDir = url.searchParams.get('sort_dir') || 'desc';
+                        sortByInput.value = sortBy;
+                        sortDirInput.value = sortDir;
+                        loadOrders(1);
+                        return;
+                    }
+
+                    const pageLink = event.target.closest('.pagination a');
+                    if (pageLink) {
+                        event.preventDefault();
+                        const url = new URL(pageLink.getAttribute('href'), window.location.origin);
+                        const page = parseInt(url.searchParams.get('page') || '1', 10);
+                        loadOrders(page > 0 ? page : 1);
+                    }
+                });
+
+            })();
+        </script>
     </div>
 </section>
 @endsection

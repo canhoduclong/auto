@@ -173,8 +173,19 @@
             </div>
         @endauth
     </div>
-    <div class="offcanvas__logo">
-        <a href="{{ route('home') }}"><img src="{{ asset('img/logo-auto-taybac.png') }}" alt=""></a>
+    <div class="offcanvas__logo"> 
+        <a href="{{ route('home') }}">
+            @if(isset($settings['logo']) && $settings['logo']->value)
+                @php
+                    $media = App\Models\Media::find($settings['logo']->value);
+                @endphp
+                @if($media)
+                    <img src="{{ asset('storage/' . $media->file_path) }}" alt="logo" height="50">
+                @endif
+            @else
+                <h2>{{ $settings['brand_name']->value ?? __('site.logo_fallback') }}</h2>
+            @endif
+        </a>
     </div>
     <div id="mobile-menu-wrap"></div>
     <ul class="offcanvas__widget__add">

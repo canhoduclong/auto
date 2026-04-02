@@ -37,11 +37,11 @@
         <div class="mb-3">
             <label class="form-label">Hình ảnh</label>
             <div class="mb-2" id="variant-image-preview-edit">
-                @if($variant->media)
-                    <img src="{{ asset('storage/' . $variant->media->file_path) }}" width="120" class="img-thumbnail">
+                @if($variant->mediaLink?->media)
+                    <img src="{{ asset('storage/' . $variant->mediaLink->media->file_path) }}" width="60" class="img-thumbnail" alt="{{ $variant->sku }}">
                 @endif
             </div>
-            <input type="hidden" name="media_id" id="variant-media-id-edit" value="{{ $variant->media?->id }}">
+            <input type="hidden" name="media_id" id="variant-media-id-edit" value="{{ old('media_id', $variant->mediaLink?->media_id) }}">
             <button type="button" class="btn btn-info" id="btnSelectVariantImageEdit">Chọn ảnh từ thư viện</button>
         </div>
         <button class="btn btn-primary">Cập nhật biến thể</button>

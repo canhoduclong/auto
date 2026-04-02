@@ -52,15 +52,13 @@ class CartController extends Controller
     {
         $total = 0;
         $itemCount = 0;
-
         foreach ($cart as $details) {
             $quantity = (int) ($details['quantity'] ?? 0);
             $price = (float) ($details['price'] ?? 0);
-
-            $total += $price * $quantity;
+            $unitWeight = isset($details['unit_weight']) && $details['unit_weight'] > 0 ? (float)$details['unit_weight'] : 1;
+            $total += $price * $quantity * $unitWeight;
             $itemCount += $quantity;
         }
-
         return [
             'total' => $total,
             'item_count' => $itemCount,
@@ -74,7 +72,63 @@ class CartController extends Controller
         $this->settings = Cache::remember('settings', 60, function () {
             return Setting::all()->keyBy('key');
         });
-    }
+    } 
+
+    public function updateDiscount(Request $request)
+    {
+        $cart = session()->get('cart', []);
+
+        $itemDiscounts = $request->input('item_discount', []);
+        $orderDiscount = (float) $request->input('order_discount', 0);
+
+        $subtotal = 0;
+        $itemDiscountTotal = 0;
+        $totalWeight = 0;
+
+        foreach ($cart as $id => &$item) {
+            $price = $item['price'] ?? 0;
+            $quantity = $item['quantity'] ?? 1;
+            $unitWeight = $item['unit_weight'] ?? 1;
+
+            $discount = isset($itemDiscounts[$id]) ? (float)$itemDiscounts[$id] : 0;
+            $discount = max(0, min($discount, $price));
+
+            // Lưu discount vào cart session
+            $item['discount'] = $discount;
+
+            $lineSubtotal = $price * $quantity;
+            $lineDiscount = $discount * $quantity;
+
+            $subtotal += $lineSubtotal;
+            $itemDiscountTotal += $lineDiscount;
+            $totalWeight += $unitWeight * $quantity;
+        }
+
+        unset($item);
+
+        $afterItemDiscount = max($subtotal - $itemDiscountTotal, 0);
+
+        $orderDiscount = max(0, min($orderDiscount, $afterItemDiscount));
+
+        // Lưu order discount session
+        session()->put('cart', $cart);
+        session()->put('order_discount', $orderDiscount);
+
+        $total = max($afterItemDiscount - $orderDiscount, 0);
+
+        return response()->json([
+            'success' => true,
+            'summary' => [
+                'formatted_subtotal' => number_format($subtotal, 0, ',', '.') . 'đ',
+                'formatted_item_discount' => number_format($itemDiscountTotal, 0, ',', '.') . 'đ',
+                'formatted_order_discount' => number_format($orderDiscount, 0, ',', '.') . 'đ',
+                'formatted_discount' => number_format($itemDiscountTotal + $orderDiscount, 0, ',', '.') . 'đ',
+                'formatted_total' => number_format($total, 0, ',', '.') . 'đ',
+                'formatted_weight' => number_format($totalWeight, 3, ',', '.') . ' kg',
+            ]
+        ]);
+    } 
+    
     public function checkout()
     {
         $settings = $this->settings;
@@ -215,17 +269,17 @@ class CartController extends Controller
 
         return view('site.cart', compact('settings', 'cart'));
     }
-
+    
     public function remove(Request $request, $id)
     {
-        // Nếu session hết hạn hoặc không có cart, trả về JSON lỗi
         if (!session()->has('cart')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Phiên làm việc đã hết hạn. Vui lòng tải lại trang.',
                 'cart_count' => 0,
-            ], 440); // 440: Login Timeout (custom)
+            ], 440);
         }
+
         $cart = session()->get('cart', []);
         $itemId = $id ?: $request->input('id');
 
@@ -234,12 +288,33 @@ class CartController extends Controller
             session()->put('cart', $cart);
         }
 
+        // Tính lại summary
+        $total = 0;
+        $itemCount = 0;
+        $lineCount = count($cart);
+
+        foreach ($cart as $item) {
+            $quantity = $item['quantity'] ?? 1;
+            $unitPrice = $item['price'] ?? 0;
+            $unitWeight = $item['unit_weight'] ?? 1;
+
+            $subtotal = $quantity * $unitWeight * $unitPrice;
+
+            $total += $subtotal;
+            $itemCount += $quantity;
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Product removed successfully!',
-            'cart_count' => count($cart),
+            'cart_count' => $itemCount,
+            'summary' => [
+                'formatted_total' => number_format($total, 0, ',', '.') . '₫',
+                'item_count' => $itemCount,
+                'line_count' => $lineCount,
+            ]
         ]);
-    }
+    } 
 
     public function updateQuantity(Request $request, $id)
     {
@@ -253,6 +328,7 @@ class CartController extends Controller
             ], 440); // 440: Login Timeout (custom)
         }
         $quantity = (int) $request->input('quantity', 0);
+        $unitWeight = $request->has('unit_weight') ? (float) $request->input('unit_weight') : null;
         if ($quantity < 1) {
             return response()->json([
                 'success' => false,
@@ -271,10 +347,16 @@ class CartController extends Controller
         }
 
         $cart[$itemId]['quantity'] = $quantity;
+        if ($unitWeight !== null && $unitWeight > 0) {
+            $cart[$itemId]['unit_weight'] = $unitWeight;
+        } elseif (!isset($cart[$itemId]['unit_weight']) || $cart[$itemId]['unit_weight'] <= 0) {
+            $cart[$itemId]['unit_weight'] = 1;
+        }
         session()->put('cart', $cart);
 
         $price = (float) ($cart[$itemId]['price'] ?? 0);
-        $itemSubtotal = $price * $quantity;
+        $uw = isset($cart[$itemId]['unit_weight']) && $cart[$itemId]['unit_weight'] > 0 ? (float)$cart[$itemId]['unit_weight'] : 1;
+        $itemSubtotal = $price * $quantity * $uw;
         $summary = $this->buildCartSummary($cart);
 
         return response()->json([
@@ -283,6 +365,8 @@ class CartController extends Controller
             'item' => [
                 'id' => (string) $itemId,
                 'quantity' => $quantity,
+                'unit_weight' => $uw,
+                'unit_price' => number_format($price),
                 'subtotal' => $itemSubtotal,
                 'formatted_subtotal' => number_format($itemSubtotal) . 'd',
             ],
