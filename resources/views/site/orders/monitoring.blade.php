@@ -246,26 +246,26 @@
 
     $timelineSteps = ['Đặt đơn', 'Duyệt', 'Kho', 'Vận chuyển', 'Hoàn tất'];
     $timelineMap = [
-        \\App\\Models\\Order::STATUS_ORDER_PLACED => 0,
+        \App\Models\Order::STATUS_ORDER_PLACED => 0,
         'pending_leader_approval' => 1,
         'pending_manager_approval' => 1,
         'pending_warehouse_approval' => 1,
-        \\App\\Models\\Order::STATUS_ORDER_CONFIRMED => 1,
-        \\App\\Models\\Order::STATUS_APPROVED => 1,
-        \\App\\Models\\Order::STATUS_READY_TO_PACK => 2,
-        \\App\\Models\\Order::STATUS_PACKING => 2,
-        \\App\\Models\\Order::STATUS_PACKED => 2,
-        \\App\\Models\\Order::STATUS_READY_TO_SHIP => 3,
-        \\App\\Models\\Order::STATUS_DELIVERING => 3,
-        \\App\\Models\\Order::STATUS_IN_DELIVERY => 3,
+        \App\Models\Order::STATUS_ORDER_CONFIRMED => 1,
+        \App\Models\Order::STATUS_APPROVED => 1,
+        \App\Models\Order::STATUS_READY_TO_PACK => 2,
+        \App\Models\Order::STATUS_PACKING => 2,
+        \App\Models\Order::STATUS_PACKED => 2,
+        \App\Models\Order::STATUS_READY_TO_SHIP => 3,
+        \App\Models\Order::STATUS_DELIVERING => 3,
+        \App\Models\Order::STATUS_IN_DELIVERY => 3,
         'shipping' => 3,
         'picked_up' => 3,
-        \\App\\Models\\Order::STATUS_DELIVERED => 4,
-        \\App\\Models\\Order::STATUS_COMPLETED => 4,
-        \\App\\Models\\Order::STATUS_RETURNING => 3,
-        \\App\\Models\\Order::STATUS_RETURNED_COMPLETED => 4,
-        \\App\\Models\\Order::STATUS_RETURNED => 4,
-        \\App\\Models\\Order::STATUS_CANCELLED => 1,
+        \App\Models\Order::STATUS_DELIVERED => 4,
+        \App\Models\Order::STATUS_COMPLETED => 4,
+        \App\Models\Order::STATUS_RETURNING => 3,
+        \App\Models\Order::STATUS_RETURNED_COMPLETED => 4,
+        \App\Models\Order::STATUS_RETURNED => 4,
+        \App\Models\Order::STATUS_CANCELLED => 1,
     ];
 @endphp
 
@@ -385,11 +385,11 @@
                                     $timelineIndex = $timelineMap[$order->status] ?? 0;
                                     $timelinePercent = ($timelineIndex / 4) * 100;
                                     $timelineFlowClass = 'normal';
-                                    if (in_array($order->status, [\\App\\Models\\Order::STATUS_RETURNING], true)) {
+                                    if (in_array($order->status, [\App\Models\Order::STATUS_RETURNING], true)) {
                                         $timelineFlowClass = 'returning';
-                                    } elseif (in_array($order->status, [\\App\\Models\\Order::STATUS_RETURNED_COMPLETED, \\App\\Models\\Order::STATUS_RETURNED], true)) {
+                                    } elseif (in_array($order->status, [\App\Models\Order::STATUS_RETURNED_COMPLETED, \App\Models\Order::STATUS_RETURNED], true)) {
                                         $timelineFlowClass = 'returned';
-                                    } elseif (in_array($order->status, [\\App\\Models\\Order::STATUS_CANCELLED, \\App\\Models\\Order::STATUS_REJECTED], true)) {
+                                    } elseif (in_array($order->status, [\App\Models\Order::STATUS_CANCELLED, \App\Models\Order::STATUS_REJECTED], true)) {
                                         $timelineFlowClass = 'cancelled';
                                     }
                                 @endphp
