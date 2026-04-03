@@ -627,6 +627,7 @@ class PageController extends Controller
             ->latest('created_at');
 
         $keyword = trim((string) $request->input('keyword', ''));
+        $showAllVariants = $request->boolean('show_all_variants');
         if ($keyword !== '') {
             $query->where(function ($sub) use ($keyword) {
                 $sub->where('code', 'like', "%{$keyword}%")
@@ -712,9 +713,76 @@ class PageController extends Controller
         }
 
         $keyword = trim((string) $request->input('keyword', ''));
+        $showAllVariants = $request->boolean('show_all_variants');
 
-        $variants = ProductVariant::query()
-            ->with(['product.avatar.media', 'latestPriceRule'])
+        $products = Product::query()
+            ->with([
+                'avatar.media',
+                'variants.latestPriceRule',
+            ])
+            ->where('status', true)
+            ->whereHas('variants')
+            ->when($keyword !== '', function ($query) use ($keyword) {
+                $query->where(function ($sub) use ($keyword) {
+                    $sub->where('name', 'like', "%{$keyword}%")
+                        ->orWhereHas('variants', function ($variantQuery) use ($keyword) {
+                            $variantQuery->where('sku', 'like', "%{$keyword}%")
+                                ->orWhere('name', 'like', "%{$keyword}%");
+                        });
+                });
+            })
+            ->orderBy('name')
+            ->paginate(20)
+            ->appends($request->query());
+
+        $products->setCollection(
+            $products->getCollection()->map(function (Product $product) {
+                $variantRows = $product->variants
+                    ->map(function (ProductVariant $variant) {
+                        $price = (float) ($variant->latestPriceRule?->price ?? $variant->final_price ?? 0);
+
+                        $variant->setAttribute('current_price', $price);
+                        $variant->setAttribute('price_key', number_format($price, 4, '.', ''));
+
+                        return $variant;
+                    })
+                    ->values();
+
+                if ($variantRows->isEmpty()) {
+                    $product->setAttribute('current_price', 0);
+                    $product->setRelation('priceDiffVariants', collect());
+                    return $product;
+                }
+
+                $groupedByPrice = $variantRows->groupBy(fn ($variant) => (string) $variant->price_key);
+                $representativeGroup = $groupedByPrice
+                    ->sortByDesc(fn ($items) => $items->count())
+                    ->first();
+
+                $representativePrice = (float) ($representativeGroup?->first()?->current_price ?? 0);
+                $representativePriceKey = (string) ($representativeGroup?->first()?->price_key ?? number_format(0, 4, '.', ''));
+
+                $differentVariants = $variantRows
+                    ->filter(fn ($variant) => (string) $variant->price_key !== $representativePriceKey)
+                    ->sortBy('name')
+                    ->values();
+
+                $product->setAttribute('current_price', $representativePrice);
+                $product->setAttribute('total_variants_count', $variantRows->count());
+                $product->setRelation('priceDiffVariants', $differentVariants);
+                $product->setRelation('allVariantsByPrice', $variantRows->sortBy('name')->values());
+
+                return $product;
+            })->map(function (Product $product) use ($showAllVariants) {
+                if ($showAllVariants) {
+                    $product->setRelation('priceDiffVariants', $product->allVariantsByPrice ?? collect());
+                }
+
+                return $product;
+            })
+        );
+
+        $totalVariants = (int) ProductVariant::query()
             ->whereHas('product', function ($query) {
                 $query->where('status', true);
             })
@@ -727,15 +795,18 @@ class PageController extends Controller
                         });
                 });
             })
-            ->orderBy('product_id')
-            ->orderBy('sku')
-            ->paginate(25)
-            ->appends($request->query());
+            ->count();
+
+        $differentVariantCountOnPage = $products->getCollection()
+            ->sum(fn (Product $product) => $product->priceDiffVariants->count());
 
         return view('site.sales.daily_prices', [
             'settings' => $this->settings,
             'user' => $user,
-            'variants' => $variants,
+            'products' => $products,
+            'totalVariants' => $totalVariants,
+            'differentVariantCountOnPage' => $differentVariantCountOnPage,
+            'showAllVariants' => $showAllVariants,
             'keyword' => $keyword,
             'asOfDate' => now(),
         ]);

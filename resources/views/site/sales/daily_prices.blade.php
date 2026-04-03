@@ -172,14 +172,14 @@
                     <div class="row g-3">
                         <div class="col-6 col-md-4">
                             <div class="sp-kpi">
-                                <div class="sp-kpi-title">Tổng biến thể</div>
-                                <div class="sp-kpi-value">{{ number_format($variants->total()) }}</div>
+                                <div class="sp-kpi-title">Tổng sản phẩm</div>
+                                <div class="sp-kpi-value">{{ number_format($products->total()) }}</div>
                             </div>
                         </div>
                         <div class="col-6 col-md-4">
                             <div class="sp-kpi">
-                                <div class="sp-kpi-title">Trên trang</div>
-                                <div class="sp-kpi-value">{{ number_format($variants->count()) }}</div>
+                                <div class="sp-kpi-title">Tổng biến thể</div>
+                                <div class="sp-kpi-value">{{ number_format($totalVariants ?? 0) }}</div>
                             </div>
                         </div>
                         <div class="col-6 col-md-4">
@@ -210,6 +210,14 @@
                     <div class="col-12 col-md-8">
                         <input type="text" name="keyword" value="{{ $keyword }}" class="form-control" placeholder="Tìm theo tên sản phẩm, tên biến thể, SKU">
                     </div>
+                    <div class="col-12 col-md-4 d-flex align-items-center">
+                        <div class="form-check mt-2 mt-md-0">
+                            <input class="form-check-input" type="checkbox" id="show_all_variants" name="show_all_variants" value="1" {{ !empty($showAllVariants) ? 'checked' : '' }}>
+                            <label class="form-check-label" for="show_all_variants">
+                                Hiển thị tất cả biến thể (không chỉ biến thể lệch giá)
+                            </label>
+                        </div>
+                    </div>
                     <div class="col-6 col-md-2">
                         <button type="submit" class="btn btn-primary w-100"><i class="fa fa-search me-1"></i>Lọc</button>
                     </div>
@@ -223,8 +231,8 @@
         <div class="card sp-card">
             <div class="sp-table-wrap">
                 <div class="d-flex justify-content-between align-items-center px-1 py-3">
-                    <h3 class="h6 mb-0 fw-bold">Danh sách giá biến thể</h3>
-                    <span class="text-muted small">Trang {{ $variants->currentPage() }}/{{ max(1, $variants->lastPage()) }}</span>
+                    <h3 class="h6 mb-0 fw-bold">Danh sách bảng báo giá theo sản phẩm</h3>
+                    <span class="text-muted small">Trang {{ $products->currentPage() }}/{{ max(1, $products->lastPage()) }}</span>
                 </div>
                 <div class="table-responsive border-top">
                     <table class="table sp-table mb-0">
@@ -232,50 +240,64 @@
                             <tr>
                                 <th>#</th>
                                 <th>Sản phẩm</th>
-                                <th>Biến thể</th>
-                                <th>SKU</th>
-                                <th class="text-end">Giá hiện tại</th>
+                                <th class="text-end">Giá sản phẩm</th>
                             </tr>
                         </thead>
                         <tbody>
-                            @forelse($variants as $index => $variant)
+                            @forelse($products as $index => $product)
                                 @php
-                                    $price = (float) ($variant->latestPriceRule?->price ?? $variant->final_price ?? 0);
-                                    $imagePath = $variant->product?->avatar?->media?->file_path;
+                                    $price = (float) ($product->current_price ?? 0);
+                                    $imagePath = $product->avatar?->media?->file_path;
                                 @endphp
                                 <tr>
-                                    <td>{{ $variants->firstItem() + $index }}</td>
+                                    <td>{{ $products->firstItem() + $index }}</td>
                                     <td>
                                         <div class="d-flex align-items-center gap-2">
                                             @if($imagePath)
-                                                <img src="{{ asset('storage/' . $imagePath) }}" alt="{{ $variant->product?->name }}" class="sp-avatar">
+                                                <img src="{{ asset('storage/' . $imagePath) }}" alt="{{ $product->name }}" class="sp-avatar">
                                             @else
                                                 <div class="sp-avatar d-flex align-items-center justify-content-center bg-light text-muted">
                                                     <i class="bi bi-image"></i>
                                                 </div>
                                             @endif
                                             <div>
-                                                <div class="sp-product-name">{{ $variant->product?->name ?? '-' }}</div>
-                                                <div class="sp-product-sub">Mã biến thể: {{ $variant->id }}</div>
+                                                <div class="sp-product-name">{{ $product->name ?? '-' }}</div>
+                                                <div class="sp-product-sub">
+                                                    {{ number_format((int) ($product->total_variants_count ?? 0)) }} biến thể
+                                                    @if(($product->priceDiffVariants->count() ?? 0) > 0)
+                                                        · {{ number_format($product->priceDiffVariants->count()) }} {{ !empty($showAllVariants) ? 'biến thể hiển thị' : 'biến thể lệch giá' }}
+                                                    @endif
+                                                </div>
                                             </div>
                                         </div>
                                     </td>
-                                    <td class="fw-semibold">{{ $variant->name ?: '-' }}</td>
-                                    <td><span class="badge text-bg-light border">{{ $variant->sku ?: '-' }}</span></td>
                                     <td class="text-end"><span class="sp-price">{{ number_format($price, 0, ',', '.') }} đ</span></td>
                                 </tr>
+
+                                @foreach(($product->priceDiffVariants ?? collect()) as $diffVariant)
+                                    <tr>
+                                        <td></td>
+                                        <td>
+                                            <div class="ps-4">
+                                                <div class="fw-semibold">• {{ $diffVariant->name ?: ('Biến thể #' . $diffVariant->id) }}</div>
+                                                <div class="sp-product-sub">SKU: {{ $diffVariant->sku ?: '-' }}</div>
+                                            </div>
+                                        </td>
+                                        <td class="text-end"><span class="sp-price">{{ number_format((float) ($diffVariant->current_price ?? 0), 0, ',', '.') }} đ</span></td>
+                                    </tr>
+                                @endforeach
                             @empty
                                 <tr>
-                                    <td colspan="5"><div class="sp-empty">Không có dữ liệu bảng giá theo bộ lọc hiện tại.</div></td>
+                                    <td colspan="3"><div class="sp-empty">Không có dữ liệu bảng giá theo bộ lọc hiện tại.</div></td>
                                 </tr>
                             @endforelse
                         </tbody>
                     </table>
                 </div>
             </div>
-            @if($variants->hasPages())
+            @if($products->hasPages())
                 <div class="card-footer bg-white border-0 pt-2 pb-3">
-                    {{ $variants->links() }}
+                    {{ $products->links() }}
                 </div>
             @endif
         </div>
