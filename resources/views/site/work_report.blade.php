@@ -1,374 +1,545 @@
-        <style>
-        .pro-stat-card {
-            border-radius: 22px;
-            box-shadow: 0 4px 18px rgba(15,23,42,0.07);
-            background: linear-gradient(120deg, #f8fafc 70%, #e0e7ef 100%);
-            border: none;
-            transition: box-shadow 0.2s, transform 0.2s;
-        }
-        .pro-stat-card:hover, .card-stat-link:focus {
-            box-shadow: 0 8px 32px rgba(37,99,235,0.13);
-            transform: translateY(-2px) scale(1.03);
-            background: linear-gradient(120deg, #e0e7ef 60%, #f8fafc 100%);
-        }
-        .pro-stat-card .stat-icon {
-            font-size:2.3rem;
-            color:#0f766e;
-            margin-bottom: 8px;
-        }
-        .pro-stat-card .stat-value {
-            font-size:1.6rem;
-            font-weight:800;
-        }
-        .pro-stat-card .stat-label {
-            color:#64748b;
-            font-size:1rem;
-        }
-        .pro-table th, .pro-table td {
-            vertical-align: middle;
-        }
-        .pro-table thead th {
-            background: #f1f5f9;
-            color: #334155;
-            font-size: 13px;
-            font-weight: 700;
-            border-top-left-radius: 12px;
-            border-top-right-radius: 12px;
-        }
-        .pro-table tbody tr {
-            border-radius: 12px;
-            background: #fff;
-            transition: box-shadow 0.15s;
-        }
-        .pro-table tbody tr:hover {
-            box-shadow: 0 2px 12px rgba(15,23,42,0.07);
-        }
-        .pro-table img.rounded-circle { border: 2px solid #e0e7ef; }
-        @media (max-width: 900px) {
-            .pro-stat-card { margin-bottom: 12px; }
-        }
-        </style>
+@extends('layouts.site')
 
-@php
-    use App\Models\Setting;
-    $brandName = Setting::get('brand_name', config('app.name'));
-    $logoId = Setting::get('logo');
-    $logoUrl = null;
-    if ($logoId) {
-        $media = \App\Models\Media::find($logoId);
-        if ($media) {
-            $logoUrl = asset('storage/' . $media->file_path);
+@push('styles')
+<style>
+    .wr-page {
+        background:
+            radial-gradient(circle at top right, rgba(196, 164, 132, 0.18), transparent 32%),
+            linear-gradient(180deg, #f8f5ef 0%, #ffffff 38%, #f6f7fb 100%);
+        padding: 42px 0 72px;
+    }
+    .wr-shell {
+        max-width: 1180px;
+        margin: 0 auto;
+    }
+    .wr-hero {
+        border: 1px solid rgba(41, 52, 98, 0.08);
+        border-radius: 28px;
+        background: linear-gradient(135deg, #152238 0%, #23385f 55%, #39598a 100%);
+        color: #fff;
+        padding: 28px;
+        box-shadow: 0 22px 60px rgba(21, 34, 56, 0.18);
+        position: relative;
+        overflow: hidden;
+    }
+    .wr-hero::after {
+        content: '';
+        position: absolute;
+        width: 220px;
+        height: 220px;
+        right: -60px;
+        top: -60px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.08);
+    }
+    .wr-kpi {
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 20px;
+        padding: 18px;
+        min-height: 100%;
+    }
+    .wr-kpi-label {
+        font-size: .78rem;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.68);
+        margin-bottom: 8px;
+    }
+    .wr-kpi-value {
+        font-size: 1.6rem;
+        font-weight: 800;
+        line-height: 1;
+    }
+    .wr-panel {
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        border-radius: 24px;
+        background: #fff;
+        box-shadow: 0 12px 34px rgba(15, 23, 42, 0.06);
+    }
+    .wr-filter {
+        padding: 24px;
+    }
+    .wr-tablist {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    .wr-tab-btn {
+        border: 1px solid #c9d4e7;
+        background: #fff;
+        color: #334155;
+        border-radius: 999px;
+        padding: 9px 14px;
+        font-weight: 700;
+        line-height: 1;
+        cursor: pointer;
+    }
+    .wr-tab-btn.active {
+        background: #1d4ed8;
+        border-color: #1d4ed8;
+        color: #fff;
+        box-shadow: 0 8px 18px rgba(29, 78, 216, 0.25);
+    }
+    .wr-range-fields {
+        display: none;
+    }
+    .wr-range-fields.active {
+        display: flex;
+    }
+    .wr-filter .form-control {
+        height: 44px;
+        border-radius: 12px;
+        border-color: #d8deea;
+    }
+    .wr-filter .btn {
+        height: 44px;
+        border-radius: 12px;
+        font-weight: 700;
+    }
+    .wr-summary {
+        border-top: 1px solid #e7ecf3;
+        margin-top: 18px;
+        padding-top: 14px;
+        color: #475569;
+        font-size: .92rem;
+    }
+    .wr-stats {
+        padding: 0 24px 20px;
+    }
+    .wr-stat-card {
+        border: 1px solid #e4ebf5;
+        border-radius: 16px;
+        padding: 14px;
+        background: #fff;
+        height: 100%;
+        box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
+    }
+    .wr-stat-label {
+        font-size: .76rem;
+        letter-spacing: .05em;
+        text-transform: uppercase;
+        color: #64748b;
+        margin-bottom: 6px;
+    }
+    .wr-stat-value {
+        font-size: 1.25rem;
+        font-weight: 800;
+        color: #0f172a;
+    }
+    .wr-content-tabs {
+        border-bottom: 1px solid #e8edf5;
+        padding: 0 24px;
+    }
+    .wr-content-tab-btn {
+        border: 0;
+        background: transparent;
+        color: #475569;
+        font-weight: 700;
+        padding: 14px 2px;
+        margin-right: 16px;
+        border-bottom: 2px solid transparent;
+        cursor: pointer;
+    }
+    .wr-content-tab-btn.active {
+        color: #1e293b;
+        border-bottom-color: #1d4ed8;
+    }
+    .wr-content-pane {
+        display: none;
+        padding: 18px 24px 24px;
+    }
+    .wr-content-pane.active {
+        display: block;
+    }
+    .wr-table {
+        margin-bottom: 0;
+    }
+    .wr-table thead th {
+        font-size: .78rem;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+        color: #64748b;
+        border-bottom: 1px solid #e8edf5;
+        white-space: nowrap;
+        padding: 14px 12px;
+    }
+    .wr-table tbody td {
+        padding: 14px 12px;
+        border-color: #edf2f7;
+        vertical-align: middle;
+    }
+    .wr-badge {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 6px 10px;
+        font-size: .75rem;
+        font-weight: 700;
+    }
+    .wr-badge.pending { background: #fff7ed; color: #c2410c; }
+    .wr-badge.progress { background: #eff6ff; color: #1d4ed8; }
+    .wr-badge.success { background: #ecfdf5; color: #047857; }
+    .wr-badge.danger { background: #fef2f2; color: #b91c1c; }
+    .wr-badge.muted { background: #f1f5f9; color: #475569; }
+    .wr-empty {
+        text-align: center;
+        color: #64748b;
+        padding: 26px 12px;
+    }
+    .wr-activity-meta {
+        font-size: .8rem;
+        color: #64748b;
+    }
+    .wr-activity-role {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 4px 8px;
+        font-size: .72rem;
+        font-weight: 700;
+        background: #f1f5f9;
+        color: #334155;
+        text-transform: uppercase;
+    }
+    .wr-activity-link {
+        font-weight: 700;
+        text-decoration: none;
+    }
+    @media (max-width: 767.98px) {
+        .wr-page {
+            padding: 20px 0 48px;
+        }
+        .wr-shell {
+            padding: 0 12px;
+        }
+        .wr-filter,
+        .wr-stats,
+        .wr-content-tabs,
+        .wr-content-pane {
+            padding-left: 16px;
+            padding-right: 16px;
         }
     }
+</style>
+@endpush
+
+@section('content')
+@php
+    $statusClasses = [
+        \App\Models\Order::STATUS_COMPLETED => 'success',
+        \App\Models\Order::STATUS_DELIVERED => 'success',
+        \App\Models\Order::STATUS_ORDER_PLACED => 'pending',
+        \App\Models\Order::STATUS_ORDER_CONFIRMED => 'progress',
+        \App\Models\Order::STATUS_PACKED => 'progress',
+        \App\Models\Order::STATUS_IN_DELIVERY => 'progress',
+        \App\Models\Order::STATUS_READY_TO_PACK => 'pending',
+        \App\Models\Order::STATUS_PACKING => 'progress',
+        \App\Models\Order::STATUS_READY_TO_SHIP => 'progress',
+        \App\Models\Order::STATUS_DELIVERING => 'progress',
+        \App\Models\Order::STATUS_RETURNING => 'danger',
+        \App\Models\Order::STATUS_RETURNED_COMPLETED => 'muted',
+        \App\Models\Order::STATUS_RETURNED => 'danger',
+        \App\Models\Order::STATUS_CANCELLED => 'danger',
+        'shipping' => 'progress',
+        'picked_up' => 'progress',
+    ];
+
+    $statusLabels = \App\Models\Order::statusOptions() + [
+        \App\Models\Order::STATUS_READY_TO_PACK => 'Chờ đóng gói',
+        \App\Models\Order::STATUS_PACKING => 'Đang đóng gói',
+        \App\Models\Order::STATUS_READY_TO_SHIP => 'Chờ giao đơn vị vận chuyển',
+        \App\Models\Order::STATUS_DELIVERING => 'Đang giao hàng',
+        \App\Models\Order::STATUS_RETURNING => 'Đang trả hàng',
+        \App\Models\Order::STATUS_RETURNED_COMPLETED => 'Đã nhập kho trả hàng',
+        'shipping' => 'Đang vận chuyển',
+        'picked_up' => 'Đã lấy hàng',
+    ];
 @endphp
 
-@extends('layouts.site')
- 
-@section('content')
-<div class="py-4"> 
-    <div class="  shadow-sm border-0 mb-4">
-
-        @section('content')
-        <div class="container py-4">
-           
-            <div class="mb-4">
-                <div class="bg-white rounded-3 shadow-sm p-4 border d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
-                    <div>
-                        <div class="fs-5 fw-bold mb-1" style="color:#0f766e;">Báo cáo tổng hợp cá nhân</div>
-                        <div class="text-muted">Chỉ thống kê khách hàng, đơn hàng, doanh thu, công nợ của bạn trong từng giai đoạn.</div>
-                    </div>
-                    <form method="GET" action="{{ route('work-reports.index') }}" class="d-flex flex-wrap align-items-end gap-2" id="workReportFilterForm">
-                        <input type="hidden" name="type" id="reportTypeInput" value="{{ $type ?? 'today' }}">
-                        <button type="button" class="btn btn-outline-primary filter-btn {{ $type == 'today' ? 'active' : '' }}" onclick="setReportType('today')">Hôm nay</button>
-                        <button type="button" class="btn btn-outline-primary filter-btn {{ $type == 'week' ? 'active' : '' }}" onclick="setReportType('week')">Tuần này</button>
-                        <button type="button" class="btn btn-outline-primary filter-btn {{ $type == 'month' ? 'active' : '' }}" onclick="setReportType('month')">Tháng này</button>
-                        <div class="d-flex align-items-end gap-1" id="rangeFilterGroup" style="display: {{ $type == 'range' ? 'flex' : 'none' }};">
-                            <label class="form-label mb-1 me-1">Từ ngày</label>
-                            <input type="date" name="from_date" class="form-control form-control-sm" value="{{ request('from_date', $date) }}">
-                            <label class="form-label mb-1 ms-2 me-1">Đến ngày</label>
-                            <input type="date" name="to_date" class="form-control form-control-sm" value="{{ request('to_date', $date) }}">
-                        </div>
-                        <button type="button" class="btn btn-outline-secondary filter-btn {{ $type == 'range' ? 'active' : '' }}" onclick="setReportType('range')">Từ ngày - Đến ngày</button>
-                        <button type="submit" class="btn btn-primary ms-2"><i class="bi bi-funnel"></i> Lọc</button>
-                    </form>
-                    <style>
-                        .filter-btn.active, .filter-btn:focus {
-                            background: #0f766e;
-                            color: #fff;
-                            border-color: #0f766e;
-                        }
-                    </style>
-                    <script>
-                    function setReportType(type) {
-                        document.getElementById('reportTypeInput').value = type;
-                        document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-                        if(type === 'today') document.querySelector('.filter-btn:nth-child(2)').classList.add('active');
-                        if(type === 'week') document.querySelector('.filter-btn:nth-child(3)').classList.add('active');
-                        if(type === 'month') document.querySelector('.filter-btn:nth-child(4)').classList.add('active');
-                        if(type === 'range') document.querySelector('.filter-btn:nth-child(6)').classList.add('active');
-                        document.getElementById('rangeFilterGroup').style.display = (type === 'range') ? 'flex' : 'none';
-                    }
-                    </script>
+<section class="wr-page">
+    <div class="container wr-shell">
+        <div class="wr-hero mb-4">
+            <div class="row g-4 align-items-end position-relative">
+                <div class="col-lg-5">
+                    <div class="text-uppercase small fw-bold mb-2" style="letter-spacing:.12em;color:rgba(255,255,255,.65);">Work Reports</div>
+                    <h1 class="mb-3" style="font-size:2rem;font-weight:900;line-height:1.15;">Báo cáo công việc cá nhân</h1>
+                    <p class="mb-0" style="color:rgba(255,255,255,.8);max-width:540px;">
+                        Theo dõi hiệu suất bán hàng của bạn theo ngày, tuần, tháng hoặc khoảng thời gian tùy chọn.
+                    </p>
                 </div>
-            </div>
-            <script>
-            document.addEventListener('DOMContentLoaded', function() {
-                function toggleFilterFields() {
-                    var type = document.getElementById('reportType').value;
-                    document.querySelectorAll('#workReportFilterForm [data-filter]').forEach(function(el) {
-                        el.style.display = 'none';
-                    });
-                    if(type === 'day') {
-                        document.querySelector('#workReportFilterForm [data-filter="day"]').style.display = '';
-                    } else if(type === 'range') {
-                        document.querySelectorAll('#workReportFilterForm [data-filter="range"]').forEach(function(el){el.style.display = '';});
-                    }
-                }
-                document.getElementById('reportType').addEventListener('change', toggleFilterFields);
-                toggleFilterFields();
-            });
-            </script>
-            <div class="card shadow-sm border-0 mb-4">
-                <div class="card-body">
-                    <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-3">
-                        <h5 class="card-title mb-0" style="color:#0f766e;font-weight:700;">Thống kê từ <span class="text-primary">{{ $start->format('d/m/Y') }}</span> đến <span class="text-primary">{{ $end->format('d/m/Y') }}</span></h5>
-                    </div>
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-2">
-                            <a href="#" class="pro-stat-card text-center d-block card-stat-link h-100 py-3 px-2" onclick="toggleStatList('all-customers');return false;">
-                                <div class="stat-icon"><i class="bi bi-people"></i></div>
-                                <div class="stat-value">{{ $totalCustomerCount ?? 0 }}</div>
-                                <div class="stat-label">Tổng khách hàng</div>
-                            </a>
-                        </div>
-                        <div class="col-md-2">
-                            <a href="#" class="pro-stat-card text-center d-block card-stat-link h-100 py-3 px-2" onclick="toggleStatList('new-customers');return false;">
-                                <div class="stat-icon"><i class="bi bi-person-plus"></i></div>
-                                <div class="stat-value">{{ $newCustomerCount ?? 0 }}</div>
-                                <div class="stat-label">Khách hàng mới</div>
-                            </a>
-                        </div>
-                                            <div id="stat-list-all-customers" style="display:none;">
-                                                <h6 class="fw-bold mt-4 mb-2"><i class="bi bi-people"></i> Danh sách tất cả khách hàng</h6>
-                                                <div class="table-responsive">
-                                                    <table class="table pro-table align-middle table-borderless table-hover">
-                                                        <thead>
-                                                            <tr>
-                                                                <th></th>
-                                                                <th>Tên khách hàng</th>
-                                                                <th>Email</th>
-                                                                <th>SĐT</th>
-                                                                <th>Ngày tạo</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            @forelse($allCustomers ?? [] as $customer)
-                                                                <tr>
-                                                                    <td>
-                                                                        @php
-                                                                            $avatar = $customer->avatar ?? null;
-                                                                            $avatarUrl = $avatar ? asset($avatar) : 'https://ui-avatars.com/api/?name=' . urlencode($customer->name ?? 'U') . '&background=0f766e&color=fff&size=40&bold=true';
-                                                                        @endphp
-                                                                        <img src="{{ $avatarUrl }}" alt="avatar" class="rounded-circle" width="36" height="36">
-                                                                    </td>
-                                                                    <td class="fw-semibold">{{ $customer->name }}</td>
-                                                                    <td>{{ $customer->email }}</td>
-                                                                    <td>{{ $customer->phone }}</td>
-                                                                    <td>{{ $customer->created_at ? $customer->created_at->format('d/m/Y H:i') : '' }}</td>
-                                                                </tr>
-                                                            @empty
-                                                                <tr><td colspan="5" class="text-center text-muted">Không có khách hàng</td></tr>
-                                                            @endforelse
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            </div>
-                                            <div id="stat-list-new-customers" style="display:none;">
-                                                <h6 class="fw-bold mt-4 mb-2"><i class="bi bi-person-plus"></i> Danh sách khách hàng mới</h6>
-                                                <div class="table-responsive">
-                                                    <table class="table pro-table align-middle table-borderless table-hover">
-                                                        <thead>
-                                                            <tr>
-                                                                <th></th>
-                                                                <th>Tên khách hàng</th>
-                                                                <th>Email</th>
-                                                                <th>SĐT</th>
-                                                                <th>Ngày tạo</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            @forelse($newCustomers ?? [] as $customer)
-                                                                <tr>
-                                                                    <td>
-                                                                        @php
-                                                                            $avatar = $customer->avatar ?? null;
-                                                                            $avatarUrl = $avatar ? asset($avatar) : 'https://ui-avatars.com/api/?name=' . urlencode($customer->name ?? 'U') . '&background=0f766e&color=fff&size=40&bold=true';
-                                                                        @endphp
-                                                                        <img src="{{ $avatarUrl }}" alt="avatar" class="rounded-circle" width="36" height="36">
-                                                                    </td>
-                                                                    <td class="fw-semibold">{{ $customer->name }}</td>
-                                                                    <td>{{ $customer->email }}</td>
-                                                                    <td>{{ $customer->phone }}</td>
-                                                                    <td>{{ $customer->created_at ? $customer->created_at->format('d/m/Y H:i') : '' }}</td>
-                                                                </tr>
-                                                            @empty
-                                                                <tr><td colspan="5" class="text-center text-muted">Không có khách hàng mới</td></tr>
-                                                            @endforelse
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            </div>
-                                            <script>
-                                                function toggleStatList(type) {
-                                                    document.getElementById('stat-list-all-customers').style.display = (type === 'all-customers') ? 'block' : 'none';
-                                                    document.getElementById('stat-list-new-customers').style.display = (type === 'new-customers') ? 'block' : 'none';
-                                                }
-                                            </script>
-                        <div class="col-md-2">
-                            <div class="p-3 bg-light rounded-3 text-center border h-100">
-                                <div class="mb-2" style="font-size:2.2rem;color:#0f766e;"><i class="bi bi-person-check"></i></div>
-                                <div class="fw-bold" style="font-size:1.5rem;">{{ $interactingCustomerCount ?? 0 }}</div>
-                                <div class="text-muted">Đang tương tác</div>
+                <div class="col-lg-7">
+                    <div class="row g-3">
+                        <div class="col-6 col-md-4">
+                            <div class="wr-kpi">
+                                <div class="wr-kpi-label">Đơn hàng</div>
+                                <div class="wr-kpi-value">{{ number_format($orderCount ?? 0) }}</div>
                             </div>
                         </div>
-                        <div class="col-md-2">
-                            <a href="#" class="pro-stat-card text-center d-block card-stat-link h-100 py-3 px-2" onclick="toggleStatList('orders');return false;">
-                                <div class="stat-icon"><i class="bi bi-receipt"></i></div>
-                                <div class="stat-value">{{ $orderCount ?? 0 }}</div>
-                                <div class="stat-label">Tổng đơn hàng</div>
-                            </a>
-                        </div>
-                        <div class="col-md-2">
-                            <div class="p-3 bg-light rounded-3 text-center border h-100">
-                                <div class="mb-2" style="font-size:2.2rem;color:#0f766e;"><i class="bi bi-cash-stack"></i></div>
-                                <div class="fw-bold" style="font-size:1.5rem;">{{ number_format($totalRevenue ?? 0, 0, ',', '.') }} đ</div>
-                                <div class="text-muted">Tổng doanh thu</div>
+                        <div class="col-6 col-md-4">
+                            <div class="wr-kpi">
+                                <div class="wr-kpi-label">Khách hàng mới</div>
+                                <div class="wr-kpi-value">{{ number_format($newCustomerCount ?? 0) }}</div>
                             </div>
                         </div>
-                        <div class="col-md-2">
-                            <div class="p-3 bg-light rounded-3 text-center border h-100">
-                                <div class="mb-2" style="font-size:2.2rem;color:#0f766e;"><i class="bi bi-cash-coin"></i></div>
-                                <div class="fw-bold" style="font-size:1.5rem;">{{ number_format($totalDebt ?? 0, 0, ',', '.') }} đ</div>
-                                <div class="text-muted">Tổng công nợ</div>
+                        <div class="col-6 col-md-4">
+                            <div class="wr-kpi">
+                                <div class="wr-kpi-label">Doanh thu</div>
+                                <div class="wr-kpi-value">{{ number_format($totalRevenue ?? 0, 0, ',', '.') }}đ</div>
                             </div>
-                        </div>
-                    </div>
-                    <div id="tab-orders" style="display:none;">
-                        <h6 class="fw-bold mt-4 mb-2"><i class="bi bi-receipt"></i> Danh sách đơn hàng mới</h6>
-                        <div class="table-responsive">
-                            <table class="table align-middle table-borderless table-hover">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>Mã đơn</th>
-                                        <th>Khách hàng</th>
-                                        <th>Ngày tạo</th>
-                                        <th>Trạng thái</th>
-                                        <th class="text-end">Tổng tiền</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @forelse($orders ?? [] as $order)
-                                        <tr>
-                                            <td class="fw-bold text-primary">#{{ $order->code ?? $order->id }}</td>
-                                            <td>
-                                                <div class="d-flex align-items-center gap-2">
-                                                    @php
-                                                        $avatar = $order->customer->avatar ?? null;
-                                                        $avatarUrl = $avatar ? asset($avatar) : 'https://ui-avatars.com/api/?name=' . urlencode($order->customer->name ?? 'U') . '&background=0f766e&color=fff&size=40&bold=true';
-                                                    @endphp
-                                                    <img src="{{ $avatarUrl }}" alt="avatar" class="rounded-circle" width="36" height="36">
-                                                    <div>
-                                                        <div class="fw-semibold">{{ $order->customer->name ?? '-' }}</div>
-                                                        <div class="text-muted small">{{ $order->customer->email ?? '' }}</div>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td>{{ $order->created_at ? $order->created_at->format('d/m/Y H:i') : '' }}</td>
-                                            <td>
-                                                @php
-                                                    $status = $order->status ?? '';
-                                                    $badgeClass = 'secondary';
-                                                    if (str_contains($status, 'thành công') || $status === 'completed') $badgeClass = 'success';
-                                                    elseif (str_contains($status, 'hủy') || $status === 'cancelled') $badgeClass = 'danger';
-                                                    elseif (str_contains($status, 'chờ') || $status === 'pending') $badgeClass = 'warning';
-                                                    elseif (str_contains($status, 'đang') || $status === 'processing') $badgeClass = 'info';
-                                                @endphp
-                                                <span class="badge bg-{{ $badgeClass }}">{{ ucfirst($status) }}</span>
-                                            </td>
-                                            <td class="text-end fw-bold text-success">{{ number_format($order->total_amount ?? 0, 0, ',', '.') }} đ</td>
-                                        </tr>
-                                    @empty
-                                        <tr><td colspan="5" class="text-center text-muted">Không có đơn hàng mới</td></tr>
-                                    @endforelse
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                    <div id="tab-customers" style="display:none;">
-                        <h6 class="fw-bold mt-4 mb-2"><i class="bi bi-person-plus"></i> Danh sách khách hàng mới</h6>
-                        <div class="table-responsive">
-                            <table class="table align-middle table-borderless table-hover">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th></th>
-                                        <th>Tên khách hàng</th>
-                                        <th>Email</th>
-                                        <th>SĐT</th>
-                                        <th>Ngày tạo</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @forelse($newCustomers ?? [] as $customer)
-                                        <tr>
-                                            <td>
-                                                @php
-                                                    $avatar = $customer->avatar ?? null;
-                                                    $avatarUrl = $avatar ? asset($avatar) : 'https://ui-avatars.com/api/?name=' . urlencode($customer->name ?? 'U') . '&background=0f766e&color=fff&size=40&bold=true';
-                                                @endphp
-                                                <img src="{{ $avatarUrl }}" alt="avatar" class="rounded-circle" width="36" height="36">
-                                            </td>
-                                            <td class="fw-semibold">{{ $customer->name }}</td>
-                                            <td>{{ $customer->email }}</td>
-                                            <td>{{ $customer->phone }}</td>
-                                            <td>{{ $customer->created_at ? $customer->created_at->format('d/m/Y H:i') : '' }}</td>
-                                        </tr>
-                                    @empty
-                                        <tr><td colspan="5" class="text-center text-muted">Không có khách hàng mới</td></tr>
-                                    @endforelse
-                                </tbody>
-                            </table>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-        @push('scripts')
-        <script>
-        // Hide all stat lists and tabs
-        function hideAllStatLists() {
-            document.getElementById('stat-list-all-customers').style.display = 'none';
-            document.getElementById('stat-list-new-customers').style.display = 'none';
-            var tabOrders = document.getElementById('tab-orders');
-            if (tabOrders) tabOrders.style.display = 'none';
-            var tabCustomers = document.getElementById('tab-customers');
-            if (tabCustomers) tabCustomers.style.display = 'none';
+
+        <div class="wr-panel mb-4">
+            <div class="wr-filter">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                    <div>
+                        <h2 class="h5 mb-1 fw-bold">Bộ lọc thời gian</h2>
+                        <p class="mb-0 text-muted">Điều chỉnh theo mốc thời gian để xem đúng hiệu suất.</p>
+                    </div>
+                    <a href="{{ route('work-reports.index') }}" class="btn btn-outline-secondary">
+                        <i class="fa fa-refresh me-1"></i>Đặt lại
+                    </a>
+                </div>
+
+                <form method="GET" action="{{ route('work-reports.index') }}" id="workReportFilterForm">
+                    <input type="hidden" name="type" id="reportTypeInput" value="{{ $type ?? 'month' }}">
+                    <input type="hidden" name="date" value="{{ $date ?? now()->toDateString() }}">
+                    <input type="hidden" name="tab" id="reportTabInput" value="{{ $tab ?? 'orders' }}">
+                    <input type="hidden" name="per_page" id="reportPerPageInput" value="{{ $perPage ?? 10 }}">
+
+                    <div class="wr-tablist mb-3" role="tablist" aria-label="Khoảng thời gian">
+                        <button type="button" class="wr-tab-btn {{ ($type ?? 'month') === 'today' ? 'active' : '' }}" data-type="today">Hôm nay</button>
+                        <button type="button" class="wr-tab-btn {{ ($type ?? 'month') === 'week' ? 'active' : '' }}" data-type="week">Tuần này</button>
+                        <button type="button" class="wr-tab-btn {{ ($type ?? 'month') === 'month' ? 'active' : '' }}" data-type="month">Tháng này</button>
+                        <button type="button" class="wr-tab-btn {{ ($type ?? 'month') === 'all' ? 'active' : '' }}" data-type="all">Tất cả</button>
+                        <button type="button" class="wr-tab-btn {{ ($type ?? 'month') === 'range' ? 'active' : '' }}" data-type="range">Tùy chọn</button>
+                    </div>
+
+                    <div class="row g-2 align-items-end wr-range-fields {{ ($type ?? 'month') === 'range' ? 'active' : '' }}" id="rangeFilterGroup">
+                        <div class="col-12 col-md-3">
+                            <label class="form-label fw-bold" for="from_date">Từ ngày</label>
+                            <input type="date" name="from_date" id="from_date" class="form-control" value="{{ $fromDate ?? '' }}">
+                        </div>
+                        <div class="col-12 col-md-3">
+                            <label class="form-label fw-bold" for="to_date">Đến ngày</label>
+                            <input type="date" name="to_date" id="to_date" class="form-control" value="{{ $toDate ?? '' }}">
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-end mt-3 {{ ($type ?? 'month') === 'range' ? '' : 'd-none' }}" id="rangeSubmitWrap">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fa fa-search me-1"></i>Xem báo cáo
+                        </button>
+                    </div>
+                </form>
+
+                <div class="wr-summary">
+                    @if(($type ?? 'month') === 'all')
+                        Đang hiển thị dữ liệu cho <strong>tất cả thời gian</strong>.
+                    @else
+                        Đang hiển thị dữ liệu từ <strong>{{ $start->format('d/m/Y') }}</strong> đến <strong>{{ $end->format('d/m/Y') }}</strong>.
+                    @endif
+                </div>
+            </div>
+
+            <div class="wr-stats">
+                <div class="row g-3">
+                    <div class="col-6 col-md-3">
+                        <div class="wr-stat-card">
+                            <div class="wr-stat-label">Tổng khách hàng</div>
+                            <div class="wr-stat-value">{{ number_format($totalCustomerCount ?? 0) }}</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="wr-stat-card">
+                            <div class="wr-stat-label">Khách hàng tương tác</div>
+                            <div class="wr-stat-value">{{ number_format($interactingCustomerCount ?? 0) }}</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="wr-stat-card">
+                            <div class="wr-stat-label">Khách hàng cũ có đơn</div>
+                            <div class="wr-stat-value">{{ number_format($oldCustomerCount ?? 0) }}</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="wr-stat-card">
+                            <div class="wr-stat-label">Tổng công nợ</div>
+                            <div class="wr-stat-value">{{ number_format($totalDebt ?? 0, 0, ',', '.') }}đ</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="wr-content-tabs" role="tablist" aria-label="Dữ liệu báo cáo">
+                <button type="button" class="wr-content-tab-btn {{ ($tab ?? 'orders') === 'orders' ? 'active' : '' }}" data-pane="orders">
+                    Đơn hàng ({{ number_format($tabCounts['orders'] ?? 0) }})
+                </button>
+                <button type="button" class="wr-content-tab-btn {{ ($tab ?? 'orders') === 'new-customers' ? 'active' : '' }}" data-pane="new-customers">
+                    Khách hàng mới ({{ number_format($tabCounts['new-customers'] ?? 0) }})
+                </button>
+                <button type="button" class="wr-content-tab-btn {{ ($tab ?? 'orders') === 'all-customers' ? 'active' : '' }}" data-pane="all-customers">
+                    Tất cả khách hàng ({{ number_format($tabCounts['all-customers'] ?? 0) }})
+                </button>
+                <button type="button" class="wr-content-tab-btn {{ ($tab ?? 'orders') === 'daily-activities' ? 'active' : '' }}" data-pane="daily-activities">
+                    Hoạt động hằng ngày ({{ number_format($tabCounts['daily-activities'] ?? 0) }})
+                </button>
+            </div>
+
+            <div class="d-flex justify-content-end align-items-center gap-2 px-4 pt-3">
+                <label for="tabPerPageSelect" class="small text-muted mb-0">Hiển thị</label>
+                <select id="tabPerPageSelect" class="form-select form-select-sm" style="width: auto; min-width: 120px;">
+                    @foreach([10, 20, 50, 100] as $size)
+                        <option value="{{ $size }}" {{ (int) ($perPage ?? 10) === $size ? 'selected' : '' }}>{{ $size }} / trang</option>
+                    @endforeach
+                </select>
+            </div>
+
+            <div id="workReportTabContainer" class="pt-2 pb-2">
+                @include('site.partials.work_report_tab_content', [
+                    'tab' => $tab ?? 'orders',
+                    'tabData' => $tabData,
+                    'statusClasses' => $statusClasses,
+                    'statusLabels' => $statusLabels,
+                    'activityByDay' => $activityByDay,
+                    'activityCount' => $activityCount,
+                    'activeUserCount' => $activeUserCount,
+                ])
+            </div>
+        </div>
+    </div>
+</section>
+
+@push('scripts')
+<script>
+    (function () {
+        const form = document.getElementById('workReportFilterForm');
+        const typeInput = document.getElementById('reportTypeInput');
+        const tabInput = document.getElementById('reportTabInput');
+        const perPageInput = document.getElementById('reportPerPageInput');
+        const rangeGroup = document.getElementById('rangeFilterGroup');
+        const rangeSubmitWrap = document.getElementById('rangeSubmitWrap');
+        const tabContainer = document.getElementById('workReportTabContainer');
+        const perPageSelect = document.getElementById('tabPerPageSelect');
+
+        const updateFilterTabState = (activeType) => {
+            document.querySelectorAll('.wr-tab-btn').forEach((btn) => {
+                btn.classList.toggle('active', btn.getAttribute('data-type') === activeType);
+            });
+
+            const isRange = activeType === 'range';
+            rangeGroup.classList.toggle('active', isRange);
+            if (rangeSubmitWrap) {
+                rangeSubmitWrap.classList.toggle('d-none', !isRange);
+            }
+        };
+
+        document.querySelectorAll('.wr-tab-btn').forEach((button) => {
+            button.addEventListener('click', function () {
+                const type = this.getAttribute('data-type') || 'month';
+                typeInput.value = type;
+                updateFilterTabState(type);
+
+                if (type !== 'range') {
+                    loadTab(1);
+                }
+            });
+        });
+
+        const updateTabHeaderState = (activeTab) => {
+            document.querySelectorAll('.wr-content-tab-btn').forEach((btn) => {
+                btn.classList.toggle('active', btn.getAttribute('data-pane') === activeTab);
+            });
+        };
+
+        const updateTabCounts = (counts) => {
+            if (!counts) {
+                return;
+            }
+
+            const labels = {
+                'orders': 'Đơn hàng',
+                'new-customers': 'Khách hàng mới',
+                'all-customers': 'Tất cả khách hàng',
+                'daily-activities': 'Hoạt động hằng ngày'
+            };
+
+            Object.keys(labels).forEach((key) => {
+                const button = document.querySelector('.wr-content-tab-btn[data-pane="' + key + '"]');
+                if (button) {
+                    const value = Number(counts[key] || 0).toLocaleString('vi-VN');
+                    button.textContent = labels[key] + ' (' + value + ')';
+                }
+            });
+        };
+
+        const loadTab = (page = 1) => {
+            const params = new URLSearchParams(new FormData(form));
+            params.set('ajax_tab', '1');
+            params.set('page', String(page));
+
+            fetch('{{ route('work-reports.index') }}?' + params.toString(), {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json'
+                }
+            })
+                .then((response) => response.json())
+                .then((data) => {
+                    tabContainer.innerHTML = data.html || '';
+                    updateTabCounts(data.counts || null);
+                    updateTabHeaderState(data.tab || tabInput.value || 'orders');
+
+                    const nextUrlParams = new URLSearchParams(new FormData(form));
+                    nextUrlParams.set('page', String(page));
+                    window.history.replaceState({}, '', '{{ route('work-reports.index') }}?' + nextUrlParams.toString());
+                })
+                .catch(() => {
+                    // Keep current content if request fails.
+                });
+        };
+
+        document.querySelectorAll('.wr-content-tab-btn').forEach((button) => {
+            button.addEventListener('click', function () {
+                const pane = this.getAttribute('data-pane') || 'orders';
+                tabInput.value = pane;
+                loadTab(1);
+            });
+        });
+
+        if (perPageSelect) {
+            perPageSelect.addEventListener('change', function () {
+                perPageInput.value = this.value;
+                loadTab(1);
+            });
         }
 
-        // Show the correct list based on type
-        function toggleStatList(type) {
-            hideAllStatLists();
-            if (type === 'all-customers') {
-                document.getElementById('stat-list-all-customers').style.display = 'block';
-            } else if (type === 'new-customers') {
-                document.getElementById('stat-list-new-customers').style.display = 'block';
-            } else if (type === 'orders') {
-                var tabOrders = document.getElementById('tab-orders');
-                if (tabOrders) tabOrders.style.display = 'block';
-            } else if (type === 'customers') {
-                var tabCustomers = document.getElementById('tab-customers');
-                if (tabCustomers) tabCustomers.style.display = 'block';
+        tabContainer.addEventListener('click', function (event) {
+            const pageLink = event.target.closest('.pagination a');
+            if (!pageLink) {
+                return;
             }
-        }
-        </script>
-        @endpush
-        @endsection
+
+            event.preventDefault();
+            const url = new URL(pageLink.getAttribute('href'), window.location.origin);
+            const page = parseInt(url.searchParams.get('page') || '1', 10);
+            loadTab(page > 0 ? page : 1);
+        });
+
+        form.addEventListener('submit', function (event) {
+            event.preventDefault();
+            const currentTab = tabInput.value || 'orders';
+            tabInput.value = currentTab;
+            perPageInput.value = perPageSelect ? perPageSelect.value : (perPageInput.value || '10');
+            loadTab(1);
+        });
+
+        updateFilterTabState(typeInput.value || 'month');
+    })();
+</script>
+@endpush
+@endsection

@@ -64,6 +64,21 @@ class PageController extends Controller
         });
     }
 
+    private function canAccessSalesDailyPages($user): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        return $user->hasRole('sale')
+            || $user->hasRole('leader')
+            || $user->hasRole('leader_sale')
+            || $user->hasRole('sale_manager')
+            || $user->hasRole('manager')
+            || $user->hasRole('manager_sale')
+            || $user->hasRole('admin');
+    }
+
     private function discountConfigFromRequest(array $validated): array
     {
         return [
@@ -682,6 +697,89 @@ class PageController extends Controller
             'fromDate' => $fromDate,
             'toDate' => $toDate,
             'selectedStatus' => (string) $request->input('status', ''),
+        ]);
+    }
+
+    public function dailyProductPrices(Request $request)
+    {
+        if (!auth()->check()) {
+            return redirect()->route('login')->with('error', 'Bạn cần đăng nhập để xem bảng giá sản phẩm hàng ngày.');
+        }
+
+        $user = auth()->user();
+        if (!$this->canAccessSalesDailyPages($user)) {
+            abort(403, 'Bạn không có quyền truy cập bảng giá sản phẩm hàng ngày.');
+        }
+
+        $keyword = trim((string) $request->input('keyword', ''));
+
+        $variants = ProductVariant::query()
+            ->with(['product.avatar.media', 'latestPriceRule'])
+            ->whereHas('product', function ($query) {
+                $query->where('status', true);
+            })
+            ->when($keyword !== '', function ($query) use ($keyword) {
+                $query->where(function ($sub) use ($keyword) {
+                    $sub->where('sku', 'like', "%{$keyword}%")
+                        ->orWhere('name', 'like', "%{$keyword}%")
+                        ->orWhereHas('product', function ($productQuery) use ($keyword) {
+                            $productQuery->where('name', 'like', "%{$keyword}%");
+                        });
+                });
+            })
+            ->orderBy('product_id')
+            ->orderBy('sku')
+            ->paginate(25)
+            ->appends($request->query());
+
+        return view('site.sales.daily_prices', [
+            'settings' => $this->settings,
+            'user' => $user,
+            'variants' => $variants,
+            'keyword' => $keyword,
+            'asOfDate' => now(),
+        ]);
+    }
+
+    public function dailyInventories(Request $request)
+    {
+        if (!auth()->check()) {
+            return redirect()->route('login')->with('error', 'Bạn cần đăng nhập để xem tồn kho hàng ngày.');
+        }
+
+        $user = auth()->user();
+        if (!$this->canAccessSalesDailyPages($user)) {
+            abort(403, 'Bạn không có quyền truy cập tồn kho hàng ngày.');
+        }
+
+        $keyword = trim((string) $request->input('keyword', ''));
+
+        $variants = ProductVariant::query()
+            ->with(['product.avatar.media'])
+            ->withAvailableStock()
+            ->whereHas('product', function ($query) {
+                $query->where('status', true);
+            })
+            ->when($keyword !== '', function ($query) use ($keyword) {
+                $query->where(function ($sub) use ($keyword) {
+                    $sub->where('sku', 'like', "%{$keyword}%")
+                        ->orWhere('name', 'like', "%{$keyword}%")
+                        ->orWhereHas('product', function ($productQuery) use ($keyword) {
+                            $productQuery->where('name', 'like', "%{$keyword}%");
+                        });
+                });
+            })
+            ->orderByDesc('available_stock')
+            ->orderBy('sku')
+            ->paginate(25)
+            ->appends($request->query());
+
+        return view('site.sales.daily_inventories', [
+            'settings' => $this->settings,
+            'user' => $user,
+            'variants' => $variants,
+            'keyword' => $keyword,
+            'asOfDate' => now(),
         ]);
     }
 

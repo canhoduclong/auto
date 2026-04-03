@@ -309,9 +309,26 @@
                                         <a class="dropdown-item" href="{{ route('work-reports.index') }}">
                                             <i class="bi bi-clipboard-data"></i> Báo cáo công việc
                                         </a>
-                                        <a class="dropdown-item" href="{{ url('/dashboard') }}">
-                                            <i class="bi bi-speedometer2"></i> {{ __('site.dashboard') }}
-                                        </a>
+                                        @php
+                                            $isSalesFlowRole = Auth::user()->hasRole('sale')
+                                                || Auth::user()->hasRole('leader')
+                                                || Auth::user()->hasRole('leader_sale')
+                                                || Auth::user()->hasRole('sale_manager')
+                                                || Auth::user()->hasRole('manager')
+                                                || Auth::user()->hasRole('manager_sale');
+                                        @endphp
+                                        @if($isSalesFlowRole)
+                                            <a class="dropdown-item" href="{{ route('pages.my_orders.daily_prices') }}">
+                                                <i class="bi bi-tags"></i> Bảng giá sản phẩm hàng ngày
+                                            </a>
+                                            <a class="dropdown-item" href="{{ route('pages.my_orders.daily_inventories') }}">
+                                                <i class="bi bi-boxes"></i> Tồn kho hàng ngày
+                                            </a>
+                                        @else
+                                            <a class="dropdown-item" href="{{ url('/dashboard') }}">
+                                                <i class="bi bi-speedometer2"></i> {{ __('site.dashboard') }}
+                                            </a>
+                                        @endif
                                         @if(Auth::user()->hasRole('leader'))
                                             <div class="dropdown-divider my-0"></div>
                                             <a class="dropdown-item" href="{{ route('pages.my_tearm_orders') }}">

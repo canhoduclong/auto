@@ -21,6 +21,11 @@ class Customer extends Model
         // Temporary: if CustomerCareLog does not exist, create a stub model or use a fallback
         return $this->hasMany(\App\Models\CustomerCareLog::class);
     }
+
+    public function latestCareLog()
+    {
+        return $this->hasOne(\App\Models\CustomerCareLog::class)->latestOfMany();
+    }
     use HasFactory;
 
     protected $fillable = [

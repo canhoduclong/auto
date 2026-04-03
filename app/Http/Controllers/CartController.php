@@ -287,31 +287,16 @@ class CartController extends Controller
             unset($cart[$itemId]);
             session()->put('cart', $cart);
         }
-
-        // Tính lại summary
-        $total = 0;
-        $itemCount = 0;
-        $lineCount = count($cart);
-
-        foreach ($cart as $item) {
-            $quantity = $item['quantity'] ?? 1;
-            $unitPrice = $item['price'] ?? 0;
-            $unitWeight = $item['unit_weight'] ?? 1;
-
-            $subtotal = $quantity * $unitWeight * $unitPrice;
-
-            $total += $subtotal;
-            $itemCount += $quantity;
-        }
+        $summary = $this->buildCartSummary($cart);
 
         return response()->json([
             'success' => true,
             'message' => 'Product removed successfully!',
-            'cart_count' => $itemCount,
+            'cart_count' => $summary['item_count'],
             'summary' => [
-                'formatted_total' => number_format($total, 0, ',', '.') . '₫',
-                'item_count' => $itemCount,
-                'line_count' => $lineCount,
+                'formatted_total' => number_format($summary['total'], 0, ',', '.') . '₫',
+                'item_count' => $summary['item_count'],
+                'line_count' => $summary['line_count'],
             ]
         ]);
     } 
@@ -327,23 +312,31 @@ class CartController extends Controller
                 'summary' => null,
             ], 440); // 440: Login Timeout (custom)
         }
-        $quantity = (int) $request->input('quantity', 0);
-        $unitWeight = $request->has('unit_weight') ? (float) $request->input('unit_weight') : null;
-        if ($quantity < 1) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Quantity must be at least 1.',
-            ], 422);
-        }
-
         $cart = session()->get('cart', []);
         $itemId = $id ?: $request->input('id');
+        $quantity = (int) $request->input('quantity', 0);
+        $unitWeight = $request->has('unit_weight') ? (float) $request->input('unit_weight') : null;
 
         if (!$itemId || !isset($cart[$itemId])) {
             return response()->json([
                 'success' => false,
                 'message' => 'Product not found in cart.',
             ], 404);
+        }
+
+        if ($quantity < 1) {
+            unset($cart[$itemId]);
+            session()->put('cart', $cart);
+
+            $summary = $this->buildCartSummary($cart);
+
+            return response()->json([
+                'success' => true,
+                'removed' => true,
+                'removed_id' => (string) $itemId,
+                'message' => 'Product removed successfully!',
+                'summary' => $summary,
+            ]);
         }
 
         $cart[$itemId]['quantity'] = $quantity;

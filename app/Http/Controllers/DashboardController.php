@@ -19,11 +19,28 @@ class DashboardController extends Controller
     {
         $user = Auth::user();
 
+        $isSalesFlowRole = $user?->hasRole('sale')
+            || $user?->hasRole('leader')
+            || $user?->hasRole('leader_sale')
+            || $user?->hasRole('sale_manager')
+            || $user?->hasRole('manager')
+            || $user?->hasRole('manager_sale');
+
+        if ($isSalesFlowRole) {
+            return redirect()
+                ->route('pages.my_orders.monitoring')
+                ->with('error', 'Vai trò của bạn không được truy cập Dashboard.');
+        }
+
         $roleName = $user?->roles()->pluck('name')->first() ?? 'default';
 
         $adminData = [];
         if ($roleName === 'admin') {
             $adminData = $this->buildAdminDashboardData();
+        }
+
+        if ($roleName === 'ceo') {
+            return redirect()->route('ceo.dashboard');
         }
 
         return match ($roleName) {

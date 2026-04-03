@@ -152,8 +152,10 @@ document.addEventListener('DOMContentLoaded', function () {
             method: 'DELETE',
             credentials: 'same-origin',
             headers: {
+                'Accept': 'application/json',
                 'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': csrfToken
+                'X-CSRF-TOKEN': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest'
             }
         })
         .then(async response => {
@@ -204,8 +206,10 @@ document.addEventListener('DOMContentLoaded', function () {
             method: 'POST',
             credentials: 'same-origin',
             headers: {
+                'Accept': 'application/json',
                 'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': csrfToken
+                'X-CSRF-TOKEN': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest'
             },
             body: JSON.stringify({
                 _method: 'PATCH',
@@ -228,6 +232,30 @@ document.addEventListener('DOMContentLoaded', function () {
             return data;
         })
         .then(data => {
+            if (data.removed) {
+                const sameItems = document.querySelectorAll(`[data-id="${id}"]`);
+                sameItems.forEach(item => item.remove());
+
+                const summaryTotal = document.querySelector('.summary-total');
+                if (summaryTotal) summaryTotal.textContent = data.summary.formatted_total;
+
+                const summaryItemCount = document.querySelector('.summary-item-count');
+                if (summaryItemCount) summaryItemCount.textContent = data.summary.item_count;
+
+                const summaryLineCount = document.querySelector('.summary-line-count');
+                if (summaryLineCount) summaryLineCount.textContent = data.summary.line_count;
+
+                const remainingItems = document.querySelectorAll('[data-id]');
+                if (remainingItems.length === 0) {
+                    const cartContainer = document.querySelector('.cart-container');
+                    if (cartContainer) {
+                        cartContainer.innerHTML =
+                            '<div class="text-center py-5">Giỏ hàng trống</div>';
+                    }
+                }
+                return;
+            }
+
             const sameItems = document.querySelectorAll(`[data-id="${id}"]`);
 
             sameItems.forEach(itemContainer => {
@@ -242,7 +270,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 const formula = itemContainer.querySelector('.cart-line-formula');
                 if (formula) {
                     formula.textContent =
-                        `${data.item.quantity} × ${data.item.unit_weight}kg × ${data.item.formatted_unit_price} = `;
+                        `${data.item.quantity} × ${data.item.unit_weight}kg × ${data.item.unit_price} = `;
                 }
             });
 

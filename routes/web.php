@@ -43,6 +43,7 @@ use App\Http\Controllers\RevenueReportController;
 use App\Http\Controllers\OrderMonitoringController;
 use App\Http\Controllers\WarehouseDashboardController;
 use App\Http\Controllers\ShipperDashboardController;
+use App\Http\Controllers\CeoDashboardController;
 
 
 
@@ -120,6 +121,20 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/orders/{order}/return-form',      [ShipperDashboardController::class, 'returnForm'])->name('return-form');
         Route::post('/orders/{order}/store-return',    [ShipperDashboardController::class, 'storeReturn'])->name('store-return');
         Route::get('/history',                         [ShipperDashboardController::class, 'history'])->name('history');
+    });
+
+    // ─── CEO module ────────────────────────────────────────────────────────
+    Route::prefix('ceo')->name('ceo.')->middleware('role:ceo,admin')->group(function () {
+        Route::get('/', [CeoDashboardController::class, 'dashboard'])->name('dashboard');
+        Route::get('/revenue', [CeoDashboardController::class, 'revenue'])->name('revenue');
+        Route::get('/orders', [CeoDashboardController::class, 'orders'])->name('orders');
+        Route::get('/sales', [CeoDashboardController::class, 'sales'])->name('sales');
+        Route::get('/debts', [CeoDashboardController::class, 'debts'])->name('debts');
+        Route::get('/warehouse', [CeoDashboardController::class, 'warehouse'])->name('warehouse');
+        Route::get('/shipper', [CeoDashboardController::class, 'shipper'])->name('shipper');
+        Route::get('/customers', [CeoDashboardController::class, 'customers'])->name('customers');
+        Route::get('/alerts', [CeoDashboardController::class, 'alerts'])->name('alerts');
+        Route::get('/reports', [CeoDashboardController::class, 'reports'])->name('reports');
     });
     Route::get('reports/revenue', [RevenueReportController::class, 'index'])
         ->name('reports.revenue')
@@ -367,6 +382,8 @@ Route::get('/my-profile', [PageController::class, 'myDashboard'])->name('pages.m
 Route::post('/my-profile', [PageController::class, 'updateProfile'])->name('pages.update_profile')->middleware('auth');
 Route::get('/my-orders', [PageController::class, 'myOrders'])->name('pages.my_orders')->middleware('auth');
 Route::get('/my-orders/monitoring', [PageController::class, 'myOrdersMonitoring'])->name('pages.my_orders.monitoring')->middleware('auth');
+Route::get('/my-orders/daily-prices', [PageController::class, 'dailyProductPrices'])->name('pages.my_orders.daily_prices')->middleware('auth');
+Route::get('/my-orders/daily-inventories', [PageController::class, 'dailyInventories'])->name('pages.my_orders.daily_inventories')->middleware('auth');
 Route::get('/my-orders/customers/ajax', [PageController::class, 'myOrderCustomersAjax'])->name('site.orders.customers.ajax')->middleware('auth');
 Route::get('/my-orders/{order}', [PageController::class, 'myOrderDetail'])->name('site.orders.show')->middleware('auth');
 Route::get('/my-orders/{order}/edit', [PageController::class, 'myOrderEdit'])->name('site.orders.edit')->middleware('auth');
