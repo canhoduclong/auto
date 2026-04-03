@@ -137,6 +137,8 @@ class WarehouseDashboardController extends Controller
         $ordersQuery = Order::with([
             'customer',
             'user',
+            'warehouse',
+            'histories.user.warehouse',
             'items.product.avatar.media',
             'items.variant' => function ($query) {
                 $query->withAvailableStock()->with('avatar.media');

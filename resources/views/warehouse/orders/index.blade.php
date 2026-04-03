@@ -63,27 +63,48 @@
         display: grid;
         gap: 6px;
     }
-    .wh-item-row {
-        border: 1px solid #e2e8f0;
-        border-radius: 10px;
-        background: #fff;
-        padding: 8px;
-        display: flex;
+    .wh-item-table-wrap {
+        overflow-x: auto;
+    }
+    .wh-item-table-head,
+    .wh-item-table-row {
+        display: grid;
+        grid-template-columns: 48px minmax(50px, 1fr) 42px 45px 70px 61px 76px;
         gap: 8px;
-        flex-wrap: wrap;
+        align-items: center; 
+    }
+    .wh-item-table-head {
+        font-size: .72rem;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+        color: #64748b;
+        font-weight: 700;
+        padding: 0 0 6px;
+        border-bottom: 1px solid #e2e8f0;
+        margin-bottom: 6px;
+    }
+    .wh-item-row {
+        border-bottom: 1px solid #f1f5f9;
+        padding-bottom: 6px;
+    }
+    .wh-item-row:last-child {
+        border-bottom: 0;
+        padding-bottom: 0;
     }
     .wh-item-thumb {
-        width: 42px;
-        height: 42px;
+        width: 40px;
+        height: 40px;
         border-radius: 8px;
         object-fit: cover;
         border: 1px solid #e2e8f0;
         background: #fff;
-        flex: 0 0 42px;
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
     }
     .wh-item-thumb-placeholder {
-        width: 42px;
-        height: 42px;
+        width: 40px;
+        height: 40px;
         border-radius: 8px;
         border: 1px dashed #cbd5e1;
         color: #94a3b8;
@@ -91,33 +112,29 @@
         align-items: center;
         justify-content: center;
         background: #f8fafc;
-        flex: 0 0 42px;
-    }
-    .wh-item-content {
-        min-width: 0;
-        flex: 1 1 220px;
+        margin-left: auto;
+        margin-right: auto;
     }
     .wh-item-name {
         font-size: .86rem;
         font-weight: 700;
         color: #0f172a;
-        margin-bottom: 4px;
         line-height: 1.25;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
-    .wh-item-meta {
-        display: flex;
-        gap: 6px;
-        flex-wrap: wrap;
-        font-size: .76rem;
+    .wh-item-cell {
+        font-size: .8rem;
+        color: #475569;
+        text-align: center;
     }
-    .wh-item-chip {
-        border-radius: 999px;
-        padding: 2px 8px;
-        font-weight: 700;
+    .wh-item-cell strong {
+        color: #0f172a;
     }
     .wh-item-action {
-        margin-left: auto;
-        flex: 0 0 auto;
+        text-align: right;
     }
     .wh-compact-form {
         display: flex;
@@ -125,10 +142,10 @@
         align-items: center;
     }
     .wh-readonly-item {
-        margin-left: auto;
         font-size: .78rem;
         color: #475569;
         font-weight: 600;
+        text-align: center
     }
     .wh-quick-wrap {
         display: flex;
@@ -175,6 +192,14 @@
     .wh-quick-pill.active .wh-quick-count {
         background: #2563eb;
         color: #fff;
+    }
+    @media (max-width: 575px) {
+        .wh-item-table-head,
+        .wh-item-table-row {
+            grid-template-columns: 44px minmax(150px, 1.2fr) 40px 54px 84px 96px 124px;
+            min-width: 630px;
+            gap: 6px;
+        }
     }
 </style>
 @endpush
@@ -276,8 +301,15 @@
                 $isPacking = $order->status === 'packing';
                 $isPackedReadonly = in_array($order->status, ['packed', 'packed_waiting_pickup', 'delivering', 'delivered', 'completed'], true);
                 $canAdminReopenPacking = auth()->user()?->hasRole('admin') && in_array($order->status, ['packed', 'packed_waiting_pickup'], true);
+                $packingHistory = $order->histories
+                    ?->whereIn('action', ['complete_packing', 'warehouse_complete_packing'])
+                    ->sortByDesc('id')
+                    ->first();
+                $sourceWarehouseName = $order->warehouse?->name ?: $packingHistory?->user?->warehouse?->name;
+                $packedByName = $packingHistory?->user?->name;
+                $packedAt = $packingHistory?->created_at?->format('d/m/Y H:i');
             @endphp
-            <div class="col-12 col-lg-6 col-xxl-3">
+            <div class="col-12 col-lg-6 col-xxl-4">
                 <div class="card wh-order-card js-order-card" data-order-id="{{ $order->id }}">
                      
                     <span class="wh-order-index">#{{ $loop->iteration }}</span>
@@ -308,68 +340,87 @@
                                 <i class="bi bi-clock me-1"></i>
                                 Giờ giao: {{ $order->delivery_time ?: ($order->customer?->delivery_time ?: 'Chưa cập nhật') }}
                             </div>
+                            @if($isPackedReadonly)
+                                <div class="small text-muted mt-1">
+                                    <i class="bi bi-box-seam me-1"></i>
+                                    Từ kho: {{ $sourceWarehouseName ?: 'Chưa xác định' }}
+                                </div>
+                            @endif
                         </div>
 
                         <div class="wh-section pb-0">
                             <div class="wh-logistics-title">Danh sách sản phẩm cần đóng & cập nhật kho</div>
-                            <ul class="wh-item-list">
-                                @foreach($order->items as $item)
-                                    @php
-                                        $variant = $item->variant;
-                                        $orderedQty = (int) $item->quantity;
-                                        $availableQty = $variant ? (int) $variant->available_stock : 0;
-                                        $canPackQty = min($orderedQty, max(0, $availableQty));
-                                        $isShort = $variant && $availableQty < $orderedQty;
-                                        $itemDate = $variant?->production_date
-                                            ? \Illuminate\Support\Carbon::parse($variant->production_date)->format('d/m/Y')
-                                            : $order->created_at->format('d/m/Y');
-                                        $imagePath = $variant?->avatar?->media?->file_path
-                                            ?? $item->product?->avatar?->media?->file_path
-                                            ?? null;
-                                    @endphp
-                                    <li class="wh-item-row">
-                                        @if($imagePath)
-                                            <img class="wh-item-thumb" src="{{ asset('storage/' . $imagePath) }}" alt="{{ $variant?->name ?? $item->product?->name ?? 'Sản phẩm' }}">
-                                        @else
-                                            <span class="wh-item-thumb-placeholder">
-                                                <i class="bi bi-image"></i>
-                                            </span>
-                                        @endif
-
-                                        <div class="wh-item-content">
-                                            <div class="wh-item-name">
-                                                {{ $variant?->name ?? $item->product?->name ?? 'Sản phẩm' }}
-                                                @if($variant?->sku)
-                                                    <span class="text-muted small">({{ $variant->sku }})</span>
+                            <div class="wh-item-table-wrap">
+                                <div class="wh-item-table-head">
+                                    <div>Ảnh</div>
+                                    <div>Sản phẩm</div>
+                                    <div class="text-center">SL</div>
+                                    <div class="text-center">Size</div>
+                                    <div class="text-center">Kg</div>
+                                    <div class="text-center">Đơn giá</div>
+                                    <div class="text-end">Thành tiền</div>
+                                    
+                                </div>
+                                <ul class="wh-item-list">
+                                    @foreach($order->items as $item)
+                                        @php
+                                            $variant = $item->variant;
+                                            $orderedQty = (int) $item->quantity;
+                                            $unitPrice = (float) ($item->price ?? 0);
+                                            $lineTotal = $orderedQty * $unitPrice;
+                                            $variantSize = $variant?->size;
+                                            $formattedVariantSize = (!is_null($variantSize) && $variantSize !== '')
+                                                ? rtrim(rtrim(number_format((float) $variantSize, 2, '.', ''), '0'), '.')
+                                                : '-';
+                                            $imagePath = $variant?->avatar?->media?->file_path
+                                                ?? $item->product?->avatar?->media?->file_path
+                                                ?? null;
+                                        @endphp
+                                        <li class="wh-item-row">
+                                            <div class="wh-item-table-row">
+                                                <div>
+                                                    @if($imagePath)
+                                                        <img class="wh-item-thumb" src="{{ asset('storage/' . $imagePath) }}" alt="{{ $variant?->name ?? $item->product?->name ?? 'Sản phẩm' }}">
+                                                    @else
+                                                        <span class="wh-item-thumb-placeholder">
+                                                            <i class="bi bi-image"></i>
+                                                        </span>
+                                                    @endif
+                                                </div>
+                                                <div class="wh-item-name">
+                                                    {{ $variant?->name ?? $item->product?->name ?? 'Sản phẩm' }}
+                                                    @if($variant?->sku)
+                                                        <span class="text-muted small">({{ $variant->sku }})</span>
+                                                    @endif
+                                                </div>
+                                                <div class="wh-item-cell"><strong>{{ number_format($orderedQty) }}</strong></div>
+                                                <div class="wh-item-cell"><strong>{{ $formattedVariantSize }}</strong></div>
+                                               
+                                                @if(!$isPackedReadonly && $canProcessThisOrder)
+                                                    @php
+                                                        $itemWeightDefault = $item->actual_weight ?? $item->total_weight ?? 0;
+                                                    @endphp
+                                                    <div class="wh-item-action js-packing-only {{ $isPacking ? '' : 'd-none' }}">
+                                                        <form action="{{ route('warehouse.orders.logistics', $order) }}" method="POST" class="js-logistics-item-form wh-compact-form justify-content-end">
+                                                            @csrf
+                                                            <input type="hidden" name="item_id" value="{{ $item->id }}">
+                                                            <input type="number" name="item_actual_weight" class="form-control form-control-sm actual_weight"
+                                                                value="{{ number_format((float) $itemWeightDefault, 3, '.', '') }}"
+                                                                min="0" step="0.001" required>
+                                                            <button class="btn btn-outline-primary btn-sm js-logistics-submit-btn" type="submit">Lưu</button>
+                                                        </form>
+                                                    </div>
+                                                @else
+                                                    <div class="wh-readonly-item">{{ number_format((float) ($item->actual_weight ?? 0), 2) }} kg</div>
                                                 @endif
-                                            </div>
-                                            <div class="wh-item-meta">
-                                                <span class="wh-item-chip bg-light text-dark">Số Lượng đặt: {{ number_format($orderedQty) }}</span>      
-                                            </div>
-                                        </div>
-
-                                        @if(!$isPackedReadonly && $canProcessThisOrder)
-                                            @php
-                                                $itemWeightDefault = $item->actual_weight ?? $item->total_weight ?? 0;
-                                            @endphp
-                                            <div class="wh-item-action js-packing-only {{ $isPacking ? '' : 'd-none' }}">
-                                                <form action="{{ route('warehouse.orders.logistics', $order) }}" method="POST" class="js-logistics-item-form wh-compact-form">
-                                                    @csrf
-                                                    <input type="hidden" name="item_id" value="{{ $item->id }}">
-                                                    <input type="number" name="item_actual_weight" class="form-control form-control-sm actual_weight"
-                                                        value="{{ number_format((float) $itemWeightDefault, 3, '.', '') }}"
-                                                        min="0" step="0.001" required>
-                                                    <button class="btn btn-outline-primary btn-sm js-logistics-submit-btn" type="submit">Lưu</button>
-                                                </form>
-                                            </div>
-                                        @else
-                                            <div class="wh-readonly-item">
-                                                Kg thực tế: {{ number_format((float) ($item->actual_weight ?? 0), 3) }} kg
-                                            </div>
-                                        @endif
-                                    </li>
-                                @endforeach
-                            </ul>
+                                           
+                                                <div class="wh-item-cell">{{ number_format($unitPrice) }}đ</div>
+                                                <div class="wh-item-cell"><strong>{{ number_format($lineTotal) }}đ</strong></div>
+                                             </div>
+                                        </li>
+                                    @endforeach
+                                </ul>
+                            </div>
 
                             @if(!$isPackedReadonly && $canProcessThisOrder)
                                 <div class="small text-muted mt-2 js-ready-only {{ $isReadyToPack ? '' : 'd-none' }}">
@@ -455,6 +506,18 @@
                                         <div class="wh-meta-label">Trạng thái</div>
                                         <div class="wh-meta-value">Đã khóa chỉnh sửa</div>
                                     </div>
+                                    <div class="col-6">
+                                        <div class="wh-meta-label">Từ kho</div>
+                                        <div class="wh-meta-value">{{ $sourceWarehouseName ?: 'Chưa xác định' }}</div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="wh-meta-label">Nhân viên kho</div>
+                                        <div class="wh-meta-value">{{ $packedByName ?: 'Chưa xác định' }}</div>
+                                    </div>
+                                    <div class="col-12">
+                                        <div class="wh-meta-label">Thời điểm đóng gói</div>
+                                        <div class="wh-meta-value">{{ $packedAt ?: 'Chưa có dữ liệu' }}</div>
+                                    </div>
                                     @if($canAdminReopenPacking)
                                         <div class="col-12">
                                             <form action="{{ route('warehouse.orders.reopen-packing', $order) }}" method="POST" class="d-grid">
@@ -468,17 +531,7 @@
                                             </div>
                                         </div>
                                     @endif
-                                    <div class="col-12">
-                                        <div class="wh-meta-label mb-1">Kg thực tế theo sản phẩm</div>
-                                        <div class="small text-muted">
-                                            @foreach($order->items as $item)
-                                                <div>
-                                                    - {{ $item->variant?->name ?? $item->product?->name ?? 'Sản phẩm' }}:
-                                                    <strong>{{ number_format((float) ($item->actual_weight ?? 0), 3) }} kg</strong>
-                                                </div>
-                                            @endforeach
-                                        </div>
-                                    </div>
+                                    
                                 </div>
                             </div>
                         @endif

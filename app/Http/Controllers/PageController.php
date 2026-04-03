@@ -2260,36 +2260,78 @@ class PageController extends Controller
     {
        $user = auth()->user();
 
-        $oldOrder = Order::with('items')
+        $oldOrder = Order::with(['items', 'customer'])
             ->where('user_id', $user->id) // bảo mật
             ->findOrFail($id);
 
-        // clone order
-        $newOrder = $oldOrder->replicate();
+        DB::transaction(function () use ($oldOrder, $user) {
+            $resolvedCustomerId = (int) ($oldOrder->customer_id ?? 0);
 
- 
-        // reset các field quan trọng
-        $newOrder->customer_id = $oldOrder->customer_id;
-        $newOrder->code = 'OD' . time();
-        $newOrder->status = Order::STATUS_PENDING_LEADER_APPROVAL;
-        $newOrder->payment_status = 'unpaid';
-        $newOrder->created_at = now();
-        $newOrder->updated_at = now();
-        if ($this->hasOrderColumn('copied_from_order_id')) {
-            $newOrder->copied_from_order_id = $oldOrder->id;
-        }
-        //echo '<pre>'; print_r($newOrder->toArray()); echo '</pre>'; die('---');
-        $newOrder->save();
+            if ($resolvedCustomerId <= 0 || !Customer::query()->whereKey($resolvedCustomerId)->exists()) {
+                $recipientPhone = $oldOrder->recipient_phone ?: $oldOrder->customer?->phone;
+                $recipientEmail = $oldOrder->recipient_email ?: $oldOrder->customer?->email;
+                $recipientName = $oldOrder->recipient_name ?: $oldOrder->customer?->name ?: ($user->name ?? 'Khach hang');
 
-        // clone items
-        foreach ($oldOrder->items as $item) {
-            $newItem = $item->replicate();
-            $newItem->order_id = $newOrder->id;
-            $newItem->save();
-        }
+                $customerQuery = Customer::query()->where('user_id', $user->id);
+                if (!empty($recipientPhone)) {
+                    $customerQuery->where('phone', $recipientPhone);
+                } elseif (!empty($recipientEmail)) {
+                    $customerQuery->where('email', $recipientEmail);
+                } else {
+                    $customerQuery->where('name', $recipientName);
+                }
 
-        // Khởi tạo lại workflow duyệt để đơn copy có bước pending rõ ràng.
-        app(ApprovalService::class)->initOrderApproval($newOrder);
+                $resolvedCustomer = $customerQuery->first();
+
+                if (!$resolvedCustomer) {
+                    $emailForCreate = null;
+                    if (!empty($recipientEmail)) {
+                        $emailUsed = Customer::query()
+                            ->where('email', $recipientEmail)
+                            ->where('user_id', '!=', $user->id)
+                            ->exists();
+                        $emailForCreate = $emailUsed ? null : $recipientEmail;
+                    }
+
+                    $resolvedCustomer = Customer::create([
+                        'user_id' => $user->id,
+                        'assigned_to' => $user->id,
+                        'name' => $recipientName,
+                        'phone' => $recipientPhone,
+                        'email' => $emailForCreate,
+                        'address' => $oldOrder->recipient_address ?: $oldOrder->customer?->address,
+                        'delivery_time' => $oldOrder->delivery_time ?: $oldOrder->customer?->delivery_time,
+                    ]);
+                }
+
+                $resolvedCustomerId = (int) $resolvedCustomer->id;
+            }
+
+            // clone order
+            $newOrder = $oldOrder->replicate();
+
+            // reset các field quan trọng
+            $newOrder->customer_id = $resolvedCustomerId;
+            $newOrder->code = 'OD' . time();
+            $newOrder->status = Order::STATUS_PENDING_LEADER_APPROVAL;
+            $newOrder->payment_status = 'unpaid';
+            $newOrder->created_at = now();
+            $newOrder->updated_at = now();
+            if ($this->hasOrderColumn('copied_from_order_id')) {
+                $newOrder->copied_from_order_id = $oldOrder->id;
+            }
+            $newOrder->save();
+
+            // clone items
+            foreach ($oldOrder->items as $item) {
+                $newItem = $item->replicate();
+                $newItem->order_id = $newOrder->id;
+                $newItem->save();
+            }
+
+            // Khởi tạo lại workflow duyệt để đơn copy có bước pending rõ ràng.
+            app(ApprovalService::class)->initOrderApproval($newOrder);
+        });
 
         return redirect()->route('pages.my_orders')
             ->with('success', 'Đã copy đơn #' . $oldOrder->code);
