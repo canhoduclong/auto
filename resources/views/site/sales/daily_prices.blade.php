@@ -199,18 +199,20 @@
                     <div>
                         <h2 class="h5 mb-1 fw-bold">Bộ lọc bảng giá</h2>
                         <p class="mb-0 text-muted">Tìm nhanh theo tên sản phẩm, biến thể hoặc SKU.</p>
-                    </div>
-                    <span class="sp-page-badge">
-                        <i class="fa fa-calendar"></i>
-                        Hiệu lực: {{ $asOfDate->format('d/m/Y H:i') }}
-                    </span>
+                    </div> 
                 </div>
 
                 <form method="GET" action="{{ route('pages.my_orders.daily_prices') }}" class="row g-2">
-                    <div class="col-12 col-md-8">
+                    <div class="col-4 col-md-4">
                         <input type="text" name="keyword" value="{{ $keyword }}" class="form-control" placeholder="Tìm theo tên sản phẩm, tên biến thể, SKU">
                     </div>
-                    <div class="col-12 col-md-4 d-flex align-items-center">
+                    <div class="col-4 col-md-2">
+                        <button type="submit" class="btn btn-primary w-100"><i class="fa fa-search me-1"></i>Lọc</button>
+                    </div>
+                    <div class="col-4 col-md-2">
+                        <a href="{{ route('pages.my_orders.daily_prices') }}" class="btn btn-light border w-100">Đặt lại</a>
+                    </div>
+                    <div class="col-4 col-md-12 d-flex align-items-center">
                         <div class="form-check mt-2 mt-md-0">
                             <input class="form-check-input" type="checkbox" id="show_all_variants" name="show_all_variants" value="1" {{ !empty($showAllVariants) ? 'checked' : '' }}>
                             <label class="form-check-label" for="show_all_variants">
@@ -218,12 +220,7 @@
                             </label>
                         </div>
                     </div>
-                    <div class="col-6 col-md-2">
-                        <button type="submit" class="btn btn-primary w-100"><i class="fa fa-search me-1"></i>Lọc</button>
-                    </div>
-                    <div class="col-6 col-md-2">
-                        <a href="{{ route('pages.my_orders.daily_prices') }}" class="btn btn-light border w-100">Đặt lại</a>
-                    </div>
+
                 </form>
             </div>
         </div>
@@ -231,7 +228,10 @@
         <div class="card sp-card">
             <div class="sp-table-wrap">
                 <div class="d-flex justify-content-between align-items-center px-1 py-3">
-                    <h3 class="h6 mb-0 fw-bold">Danh sách bảng báo giá theo sản phẩm</h3>
+                    <span class="date-approved">
+                        <i class="fa fa-calendar"></i>
+                        Hiệu lực: <strong>{{ $asOfDate->format('d/m/Y H:i') }}</strong>
+                    </span> 
                     <span class="text-muted small">Trang {{ $products->currentPage() }}/{{ max(1, $products->lastPage()) }}</span>
                 </div>
                 <div class="table-responsive border-top">

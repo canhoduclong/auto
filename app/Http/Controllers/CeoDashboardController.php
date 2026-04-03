@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Customer;
 use App\Models\Inventory;
 use App\Models\Order;
+use App\Models\OrderItem;
+use App\Models\ProductPriceLog;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Models\Warehouse;
@@ -23,14 +25,16 @@ class CeoDashboardController extends Controller
     public function dashboard(Request $request)
     {
         [$from, $to, $rangeLabel] = $this->resolveRange($request);
+        $groupBy = $this->resolveGroupBy($request);
 
         $overview = $this->buildOverview($from, $to);
         $salesTop = $this->buildSalesTop($from, $to, 5);
         $customerTop = $this->buildCustomerTop($from, $to, 5);
         $shipperTop = $this->buildShipperTop($from, $to, 5);
         $alerts = $this->buildAlerts($overview);
+        $trend = $this->buildPriceAndVolumeTrend($from, $to, $groupBy);
 
-        return view('ceo.dashboard', compact('overview', 'salesTop', 'customerTop', 'shipperTop', 'alerts', 'from', 'to', 'rangeLabel'));
+        return view('ceo.dashboard', compact('overview', 'salesTop', 'customerTop', 'shipperTop', 'alerts', 'from', 'to', 'rangeLabel', 'trend', 'groupBy'));
     }
 
     public function revenue(Request $request)
@@ -417,6 +421,106 @@ class CeoDashboardController extends Controller
         };
 
         return [$from, $to, $rangeLabel];
+    }
+
+    private function resolveGroupBy(Request $request): string
+    {
+        $groupBy = (string) $request->input('group_by', 'week');
+
+        if (!in_array($groupBy, ['day', 'week', 'month', 'quarter', 'year'], true)) {
+            $groupBy = 'week';
+        }
+
+        return $groupBy;
+    }
+
+    private function periodExpression(string $column, string $groupBy): string
+    {
+        return match ($groupBy) {
+            'day' => "DATE({$column})",
+            'week' => "DATE_FORMAT({$column}, '%x-W%v')",
+            'month' => "DATE_FORMAT({$column}, '%Y-%m')",
+            'quarter' => "CONCAT(YEAR({$column}), '-Q', QUARTER({$column}))",
+            'year' => "DATE_FORMAT({$column}, '%Y')",
+            default => "DATE_FORMAT({$column}, '%x-W%v')",
+        };
+    }
+
+    private function formatPeriodLabel(string $periodKey, string $groupBy): string
+    {
+        return match ($groupBy) {
+            'day' => Carbon::parse($periodKey)->format('d/m'),
+            'week' => str_replace('-', ' ', $periodKey),
+            'month' => Carbon::createFromFormat('Y-m', $periodKey)->format('m/Y'),
+            'quarter' => preg_match('/^(\d{4})-Q([1-4])$/', $periodKey, $matches)
+                ? ('Q' . $matches[2] . '/' . $matches[1])
+                : $periodKey,
+            'year' => $periodKey,
+            default => $periodKey,
+        };
+    }
+
+    private function buildPriceAndVolumeTrend(Carbon $from, Carbon $to, string $groupBy): array
+    {
+        $pricePeriodExpr = $this->periodExpression('applied_at', $groupBy);
+        $volumePeriodExpr = $this->periodExpression('orders.created_at', $groupBy);
+
+        $priceRows = ProductPriceLog::query()
+            ->selectRaw("{$pricePeriodExpr} as period_key")
+            ->selectRaw('MIN(applied_at) as period_start')
+            ->selectRaw('AVG(new_price) as avg_price')
+            ->selectRaw('COUNT(*) as change_count')
+            ->whereBetween('applied_at', [$from, $to])
+            ->groupBy('period_key')
+            ->orderBy('period_start')
+            ->get();
+
+        $volumeRows = OrderItem::query()
+            ->join('orders', 'orders.id', '=', 'order_items.order_id')
+            ->selectRaw("{$volumePeriodExpr} as period_key")
+            ->selectRaw('MIN(orders.created_at) as period_start')
+            ->selectRaw('SUM(order_items.quantity) as total_qty')
+            ->whereBetween('orders.created_at', [$from, $to])
+            ->whereNotIn('orders.status', ['cancelled', 'rejected'])
+            ->groupBy('period_key')
+            ->orderBy('period_start')
+            ->get();
+
+        $priceMap = $priceRows->keyBy('period_key');
+        $volumeMap = $volumeRows->keyBy('period_key');
+
+        // Chart should represent each price-change milestone.
+        $periodKeys = $priceRows->pluck('period_key')->unique()->sort()->values();
+
+        if ($periodKeys->isEmpty()) {
+            // Fallback: when no price-change record exists in range, still show volume trend.
+            $periodKeys = $volumeRows->pluck('period_key')->unique()->sort()->values();
+        }
+
+        $labels = [];
+        $avgPrices = [];
+        $priceChanges = [];
+        $quantities = [];
+
+        foreach ($periodKeys as $periodKey) {
+            $labels[] = $this->formatPeriodLabel((string) $periodKey, $groupBy);
+            $avgPrices[] = (float) ($priceMap[$periodKey]->avg_price ?? 0);
+            $priceChanges[] = (int) ($priceMap[$periodKey]->change_count ?? 0);
+            $quantities[] = (int) ($volumeMap[$periodKey]->total_qty ?? 0);
+        }
+
+        return [
+            'group_by' => $groupBy,
+            'labels' => $labels,
+            'avg_prices' => $avgPrices,
+            'price_changes' => $priceChanges,
+            'quantities' => $quantities,
+            'summary' => [
+                'total_price_changes' => (int) $priceRows->sum('change_count'),
+                'total_quantity' => (int) $volumeRows->sum('total_qty'),
+                'avg_price_whole_period' => (float) $priceRows->avg('avg_price'),
+            ],
+        ];
     }
 
     private function buildOverview(Carbon $from, Carbon $to): array

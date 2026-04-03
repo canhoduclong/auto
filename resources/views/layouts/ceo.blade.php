@@ -57,6 +57,25 @@
             overflow: auto;
             flex: 1;
         }
+        .ceo-nav-footer {
+            padding: .8rem;
+            border-top: 1px solid rgba(148, 163, 184, 0.18);
+        }
+        .ceo-nav-form {
+            margin: 0;
+        }
+        .ceo-nav-logout {
+            width: 100%;
+            border: 1px solid rgba(248, 113, 113, 0.45);
+            background: rgba(127, 29, 29, 0.18);
+            color: #fee2e2;
+            cursor: pointer;
+            text-align: left;
+        }
+        .ceo-nav-logout:hover {
+            background: rgba(220, 38, 38, 0.25);
+            color: #fff;
+        }
         .ceo-nav-link {
             display: flex;
             align-items: center;
@@ -152,6 +171,14 @@
                 <i class="bi bi-journal-text"></i> Báo cáo
             </a>
         </nav>
+        <div class="ceo-nav-footer">
+            <form method="POST" action="{{ route('logout') }}" class="ceo-nav-form">
+                @csrf
+                <button type="submit" class="ceo-nav-link ceo-nav-logout">
+                    <i class="bi bi-box-arrow-right"></i> Đăng xuất
+                </button>
+            </form>
+        </div>
     </aside>
 
     <main class="ceo-main">
@@ -161,7 +188,7 @@
                 <div class="text-muted small">@yield('subtitle', 'Bảng điều hành CEO')</div>
             </div>
             <div class="ceo-user">
-                {{ auth()->user()->name ?? 'CEO' }} | {{ now()->format('d/m/Y H:i') }}
+                <span>{{ auth()->user()->name ?? 'CEO' }} | {{ now()->format('d/m/Y H:i') }}</span>
             </div>
         </header>
         <section class="ceo-content">

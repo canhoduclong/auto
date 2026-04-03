@@ -100,4 +100,36 @@ class User extends Authenticatable
         return $this->hasRole('admin');
     }
 
+    public function isSalesFlowRole(): bool
+    {
+        return $this->hasRole('sale')
+            || $this->hasRole('leader')
+            || $this->hasRole('leader_sale')
+            || $this->hasRole('sale_manager')
+            || $this->hasRole('manager')
+            || $this->hasRole('manager_sale');
+    }
+
+    public function canAccessSalesDailyFeatures(): bool
+    {
+        if ($this->hasRole('admin')) {
+            return true;
+        }
+
+        $dynamicPermissions = [
+            'work-reports.index',
+            'pages.my_orders.daily_prices',
+            'pages.my_orders.daily_inventories',
+        ];
+
+        foreach ($dynamicPermissions as $permissionName) {
+            if ($this->hasPermission($permissionName)) {
+                return true;
+            }
+        }
+
+        // Backward compatibility for legacy role-only assignments.
+        return $this->isSalesFlowRole();
+    }
+
 }

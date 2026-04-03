@@ -29,6 +29,10 @@ class AuthController extends Controller
                 return redirect()->route('dashboard');
             }
 
+            if ($user->hasRole('ceo')) {
+                return redirect()->route('ceo.dashboard');
+            }
+
             if ($user->hasRole('warehouse')) {
                 return redirect()->route('warehouse.dashboard');
             }
@@ -37,15 +41,22 @@ class AuthController extends Controller
                 return redirect()->route('shipper.dashboard');
             }
 
-            if (
-                $user->hasRole('sale')
-                || $user->hasRole('leader')
-                || $user->hasRole('leader_sale')
-                || $user->hasRole('sale_manager')
-                || $user->hasRole('manager')
-                || $user->hasRole('manager_sale')
-            ) {
-                return redirect()->route('pages.my_orders.monitoring');
+            if ($user->hasRole('accountant') || $user->hasRole('accounting')) {
+                return redirect()->route('accounting.dashboard');
+            }
+
+            $isSalesLikeUser = $user->isSalesFlowRole()
+                || $user->hasPermission('pages.my_orders')
+                || $user->hasPermission('orders.monitoring')
+                || $user->hasPermission('work-reports.index')
+                || $user->canAccessSalesDailyFeatures();
+
+            if ($isSalesLikeUser) {
+                if ($user->hasPermission('orders.monitoring')) {
+                    return redirect()->route('pages.my_orders.monitoring');
+                }
+
+                return redirect()->route('pages.my_orders');
             }
 
             return redirect()->route('pages.my_dashboard');

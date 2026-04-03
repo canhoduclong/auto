@@ -25,6 +25,16 @@ class WorkReportController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
+        if (
+            !$user
+            || (
+                !$user->hasPermission('work-reports.index')
+                && !$user->canAccessSalesDailyFeatures()
+            )
+        ) {
+            abort(403, 'Bạn không có quyền truy cập báo cáo công việc.');
+        }
+
         $today = Carbon::today();
 
         $allowedTabs = ['orders', 'new-customers', 'all-customers', 'daily-activities'];

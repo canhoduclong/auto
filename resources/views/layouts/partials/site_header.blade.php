@@ -156,9 +156,14 @@
                     </div>
                 </div>
                 <ul class="list-unstyled mb-2">
+                    @php
+                        $offcanvasCanViewMonitoring = Auth::user()->isAdmin() || Auth::user()->hasPermission('orders.monitoring');
+                    @endphp
                     <li><a href="{{ route('pages.my_dashboard') }}" class="d-block py-1"><i class="bi bi-person-circle me-1"></i> {{ __('site.profile') }}</a></li>
                     <li><a href="{{ route('pages.my_orders') }}" class="d-block py-1"><i class="bi bi-bag-check me-1"></i> {{ __('site.my_orders') }}</a></li>
-                    <li><a href="{{ route('pages.my_orders.monitoring') }}" class="d-block py-1"><i class="bi bi-activity me-1"></i> Theo dõi đơn hàng</a></li>
+                    @if($offcanvasCanViewMonitoring)
+                        <li><a href="{{ route('pages.my_orders.monitoring') }}" class="d-block py-1"><i class="bi bi-activity me-1"></i> Theo dõi đơn hàng</a></li>
+                    @endif
                     <li><a href="{{ route('pages.my_customer') }}" class="d-block py-1"><i class="bi bi-people me-1"></i> {{ __('site.my_customers') }}</a></li>
                     <li><a href="{{ route('work-reports.index') }}" class="d-block py-1"><i class="bi bi-clipboard-data me-1"></i> Báo cáo công việc</a></li>
                     <li><a href="{{ url('/dashboard') }}" class="d-block py-1"><i class="bi bi-speedometer2 me-1"></i> {{ __('site.dashboard') }}</a></li>
@@ -300,9 +305,14 @@
                                         <a class="dropdown-item" href="{{ route('pages.my_orders') }}">
                                             <i class="bi bi-bag-check"></i> {{ __('site.my_orders') }}
                                         </a>
-                                        <a class="dropdown-item" href="{{ route('pages.my_orders.monitoring') }}">
-                                            <i class="bi bi-activity"></i> Theo dõi đơn hàng
-                                        </a>
+                                        @php
+                                            $canViewMonitoring = Auth::user()->isAdmin() || Auth::user()->hasPermission('orders.monitoring');
+                                        @endphp
+                                        @if($canViewMonitoring)
+                                            <a class="dropdown-item" href="{{ route('pages.my_orders.monitoring') }}">
+                                                <i class="bi bi-activity"></i> Theo dõi đơn hàng
+                                            </a>
+                                        @endif
                                         <a class="dropdown-item" href="{{ route('pages.my_customer') }}">
                                             <i class="bi bi-people"></i> {{ __('site.my_customers') }}
                                         </a>
@@ -310,21 +320,18 @@
                                             <i class="bi bi-clipboard-data"></i> Báo cáo công việc
                                         </a>
                                         @php
-                                            $isSalesFlowRole = Auth::user()->hasRole('sale')
-                                                || Auth::user()->hasRole('leader')
-                                                || Auth::user()->hasRole('leader_sale')
-                                                || Auth::user()->hasRole('sale_manager')
-                                                || Auth::user()->hasRole('manager')
-                                                || Auth::user()->hasRole('manager_sale');
+                                            $isSalesFlowRole = Auth::user()->isSalesFlowRole();
+                                            $canAccessSalesDailyPages = Auth::user()->canAccessSalesDailyFeatures();
                                         @endphp
-                                        @if($isSalesFlowRole)
+                                        @if($canAccessSalesDailyPages)
                                             <a class="dropdown-item" href="{{ route('pages.my_orders.daily_prices') }}">
                                                 <i class="bi bi-tags"></i> Bảng giá sản phẩm
                                             </a>
                                             <a class="dropdown-item" href="{{ route('pages.my_orders.daily_inventories') }}">
                                                 <i class="bi bi-boxes"></i> Tồn kho hôm nay
                                             </a>
-                                        @else
+                                        @endif
+                                        @if(!$isSalesFlowRole)
                                             <a class="dropdown-item" href="{{ url('/dashboard') }}">
                                                 <i class="bi bi-speedometer2"></i> {{ __('site.dashboard') }}
                                             </a>

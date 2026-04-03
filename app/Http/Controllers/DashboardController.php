@@ -19,6 +19,14 @@ class DashboardController extends Controller
     {
         $user = Auth::user();
 
+        if ($user?->hasRole('ceo')) {
+            return redirect()->route('ceo.dashboard');
+        }
+
+        if ($user?->hasRole('accountant') || $user?->hasRole('accounting')) {
+            return redirect()->route('accounting.dashboard');
+        }
+
         if ($user?->hasRole('warehouse')) {
             return redirect()->route('warehouse.dashboard');
         }
@@ -45,10 +53,6 @@ class DashboardController extends Controller
         $adminData = [];
         if ($roleName === 'admin') {
             $adminData = $this->buildAdminDashboardData();
-        }
-
-        if ($roleName === 'ceo') {
-            return redirect()->route('ceo.dashboard');
         }
 
         return match ($roleName) {

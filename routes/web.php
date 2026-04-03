@@ -44,6 +44,7 @@ use App\Http\Controllers\OrderMonitoringController;
 use App\Http\Controllers\WarehouseDashboardController;
 use App\Http\Controllers\ShipperDashboardController;
 use App\Http\Controllers\CeoDashboardController;
+use App\Http\Controllers\AccountingDashboardController;
 
 
 
@@ -82,10 +83,26 @@ Route::middleware(['auth'])->group(function () {
         Route::put('/my-customer/{customer}/reminders/{reminder}', [\App\Http\Controllers\CustomerReminderController::class, 'update'])->name('customer_reminders.update');
         Route::delete('/my-customer/{customer}/reminders/{reminder}', [\App\Http\Controllers\CustomerReminderController::class, 'destroy'])->name('customer_reminders.destroy');
     // Báo cáo công việc cho user frontend
-    Route::get('work-reports', [\App\Http\Controllers\WorkReportController::class, 'index'])->name('work-reports.index');
+    Route::get('work-reports', [\App\Http\Controllers\WorkReportController::class, 'index'])
+        ->name('work-reports.index');
     // AJAX lấy tổng tiền đơn hàng
     Route::get('orders/ajax/total', [OrderAjaxController::class, 'total'])->name('orders.ajax.total');
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+    Route::prefix('accounting')->name('accounting.')->middleware('role:accountant,accounting,admin')->group(function () {
+        Route::get('/', [AccountingDashboardController::class, 'index'])->name('dashboard');
+        Route::get('/customer-debts', [AccountingDashboardController::class, 'customerDebts'])->name('customer-debts');
+        Route::get('/supplier-debts', [AccountingDashboardController::class, 'supplierDebts'])->name('supplier-debts');
+        Route::get('/cashflow', [AccountingDashboardController::class, 'cashflow'])->name('cashflow');
+        Route::get('/reconciliation', [AccountingDashboardController::class, 'reconciliation'])->name('reconciliation');
+        Route::get('/inventory', [AccountingDashboardController::class, 'inventory'])->name('inventory');
+        Route::get('/commissions', [AccountingDashboardController::class, 'commissions'])->name('commissions');
+        Route::post('/commissions', [AccountingDashboardController::class, 'storeCommission'])->name('commissions.store');
+        Route::get('/discounts', [AccountingDashboardController::class, 'discounts'])->name('discounts');
+        Route::post('/discounts', [AccountingDashboardController::class, 'storeDiscount'])->name('discounts.store');
+        Route::get('/daily-orders', [AccountingDashboardController::class, 'dailyOrders'])->name('daily-orders');
+        Route::get('/financial-reports', [AccountingDashboardController::class, 'financialReports'])->name('financial-reports');
+    });
 
     // ─── Warehouse module ───────────────────────────────────────────────────
     Route::prefix('warehouse')->name('warehouse.')->middleware('role:warehouse,admin')->group(function () {
@@ -381,7 +398,9 @@ Route::get('/variant/{variant:slug}', [PageController::class, 'variantDetail'])-
 Route::get('/my-profile', [PageController::class, 'myDashboard'])->name('pages.my_dashboard')->middleware('auth');
 Route::post('/my-profile', [PageController::class, 'updateProfile'])->name('pages.update_profile')->middleware('auth');
 Route::get('/my-orders', [PageController::class, 'myOrders'])->name('pages.my_orders')->middleware('auth');
-Route::get('/my-orders/monitoring', [PageController::class, 'myOrdersMonitoring'])->name('pages.my_orders.monitoring')->middleware('auth');
+Route::get('/my-orders/monitoring', [PageController::class, 'myOrdersMonitoring'])
+    ->name('pages.my_orders.monitoring')
+    ->middleware(['auth', 'permission:orders.monitoring']);
 Route::get('/my-orders/daily-prices', [PageController::class, 'dailyProductPrices'])->name('pages.my_orders.daily_prices')->middleware('auth');
 Route::get('/my-orders/daily-inventories', [PageController::class, 'dailyInventories'])->name('pages.my_orders.daily_inventories')->middleware('auth');
 Route::get('/my-orders/customers/ajax', [PageController::class, 'myOrderCustomersAjax'])->name('site.orders.customers.ajax')->middleware('auth');

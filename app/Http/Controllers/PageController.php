@@ -70,13 +70,7 @@ class PageController extends Controller
             return false;
         }
 
-        return $user->hasRole('sale')
-            || $user->hasRole('leader')
-            || $user->hasRole('leader_sale')
-            || $user->hasRole('sale_manager')
-            || $user->hasRole('manager')
-            || $user->hasRole('manager_sale')
-            || $user->hasRole('admin');
+        return $user->canAccessSalesDailyFeatures();
     }
 
     private function discountConfigFromRequest(array $validated): array
@@ -621,6 +615,9 @@ class PageController extends Controller
         }
 
         $user = auth()->user();
+        if (!$user->isAdmin() && !$user->hasPermission('orders.monitoring')) {
+            abort(403, 'Bạn không có quyền truy cập theo dõi đơn hàng.');
+        }
 
         $query = Order::query()
             ->with(['customer', 'user', 'shipper'])
@@ -708,7 +705,10 @@ class PageController extends Controller
         }
 
         $user = auth()->user();
-        if (!$this->canAccessSalesDailyPages($user)) {
+        if (
+            !$user->hasPermission('pages.my_orders.daily_prices')
+            && !$this->canAccessSalesDailyPages($user)
+        ) {
             abort(403, 'Bạn không có quyền truy cập bảng giá sản phẩm hàng ngày.');
         }
 
@@ -829,7 +829,10 @@ class PageController extends Controller
         }
 
         $user = auth()->user();
-        if (!$this->canAccessSalesDailyPages($user)) {
+        if (
+            !$user->hasPermission('pages.my_orders.daily_inventories')
+            && !$this->canAccessSalesDailyPages($user)
+        ) {
             abort(403, 'Bạn không có quyền truy cập tồn kho hàng ngày.');
         }
 

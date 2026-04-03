@@ -19,4 +19,19 @@ class Warehouse extends Model
     protected $casts = [
         'status' => 'boolean',
     ];
+
+    public function inventories()
+    {
+        return $this->hasMany(Inventory::class);
+    }
+
+    public function inventoryDocuments()
+    {
+        return $this->hasMany(InventoryDocument::class);
+    }
+
+    public function users()
+    {
+        return $this->hasMany(User::class);
+    }
 }
