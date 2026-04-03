@@ -214,7 +214,7 @@
                         <div class="form-check mt-2 mt-md-0">
                             <input class="form-check-input" type="checkbox" id="show_all_variants" name="show_all_variants" value="1" {{ !empty($showAllVariants) ? 'checked' : '' }}>
                             <label class="form-check-label" for="show_all_variants">
-                                Hiển thị tất cả biến thể (không chỉ biến thể lệch giá)
+                                Hiển thị tất cả biến thể
                             </label>
                         </div>
                     </div>
