@@ -87,6 +87,12 @@ class ProductVariant extends Model
     {
         return $this->hasMany(ProductPriceLog::class);
     }
+
+    public function latestPriceLog()
+    {
+        return $this->hasOne(ProductPriceLog::class)->latestOfMany('applied_at');
+    }
+
     public function latestPriceRule()
     {
         return $this->hasOne(ProductPriceRule::class, 'product_variant_id')

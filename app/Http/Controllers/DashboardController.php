@@ -19,6 +19,14 @@ class DashboardController extends Controller
     {
         $user = Auth::user();
 
+        if ($user?->hasRole('warehouse')) {
+            return redirect()->route('warehouse.dashboard');
+        }
+
+        if ($user?->hasRole('shipper')) {
+            return redirect()->route('shipper.dashboard');
+        }
+
         $isSalesFlowRole = $user?->hasRole('sale')
             || $user?->hasRole('leader')
             || $user?->hasRole('leader_sale')

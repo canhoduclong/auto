@@ -172,6 +172,11 @@
     }
 </style>
 
+@php
+    $outCount = $variants->getCollection()->filter(fn($v) => (int) $v->available_stock <= 0)->count();
+    $lowCount = $variants->getCollection()->filter(fn($v) => (int) $v->available_stock > 0 && (int) $v->available_stock < 20)->count();
+@endphp
+
 <div class="si-page">
     <div class="container si-shell">
         <div class="si-hero mb-4">
@@ -207,11 +212,6 @@
                 </div>
             </div>
         </div>
-
-        @php
-            $outCount = $variants->getCollection()->filter(fn($v) => (int) $v->available_stock <= 0)->count();
-            $lowCount = $variants->getCollection()->filter(fn($v) => (int) $v->available_stock > 0 && (int) $v->available_stock < 20)->count();
-        @endphp
 
         <div class="card si-card mb-4">
             <div class="si-filter">

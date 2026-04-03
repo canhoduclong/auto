@@ -718,10 +718,14 @@ class PageController extends Controller
         $products = Product::query()
             ->with([
                 'avatar.media',
-                'variants.latestPriceRule',
+                'variants.latestPriceLog',
             ])
             ->where('status', true)
-            ->whereHas('variants')
+            ->whereHas('variants', function ($variantQuery) {
+                $variantQuery->whereHas('latestPriceLog', function ($priceLogQuery) {
+                    $priceLogQuery->where('new_price', '>', 0);
+                });
+            })
             ->when($keyword !== '', function ($query) use ($keyword) {
                 $query->where(function ($sub) use ($keyword) {
                     $sub->where('name', 'like', "%{$keyword}%")
@@ -739,18 +743,20 @@ class PageController extends Controller
             $products->getCollection()->map(function (Product $product) {
                 $variantRows = $product->variants
                     ->map(function (ProductVariant $variant) {
-                        $price = (float) ($variant->latestPriceRule?->price ?? $variant->final_price ?? 0);
+                        $price = (float) ($variant->latestPriceLog?->new_price ?? 0);
 
                         $variant->setAttribute('current_price', $price);
                         $variant->setAttribute('price_key', number_format($price, 4, '.', ''));
 
                         return $variant;
                     })
+                    ->filter(fn (ProductVariant $variant) => (float) ($variant->current_price ?? 0) > 0)
                     ->values();
 
                 if ($variantRows->isEmpty()) {
                     $product->setAttribute('current_price', 0);
                     $product->setRelation('priceDiffVariants', collect());
+                    $product->setAttribute('has_positive_price', false);
                     return $product;
                 }
 
@@ -771,6 +777,7 @@ class PageController extends Controller
                 $product->setAttribute('total_variants_count', $variantRows->count());
                 $product->setRelation('priceDiffVariants', $differentVariants);
                 $product->setRelation('allVariantsByPrice', $variantRows->sortBy('name')->values());
+                $product->setAttribute('has_positive_price', true);
 
                 return $product;
             })->map(function (Product $product) use ($showAllVariants) {
@@ -779,12 +786,15 @@ class PageController extends Controller
                 }
 
                 return $product;
-            })
+            })->filter(fn (Product $product) => (bool) ($product->has_positive_price ?? false))->values()
         );
 
         $totalVariants = (int) ProductVariant::query()
             ->whereHas('product', function ($query) {
                 $query->where('status', true);
+            })
+            ->whereHas('latestPriceLog', function ($priceLogQuery) {
+                $priceLogQuery->where('new_price', '>', 0);
             })
             ->when($keyword !== '', function ($query) use ($keyword) {
                 $query->where(function ($sub) use ($keyword) {

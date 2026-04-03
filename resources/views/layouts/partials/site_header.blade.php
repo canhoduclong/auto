@@ -319,10 +319,10 @@
                                         @endphp
                                         @if($isSalesFlowRole)
                                             <a class="dropdown-item" href="{{ route('pages.my_orders.daily_prices') }}">
-                                                <i class="bi bi-tags"></i> Bảng giá sản phẩm hàng ngày
+                                                <i class="bi bi-tags"></i> Bảng giá sản phẩm
                                             </a>
                                             <a class="dropdown-item" href="{{ route('pages.my_orders.daily_inventories') }}">
-                                                <i class="bi bi-boxes"></i> Tồn kho hàng ngày
+                                                <i class="bi bi-boxes"></i> Tồn kho hôm nay
                                             </a>
                                         @else
                                             <a class="dropdown-item" href="{{ url('/dashboard') }}">
