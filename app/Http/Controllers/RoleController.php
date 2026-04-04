@@ -79,6 +79,7 @@ class RoleController extends Controller
 
         $role->update([
             'name' => $request->name,
+            'description' => $request->description,
         ]);
 
         // gán quyền cho role
