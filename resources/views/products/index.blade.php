@@ -78,6 +78,7 @@
                         </th>
                         <th>Brand</th>
                         <th>Category</th>
+                        <th>Đơn vị tính</th>
                         <th>Trạng thái</th>
                         <th>Giá hiện tại</th>
                 <th>
@@ -121,6 +122,7 @@
                     </td>
                     <td>{{ $product->brand->name ?? '' }}</td>
                     <td>{{ $product->category->name ?? '' }}</td>
+                    <td>{{ $product->unit_label }}</td>
                 <td>
                     @if($product->status)
                         <span class="badge bg-success">Đang hoạt động</span>
@@ -149,7 +151,7 @@
                         {{ number_format((float) $minPrice, 0, ',', '.') }} đ - {{ number_format((float) $maxPrice, 0, ',', '.') }} đ
                     @endif
                 </td>
-                <td id="product-stock-{{ $product->id }}">{{ $product->stock ?? '' }}</td>
+                <td id="product-stock-{{ $product->id }}">{{ ($product->stock ?? '') !== '' ? number_format((float) $product->stock, 0, ',', '.') : '' }}</td>
                 <td>
                     <div class="d-flex justify-content-end list-actions"> 
                         
@@ -293,7 +295,8 @@
                 contentType: false,
                 success: function(response) {
                     $('#product-name-' + id).text(response.product.name);
-                    $('#product-stock-' + id).text(response.product.stock);
+                    var stockText = new Intl.NumberFormat('vi-VN').format(Number(response.product.stock || 0));
+                    $('#product-stock-' + id).text(stockText.trim());
                     if(response.product.image_url) {
                         var image_element = $("<img />", { 
                             id: 'product-image-'+id, 

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\ProductUnit;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Http\Request;
@@ -17,6 +18,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class ProductController extends Controller
 {
@@ -73,7 +75,9 @@ class ProductController extends Controller
         $this->authorize('create', Product::class);
         $categories = Category::all();
         $brands = Brand::all();
-        return view('products.create', compact('categories', 'brands'));
+        $unitOptions = ProductUnit::options();
+
+        return view('products.create', compact('categories', 'brands', 'unitOptions'));
     }
 
     public function store(Request $request)
@@ -86,6 +90,7 @@ class ProductController extends Controller
             'category_id' => 'required|numeric',
             'brand_id' => 'nullable|numeric',
             'stock' => 'required|numeric',
+            'unit' => ['required', Rule::in(ProductUnit::values())],
             'media_id' => 'nullable|integer|exists:media,id',
         ]);
         $data['user_id'] = Auth::id();
@@ -99,16 +104,17 @@ class ProductController extends Controller
         $product = Product::create($data);
 
         if ($request->filled('media_id')) {
-            MediaLink::updateOrCreate(
-                [
-                    'model_type' => Product::class,
-                    'model_id'   => $product->id,
-                    'role'       => 'avatar',
-                ],
-                [
-                    'media_id'   => $request->media_id,
-                ]
-            );
+            MediaLink::where('model_id', $product->id)
+                ->whereIn('model_type', [$product->getMorphClass(), Product::class])
+                ->where('role', 'avatar')
+                ->delete();
+
+            MediaLink::create([
+                'model_type' => $product->getMorphClass(),
+                'model_id'   => $product->id,
+                'role'       => 'avatar',
+                'media_id'   => $request->media_id,
+            ]);
         }
 
         return redirect()->route('products.index')->with('success', 'Product created successfully!');
@@ -120,8 +126,9 @@ class ProductController extends Controller
         $product->load('variants.avatar.media', 'category', 'brand', 'avatar.media', 'gallery.media');
         $categories = Category::all();
         $brands = Brand::all();
+        $unitOptions = ProductUnit::options();
 
-        return view('products.show', compact('product', 'categories', 'brands'));
+        return view('products.show', compact('product', 'categories', 'brands', 'unitOptions'));
     }
 
     public function edit(Request $request, $id)
@@ -129,16 +136,26 @@ class ProductController extends Controller
         $page =(int) $request->get('page', 1);
         $perPage = (int) $request->get('perPage', 10);
         
-        $product = Product::with(['category'])->findOrFail($id);
+        $product = Product::with([
+            'category',
+            'brand',
+            'avatar.media',
+            'gallery.media',
+            'variants.avatar.media',
+        ])->findOrFail($id);
         $categories = Category::all();
         $brands = Brand::all();
-        return view('products.edit', compact('product','page','perPage','categories', 'brands'));
+        $unitOptions = ProductUnit::options();
+
+        return view('products.edit', compact('product','page','perPage','categories', 'brands', 'unitOptions'));
 
     }
 
     public function getQuickEditForm(Product $product)
     {
-        return view('products._quick-edit-form', compact('product'));
+        $unitOptions = ProductUnit::options();
+
+        return view('products._quick-edit-form', compact('product', 'unitOptions'));
     }
     
     
@@ -151,6 +168,7 @@ class ProductController extends Controller
                 'name'  => 'required|string|max:255',
                 'price' => 'nullable|numeric',
                 'stock' => 'nullable|numeric',
+                'unit'  => ['required', Rule::in(ProductUnit::values())],
                 'media_id' => 'nullable|integer|exists:media,id',
             ]);
 
@@ -161,19 +179,21 @@ class ProductController extends Controller
             if(isset($validated['stock'])) {
                 $product->stock = $validated['stock'];
             }
+            $product->unit = $validated['unit'];
 
             if ($request->filled('media_id')) {
-                // Update or create the media link
-                MediaLink::updateOrCreate(
-                    [
-                        'model_type' => Product::class,
-                        'model_id'   => $product->id,
-                        'role'       => 'avatar',
-                    ],
-                    [
-                        'media_id'   => $validated['media_id'],
-                    ]
-                );
+                MediaLink::where('model_id', $product->id)
+                    ->whereIn('model_type', [$product->getMorphClass(), Product::class])
+                    ->where('role', 'avatar')
+                    ->delete();
+
+                MediaLink::create([
+                    'model_type' => $product->getMorphClass(),
+                    'model_id'   => $product->id,
+                    'role'       => 'avatar',
+                    'media_id'   => $validated['media_id'],
+                ]);
+
                 $product->load('avatar.media'); // Reload the relationship
             }
 
@@ -186,6 +206,8 @@ class ProductController extends Controller
                     'name' => $product->name,
                     'price' => $product->price,
                     'stock' => $product->stock,
+                    'unit' => $product->unit,
+                    'unit_label' => $product->unit_label,
                     'image_url' => $product->avatar && $product->avatar->media ? asset('storage/' . $product->avatar->media->file_path) : null,
                 ]
             ]);
@@ -199,6 +221,7 @@ class ProductController extends Controller
                 'description' => 'nullable',
                 'category_id' => 'required|numeric',
                 'brand_id' => 'nullable|numeric',
+                'unit' => ['required', Rule::in(ProductUnit::values())],
                 'media_id'    => 'nullable|integer|exists:media,id',
                 'gallery'     => 'nullable|array',
                 'gallery.*'   => 'integer|exists:media,id',
@@ -210,20 +233,21 @@ class ProductController extends Controller
                 'name'        => $validated['name'],
                 'category_id' => $validated['category_id'],
                 'brand_id' => $validated['brand_id'],
+                'unit' => $validated['unit'],
                 'description' => $validated['description'] ?? $product->description,
             ]);
 
             // ===== Cập nhật avatar =====
             if (!empty($validated['media_id'])) {
                 MediaLink::where('model_id', $product->id)
-                    ->where('model_type', 'product')
+                        ->whereIn('model_type', [$product->getMorphClass(), Product::class])
                     ->where('role', 'avatar')
                     ->delete();
 
                 MediaLink::create([
                     'media_id'   => $validated['media_id'],
                     'model_id'   => $product->id,
-                    'model_type' => 'product',
+                        'model_type' => $product->getMorphClass(),
                     'role'       => 'avatar',
                 ]);
             }
@@ -231,7 +255,7 @@ class ProductController extends Controller
             // ===== Cập nhật gallery =====
             if ($request->filled('gallery')) {
                 MediaLink::where('model_id', $product->id)
-                    ->where('model_type', 'product')
+                        ->whereIn('model_type', [$product->getMorphClass(), Product::class])
                     ->where('role', 'gallery')
                     ->delete();
 
@@ -239,7 +263,7 @@ class ProductController extends Controller
                     MediaLink::create([
                         'media_id'   => $mediaId,
                         'model_id'   => $product->id,
-                        'model_type' => 'product',
+                            'model_type' => $product->getMorphClass(),
                         'role'       => 'gallery',
                     ]);
                 }
@@ -278,23 +302,25 @@ class ProductController extends Controller
 
                 // ===== Gán media cho biến thể =====
                 if (!empty($variantData['media_id'])) {
-                    MediaLink::updateOrCreate(
-                        [
-                            'model_type' => $variant::class,
-                            'model_id'   => $variant->id,
-                            'role'       => 'variant',
-                        ],
-                        [
-                            'media_id'   => $variantData['media_id'],
-                        ]
-                    );
+                    MediaLink::where('model_id', $variant->id)
+                        ->whereIn('model_type', [$variant->getMorphClass(), ProductVariant::class])
+                        ->where('role', 'variant')
+                        ->delete();
+
+                    MediaLink::create([
+                        'model_type' => $variant->getMorphClass(),
+                        'model_id'   => $variant->id,
+                        'role'       => 'variant',
+                        'media_id'   => $variantData['media_id'],
+                    ]);
                 } else {
                     // Nếu không có media_id thì xóa link cũ (nếu có)
                     MediaLink::where([
-                        'model_type' => $variant::class,
                         'model_id'   => $variant->id,
                         'role'       => 'variant',
-                    ])->delete();
+                        ])
+                        ->whereIn('model_type', [$variant->getMorphClass(), ProductVariant::class])
+                        ->delete();
                 }
 
                 // ===== Xử lý giá biến thể =====

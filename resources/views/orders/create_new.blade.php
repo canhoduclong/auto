@@ -37,6 +37,8 @@
                             <th>SKU</th>
                             <th>{{ __('orders.labels.unit_price') }}</th>
                             <th>{{ __('orders.labels.quantity') }}</th>
+                            <th>ĐVT</th>
+                            <th>Khối lượng</th>
                             <th>{{ __('orders.labels.line_total') }}</th>
                             <th></th>
                         </tr>
@@ -63,6 +65,22 @@
                             <td class="price" data-price="{{ $variant->latestPriceRule?->price ?? 0 }}">{{ number_format($variant->latestPriceRule?->price ?? 0) }}</td>
                             <td>
                                 <input type="number" name="items[0][quantity]" class="form-control quantity-input" value="1" min="1" max="{{ $variant->available_stock }}" required>
+                            </td>
+                            <td>{{ $variant->product->unit_label ?? 'Cái' }}</td>
+                            <td>
+                                @php
+                                    $sizeRaw = strtolower(str_replace(',', '.', trim((string) ($variant->size ?? ''))));
+                                    preg_match('/([0-9]*\.?[0-9]+)/', $sizeRaw, $sizeMatches);
+                                    $defaultWeight = (float) ($sizeMatches[1] ?? 0);
+                                    if (str_contains($sizeRaw, 'g') && !str_contains($sizeRaw, 'kg')) {
+                                        $defaultWeight = $defaultWeight / 1000;
+                                    }
+                                    $defaultWeight = round(max(0, $defaultWeight), 3);
+                                    $weightUnitLabel = in_array((string) ($variant->product->unit ?? 'cai'), ['con', 'cai'], true)
+                                        ? 'Kg'
+                                        : ($variant->product->unit_label ?? 'Cái');
+                                @endphp
+                                <span class="text-muted">{{ number_format($defaultWeight, 3, ',', '.') }} {{ $weightUnitLabel }}</span>
                             </td>
                             <td class="row-total">{{ number_format($variant->latestPriceRule?->price ?? 0) }}</td>
                             <td>
@@ -254,6 +272,9 @@ $(document).ready(function() {
     variantSearchResults.on('click', '.add-variant-to-cart', function() {
         const button = $(this);
         const variantId = button.data('variant-id');
+        const variantUnitLabel = button.data('variant-unit-label') || 'Cái';
+        const variantWeight = parseFloat(button.data('variant-weight') || '0');
+        const variantWeightUnitLabel = button.data('variant-weight-unit-label') || 'Kg';
         if ($('.cart-item-row[data-variant-id="' + variantId + '"]').length > 0) { alert('Sản phẩm này đã có trong giỏ hàng.'); return; }
 
         const newRow = `
@@ -263,6 +284,8 @@ $(document).ready(function() {
                 <td>${button.data('variant-sku')}</td>
                 <td class="price" data-price="${button.data('variant-price')}">${formatNumber(button.data('variant-price'))}</td>
                 <td><input type="number" name="items[${cartItemIndex}][quantity]" class="form-control quantity-input" value="1" min="1" max="${button.data('variant-stock')}" required></td>
+                <td>${variantUnitLabel}</td>
+                <td><span class="text-muted">${new Intl.NumberFormat('vi-VN', { minimumFractionDigits: 3, maximumFractionDigits: 3 }).format(variantWeight)} ${variantWeightUnitLabel}</span></td>
                 <td class="row-total">${formatNumber(button.data('variant-price'))}</td>
                 <td><button type="button" class="btn btn-danger btn-sm remove-cart-item">&times;</button></td>
             </tr>`;

@@ -364,6 +364,7 @@
                                 <th>Sản phẩm</th>
                                 <th>Biến thể</th>
                                 <th>SL</th>
+                                <th>ĐVT</th>
                                 <th>Kg/SP</th>
                                 <th>Đơn giá</th>
                                 <th>Discount</th>
@@ -374,6 +375,10 @@
                             @foreach($order->items as $item)
                             @php
                                 $variant = $item->variant;
+                                $unitLabel = optional(optional($item->variant)->product)->unit_label ?? 'Cái';
+                                $weightUnitLabel = in_array((string) (optional(optional($item->variant)->product)->unit ?? 'cai'), ['con', 'cai'], true)
+                                    ? 'Kg'
+                                    : $unitLabel;
                                 $imageUrl = $variant?->media_url
                                     ?? ($variant?->product?->avatar?->media
                                         ? asset('storage/' . $variant->product->avatar->media->file_path)
@@ -389,7 +394,8 @@
                                 </td>
                                 <td>{{ optional($item->variant)->name ?? 'N/A' }}</td>
                                 <td class="order-qty">{{ number_format((float) $item->quantity, 0, ',', '.') }}</td>
-                                <td class="order-qty">{{ number_format((float) ($item->unit_weight ?? 0), 3, ',', '.') }}</td>
+                                <td class="order-qty">{{ $unitLabel }}</td>
+                                <td class="order-qty">{{ number_format((float) ($item->unit_weight ?? 0), 3, ',', '.') }} {{ $weightUnitLabel }}</td>
                                 <td class="order-money">{{ number_format((float) $item->price, 0, ',', '.') }}đ</td>
                                 <td class="order-money">{{ number_format((float) ($item->discount_total ?? 0), 0, ',', '.') }}đ</td>
                                 <td class="order-money">{{ number_format((float) ($item->price * $item->quantity), 0, ',', '.') }}đ</td>
@@ -398,7 +404,7 @@
                         </tbody>
                         <tfoot>
                             <tr>
-                                <td colspan="7" class="text-end"><strong>Tổng cộng</strong></td>
+                                <td colspan="8" class="text-end"><strong>Tổng cộng</strong></td>
                                 <td class="order-money"><strong>{{ number_format((float) $order->total, 0, ',', '.') }}đ</strong></td>
                             </tr>
                         </tfoot>

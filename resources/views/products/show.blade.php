@@ -30,6 +30,11 @@
                         <label for="brand_id" class="form-label fw-bold">Thương hiệu</label>
                         <p>{{ $product->brand->name ?? 'N/A' }}</p>
                     </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Đơn vị tính</label>
+                        <p>{{ $product->unit_label }}</p>
+                    </div>
                     
                     {{-- Mô tả --}}
                     <div class="mb-3">
@@ -83,6 +88,7 @@
                                 <th>Ngày SX</th>
                                 <th>Hình ảnh</th>
                                 <th>Giá bán</th>
+                                <th>ĐVT</th>
                                 <th>Số lượng tồn</th>
                             </tr>
                         </thead>
@@ -101,11 +107,12 @@
                                     @endif
                                 </td>
                                 <td>{{ number_format($variant->final_price, 0, ',', '.') }} đ</td>
-                                <td>{{ $variant->stock }}</td>
+                                <td>{{ $product->unit_label }}</td>
+                                <td>{{ number_format((float) $variant->stock, 0, ',', '.') }}</td>
                             </tr>
                             @empty
                             <tr>
-                                <td colspan="7" class="text-center">Sản phẩm này chưa có biến thể nào.</td>
+                                <td colspan="8" class="text-center">Sản phẩm này chưa có biến thể nào.</td>
                             </tr>
                             @endforelse
                         </tbody>

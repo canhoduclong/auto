@@ -460,6 +460,7 @@
                                     <thead class="table-light">
                                         <tr>
                                             <th>San pham</th>
+                                            <th class="text-end">Don vi</th>
                                             <th class="text-end">So bien the</th>
                                             <th class="text-end">On hand</th>
                                             <th class="text-end">Kha dung</th>
@@ -469,13 +470,14 @@
                                         @forelse($productTotals as $productTotal)
                                             <tr>
                                                 <td>{{ $productTotal->product_name }}</td>
+                                                <td class="text-end">{{ \App\Enums\ProductUnit::tryFrom((string) ($productTotal->product_unit ?? 'cai'))?->label() ?? 'Cái' }}</td>
                                                 <td class="text-end">{{ number_format((int) $productTotal->variant_count) }}</td>
                                                 <td class="text-end">{{ number_format((int) $productTotal->on_hand_sum) }}</td>
                                                 <td class="text-end">{{ number_format(max(0, (int) $productTotal->available_sum)) }}</td>
                                             </tr>
                                         @empty
                                             <tr>
-                                                <td colspan="4" class="text-center text-muted py-3">Khong co du lieu.</td>
+                                                <td colspan="5" class="text-center text-muted py-3">Khong co du lieu.</td>
                                             </tr>
                                         @endforelse
                                     </tbody>
@@ -490,6 +492,7 @@
                                         <tr>
                                             <th>SKU</th>
                                             <th>San pham</th>
+                                            <th class="text-end">Don vi</th>
                                             <th class="text-end">On hand</th>
                                             <th class="text-end">Kha dung</th>
                                         </tr>
@@ -499,12 +502,13 @@
                                             <tr>
                                                 <td class="fw-semibold">{{ $variantTotal->sku ?: ('#' . $variantTotal->variant_id) }}</td>
                                                 <td>{{ $variantTotal->product_name }}</td>
+                                                <td class="text-end">{{ \App\Enums\ProductUnit::tryFrom((string) ($variantTotal->product_unit ?? 'cai'))?->label() ?? 'Cái' }}</td>
                                                 <td class="text-end">{{ number_format((int) $variantTotal->on_hand_sum) }}</td>
                                                 <td class="text-end">{{ number_format(max(0, (int) $variantTotal->available_sum)) }}</td>
                                             </tr>
                                         @empty
                                             <tr>
-                                                <td colspan="4" class="text-center text-muted py-3">Khong co du lieu.</td>
+                                                <td colspan="5" class="text-center text-muted py-3">Khong co du lieu.</td>
                                             </tr>
                                         @endforelse
                                     </tbody>

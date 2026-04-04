@@ -108,12 +108,21 @@
                         <th>Sản phẩm</th>
                         <th>SKU</th>
                         <th class="text-center">Số lượng</th>
+                        <th class="text-center">ĐVT</th>
+                        <th class="text-center">Khối lượng</th>
                         <th class="text-end">Đơn giá</th>
                         <th class="text-end">Thành tiền</th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach($document->items as $i => $item)
+                    @php
+                        $unitLabel = $item->productVariant?->product?->unit_label ?? 'Cái';
+                        $weightUnitLabel = in_array((string) ($item->productVariant?->product?->unit ?? 'cai'), ['con', 'cai'], true)
+                            ? 'Kg'
+                            : $unitLabel;
+                        $lineWeight = (float) (($item->productVariant?->size ?? 0) * ($item->quantity ?? 0));
+                    @endphp
                     <tr>
                         <td class="text-muted small">{{ $i + 1 }}</td>
                         <td>
@@ -124,6 +133,8 @@
                         <td class="text-center fw-700 {{ $isImport ? 'text-success' : 'text-danger' }}">
                             {{ number_format($item->quantity) }}
                         </td>
+                        <td class="text-center">{{ $unitLabel }}</td>
+                        <td class="text-center">{{ number_format($lineWeight, 3) }} {{ $weightUnitLabel }}</td>
                         <td class="text-end">{{ number_format($item->unit_cost) }}đ</td>
                         <td class="text-end fw-700">{{ number_format($item->quantity * $item->unit_cost) }}đ</td>
                     </tr>

@@ -161,6 +161,10 @@
                     <i class="bi bi-diagram-3"></i>
                     {{ $product->variants->count() }} biến thể
                 </span>
+                <span>
+                    <i class="bi bi-box-seam"></i>
+                    Đơn vị: {{ strtolower($product->unit_label) }}
+                </span>
             </div>
             
             @if($product->variants->count() > 0)
@@ -179,9 +183,9 @@
                                 <small class="text-muted">SKU: {{ $variant->sku ?? '-' }}</small>
                             </div>
                             <div class="d-flex gap-2 align-items-center">
-                                <span class="badge bg-primary">Tồn: {{ $qty }}</span>
-                                <span class="badge bg-warning">Cọc: {{ $reserved }}</span>
-                                <span class="badge bg-info">Sẵn: {{ $available }}</span>
+                                <span class="badge bg-primary">Tồn: {{ number_format((float) $qty, 0, ',', '.') }}</span>
+                                <span class="badge bg-warning">Cọc: {{ number_format((float) $reserved, 0, ',', '.') }}</span>
+                                <span class="badge bg-info">Sẵn: {{ number_format((float) $available, 0, ',', '.') }}</span>
                             </div>
                         </div>
                     @endforeach

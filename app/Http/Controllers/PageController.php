@@ -2151,6 +2151,8 @@ class PageController extends Controller
             'order_discount' => ['nullable', 'numeric', 'min:0'],
             'item_discount' => ['nullable', 'array'],
             'item_discount.*' => ['nullable', 'numeric', 'min:0'],
+            'item_weight' => ['nullable', 'array'],
+            'item_weight.*' => ['nullable', 'numeric', 'min:0'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.variant_id' => ['required', 'integer', 'exists:product_variants,id'],
             'items.*.quantity' => ['required', 'integer', 'min:1'],
@@ -2189,11 +2191,34 @@ class PageController extends Controller
         DB::transaction(function () use ($order, $validated, $itemsInput, $variants, $isCopiedOrder): void {
             $order->items()->delete();
 
+            $parseWeightToKg = static function ($size): float {
+                $normalized = strtolower(str_replace(',', '.', trim((string) $size)));
+                if ($normalized === '') {
+                    return 0.0;
+                }
+
+                if (!preg_match('/([0-9]*\.?[0-9]+)/', $normalized, $matches)) {
+                    return 0.0;
+                }
+
+                $weight = (float) ($matches[1] ?? 0);
+                if ($weight <= 0) {
+                    return 0.0;
+                }
+
+                if (str_contains($normalized, 'g') && !str_contains($normalized, 'kg')) {
+                    $weight = $weight / 1000;
+                }
+
+                return round(max(0, $weight), 3);
+            };
+
             $subtotalAmount = 0;
             $itemDiscountTotal = 0;
             $totalBeforeOrderDiscount = 0;
             $orderDiscountInput = max(0, (float) ($validated['order_discount'] ?? 0));
             $itemDiscountInput = collect($validated['item_discount'] ?? []);
+            $itemWeightInput = collect($validated['item_weight'] ?? []);
 
             foreach ($itemsInput as $item) {
                 $variant = $variants->get($item['variant_id']);
@@ -2202,6 +2227,10 @@ class PageController extends Controller
                 $lineSubtotal = round($price * $quantity, 2);
                 $requestedUnitDiscount = (float) $itemDiscountInput->get((string) $variant->id, 0);
                 $unitDiscount = max(0, min($requestedUnitDiscount, $price));
+                $defaultWeight = $parseWeightToKg($variant->size ?? null);
+                $unitWeight = (float) $itemWeightInput->get((string) $variant->id, $defaultWeight);
+                $unitWeight = max(0, round($unitWeight, 3));
+                $totalWeight = round($unitWeight * $quantity, 3);
                 $lineDiscount = round($unitDiscount * $quantity, 2);
                 $lineTotal = max($lineSubtotal - $lineDiscount, 0);
 
@@ -2213,8 +2242,8 @@ class PageController extends Controller
                     'base_price' => $price,
                     'unit_discount' => $unitDiscount,
                     'discount_total' => $lineDiscount,
-                    'unit_weight' => 0,
-                    'total_weight' => 0,
+                    'unit_weight' => $unitWeight,
+                    'total_weight' => $totalWeight,
                     'total' => $lineTotal,
                 ]);
 

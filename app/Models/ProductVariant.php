@@ -134,6 +134,12 @@ class ProductVariant extends Model
 
         return (float) ($this->product?->default_price ?? $this->product?->price ?? 0);
     }
+
+    public function getUnitLabelAttribute(): string
+    {
+        return strtolower($this->product?->unit_label ?? 'cai');
+    }
+
     public function mediaLinks()
     {
         return $this->morphMany(MediaLink::class, 'model');

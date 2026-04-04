@@ -218,6 +218,8 @@
                         <div class="row g-2 mb-1 align-items-end small fw-600 text-muted px-1" style="font-size:.72rem;text-transform:uppercase;">
                             <div class="col-5">Sản phẩm / Biến thể</div>
                             <div class="col-2">Số lượng</div>
+                            <div class="col-1">ĐVT</div>
+                            <div class="col-2">Khối lượng</div>
                             <div class="col-3">Đơn giá nhập (đ)</div>
                             <div class="col-1 text-end">Thành tiền</div>
                             <div class="col-1"></div>
@@ -228,12 +230,33 @@
                                     <select name="items[0][product_variant_id]" class="form-select form-select-sm variant-select" required>
                                         <option value="">-- Chọn sản phẩm --</option>
                                         @foreach($productVariants as $v)
-                                            <option value="{{ $v->id }}">{{ $v->product?->name }} – {{ $v->name }} {{ $v->sku ? '('.$v->sku.')' : '' }}</option>
+                                            @php
+                                                $sizeRaw = strtolower(str_replace(',', '.', trim((string) ($v->size ?? ''))));
+                                                preg_match('/([0-9]*\.?[0-9]+)/', $sizeRaw, $sizeMatches);
+                                                $defaultWeight = (float) ($sizeMatches[1] ?? 0);
+                                                if (str_contains($sizeRaw, 'g') && !str_contains($sizeRaw, 'kg')) {
+                                                    $defaultWeight = $defaultWeight / 1000;
+                                                }
+                                                $defaultWeight = round(max(0, $defaultWeight), 3);
+                                                $weightUnitLabel = in_array((string) ($v->product->unit ?? 'cai'), ['con', 'cai'], true)
+                                                    ? 'Kg'
+                                                    : ($v->product->unit_label ?? 'Cái');
+                                            @endphp
+                                            <option value="{{ $v->id }}" data-unit-label="{{ $v->product->unit_label ?? 'Cái' }}" data-default-weight="{{ number_format($defaultWeight, 3, '.', '') }}" data-weight-unit-label="{{ $weightUnitLabel }}">{{ $v->product?->name }} – {{ $v->name }} {{ $v->sku ? '('.$v->sku.')' : '' }} - {{ $v->product->unit_label ?? 'Cái' }}</option>
                                         @endforeach
                                     </select>
                                 </div>
                                 <div class="col-2">
                                     <input type="number" name="items[0][quantity]" class="form-control form-control-sm qty-input" min="1" value="1" required>
+                                </div>
+                                <div class="col-1">
+                                    <input type="text" class="form-control form-control-sm unit-label" value="Cái" readonly>
+                                </div>
+                                <div class="col-2">
+                                    <div class="d-flex align-items-center gap-1">
+                                        <input type="number" class="form-control form-control-sm weight-input" value="0.000" step="0.001" min="0" readonly>
+                                        <span class="text-muted small weight-unit-label" style="white-space: nowrap;">Kg</span>
+                                    </div>
                                 </div>
                                 <div class="col-3">
                                     <input type="number" name="items[0][unit_cost]" class="form-control form-control-sm cost-input" min="0" step="1000" value="0" required>
@@ -284,7 +307,32 @@
         document.getElementById('grandTotalIn').textContent = total.toLocaleString('vi-VN') + 'đ';
     }
 
+    function syncUnitLabel(row) {
+        const select = row.querySelector('.variant-select');
+        const label = row.querySelector('.unit-label');
+        const weightInput = row.querySelector('.weight-input');
+        const weightUnitLabel = row.querySelector('.weight-unit-label');
+        if (!select || !label) {
+            return;
+        }
+
+        const opt = select.options[select.selectedIndex];
+        label.value = (opt && opt.dataset.unitLabel) ? opt.dataset.unitLabel : 'Cái';
+        if (weightInput) {
+            const weight = (opt && opt.dataset.defaultWeight) ? parseFloat(opt.dataset.defaultWeight) : 0;
+            weightInput.value = Number.isFinite(weight) ? weight.toFixed(3) : '0.000';
+        }
+        if (weightUnitLabel) {
+            weightUnitLabel.textContent = (opt && opt.dataset.weightUnitLabel) ? opt.dataset.weightUnitLabel : 'Kg';
+        }
+    }
+
     document.getElementById('itemsContainerIn').addEventListener('input', calcAll);
+    document.getElementById('itemsContainerIn').addEventListener('change', function (e) {
+        if (e.target.classList.contains('variant-select')) {
+            syncUnitLabel(e.target.closest('[data-item-row]'));
+        }
+    });
 
     document.getElementById('btnAddItemIn').addEventListener('click', function () {
         const first = document.querySelector('#itemsContainerIn [data-item-row]');
@@ -295,6 +343,18 @@
             else if (el.classList.contains('qty-input'))  el.value = 1;
             else if (el.classList.contains('cost-input')) el.value = 0;
         });
+        const unitLabel = clone.querySelector('.unit-label');
+        if (unitLabel) {
+            unitLabel.value = 'Cái';
+        }
+        const weightInput = clone.querySelector('.weight-input');
+        if (weightInput) {
+            weightInput.value = '0.000';
+        }
+        const weightUnitLabel = clone.querySelector('.weight-unit-label');
+        if (weightUnitLabel) {
+            weightUnitLabel.textContent = 'Kg';
+        }
         clone.querySelector('.line-total').textContent = '0đ';
         document.getElementById('itemsContainerIn').appendChild(clone);
         calcAll();
@@ -307,6 +367,8 @@
         btn.closest('[data-item-row]').remove();
         calcAll();
     };
+
+    document.querySelectorAll('#itemsContainerIn [data-item-row]').forEach(syncUnitLabel);
 })();
 </script>
 @endpush

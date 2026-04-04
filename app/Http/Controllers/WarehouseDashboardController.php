@@ -17,6 +17,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Collection;
 
 class WarehouseDashboardController extends Controller
 {
@@ -154,6 +155,18 @@ class WarehouseDashboardController extends Controller
             ->orderByDesc('created_at')
             ->get();
 
+        $managedWarehouseId = Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
+        $stockGuardMap = $this->buildPackingQueueStockGuards($orders, $managedWarehouseId);
+
+        $orders->each(function (Order $order) use ($stockGuardMap) {
+            $order->setAttribute('stock_guard', $stockGuardMap[$order->id] ?? [
+                'has_shortage' => false,
+                'can_start_packing' => true,
+                'message' => null,
+                'shortages' => [],
+            ]);
+        });
+
         return view('warehouse.orders.index', compact('orders', 'selectedDate', 'status', 'quickDates'));
     }
 
@@ -186,6 +199,29 @@ class WarehouseDashboardController extends Controller
             return back()->with('error', 'Đơn hàng không ở trạng thái Chờ đóng gói.');
         }
 
+        $managedWarehouseId = Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
+        $stockCheck = $this->evaluateSingleOrderStock($order, $managedWarehouseId);
+
+        if (!($stockCheck['can_start_packing'] ?? false)) {
+            $message = 'Không đủ tồn kho để đóng hàng';
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => $message,
+                    'stock_check' => [
+                        'has_shortage' => true,
+                        'can_start_packing' => false,
+                        'shortages' => $stockCheck['shortages'] ?? [],
+                        'import_url' => route('warehouse.stock-in'),
+                        'import_hint' => 'Bạn cần Nhập kho để thực hiện công việc tiếp',
+                    ],
+                ], 422);
+            }
+
+            return back()->with('error', $message);
+        }
+
         $statusBefore = $order->status;
 
         $order->update(['status' => Order::STATUS_PACKING]);
@@ -214,6 +250,220 @@ class WarehouseDashboardController extends Controller
         }
 
         return back()->with('success', 'Đã bắt đầu đóng gói đơn #' . $order->code);
+    }
+
+    private function evaluateSingleOrderStock(Order $order, ?int $warehouseId): array
+    {
+        $order->loadMissing(['items.product', 'items.variant.product']);
+
+        $itemRows = $order->items
+            ->filter(fn ($item) => !empty($item->product_variant_id) && (int) $item->quantity > 0)
+            ->values();
+
+        if ($itemRows->isEmpty()) {
+            return [
+                'has_shortage' => false,
+                'can_start_packing' => true,
+                'message' => null,
+                'shortages' => [],
+            ];
+        }
+
+        $variantIds = $itemRows->pluck('product_variant_id')->map(fn ($id) => (int) $id)->unique()->values();
+        $orderItemIds = $itemRows->pluck('id')->map(fn ($id) => (int) $id)->unique()->values();
+
+        $availableByVariant = $this->getAvailableByVariant($variantIds, $warehouseId);
+        $reservedByOrderItem = $this->getReservedByOrderItem($orderItemIds, $warehouseId);
+
+        $shortages = [];
+
+        foreach ($itemRows as $item) {
+            $variantId = (int) $item->product_variant_id;
+            $requiredQty = max(0, (int) $item->quantity);
+            $reservedForItem = max(0, (int) ($reservedByOrderItem[$item->id] ?? 0));
+            $availableQty = max(0, (int) ($availableByVariant[$variantId] ?? 0));
+            $effectiveQty = $availableQty + $reservedForItem;
+
+            if ($effectiveQty >= $requiredQty) {
+                continue;
+            }
+
+            $shortages[] = [
+                'order_id' => (int) $order->id,
+                'order_code' => (string) $order->code,
+                'order_item_id' => (int) $item->id,
+                'variant_id' => $variantId,
+                'variant_name' => (string) ($item->variant?->name ?? $item->product?->name ?? ('SP #' . $variantId)),
+                'required_qty' => $requiredQty,
+                'available_qty' => $effectiveQty,
+                'short_qty' => max(0, $requiredQty - $effectiveQty),
+                'reason' => 'insufficient_stock',
+            ];
+        }
+
+        $hasShortage = !empty($shortages);
+
+        return [
+            'has_shortage' => $hasShortage,
+            'can_start_packing' => !$hasShortage,
+            'message' => $hasShortage ? 'Không đủ tồn kho để đóng hàng' : null,
+            'shortages' => $shortages,
+        ];
+    }
+
+    private function buildPackingQueueStockGuards(Collection $orders, ?int $warehouseId): array
+    {
+        $queueStatuses = array_merge(self::READY_TO_PACK_STATUSES, [Order::STATUS_PACKING]);
+
+        $queueOrders = $orders
+            ->filter(fn (Order $order) => in_array($order->status, $queueStatuses, true))
+            ->sort(function (Order $a, Order $b) {
+                $aTime = $a->created_at?->getTimestamp() ?? 0;
+                $bTime = $b->created_at?->getTimestamp() ?? 0;
+
+                if ($aTime === $bTime) {
+                    return $a->id <=> $b->id;
+                }
+
+                return $aTime <=> $bTime;
+            })
+            ->values();
+
+        if ($queueOrders->isEmpty()) {
+            return [];
+        }
+
+        $queueOrders->loadMissing(['items.product', 'items.variant.product']);
+
+        $variantIds = $queueOrders
+            ->flatMap(fn (Order $order) => $order->items->pluck('product_variant_id'))
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        $orderItemIds = $queueOrders
+            ->flatMap(fn (Order $order) => $order->items->pluck('id'))
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        $availableByVariant = $this->getAvailableByVariant($variantIds, $warehouseId);
+        $reservedByOrderItem = $this->getReservedByOrderItem($orderItemIds, $warehouseId);
+
+        $blockedVariantIds = [];
+        $guards = [];
+
+        foreach ($queueOrders as $order) {
+            $shortages = [];
+
+            foreach ($order->items as $item) {
+                $variantId = (int) $item->product_variant_id;
+                $requiredQty = max(0, (int) $item->quantity);
+
+                if ($variantId <= 0 || $requiredQty <= 0) {
+                    continue;
+                }
+
+                $reservedForItem = max(0, (int) ($reservedByOrderItem[$item->id] ?? 0));
+                $availableQty = max(0, (int) ($availableByVariant[$variantId] ?? 0));
+                $effectiveQty = $availableQty + $reservedForItem;
+
+                $isBlockedByPriorOrder = in_array($variantId, $blockedVariantIds, true);
+
+                if ($isBlockedByPriorOrder) {
+                    $shortages[] = [
+                        'order_id' => (int) $order->id,
+                        'order_code' => (string) $order->code,
+                        'order_item_id' => (int) $item->id,
+                        'variant_id' => $variantId,
+                        'variant_name' => (string) ($item->variant?->name ?? $item->product?->name ?? ('SP #' . $variantId)),
+                        'required_qty' => $requiredQty,
+                        'available_qty' => $effectiveQty,
+                        'short_qty' => max(1, $requiredQty - $effectiveQty),
+                        'reason' => 'blocked_by_prior_order',
+                    ];
+
+                    continue;
+                }
+
+                if ($effectiveQty < $requiredQty) {
+                    $shortages[] = [
+                        'order_id' => (int) $order->id,
+                        'order_code' => (string) $order->code,
+                        'order_item_id' => (int) $item->id,
+                        'variant_id' => $variantId,
+                        'variant_name' => (string) ($item->variant?->name ?? $item->product?->name ?? ('SP #' . $variantId)),
+                        'required_qty' => $requiredQty,
+                        'available_qty' => $effectiveQty,
+                        'short_qty' => max(0, $requiredQty - $effectiveQty),
+                        'reason' => 'insufficient_stock',
+                    ];
+
+                    $blockedVariantIds[] = $variantId;
+
+                    continue;
+                }
+
+                $consumeFromAvailable = max(0, $requiredQty - $reservedForItem);
+                $availableByVariant[$variantId] = max(0, $availableQty - $consumeFromAvailable);
+            }
+
+            $hasShortage = !empty($shortages);
+
+            $guards[$order->id] = [
+                'has_shortage' => $hasShortage,
+                'can_start_packing' => !$hasShortage,
+                'message' => $hasShortage ? 'Không đủ tồn kho để đóng hàng' : null,
+                'shortages' => $shortages,
+            ];
+        }
+
+        return $guards;
+    }
+
+    private function getAvailableByVariant(Collection $variantIds, ?int $warehouseId): array
+    {
+        if ($variantIds->isEmpty()) {
+            return [];
+        }
+
+        $query = Inventory::query()
+            ->selectRaw('product_variant_id, COALESCE(SUM(quantity - reserved_quantity), 0) as available_qty')
+            ->whereIn('product_variant_id', $variantIds->all());
+
+        if ($warehouseId) {
+            $query->where('warehouse_id', $warehouseId);
+        }
+
+        return $query
+            ->groupBy('product_variant_id')
+            ->pluck('available_qty', 'product_variant_id')
+            ->map(fn ($value) => (int) $value)
+            ->all();
+    }
+
+    private function getReservedByOrderItem(Collection $orderItemIds, ?int $warehouseId): array
+    {
+        if ($orderItemIds->isEmpty()) {
+            return [];
+        }
+
+        $query = InventoryReservation::query()
+            ->selectRaw('inventory_reservations.order_item_id, COALESCE(SUM(inventory_reservations.quantity), 0) as reserved_qty')
+            ->whereIn('inventory_reservations.order_item_id', $orderItemIds->all());
+
+        if ($warehouseId) {
+            $query->join('inventories', 'inventories.id', '=', 'inventory_reservations.inventory_id')
+                ->where('inventories.warehouse_id', $warehouseId);
+        }
+
+        return $query
+            ->groupBy('inventory_reservations.order_item_id')
+            ->pluck('reserved_qty', 'inventory_reservations.order_item_id')
+            ->map(fn ($value) => (int) $value)
+            ->all();
     }
 
     /**
@@ -970,7 +1220,7 @@ class WarehouseDashboardController extends Controller
             ->with([
                 'document:id,type,warehouse_id,document_date',
                 'productVariant:id,product_id,name,sku',
-                'productVariant.product:id,name,slug',
+                'productVariant.product:id,name,slug,unit',
             ])
             ->get();
 
@@ -993,6 +1243,7 @@ class WarehouseDashboardController extends Controller
                     'product_id' => $product?->id,
                     'product_name' => $product?->name ?? 'N/A',
                     'product_sku' => $product?->sku,
+                    'unit_label' => $product?->unit_label ?? 'Cái',
                     'variant_id' => $variant?->id,
                     'variant_name' => $variant?->name ?? 'N/A',
                     'variant_sku' => $variant?->sku,
@@ -1015,6 +1266,7 @@ class WarehouseDashboardController extends Controller
                     'product_id' => $first['product_id'],
                     'product_name' => $first['product_name'],
                     'product_sku' => $first['product_sku'],
+                    'unit_label' => $first['unit_label'] ?? 'Cái',
                     'variant_count' => $items->count(),
                     'in_qty' => $inQty,
                     'out_qty' => $outQty,

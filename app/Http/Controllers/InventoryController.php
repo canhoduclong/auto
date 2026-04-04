@@ -245,11 +245,12 @@ class InventoryController extends Controller
             ->select([
                 'products.id as product_id',
                 'products.name as product_name',
+                'products.unit as product_unit',
                 DB::raw('COUNT(DISTINCT product_variants.id) as variant_count'),
                 DB::raw('COALESCE(SUM(inventories.quantity), 0) as on_hand_sum'),
                 DB::raw('COALESCE(SUM(inventories.quantity - inventories.reserved_quantity), 0) as available_sum'),
             ])
-            ->groupBy('products.id', 'products.name')
+            ->groupBy('products.id', 'products.name', 'products.unit')
             ->orderByDesc('on_hand_sum')
             ->limit(20)
             ->get();
@@ -261,10 +262,11 @@ class InventoryController extends Controller
                 'product_variants.id as variant_id',
                 'product_variants.sku as sku',
                 'products.name as product_name',
+                'products.unit as product_unit',
                 DB::raw('COALESCE(SUM(inventories.quantity), 0) as on_hand_sum'),
                 DB::raw('COALESCE(SUM(inventories.quantity - inventories.reserved_quantity), 0) as available_sum'),
             ])
-            ->groupBy('product_variants.id', 'product_variants.sku', 'products.name')
+            ->groupBy('product_variants.id', 'product_variants.sku', 'products.name', 'products.unit')
             ->orderByDesc('on_hand_sum')
             ->limit(30)
             ->get();

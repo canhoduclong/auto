@@ -239,6 +239,7 @@
                     <th colspan="2">
                         <i class="bi bi-star"></i> Top Sản Phẩm Phát Sinh Tối Đa
                     </th>
+                        <th class="text-center">ĐVT</th>
                     <th class="text-center">Số Lượng</th>
                     <th class="text-center">Số Giao Dịch</th>
                 </tr>
@@ -255,6 +256,9 @@
                                 <br>
                                 <small class="text-muted">{{ $item['variant']->name }}</small>
                             </div>
+                        </td>
+                        <td class="text-center">
+                            <span class="badge bg-light text-dark">{{ $item['product']->unit_label ?? 'Cái' }}</span>
                         </td>
                         <td class="text-center">
                             <span class="badge bg-primary">{{ number_format($item['quantity']) }}</span>
@@ -276,6 +280,7 @@
                 <thead>
                     <tr>
                         <th colspan="2"><i class="bi bi-box"></i> Thống Kê Theo Sản Phẩm</th>
+                        <th class="text-center">ĐVT</th>
                         <th class="text-center">Nhập</th>
                         <th class="text-center">Xuất</th>
                         <th class="text-center">Chênh lệch</th>
@@ -294,6 +299,7 @@
                                     </small>
                                 </div>
                             </td>
+                            <td class="text-center"><span class="badge bg-light text-dark">{{ $item['unit_label'] ?? 'Cái' }}</span></td>
                             <td class="text-center"><span class="badge bg-success">{{ number_format($item['in_qty']) }}</span></td>
                             <td class="text-center"><span class="badge bg-danger">{{ number_format($item['out_qty']) }}</span></td>
                             <td class="text-center">
@@ -304,7 +310,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="5" class="text-center text-muted py-3">Không có dữ liệu theo sản phẩm</td>
+                            <td colspan="6" class="text-center text-muted py-3">Không có dữ liệu theo sản phẩm</td>
                         </tr>
                     @endforelse
                 </tbody>
@@ -318,6 +324,7 @@
                 <thead>
                     <tr>
                         <th colspan="2"><i class="bi bi-diagram-3"></i> Thống Kê Theo Biến Thể</th>
+                        <th class="text-center">ĐVT</th>
                         <th class="text-center">Nhập</th>
                         <th class="text-center">Xuất</th>
                         <th class="text-center">Chênh lệch</th>
@@ -336,6 +343,7 @@
                                     </small>
                                 </div>
                             </td>
+                            <td class="text-center"><span class="badge bg-light text-dark">{{ $item['unit_label'] ?? 'Cái' }}</span></td>
                             <td class="text-center"><span class="badge bg-success">{{ number_format($item['in_qty']) }}</span></td>
                             <td class="text-center"><span class="badge bg-danger">{{ number_format($item['out_qty']) }}</span></td>
                             <td class="text-center">
@@ -346,7 +354,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="5" class="text-center text-muted py-3">Không có dữ liệu theo biến thể</td>
+                            <td colspan="6" class="text-center text-muted py-3">Không có dữ liệu theo biến thể</td>
                         </tr>
                     @endforelse
                 </tbody>

@@ -15,9 +15,41 @@
         ->map(fn ($role) => ucfirst((string) $role))
         ->implode(', ');
 
-    $subtotal = (float) ($order->subtotal_amount ?? $order->items->sum(function ($item) {
-        return (float) (($item->base_price ?? $item->price ?? 0) * ($item->quantity ?? 0));
-    }));
+    $parseSizeToKg = static function ($size): float {
+        $normalized = strtolower(trim((string) $size));
+        if ($normalized === '') {
+            return 0.0;
+        }
+
+        $normalized = str_replace(',', '.', $normalized);
+
+        if (!preg_match('/([0-9]*\.?[0-9]+)/', $normalized, $matches)) {
+            return 0.0;
+        }
+
+        $value = (float) ($matches[1] ?? 0);
+        if ($value <= 0) {
+            return 0.0;
+        }
+
+        // Support common inputs such as "500g", "0.5kg", "1 kg".
+        if (str_contains($normalized, 'g') && !str_contains($normalized, 'kg')) {
+            $value = $value / 1000;
+        }
+
+        return round($value, 3);
+    };
+
+    $subtotal = (float) $order->items->sum(function ($item) use ($parseSizeToKg) {
+        $qty = (int) ($item->quantity ?? 0);
+        $price = (float) ($item->price ?? $item->base_price ?? 0);
+        $unitWeight = (float) ($item->unit_weight ?? 0);
+        if ($unitWeight <= 0) {
+            $unitWeight = $parseSizeToKg($item->variant?->size);
+        }
+
+        return (float) ($qty * $unitWeight * $price);
+    });
 
     $itemDiscount = (float) ($order->item_discount_total ?? $order->items->sum('discount_total'));
     $extraDiscount = (float) ($order->extra_discount_total ?? $order->order_discount ?? 0);
@@ -200,7 +232,7 @@
     .team-item-table-head,
     .team-item-table-row {
         display: grid;
-        grid-template-columns: minmax(0, 2fr) 64px 72px 88px 92px 92px;
+        grid-template-columns: minmax(0, 2fr) 64px 58px 72px 88px 92px 92px;
         gap: 8px;
         align-items: center;
     }
@@ -278,7 +310,7 @@
     @media (max-width: 575px) {
         .team-item-table-head,
         .team-item-table-row {
-            grid-template-columns: minmax(0, 1.25fr) 48px 62px 82px 82px 82px;
+            grid-template-columns: minmax(0, 1.25fr) 48px 50px 62px 82px 82px 82px;
             gap: 6px;
         }
     }
@@ -393,6 +425,7 @@
                             <div class="team-item-table-head">
                                 <div>Sản phẩm</div>                                
                                 <div class="text-end">Số Lượng</div>
+                                <div class="text-center">ĐVT</div>
                                 <div class="text-center">Size</div>
                                 <div class="text-end">KL tạm tính</div>
                                 <div class="text-end">Đơn giá</div>
@@ -403,13 +436,21 @@
                                     @php
                                         $qty = (int) ($item->quantity ?? 0);
                                         $price = (float) ($item->price ?? $item->base_price ?? 0);
-                                        $lineTotal = $qty * $price;
                                         $unitWeight = (float) ($item->unit_weight ?? 0);
+                                        if ($unitWeight <= 0) {
+                                            $unitWeight = $parseSizeToKg($item->variant?->size);
+                                        }
+
                                         $lineWeight = (float) ($item->total_weight ?? ($qty * $unitWeight));
+                                        $lineTotal = $qty * $unitWeight * $price;
+                                        $unitLabel = $item->variant?->product?->unit_label ?? 'Cái';
+                                        $weightUnitLabel = in_array((string) ($item->variant?->product?->unit ?? 'cai'), ['con', 'cai'], true)
+                                            ? 'Kg'
+                                            : $unitLabel;
                                         $sizeText = trim((string) ($item->variant?->size ?? ''));
                                         if ($sizeText === '') {
                                             $sizeText = $unitWeight > 0
-                                                ? number_format($unitWeight, 3, ',', '.') . 'kg'
+                                                ? number_format($unitWeight, 2, ',', '.') . 'kg'
                                                 : '-';
                                         }
                                     @endphp
@@ -423,8 +464,9 @@
                                             </div>
                                             
                                             <div class="team-item-cell"><strong>{{ number_format($qty, 0, ',', '.') }}</strong></div>
+                                            <div class="text-center text-muted small">{{ $unitLabel }}</div>
                                             <div class="text-center text-muted small">{{ $sizeText }}</div>
-                                            <div class="team-item-cell">{{ number_format($lineWeight, 3, ',', '.') }} kg</div>
+                                            <div class="team-item-cell">{{ number_format($lineWeight, 3, ',', '.') }} {{ $weightUnitLabel }}</div>
                                             <div class="team-item-cell">{{ number_format($price, 0, ',', '.') }} đ</div>
                                             <div class="team-item-cell"><strong>{{ number_format($lineTotal, 0, ',', '.') }} đ</strong></div>
                                         </div>

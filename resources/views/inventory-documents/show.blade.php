@@ -34,15 +34,26 @@
                     <tr>
                         <th>{{ __('inventory.labels.product_variant') }}</th>
                         <th>{{ __('inventory.labels.quantity') }}</th>
+                        <th>ĐVT</th>
+                        <th>Khối lượng</th>
                         <th>{{ __('inventory.labels.unit_cost') }}</th>
                         <th>{{ __('inventory.labels.total_cost') }}</th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach($inventoryDocument->items as $item)
+                        @php
+                            $unitLabel = $item->productVariant->product->unit_label ?? 'Cái';
+                            $weightUnitLabel = in_array((string) ($item->productVariant->product->unit ?? 'cai'), ['con', 'cai'], true)
+                                ? 'Kg'
+                                : $unitLabel;
+                            $lineWeight = (float) (($item->productVariant->size ?? 0) * ($item->quantity ?? 0));
+                        @endphp
                         <tr>
                             <td>{{ $item->productVariant->product->name }} ({{ $item->productVariant->sku }})</td>
-                            <td>{{ $item->quantity }}</td>
+                            <td>{{ number_format((float) $item->quantity, 0, ',', '.') }}</td>
+                            <td>{{ $unitLabel }}</td>
+                            <td>{{ number_format($lineWeight, 3, ',', '.') }} {{ $weightUnitLabel }}</td>
                             <td>{{ number_format($item->unit_cost, 2) }}</td>
                             <td>{{ number_format($item->quantity * $item->unit_cost, 2) }}</td>
                         </tr>

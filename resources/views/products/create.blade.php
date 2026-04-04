@@ -59,6 +59,23 @@
                             </div>  
                         </div>      
 
+                        <div class="mb-3">
+                            <label for="unit" class="form-label">Đơn vị tính <span class="text-danger">*</span></label>
+                            <select
+                                name="unit"
+                                id="unit"
+                                class="form-select @error('unit') is-invalid @enderror"
+                                required
+                            >
+                                @foreach($unitOptions as $value => $label)
+                                    <option value="{{ $value }}" {{ old('unit', 'cai') === $value ? 'selected' : '' }}>{{ $label }}</option>
+                                @endforeach
+                            </select>
+                            @error('unit')
+                                <div class="invalid-feedback">{{ $message }}</div>
+                            @enderror
+                        </div>
+
                         {{-- Hình ảnh --}}
                         <div class="form-group">
                             <label>Ảnh đại diện</label>

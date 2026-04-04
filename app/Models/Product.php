@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\ProductUnit;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
@@ -15,10 +16,33 @@ class Product extends Model
         'category_id',
         'status',
         'name',
+        'unit',
         'slug',
         'description', 
         'image',
     ];
+
+    public function getUnitLabelAttribute(): string
+    {
+        $unit = ProductUnit::tryFrom((string) $this->unit);
+
+        return $unit?->label() ?? ProductUnit::CAI->label();
+    }
+
+    public function formatQuantity(float|int $quantity, int $decimals = 0): string
+    {
+        return number_format($quantity, $decimals, ',', '.') . ' ' . strtolower($this->unit_label);
+    }
+
+    public function getWeightUnitLabelAttribute(): string
+    {
+        // Business rule: Con/Cai => weight shown in Kg, others keep their own unit.
+        if (in_array((string) $this->unit, ['con', 'cai'], true)) {
+            return 'Kg';
+        }
+
+        return $this->unit_label;
+    }
     
     // Tạo slug tự động nếu chưa có
     public static function boot()

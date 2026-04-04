@@ -69,7 +69,7 @@
     .wh-item-table-head,
     .wh-item-table-row {
         display: grid;
-        grid-template-columns: 48px minmax(50px, 1fr) 42px 45px 70px 61px 76px;
+        grid-template-columns: 48px minmax(50px, 1fr) 42px 52px 45px 70px 61px 76px;
         gap: 8px;
         align-items: center; 
     }
@@ -193,11 +193,31 @@
         background: #2563eb;
         color: #fff;
     }
+    .wh-stock-alert {
+        border: 1px solid #fca5a5;
+        background: #fef2f2;
+        color: #991b1b;
+        border-radius: 10px;
+        padding: 10px 12px;
+        margin-bottom: 10px;
+    }
+    .wh-stock-alert summary {
+        cursor: pointer;
+        font-weight: 700;
+    }
+    .wh-stock-alert ul {
+        margin: 8px 0 0;
+        padding-left: 16px;
+    }
+    .wh-stock-alert a {
+        color: #9a3412;
+        font-weight: 700;
+    }
     @media (max-width: 575px) {
         .wh-item-table-head,
         .wh-item-table-row {
-            grid-template-columns: 44px minmax(150px, 1.2fr) 40px 54px 84px 96px 124px;
-            min-width: 630px;
+            grid-template-columns: 44px minmax(140px, 1.15fr) 40px 52px 54px 84px 96px 124px;
+            min-width: 700px;
             gap: 6px;
         }
     }
@@ -308,6 +328,10 @@
                 $sourceWarehouseName = $order->warehouse?->name ?: $packingHistory?->user?->warehouse?->name;
                 $packedByName = $packingHistory?->user?->name;
                 $packedAt = $packingHistory?->created_at?->format('d/m/Y H:i');
+                $stockGuard = $order->stock_guard ?? [];
+                $hasStockShortage = (bool) ($stockGuard['has_shortage'] ?? false);
+                $canStartPacking = (bool) ($stockGuard['can_start_packing'] ?? true);
+                $stockShortages = collect($stockGuard['shortages'] ?? []);
             @endphp
             <div class="col-12 col-lg-6 col-xxl-4">
                 <div class="card wh-order-card js-order-card" data-order-id="{{ $order->id }}">
@@ -350,13 +374,36 @@
 
                         <div class="wh-section pb-0">
                             <div class="wh-logistics-title">Danh sách sản phẩm cần đóng & cập nhật kho</div>
+                            @if($hasStockShortage && $isReadyToPack)
+                                <div class="wh-stock-alert" title="Không thể bắt đầu đóng hàng khi tồn kho chưa đáp ứng.">
+                                    <details>
+                                        <summary>Không đủ tồn kho để đóng hàng</summary>
+                                        <ul>
+                                            @foreach($stockShortages as $shortage)
+                                                <li>
+                                                    {{ $shortage['variant_name'] ?? 'Sản phẩm' }}:
+                                                    cần {{ number_format((int) ($shortage['required_qty'] ?? 0)) }},
+                                                    khả dụng {{ number_format((int) ($shortage['available_qty'] ?? 0)) }}
+                                                    @if(($shortage['reason'] ?? '') === 'blocked_by_prior_order')
+                                                        (bị ảnh hưởng bởi đơn ưu tiên trước)
+                                                    @endif
+                                                </li>
+                                            @endforeach
+                                        </ul>
+                                        <div class="mt-1">
+                                            <a href="{{ route('warehouse.stock-in') }}">Bạn cần Nhập kho để thực hiện công việc tiếp</a>
+                                        </div>
+                                    </details>
+                                </div>
+                            @endif
                             <div class="wh-item-table-wrap">
                                 <div class="wh-item-table-head">
                                     <div>Ảnh</div>
                                     <div>Sản phẩm</div>
                                     <div class="text-center">SL</div>
+                                    <div class="text-center">ĐVT</div>
                                     <div class="text-center">Size</div>
-                                    <div class="text-center">Kg</div>
+                                    <div class="text-center">Khối lượng</div>
                                     <div class="text-center">Đơn giá</div>
                                     <div class="text-end">Thành tiền</div>
                                     
@@ -367,18 +414,25 @@
                                             $variant = $item->variant;
                                             $orderedQty = (int) $item->quantity;
                                             $unitPrice = (float) ($item->price ?? 0);
+                                            $unitLabel = $variant?->product?->unit_label ?? 'Cái';
+                                            $weightUnitLabel = in_array((string) ($variant?->product?->unit ?? 'cai'), ['con', 'cai'], true)
+                                                ? 'Kg'
+                                                : $unitLabel;
                                             $itemActualWeight = is_null($item->actual_weight) ? null : (float) $item->actual_weight;
                                             $lineTotal = !is_null($itemActualWeight) ? ($itemActualWeight * $unitPrice) : null;
                                             $variantSize = $variant?->size;
                                             $formattedVariantSize = (!is_null($variantSize) && $variantSize !== '')
                                                 ? rtrim(rtrim(number_format((float) $variantSize, 2, '.', ''), '0'), '.')
                                                 : '-';
+                                            $displayActualWeight = (!is_null($itemActualWeight) && (float) $itemActualWeight > 0)
+                                                ? number_format((float) $itemActualWeight, 3) . ' ' . $weightUnitLabel
+                                                : '---';
                                             $imagePath = $variant?->avatar?->media?->file_path
                                                 ?? $item->product?->avatar?->media?->file_path
                                                 ?? null;
                                         @endphp
                                         <li class="wh-item-row">
-                                            <div class="wh-item-table-row" data-unit-price="{{ number_format($unitPrice, 2, '.', '') }}">
+                                            <div class="wh-item-table-row" data-unit-price="{{ number_format($unitPrice, 2, '.', '') }}" data-weight-unit="{{ $weightUnitLabel }}">
                                                 <div>
                                                     @if($imagePath)
                                                         <img class="wh-item-thumb" src="{{ asset('storage/' . $imagePath) }}" alt="{{ $variant?->name ?? $item->product?->name ?? 'Sản phẩm' }}">
@@ -395,6 +449,7 @@
                                                     @endif
                                                 </div>
                                                 <div class="wh-item-cell"><strong>{{ number_format($orderedQty) }}</strong></div>
+                                                <div class="wh-item-cell"><strong>{{ $unitLabel }}</strong></div>
                                                 <div class="wh-item-cell"><strong>{{ $formattedVariantSize }}</strong></div>
                                                
                                                 @if(!$isPackedReadonly && $canProcessThisOrder)
@@ -409,14 +464,15 @@
                                                             <input type="hidden" name="item_id" value="{{ $item->id }}">
                                                             <input type="number" name="item_actual_weight" class="form-control form-control-sm actual_weight"
                                                                 value="{{ $itemWeightDefault }}"
-                                                                placeholder="kg"
+                                                                placeholder="{{ $weightUnitLabel }}"
                                                                 min="0" step="0.001" required>
                                                             <button class="btn btn-outline-primary btn-sm js-logistics-submit-btn" type="submit">Lưu</button>
                                                         </form>
                                                     </div>
+                                                    <div class="wh-readonly-item js-ready-only {{ $isPacking ? 'd-none' : '' }}">{{ $displayActualWeight }}</div>
                                                 @else
                                                     <div class="wh-readonly-item js-item-readonly-kg">
-                                                        {{ !is_null($itemActualWeight) ? number_format($itemActualWeight, 3) . ' kg' : '---' }}
+                                                        {{ $displayActualWeight }}
                                                     </div>
                                                 @endif
                                            
@@ -545,12 +601,25 @@
                         @endif
 
                         @if($canProcessThisOrder && ($isReadyToPack || $isPacking))
-                            <form action="{{ route('warehouse.orders.start-packing', $order) }}" method="POST" class="d-grid js-start-packing-form {{ $isReadyToPack ? '' : 'd-none' }}">
-                                @csrf
-                                <button class="btn btn-primary btn-sm js-start-packing-btn" type="submit">
-                                    <i class="bi bi-box2 me-1"></i>Đóng hàng
-                                </button>
-                            </form>
+                            @if($isReadyToPack)
+                                @if($canStartPacking)
+                                    <form action="{{ route('warehouse.orders.start-packing', $order) }}" method="POST" class="d-grid js-start-packing-form">
+                                        @csrf
+                                        <button class="btn btn-primary btn-sm js-start-packing-btn" type="submit">
+                                            <i class="bi bi-box2 me-1"></i>Đóng hàng
+                                        </button>
+                                    </form>
+                                @else
+                                    <div class="d-grid gap-2">
+                                        <button class="btn btn-outline-danger btn-sm" type="button" disabled>
+                                            Unable
+                                        </button>
+                                        <a href="{{ route('warehouse.stock-in') }}" class="btn btn-warning btn-sm">
+                                            Bạn cần Nhập kho để thực hiện công việc tiếp
+                                        </a>
+                                    </div>
+                                @endif
+                            @endif
 
                             <form action="{{ route('warehouse.orders.complete-packing', $order) }}" method="POST" class="d-grid js-complete-packing-form {{ $isPacking ? '' : 'd-none' }}">
                                 @csrf
@@ -621,6 +690,7 @@
                     const row = form.closest('.wh-item-table-row');
                     if (row) {
                         const unitPrice = parseFloat(row.dataset.unitPrice || '0');
+                        const weightUnit = row.dataset.weightUnit || 'kg';
                         const weightInput = form.querySelector('input[name="item_actual_weight"]');
                         const actualWeight = parseFloat(weightInput?.value || '0');
                         const amountCell = row.querySelector('.js-item-total-amount strong');
@@ -636,7 +706,7 @@
 
                         const readonlyKg = row.querySelector('.js-item-readonly-kg');
                         if (readonlyKg && !Number.isNaN(actualWeight)) {
-                            readonlyKg.textContent = actualWeight.toFixed(3) + ' kg';
+                            readonlyKg.textContent = actualWeight > 0 ? (actualWeight.toFixed(3) + ' ' + weightUnit) : '---';
                         }
                     }
                 }

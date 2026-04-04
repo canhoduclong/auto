@@ -17,6 +17,19 @@
     </div>
     <ul class="list-group mt-2">
         @foreach($variants as $variant)
+            @php
+                $unitValue = (string) ($variant->product->unit ?? 'cai');
+                $weightUnitLabel = in_array($unitValue, ['con', 'cai'], true)
+                    ? 'Kg'
+                    : ($variant->product->unit_label ?? 'Cái');
+                $sizeRaw = strtolower(str_replace(',', '.', trim((string) ($variant->size ?? ''))));
+                preg_match('/([0-9]*\.?[0-9]+)/', $sizeRaw, $sizeMatches);
+                $defaultWeight = (float) ($sizeMatches[1] ?? 0);
+                if (str_contains($sizeRaw, 'g') && !str_contains($sizeRaw, 'kg')) {
+                    $defaultWeight = $defaultWeight / 1000;
+                }
+                $defaultWeight = round(max(0, $defaultWeight), 3);
+            @endphp
             <li class="list-group-item d-flex justify-content-between align-items-center">
                 <div class="d-flex align-items-center">
                     @php
@@ -30,7 +43,7 @@
                     <img src="{{ $imageUrl }}" alt="{{ $variant->product->name }}" width="60" class="me-3 rounded">
                     <div>
                         <h6 class="my-0">{{ $variant->product->name }}</h6>
-                        <small class="text-muted">SKU: {{ $variant->sku }} | {{ __('orders.labels.unit_price') }}: {{ number_format($variant->latestPriceRule?->price ?? 0) }} | {{ __('orders.labels.stock') }}: {{ $variant->available_stock }}</small>
+                        <small class="text-muted">SKU: {{ $variant->sku }} | ĐVT: {{ $variant->product->unit_label ?? 'Cái' }} | {{ __('orders.labels.unit_price') }}: {{ number_format($variant->latestPriceRule?->price ?? 0) }} | {{ __('orders.labels.stock') }}: {{ number_format((float) $variant->available_stock, 0, ',', '.') }}</small>
                     </div>
                 </div>
                 <a
@@ -41,6 +54,10 @@
                     data-variant-sku="{{ $variant->sku }}"
                     data-variant-price="{{ $variant->latestPriceRule?->price ?? 0 }}"
                     data-variant-stock="{{ $variant->available_stock }}"
+                    data-variant-unit="{{ $unitValue }}"
+                    data-variant-unit-label="{{ $variant->product->unit_label ?? 'Cái' }}"
+                    data-variant-weight="{{ number_format($defaultWeight, 3, '.', '') }}"
+                    data-variant-weight-unit-label="{{ $weightUnitLabel }}"
                     data-variant-image="{{ $imageUrl }}">
                     {{ __('inventory.buttons.add_item') }}
                 </a>

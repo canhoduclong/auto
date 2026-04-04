@@ -70,6 +70,18 @@
                     @enderror
                 </div>
 
+                <div class="mb-3">
+                    <label for="unit" class="form-label">Đơn vị tính <span class="text-danger">*</span></label>
+                    <select name="unit" id="unit" class="form-select @error('unit') is-invalid @enderror" required>
+                        @foreach($unitOptions as $value => $label)
+                            <option value="{{ $value }}" {{ old('unit', $product->unit ?? 'cai') === $value ? 'selected' : '' }}>{{ $label }}</option>
+                        @endforeach
+                    </select>
+                    @error('unit')
+                        <div class="invalid-feedback">{{ $message }}</div>
+                    @enderror
+                </div>
+
                 {{-- Ảnh đại diện --}}
                 <div class="form-group">
                     <label>Ảnh đại diện</label>
@@ -273,12 +285,39 @@ document.addEventListener('DOMContentLoaded', function () {
     const btnSelectMedia = document.getElementById('btnSelectMedia');
     const mediaPreview = document.getElementById('mediaPreview');
     const mediaIdInput = document.getElementById('media_id');
+    const mediaModalEl = document.getElementById('mediaModal');
     let mediaModal = null;
+
+    function cleanupModalBackdrop() {
+        document.querySelectorAll('.modal-backdrop').forEach(function (el) {
+            el.remove();
+        });
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('padding-right');
+    }
+
+    function closeMediaModal() {
+        if (window.bootstrap && mediaModalEl) {
+            const instance = bootstrap.Modal.getInstance(mediaModalEl) || bootstrap.Modal.getOrCreateInstance(mediaModalEl);
+            instance.hide();
+        } else if (window.$ && typeof $('#mediaModal').modal === 'function') {
+            $('#mediaModal').modal('hide');
+        }
+
+        // Fallback for mixed bootstrap/jquery modal states.
+        setTimeout(cleanupModalBackdrop, 100);
+    }
+
+    if (mediaModalEl) {
+        mediaModalEl.addEventListener('hidden.bs.modal', cleanupModalBackdrop);
+    }
 
     if (btnSelectMedia) {
         btnSelectMedia.addEventListener('click', function () {
+            window.__productEditImageTarget = 'avatar';
+
             if (!mediaModal) {
-                mediaModal = new bootstrap.Modal(document.getElementById('mediaModal'));
+                mediaModal = new bootstrap.Modal(mediaModalEl);
             }
             mediaModal.show();
         });
@@ -287,12 +326,21 @@ document.addEventListener('DOMContentLoaded', function () {
     // Lắng nghe postMessage từ popup media (ổn định, không phụ thuộc window.selectMedia)
     window.addEventListener('message', function (event) {
         if (event.data && event.data.type === 'mediaSelected') {
-            if (mediaIdInput) mediaIdInput.value = event.data.mediaId;
+            const target = window.__productEditImageTarget || 'avatar';
+
+            if (target !== 'avatar') {
+                return;
+            }
+
+            if (mediaIdInput) {
+                mediaIdInput.value = event.data.mediaId;
+            }
+
             if (mediaPreview) {
                 mediaPreview.innerHTML = `<img src="${event.data.url}" width="120" class="img-thumbnail">`;
             }
-            // Đóng modal nếu có
-            if (mediaModal) mediaModal.hide();
+
+            closeMediaModal();
         }
     });
 });
@@ -337,13 +385,6 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-    // Avatar chọn ảnh
-    var btnSelectMedia = document.getElementById('btnSelectMedia');
-    if (btnSelectMedia) {
-        btnSelectMedia.addEventListener('click', function() {
-            $('#mediaModal').modal('show');
-        });
-    }
 });
 
 function selectMedia(id, url) {
@@ -361,6 +402,8 @@ function selectMedia(id, url) {
     if (window.$ && typeof $('#mediaModal').modal === 'function') {
         $('#mediaModal').modal('hide');
     }
+
+    window.__productEditImageTarget = 'avatar';
 }
 
 // Gallery xử lý chọn ảnh
@@ -382,18 +425,23 @@ window.addEventListener("message", function(event) {
         gallerySelected = event.data.data;
         updatePreview();
     }
-    // Nhận ảnh từ modal chọn ảnh biến thể
-    if (event.data.type === 'variantImageSelected') {
-        let variantId = event.data.variantId;
-        let mediaId = event.data.mediaId;
-        let url = event.data.url;
-        document.getElementById('variant-media-id-' + variantId).value = mediaId;
-        let preview = document.querySelector(`tr[data-variant-id="${variantId}"] .variant-image-preview`)
-            || document.querySelector(`#variant-media-id-${variantId}`)?.closest('td').querySelector('.variant-image-preview');
-        if (preview) {
-            preview.innerHTML = `<img src="${url}" width="50" class="rounded">`;
+
+    if (event.data.type === 'mediaSelected' && (window.__productEditImageTarget === 'variant')) {
+        const mediaIdInput = document.getElementById('variant-image-modal-media-id');
+        const previewModal = document.getElementById('variant-image-preview-modal');
+        const libraryContainer = document.getElementById('variant-image-library-container');
+
+        if (mediaIdInput) {
+            mediaIdInput.value = event.data.mediaId || '';
         }
-        $('#variantImageModal').modal('hide');
+
+        if (previewModal && event.data.url) {
+            previewModal.innerHTML = `<img src="${event.data.url}" width="120" class="img-thumbnail">`;
+        }
+
+        if (libraryContainer) {
+            libraryContainer.style.display = 'none';
+        }
     }
 });
 
@@ -462,57 +510,92 @@ let currentVariantMediaId = null;
 
 document.addEventListener('click', function(e) {
     if (e.target.classList.contains('select-variant-image')) {
+        window.__productEditImageTarget = 'variant';
         currentVariantId = e.target.dataset.variantId;
-        // Lấy ảnh hiện tại nếu có
+        window.__productEditCurrentVariantId = currentVariantId;
+
         let preview = document.querySelector(`tr[data-variant-id="${currentVariantId}"] .variant-image-preview img`);
         let mediaIdInput = document.getElementById('variant-media-id-' + currentVariantId);
         currentVariantImageUrl = preview ? preview.src : null;
         currentVariantMediaId = mediaIdInput ? mediaIdInput.value : null;
-        // Hiển thị modal
-        let modal = new bootstrap.Modal(document.getElementById('variantImageModal'));
-        document.getElementById('variant-image-preview-modal').innerHTML = currentVariantImageUrl ? `<img src="${currentVariantImageUrl}" width="120" class="img-thumbnail">` : '<span class="text-muted">Chưa có hình ảnh</span>';
-        document.getElementById('variant-image-modal-media-id').value = currentVariantMediaId || '';
-        document.getElementById('variant-image-library-container').style.display = 'none';
+
+        const variantPreviewModal = document.getElementById('variant-image-preview-modal');
+        const variantMediaModalInput = document.getElementById('variant-image-modal-media-id');
+        const variantLibraryContainer = document.getElementById('variant-image-library-container');
+
+        if (variantPreviewModal) {
+            variantPreviewModal.innerHTML = currentVariantImageUrl
+                ? `<img src="${currentVariantImageUrl}" width="120" class="img-thumbnail">`
+                : '<span class="text-muted">Chưa có hình ảnh</span>';
+        }
+
+        if (variantMediaModalInput) {
+            variantMediaModalInput.value = currentVariantMediaId || '';
+        }
+
+        if (variantLibraryContainer) {
+            variantLibraryContainer.style.display = 'none';
+        }
+
+        if (!window.bootstrap) {
+            return;
+        }
+
+        const variantModalEl = document.getElementById('variantImageModal');
+        const modal = bootstrap.Modal.getInstance(variantModalEl) || bootstrap.Modal.getOrCreateInstance(variantModalEl);
         modal.show();
     }
 });
 
-// Nút chọn ảnh từ thư viện trong modal
 document.addEventListener('DOMContentLoaded', function () {
-    var btnSelectVariantImageFromLibrary = document.getElementById('btnSelectVariantImageFromLibrary');
+    const btnSelectVariantImageFromLibrary = document.getElementById('btnSelectVariantImageFromLibrary');
     if (btnSelectVariantImageFromLibrary) {
-        btnSelectVariantImageFromLibrary.addEventListener('click', function() {
-            document.getElementById('variant-image-library-container').style.display = '';
+        btnSelectVariantImageFromLibrary.addEventListener('click', function () {
+            window.__productEditImageTarget = 'variant';
+            const container = document.getElementById('variant-image-library-container');
+            if (container) {
+                container.style.display = '';
+            }
         });
     }
-    // Nhận ảnh từ iframe thư viện
-    window.addEventListener('message', function(event) {
-        if (event.data && event.data.type === 'mediaSelected') {
-            // event.data.mediaId, event.data.url
-            document.getElementById('variant-image-modal-media-id').value = event.data.mediaId;
-            document.getElementById('variant-image-preview-modal').innerHTML = `<img src="${event.data.url}" width="120" class="img-thumbnail">`;
-            // Ẩn thư viện sau khi chọn
-            document.getElementById('variant-image-library-container').style.display = 'none';
-        }
-    });
-    // Gán ảnh cho biến thể
-    var btnApplyVariantImage = document.getElementById('btnApplyVariantImage');
+
+    const btnApplyVariantImage = document.getElementById('btnApplyVariantImage');
     if (btnApplyVariantImage) {
-        btnApplyVariantImage.addEventListener('click', function() {
-            if (!currentVariantId) return;
-            let mediaId = document.getElementById('variant-image-modal-media-id').value;
-            let url = document.getElementById('variant-image-preview-modal').querySelector('img')?.src;
-            // Gán vào input hidden và preview của dòng biến thể
-            let input = document.getElementById('variant-media-id-' + currentVariantId);
-            if (input) input.value = mediaId;
-            let preview = document.querySelector(`tr[data-variant-id="${currentVariantId}"] .variant-image-preview`)
-                || document.querySelector(`#variant-media-id-${currentVariantId}`)?.closest('td').querySelector('.variant-image-preview');
+        btnApplyVariantImage.addEventListener('click', function () {
+            if (!currentVariantId) {
+                return;
+            }
+
+            const modalMediaInput = document.getElementById('variant-image-modal-media-id');
+            const modalPreviewImage = document.querySelector('#variant-image-preview-modal img');
+            const mediaId = modalMediaInput ? modalMediaInput.value : '';
+            const url = modalPreviewImage ? modalPreviewImage.src : '';
+
+            const input = document.getElementById('variant-media-id-' + currentVariantId);
+            if (input) {
+                input.value = mediaId;
+            }
+
+            const preview = document.querySelector(`tr[data-variant-id="${currentVariantId}"] .variant-image-preview`)
+                || document.querySelector(`#variant-media-id-${currentVariantId}`)?.closest('td')?.querySelector('.variant-image-preview');
             if (preview && url) {
                 preview.innerHTML = `<img src="${url}" width="50" class="rounded">`;
             }
-            // Đóng modal
-            let modal = bootstrap.Modal.getInstance(document.getElementById('variantImageModal'));
-            if (modal) modal.hide();
+
+            if (window.bootstrap) {
+                const variantModalEl = document.getElementById('variantImageModal');
+                const modal = bootstrap.Modal.getInstance(variantModalEl) || bootstrap.Modal.getOrCreateInstance(variantModalEl);
+                modal.hide();
+            }
+
+            window.__productEditImageTarget = 'avatar';
+        });
+    }
+
+    const variantModalEl = document.getElementById('variantImageModal');
+    if (variantModalEl) {
+        variantModalEl.addEventListener('hidden.bs.modal', function () {
+            window.__productEditImageTarget = 'avatar';
         });
     }
 });

@@ -233,6 +233,8 @@
                                             <th>Đơn giá</th>
                                             <th>CK giá</th>
                                             <th>SL</th>
+                                            <th>ĐVT</th>
+                                            <th>Khối lượng</th>
                                             <th>Thành tiền</th>
                                             <th></th>
                                         </tr>
@@ -249,6 +251,18 @@
                                                 }
                                                 $unitPrice = (float) ($item->price ?? 0);
                                                 $qty = (int) ($item->quantity ?? 1);
+                                                $unitLabel = $variant?->product?->unit_label ?? 'Cái';
+                                                $weightUnitLabel = in_array((string) ($variant?->product?->unit ?? 'cai'), ['con', 'cai'], true) ? 'Kg' : $unitLabel;
+                                                $unitWeight = (float) old('item_weight.' . ($variant?->id), $item->unit_weight ?? 0);
+                                                if ($unitWeight <= 0) {
+                                                    $sizeRaw = strtolower(str_replace(',', '.', trim((string) ($variant?->size ?? ''))));
+                                                    preg_match('/([0-9]*\.?[0-9]+)/', $sizeRaw, $sizeMatches);
+                                                    $unitWeight = (float) ($sizeMatches[1] ?? 0);
+                                                    if (str_contains($sizeRaw, 'g') && !str_contains($sizeRaw, 'kg')) {
+                                                        $unitWeight = $unitWeight / 1000;
+                                                    }
+                                                    $unitWeight = round(max(0, $unitWeight), 3);
+                                                }
                                                 $unitDiscount = (float) old('item_discount.' . ($variant?->id), $item->unit_discount ?? 0);
                                                 $unitDiscount = max(0, min($unitDiscount, $unitPrice));
                                                 $lineTotal = (float) ($item->total ?? (($unitPrice - $unitDiscount) * $qty));
@@ -278,6 +292,20 @@
                                                 </td>
                                                 <td>
                                                     <input type="number" name="items[{{ $index }}][quantity]" class="form-control quantity-input" min="1" value="{{ $qty }}" required>
+                                                </td>
+                                                <td><span class="text-muted small">{{ $unitLabel }}</span></td>
+                                                <td>
+                                                    <div class="d-flex align-items-center gap-2">
+                                                        <input
+                                                            type="number"
+                                                            class="form-control form-control-sm weight-input"
+                                                            name="item_weight[{{ $variant?->id }}]"
+                                                            min="0"
+                                                            step="0.001"
+                                                            value="{{ number_format((float) $unitWeight, 3, '.', '') }}"
+                                                        >
+                                                        <span class="text-muted small" style="white-space: nowrap;">{{ $weightUnitLabel }}</span>
+                                                    </div>
                                                 </td>
                                                 <td class="row-total">{{ number_format($lineTotal, 0, ',', '.') }}đ</td>
                                                 <td>
@@ -544,6 +572,9 @@ document.addEventListener('DOMContentLoaded', function () {
         const variantPrice = parseFloat(addBtn.dataset.variantPrice || '0');
         const variantStock = parseInt(addBtn.dataset.variantStock || '0', 10);
         const variantImage = addBtn.dataset.variantImage || 'https://via.placeholder.com/48';
+        const variantUnitLabel = addBtn.dataset.variantUnitLabel || 'Cái';
+        const variantWeight = parseFloat(addBtn.dataset.variantWeight || '0');
+        const variantWeightUnitLabel = addBtn.dataset.variantWeightUnitLabel || 'Kg';
 
         const row = document.createElement('tr');
         row.className = 'cart-item-row';
@@ -572,6 +603,13 @@ document.addEventListener('DOMContentLoaded', function () {
             </td>
             <td>
                 <input type="number" name="items[${itemIndex}][quantity]" class="form-control quantity-input" min="1" max="${variantStock > 0 ? variantStock : ''}" value="1" required>
+            </td>
+            <td><span class="text-muted small">${variantUnitLabel}</span></td>
+            <td>
+                <div class="d-flex align-items-center gap-2">
+                    <input type="number" class="form-control form-control-sm weight-input" name="item_weight[${variantId}]" min="0" step="0.001" value="${variantWeight.toFixed(3)}">
+                    <span class="text-muted small" style="white-space: nowrap;">${variantWeightUnitLabel}</span>
+                </div>
             </td>
             <td class="row-total">${formatNumber(variantPrice)}đ</td>
             <td>

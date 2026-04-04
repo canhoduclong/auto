@@ -76,6 +76,8 @@
         <tr>
             <th>{{ __('inventory.labels.product_variant') }}</th>
             <th>{{ __('inventory.labels.quantity') }}</th>
+            <th>ĐVT</th>
+            <th>Khối lượng</th>
             <th>{{ __('inventory.labels.unit_cost') }}</th>
             <th></th>
         </tr>
@@ -106,11 +108,38 @@
         let tbody = document.getElementById('items-tbody');
         let addItemBtn = document.getElementById('add-item-btn');
 
+        const syncRowUnitLabel = (row) => {
+            if (!row) {
+                return;
+            }
+
+            const select = row.querySelector('select[name*="[product_variant_id]"]');
+            const labelEl = row.querySelector('.unit-label-display');
+            const weightEl = row.querySelector('.weight-display');
+            const weightUnitEl = row.querySelector('.weight-unit-display');
+            if (!select || !labelEl) {
+                return;
+            }
+
+            const selectedOption = select.options[select.selectedIndex];
+            const unitLabel = selectedOption?.getAttribute('data-unit-label') || 'Cái';
+            labelEl.textContent = unitLabel;
+
+            if (weightEl) {
+                const weight = parseFloat(selectedOption?.getAttribute('data-default-weight') || '0');
+                weightEl.value = Number.isFinite(weight) ? weight.toFixed(3) : '0.000';
+            }
+            if (weightUnitEl) {
+                weightUnitEl.textContent = selectedOption?.getAttribute('data-weight-unit-label') || 'Kg';
+            }
+        };
+
         addItemBtn.addEventListener('click', function () {
             let key = new Date().getTime();
             let newRow = document.createElement('tr');
             newRow.innerHTML = `@include('inventory-documents.item-row', ['key' => '${key}'])`;
             tbody.appendChild(newRow);
+            syncRowUnitLabel(newRow);
         });
 
         tbody.addEventListener('click', function (e) {
@@ -118,6 +147,20 @@
                 e.target.closest('tr').remove();
             }
         });
+
+        tbody.addEventListener('change', function (e) {
+            const target = e.target;
+            if (!(target instanceof HTMLSelectElement)) {
+                return;
+            }
+            if (target.name.indexOf('[product_variant_id]') === -1) {
+                return;
+            }
+
+            syncRowUnitLabel(target.closest('tr'));
+        });
+
+        tbody.querySelectorAll('tr').forEach(syncRowUnitLabel);
     });
 </script>
 @endpush

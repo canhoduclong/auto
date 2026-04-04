@@ -250,6 +250,9 @@ class CartController extends Controller
                 'image' => $variant->product->avatar?->media?->file_path ?? null,
                 'sku' => $variant->sku,
                 'size' => $variant->size,
+                'unit' => $variant->product->unit,
+                'unit_label' => $variant->product->unit_label ?? 'Cái',
+                'don_vi_tinh' => $variant->product->unit_label ?? 'Cái',
                 'unit_weight' => $this->parseWeightToKg($variant->size),
             ];
         }
@@ -258,7 +261,12 @@ class CartController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Product added to cart successfully!',
-            'cart_count' => count($cart)
+            'cart_count' => count($cart),
+            'quantity' => (int) ($cart[$variant->id]['quantity'] ?? $quantity),
+            'unit' => $variant->product->unit,
+            'unit_label' => $variant->product->unit_label ?? 'Cái',
+            'don_vi_tinh' => $variant->product->unit_label ?? 'Cái',
+            'weight' => (float) ($cart[$variant->id]['unit_weight'] ?? 0),
         ]);
     }
 
@@ -358,6 +366,10 @@ class CartController extends Controller
             'item' => [
                 'id' => (string) $itemId,
                 'quantity' => $quantity,
+                'unit' => $cart[$itemId]['unit'] ?? null,
+                'unit_label' => $cart[$itemId]['unit_label'] ?? 'Cái',
+                'don_vi_tinh' => $cart[$itemId]['unit_label'] ?? 'Cái',
+                'weight' => $uw,
                 'unit_weight' => $uw,
                 'unit_price' => number_format($price),
                 'subtotal' => $itemSubtotal,

@@ -14,6 +14,14 @@
         <label>Tồn kho</label>
         <input type='text' name='stock' value='{{ $product->stock }}' class='form-control'>
     </div>
+    <div style="display: inline-block; margin-right: 10px; min-width: 140px;">
+        <label>Đơn vị tính</label>
+        <select name="unit" class="form-select">
+            @foreach($unitOptions as $value => $label)
+                <option value="{{ $value }}" {{ ($product->unit ?? 'cai') === $value ? 'selected' : '' }}>{{ $label }}</option>
+            @endforeach
+        </select>
+    </div>
     <div style="display: inline-block; margin-right: 10px;">
         <label>Ảnh</label>
         <div>
