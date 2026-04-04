@@ -31,13 +31,8 @@ class CheckMobileRoleRedirect
             }
         }
 
-        if (!$isMobile && $isMobilePath) {
-            $desktopRoute = $this->resolveDesktopRoute($user);
-
-            if ($desktopRoute !== null && !$request->routeIs($desktopRoute)) {
-                return redirect()->route($desktopRoute);
-            }
-        }
+        // Allow users to open /m/* explicitly on desktop (useful for testing and hybrid workflows).
+        // We only force mobile redirect when device is mobile and user is on desktop routes.
 
         return $next($request);
     }
@@ -54,27 +49,6 @@ class CheckMobileRoleRedirect
 
         if ($this->isSalesLikeUser($user)) {
             return 'mobile.sale.home';
-        }
-
-        return null;
-    }
-
-    private function resolveDesktopRoute($user): ?string
-    {
-        if ($user->hasRole('warehouse')) {
-            return 'warehouse.dashboard';
-        }
-
-        if ($user->hasRole('shipper') || $user->hasRole('ship')) {
-            return 'shipper.dashboard';
-        }
-
-        if ($this->isSalesLikeUser($user)) {
-            if ($user->hasPermission('orders.monitoring')) {
-                return 'pages.my_orders.monitoring';
-            }
-
-            return 'pages.my_orders';
         }
 
         return null;
