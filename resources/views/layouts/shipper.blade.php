@@ -7,6 +7,7 @@
     <title>Shipper – @yield('title', 'Dashboard')</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="{{ asset('css/mobile-responsive.css') }}" type="text/css">
     @stack('styles')
     <style>
         :root {
@@ -151,12 +152,15 @@
         }
 
         @media (max-width: 768px) {
-            .sp-sidebar { transform: translateX(-100%); }
+            .sp-sidebar { transform: translateX(-100%); transition: transform .22s ease; }
+            .sp-sidebar.mobile-open { transform: translateX(0); }
             .sp-main { margin-left: 0; }
+            .sp-topbar { padding: .65rem .85rem; }
+            .sp-content { padding: .9rem; }
         }
     </style>
 </head>
-<body>
+<body class="{{ !empty($isMobileClient) ? 'is-mobile-client' : '' }}">
     <!-- Sidebar -->
     <aside class="sp-sidebar">
         <div class="sp-brand">
@@ -201,15 +205,21 @@
             </form>
         </div>
     </aside>
+    <div class="mobile-drawer-overlay d-md-none js-sp-overlay"></div>
 
     <!-- Main content -->
     <div class="sp-main">
         <header class="sp-topbar">
-            <div>
+            <div class="d-flex align-items-center gap-2">
+                <button type="button" class="btn btn-light d-md-none js-sp-toggle" aria-label="Open menu">
+                    <i class="bi bi-list"></i>
+                </button>
+                <div>
                 <h6 class="mb-0 fw-semibold">@yield('title', 'Dashboard')</h6>
                 @hasSection('subtitle')
                     <div class="text-muted" style="font-size:.8rem;">@yield('subtitle')</div>
                 @endif
+                </div>
             </div>
             <div class="d-flex align-items-center gap-3">
                 <span class="text-muted small">
@@ -252,6 +262,26 @@
             if (el) el.textContent = new Date().toLocaleTimeString('vi-VN', {hour:'2-digit', minute:'2-digit'});
             setTimeout(tick, 60000);
         })();
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const sidebar = document.querySelector('.sp-sidebar');
+            const toggle = document.querySelector('.js-sp-toggle');
+            const overlay = document.querySelector('.js-sp-overlay');
+
+            if (sidebar && toggle && overlay) {
+                const closeDrawer = function () {
+                    sidebar.classList.remove('mobile-open');
+                    document.body.classList.remove('mobile-menu-open');
+                };
+
+                toggle.addEventListener('click', function () {
+                    sidebar.classList.add('mobile-open');
+                    document.body.classList.add('mobile-menu-open');
+                });
+
+                overlay.addEventListener('click', closeDrawer);
+            }
+        });
     </script>
     @stack('scripts')
 </body>

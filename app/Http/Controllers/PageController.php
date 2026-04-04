@@ -920,7 +920,14 @@ class PageController extends Controller
             ->map(fn ($role) => strtolower((string) $role))
             ->values();
 
-        $query = Order::with(['customer', 'user.roles', 'user.team', 'approvals.step'])
+        $query = Order::with([
+            'customer',
+            'user.roles',
+            'user.team',
+            'approvals.step',
+            'items.product',
+            'items.variant',
+        ])
             ->when(!$user->hasRole('admin'), function ($q) use ($user) {
                 $q->whereHas('user', function ($sub) use ($user) {
                     $sub->where(function ($scope) use ($user) {
@@ -983,7 +990,13 @@ class PageController extends Controller
             });
         }
 
-        $orders = $query->latest()->paginate(15)->appends($request->query());
+        $allowedPerPage = [10, 15, 25, 50, 100];
+        $perPage = (int) $request->input('per_page', 15);
+        if (!in_array($perPage, $allowedPerPage, true)) {
+            $perPage = 15;
+        }
+
+        $orders = $query->latest()->paginate($perPage)->appends($request->query());
 
         $currentStepByOrder = [];
         $canApproveByOrder = [];
@@ -1021,6 +1034,7 @@ class PageController extends Controller
             'pendingOnly' => $pendingOnly,
             'fromDate' => $fromDate,
             'toDate' => $toDate,
+            'perPage' => $perPage,
         ]);
     }
 

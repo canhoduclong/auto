@@ -11,6 +11,7 @@
 	<link href="{{ asset('assets/fonts/inter/inter.css') }}" rel="stylesheet" type="text/css">
 	<link href="{{ asset('assets/icons/phosphor/styles.min.css') }}" rel="stylesheet" type="text/css">
 	<link href="{{ asset('assets/css/ltr/all.min.css') }}" id="stylesheet" rel="stylesheet" type="text/css">
+    <link href="{{ asset('css/mobile-responsive.css') }}" rel="stylesheet" type="text/css">
 	<!-- /global stylesheets -->
 
 	<!-- Core JS files -->
@@ -26,16 +27,41 @@
      <script src="{{ asset('ckeditor/ckeditor.js') }}"></script>
      
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+
+    <style>
+        @media (max-width: 991.98px) {
+            .sidebar.sidebar-main {
+                position: fixed;
+                top: 0;
+                left: 0;
+                bottom: 0;
+                width: min(86vw, 320px);
+                transform: translateX(-100%);
+                transition: transform 0.22s ease;
+                z-index: 220;
+            }
+
+            .sidebar.sidebar-main.mobile-sidebar-open {
+                transform: translateX(0);
+            }
+
+            .content-wrapper {
+                margin-left: 0 !important;
+                width: 100%;
+            }
+        }
+    </style>
  	
 
     @stack('styles')
 </head>
-<body>
+<body class="{{ !empty($isMobileClient) ? 'is-mobile-client' : '' }}">
 
     <div class="page-content"> 
 		<div class="sidebar sidebar-dark sidebar-main sidebar-expand-lg">
              @include('layouts.sidebar')
         </div>
+        <div class="mobile-drawer-overlay d-lg-none js-mobile-drawer-overlay"></div>
         <div class="content-wrapper">
             <div class="navbar navbar-expand-lg navbar-static shadow">
 				<div class="container-fluid">
@@ -45,6 +71,10 @@
                         $unreadNotificationsCount = $hasNotificationsTable ? ($currentUser?->unreadNotifications()->count() ?? 0) : 0;
                         $latestNotifications = $hasNotificationsTable ? ($currentUser?->notifications()->latest()->take(5)->get() ?? collect()) : collect();
                     @endphp
+
+                    <button type="button" class="btn btn-light btn-sm d-lg-none me-2 js-global-mobile-menu-toggle" aria-label="Open menu">
+                        <i class="ph ph-list"></i>
+                    </button>
 
                     <div class="ms-auto d-flex align-items-center gap-2 py-2">
                         <div class="dropdown">
@@ -157,6 +187,24 @@
                 const toast = new bootstrap.Toast(toastEl, { delay: 5000 });
                 toast.show();
             });
+        }
+
+        const sidebar = document.querySelector('.sidebar.sidebar-main');
+        const toggleBtn = document.querySelector('.js-global-mobile-menu-toggle');
+        const overlay = document.querySelector('.js-mobile-drawer-overlay');
+
+        if (sidebar && toggleBtn && overlay) {
+            const closeSidebar = function () {
+                sidebar.classList.remove('mobile-sidebar-open');
+                document.body.classList.remove('mobile-menu-open');
+            };
+
+            toggleBtn.addEventListener('click', function () {
+                sidebar.classList.add('mobile-sidebar-open');
+                document.body.classList.add('mobile-menu-open');
+            });
+
+            overlay.addEventListener('click', closeSidebar);
         }
     });
 </script>

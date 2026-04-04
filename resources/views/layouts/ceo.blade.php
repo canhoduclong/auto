@@ -7,6 +7,7 @@
     <title>CEO - @yield('title', 'Executive')</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="{{ asset('css/mobile-responsive.css') }}" type="text/css">
     @stack('styles')
     <style>
         :root {
@@ -125,15 +126,31 @@
         }
         @media (max-width: 992px) {
             .ceo-sidebar {
+                position: fixed;
+                top: 0;
+                left: 0;
+                bottom: 0;
+                width: min(86vw, 320px);
+                z-index: 220;
                 transform: translateX(-100%);
+                transition: transform 0.22s ease;
+            }
+            .ceo-sidebar.mobile-open {
+                transform: translateX(0);
             }
             .ceo-main {
                 margin-left: 0;
             }
+            .ceo-topbar {
+                padding: .65rem .85rem;
+            }
+            .ceo-content {
+                padding: .9rem;
+            }
         }
     </style>
 </head>
-<body>
+<body class="{{ !empty($isMobileClient) ? 'is-mobile-client' : '' }}">
     <aside class="ceo-sidebar">
         <div class="ceo-brand">
             <span class="dot"></span>
@@ -180,12 +197,18 @@
             </form>
         </div>
     </aside>
+    <div class="mobile-drawer-overlay d-lg-none js-ceo-overlay"></div>
 
     <main class="ceo-main">
         <header class="ceo-topbar">
-            <div>
+            <div class="d-flex align-items-center gap-2">
+                <button type="button" class="btn btn-light d-lg-none js-ceo-toggle" aria-label="Open menu">
+                    <i class="bi bi-list"></i>
+                </button>
+                <div>
                 <strong>@yield('title', 'Executive')</strong>
                 <div class="text-muted small">@yield('subtitle', 'Bảng điều hành CEO')</div>
+                </div>
             </div>
             <div class="ceo-user">
                 <span>{{ auth()->user()->name ?? 'CEO' }} | {{ now()->format('d/m/Y H:i') }}</span>
@@ -204,6 +227,27 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const sidebar = document.querySelector('.ceo-sidebar');
+            const toggle = document.querySelector('.js-ceo-toggle');
+            const overlay = document.querySelector('.js-ceo-overlay');
+
+            if (sidebar && toggle && overlay) {
+                const closeDrawer = function () {
+                    sidebar.classList.remove('mobile-open');
+                    document.body.classList.remove('mobile-menu-open');
+                };
+
+                toggle.addEventListener('click', function () {
+                    sidebar.classList.add('mobile-open');
+                    document.body.classList.add('mobile-menu-open');
+                });
+
+                overlay.addEventListener('click', closeDrawer);
+            }
+        });
+    </script>
     @stack('scripts')
 </body>
 </html>

@@ -158,11 +158,23 @@
                 <ul class="list-unstyled mb-2">
                     @php
                         $offcanvasCanViewMonitoring = Auth::user()->isAdmin() || Auth::user()->hasPermission('orders.monitoring');
+                        $offcanvasCanApproveTeamOrders = Auth::user()->hasRole('leader')
+                            || Auth::user()->hasRole('leader_sale')
+                            || Auth::user()->hasRole('manager')
+                            || Auth::user()->hasRole('manager_sale');
+                        $offcanvasCanApproveDepartmentOrders = Auth::user()->hasRole('manager')
+                            || Auth::user()->hasRole('manager_sale');
                     @endphp
                     <li><a href="{{ route('pages.my_dashboard') }}" class="d-block py-1"><i class="bi bi-person-circle me-1"></i> {{ __('site.profile') }}</a></li>
                     <li><a href="{{ route('pages.my_orders') }}" class="d-block py-1"><i class="bi bi-bag-check me-1"></i> {{ __('site.my_orders') }}</a></li>
                     @if($offcanvasCanViewMonitoring)
                         <li><a href="{{ route('pages.my_orders.monitoring') }}" class="d-block py-1"><i class="bi bi-activity me-1"></i> Theo dõi đơn hàng</a></li>
+                    @endif
+                    @if($offcanvasCanApproveTeamOrders)
+                        <li><a href="{{ route('pages.my_team_orders') }}" class="d-block py-1"><i class="bi bi-check-circle me-1"></i> Duyệt đơn của Team</a></li>
+                    @endif
+                    @if($offcanvasCanApproveDepartmentOrders)
+                        <li><a href="{{ route('pages.all_team_orders') }}" class="d-block py-1"><i class="bi bi-check2-all me-1"></i> Duyệt đơn PKD</a></li>
                     @endif
                     <li><a href="{{ route('pages.my_customer') }}" class="d-block py-1"><i class="bi bi-people me-1"></i> {{ __('site.my_customers') }}</a></li>
                     <li><a href="{{ route('work-reports.index') }}" class="d-block py-1"><i class="bi bi-clipboard-data me-1"></i> Báo cáo công việc</a></li>
@@ -322,6 +334,12 @@
                                         @php
                                             $isSalesFlowRole = Auth::user()->isSalesFlowRole();
                                             $canAccessSalesDailyPages = Auth::user()->canAccessSalesDailyFeatures();
+                                            $canApproveTeamOrders = Auth::user()->hasRole('leader')
+                                                || Auth::user()->hasRole('leader_sale')
+                                                || Auth::user()->hasRole('manager')
+                                                || Auth::user()->hasRole('manager_sale');
+                                            $canApproveDepartmentOrders = Auth::user()->hasRole('manager')
+                                                || Auth::user()->hasRole('manager_sale');
                                         @endphp
                                         @if($canAccessSalesDailyPages)
                                             <a class="dropdown-item" href="{{ route('pages.my_orders.daily_prices') }}">
@@ -336,15 +354,15 @@
                                                 <i class="bi bi-speedometer2"></i> {{ __('site.dashboard') }}
                                             </a>
                                         @endif
-                                        @if(Auth::user()->hasRole('leader'))
+                                        @if($canApproveTeamOrders)
                                             <div class="dropdown-divider my-0"></div>
-                                            <a class="dropdown-item" href="{{ route('pages.my_tearm_orders') }}">
+                                            <a class="dropdown-item" href="{{ route('pages.my_team_orders') }}">
                                                 <i class="bi bi-check-circle"></i> Duyệt đơn của Team
                                             </a>
                                         @endif
-                                        @if(Auth::user()->hasRole('manager'))
+                                        @if($canApproveDepartmentOrders)
                                             <div class="dropdown-divider my-0"></div>
-                                            <a class="dropdown-item" href="{{ route('pages.all_tearm_orders') }}">
+                                            <a class="dropdown-item" href="{{ route('pages.all_team_orders') }}">
                                                 <i class="bi bi-check-circle"></i> Duyệt Đơn PKD
                                             </a>
                                         @endif

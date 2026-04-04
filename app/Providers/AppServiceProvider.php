@@ -12,6 +12,8 @@ use Illuminate\Support\ServiceProvider;
 use Illuminate\Database\Eloquent\Relations\Relation;
 
 use Illuminate\Pagination\Paginator;
+use Illuminate\Support\Facades\Request;
+use Illuminate\Support\Facades\View;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -23,6 +25,10 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Paginator::useBootstrap();
+
+        $agent = strtolower((string) Request::userAgent());
+        $isMobileClient = preg_match('/iphone|ipod|android|blackberry|opera mini|windows phone|mobile|webos|iemobile|ipad/', $agent) === 1;
+        View::share('isMobileClient', $isMobileClient);
 
         Product::observe(ProductObserver::class);
         Customer::observe(CustomerObserver::class);

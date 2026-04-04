@@ -7,6 +7,7 @@
     <title>Accounting - @yield('title', 'Dashboard')</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="{{ asset('css/mobile-responsive.css') }}" type="text/css">
     <style>
         :root {
             --acc-bg: #f4f6fb;
@@ -127,13 +128,28 @@
         }
         @media (max-width: 992px) {
             .acc-shell { grid-template-columns: 1fr; }
-            .acc-sidebar { display: none; }
+            .acc-sidebar {
+                display: flex;
+                position: fixed;
+                top: 0;
+                left: 0;
+                bottom: 0;
+                width: min(86vw, 320px);
+                z-index: 220;
+                transform: translateX(-100%);
+                transition: transform 0.22s ease;
+            }
+            .acc-sidebar.mobile-open {
+                transform: translateX(0);
+            }
             .acc-kpi { grid-template-columns: 1fr; }
+            .acc-topbar { padding: .65rem .85rem; }
+            .acc-content { padding: .9rem; }
         }
     </style>
     @stack('styles')
 </head>
-<body>
+<body class="{{ !empty($isMobileClient) ? 'is-mobile-client' : '' }}">
 <div class="acc-shell">
     <aside class="acc-sidebar">
         <div class="acc-brand">
@@ -161,12 +177,18 @@
             </form>
         </div>
     </aside>
+    <div class="mobile-drawer-overlay d-lg-none js-acc-overlay"></div>
 
     <main class="acc-main">
         <header class="acc-topbar">
-            <div>
+            <div class="d-flex align-items-center gap-2">
+                <button type="button" class="btn btn-light d-lg-none js-acc-toggle" aria-label="Open menu">
+                    <i class="bi bi-list"></i>
+                </button>
+                <div>
                 <strong>@yield('title', 'Accounting')</strong>
                 <div class="text-muted small">@yield('subtitle', 'Khu vuc nghiep vu ke toan')</div>
+                </div>
             </div>
             <div class="text-muted small">{{ auth()->user()->name ?? 'Accounting' }} | {{ now()->format('d/m/Y H:i') }}</div>
         </header>
@@ -184,6 +206,27 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const sidebar = document.querySelector('.acc-sidebar');
+    const toggle = document.querySelector('.js-acc-toggle');
+    const overlay = document.querySelector('.js-acc-overlay');
+
+    if (sidebar && toggle && overlay) {
+        const closeDrawer = function () {
+            sidebar.classList.remove('mobile-open');
+            document.body.classList.remove('mobile-menu-open');
+        };
+
+        toggle.addEventListener('click', function () {
+            sidebar.classList.add('mobile-open');
+            document.body.classList.add('mobile-menu-open');
+        });
+
+        overlay.addEventListener('click', closeDrawer);
+    }
+});
+</script>
 @stack('scripts')
 </body>
 </html>
