@@ -46,7 +46,7 @@
     .sp-av-table-head,
     .sp-av-table-row {
         display: grid;
-        grid-template-columns: minmax(0, 2fr) 36px 64px 85px 100px;
+        grid-template-columns: minmax(0, 2fr) 36px 44px 34px 68px 100px;
         gap: 8px;
         align-items: center;
     }
@@ -298,6 +298,7 @@
                         <div>Sản phẩm</div>
                         <div class="text-end">SL</div>
                         <div class="text-end">Size</div>
+                        <div class="text-end">Kg</div>
                         <div class="text-end">Đơn giá</div>
                         <div class="text-end">Thành tiền</div>
                     </div>
@@ -321,7 +322,20 @@
                                         @endif
                                     </div>
                                     <div class="sp-av-item-cell"><strong>{{ $qty }}</strong></div>
-                                    <div class="sp-av-item-cell"><strong>{{ $formattedVariantSize }}</strong></div>
+                                    <div class="sp-av-item-cell"><strong>{{ $formattedVariantSize }}</strong></div> 
+                                    <div class="sp-av-item-cell"><strong>
+                                         
+                                    @php
+                                        $itemActualWeight = null;
+                                        if ($item->actual_weight) {
+                                            $itemActualWeight = rtrim(rtrim(number_format((float) $item->actual_weight, 2, '.', ''), '0'), '.');
+                                        }else {
+                                            $itemActualWeight = '-';
+                                        }
+                                    @endphp
+                                    {{ $itemActualWeight }}
+                                    
+                                        </strong></div>
                                     <div class="sp-av-item-cell">{{ number_format($unitPrice) }}đ</div>
                                     <div class="sp-av-item-cell"><strong>{{ number_format($lineTotal) }}đ</strong></div>
                                 </div>

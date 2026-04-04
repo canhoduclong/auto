@@ -367,7 +367,8 @@
                                             $variant = $item->variant;
                                             $orderedQty = (int) $item->quantity;
                                             $unitPrice = (float) ($item->price ?? 0);
-                                            $lineTotal = $orderedQty * $unitPrice;
+                                            $itemActualWeight = is_null($item->actual_weight) ? null : (float) $item->actual_weight;
+                                            $lineTotal = !is_null($itemActualWeight) ? ($itemActualWeight * $unitPrice) : null;
                                             $variantSize = $variant?->size;
                                             $formattedVariantSize = (!is_null($variantSize) && $variantSize !== '')
                                                 ? rtrim(rtrim(number_format((float) $variantSize, 2, '.', ''), '0'), '.')
@@ -377,7 +378,7 @@
                                                 ?? null;
                                         @endphp
                                         <li class="wh-item-row">
-                                            <div class="wh-item-table-row">
+                                            <div class="wh-item-table-row" data-unit-price="{{ number_format($unitPrice, 2, '.', '') }}">
                                                 <div>
                                                     @if($imagePath)
                                                         <img class="wh-item-thumb" src="{{ asset('storage/' . $imagePath) }}" alt="{{ $variant?->name ?? $item->product?->name ?? 'Sản phẩm' }}">
@@ -398,24 +399,31 @@
                                                
                                                 @if(!$isPackedReadonly && $canProcessThisOrder)
                                                     @php
-                                                        $itemWeightDefault = $item->actual_weight ?? $item->total_weight ?? 0;
+                                                        $itemWeightDefault = is_null($item->actual_weight)
+                                                            ? ''
+                                                            : number_format((float) $item->actual_weight, 3, '.', '');
                                                     @endphp
                                                     <div class="wh-item-action js-packing-only {{ $isPacking ? '' : 'd-none' }}">
                                                         <form action="{{ route('warehouse.orders.logistics', $order) }}" method="POST" class="js-logistics-item-form wh-compact-form justify-content-end">
                                                             @csrf
                                                             <input type="hidden" name="item_id" value="{{ $item->id }}">
                                                             <input type="number" name="item_actual_weight" class="form-control form-control-sm actual_weight"
-                                                                value="{{ number_format((float) $itemWeightDefault, 3, '.', '') }}"
+                                                                value="{{ $itemWeightDefault }}"
+                                                                placeholder="kg"
                                                                 min="0" step="0.001" required>
                                                             <button class="btn btn-outline-primary btn-sm js-logistics-submit-btn" type="submit">Lưu</button>
                                                         </form>
                                                     </div>
                                                 @else
-                                                    <div class="wh-readonly-item">{{ number_format((float) ($item->actual_weight ?? 0), 2) }} kg</div>
+                                                    <div class="wh-readonly-item js-item-readonly-kg">
+                                                        {{ !is_null($itemActualWeight) ? number_format($itemActualWeight, 3) . ' kg' : '---' }}
+                                                    </div>
                                                 @endif
                                            
                                                 <div class="wh-item-cell">{{ number_format($unitPrice) }}đ</div>
-                                                <div class="wh-item-cell"><strong>{{ number_format($lineTotal) }}đ</strong></div>
+                                                <div class="wh-item-cell js-item-total-amount">
+                                                    <strong>{{ !is_null($lineTotal) ? number_format($lineTotal) . 'đ' : '---' }}</strong>
+                                                </div>
                                              </div>
                                         </li>
                                     @endforeach
@@ -607,6 +615,30 @@
 
                 if (typeof showToast === 'function') {
                     showToast(payload.message || 'Đã lưu thông tin kho.', 'success');
+                }
+
+                if (form.classList.contains('js-logistics-item-form')) {
+                    const row = form.closest('.wh-item-table-row');
+                    if (row) {
+                        const unitPrice = parseFloat(row.dataset.unitPrice || '0');
+                        const weightInput = form.querySelector('input[name="item_actual_weight"]');
+                        const actualWeight = parseFloat(weightInput?.value || '0');
+                        const amountCell = row.querySelector('.js-item-total-amount strong');
+
+                        if (amountCell) {
+                            if (!Number.isNaN(actualWeight)) {
+                                const lineTotal = Math.round(unitPrice * actualWeight);
+                                amountCell.textContent = new Intl.NumberFormat('vi-VN').format(lineTotal) + 'đ';
+                            } else {
+                                amountCell.textContent = '---';
+                            }
+                        }
+
+                        const readonlyKg = row.querySelector('.js-item-readonly-kg');
+                        if (readonlyKg && !Number.isNaN(actualWeight)) {
+                            readonlyKg.textContent = actualWeight.toFixed(3) + ' kg';
+                        }
+                    }
                 }
             } catch (error) {
                 if (typeof showToast === 'function') {
