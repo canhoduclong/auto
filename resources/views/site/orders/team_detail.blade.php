@@ -483,7 +483,7 @@
                                 </div>
                                 <div class="team-summary-row">
                                     <span>Khối lượng tạm tính</span>
-                                    <strong>{{ number_format($estimatedTotalWeight, 3, ',', '.') }} kg</strong>
+                                    <strong>{{ number_format($estimatedTotalWeight, 2, ',', '.') }} kg</strong>
                                 </div>
                                 <div class="team-summary-row">
                                     <span>Giảm giá</span>
