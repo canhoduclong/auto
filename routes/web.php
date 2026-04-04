@@ -255,6 +255,9 @@ Route::middleware(['auth'])->group(function () {
     // Quản lý quyền
     // Route::resource('permissions', PermissionController::class);//->middleware('permission');
 
+    Route::post('permissions/sync-routes', [PermissionController::class, 'syncFromRoutes'])
+        ->name('permissions.sync-routes')
+        ->middleware('permission:permissions.index');
     Route::resource('permissions', PermissionController::class)->middleware('permission');
 
     // Quản lý người dùng

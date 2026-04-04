@@ -4,6 +4,7 @@ namespace App\Exceptions;
 
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
+use Illuminate\Session\TokenMismatchException;
 use Throwable;
 
 class Handler extends ExceptionHandler
@@ -58,6 +59,20 @@ class Handler extends ExceptionHandler
      */
     public function render($request, Throwable $exception)
     {
+        if ($exception instanceof TokenMismatchException) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.',
+                ], 419);
+            }
+
+            if ($request->is('logout') || $request->routeIs('logout')) {
+                return redirect()
+                    ->route('login')
+                    ->with('error', 'Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.');
+            }
+        }
+
         if ($exception instanceof AuthorizationException) {
             // Bắt lỗi 403 (Unauthorized) và trả về view lỗi tùy chỉnh
             return response()->view('errors.403', [], 403);
