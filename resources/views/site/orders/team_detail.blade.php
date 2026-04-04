@@ -466,7 +466,7 @@
                                             <div class="team-item-cell"><strong>{{ number_format($qty, 0, ',', '.') }}</strong></div>
                                             <div class="text-center text-muted small">{{ $unitLabel }}</div>
                                             <div class="text-center text-muted small">{{ $sizeText }}</div>
-                                            <div class="team-item-cell">{{ number_format($lineWeight, 3, ',', '.') }} {{ $weightUnitLabel }}</div>
+                                            <div class="team-item-cell">{{ number_format($lineWeight, 2, ',', '.') }} {{ $weightUnitLabel }}</div>
                                             <div class="team-item-cell">{{ number_format($price, 0, ',', '.') }} đ</div>
                                             <div class="team-item-cell"><strong>{{ number_format($lineTotal, 0, ',', '.') }} đ</strong></div>
                                         </div>
