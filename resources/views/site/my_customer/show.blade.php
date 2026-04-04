@@ -135,15 +135,40 @@
         margin-top: 22px;
     }
     .customer-card {
-        background: rgba(255, 255, 255, 0.88);
-        border: 1px solid rgba(148, 163, 184, 0.2);
-        border-radius: 24px;
-        box-shadow: 0 18px 44px rgba(15, 23, 42, 0.08);
+        background: #fff;
+        border: 1px solid #dbe4ef;
+        border-radius: 12px;
+        box-shadow: 0 6px 18px rgba(17, 24, 39, 0.05);
         overflow: hidden;
-        backdrop-filter: blur(10px);
+    }
+    .customer-card-header {
+        border-bottom: 1px solid #dbe4ef;
+        padding: 14px 16px;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+        background: #fff;
     }
     .customer-card-body {
-        padding: 22px;
+        padding: 16px;
+    }
+    .customer-card-head-right {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    .customer-collapse-btn {
+        border-radius: 999px;
+        border: 1px solid #dbe4ef;
+        background: #fff;
+        color: #334155;
+        font-weight: 700;
+        font-size: 12px;
+        padding: 4px 12px;
+        white-space: nowrap;
     }
     .customer-filter-card {
         grid-column: span 12;
@@ -240,39 +265,44 @@
         background: rgba(255, 255, 255, 0.18);
     }
     .customer-section-title {
-        margin: 0 0 6px;
-        font-size: 22px;
+        margin: 0 0 4px;
+        font-size: 20px;
         font-weight: 800;
         color: #0f172a;
     }
     .customer-section-subtitle {
         color: #64748b;
         margin: 0;
+        font-size: 14px;
     }
-    .customer-info-grid {
+    .customer-info-stack {
         display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 16px;
-        margin-top: 20px;
+        gap: 10px;
+        margin-top: 12px;
     }
-    .customer-info-item {
+    .customer-info-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 16px;
         border: 1px solid #e2e8f0;
-        border-radius: 18px;
-        padding: 16px 18px;
-        background: #fff;
+        border-radius: 10px;
+        padding: 10px 12px;
+        background: #f8fafc;
     }
     .customer-info-label {
-        display: block;
+        display: inline-block;
         font-size: 12px;
         text-transform: uppercase;
         letter-spacing: 0.08em;
         color: #64748b;
-        margin-bottom: 8px;
+        margin-bottom: 0;
     }
     .customer-info-value {
         color: #0f172a;
         font-weight: 700;
         word-break: break-word;
+        text-align: right;
     }
     .customer-two-column {
         grid-column: span 12;
@@ -342,6 +372,14 @@
     .customer-field { grid-column: span 3; }
     .customer-field.wide { grid-column: span 4; }
     .customer-field.full { grid-column: span 12; }
+    .customer-form-stack {
+        grid-template-columns: 1fr;
+    }
+    .customer-form-stack .customer-field,
+    .customer-form-stack .customer-field.wide,
+    .customer-form-stack .customer-field.full {
+        grid-column: span 12;
+    }
     .customer-label {
         display: block;
         margin-bottom: 8px;
@@ -441,13 +479,94 @@
     .customer-border{
         border: #dfdfdf 1px solid;
     }
+    .customer-layout-grid {
+        display: grid;
+        grid-template-columns: 320px minmax(0, 1fr);
+        gap: 18px;
+        align-items: start;
+    }
+    .customer-sidebar {
+        position: sticky;
+        top: 84px;
+        max-height: calc(100vh - 96px);
+        overflow: hidden;
+    }
+    .customer-sidebar-card {
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        border-radius: 20px;
+        box-shadow: 0 14px 30px rgba(15, 23, 42, 0.09);
+        display: flex;
+        flex-direction: column;
+        max-height: calc(100vh - 96px);
+    }
+    .customer-sidebar-header {
+        padding: 16px;
+        border-bottom: 1px solid #e2e8f0;
+    }
+    .customer-sidebar-list {
+        padding: 10px;
+        overflow: auto;
+        display: grid;
+        gap: 8px;
+    }
+    .customer-sidebar-item {
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        background: #fff;
+        padding: 10px 12px;
+        text-decoration: none;
+        color: #334155;
+        transition: .18s ease;
+    }
+    .customer-sidebar-item:hover {
+        border-color: #93c5fd;
+        box-shadow: 0 4px 14px rgba(59, 130, 246, 0.14);
+    }
+    .customer-sidebar-item.active {
+        border-color: #16a34a;
+        background: linear-gradient(135deg, #dcfce7 0%, #f0fdf4 100%);
+        color: #14532d;
+        box-shadow: inset 0 0 0 1px rgba(22, 163, 74, 0.18);
+    }
+    .customer-sidebar-name {
+        font-weight: 800;
+        margin-bottom: 4px;
+        font-size: 14px;
+    }
+    .customer-sidebar-meta {
+        font-size: 12px;
+        color: #64748b;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .customer-main-pane {
+        min-width: 0;
+    }
     @media (max-width: 991px) {
         .customer-summary-grid,
         .customer-report-grid,
         .customer-two-column {
             grid-template-columns: 1fr;
         }
-        .customer-info-grid { grid-template-columns: 1fr; }
+        .customer-layout-grid {
+            grid-template-columns: 1fr;
+        }
+        .customer-sidebar {
+            position: static;
+            max-height: none;
+        }
+        .customer-sidebar-card {
+            max-height: 420px;
+        }
+        .customer-info-row {
+            flex-direction: column;
+            gap: 6px;
+        }
+        .customer-info-value {
+            text-align: left;
+        }
         .customer-field,
         .customer-field.wide { grid-column: span 6; }
     }
@@ -464,6 +583,9 @@
 </style>
 
 @php
+    $careLogsSorted = collect($careLogs ?? $customer->careLogs ?? [])->sortByDesc('created_at')->values();
+    $remindersSorted = collect($reminders ?? $customer->reminders ?? [])->sortByDesc('remind_at')->values();
+
     $defaultAddress = $customer->addresses->firstWhere('is_default', 1) ?? $customer->addresses->first();
     $addressParts = collect([
         optional($defaultAddress)->house_number,
@@ -483,6 +605,7 @@
     ])->filter()->implode(', ');
 
     $queryParams = request()->except('orders_page', 'debt_page', 'payments_page');
+    $sidebarQueryParams = request()->except('orders_page', 'debt_page', 'payments_page');
     $periodLabel = match($period) {
         'today' => 'Hom nay',
         'week' => 'Tuan nay',
@@ -517,10 +640,66 @@
     $reportOrderCount = (int) $reportByMonth->sum('order_count');
     $reportOrderTotal = (float) $reportByMonth->sum('order_total');
     $reportOutstandingTotal = (float) $reportByMonth->sum('outstanding_total');
+
+    $recentTwoPeriods = collect($reportByMonth)->sortByDesc('period')->take(2)->values();
+    $frequencyTrendLabel = 'Ổn định';
+    $frequencyTrendClass = 'badge-info';
+    if ($recentTwoPeriods->count() >= 2) {
+        $latestCount = (int) ($recentTwoPeriods[0]['order_count'] ?? 0);
+        $previousCount = (int) ($recentTwoPeriods[1]['order_count'] ?? 0);
+        if ($latestCount > $previousCount) {
+            $frequencyTrendLabel = 'Tăng';
+            $frequencyTrendClass = 'badge-success';
+        } elseif ($latestCount < $previousCount) {
+            $frequencyTrendLabel = 'Giảm';
+            $frequencyTrendClass = 'badge-warning';
+        }
+    }
 @endphp
 
 <div class="customer-detail-shell">
     <div class="customer-detail-container">
+        <div class="customer-layout-grid">
+            <aside class="customer-sidebar">
+                <div class="customer-sidebar-card">
+                    <div class="customer-sidebar-header">
+                        <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
+                            <strong>Danh sách khách hàng</strong>
+                            <span class="customer-badge badge-info">{{ count($customerList ?? []) }}</span>
+                        </div>
+                        <form method="GET" action="{{ route('my_customer.show', $customer) }}">
+                            <input type="hidden" name="tab" value="{{ $activeTab }}">
+                            <input type="hidden" name="period" value="{{ $period }}">
+                            <input type="hidden" name="from_date" value="{{ $fromDate->toDateString() }}">
+                            <input type="hidden" name="to_date" value="{{ $toDate->toDateString() }}">
+                            <input type="hidden" name="order_status" value="{{ request('order_status') }}">
+                            <input type="text" name="sidebar_search" class="customer-input" value="{{ $sidebarSearch ?? '' }}" placeholder="Tìm tên/sđt/khu vực...">
+                        </form>
+                    </div>
+                    <div class="customer-sidebar-list">
+                        @forelse(($customerList ?? []) as $listCustomer)
+                            @php
+                                $isActiveCustomer = (int) $listCustomer->id === (int) $customer->id;
+                                $shortArea = \Illuminate\Support\Str::limit((string) ($listCustomer->address ?? 'Chưa có khu vực'), 38);
+                            @endphp
+                            <a href="{{ route('my_customer.show', ['customer' => $listCustomer->id] + $sidebarQueryParams) }}" class="customer-sidebar-item {{ $isActiveCustomer ? 'active' : '' }}">
+                                <div class="customer-sidebar-name">{{ $listCustomer->name }}</div>
+                                <div class="customer-sidebar-meta">
+                                    <span><i class="bi bi-geo-alt"></i> {{ $shortArea }}</span>
+                                </div>
+                                <div class="customer-sidebar-meta mt-1">
+                                    <span><i class="bi bi-telephone"></i> {{ $listCustomer->phone ?: '-' }}</span>
+                                    <span><i class="bi bi-bag-check"></i> {{ number_format((int) ($listCustomer->orders_count ?? 0)) }} đơn</span>
+                                </div>
+                            </a>
+                        @empty
+                            <div class="customer-empty">Không có khách hàng phù hợp.</div>
+                        @endforelse
+                    </div>
+                </div>
+            </aside>
+
+            <div class="customer-main-pane">
         <div class="customer-hero">
             <div class="customer-hero-top">
                 <div>
@@ -578,138 +757,170 @@
                 </div>
             </div>
 
-            <div class="customer-card" style="grid-column: span 6;">
-                <div class="customer-card-body">
-                    <h2 class="customer-section-title">Thông tin khách hàng</h2>
-                    <p class="customer-section-subtitle">Thông tin chi tiết để sale và CSKH phối hợp xử lý nhanh.</p>
-                    <div class="customer-info-grid">
-                        <div class="customer-info-item">
-                            <span class="customer-info-label">Tên khách</span>
+            <div class="customer-card" style="grid-column: span 12;">
+                <div class="customer-card-header">
+                    <div>
+                        <h2 class="customer-section-title">Thông tin khách hàng</h2>
+                        <p class="customer-section-subtitle">Thông tin cốt lõi để quét nhanh dữ liệu khách hàng.</p>
+                    </div>
+                    <button type="button" class="customer-collapse-btn" data-bs-toggle="collapse" data-bs-target="#customerInfoCollapse" aria-expanded="true" aria-controls="customerInfoCollapse">
+                        Thu gọn / Mở rộng
+                    </button>
+                </div>
+                <div class="customer-card-body collapse show" id="customerInfoCollapse">
+                    <div class="customer-info-stack">
+                        <div class="customer-info-row">
+                            <span class="customer-info-label">Tên khách hàng</span>
                             <div class="customer-info-value">{{ $customer->name }}</div>
                         </div>
-                        <div class="customer-info-item">
-                            <span class="customer-info-label">Điện thoại</span>
-                            <div class="customer-info-value">{{ $customer->phone ?: '-' }}</div>
-                        </div>
-                        <div class="customer-info-item">
-                            <span class="customer-info-label">Email</span>
-                            <div class="customer-info-value">{{ $customer->email ?: '-' }}</div>
-                        </div>
-                        <div class="customer-info-item">
-                            <span class="customer-info-label">Khu vực</span>
-                            <div class="customer-info-value">{{ $region ?: '-' }}</div>
-                        </div>
-                        <div class="customer-info-item">
-                            <span class="customer-info-label">Size</span>
-                            <div class="customer-info-value">{{ $customer->size ?: '-' }}</div>
-                        </div>
-                        <div class="customer-info-item">
-                            <span class="customer-info-label">Sản lượng</span>
-                            <div class="customer-info-value">{{ $customer->production ?: '-' }}</div>
-                        </div>
-                        <div class="customer-info-item" style="grid-column: span 2;">
+                        <div class="customer-info-row">
                             <span class="customer-info-label">Địa chỉ</span>
                             <div class="customer-info-value">{{ $fullAddress ?: '-' }}</div>
                         </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="customer-card" style="grid-column: span 6;">
-                <div class="customer-card-body">
-                    <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
-                        <div>
-                            <h2 class="customer-section-title">Tình trạng chăm sóc</h2>
-                            <p class="customer-section-subtitle">Ghi chú nhanh tình trạng làm việc với khách hàng.</p>
+                        <div class="customer-info-row">
+                            <span class="customer-info-label">Email</span>
+                            <div class="customer-info-value">{{ $customer->email ?: '-' }}</div>
                         </div>
-                        <div>
-                            <span class="customer-badge badge-info"><i class="bi bi-activity me-1"></i>{{ $customer->status }}</span>
-                            @if($customer->potential)
-                                <span class="customer-badge badge-warning">Khách tiềm năng</span>
-                            @endif
+                        <div class="customer-info-row">
+                            <span class="customer-info-label">Size</span>
+                            <div class="customer-info-value">{{ $customer->size ?: '-' }}</div>
                         </div>
-                    </div>
-                    <form method="POST" action="{{ route('my_customer.update', $customer) }}" class="mt-3">
-                        @csrf
-                        @method('PUT')
-                        <textarea name="care_note" class="customer-textarea" placeholder="Nhập tình trạng hoặc nhật ký chăm sóc..."></textarea>
-                        <div class="customer-inline-actions">
-                            <button class="customer-btn customer-btn-primary" type="submit" style="border:none;">
-                                <i class="bi bi-plus-lg me-2"></i>Lưu nhật ký
-                            </button>
+                        <div class="customer-info-row">
+                            <span class="customer-info-label">Sản lượng</span>
+                            <div class="customer-info-value">{{ $customer->production ?: '-' }}</div>
                         </div>
-                    </form>
-                    <div class="customer-list-stack" style="max-height:180px;overflow:auto;">
-                        @forelse(($careLogs ?? $customer->careLogs ?? []) as $log)
-                            <div class="customer-list-item">
-                                <div>
-                                    <div class="customer-list-item-title">{{ $log->user->name ?? 'Hệ thống' }}</div>
-                                    <div class="customer-list-meta">
-                                        <span><i class="bi bi-clock me-1"></i>{{ $log->created_at->format('d/m/Y H:i') }}</span>
-                                    </div>
-                                    <div class="customer-muted" style="margin-top:6px;">{{ $log->note }}</div>
-                                </div>
+                        <div class="customer-info-row">
+                            <span class="customer-info-label">Thương hiệu</span>
+                            <div class="customer-info-value">{{ $customer->brand ?: '-' }}</div>
+                        </div>
+                        @if(!empty($customer->tax_code))
+                            <div class="customer-info-row">
+                                <span class="customer-info-label">Mã số thuế</span>
+                                <div class="customer-info-value">{{ $customer->tax_code }}</div>
                             </div>
-                        @empty
-                            <div class="customer-empty">Chưa có nhật ký chăm sóc.</div>
-                        @endforelse
+                        @endif
                     </div>
                 </div>
             </div>
 
-            <div class="customer-card" style="grid-column: span 6;">
-                <div class="customer-card-body">
-                    <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
-                        <div>
-                            <h2 class="customer-section-title">Tần suất lấy hàng</h2>
-                            <p class="customer-section-subtitle">Thiết lập mức lấy hàng kỳ vọng để theo dõi hành vi mua.</p>
-                        </div>
-                        <span class="customer-badge badge-success">
-                            {{ $customer->order_frequency_count ?? '?' }} lần/{{ $customer->order_frequency_type == 'week' ? 'tuần' : 'tháng' }}
-                        </span>
+            <div class="customer-card" style="grid-column: span 12;">
+                <div class="customer-card-header">
+                    <div>
+                        <h2 class="customer-section-title">Tình trạng chăm sóc</h2>
+                        <p class="customer-section-subtitle">Ghi chú nhanh tình trạng làm việc với khách hàng.</p>
                     </div>
-                    <form method="POST" action="{{ route('my_customer.update', $customer) }}" class="customer-form-grid mt-2">
+                    <div class="customer-card-head-right">
+                        <span class="customer-badge badge-info"><i class="bi bi-activity me-1"></i>{{ $customer->status }}</span>
+                        @if($customer->potential)
+                            <span class="customer-badge badge-warning">Khách tiềm năng</span>
+                        @endif
+                        <button type="button" class="customer-collapse-btn" data-bs-toggle="collapse" data-bs-target="#careStatusCollapse" aria-expanded="true" aria-controls="careStatusCollapse">
+                            Thu gọn / Mở rộng
+                        </button>
+                    </div>
+                </div>
+                <div class="customer-card-body">
+                    <div class="collapse show" id="careStatusCollapse">
+                        <form method="POST" action="{{ route('my_customer.update', $customer) }}" class="mt-3">
+                            @csrf
+                            @method('PUT')
+                            <textarea name="care_note" class="customer-textarea" placeholder="Nhập tình trạng hoặc nhật ký chăm sóc..."></textarea>
+                            <div class="customer-inline-actions">
+                                <button class="customer-btn customer-btn-primary" type="submit" style="border:none;">
+                                    <i class="bi bi-plus-lg me-2"></i>Lưu nhật ký
+                                </button>
+                            </div>
+                        </form>
+                        <div class="customer-list-stack" style="max-height:220px;overflow:auto;">
+                            @forelse($careLogsSorted as $index => $log)
+                                <div class="customer-list-item {{ $index === 0 ? 'customer-border' : '' }}">
+                                    <div>
+                                        <div class="customer-list-item-title">{{ $log->user->name ?? 'Hệ thống' }} @if($index === 0)<span class="customer-badge badge-info ms-1">Mới nhất</span>@endif</div>
+                                        <div class="customer-list-meta">
+                                            <span><i class="bi bi-clock me-1"></i>{{ $log->created_at->format('d/m/Y H:i') }}</span>
+                                        </div>
+                                        <div class="customer-muted" style="margin-top:6px;">{{ $log->note }}</div>
+                                    </div>
+                                </div>
+                            @empty
+                                <div class="customer-empty">Chưa có nhật ký chăm sóc.</div>
+                            @endforelse
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="customer-card" style="grid-column: span 12;">
+                <div class="customer-card-header">
+                    <div>
+                        <h2 class="customer-section-title">Tần suất lấy hàng</h2>
+                        <p class="customer-section-subtitle">Thiết lập mức lấy hàng kỳ vọng để theo dõi hành vi mua.</p>
+                    </div>
+                    <div class="customer-card-head-right">
+                        <span class="customer-badge {{ $frequencyTrendClass }}">{{ $frequencyTrendLabel }}</span>
+                        <span class="customer-badge badge-success">
+                        {{ $customer->order_frequency_count ?? '?' }} lần/{{ $customer->order_frequency_type == 'week' ? 'tuần' : 'tháng' }}
+                        </span>
+                        <button type="button" class="customer-collapse-btn" data-bs-toggle="collapse" data-bs-target="#frequencyCollapse" aria-expanded="true" aria-controls="frequencyCollapse">
+                            Thu gọn / Mở rộng
+                        </button>
+                    </div>
+                </div>
+                <div class="customer-card-body">
+                    <div class="collapse show" id="frequencyCollapse">
+                    <form method="POST" action="{{ route('my_customer.update', $customer) }}" class="customer-form-grid customer-form-stack mt-2">
                         @csrf
                         @method('PUT')
-                        <div class="customer-field wide">
+                        <div class="customer-field full">
                             <label class="customer-label">Tần suất mong muốn</label>
                             <input type="number" name="order_frequency_count" class="customer-input" min="1" value="{{ $customer->order_frequency_count ?? '' }}">
                         </div>
-                        <div class="customer-field wide">
+                        <div class="customer-field full">
                             <label class="customer-label">Đơn vị</label>
                             <select name="order_frequency_type" class="customer-select">
                                 <option value="week" {{ $customer->order_frequency_type == 'week' ? 'selected' : '' }}>Tuần</option>
                                 <option value="month" {{ $customer->order_frequency_type == 'month' ? 'selected' : '' }}>Tháng</option>
                             </select>
                         </div>
-                        <div class="customer-field wide" style="display:flex;align-items:flex-end;">
+                        <div class="customer-field full" style="display:flex;align-items:flex-end;">
                             <button class="customer-btn customer-btn-primary" type="submit" style="border:none;width:100%;">Cập nhật tần suất</button>
                         </div>
                     </form>
+                    </div>
                 </div>
             </div>
 
-            <div class="customer-card" style="grid-column: span 6;">
+            <div class="customer-card" style="grid-column: span 12;">
+                <div class="customer-card-header">
+                    <div>
+                        <h2 class="customer-section-title">Cuộc hẹn khách hàng</h2>
+                        <p class="customer-section-subtitle">Lưu lịch hẹn và nhắc nhở chăm sóc khách đúng thời điểm.</p>
+                    </div>
+                    <div class="customer-card-head-right">
+                        <button type="button" class="customer-collapse-btn" data-bs-toggle="collapse" data-bs-target="#customerReminderCollapse" aria-expanded="true" aria-controls="customerReminderCollapse">
+                            Thu gọn / Mở rộng
+                        </button>
+                    </div>
+                </div>
                 <div class="customer-card-body">
-                    <h2 class="customer-section-title">Cuộc hẹn khách hàng</h2>
-                    <p class="customer-section-subtitle">Lưu lịch hẹn và nhắc nhở chăm sóc khách đúng thời điểm.</p>
-                    <form method="POST" action="{{ route('customer_reminders.store', $customer) }}" class="customer-form-grid mt-2">
-                        @csrf
-                        <div class="customer-field wide">
-                            <label class="customer-label">Nội dung cuộc hẹn</label>
-                            <input type="text" name="title" class="customer-input" placeholder="Nội dung cuộc hẹn...">
-                        </div>
-                        <div class="customer-field wide">
-                            <label class="customer-label">Thời gian</label>
-                            <input type="datetime-local" name="remind_at" class="customer-input">
-                        </div>
-                        <div class="customer-field wide" style="display:flex;align-items:flex-end;">
-                            <button class="customer-btn customer-btn-primary" type="submit" style="border:none;width:100%;">Thêm cuộc hẹn</button>
-                        </div>
-                    </form>
+                    <div class="collapse show" id="customerReminderCollapse">
+                        <form method="POST" action="{{ route('customer_reminders.store', $customer) }}" class="customer-form-grid customer-form-stack mt-2">
+                            @csrf
+                            <div class="customer-field full">
+                                <label class="customer-label">Nội dung cuộc hẹn</label>
+                                <input type="text" name="title" class="customer-input" placeholder="Nội dung cuộc hẹn...">
+                            </div>
+                            <div class="customer-field full">
+                                <label class="customer-label">Thời gian</label>
+                                <input type="datetime-local" name="remind_at" class="customer-input">
+                            </div>
+                            <div class="customer-field full" style="display:flex;align-items:flex-end;">
+                                <button class="customer-btn customer-btn-primary" type="submit" style="border:none;width:100%;">Thêm cuộc hẹn</button>
+                            </div>
+                        </form>
 
-                    <div class="customer-list-stack" style="max-height:180px;overflow:auto;">
-                        @foreach(($reminders ?? $customer->reminders ?? []) as $reminder)
+                        <div class="customer-list-stack" style="max-height:220px;overflow:auto;">
+                        @foreach($remindersSorted as $reminder)
                             <div class="customer-list-item">
                                 <div>
                                     <div class="customer-list-item-title">{{ $reminder->title }}</div>
@@ -765,6 +976,10 @@
                                 </div>
                             </div>
                         @endforeach
+                        @if($remindersSorted->isEmpty())
+                            <div class="customer-empty">Chưa có cuộc hẹn nào.</div>
+                        @endif
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1188,6 +1403,8 @@
                 </div>
             </div>
         @endif
+            </div>
+        </div>
     </div>
 </div>
 

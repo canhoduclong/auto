@@ -1,12 +1,3 @@
-                            <div class="mb-3">
-                                <label for="size" class="form-label mc-form-label">Size</label>
-                                <input type="text" class="form-control mc-form-control" id="size" name="size" value="{{ old('size', $customer->size) }}" placeholder="Nhập size (nếu có)">
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="production" class="form-label mc-form-label">Sản lượng</label>
-                                <input type="number" step="any" class="form-control mc-form-control" id="production" name="production" value="{{ old('production', $customer->production) }}" placeholder="Nhập sản lượng (nếu có)">
-                            </div>
 @extends('layouts.site')
 
 @section('content')
@@ -184,6 +175,17 @@
                                 <label for="delivery_time" class="form-label mc-form-label">Giờ giao hàng</label>
                                 <input type="text" class="form-control mc-form-control" id="delivery_time" name="delivery_time" value="{{ old('delivery_time', $customer->delivery_time) }}" placeholder="Ví dụ: 8h-10h, 14h-16h, sau 17h">
                                 <div class="mc-help mt-1">Thông tin này sẽ được dùng làm mặc định khi sale tạo đơn mới cho khách.</div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="size" class="form-label mc-form-label">Size</label>
+                                <input type="text" class="form-control mc-form-control" id="size" name="size" value="{{ old('size', $customer->size) }}" placeholder="Nhập size (nếu có)">
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="production" class="form-label mc-form-label">Sản lượng</label>
+                                <input type="number" step="any" class="form-control mc-form-control" id="production" name="production" value="{{ old('production', $customer->production) }}" placeholder="Nhập sản lượng (nếu có)">
+                                <div class="mc-help mt-1">Điền sản lượng trung bình theo đơn vị bạn đang theo dõi (ví dụ: kg/tháng).</div>
                             </div>
 
                             <div class="mc-actions pt-2">

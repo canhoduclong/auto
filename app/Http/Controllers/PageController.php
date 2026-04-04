@@ -1668,10 +1668,33 @@ class PageController extends Controller
             'from_date' => 'nullable|date',
             'to_date' => 'nullable|date|after_or_equal:from_date',
             'order_status' => 'nullable|string|max:50',
+            'sidebar_search' => 'nullable|string|max:100',
             'orders_per_page' => 'nullable|integer|min:5|max:100',
             'debt_per_page' => 'nullable|integer|min:5|max:100',
             'payments_per_page' => 'nullable|integer|min:5|max:100',
         ]);
+
+        $userId = auth()->id();
+        $sidebarSearch = trim((string) ($validated['sidebar_search'] ?? ''));
+
+        $customerList = Customer::query()
+            ->withCount('orders')
+            ->where(function ($q) use ($userId) {
+                $q->where('user_id', $userId)
+                    ->orWhere('assigned_to', $userId);
+            })
+            ->when($sidebarSearch !== '', function ($q) use ($sidebarSearch) {
+                $q->where(function ($sub) use ($sidebarSearch) {
+                    $sub->where('name', 'like', "%{$sidebarSearch}%")
+                        ->orWhere('phone', 'like', "%{$sidebarSearch}%")
+                        ->orWhere('email', 'like', "%{$sidebarSearch}%")
+                        ->orWhere('address', 'like', "%{$sidebarSearch}%");
+                });
+            })
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id')
+            ->limit(300)
+            ->get();
 
         [$fromDate, $toDate] = $this->resolveMyCustomerDateRange(
             (string) ($validated['period'] ?? 'month'),
@@ -1880,6 +1903,8 @@ class PageController extends Controller
             'toDate' => $toDate,
             'activeTab' => (string) ($validated['tab'] ?? 'info'),
             'orderStatuses' => $orderStatuses,
+            'customerList' => $customerList,
+            'sidebarSearch' => $sidebarSearch,
             'settings' => $this->settings,
             // For Blade compatibility
             'reminders' => $customer->reminders,
