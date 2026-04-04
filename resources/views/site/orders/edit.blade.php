@@ -249,7 +249,7 @@
                                     <thead>
                                         <tr>
                                             <th>Sản phẩm</th>
-                                            <th>SKU</th>
+                                            <th>Size</th>
                                             <th>Đơn giá</th>
                                             <th>CK giá</th>
                                             <th>SL</th>
@@ -292,13 +292,13 @@
                                                     <div class="checkout-product">
                                                         <img src="{{ $imageUrl }}" alt="{{ $variant?->product?->name ?? 'Product' }}">
                                                         <div class="checkout-product-meta">
-                                                            <div class="checkout-product-title">{{ $variant?->product?->name ?? 'N/A' }}</div>
-                                                            <div class="checkout-product-sub">{{ $variant?->size ?? '' }} {{ $variant?->quality ? '- ' . $variant->quality : '' }}</div>
+                                                            <div class="checkout-product-title">{{ $variant?->product?->name ?? '--' }}</div>
+                                                            <div class="checkout-product-sub">{{ $variant?->sku ?? '--' }}</div>
                                                         </div>
                                                     </div>
                                                     <input type="hidden" name="items[{{ $index }}][variant_id]" value="{{ $variant?->id }}">
                                                 </td>
-                                                <td>{{ $variant?->sku ?? 'N/A' }}</td>
+                                                <td>{{ $variant?->size ?? '--' }}</td>
                                                 <td class="price" data-price="{{ $unitPrice }}">{{ number_format($unitPrice, 0, ',', '.') }}đ</td>
                                                 <td>
                                                     <input
@@ -484,7 +484,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 const unitWeight = parseFloat(lineWeightEl.getAttribute('data-unit-weight') || '0');
                 const weightUnit = lineWeightEl.getAttribute('data-weight-unit') || 'Kg';
                 const lineWeight = Math.max(0, unitWeight * Math.max(quantity, 0));
-                lineWeightEl.textContent = `${lineWeight.toLocaleString('vi-VN', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} ${weightUnit}`;
+                lineWeightEl.textContent = `${lineWeight.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${weightUnit}`;
             }
 
             if (discountInput) {
