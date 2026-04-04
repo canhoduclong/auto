@@ -16,6 +16,9 @@
     .checkout-shell {
         max-width: 1240px;
     }
+    .table > :not(caption) > * > *{
+        padding: .5rem .3rem;
+    }
     .checkout-hero {
         border: 1px solid rgba(255, 255, 255, 0.22);
         border-radius: 22px;
@@ -76,12 +79,14 @@
         min-width: 50px;
     }
     .min50{
-        min-width: 50px;
+        min-width: 50px  !important;
     }
     .min80{
-        min-width: 80px;
+        min-width: 80px !important;
     }
-
+    .form-control-sm { 
+        padding: .25rem .0rem .25rem .3rem !important
+    }
     .line-weight {
         font-weight: 700;
         color: #0f766e;
@@ -256,13 +261,13 @@
                                     <thead>
                                         <tr>
                                             <th>Sản phẩm</th>
-                                            <th>Size</th>
-                                            <th>Đơn giá</th>
-                                            <th>CK giá</th>
-                                            <th>SL</th>
-                                            <th>ĐVT</th>
-                                            <th>Khối lượng</th>
-                                            <th>Thành tiền</th>
+                                            <th class="text-center">Size</th>
+                                            <th class="text-center">Đơn giá</th>
+                                            <th class="text-center">CK giá</th>
+                                            <th class="text-center">SL</th>
+                                            <th class="text-center">ĐVT</th>
+                                            <th class="text-center">KL</th>
+                                            <th class="text-center">Tạm tính</th>
                                             <th></th>
                                         </tr>
                                     </thead>
@@ -310,7 +315,7 @@
                                                 <td>
                                                     <input
                                                         type="number"
-                                                        class="form-control form-control-sm discount-input"
+                                                        class="form-control form-control-sm discount-input min80"
                                                         name="item_discount[{{ $variant?->id }}]"
                                                         min="0"
                                                         step="1000"
@@ -318,16 +323,16 @@
                                                         value="{{ number_format($unitDiscount, 0, '.', '') }}">
                                                 </td>
                                                 <td>
-                                                    <input type="number" name="items[{{ $index }}][quantity]" class="form-control form-control-sm quantity-input" min="1" value="{{ $qty }}" required>
+                                                    <input type="number" name="items[{{ $index }}][quantity]" class="form-control form-control-sm quantity-input min50" min="1" value="{{ $qty }}" required>
                                                 </td>
                                                 <td><span class="text-muted small">{{ $unitLabel }}</span></td>
-                                                <td>
+                                                <td class="text-end">
                                                     <span class="line-weight" data-unit-weight="{{ number_format((float) $unitWeight, 3, '.', '') }}" data-weight-unit="{{ $weightUnitLabel }}">
                                                         {{ number_format((float) ($unitWeight * $qty), 3, ',', '.') }} {{ $weightUnitLabel }}
                                                     </span>
                                                 </td>
-                                                <td class="row-total">{{ number_format($lineTotal, 0, ',', '.') }}đ</td>
-                                                <td>
+                                                <td class="row-total text-end">{{ number_format($lineTotal, 0, ',', '.') }}đ</td>
+                                                <td class="text-end">
                                                     <button type="button" class="btn btn-sm btn-outline-danger remove-cart-item">&times;</button>
                                                 </td>
                                             </tr>
