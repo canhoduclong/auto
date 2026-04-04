@@ -118,7 +118,7 @@
     }
     .tmo-page .tmo-product-vertical-row {
         display: grid;
-        grid-template-columns: 1.5fr repeat(6, minmax(90px, auto));
+        grid-template-columns: 56px 1.5fr repeat(6, minmax(90px, auto));
         gap: .35rem;
         border: 1px solid #e5edf7;
         border-radius: 8px;
@@ -744,9 +744,9 @@ document.addEventListener('DOMContentLoaded', function () {
         let pending = 0;
         let rejected = 0;
         let totalValue = 0;
-        let totalLines = 0;
+        let totalGoods = 0;
         let totalQty = 0;
-        const productMap = new Map();
+        const itemMap = new Map();
 
         rows.forEach(function (row) {
             const statusEl = row.querySelector('.js-order-status');
@@ -761,18 +761,42 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             totalValue += Number(row.dataset.total || 0);
-            totalLines += Number(row.dataset.itemLines || 0);
-            totalQty += Number(row.dataset.itemQty || 0);
-
             row.querySelectorAll('.js-product-line').forEach(function (line) {
                 const name = (line.dataset.productName || '').trim();
+                const unit = (line.dataset.productUnit || '').trim();
+                const size = (line.dataset.productSize || '').trim();
                 const qty = Number(line.dataset.productQty || 0);
+                const estWeight = Number(line.dataset.productEstWeight || 0);
+                const price = Number(line.dataset.productPrice || 0);
+                const subtotal = Number(line.dataset.productSubtotal || 0);
+
                 if (!name) {
                     return;
                 }
-                productMap.set(name, (productMap.get(name) || 0) + qty);
+
+                const key = [name, unit, size, price].join('||');
+                const current = itemMap.get(key) || {
+                    name: name,
+                    unit: unit || '-',
+                    size: size || '-',
+                    qty: 0,
+                    estWeight: 0,
+                    price: price,
+                    subtotal: 0,
+                };
+
+                current.qty += qty;
+                current.estWeight += estWeight;
+                current.subtotal += subtotal;
+
+                itemMap.set(key, current);
             });
         });
+
+        totalGoods = itemMap.size;
+        totalQty = Array.from(itemMap.values()).reduce(function (sum, item) {
+            return sum + Number(item.qty || 0);
+        }, 0);
 
         const sumStatus = document.getElementById('sumStatus');
         const sumItemLines = document.getElementById('sumItemLines');
@@ -784,7 +808,7 @@ document.addEventListener('DOMContentLoaded', function () {
             sumStatus.textContent = approved + ' / ' + pending + ' / ' + rejected;
         }
         if (sumItemLines) {
-            sumItemLines.textContent = formatQty(totalLines) + ' mặt hàng';
+            sumItemLines.textContent = formatQty(totalGoods) + ' mặt hàng';
         }
         if (sumItemQty) {
             sumItemQty.textContent = formatQty(totalQty);
@@ -794,41 +818,6 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         if (sumProductDetailList) {
-            const itemMap = new Map();
-
-            rows.forEach(function (row) {
-                row.querySelectorAll('.js-product-line').forEach(function (line) {
-                    const name = (line.dataset.productName || '').trim();
-                    const unit = (line.dataset.productUnit || '').trim();
-                    const size = (line.dataset.productSize || '').trim();
-                    const qty = Number(line.dataset.productQty || 0);
-                    const estWeight = Number(line.dataset.productEstWeight || 0);
-                    const price = Number(line.dataset.productPrice || 0);
-                    const subtotal = Number(line.dataset.productSubtotal || 0);
-
-                    if (!name) {
-                        return;
-                    }
-
-                    const key = [name, unit, size, price].join('||');
-                    const current = itemMap.get(key) || {
-                        name: name,
-                        unit: unit || '-',
-                        size: size || '-',
-                        qty: 0,
-                        estWeight: 0,
-                        price: price,
-                        subtotal: 0,
-                    };
-
-                    current.qty += qty;
-                    current.estWeight += estWeight;
-                    current.subtotal += subtotal;
-
-                    itemMap.set(key, current);
-                });
-            });
-
             const items = Array.from(itemMap.values()).sort(function (a, b) {
                 return b.qty - a.qty;
             });
@@ -836,9 +825,10 @@ document.addEventListener('DOMContentLoaded', function () {
             if (!items.length) {
                 sumProductDetailList.innerHTML = '<div class="tmo-mini">Không có dữ liệu hàng hóa.</div>';
             } else {
-                const head = '<div class="tmo-product-vertical-row tmo-product-vertical-head"><div>Sản phẩm</div><div>Số lượng</div><div>ĐVT</div><div>Size</div><div>KL tạm tính</div><div>Đơn giá</div><div>Tạm tính</div></div>';
-                const body = items.map(function (item) {
+                const head = '<div class="tmo-product-vertical-row tmo-product-vertical-head"><div>STT</div><div>Sản phẩm</div><div>Số lượng</div><div>ĐVT</div><div>Size</div><div>KL tạm tính</div><div>Đơn giá</div><div>Tạm tính</div></div>';
+                const body = items.map(function (item, index) {
                     return '<div class="tmo-product-vertical-row">'
+                        + '<div>' + (index + 1) + '</div>'
                         + '<div class="fw-semibold">' + item.name + '</div>'
                         + '<div>' + formatQty(item.qty) + '</div>'
                         + '<div>' + item.unit + '</div>'
