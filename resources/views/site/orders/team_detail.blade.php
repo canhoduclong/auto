@@ -52,6 +52,12 @@
     $itemCount = (int) $order->items->sum('quantity');
     $shippingFee = (float) ($order->shipping_fee ?? 0);
     $foamBoxFee = (float) (($order->charge_foam_box_fee ?? false) ? ($order->foam_box_price ?? 0) : 0);
+    $estimatedTotalWeight = (float) ($order->total_weight ?? $order->items->sum(function ($item) {
+        $qty = (int) ($item->quantity ?? 0);
+        $unitWeight = (float) ($item->unit_weight ?? 0);
+
+        return (float) ($item->total_weight ?? ($qty * $unitWeight));
+    }));
 @endphp
 
 @push('styles')
@@ -194,7 +200,7 @@
     .team-item-table-head,
     .team-item-table-row {
         display: grid;
-        grid-template-columns: minmax(0, 2fr) 64px 56px 58px 87px;
+        grid-template-columns: minmax(0, 2fr) 64px 72px 88px 92px 92px;
         gap: 8px;
         align-items: center;
     }
@@ -272,7 +278,7 @@
     @media (max-width: 575px) {
         .team-item-table-head,
         .team-item-table-row {
-            grid-template-columns: minmax(0, 1.3fr) 50px 84px 96px;
+            grid-template-columns: minmax(0, 1.25fr) 48px 62px 82px 82px 82px;
             gap: 6px;
         }
     }
@@ -387,9 +393,10 @@
                             <div class="team-item-table-head">
                                 <div>Sản phẩm</div>                                
                                 <div class="text-end">Số Lượng</div>
-                                <div class="text-center text-muted small">Size</div>
+                                <div class="text-center">Size</div>
+                                <div class="text-end">KL tạm tính</div>
                                 <div class="text-end">Đơn giá</div>
-                                <div class="text-end">Thành tiền</div>
+                                <div class="text-end">Tạm tính</div>
                             </div>
                             <ul class="team-item-list">
                                 @forelse($order->items as $item)
@@ -397,6 +404,14 @@
                                         $qty = (int) ($item->quantity ?? 0);
                                         $price = (float) ($item->price ?? $item->base_price ?? 0);
                                         $lineTotal = $qty * $price;
+                                        $unitWeight = (float) ($item->unit_weight ?? 0);
+                                        $lineWeight = (float) ($item->total_weight ?? ($qty * $unitWeight));
+                                        $sizeText = trim((string) ($item->variant?->size ?? ''));
+                                        if ($sizeText === '') {
+                                            $sizeText = $unitWeight > 0
+                                                ? number_format($unitWeight, 3, ',', '.') . 'kg'
+                                                : '-';
+                                        }
                                     @endphp
                                     <li class="team-item-row">
                                         <div class="team-item-table-row">
@@ -408,7 +423,8 @@
                                             </div>
                                             
                                             <div class="team-item-cell"><strong>{{ number_format($qty, 0, ',', '.') }}</strong></div>
-                                            <div class="text-center text-muted small">{{ isset($item->size) ? ($item->size . 'kg') : '-' }}</div> 
+                                            <div class="text-center text-muted small">{{ $sizeText }}</div>
+                                            <div class="team-item-cell">{{ number_format($lineWeight, 3, ',', '.') }} kg</div>
                                             <div class="team-item-cell">{{ number_format($price, 0, ',', '.') }} đ</div>
                                             <div class="team-item-cell"><strong>{{ number_format($lineTotal, 0, ',', '.') }} đ</strong></div>
                                         </div>
@@ -422,6 +438,10 @@
                                 <div class="team-summary-row">
                                     <span>Tạm tính</span>
                                     <strong>{{ number_format($subtotal, 0, ',', '.') }} đ</strong>
+                                </div>
+                                <div class="team-summary-row">
+                                    <span>Khối lượng tạm tính</span>
+                                    <strong>{{ number_format($estimatedTotalWeight, 3, ',', '.') }} kg</strong>
                                 </div>
                                 <div class="team-summary-row">
                                     <span>Giảm giá</span>
