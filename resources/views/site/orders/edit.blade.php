@@ -73,8 +73,15 @@
         color: #64748b;
     }
     .checkout-table .form-control.form-control-sm {
-        min-width: 84px;
+        min-width: 50px;
     }
+    .min50{
+        min-width: 50px;
+    }
+    .min80{
+        min-width: 80px;
+    }
+
     .line-weight {
         font-weight: 700;
         color: #0f766e;
