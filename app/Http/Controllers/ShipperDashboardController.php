@@ -59,11 +59,11 @@ class ShipperDashboardController extends Controller
         $startDate = $today->copy()->subDays(6)->toDateString();
 
         $dailyCounts = Order::query()
-            ->selectRaw('DATE(created_at) as day_key, COUNT(*) as total')
+            ->selectRaw('DATE(updated_at) as day_key, COUNT(*) as total')
             ->where('status', Order::STATUS_READY_TO_SHIP)
             ->whereNull('shipper_id')
-            ->whereDate('created_at', '>=', $startDate)
-            ->whereDate('created_at', '<=', $today->toDateString())
+            ->whereDate('updated_at', '>=', $startDate)
+            ->whereDate('updated_at', '<=', $today->toDateString())
             ->groupBy('day_key')
             ->pluck('total', 'day_key');
 
@@ -84,7 +84,10 @@ class ShipperDashboardController extends Controller
         $orders = Order::with(['customer.addresses', 'items.variant.product'])
             ->where('status', Order::STATUS_READY_TO_SHIP)
             ->whereNull('shipper_id')
-            ->whereDate('created_at', $selectedDate)
+            ->where(function ($query) use ($selectedDate) {
+                $query->whereDate('updated_at', $selectedDate)
+                    ->orWhereDate('created_at', $selectedDate);
+            })
             ->orderBy('created_at', 'asc')
             ->get();
 
@@ -101,7 +104,12 @@ class ShipperDashboardController extends Controller
                 ->where('id', $order->id)
                 ->where('status', Order::STATUS_READY_TO_SHIP)
                 ->whereNull('shipper_id')
-                ->whereDate('created_at', Carbon::today()->toDateString())
+                ->where(function ($query) {
+                    $today = Carbon::today()->toDateString();
+
+                    $query->whereDate('updated_at', $today)
+                        ->orWhereDate('created_at', $today);
+                })
                 ->lockForUpdate()
                 ->first();
 

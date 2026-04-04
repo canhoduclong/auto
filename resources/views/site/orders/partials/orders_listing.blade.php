@@ -105,8 +105,10 @@
                                 $statusLabel = $statusLabels[$order->status] ?? ucfirst(str_replace('_', ' ', $order->status));
                                 $statusClass = $statusClasses[$order->status] ?? 'status-muted';
                                 $canReturn = in_array($order->status, ['picked_up', 'shipping', 'completed'], true);
-                                $canEdit = $order->status === \App\Models\Order::STATUS_PENDING_LEADER_APPROVAL
-                                    && $order->created_at?->isToday();
+                                $isCopiedOrder = !empty($order->copied_from_order_id);
+                                $canEdit = $isCopiedOrder
+                                    || ($order->status === \App\Models\Order::STATUS_PENDING_LEADER_APPROVAL
+                                        && $order->created_at?->isToday());
                             @endphp
                             <tr>
                                 <td>
@@ -167,8 +169,10 @@
                         $statusLabel = $statusLabels[$order->status] ?? ucfirst(str_replace('_', ' ', $order->status));
                         $statusClass = $statusClasses[$order->status] ?? 'status-muted';
                         $canReturn = in_array($order->status, ['picked_up', 'shipping', 'completed'], true);
-                        $canEdit = $order->status === \App\Models\Order::STATUS_PENDING_LEADER_APPROVAL
-                            && $order->created_at?->isToday();
+                        $isCopiedOrder = !empty($order->copied_from_order_id);
+                        $canEdit = $isCopiedOrder
+                            || ($order->status === \App\Models\Order::STATUS_PENDING_LEADER_APPROVAL
+                                && $order->created_at?->isToday());
                     @endphp
                     <div class="col-12">
                         <div class="orders-mobile-card">

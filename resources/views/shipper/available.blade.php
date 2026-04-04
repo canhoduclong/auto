@@ -364,7 +364,7 @@
                 </div>
             </div>
             <div class="card-footer bg-white border-top">
-                @if($canAcceptToday && $order->created_at->isToday())
+                                @if($canAcceptToday && ($order->updated_at->isToday() || $order->created_at->isToday()))
                     <form action="{{ route('shipper.accept', $order) }}" method="POST"
                           onsubmit="return confirm('Xác nhận nhận đơn #{{ $order->code }}?')">
                         @csrf

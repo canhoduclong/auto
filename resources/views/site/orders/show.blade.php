@@ -32,8 +32,10 @@
     $orderExtraDiscount = (float) ($order->extra_discount_total ?? $order->order_discount ?? 0);
     $orderTotalDiscount = (float) ($order->total_discount ?? ($orderItemDiscount + $orderExtraDiscount));
     $orderTotalWeight = (float) ($order->total_weight ?? $order->items->sum('total_weight'));
-    $canEdit = $order->status === \App\Models\Order::STATUS_PENDING_LEADER_APPROVAL
-        && $order->created_at?->isToday();
+    $isCopiedOrder = !empty($order->copied_from_order_id);
+    $canEdit = $isCopiedOrder
+        || ($order->status === \App\Models\Order::STATUS_PENDING_LEADER_APPROVAL
+            && $order->created_at?->isToday());
 @endphp
 
 @push('styles')

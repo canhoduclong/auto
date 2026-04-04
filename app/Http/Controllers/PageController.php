@@ -2052,8 +2052,12 @@ class PageController extends Controller
             abort(403);
         }
 
-        $isEditable = $order->status === Order::STATUS_PENDING_LEADER_APPROVAL
-            && $order->created_at?->isToday();
+        $isCopiedOrder = $this->hasOrderColumn('copied_from_order_id')
+            && !empty($order->copied_from_order_id);
+
+        $isEditable = $isCopiedOrder
+            || ($order->status === Order::STATUS_PENDING_LEADER_APPROVAL
+                && $order->created_at?->isToday());
 
         if (!$isEditable) {
             return redirect()->route('pages.my_orders')
@@ -2089,8 +2093,12 @@ class PageController extends Controller
             abort(403);
         }
 
-        $isEditable = $order->status === Order::STATUS_PENDING_LEADER_APPROVAL
-            && $order->created_at?->isToday();
+        $isCopiedOrder = $this->hasOrderColumn('copied_from_order_id')
+            && !empty($order->copied_from_order_id);
+
+        $isEditable = $isCopiedOrder
+            || ($order->status === Order::STATUS_PENDING_LEADER_APPROVAL
+                && $order->created_at?->isToday());
 
         if (!$isEditable) {
             return redirect()->route('pages.my_orders')
@@ -2178,7 +2186,7 @@ class PageController extends Controller
             }
         }
 
-        DB::transaction(function () use ($order, $validated, $itemsInput, $variants): void {
+        DB::transaction(function () use ($order, $validated, $itemsInput, $variants, $isCopiedOrder): void {
             $order->items()->delete();
 
             $subtotalAmount = 0;
@@ -2247,6 +2255,14 @@ class PageController extends Controller
                 ARRAY_FILTER_USE_KEY
             ));
 
+            if ($isCopiedOrder && $this->hasOrderColumn('created_at')) {
+                DB::table('orders')
+                    ->where('id', $order->id)
+                    ->update(['created_at' => now()]);
+
+                $order->refresh();
+            }
+
             // Sau khi sửa đơn, reset lại luồng duyệt tương tự tạo mới.
             $order->approvals()->delete();
             app(ApprovalService::class)->initOrderApproval($order->fresh());
@@ -2312,9 +2328,15 @@ class PageController extends Controller
 
             // reset các field quan trọng
             $newOrder->customer_id = $resolvedCustomerId;
+            $newOrder->shipper_id = null;
             $newOrder->code = 'OD' . time();
             $newOrder->status = Order::STATUS_PENDING_LEADER_APPROVAL;
             $newOrder->payment_status = 'unpaid';
+            $newOrder->delivery_status = 'not_shipped';
+            $newOrder->delivered_at = null;
+            $newOrder->collected_amount = null;
+            $newOrder->proof_images = null;
+            $newOrder->return_reason = null;
             $newOrder->created_at = now();
             $newOrder->updated_at = now();
             if ($this->hasOrderColumn('copied_from_order_id')) {
