@@ -213,6 +213,60 @@
         color: #9a3412;
         font-weight: 700;
     }
+    .wh-stock-panel {
+        border: 1px solid #dbe4ef;
+        border-radius: 12px;
+        background: #fff;
+        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+    }
+    .wh-stock-panel .card-header {
+        background: #f8fafc;
+        border-bottom: 1px solid #e2e8f0;
+        border-top-left-radius: 12px;
+        border-top-right-radius: 12px;
+    }
+    .wh-stock-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+        gap: 10px;
+    }
+    .wh-stock-item {
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 10px;
+        background: #fff;
+    }
+    .wh-stock-name {
+        font-size: .86rem;
+        font-weight: 700;
+        color: #0f172a;
+        margin-bottom: 8px;
+    }
+    .stock-bar-wrap {
+        margin-bottom: 8px;
+    }
+    .stock-bar-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: .74rem;
+        color: #64748b;
+        margin-bottom: 4px;
+    }
+    .stock-bar-track {
+        width: 100%;
+        height: 8px;
+        background: #e2e8f0;
+        border-radius: 999px;
+        overflow: hidden;
+    }
+    .stock-bar-fill {
+        height: 100%;
+        border-radius: 999px;
+    }
+    .stock-bar-fill.stock-available { background: linear-gradient(90deg, #2563eb, #0ea5e9); }
+    .stock-bar-fill.stock-ordered { background: linear-gradient(90deg, #f59e0b, #f97316); }
+    .stock-bar-fill.stock-packed { background: linear-gradient(90deg, #16a34a, #22c55e); }
     @media (max-width: 575px) {
         .wh-item-table-head,
         .wh-item-table-row {
@@ -241,6 +295,39 @@
         'pending_warehouse_approval' => ['label' => 'Chờ kho duyệt', 'class' => 'bg-light text-dark'],
         'rejected' => ['label' => 'Từ chối', 'class' => 'bg-danger'],
     ];
+
+    $packedLikeStatuses = ['packed', 'packed_waiting_pickup', 'delivering', 'delivered', 'completed'];
+
+    $inventoryStats = $orders
+        ->flatMap(function ($order) use ($packedLikeStatuses) {
+            return $order->items->map(function ($item) use ($order, $packedLikeStatuses) {
+                $variant = $item->variant;
+                $productName = $variant?->name ?? $item->product?->name ?? 'Sản phẩm';
+                $orderedQty = (float) ($item->quantity ?? 0);
+                $packedQty = in_array((string) $order->status, $packedLikeStatuses, true) ? $orderedQty : 0;
+
+                return [
+                    'variant_id' => (int) ($item->product_variant_id ?? 0),
+                    'name' => $productName,
+                    'available_stock' => max(0, (float) ($variant?->available_stock ?? 0)),
+                    'ordered_qty' => $orderedQty,
+                    'packed_qty' => $packedQty,
+                ];
+            });
+        })
+        ->filter(fn($row) => (int) ($row['variant_id'] ?? 0) > 0)
+        ->groupBy('variant_id')
+        ->map(function ($rows) {
+            $first = $rows->first();
+            return [
+                'name' => $first['name'] ?? 'Sản phẩm',
+                'available_stock' => (float) ($first['available_stock'] ?? 0),
+                'ordered_qty' => (float) $rows->sum('ordered_qty'),
+                'packed_qty' => (float) $rows->sum('packed_qty'),
+            ];
+        })
+        ->sortByDesc('ordered_qty')
+        ->values();
 @endphp
 <div class="wh-orders-shell">
     <div class="card border-0 shadow-sm mb-3">
@@ -303,6 +390,68 @@
         <a href="{{ route('warehouse.dashboard') }}" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-arrow-left me-1"></i>Dashboard
         </a>
+    </div>
+
+    <div class="card wh-stock-panel mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <div class="fw-semibold">
+                <i class="bi bi-bar-chart-steps me-1"></i>Show tồn kho theo sản phẩm
+            </div>
+            <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#warehouseStockCollapse" aria-expanded="false" aria-controls="warehouseStockCollapse">
+                Mở / Thu gọn
+            </button>
+        </div>
+        <div class="collapse" id="warehouseStockCollapse">
+            <div class="card-body">
+                @if($inventoryStats->isEmpty())
+                    <div class="text-muted small">Không có dữ liệu tồn kho theo danh sách đơn hiện tại.</div>
+                @else
+                    <div class="wh-stock-grid">
+                        @foreach($inventoryStats as $stockItem)
+                            @php
+                                $maxBar = max(1, (float) $stockItem['available_stock'], (float) $stockItem['ordered_qty'], (float) $stockItem['packed_qty']);
+                                $availableWidth = min(100, ((float) $stockItem['available_stock'] / $maxBar) * 100);
+                                $orderedWidth = min(100, ((float) $stockItem['ordered_qty'] / $maxBar) * 100);
+                                $packedWidth = min(100, ((float) $stockItem['packed_qty'] / $maxBar) * 100);
+                            @endphp
+                            <div class="wh-stock-item">
+                                <div class="wh-stock-name">{{ $stockItem['name'] }}</div>
+
+                                <div class="stock-bar-wrap">
+                                    <div class="stock-bar-meta">
+                                        <span>1. Số lượng tồn kho</span>
+                                        <strong>{{ number_format($stockItem['available_stock'], 0, ',', '.') }}</strong>
+                                    </div>
+                                    <div class="stock-bar-track">
+                                        <div class="stock-bar-fill stock-available" style="width: {{ $availableWidth }}%"></div>
+                                    </div>
+                                </div>
+
+                                <div class="stock-bar-wrap">
+                                    <div class="stock-bar-meta">
+                                        <span>2. Số lượng đặt theo đơn</span>
+                                        <strong>{{ number_format($stockItem['ordered_qty'], 0, ',', '.') }}</strong>
+                                    </div>
+                                    <div class="stock-bar-track">
+                                        <div class="stock-bar-fill stock-ordered" style="width: {{ $orderedWidth }}%"></div>
+                                    </div>
+                                </div>
+
+                                <div class="stock-bar-wrap mb-0">
+                                    <div class="stock-bar-meta">
+                                        <span>3. Số lượng đã đóng hàng</span>
+                                        <strong>{{ number_format($stockItem['packed_qty'], 0, ',', '.') }}</strong>
+                                    </div>
+                                    <div class="stock-bar-track">
+                                        <div class="stock-bar-fill stock-packed" style="width: {{ $packedWidth }}%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
+            </div>
+        </div>
     </div>
 
     @if($orders->isEmpty())
