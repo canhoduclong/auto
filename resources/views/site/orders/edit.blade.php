@@ -60,6 +60,26 @@
         border: 1px solid rgba(148, 163, 184, 0.25);
         background: #e2e8f0;
     }
+    .checkout-product-meta {
+        line-height: 1.2;
+    }
+    .checkout-product-title {
+        font-size: 0.9rem;
+        font-weight: 700;
+        color: #0f172a;
+    }
+    .checkout-product-sub {
+        font-size: 0.74rem;
+        color: #64748b;
+    }
+    .checkout-table .form-control.form-control-sm {
+        min-width: 84px;
+    }
+    .line-weight {
+        font-weight: 700;
+        color: #0f766e;
+        white-space: nowrap;
+    }
     .checkout-summary {
         position: sticky;
         top: 20px;
@@ -271,9 +291,9 @@
                                                 <td>
                                                     <div class="checkout-product">
                                                         <img src="{{ $imageUrl }}" alt="{{ $variant?->product?->name ?? 'Product' }}">
-                                                        <div>
-                                                            <div class="fw-bold">{{ $variant?->product?->name ?? 'N/A' }}</div>
-                                                            <small class="text-muted">{{ $variant?->size ?? '' }} {{ $variant?->quality ? '- ' . $variant->quality : '' }}</small>
+                                                        <div class="checkout-product-meta">
+                                                            <div class="checkout-product-title">{{ $variant?->product?->name ?? 'N/A' }}</div>
+                                                            <div class="checkout-product-sub">{{ $variant?->size ?? '' }} {{ $variant?->quality ? '- ' . $variant->quality : '' }}</div>
                                                         </div>
                                                     </div>
                                                     <input type="hidden" name="items[{{ $index }}][variant_id]" value="{{ $variant?->id }}">
@@ -291,21 +311,13 @@
                                                         value="{{ number_format($unitDiscount, 0, '.', '') }}">
                                                 </td>
                                                 <td>
-                                                    <input type="number" name="items[{{ $index }}][quantity]" class="form-control quantity-input" min="1" value="{{ $qty }}" required>
+                                                    <input type="number" name="items[{{ $index }}][quantity]" class="form-control form-control-sm quantity-input" min="1" value="{{ $qty }}" required>
                                                 </td>
                                                 <td><span class="text-muted small">{{ $unitLabel }}</span></td>
                                                 <td>
-                                                    <div class="d-flex align-items-center gap-2">
-                                                        <input
-                                                            type="number"
-                                                            class="form-control form-control-sm weight-input"
-                                                            name="item_weight[{{ $variant?->id }}]"
-                                                            min="0"
-                                                            step="0.001"
-                                                            value="{{ number_format((float) $unitWeight, 3, '.', '') }}"
-                                                        >
-                                                        <span class="text-muted small" style="white-space: nowrap;">{{ $weightUnitLabel }}</span>
-                                                    </div>
+                                                    <span class="line-weight" data-unit-weight="{{ number_format((float) $unitWeight, 3, '.', '') }}" data-weight-unit="{{ $weightUnitLabel }}">
+                                                        {{ number_format((float) ($unitWeight * $qty), 3, ',', '.') }} {{ $weightUnitLabel }}
+                                                    </span>
                                                 </td>
                                                 <td class="row-total">{{ number_format($lineTotal, 0, ',', '.') }}đ</td>
                                                 <td>
@@ -467,6 +479,14 @@ document.addEventListener('DOMContentLoaded', function () {
             let unitDiscount = parseFloat(discountInput?.value || '0');
             unitDiscount = Math.max(0, Math.min(unitDiscount, price));
 
+            const lineWeightEl = row.querySelector('.line-weight');
+            if (lineWeightEl) {
+                const unitWeight = parseFloat(lineWeightEl.getAttribute('data-unit-weight') || '0');
+                const weightUnit = lineWeightEl.getAttribute('data-weight-unit') || 'Kg';
+                const lineWeight = Math.max(0, unitWeight * Math.max(quantity, 0));
+                lineWeightEl.textContent = `${lineWeight.toLocaleString('vi-VN', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} ${weightUnit}`;
+            }
+
             if (discountInput) {
                 discountInput.max = String(price);
                 discountInput.value = String(Math.round(unitDiscount));
@@ -583,8 +603,8 @@ document.addEventListener('DOMContentLoaded', function () {
             <td>
                 <div class="checkout-product">
                     <img src="${variantImage}" alt="${variantName}">
-                    <div>
-                        <div class="fw-bold">${variantName}</div>
+                    <div class="checkout-product-meta">
+                        <div class="checkout-product-title">${variantName}</div>
                     </div>
                 </div>
                 <input type="hidden" name="items[${itemIndex}][variant_id]" value="${variantId}">
@@ -602,14 +622,13 @@ document.addEventListener('DOMContentLoaded', function () {
                     value="0">
             </td>
             <td>
-                <input type="number" name="items[${itemIndex}][quantity]" class="form-control quantity-input" min="1" max="${variantStock > 0 ? variantStock : ''}" value="1" required>
+                <input type="number" name="items[${itemIndex}][quantity]" class="form-control form-control-sm quantity-input" min="1" max="${variantStock > 0 ? variantStock : ''}" value="1" required>
             </td>
             <td><span class="text-muted small">${variantUnitLabel}</span></td>
             <td>
-                <div class="d-flex align-items-center gap-2">
-                    <input type="number" class="form-control form-control-sm weight-input" name="item_weight[${variantId}]" min="0" step="0.001" value="${variantWeight.toFixed(3)}">
-                    <span class="text-muted small" style="white-space: nowrap;">${variantWeightUnitLabel}</span>
-                </div>
+                <span class="line-weight" data-unit-weight="${variantWeight.toFixed(3)}" data-weight-unit="${variantWeightUnitLabel}">
+                    ${variantWeight.toLocaleString('vi-VN', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} ${variantWeightUnitLabel}
+                </span>
             </td>
             <td class="row-total">${formatNumber(variantPrice)}đ</td>
             <td>
