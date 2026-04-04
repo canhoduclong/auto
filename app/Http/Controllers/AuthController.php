@@ -25,6 +25,13 @@ class AuthController extends Controller
 
             $user = Auth::user();
 
+            if ($this->isMobileRequest($request)) {
+                $mobileRoute = $this->resolveMobileRoute($user);
+                if ($mobileRoute !== null) {
+                    return redirect()->route($mobileRoute);
+                }
+            }
+
             if ($user->hasRole('admin')) {
                 return redirect()->route('dashboard');
             }
@@ -97,5 +104,40 @@ class AuthController extends Controller
         Auth::login($user);
 
         return redirect()->route('pages.my_dashboard');
+    }
+
+    private function resolveMobileRoute($user): ?string
+    {
+        if ($user->hasRole('warehouse')) {
+            return 'mobile.warehouse.home';
+        }
+
+        if ($user->hasRole('shipper') || $user->hasRole('ship')) {
+            return 'mobile.shipper.home';
+        }
+
+        $isSalesLikeUser = $user->isSalesFlowRole()
+            || $user->hasPermission('pages.my_orders')
+            || $user->hasPermission('orders.monitoring')
+            || $user->hasPermission('work-reports.index')
+            || $user->canAccessSalesDailyFeatures();
+
+        if ($isSalesLikeUser) {
+            return 'mobile.sale.home';
+        }
+
+        return null;
+    }
+
+    private function isMobileRequest(Request $request): bool
+    {
+        $uaMobile = (string) $request->header('sec-ch-ua-mobile', '');
+        if ($uaMobile === '?1') {
+            return true;
+        }
+
+        $agent = strtolower((string) $request->userAgent());
+
+        return preg_match('/iphone|ipod|android|blackberry|opera mini|windows phone|mobile|webos|iemobile|ipad/', $agent) === 1;
     }
 }
