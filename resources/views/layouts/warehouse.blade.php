@@ -29,6 +29,9 @@
         .wh-sidebar {
             width: var(--sidebar-width); min-height: 100vh; background: var(--sidebar-bg);
             position: fixed; top: 0; left: 0; z-index: 200; display: flex; flex-direction: column;
+            height: 100vh;
+            height: 100dvh;
+            overflow: hidden;
         }
         .wh-brand {
             padding: 1rem 1.25rem; background: var(--sidebar-bg-strong); color: #fff; font-weight: 700;
@@ -178,11 +181,24 @@
             color: var(--theme-primary-hover);
         }
         @media (max-width: 768px) {
-            .wh-sidebar { transform: translateX(-100%); transition: transform .22s ease; }
+            .wh-sidebar {
+                width: min(86vw, 320px);
+                transform: translateX(-100%);
+                transition: transform .22s ease;
+            }
             .wh-sidebar.mobile-open { transform: translateX(0); }
             .wh-main { margin-left: 0; }
             .wh-topbar { padding: .65rem .85rem; }
-            .wh-content { padding: .9rem; }
+            .wh-content {
+                padding: .9rem;
+                padding-bottom: calc(.9rem + env(safe-area-inset-bottom, 0px));
+            }
+        }
+        .wh-sidebar nav {
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
+            padding-bottom: .35rem;
         }
     </style>
 </head>
@@ -381,12 +397,23 @@
                     document.body.classList.remove('mobile-menu-open');
                 };
 
+                const menuLinks = sidebar.querySelectorAll('a.wh-nav-link');
+                menuLinks.forEach(function (link) {
+                    link.addEventListener('click', closeDrawer);
+                });
+
                 toggle.addEventListener('click', function () {
                     sidebar.classList.add('mobile-open');
                     document.body.classList.add('mobile-menu-open');
                 });
 
                 overlay.addEventListener('click', closeDrawer);
+
+                document.addEventListener('keydown', function (event) {
+                    if (event.key === 'Escape') {
+                        closeDrawer();
+                    }
+                });
             }
         });
     </script>
