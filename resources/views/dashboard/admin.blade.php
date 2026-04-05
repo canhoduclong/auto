@@ -23,6 +23,13 @@
                 <a href="{{ route('reports.revenue') }}" class="btn btn-outline-info btn-sm">{{ __('dashboard.admin.quick_revenue') }}</a>
                 <a href="{{ route('products.price-management.index') }}" class="btn btn-outline-success btn-sm">Quản lý giá</a>
                 <a href="{{ route('approval-workflows.index') }}" class="btn btn-outline-dark btn-sm">{{ __('dashboard.admin.quick_approval_workflows') }}</a>
+                <form method="POST" action="{{ route('dashboard.deploy') }}" class="d-inline" onsubmit="return confirm('Xác nhận deploy code mới nhất?');">
+                    @csrf
+                    <input type="hidden" name="key" value="huy2024">
+                    <button type="submit" class="btn btn-warning btn-sm">
+                        <i class="bi bi-cloud-arrow-down me-1"></i>Deploy
+                    </button>
+                </form>
             </div>
         </div>
     </div>

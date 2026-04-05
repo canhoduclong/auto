@@ -88,6 +88,7 @@ Route::middleware(['auth'])->group(function () {
     // AJAX lấy tổng tiền đơn hàng
     Route::get('orders/ajax/total', [OrderAjaxController::class, 'total'])->name('orders.ajax.total');
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::post('/dashboard/deploy', [DashboardController::class, 'deploy'])->name('dashboard.deploy')->middleware('role:admin');
 
     Route::prefix('accounting')->name('accounting.')->middleware('role:accountant,accounting,admin')->group(function () {
         Route::get('/', [AccountingDashboardController::class, 'index'])->name('dashboard');

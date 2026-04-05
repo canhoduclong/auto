@@ -10,6 +10,7 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Transaction;
 use Carbon\Carbon;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
@@ -209,5 +210,39 @@ class DashboardController extends Controller
             'dailyStats' => $dailyStats,
             'ordersByStatus' => $ordersByStatus,
         ];
+    }
+
+    public function deploy(Request $request)
+    {
+        $user = Auth::user();
+        if (!$user || !$user->hasRole('admin')) {
+            abort(403, 'Bạn không có quyền thực hiện deploy.');
+        }
+
+        if ((string) $request->input('key') !== 'huy2024') {
+            return back()->with('error', 'Sai key deploy.');
+        }
+
+        $commands = [
+            'cd /home/hltnt/public_html && git pull origin hoanglong',
+            'cd /home/hltnt/public_html && php artisan migrate --force',
+            'cd /home/hltnt/public_html && php artisan optimize:clear',
+            'cd /home/hltnt/public_html && php artisan config:cache',
+            'cd /home/hltnt/public_html && php artisan route:cache',
+        ];
+
+        foreach ($commands as $command) {
+            $output = [];
+            $exitCode = 0;
+            exec($command . ' 2>&1', $output, $exitCode);
+
+            if ($exitCode !== 0) {
+                $error = trim(implode("\n", $output));
+
+                return back()->with('error', 'Deploy thất bại: ' . ($error !== '' ? $error : 'Lệnh chạy lỗi.'));
+            }
+        }
+
+        return back()->with('success', 'deploy success');
     }
 }

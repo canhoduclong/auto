@@ -204,11 +204,11 @@
     <div class="col-md-6">
         <div class="card shadow-sm border-0 h-100">
             <div class="card-header bg-white fw-semibold d-flex align-items-center gap-2">
-                <i class="bi bi-boxes text-primary"></i> Xử lý đóng gói nhanh
+                <i class="bi bi-boxes text-primary"></i> Đóng gói nhanh
             </div>
             <div class="card-body d-flex gap-3 flex-wrap">
                 <a href="{{ route('warehouse.orders', ['date' => $selectedDate->toDateString()]) }}" class="btn btn-primary wh-btn-sync">
-                    <i class="bi bi-box2-fill me-1"></i>Xem đơn cần đóng gói
+                    <i class="bi bi-box2-fill me-1"></i>Đơn cần đóng gói
                     @if($stats['ready_to_pack'] + $stats['packing'] > 0)
                         <span class="badge bg-light text-primary ms-1">{{ $stats['ready_to_pack'] + $stats['packing'] }}</span>
                     @endif
