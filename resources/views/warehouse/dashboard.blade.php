@@ -39,6 +39,25 @@
         text-transform: uppercase;
         letter-spacing: .03em;
     }
+    .wh-btn-sync {
+        min-height: 42px;
+        padding: .48rem .95rem;
+        border-radius: 10px;
+        font-size: .9rem;
+        font-weight: 600;
+        line-height: 1.2;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: .35rem;
+    }
+    .wh-btn-sync i {
+        line-height: 1;
+    }
+    .wh-btn-sync .badge {
+        line-height: 1;
+        margin-left: .1rem;
+    }
 </style>
 @endpush
 
@@ -65,13 +84,13 @@
                 <input type="date" name="date" class="form-control" value="{{ $selectedDate->toDateString() }}">
             </div>
             <div class="col-md-8 d-flex gap-2 flex-wrap">
-                <button type="submit" class="btn btn-primary">
+                <button type="submit" class="btn btn-primary wh-btn-sync">
                     <i class="bi bi-funnel me-1"></i>Lọc dữ liệu
                 </button>
-                <a href="{{ route('warehouse.dashboard') }}" class="btn btn-outline-secondary">
+                <a href="{{ route('warehouse.dashboard') }}" class="btn btn-outline-secondary wh-btn-sync">
                     <i class="bi bi-arrow-clockwise me-1"></i>Hôm nay
                 </a>
-                <a href="{{ route('warehouse.orders', ['date' => $selectedDate->toDateString()]) }}" class="btn btn-outline-primary">
+                <a href="{{ route('warehouse.orders', ['date' => $selectedDate->toDateString()]) }}" class="btn btn-outline-primary wh-btn-sync">
                     <i class="bi bi-box2-fill me-1"></i>Xem tất cả đơn theo ngày
                 </a>
             </div>
@@ -188,7 +207,7 @@
                 <i class="bi bi-boxes text-primary"></i> Xử lý đóng gói nhanh
             </div>
             <div class="card-body d-flex gap-3 flex-wrap">
-                <a href="{{ route('warehouse.orders', ['date' => $selectedDate->toDateString()]) }}" class="btn btn-primary">
+                <a href="{{ route('warehouse.orders', ['date' => $selectedDate->toDateString()]) }}" class="btn btn-primary wh-btn-sync">
                     <i class="bi bi-box2-fill me-1"></i>Xem đơn cần đóng gói
                     @if($stats['ready_to_pack'] + $stats['packing'] > 0)
                         <span class="badge bg-light text-primary ms-1">{{ $stats['ready_to_pack'] + $stats['packing'] }}</span>
@@ -203,7 +222,7 @@
                 <i class="bi bi-arrow-return-left text-danger"></i> Hàng trả về
             </div>
             <div class="card-body d-flex gap-3 flex-wrap">
-                <a href="{{ route('warehouse.returns') }}" class="btn btn-outline-danger">
+                <a href="{{ route('warehouse.returns') }}" class="btn btn-outline-danger wh-btn-sync">
                     <i class="bi bi-clipboard-check me-1"></i>Xác nhận nhập kho hàng trả
                     @if($stats['returning'] > 0)
                         <span class="badge bg-danger ms-1">{{ $stats['returning'] }}</span>
@@ -217,9 +236,9 @@
 {{-- Orders by selected day --}}
 <div class="card wh-table-card mb-4">
     <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
-        <span><i class="bi bi-table me-1 text-primary"></i> Đơn hàng trong ngày {{ $selectedDate->format('d/m/Y') }}</span>
-        <a href="{{ route('warehouse.orders', ['date' => $selectedDate->toDateString()]) }}" class="btn btn-sm btn-outline-primary">
-            Xử lý đóng gói
+        <span><i class="bi bi-table me-1 text-primary"></i> Đơn hàng ngày {{ $selectedDate->format('d/m/Y') }}</span>
+        <a href="{{ route('warehouse.orders', ['date' => $selectedDate->toDateString()]) }}" class="btn btn-outline-primary wh-btn-sync">
+            Đóng gói
         </a>
     </div>
     @if($dailyOrders->isNotEmpty())

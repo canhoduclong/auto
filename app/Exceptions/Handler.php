@@ -5,6 +5,7 @@ namespace App\Exceptions;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
 use Illuminate\Session\TokenMismatchException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Throwable;
 
 class Handler extends ExceptionHandler
@@ -73,9 +74,24 @@ class Handler extends ExceptionHandler
             }
         }
 
-        if ($exception instanceof AuthorizationException) {
-            // Bắt lỗi 403 (Unauthorized) và trả về view lỗi tùy chỉnh
-            return response()->view('errors.403', [], 403);
+        $isForbidden = $exception instanceof AuthorizationException
+            || ($exception instanceof HttpExceptionInterface && $exception->getStatusCode() === 403);
+
+        if ($isForbidden) {
+            $message = trim((string) $exception->getMessage());
+            if ($message === '' || str_contains(strtolower($message), 'unauthorized')) {
+                $message = 'Bạn không có quyền truy cập chức năng này.';
+            }
+
+            if ($request->expectsJson() || $request->is('api/*')) {
+                return response()->json([
+                    'message' => $message,
+                ], 403);
+            }
+
+            return redirect()
+                ->route('home')
+                ->with('error', $message);
         }
 
         // Nếu không phải lỗi 403, Laravel sẽ xử lý các lỗi khác như bình thường
