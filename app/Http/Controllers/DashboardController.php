@@ -10,7 +10,6 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Transaction;
 use Carbon\Carbon;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
@@ -212,89 +211,4 @@ class DashboardController extends Controller
         ];
     }
 
-    public function deploy(Request $request)
-    {
-        $user = Auth::user();
-        if (!$user || !$user->hasRole('admin')) {
-            abort(403, 'Bạn không có quyền thực hiện deploy.');
-        }
-
-        if ((string) $request->input('key') !== 'huy2024') {
-            return back()->with('error', 'Sai key deploy.');
-        }
-
-        $deployPath = '/home/hltnt/public_html';
-        $branch = 'hoanglong';
-        $logs = [];
-
-        $logs[] = 'Deploy branch: ' . $branch;
-        $logs[] = 'Deploy path: ' . $deployPath;
-        $logs[] = '';
-        $logs[] = 'Pulling code...';
-
-        [$pullCode, $pullOutput] = $this->runDeployCommand("cd {$deployPath} && git pull origin {$branch}");
-        $logs = array_merge($logs, $pullOutput);
-        $logs[] = '';
-
-        if ($pullCode !== 0) {
-            $logs[] = 'Deploy failed at step: git pull';
-
-            return back()
-                ->with('error', 'Deploy thất bại ở bước pull code.')
-                ->with('deploy_output', implode("\n", $logs))
-                ->with('deploy_status', 'error');
-        }
-
-        $logs[] = 'Changed files:';
-        [$diffCode, $diffOutput] = $this->runDeployCommand("cd {$deployPath} && git diff --name-only ORIG_HEAD HEAD");
-        if ($diffCode === 0 && !empty($diffOutput)) {
-            $logs = array_merge($logs, $diffOutput);
-        } else {
-            $logs[] = '(No changed files or already up-to-date)';
-        }
-        $logs[] = '';
-
-        $steps = [
-            ['title' => 'Running migrate...', 'command' => "cd {$deployPath} && php artisan migrate --force", 'fail' => 'migrate'],
-            ['title' => 'Clearing cache...', 'command' => "cd {$deployPath} && php artisan optimize:clear", 'fail' => 'optimize:clear'],
-            ['title' => 'Caching config...', 'command' => "cd {$deployPath} && php artisan config:cache", 'fail' => 'config:cache'],
-            ['title' => 'Caching routes...', 'command' => "cd {$deployPath} && php artisan route:cache", 'fail' => 'route:cache'],
-        ];
-
-        foreach ($steps as $step) {
-            $logs[] = $step['title'];
-            [$code, $output] = $this->runDeployCommand($step['command']);
-            $logs = array_merge($logs, $output);
-            $logs[] = '';
-
-            if ($code !== 0) {
-                $logs[] = 'Deploy failed at step: ' . $step['fail'];
-
-                return back()
-                    ->with('error', 'Deploy thất bại ở bước ' . $step['fail'] . '.')
-                    ->with('deploy_output', implode("\n", $logs))
-                    ->with('deploy_status', 'error');
-            }
-        }
-
-        $logs[] = 'Deploy success.';
-
-        return back()
-            ->with('success', 'deploy success')
-            ->with('deploy_output', implode("\n", $logs))
-            ->with('deploy_status', 'success');
-    }
-
-    private function runDeployCommand(string $command): array
-    {
-        $output = [];
-        $exitCode = 0;
-        exec($command . ' 2>&1', $output, $exitCode);
-
-        if (empty($output)) {
-            $output[] = '(No output)';
-        }
-
-        return [$exitCode, $output];
-    }
 }

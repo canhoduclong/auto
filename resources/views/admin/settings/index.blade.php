@@ -16,6 +16,117 @@
         <div class="alert alert-success border-0 shadow-sm">{{ session('success') }}</div>
     @endif
 
+    @if(session('deploy_output'))
+        <div class="card border-0 shadow-sm mb-3 border-{{ session('deploy_status') === 'error' ? 'danger' : 'success' }}">
+            <div class="card-header bg-{{ session('deploy_status') === 'error' ? 'danger' : 'success' }} bg-opacity-10 border-0">
+                <strong>
+                    <i class="bi {{ session('deploy_status') === 'error' ? 'bi-exclamation-triangle' : 'bi-terminal' }} me-1"></i>
+                    Deploy Notification
+                </strong>
+            </div>
+            <div class="card-body">
+                <pre class="settings-deploy-log mb-0">{{ session('deploy_output') }}</pre>
+            </div>
+        </div>
+    @endif
+
+    @if(session('push_output'))
+        <div class="card border-0 shadow-sm mb-3 border-{{ session('push_status') === 'error' ? 'danger' : 'success' }}">
+            <div class="card-header bg-{{ session('push_status') === 'error' ? 'danger' : 'success' }} bg-opacity-10 border-0">
+                <strong>
+                    <i class="bi {{ session('push_status') === 'error' ? 'bi-exclamation-triangle' : 'bi-git' }} me-1"></i>
+                    Push Notification
+                </strong>
+            </div>
+            <div class="card-body">
+                <pre class="settings-deploy-log mb-0">{{ session('push_output') }}</pre>
+            </div>
+        </div>
+    @endif
+
+    <div class="card border-0 shadow-sm mb-3">
+        <div class="card-header bg-white border-0 pt-3 pb-0 d-flex justify-content-between align-items-center gap-2 flex-wrap">
+            <div>
+                <h5 class="mb-1">Deploy hệ thống</h5>
+                <p class="text-muted small mb-0">Pull code mới nhất từ branch hoanglong và chạy các bước migrate/cache.</p>
+            </div>
+            <form method="POST" action="{{ route('admin.settings.deploy') }}" class="d-inline" onsubmit="return confirm('Xác nhận deploy code mới nhất?');">
+                @csrf
+                <input type="hidden" name="key" value="huy2024">
+                <button type="submit" class="btn btn-warning btn-sm">
+                    <i class="bi bi-cloud-arrow-down me-1"></i>Deploy
+                </button>
+            </form>
+        </div>
+        <div class="card-body pt-2">
+            <small class="text-muted">Kết quả deploy sẽ hiển thị ngay tại khối Deploy Notification phía trên.</small>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm mb-3">
+        <div class="card-header bg-white border-0 pt-3 pb-0">
+            <h5 class="mb-1">Push code lên GitHub</h5>
+            <p class="text-muted small mb-0">Commit message lấy từ ô nhập liệu bên dưới, source local: /var/www/auto.com.</p>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ route('admin.settings.push') }}" onsubmit="return confirm('Xác nhận commit và push code lên GitHub?');">
+                @csrf
+                <input type="hidden" name="key" value="huy2024">
+                <div class="mb-2">
+                    <label for="commit_message" class="form-label">Commit message</label>
+                    <textarea id="commit_message" name="commit_message" class="form-control" rows="3" placeholder="Nhập nội dung commit..." required>{{ old('commit_message') }}</textarea>
+                </div>
+                <div class="d-flex gap-2 flex-wrap align-items-center">
+                    <button type="submit" class="btn btn-dark btn-sm">
+                        <i class="bi bi-git me-1"></i>Commit & Push
+                    </button>
+                    <small class="text-muted">Kết quả push sẽ hiển thị tại khối Push Notification phía trên.</small>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm mb-3">
+        <div class="card-header bg-white border-0 pt-3 pb-0">
+            <h5 class="mb-1">Lịch sử Push gần đây</h5>
+            <p class="text-muted small mb-0">Theo dõi các lần thay đổi code local đã đẩy lên GitHub.</p>
+        </div>
+        <div class="card-body">
+            @if(!empty($pushHistory))
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Thời gian</th>
+                                <th>Branch</th>
+                                <th>Commit</th>
+                                <th>Trạng thái</th>
+                                <th>User</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($pushHistory as $log)
+                                <tr>
+                                    <td>{{ $log['time'] ?? '-' }}</td>
+                                    <td>{{ $log['branch'] ?? '-' }}</td>
+                                    <td>{{ $log['commit_message'] ?? '-' }}</td>
+                                    <td>
+                                        <span class="badge {{ ($log['status'] ?? '') === 'success' ? 'bg-success' : 'bg-danger' }}">
+                                            {{ strtoupper($log['status'] ?? 'unknown') }}
+                                        </span>
+                                    </td>
+                                    <td>{{ $log['user'] ?? '-' }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @else
+                <div class="text-muted small">Chưa có lịch sử push nào.</div>
+            @endif
+        </div>
+    </div>
+
     <form action="{{ route('admin.settings.update') }}" method="POST" enctype="multipart/form-data" id="settings-form">
         @csrf
 
@@ -237,6 +348,17 @@
     position: sticky;
     bottom: 12px;
     z-index: 10;
+}
+
+.settings-deploy-log {
+    white-space: pre-wrap;
+    word-break: break-word;
+    background: #0f172a;
+    color: #e2e8f0;
+    border-radius: 8px;
+    padding: 12px;
+    max-height: 420px;
+    overflow: auto;
 }
 </style>
 @endpush

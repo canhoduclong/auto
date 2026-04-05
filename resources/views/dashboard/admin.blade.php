@@ -23,32 +23,11 @@
                 <a href="{{ route('reports.revenue') }}" class="btn btn-outline-info btn-sm">{{ __('dashboard.admin.quick_revenue') }}</a>
                 <a href="{{ route('products.price-management.index') }}" class="btn btn-outline-success btn-sm">Quản lý giá</a>
                 <a href="{{ route('approval-workflows.index') }}" class="btn btn-outline-dark btn-sm">{{ __('dashboard.admin.quick_approval_workflows') }}</a>
-                <form method="POST" action="{{ route('dashboard.deploy') }}" class="d-inline" onsubmit="return confirm('Xác nhận deploy code mới nhất?');">
-                    @csrf
-                    <input type="hidden" name="key" value="huy2024">
-                    <button type="submit" class="btn btn-warning btn-sm">
-                        <i class="bi bi-cloud-arrow-down me-1"></i>Deploy
-                    </button>
-                </form>
             </div>
         </div>
     </div>
 
     <div class="content pt-0">
-        @if(session('deploy_output'))
-            <div class="card mb-3 border-{{ session('deploy_status') === 'error' ? 'danger' : 'success' }}">
-                <div class="card-header bg-{{ session('deploy_status') === 'error' ? 'danger' : 'success' }} bg-opacity-10">
-                    <strong>
-                        <i class="bi {{ session('deploy_status') === 'error' ? 'bi-exclamation-triangle' : 'bi-terminal' }} me-1"></i>
-                        Deploy Notification
-                    </strong>
-                </div>
-                <div class="card-body">
-                    <pre class="mb-0" style="white-space:pre-wrap;word-break:break-word;background:#0f172a;color:#e2e8f0;border-radius:8px;padding:12px;max-height:420px;overflow:auto;">{{ session('deploy_output') }}</pre>
-                </div>
-            </div>
-        @endif
-
         <div class="row g-3 mb-3">
             <div class="col-md-6 col-xl-3">
                 <div class="card mb-0">

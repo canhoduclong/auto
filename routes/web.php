@@ -88,7 +88,6 @@ Route::middleware(['auth'])->group(function () {
     // AJAX lấy tổng tiền đơn hàng
     Route::get('orders/ajax/total', [OrderAjaxController::class, 'total'])->name('orders.ajax.total');
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
-    Route::post('/dashboard/deploy', [DashboardController::class, 'deploy'])->name('dashboard.deploy')->middleware('role:admin');
 
     Route::prefix('accounting')->name('accounting.')->middleware('role:accountant,accounting,admin')->group(function () {
         Route::get('/', [AccountingDashboardController::class, 'index'])->name('dashboard');
@@ -332,6 +331,8 @@ Route::middleware(['auth'])->group(function () {
     Route::group(['prefix' => 'admin', 'as' => 'admin.'], function () {
         Route::get('settings', [SettingController::class, 'index'])->name('settings.index');
         Route::post('settings', [SettingController::class, 'update'])->name('settings.update');
+        Route::post('settings/deploy', [SettingController::class, 'deploy'])->name('settings.deploy')->middleware('role:admin');
+        Route::post('settings/push', [SettingController::class, 'push'])->name('settings.push')->middleware('role:admin');
         Route::resource('posts', PostController::class);
         Route::resource('post-categories', PostCategoryController::class);
         Route::resource('pages', PageController::class);

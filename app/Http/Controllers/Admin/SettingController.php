@@ -24,7 +24,10 @@ class SettingController extends Controller
         $settings = Cache::remember('settings', 60, function () {
             return Setting::all()->keyBy('key');
         });
-        return view('admin.settings.index', compact('settings'));
+
+        $pushHistory = $this->readPushHistory();
+
+        return view('admin.settings.index', compact('settings', 'pushHistory'));
     }
 
     public function update(Request $request)
@@ -38,5 +41,281 @@ class SettingController extends Controller
         Cache::forget('settings');
 
         return redirect()->back()->with('success', 'Settings updated successfully.');
+    }
+
+    public function deploy(Request $request)
+    {
+        $user = $request->user();
+        if (!$user || !$user->hasRole('admin')) {
+            abort(403, 'Bạn không có quyền thực hiện deploy.');
+        }
+
+        if ((string) $request->input('key') !== 'huy2024') {
+            return back()->with('error', 'Sai key deploy.');
+        }
+
+        $deployPath = '/home/hltnt/public_html';
+        $branch = 'hoanglong';
+        $logs = [];
+
+        $logs[] = 'Deploy branch: ' . $branch;
+        $logs[] = 'Deploy path: ' . $deployPath;
+        $logs[] = '';
+        $logs[] = 'Pulling code...';
+
+        [$pullCode, $pullOutput] = $this->runDeployCommand("cd {$deployPath} && git pull origin {$branch}");
+        $logs = array_merge($logs, $pullOutput);
+        $logs[] = '';
+
+        if ($pullCode !== 0) {
+            $logs[] = 'Deploy failed at step: git pull';
+
+            return back()
+                ->with('error', 'Deploy thất bại ở bước pull code.')
+                ->with('deploy_output', implode("\n", $logs))
+                ->with('deploy_status', 'error');
+        }
+
+        $logs[] = 'Changed files:';
+        [$diffCode, $diffOutput] = $this->runDeployCommand("cd {$deployPath} && git diff --name-only ORIG_HEAD HEAD");
+        if ($diffCode === 0 && !empty($diffOutput)) {
+            $logs = array_merge($logs, $diffOutput);
+        } else {
+            $logs[] = '(No changed files or already up-to-date)';
+        }
+        $logs[] = '';
+
+        $steps = [
+            ['title' => 'Running migrate...', 'command' => "cd {$deployPath} && php artisan migrate --force", 'fail' => 'migrate'],
+            ['title' => 'Clearing cache...', 'command' => "cd {$deployPath} && php artisan optimize:clear", 'fail' => 'optimize:clear'],
+            ['title' => 'Caching config...', 'command' => "cd {$deployPath} && php artisan config:cache", 'fail' => 'config:cache'],
+            ['title' => 'Caching routes...', 'command' => "cd {$deployPath} && php artisan route:cache", 'fail' => 'route:cache'],
+        ];
+
+        foreach ($steps as $step) {
+            $logs[] = $step['title'];
+            [$code, $output] = $this->runDeployCommand($step['command']);
+            $logs = array_merge($logs, $output);
+            $logs[] = '';
+
+            if ($code !== 0) {
+                $logs[] = 'Deploy failed at step: ' . $step['fail'];
+
+                return back()
+                    ->with('error', 'Deploy thất bại ở bước ' . $step['fail'] . '.')
+                    ->with('deploy_output', implode("\n", $logs))
+                    ->with('deploy_status', 'error');
+            }
+        }
+
+        $logs[] = 'Deploy success.';
+
+        return back()
+            ->with('success', 'deploy success')
+            ->with('deploy_output', implode("\n", $logs))
+            ->with('deploy_status', 'success');
+    }
+
+    public function push(Request $request)
+    {
+        $user = $request->user();
+        if (!$user || !$user->hasRole('admin')) {
+            abort(403, 'Bạn không có quyền thực hiện push code.');
+        }
+
+        $validated = $request->validate([
+            'key' => ['required', 'string'],
+            'commit_message' => ['required', 'string', 'max:500'],
+        ]);
+
+        if ((string) $validated['key'] !== 'huy2024') {
+            return back()->with('error', 'Sai key push code.')->withInput();
+        }
+
+        $repoPath = '/var/www/auto.com';
+        $repoPathArg = escapeshellarg($repoPath);
+        $gitCmdPrefix = 'git -c safe.directory=' . escapeshellarg($repoPath);
+        $branch = 'hoanglong';
+        $commitMessage = trim((string) $validated['commit_message']);
+        $logs = [];
+
+        $logs[] = 'Push path: ' . $repoPath;
+        $logs[] = 'Push branch: ' . $branch;
+        $logs[] = 'Commit message: ' . $commitMessage;
+        $logs[] = '';
+        $logs[] = 'Git safe.directory: ' . $repoPath;
+        $logs[] = '';
+
+        $logs[] = 'Local changed files:';
+        [$statusCode, $statusOutput] = $this->runDeployCommand("cd {$repoPathArg} && {$gitCmdPrefix} status --short");
+        $changedFiles = [];
+        if ($statusCode === 0) {
+            if (count($statusOutput) === 1 && trim((string) $statusOutput[0]) === '(No output)') {
+                $logs[] = '(No local changes)';
+            } else {
+                $logs = array_merge($logs, $statusOutput);
+                foreach ($statusOutput as $line) {
+                    $line = trim((string) $line);
+                    if ($line === '') {
+                        continue;
+                    }
+
+                    $parts = preg_split('/\s+/', $line, 2);
+                    $changedFiles[] = trim((string) ($parts[1] ?? $parts[0] ?? ''));
+                }
+            }
+        } else {
+            $logs = array_merge($logs, $statusOutput);
+        }
+        $logs[] = '';
+
+        $logs[] = 'Staging files...';
+        [$addCode, $addOutput] = $this->runDeployCommand("cd {$repoPathArg} && {$gitCmdPrefix} add .");
+        $logs = array_merge($logs, $addOutput);
+        $logs[] = '';
+
+        if ($addCode !== 0) {
+            $logs[] = 'Push failed at step: git add';
+
+            $this->appendPushHistory([
+                'time' => now()->toDateTimeString(),
+                'user' => $user->email ?? $user->name,
+                'branch' => $branch,
+                'commit_message' => $commitMessage,
+                'status' => 'error',
+                'changed_files' => $changedFiles,
+                'output' => $logs,
+            ]);
+
+            return back()
+                ->with('error', 'Push thất bại ở bước git add.')
+                ->with('push_output', implode("\n", $logs))
+                ->with('push_status', 'error');
+        }
+
+        $logs[] = 'Committing...';
+        [$commitCode, $commitOutput] = $this->runDeployCommand("cd {$repoPathArg} && {$gitCmdPrefix} commit -m " . escapeshellarg($commitMessage));
+        $logs = array_merge($logs, $commitOutput);
+        $logs[] = '';
+
+        if ($commitCode !== 0) {
+            $commitText = strtolower(implode("\n", $commitOutput));
+            if (str_contains($commitText, 'nothing to commit') || str_contains($commitText, 'no changes added to commit')) {
+                $logs[] = 'No new commit created (nothing to commit).';
+                $logs[] = '';
+            } else {
+                $logs[] = 'Push failed at step: git commit';
+
+                $this->appendPushHistory([
+                    'time' => now()->toDateTimeString(),
+                    'user' => $user->email ?? $user->name,
+                    'branch' => $branch,
+                    'commit_message' => $commitMessage,
+                    'status' => 'error',
+                    'changed_files' => $changedFiles,
+                    'output' => $logs,
+                ]);
+
+                return back()
+                    ->with('error', 'Push thất bại ở bước commit.')
+                    ->with('push_output', implode("\n", $logs))
+                    ->with('push_status', 'error');
+            }
+        }
+
+        $logs[] = 'Pushing to origin/' . $branch . '...';
+        [$pushCode, $pushOutput] = $this->runDeployCommand("cd {$repoPathArg} && {$gitCmdPrefix} push origin {$branch}");
+        $logs = array_merge($logs, $pushOutput);
+        $logs[] = '';
+
+        if ($pushCode !== 0) {
+            $logs[] = 'Push failed at step: git push';
+
+            $this->appendPushHistory([
+                'time' => now()->toDateTimeString(),
+                'user' => $user->email ?? $user->name,
+                'branch' => $branch,
+                'commit_message' => $commitMessage,
+                'status' => 'error',
+                'changed_files' => $changedFiles,
+                'output' => $logs,
+            ]);
+
+            return back()
+                ->with('error', 'Push thất bại ở bước git push.')
+                ->with('push_output', implode("\n", $logs))
+                ->with('push_status', 'error');
+        }
+
+        $logs[] = 'Push success.';
+
+        $this->appendPushHistory([
+            'time' => now()->toDateTimeString(),
+            'user' => $user->email ?? $user->name,
+            'branch' => $branch,
+            'commit_message' => $commitMessage,
+            'status' => 'success',
+            'changed_files' => $changedFiles,
+            'output' => $logs,
+        ]);
+
+        return back()
+            ->with('success', 'Push code thành công.')
+            ->with('push_output', implode("\n", $logs))
+            ->with('push_status', 'success');
+    }
+
+    private function runDeployCommand(string $command): array
+    {
+        $output = [];
+        $exitCode = 0;
+        exec($command . ' 2>&1', $output, $exitCode);
+
+        if (empty($output)) {
+            $output[] = '(No output)';
+        }
+
+        return [$exitCode, $output];
+    }
+
+    private function appendPushHistory(array $entry): void
+    {
+        $file = storage_path('app/push_history.json');
+        $dir = dirname($file);
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0755, true);
+        }
+
+        $history = [];
+        if (is_file($file)) {
+            $json = @file_get_contents($file);
+            $decoded = json_decode((string) $json, true);
+            if (is_array($decoded)) {
+                $history = $decoded;
+            }
+        }
+
+        $history[] = $entry;
+        if (count($history) > 100) {
+            $history = array_slice($history, -100);
+        }
+
+        @file_put_contents($file, json_encode($history, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+    }
+
+    private function readPushHistory(): array
+    {
+        $file = storage_path('app/push_history.json');
+        if (!is_file($file)) {
+            return [];
+        }
+
+        $json = @file_get_contents($file);
+        $decoded = json_decode((string) $json, true);
+        if (!is_array($decoded)) {
+            return [];
+        }
+
+        return array_reverse($decoded);
     }
 }
