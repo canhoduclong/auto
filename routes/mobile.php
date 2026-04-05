@@ -5,7 +5,7 @@ use App\Http\Controllers\Mobile\WarehouseMobileController;
 use App\Http\Controllers\Mobile\ShipperMobileController;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware(['auth', 'mobile.role.redirect'])->prefix('m')->name('mobile.')->group(function () {
+Route::middleware(['auth'])->prefix('m')->name('mobile.')->group(function () {
     Route::get('/', function () {
         $user = auth()->user();
 

@@ -20,7 +20,7 @@ class CheckMobileRoleRedirect
             return $next($request);
         }
 
-        if ($request->ajax() || $request->expectsJson() || $request->is('api/*')) {
+        if (!$this->shouldApplyRedirect($request)) {
             return $next($request);
         }
 
@@ -38,6 +38,30 @@ class CheckMobileRoleRedirect
         }
 
         return $next($request);
+    }
+
+    private function shouldApplyRedirect(Request $request): bool
+    {
+        if (!in_array($request->method(), ['GET', 'HEAD'], true)) {
+            return false;
+        }
+
+        if ($request->ajax() || $request->expectsJson() || $request->is('api/*')) {
+            return false;
+        }
+
+        // Only redirect for real page navigations, not sub-resource/fetch requests.
+        $fetchDest = strtolower((string) $request->header('sec-fetch-dest', ''));
+        if ($fetchDest !== '' && !in_array($fetchDest, ['document', 'iframe'], true)) {
+            return false;
+        }
+
+        $fetchMode = strtolower((string) $request->header('sec-fetch-mode', ''));
+        if ($fetchMode !== '' && $fetchMode !== 'navigate') {
+            return false;
+        }
+
+        return true;
     }
 
     private function isMobileRequest(Request $request): bool
