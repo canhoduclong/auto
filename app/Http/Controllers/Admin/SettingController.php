@@ -26,8 +26,9 @@ class SettingController extends Controller
         });
 
         $pushHistory = $this->readPushHistory();
+        $showPushFeature = !$this->isRestrictedPushDomain(request()->getHost());
 
-        return view('admin.settings.index', compact('settings', 'pushHistory'));
+        return view('admin.settings.index', compact('settings', 'pushHistory', 'showPushFeature'));
     }
 
     public function update(Request $request)
@@ -118,6 +119,10 @@ class SettingController extends Controller
 
     public function push(Request $request)
     {
+        if ($this->isRestrictedPushDomain($request->getHost())) {
+            return back()->with('error', 'Domain này chỉ cho phép Deploy, không hiển thị/không chạy Push.');
+        }
+
         $user = $request->user();
         if (!$user || !$user->hasRole('admin')) {
             abort(403, 'Bạn không có quyền thực hiện push code.');
@@ -317,5 +322,12 @@ class SettingController extends Controller
         }
 
         return array_reverse($decoded);
+    }
+
+    private function isRestrictedPushDomain(?string $host): bool
+    {
+        $host = strtolower(trim((string) $host));
+
+        return $host === 'hoanglongtnt.com' || $host === 'www.hoanglongtnt.com';
     }
 }

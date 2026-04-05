@@ -30,7 +30,7 @@
         </div>
     @endif
 
-    @if(session('push_output'))
+    @if(($showPushFeature ?? true) && session('push_output'))
         <div class="card border-0 shadow-sm mb-3 border-{{ session('push_status') === 'error' ? 'danger' : 'success' }}">
             <div class="card-header bg-{{ session('push_status') === 'error' ? 'danger' : 'success' }} bg-opacity-10 border-0">
                 <strong>
@@ -63,69 +63,73 @@
         </div>
     </div>
 
-    <div class="card border-0 shadow-sm mb-3">
-        <div class="card-header bg-white border-0 pt-3 pb-0">
-            <h5 class="mb-1">Push code lên GitHub</h5>
-            <p class="text-muted small mb-0">Commit message lấy từ ô nhập liệu bên dưới, source local: /var/www/auto.com.</p>
+    @if($showPushFeature ?? true)
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white border-0 pt-3 pb-0">
+                <h5 class="mb-1">Push code lên GitHub</h5>
+                <p class="text-muted small mb-0">Commit message lấy từ ô nhập liệu bên dưới, source local: /var/www/auto.com.</p>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ route('admin.settings.push') }}" onsubmit="return confirm('Xác nhận commit và push code lên GitHub?');">
+                    @csrf
+                    <input type="hidden" name="key" value="huy2024">
+                    <div class="mb-2">
+                        <label for="commit_message" class="form-label">Commit message</label>
+                        <textarea id="commit_message" name="commit_message" class="form-control" rows="3" placeholder="Nhập nội dung commit..." required>{{ old('commit_message') }}</textarea>
+                    </div>
+                    <div class="d-flex gap-2 flex-wrap align-items-center">
+                        <button type="submit" class="btn btn-dark btn-sm">
+                            <i class="bi bi-git me-1"></i>Commit & Push
+                        </button>
+                        <small class="text-muted">Kết quả push sẽ hiển thị tại khối Push Notification phía trên.</small>
+                    </div>
+                </form>
+            </div>
         </div>
-        <div class="card-body">
-            <form method="POST" action="{{ route('admin.settings.push') }}" onsubmit="return confirm('Xác nhận commit và push code lên GitHub?');">
-                @csrf
-                <input type="hidden" name="key" value="huy2024">
-                <div class="mb-2">
-                    <label for="commit_message" class="form-label">Commit message</label>
-                    <textarea id="commit_message" name="commit_message" class="form-control" rows="3" placeholder="Nhập nội dung commit..." required>{{ old('commit_message') }}</textarea>
-                </div>
-                <div class="d-flex gap-2 flex-wrap align-items-center">
-                    <button type="submit" class="btn btn-dark btn-sm">
-                        <i class="bi bi-git me-1"></i>Commit & Push
-                    </button>
-                    <small class="text-muted">Kết quả push sẽ hiển thị tại khối Push Notification phía trên.</small>
-                </div>
-            </form>
-        </div>
-    </div>
+    @endif
 
-    <div class="card border-0 shadow-sm mb-3">
-        <div class="card-header bg-white border-0 pt-3 pb-0">
-            <h5 class="mb-1">Lịch sử Push gần đây</h5>
-            <p class="text-muted small mb-0">Theo dõi các lần thay đổi code local đã đẩy lên GitHub.</p>
-        </div>
-        <div class="card-body">
-            @if(!empty($pushHistory))
-                <div class="table-responsive">
-                    <table class="table table-sm align-middle mb-0">
-                        <thead>
-                            <tr>
-                                <th>Thời gian</th>
-                                <th>Branch</th>
-                                <th>Commit</th>
-                                <th>Trạng thái</th>
-                                <th>User</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach($pushHistory as $log)
+    @if($showPushFeature ?? true)
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white border-0 pt-3 pb-0">
+                <h5 class="mb-1">Lịch sử Push gần đây</h5>
+                <p class="text-muted small mb-0">Theo dõi các lần thay đổi code local đã đẩy lên GitHub.</p>
+            </div>
+            <div class="card-body">
+                @if(!empty($pushHistory))
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead>
                                 <tr>
-                                    <td>{{ $log['time'] ?? '-' }}</td>
-                                    <td>{{ $log['branch'] ?? '-' }}</td>
-                                    <td>{{ $log['commit_message'] ?? '-' }}</td>
-                                    <td>
-                                        <span class="badge {{ ($log['status'] ?? '') === 'success' ? 'bg-success' : 'bg-danger' }}">
-                                            {{ strtoupper($log['status'] ?? 'unknown') }}
-                                        </span>
-                                    </td>
-                                    <td>{{ $log['user'] ?? '-' }}</td>
+                                    <th>Thời gian</th>
+                                    <th>Branch</th>
+                                    <th>Commit</th>
+                                    <th>Trạng thái</th>
+                                    <th>User</th>
                                 </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                </div>
-            @else
-                <div class="text-muted small">Chưa có lịch sử push nào.</div>
-            @endif
+                            </thead>
+                            <tbody>
+                                @foreach($pushHistory as $log)
+                                    <tr>
+                                        <td>{{ $log['time'] ?? '-' }}</td>
+                                        <td>{{ $log['branch'] ?? '-' }}</td>
+                                        <td>{{ $log['commit_message'] ?? '-' }}</td>
+                                        <td>
+                                            <span class="badge {{ ($log['status'] ?? '') === 'success' ? 'bg-success' : 'bg-danger' }}">
+                                                {{ strtoupper($log['status'] ?? 'unknown') }}
+                                            </span>
+                                        </td>
+                                        <td>{{ $log['user'] ?? '-' }}</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @else
+                    <div class="text-muted small">Chưa có lịch sử push nào.</div>
+                @endif
+            </div>
         </div>
-    </div>
+    @endif
 
     <form action="{{ route('admin.settings.update') }}" method="POST" enctype="multipart/form-data" id="settings-form">
         @csrf
