@@ -55,6 +55,24 @@
         .wh-topbar .breadcrumb { margin-bottom: 0; font-size: .95rem; }
         .wh-topbar h6 { font-size: 1.08rem; }
         .wh-topbar .small { font-size: .93rem !important; }
+        .wh-mobile-logout-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: .35rem;
+            min-height: 34px;
+            padding: 0 .65rem;
+            border-radius: 999px;
+            border: 1px solid #f5c2c7;
+            background: #fff;
+            color: #b42318;
+            font-size: .83rem;
+            font-weight: 700;
+        }
+        .wh-mobile-logout-btn:hover {
+            background: #fff5f5;
+            color: #912018;
+        }
         .wh-content { padding: 1.5rem; flex: 1; }
         .stat-card { border: none; border-radius: .75rem; transition: transform .15s; }
         .stat-card:hover { transform: translateY(-2px); }
@@ -246,6 +264,13 @@
                 </div>
             </div>
             <div class="d-flex align-items-center gap-3">
+                <form method="POST" action="{{ route('logout') }}" class="d-md-none">
+                    @csrf
+                    <button type="submit" class="wh-mobile-logout-btn" aria-label="Đăng xuất">
+                        <i class="bi bi-box-arrow-right"></i>
+                        <span>Đăng xuất</span>
+                    </button>
+                </form>
                 <span class="text-muted small">
                     <i class="bi bi-clock me-1"></i>
                     <span id="current-time">{{ now()->format('H:i') }}</span>
