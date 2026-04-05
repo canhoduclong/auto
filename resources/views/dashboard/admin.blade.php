@@ -35,6 +35,20 @@
     </div>
 
     <div class="content pt-0">
+        @if(session('deploy_output'))
+            <div class="card mb-3 border-{{ session('deploy_status') === 'error' ? 'danger' : 'success' }}">
+                <div class="card-header bg-{{ session('deploy_status') === 'error' ? 'danger' : 'success' }} bg-opacity-10">
+                    <strong>
+                        <i class="bi {{ session('deploy_status') === 'error' ? 'bi-exclamation-triangle' : 'bi-terminal' }} me-1"></i>
+                        Deploy Notification
+                    </strong>
+                </div>
+                <div class="card-body">
+                    <pre class="mb-0" style="white-space:pre-wrap;word-break:break-word;background:#0f172a;color:#e2e8f0;border-radius:8px;padding:12px;max-height:420px;overflow:auto;">{{ session('deploy_output') }}</pre>
+                </div>
+            </div>
+        @endif
+
         <div class="row g-3 mb-3">
             <div class="col-md-6 col-xl-3">
                 <div class="card mb-0">
