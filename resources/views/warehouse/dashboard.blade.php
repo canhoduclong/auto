@@ -1,7 +1,7 @@
 @extends('layouts.warehouse')
 
 @section('title', 'Dashboard Kho hàng')
-@section('subtitle', 'Theo dõi đơn hàng và duyệt hàng theo ngày')
+@section('subtitle_clock', '1')
 
 @push('styles')
 <style>

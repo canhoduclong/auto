@@ -274,7 +274,13 @@
                 </button>
                 <div>
                 <h6 class="mb-0 fw-semibold">@yield('title', 'Dashboard')</h6>
-                @hasSection('subtitle')
+                @if(trim($__env->yieldContent('subtitle_clock')) === '1')
+                    <div class="text-muted" style="font-size:.9rem;">
+                        <i class="bi bi-clock me-1"></i>
+                        <span data-current-time>{{ now()->format('H:i') }}</span>
+                        – {{ now()->format('d/m/Y') }}
+                    </div>
+                @elseif(View::hasSection('subtitle'))
                     <div class="text-muted" style="font-size:.9rem;">@yield('subtitle')</div>
                 @endif
                 </div>
@@ -287,11 +293,13 @@
                         <span>Đăng xuất</span>
                     </button>
                 </form>
-                <span class="text-muted small">
-                    <i class="bi bi-clock me-1"></i>
-                    <span id="current-time">{{ now()->format('H:i') }}</span>
-                    – {{ now()->format('d/m/Y') }}
-                </span>
+                @if(trim($__env->yieldContent('subtitle_clock')) !== '1')
+                    <span class="text-muted small">
+                        <i class="bi bi-clock me-1"></i>
+                        <span data-current-time>{{ now()->format('H:i') }}</span>
+                        – {{ now()->format('d/m/Y') }}
+                    </span>
+                @endif
             </div>
         </header>
 
@@ -324,8 +332,10 @@
     <script>
         // Live clock
         (function tick() {
-            const el = document.getElementById('current-time');
-            if (el) el.textContent = new Date().toLocaleTimeString('vi-VN', {hour:'2-digit', minute:'2-digit'});
+            const timeText = new Date().toLocaleTimeString('vi-VN', {hour:'2-digit', minute:'2-digit'});
+            document.querySelectorAll('[data-current-time]').forEach(function (el) {
+                el.textContent = timeText;
+            });
             setTimeout(tick, 60000);
         })();
 
