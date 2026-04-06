@@ -277,6 +277,7 @@
     }
     .customer-info-stack {
         display: grid;
+        grid-template-columns: repeat(2, 1fr);
         gap: 10px;
         margin-top: 12px;
     }
@@ -560,9 +561,8 @@
         .customer-sidebar-card {
             max-height: 420px;
         }
-        .customer-info-row {
-            flex-direction: column;
-            gap: 6px;
+        .customer-info-stack {
+            grid-template-columns: 1fr;
         }
         .customer-info-value {
             text-align: left;
@@ -772,14 +772,14 @@
                         <div class="customer-info-row">
                             <span class="customer-info-label">Tên khách hàng</span>
                             <div class="customer-info-value">{{ $customer->name }}</div>
-                        </div>
-                        <div class="customer-info-row">
-                            <span class="customer-info-label">Địa chỉ</span>
-                            <div class="customer-info-value">{{ $fullAddress ?: '-' }}</div>
-                        </div>
+                        </div> 
                         <div class="customer-info-row">
                             <span class="customer-info-label">Email</span>
                             <div class="customer-info-value">{{ $customer->email ?: '-' }}</div>
+                        </div>
+                        <div class="customer-info-row">
+                            <span class="customer-info-label">Số điện thoại</span>
+                            <div class="customer-info-value">{{ $customer->phone ?: '-' }}</div>
                         </div>
                         <div class="customer-info-row">
                             <span class="customer-info-label">Size</span>
@@ -792,13 +792,23 @@
                         <div class="customer-info-row">
                             <span class="customer-info-label">Thương hiệu</span>
                             <div class="customer-info-value">{{ $customer->brand ?: '-' }}</div>
-                        </div>
+                        </div> 
                         @if(!empty($customer->tax_code))
                             <div class="customer-info-row">
                                 <span class="customer-info-label">Mã số thuế</span>
                                 <div class="customer-info-value">{{ $customer->tax_code }}</div>
                             </div>
                         @endif
+                        @if(!empty($customer->customer_code))
+                            <div class="customer-info-row">
+                                <span class="customer-info-label">Mã số khách hàng</span>
+                                <div class="customer-info-value">{{ $customer->customer_code }}</div>
+                            </div>
+                        @endif
+                    </div>
+                    <div class="customer-info-row my-3 ">
+                        <span class="customer-info-label">Địa chỉ</span>
+                        <div class="customer-info-value">{{ $fullAddress ?: '-' }}</div>
                     </div>
                 </div>
             </div>
@@ -821,16 +831,14 @@
                 </div>
                 <div class="customer-card-body">
                     <div class="collapse show" id="careStatusCollapse">
-                        <form method="POST" action="{{ route('my_customer.update', $customer) }}" class="mt-3">
-                            @csrf
-                            @method('PUT')
-                            <textarea name="care_note" class="customer-textarea" placeholder="Nhập tình trạng hoặc nhật ký chăm sóc..."></textarea>
+                        <div class="mt-3">
+                            <textarea id="careNoteTextarea" class="customer-textarea" placeholder="Nhập tình trạng hoặc nhật ký chăm sóc..."></textarea>
                             <div class="customer-inline-actions">
-                                <button class="customer-btn customer-btn-primary" type="submit" style="border:none;">
+                                <button class="customer-btn customer-btn-primary" type="button" id="saveCareNoteBtn" style="border:none;">
                                     <i class="bi bi-plus-lg me-2"></i>Lưu nhật ký
                                 </button>
                             </div>
-                        </form>
+                        </div>
                         <div class="customer-list-stack" style="max-height:220px;overflow:auto;">
                             @forelse($careLogsSorted as $index => $log)
                                 <div class="customer-list-item {{ $index === 0 ? 'customer-border' : '' }}">
@@ -904,7 +912,7 @@
                 </div>
                 <div class="customer-card-body">
                     <div class="collapse show" id="customerReminderCollapse">
-                        <form method="POST" action="{{ route('customer_reminders.store', $customer) }}" class="customer-form-grid customer-form-stack mt-2">
+                        <form id="reminderForm" method="POST" action="{{ route('customer_reminders.store', $customer) }}" class="customer-form-grid customer-form-stack mt-2">
                             @csrf
                             <div class="customer-field full">
                                 <label class="customer-label">Nội dung cuộc hẹn</label>
@@ -1416,3 +1424,259 @@
     }
 </script>
 @endsection
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // AJAX for care note
+    const saveCareNoteBtn = document.getElementById('saveCareNoteBtn');
+    const careNoteTextarea = document.getElementById('careNoteTextarea');
+
+    if (saveCareNoteBtn && careNoteTextarea) {
+        saveCareNoteBtn.addEventListener('click', function() {
+            const note = careNoteTextarea.value.trim();
+            if (!note) {
+                alert('Vui lòng nhập nội dung nhật ký.');
+                return;
+            }
+
+            fetch('{{ route("my_customer.update", $customer) }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    care_note: note,
+                    _method: 'PUT'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Đã lưu nhật ký chăm sóc.');
+                    careNoteTextarea.value = '';
+                    // Add new log to list
+                    const logList = document.querySelector('.customer-list-stack');
+                    if (logList) {
+                        const newLog = document.createElement('div');
+                        newLog.className = 'customer-list-item';
+                        newLog.innerHTML = `
+                            <div>
+                                <div class="customer-list-item-title">{{ auth()->user()->name ?? 'Hệ thống' }} <span class="customer-badge badge-info ms-1">Mới nhất</span></div>
+                                <div class="customer-list-meta">
+                                    <span><i class="bi bi-clock me-1"></i>${new Date().toLocaleString('vi-VN')}</span>
+                                </div>
+                                <div class="customer-muted" style="margin-top:6px;">${careNoteTextarea.value}</div>
+                            </div>
+                        `;
+                        logList.insertBefore(newLog, logList.firstChild);
+                        // Remove "Mới nhất" from old first
+                        const oldFirst = logList.querySelector('.customer-list-item .customer-badge');
+                        if (oldFirst) oldFirst.remove();
+                    }
+                } else {
+                    alert('Lỗi: ' + (data.message || 'Không thể lưu.'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Có lỗi xảy ra.');
+            });
+        });
+    }
+
+    // AJAX for reminders
+    const reminderForm = document.getElementById('reminderForm');
+    if (reminderForm) {
+        reminderForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+
+            fetch(this.action, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json'
+                },
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Đã thêm cuộc hẹn.');
+                    reminderForm.reset();
+                    // Add new reminder to list
+                    const reminderList = document.querySelector('.customer-list-stack');
+                    if (reminderList) {
+                        const newReminder = document.createElement('div');
+                        newReminder.className = 'customer-list-item';
+                        const title = formData.get('title');
+                        const remindAt = formData.get('remind_at');
+                        newReminder.innerHTML = `
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <div class="customer-list-item-title">${title}</div>
+                                    <div class="customer-list-meta">
+                                        <span><i class="bi bi-calendar me-1"></i>${new Date(remindAt).toLocaleDateString('vi-VN')}</span>
+                                    </div>
+                                </div>
+                                <button type="button" class="btn btn-link btn-sm text-danger p-0" onclick="deleteReminder(this, 0)">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        `;
+                        reminderList.appendChild(newReminder);
+                    }
+                } else {
+                    alert('Lỗi: ' + (data.message || 'Không thể thêm.'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Có lỗi xảy ra.');
+            });
+        });
+    }
+
+    // Inline edit for customer info
+    const infoRows = document.querySelectorAll('.customer-info-row');
+    infoRows.forEach(row => {
+        const label = row.querySelector('.customer-info-label');
+        const valueDiv = row.querySelector('.customer-info-value');
+        if (!label || !valueDiv) return;
+
+        const field = label.textContent.trim().toLowerCase().replace(/\s+/g, '_');
+        const currentValue = valueDiv.textContent.trim();
+
+        // Wrap text in span and add edit button
+        valueDiv.innerHTML = `<span>${currentValue}</span>`;
+        const editBtn = document.createElement('button');
+        editBtn.className = 'btn btn-sm btn-outline-secondary ms-2';
+        editBtn.innerHTML = '<i class="bi bi-pencil"></i>';
+        editBtn.onclick = function() {
+            startEdit(row, field, currentValue);
+        };
+        valueDiv.appendChild(editBtn);
+        valueDiv.style.display = 'flex';
+        valueDiv.style.alignItems = 'center';
+    });
+
+    function startEdit(row, field, currentValue) {
+        const valueDiv = row.querySelector('.customer-info-value');
+        const editBtn = valueDiv.querySelector('button');
+        editBtn.style.display = 'none';
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'form-control form-control-sm d-inline-block w-auto';
+        input.value = currentValue;
+        input.style.width = '200px';
+
+        const saveBtn = document.createElement('button');
+        saveBtn.className = 'btn btn-sm btn-success ms-1';
+        saveBtn.innerHTML = '<i class="bi bi-check"></i>';
+        saveBtn.onclick = function() {
+            saveEdit(field, input.value, row);
+        };
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'btn btn-sm btn-secondary ms-1';
+        cancelBtn.innerHTML = '<i class="bi bi-x"></i>';
+        cancelBtn.onclick = function() {
+            cancelEdit(row, currentValue);
+        };
+
+        valueDiv.innerHTML = '';
+        valueDiv.appendChild(input);
+        valueDiv.appendChild(saveBtn);
+        valueDiv.appendChild(cancelBtn);
+        input.focus();
+    }
+
+    function saveEdit(field, newValue, row) {
+        const fieldMap = {
+            'tên_khách_hàng': 'name',
+            'địa_chỉ': 'address',
+            'email': 'email',
+            'số_điện_thoại': 'phone',
+            'size': 'size',
+            'sản_lượng': 'production',
+            'thương_hiệu': 'brand',
+            'mã_số_thuế': 'tax_code',
+            'mã_số_khách_hàng': 'customer_code'
+        };
+        const apiField = fieldMap[field] || field;
+
+        fetch('{{ route("my_customer.update", $customer) }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+                [apiField]: newValue,
+                _method: 'PUT'
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Đã cập nhật thông tin.');
+                // Update DOM directly
+                const valueDiv = row.querySelector('.customer-info-value');
+                valueDiv.innerHTML = `<span>${newValue}</span>`;
+                const editBtn = document.createElement('button');
+                editBtn.className = 'btn btn-sm btn-outline-secondary ms-2';
+                editBtn.innerHTML = '<i class="bi bi-pencil"></i>';
+                editBtn.onclick = function() {
+                    startEdit(row, row.querySelector('.customer-info-label').textContent.trim().toLowerCase().replace(/\s+/g, '_'), newValue);
+                };
+                valueDiv.appendChild(editBtn);
+                valueDiv.style.display = 'flex';
+                valueDiv.style.alignItems = 'center';
+            } else {
+                alert('Lỗi: ' + (data.message || 'Không thể cập nhật.'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Có lỗi xảy ra.');
+        });
+    }
+
+    function cancelEdit(row, originalValue) {
+        const valueDiv = row.querySelector('.customer-info-value');
+        valueDiv.innerHTML = `<span>${originalValue}</span>`;
+        const editBtn = document.createElement('button');
+        editBtn.className = 'btn btn-sm btn-outline-secondary ms-2';
+        editBtn.innerHTML = '<i class="bi bi-pencil"></i>';
+        editBtn.onclick = function() {
+            startEdit(row, row.querySelector('.customer-info-label').textContent.trim().toLowerCase().replace(/\s+/g, '_'), originalValue);
+        };
+        valueDiv.appendChild(editBtn);
+        valueDiv.style.display = 'flex';
+        valueDiv.style.alignItems = 'center';
+    }
+
+    // Add edit buttons to editable fields
+    const editableFields = ['tên_khách_hàng', 'địa_chỉ', 'email', 'số_điện_thoại', 'size', 'sản_lượng', 'thương_hiệu', 'mã_số_thuế', 'mã_số_khách_hàng'];
+    document.querySelectorAll('.customer-info-row').forEach(row => {
+        const label = row.querySelector('.customer-info-label').textContent.trim();
+        if (editableFields.includes(label)) {
+            const valueDiv = row.querySelector('.customer-info-value');
+            const currentValue = valueDiv.textContent.trim();
+            const editBtn = document.createElement('button');
+            editBtn.className = 'btn btn-sm btn-outline-secondary ms-2';
+            editBtn.innerHTML = '<i class="bi bi-pencil"></i>';
+            editBtn.onclick = function() {
+                startEdit(row, label.toLowerCase().replace(/\s+/g, '_'), currentValue);
+            };
+            valueDiv.appendChild(editBtn);
+            valueDiv.style.display = 'flex';
+            valueDiv.style.alignItems = 'center';
+        }
+    });
+});
+</script>

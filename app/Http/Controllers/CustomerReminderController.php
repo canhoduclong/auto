@@ -42,6 +42,10 @@ class CustomerReminderController extends Controller
             'note' => $validated['note'] ?? null,
         ]);
 
+        if ($request->expectsJson()) {
+            return response()->json(['success' => true, 'message' => 'Đã thêm nhắc nhở thành công!']);
+        }
+
         return redirect()->route('my_customer.show', $customer)->with('success', 'Đã thêm nhắc nhở thành công!');
     }
 }

@@ -1649,28 +1649,50 @@ class PageController extends Controller
                 'user_id' => auth()->id(),
                 'note' => $request->input('care_note'),
             ]);
+            if ($request->expectsJson()) {
+                return response()->json(['success' => true, 'message' => 'Đã thêm tình trạng/nhật ký chăm sóc!']);
+            }
             return redirect()->route('my_customer.show', $customer)->with('success', 'Đã thêm tình trạng/nhật ký chăm sóc!');
         }
 
         // Nếu không, cập nhật thông tin cơ bản
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['nullable', 'email', 'max:255', Rule::unique('customers', 'email')->ignore($customer->id)],
-            'phone' => ['nullable', 'string', 'max:50'],
-            'address' => ['nullable', 'string', 'max:1000'],
-            'delivery_time' => ['nullable', 'string', 'max:255'],
-            'size' => ['nullable', 'string', 'max:255'],
-            'production' => ['nullable', 'numeric'],
-        ]);
-        $customer->update([
-            'name' => $validated['name'],
-            'email' => $validated['email'] ?? null,
-            'phone' => $validated['phone'] ?? null,
-            'address' => $validated['address'] ?? null,
-            'delivery_time' => $validated['delivery_time'] ?? null,
-            'size' => $validated['size'] ?? null,
-            'production' => $validated['production'] ?? null,
-        ]);
+        $rules = [];
+        if ($request->has('name')) {
+            $rules['name'] = ['required', 'string', 'max:255'];
+        }
+        if ($request->has('email')) {
+            $rules['email'] = ['nullable', 'email', 'max:255', Rule::unique('customers', 'email')->ignore($customer->id)];
+        }
+        if ($request->has('phone')) {
+            $rules['phone'] = ['nullable', 'string', 'max:50'];
+        }
+        if ($request->has('address')) {
+            $rules['address'] = ['nullable', 'string', 'max:1000'];
+        }
+        if ($request->has('delivery_time')) {
+            $rules['delivery_time'] = ['nullable', 'string', 'max:255'];
+        }
+        if ($request->has('size')) {
+            $rules['size'] = ['nullable', 'string', 'max:255'];
+        }
+        if ($request->has('production')) {
+            $rules['production'] = ['nullable', 'numeric'];
+        }
+        if ($request->has('brand')) {
+            $rules['brand'] = ['nullable', 'string', 'max:255'];
+        }
+        if ($request->has('tax_code')) {
+            $rules['tax_code'] = ['nullable', 'string', 'max:50'];
+        }
+        if ($request->has('customer_code')) {
+            $rules['customer_code'] = ['nullable', 'string', 'max:50'];
+        }
+
+        $validated = $request->validate($rules);
+        $customer->update($validated);
+        if ($request->expectsJson()) {
+            return response()->json(['success' => true, 'message' => 'Đã cập nhật thông tin khách hàng thành công.']);
+        }
         return redirect()->route('pages.my_customer')->with('success', 'Đã cập nhật thông tin khách hàng thành công.');
     }
 
