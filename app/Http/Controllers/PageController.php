@@ -1708,7 +1708,7 @@ class PageController extends Controller
             $address = $customer->addresses->first();
             $addressText = '';
             if ($address) {
-                $parts = array_filter([$address->house_number, $address->street, $address->ward, $address->district, $address->city]);
+                $parts = array_filter([$address->house_number, $address->street, $address->ward, $address->city]);
                 $addressText = implode(', ', $parts);
             }
             $customer->address_text = $addressText;
