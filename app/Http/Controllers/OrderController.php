@@ -287,6 +287,11 @@ class OrderController extends Controller
             'items.*.quantity' => 'required|integer|min:1',
             'customer_id' => 'required|exists:customers,id',
             'delivery_time' => 'nullable|string|max:255',
+            'item_discount' => 'nullable|array',
+            'item_discount.*' => 'nullable|numeric|min:0',
+            'item_weight' => 'nullable|array',
+            'item_weight.*' => 'nullable|numeric|min:0',
+            'order_discount' => 'nullable|numeric|min:0',
         ]);
 
         $customerId = (int) $request->input('customer_id');
@@ -295,10 +300,16 @@ class OrderController extends Controller
             $request->input('delivery_time')
         );
 
-        $items = collect($request->input('items'))->map(function ($item) {
+        $items = collect($request->input('items'))->map(function ($item) use ($request) {
+            $variantId = (int) ($item['variant_id'] ?? 0);
+
             return [
-                'variant_id' => (int) $item['variant_id'],
-                'quantity' => (int) $item['quantity'],
+                'variant_id' => $variantId,
+                'quantity' => (int) ($item['quantity'] ?? 0),
+                'price' => isset($item['price']) ? (float) $item['price'] : null,
+                'base_price' => isset($item['base_price']) ? (float) $item['base_price'] : null,
+                'unit_discount' => (float) $request->input('item_discount.' . $variantId, 0),
+                'unit_weight' => $request->input('item_weight.' . $variantId) !== null ? (float) $request->input('item_weight.' . $variantId) : null,
             ];
         })->values()->all();
 
@@ -312,6 +323,7 @@ class OrderController extends Controller
                     'status' => OrderStatus::Pending->value,
                     'payment_status' => PaymentStatus::Unpaid->value,
                     'delivery_status' => DeliveryStatus::NotShipped->value,
+                    'order_discount' => max(0, (float) $request->input('order_discount', 0)),
                 ],
                 approvalService: $approvalService
             );
@@ -329,6 +341,11 @@ class OrderController extends Controller
             'items.*.quantity' => 'required|integer|min:1',
             'customer_id' => 'required|exists:customers,id',
             'delivery_time' => 'nullable|string|max:255',
+            'item_discount' => 'nullable|array',
+            'item_discount.*' => 'nullable|numeric|min:0',
+            'item_weight' => 'nullable|array',
+            'item_weight.*' => 'nullable|numeric|min:0',
+            'order_discount' => 'nullable|numeric|min:0',
         ]);
 
         $customerId = (int) $request->input('customer_id');
@@ -337,10 +354,16 @@ class OrderController extends Controller
             $request->input('delivery_time')
         );
 
-        $items = collect($request->input('items'))->map(function ($item) {
+        $items = collect($request->input('items'))->map(function ($item) use ($request) {
+            $variantId = (int) ($item['variant_id'] ?? 0);
+
             return [
-                'variant_id' => (int) $item['variant_id'],
-                'quantity' => (int) $item['quantity'],
+                'variant_id' => $variantId,
+                'quantity' => (int) ($item['quantity'] ?? 0),
+                'price' => isset($item['price']) ? (float) $item['price'] : null,
+                'base_price' => isset($item['base_price']) ? (float) $item['base_price'] : null,
+                'unit_discount' => (float) $request->input('item_discount.' . $variantId, 0),
+                'unit_weight' => $request->input('item_weight.' . $variantId) !== null ? (float) $request->input('item_weight.' . $variantId) : null,
             ];
         })->values()->all();
 
@@ -354,6 +377,7 @@ class OrderController extends Controller
                     'status' => OrderStatus::Pending->value,
                     'payment_status' => PaymentStatus::Unpaid->value,
                     'delivery_status' => DeliveryStatus::NotShipped->value,
+                    'order_discount' => max(0, (float) $request->input('order_discount', 0)),
                 ],
                 approvalService: $approvalService
             );

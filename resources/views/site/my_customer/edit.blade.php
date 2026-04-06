@@ -171,6 +171,27 @@
                                 <div class="mc-help mt-1">Địa chỉ này dùng làm mặc định khi tạo đơn cho khách nếu chưa nhập địa chỉ giao riêng.</div>
                             </div>
 
+                            <div class="row mb-3">
+                                <div class="col-md-4">
+                                    <label for="province_id" class="form-label mc-form-label">Tỉnh / Thành phố</label>
+                                    <select class="form-select mc-form-control" id="province_id" name="province_id">
+                                        <option value="">-- Chọn tỉnh/thành phố --</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="district_id" class="form-label mc-form-label">Quận / Huyện</label>
+                                    <select class="form-select mc-form-control" id="district_id" name="district_id" disabled>
+                                        <option value="">-- Chọn quận/huyện --</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="ward_id" class="form-label mc-form-label">Phường / Xã</label>
+                                    <select class="form-select mc-form-control" id="ward_id" name="ward_id" disabled>
+                                        <option value="">-- Chọn phường/xã --</option>
+                                    </select>
+                                </div>
+                            </div>
+
                             <div class="mb-3">
                                 <label for="delivery_time" class="form-label mc-form-label">Giờ giao hàng</label>
                                 <input type="text" class="form-control mc-form-control" id="delivery_time" name="delivery_time" value="{{ old('delivery_time', $customer->delivery_time) }}" placeholder="Ví dụ: 8h-10h, 14h-16h, sau 17h">
@@ -229,4 +250,82 @@
         </div>
     </div>
 </div>
+
+@push('scripts')
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const provinceSelect = document.getElementById('province_id');
+        const districtSelect = document.getElementById('district_id');
+        const wardSelect = document.getElementById('ward_id');
+
+        // Load provinces on page load
+        loadProvinces();
+
+        // Load districts when province changes
+        provinceSelect.addEventListener('change', function() {
+            if (this.value) {
+                loadDistricts(this.value);
+                districtSelect.disabled = false;
+            } else {
+                districtSelect.disabled = true;
+                wardSelect.disabled = true;
+                districtSelect.innerHTML = '<option value="">-- Chọn quận/huyện --</option>';
+                wardSelect.innerHTML = '<option value="">-- Chọn phường/xã --</option>';
+            }
+        });
+
+        // Load wards when district changes
+        districtSelect.addEventListener('change', function() {
+            if (this.value) {
+                loadWards(this.value);
+                wardSelect.disabled = false;
+            } else {
+                wardSelect.disabled = true;
+                wardSelect.innerHTML = '<option value="">-- Chọn phường/xã --</option>';
+            }
+        });
+
+        function loadProvinces() {
+            fetch('{{ route("api.provinces") }}')
+                .then(response => response.json())
+                .then(data => {
+                    let html = '<option value="">-- Chọn tỉnh/thành phố --</option>';
+                    data.forEach(province => {
+                        html += `<option value="${province.id}">${province.name}</option>`;
+                    });
+                    provinceSelect.innerHTML = html;
+                })
+                .catch(error => console.error('Error loading provinces:', error));
+        }
+
+        function loadDistricts(provinceId) {
+            fetch(`{{ route("api.districts") }}?province_id=${provinceId}`)
+                .then(response => response.json())
+                .then(data => {
+                    let html = '<option value="">-- Chọn quận/huyện --</option>';
+                    data.forEach(district => {
+                        html += `<option value="${district.id}">${district.name}</option>`;
+                    });
+                    districtSelect.innerHTML = html;
+                })
+                .catch(error => console.error('Error loading districts:', error));
+        }
+
+        function loadWards(districtId) {
+            fetch(`{{ route("api.wards") }}?district_id=${districtId}`)
+                .then(response => response.json())
+                .then(data => {
+                    let html = '<option value="">-- Chọn phường/xã --</option>';
+                    data.forEach(ward => {
+                        html += `<option value="${ward.id}">${ward.name}</option>`;
+                    });
+                    wardSelect.innerHTML = html;
+                })
+                .catch(error => console.error('Error loading wards:', error));
+        }
+    });
+</script>
+@endpush
+
 @endsection
+

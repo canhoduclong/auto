@@ -11,6 +11,7 @@ use App\Models\ProductVariant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Models\Customer;
+use App\Models\CustomerAddress;
 use App\Models\Team;
 use App\Services\OrderService;
 use App\Services\ApprovalService;
@@ -27,6 +28,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Illuminate\Database\Eloquent\Builder;
+use App\Models\Province;
+use App\Models\District;
+use App\Models\Ward;
 
 class PageController extends Controller
 {
@@ -1580,11 +1584,21 @@ class PageController extends Controller
     {
         $userId = auth()->id();
 
-        $customers = Customer::withCount('orders')
+        $customerQuery = Customer::query()
             ->where(function ($q) use ($userId) {
                 $q->where('user_id', $userId)
                     ->orWhere('assigned_to', $userId);
-            })
+            });
+
+        $cityFilter = $request->input('city');
+        $districtFilter = $request->input('district');
+        $wardFilter = $request->input('ward');
+
+        $customers = (clone $customerQuery)
+            ->withCount('orders')
+            ->with(['type', 'addresses' => function ($q) {
+                $q->where('is_default', true)->orWhere('is_default', null)->limit(1);
+            }])
             ->when($request->search, function ($q, $s) {
                 $q->where(function ($searchQuery) use ($s) {
                     $searchQuery->where('name', 'like', "%{$s}%")
@@ -1592,13 +1606,127 @@ class PageController extends Controller
                         ->orWhere('phone', 'like', "%{$s}%");
                 });
             })
+            ->when($cityFilter || $districtFilter || $wardFilter, function ($q) use ($cityFilter, $districtFilter, $wardFilter) {
+                $q->whereHas('addresses', function ($addressQuery) use ($cityFilter, $districtFilter, $wardFilter) {
+                    if ($cityFilter) {
+                        $addressQuery->where('city', $cityFilter);
+                    }
+                    if ($districtFilter) {
+                        $addressQuery->where('district', $districtFilter);
+                    }
+                    if ($wardFilter) {
+                        $addressQuery->where('ward', $wardFilter);
+                    }
+                });
+            })
+            ->when($request->sort_by, function ($q, $sortBy) {
+                $allowedSorts = ['production', 'size', 'delivery_time'];
+                if (in_array($sortBy, $allowedSorts)) {
+                    $q->orderBy($sortBy, $request->sort_dir === 'desc' ? 'desc' : 'asc');
+                }
+            })
             ->orderByDesc('id')
             ->paginate($request->input('per_page', 10));
+
+        $locationAddresses = CustomerAddress::query()
+            ->whereHas('customer', function ($q) use ($userId) {
+                $q->where('user_id', $userId)
+                    ->orWhere('assigned_to', $userId);
+            })
+            ->whereNotNull('city')
+            ->where('city', '!=', '')
+            ->get(['city', 'district', 'ward', 'customer_id']);
+
+        $locationTree = $locationAddresses
+            ->groupBy('city')
+            ->map(function ($cityGroup) {
+                return $cityGroup->groupBy('district')->map(function ($districtGroup) {
+                    return $districtGroup->pluck('ward')
+                        ->filter()
+                        ->unique()
+                        ->values();
+                });
+            });
 
         return view('site.my_customer.index', [
             'customers' => $customers,
             'search' => $request->search,
-            'settings' => $this->settings
+            'settings' => $this->settings,
+            'locationTree' => $locationTree,
+        ]);
+    }
+
+    public function myCustomerAjax(Request $request)
+    {
+        $userId = auth()->id();
+
+        $customerQuery = Customer::query()
+            ->where(function ($q) use ($userId) {
+                $q->where('user_id', $userId)
+                    ->orWhere('assigned_to', $userId);
+            });
+
+        $cityFilter = $request->input('city');
+        $districtFilter = $request->input('district');
+        $wardFilter = $request->input('ward');
+
+        $customers = (clone $customerQuery)
+            ->withCount('orders')
+            ->with(['type', 'addresses' => function ($q) {
+                $q->where('is_default', true)->orWhere('is_default', null)->limit(1);
+            }])
+            ->when($request->search, function ($q, $s) {
+                $q->where(function ($searchQuery) use ($s) {
+                    $searchQuery->where('name', 'like', "%{$s}%")
+                        ->orWhere('email', 'like', "%{$s}%")
+                        ->orWhere('phone', 'like', "%{$s}%");
+                });
+            })
+            ->when($cityFilter || $districtFilter || $wardFilter, function ($q) use ($cityFilter, $districtFilter, $wardFilter) {
+                $q->whereHas('addresses', function ($addressQuery) use ($cityFilter, $districtFilter, $wardFilter) {
+                    if ($cityFilter) {
+                        $addressQuery->where('city', $cityFilter);
+                    }
+                    if ($districtFilter) {
+                        $addressQuery->where('district', $districtFilter);
+                    }
+                    if ($wardFilter) {
+                        $addressQuery->where('ward', $wardFilter);
+                    }
+                });
+            })
+            ->when($request->sort_by, function ($q, $sortBy) {
+                $allowedSorts = ['production', 'size', 'delivery_time'];
+                if (in_array($sortBy, $allowedSorts)) {
+                    $q->orderBy($sortBy, $request->sort_dir === 'desc' ? 'desc' : 'asc');
+                }
+            })
+            ->orderByDesc('id')
+            ->paginate($request->input('per_page', 10));
+
+        $customers->getCollection()->transform(function ($customer) {
+            $address = $customer->addresses->first();
+            $addressText = '';
+            if ($address) {
+                $parts = array_filter([$address->house_number, $address->street, $address->ward, $address->district, $address->city]);
+                $addressText = implode(', ', $parts);
+            }
+            $customer->address_text = $addressText;
+            $customer->updated_at_formatted = $customer->updated_at ? $customer->updated_at->format('d/m/Y') : null;
+            return $customer;
+        });
+
+        return response()->json([
+            'customers' => $customers->items(),
+            'pagination' => [
+                'current_page' => $customers->currentPage(),
+                'last_page' => $customers->lastPage(),
+                'per_page' => $customers->perPage(),
+                'total' => $customers->total(),
+                'from' => $customers->firstItem(),
+                'to' => $customers->lastItem(),
+                'links' => $customers->links()->toHtml(),
+            ],
         ]);
     }
 
@@ -2092,13 +2220,20 @@ class PageController extends Controller
 
     public function myCustomerOrderCreate(Customer $customer)
     {
-        $products = Product::with('variants.latestPriceRule')->get();
+        $this->ensureManagedCustomer($customer);
 
         return view('site.my_customer.order_create', [
             'customer' => $customer,
-            'products' => $products,
             'settings' => $this->settings
         ]);
+    }
+
+    public function myCustomerOrderStore(Request $request, Customer $customer, ApprovalService $approvalService)
+    {
+        $this->ensureManagedCustomer($customer);
+        $request->merge(['customer_id' => $customer->id]);
+
+        return app(\App\Http\Controllers\OrderController::class)->storeANewOrder($request, $approvalService);
     }
 
     public function myCustomerOrdersQuickView(Customer $customer)
@@ -2527,5 +2662,53 @@ class PageController extends Controller
         $customer->save();
 
         return redirect()->route('pages.my_customer')->with('success', 'Đã thêm khách hàng thành công!');
+    }
+
+    public function getProvinces(Request $request)
+    {
+        $query = Province::query();
+        
+        if ($request->has('search') && $request->search) {
+            $search = '%' . $request->search . '%';
+            $query->where('name', 'like', $search);
+        }
+        
+        $provinces = $query->orderBy('name')->get(['id', 'code', 'name', 'type']);
+        
+        return response()->json($provinces);
+    }
+
+    public function getDistricts(Request $request)
+    {
+        $request->validate(['province_id' => 'required|exists:provinces,id']);
+        
+        $query = District::where('province_id', $request->province_id);
+        
+        if ($request->has('search') && $request->search) {
+            $search = '%' . $request->search . '%';
+            $query->where('name', 'like', $search)
+                  ->orWhere('old_name', 'like', $search);
+        }
+        
+        $districts = $query->orderBy('name')->get(['id', 'code', 'name', 'type', 'old_name']);
+        
+        return response()->json($districts);
+    }
+
+    public function getWards(Request $request)
+    {
+        $request->validate(['district_id' => 'required|exists:districts,id']);
+        
+        $query = Ward::where('district_id', $request->district_id);
+        
+        if ($request->has('search') && $request->search) {
+            $search = '%' . $request->search . '%';
+            $query->where('name', 'like', $search)
+                  ->orWhere('old_name', 'like', $search);
+        }
+        
+        $wards = $query->orderBy('name')->get(['id', 'code', 'name', 'type', 'old_name']);
+        
+        return response()->json($wards);
     }
 }

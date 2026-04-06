@@ -344,6 +344,7 @@ Route::middleware(['auth'])->group(function () {
 
     // My Customer Page
     Route::get('/my-customer', [PageController::class, 'myCustomer'])->name('pages.my_customer');
+    Route::get('/my-customer/ajax', [PageController::class, 'myCustomerAjax'])->name('pages.my_customer.ajax');
     Route::get('/my-customer/create', [PageController::class, 'myCustomerCreate'])->name('my_customer.create');
     Route::post('/my-customer', [PageController::class, 'myCustomerStore'])->name('my_customer.store');
     Route::get('/my-customer/{customer}/edit', [PageController::class, 'myCustomerEdit'])->name('my_customer.edit');
@@ -357,6 +358,11 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/my-customer/{customer}/order', [PageController::class, 'myCustomerOrderCreate'])->name('my_customer.order.create');
     Route::post('/my-customer/{customer}/order', [PageController::class, 'myCustomerOrderStore'])->name('my_customer.order.store');
     Route::get('/my-customer/{customer}/orders-quick-view', [PageController::class, 'myCustomerOrdersQuickView'])->name('my_customer.orders_quick_view');
+
+    // Address data AJAX endpoints
+    Route::get('/api/provinces', [PageController::class, 'getProvinces'])->name('api.provinces');
+    Route::get('/api/districts', [PageController::class, 'getDistricts'])->name('api.districts');
+    Route::get('/api/wards', [PageController::class, 'getWards'])->name('api.wards');
 
     // Leader - duyệt đơn của sale trong team
     Route::get('/my-tearm-orders', [PageController::class, 'myTearmOrders'])->name('pages.my_tearm_orders');
