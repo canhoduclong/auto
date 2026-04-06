@@ -2697,9 +2697,19 @@ class PageController extends Controller
 
     public function getWards(Request $request)
     {
-        $request->validate(['district_id' => 'required|exists:districts,id']);
+        $request->validate([
+            'district_id' => 'nullable|exists:districts,id',
+            'province_id' => 'nullable|exists:provinces,id',
+        ]);
         
-        $query = Ward::where('district_id', $request->district_id);
+        if ($request->filled('district_id')) {
+            $query = Ward::where('district_id', $request->district_id);
+        } elseif ($request->filled('province_id')) {
+            $districtIds = District::where('province_id', $request->province_id)->pluck('id');
+            $query = Ward::whereIn('district_id', $districtIds);
+        } else {
+            return response()->json([], 422);
+        }
         
         if ($request->has('search') && $request->search) {
             $search = '%' . $request->search . '%';
