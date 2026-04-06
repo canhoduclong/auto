@@ -655,8 +655,13 @@
                                             $qty = (float) ($item->quantity ?? 0);
                                             $price = (float) ($item->price ?? 0);
                                             $estimatedWeight = (float) ($item->total_weight ?? 0);
-                                            if ($estimatedWeight <= 0 && (float) ($item->unit_weight ?? 0) > 0) {
-                                                $estimatedWeight = $qty * (float) $item->unit_weight;
+                                            if ($estimatedWeight <= 0) {
+                                                // Lấy số từ size, ví dụ "1.5kg" -> 1.5
+                                                $sizeValue = 0;
+                                                if (preg_match('/(\d+(\.\d+)?)/', $sizeLabel, $matches)) {
+                                                    $sizeValue = (float) $matches[1];
+                                                }
+                                                $estimatedWeight = $qty * $sizeValue;
                                             }
                                             $lineSubtotal = (float) ($item->total ?? 0);
                                             if ($lineSubtotal <= 0) {
