@@ -554,7 +554,8 @@
                                         <div class="d-flex justify-content-end align-items-center">
                                              <div class="text-end me-3">
                                                 <small class="text-muted">Đơn: {{ $customer->orders_count }}</small>
-                                            </div>                                     
+                                            </div>
+                                             <input type="checkbox" name="ids[]" value="{{ $customer->id }}" class="form-check-input customer-checkbox">
                                             <div class="mc-actions justify-content-end pr-4 gap-2">
                                                 <a href="{{ route('my_customer.show', $customer) }}" class="btn btn-outline-info btn-sm" title="Xem chi tiết"><i class="bi bi-eye"></i></a>
                                                 <a href="{{ route('my_customer.order.create', $customer) }}" class="btn btn-outline-success btn-sm" title="Lên đơn hàng"><i class="bi bi-file-text"></i></a>
@@ -566,7 +567,7 @@
                                                     <button type="submit" class="btn btn-outline-danger btn-sm" title="Xóa"><i class="bi bi-trash"></i></button>
                                                 </form>
                                             </div>
-                                            <input type="checkbox" name="ids[]" value="{{ $customer->id }}" class="form-check-input customer-checkbox">
+                                           
                                         </div>
                                     </div>
                                 </div>
