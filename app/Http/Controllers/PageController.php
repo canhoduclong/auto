@@ -990,11 +990,6 @@ class PageController extends Controller
             });
         }
 
-        $saleId = $request->input('sale_id');
-        if ($saleId && is_numeric($saleId)) {
-            $query->where('user_id', $saleId);
-        }
-
         $allowedPerPage = [10, 15, 25, 50, 100];
         $perPage = (int) $request->input('per_page', 15);
         if (!in_array($perPage, $allowedPerPage, true)) {
@@ -1061,7 +1056,6 @@ class PageController extends Controller
             'fromDate' => $fromDate,
             'toDate' => $toDate,
             'perPage' => $perPage,
-            'saleId' => $saleId,
         ]);
     }
 

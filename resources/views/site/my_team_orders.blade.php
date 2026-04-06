@@ -548,15 +548,26 @@
                         };
                         $discountTotal = (float) ($order->total_discount
                             ?? (($order->item_discount_total ?? 0) + ($order->extra_discount_total ?? 0) + ($order->order_discount ?? 0)));
-                        $createdTs = optional($order->created_at)?->timestamp ?? 0;
                         $deliveryTs = 0;
                         try {
                             if (!empty($order->delivery_time)) {
-                                $deliveryTs = \Carbon\Carbon::parse($order->delivery_time)->timestamp;
+                                $timeStr = $order->delivery_time;
+                                if (preg_match('/^(\d{1,2})h(\d{0,2})$/', $timeStr, $matches)) {
+                                    $hour = (int) $matches[1];
+                                    $min = (int) ($matches[2] ?: 0);
+                                    $deliveryTs = \Carbon\Carbon::today()->setTime($hour, $min)->timestamp;
+                                } elseif (preg_match('/^(\d{1,2}):(\d{2})$/', $timeStr, $matches)) {
+                                    $hour = (int) $matches[1];
+                                    $min = (int) $matches[2];
+                                    $deliveryTs = \Carbon\Carbon::today()->setTime($hour, $min)->timestamp;
+                                } else {
+                                    $deliveryTs = \Carbon\Carbon::parse($timeStr)->timestamp;
+                                }
                             }
                         } catch (\Throwable $e) {
                             $deliveryTs = 0;
                         }
+                        $createdTs = optional($order->created_at)?->timestamp ?? 0;
                     @endphp
 
                     <article class="tmo-order-row js-order-row {{ $rowStateClass }}"
@@ -583,7 +594,23 @@
                                 <div class="tmo-mini">Giảm: {{ number_format($discountTotal, 0, ',', '.') }} đ</div>
                             </div>
                             <div>
-                                <div class="fw-semibold">{{ $order->delivery_time ? \Carbon\Carbon::parse($order->delivery_time)->format('H:i d/m') : '-' }}</div>
+                                <div class="fw-semibold">{{ $order->delivery_time ? (function($timeStr) {
+                                    try {
+                                        if (preg_match('/^(\d{1,2})h(\d{0,2})$/', $timeStr, $matches)) {
+                                            $hour = str_pad($matches[1], 2, '0', STR_PAD_LEFT);
+                                            $min = str_pad($matches[2] ?: 0, 2, '0', STR_PAD_LEFT);
+                                            return $hour . ':' . $min . ' ' . now()->format('d/m');
+                                        } elseif (preg_match('/^(\d{1,2}):(\d{2})$/', $timeStr, $matches)) {
+                                            $hour = str_pad($matches[1], 2, '0', STR_PAD_LEFT);
+                                            $min = str_pad($matches[2], 2, '0', STR_PAD_LEFT);
+                                            return $hour . ':' . $min . ' ' . now()->format('d/m');
+                                        } else {
+                                            return \Carbon\Carbon::parse($timeStr)->format('H:i d/m');
+                                        }
+                                    } catch (\Throwable $e) {
+                                        return $timeStr;
+                                    }
+                                })($order->delivery_time) : '-' }}</div>
                                 <div class="tmo-mini">Giờ giao</div>
                             </div>
                             <div>
