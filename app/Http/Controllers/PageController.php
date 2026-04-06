@@ -1705,9 +1705,9 @@ class PageController extends Controller
             ->paginate($request->input('per_page', 10));
 
         $customers->getCollection()->transform(function ($customer) {
-            $address = $customer->addresses->first();
-            $addressText = '';
-            if ($address) {
+            $addressText = $customer->address ?: '';
+            if (!$addressText && $customer->addresses->first()) {
+                $address = $customer->addresses->first();
                 $parts = array_filter([$address->house_number, $address->street, $address->ward, $address->city]);
                 $addressText = implode(', ', $parts);
             }

@@ -488,9 +488,9 @@
             <div id="customer-list" class="row g-3">
                 @foreach($customers as $customer)
                     @php
-                        $address = $customer->addresses->first();
-                        $addressText = '';
-                        if ($address) {
+                        $addressText = $customer->address ?: '';
+                        if (!$addressText && $customer->addresses->first()) {
+                            $address = $customer->addresses->first();
                             $parts = array_filter([$address->house_number, $address->street, $address->ward, $address->city]);
                             $addressText = implode(', ', $parts);
                         }
