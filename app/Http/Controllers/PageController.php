@@ -2706,7 +2706,10 @@ class PageController extends Controller
             $query = Ward::where('district_id', $request->district_id);
         } elseif ($request->filled('province_id')) {
             $districtIds = District::where('province_id', $request->province_id)->pluck('id');
-            $query = Ward::whereIn('district_id', $districtIds);
+            $query = Ward::where(function ($query) use ($request, $districtIds) {
+                $query->where('province_id', $request->province_id)
+                      ->orWhereIn('district_id', $districtIds);
+            });
         } else {
             return response()->json([], 422);
         }

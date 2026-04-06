@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Models\Province;
 
 class Ward extends Model
 {
@@ -12,6 +13,7 @@ class Ward extends Model
 
     protected $fillable = [
         'district_id',
+        'province_id',
         'code',
         'name',
         'type',
@@ -22,5 +24,10 @@ class Ward extends Model
     public function district(): BelongsTo
     {
         return $this->belongsTo(District::class);
+    }
+
+    public function province(): BelongsTo
+    {
+        return $this->belongsTo(Province::class);
     }
 }

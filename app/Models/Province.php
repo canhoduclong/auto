@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Models\Ward;
 
 class Province extends Model
 {
@@ -20,4 +21,10 @@ class Province extends Model
     {
         return $this->hasMany(District::class);
     }
+
+    public function wards(): HasMany
+    {
+        return $this->hasMany(Ward::class);
+    }
 }
+

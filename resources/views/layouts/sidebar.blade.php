@@ -196,16 +196,9 @@
 							</a>
 						</li>
 						<li class="nav-item ">
-							<a href="{{ route('companies.index') }}" class="nav-link{{ request()->routeIs('companies.*') ? ' active' : '' }}">
-								<i class="ph-buildings"></i>
-								<span>{{ __('menu.companies') }}</span>
-							</a>
-						</li>						
-						
-						<li class="nav-item ">
-							<a href="{{ route('orders.index') }}" class="nav-link{{ request()->routeIs('orders.*') ? ' active' : '' }}">
-								<i class="ph-note-blank"></i>
-								<span>{{ __('menu.orders') }}</span>
+							<a href="{{ route('provinces.index') }}" class="nav-link{{ request()->routeIs('provinces.*') ? ' active' : '' }}">
+								<i class="ph-map-pin"></i>
+								<span>Quản lý tỉnh/thành và phường/xã</span>
 							</a>
 						</li>
 						<li class="nav-item ">

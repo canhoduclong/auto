@@ -28,6 +28,7 @@ use App\Http\Controllers\HomeController;
 use App\Http\Controllers\CustomerPopupController;
 use App\Http\Controllers\OrderAjaxController;
 use App\Http\Controllers\PageController;
+use App\Http\Controllers\ProvinceController;
 use App\Http\Controllers\PostController; 
 use App\Http\Controllers\Admin\PostCategoryController;
 use App\Http\Controllers\ProfileController;
@@ -277,6 +278,10 @@ Route::middleware(['auth'])->group(function () {
 
     // Xóa nhiều khách hàng
     Route::post('customers/bulk-delete', [CustomerController::class, 'bulkDelete'])->name('customers.bulkDelete')->middleware('permission');
+    Route::resource('provinces', ProvinceController::class)->middleware('permission');
+    Route::post('provinces/{province}/wards', [ProvinceController::class, 'storeWard'])->name('provinces.wards.store')->middleware('permission');
+    Route::put('provinces/{province}/wards/{ward}', [ProvinceController::class, 'updateWard'])->name('provinces.wards.update')->middleware('permission');
+    Route::delete('provinces/{province}/wards/{ward}', [ProvinceController::class, 'destroyWard'])->name('provinces.wards.destroy')->middleware('permission');
     Route::resource('companies', \App\Http\Controllers\CompanyController::class)->middleware('permission');
     Route::get('companies/export', [\App\Http\Controllers\CompanyController::class, 'export'])->name('companies.export')->middleware('permission');
     Route::get('companies/import', [\App\Http\Controllers\CompanyController::class, 'importForm'])->name('companies.import.form')->middleware('permission');
