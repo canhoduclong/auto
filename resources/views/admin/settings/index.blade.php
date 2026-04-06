@@ -81,6 +81,9 @@
                         <button type="submit" class="btn btn-dark btn-sm">
                             <i class="bi bi-git me-1"></i>Commit & Push
                         </button>
+                        <a href="#push-history-section" class="btn btn-outline-secondary btn-sm">
+                            <i class="bi bi-clock-history me-1"></i>Xem lịch sử push gần đây
+                        </a>
                         <small class="text-muted">Kết quả push sẽ hiển thị tại khối Push Notification phía trên.</small>
                     </div>
                 </form>
@@ -89,7 +92,7 @@
     @endif
 
     @if($showPushFeature ?? true)
-        <div class="card border-0 shadow-sm mb-3">
+        <div class="card border-0 shadow-sm mb-3" id="push-history-section">
             <div class="card-header bg-white border-0 pt-3 pb-0">
                 <h5 class="mb-1">Lịch sử Push gần đây</h5>
                 <p class="text-muted small mb-0">Theo dõi các lần thay đổi code local đã đẩy lên GitHub.</p>

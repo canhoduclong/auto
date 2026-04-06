@@ -990,6 +990,11 @@ class PageController extends Controller
             });
         }
 
+        $saleId = $request->input('sale_id');
+        if ($saleId && is_numeric($saleId)) {
+            $query->where('user_id', $saleId);
+        }
+
         $allowedPerPage = [10, 15, 25, 50, 100];
         $perPage = (int) $request->input('per_page', 15);
         if (!in_array($perPage, $allowedPerPage, true)) {
@@ -1018,11 +1023,32 @@ class PageController extends Controller
             $canApproveByOrder[$order->id] = $canApprove;
         }
 
+        // Tính stats dựa trên visual status
+        $allOrders = (clone $query)->with(['approvals.step'])->get();
         $stats = [
-            'total' => $orders->total(),
-            'pending' => (clone $query)->where('status', 'pending_leader_approval')->count(),
-            'approved' => (clone $query)->where('status', 'approved')->count(),
+            'total' => $allOrders->count(),
+            'pending' => 0,
+            'approved' => 0,
+            'rejected' => 0,
         ];
+
+        foreach ($allOrders as $order) {
+            $hasPassedViewerStep = $order->approvals->contains(function ($approval) use ($roleNames) {
+                $roleSlug = strtolower((string) optional($approval->step)->role_slug);
+                return $approval->status === 'approved' && in_array($roleSlug, $roleNames->toArray(), true);
+            });
+            $visualStatus = ($order->status !== 'rejected' && $hasPassedViewerStep)
+                ? 'approved'
+                : (string) $order->status;
+
+            if ($visualStatus === 'approved') {
+                $stats['approved']++;
+            } elseif ($visualStatus === 'rejected') {
+                $stats['rejected']++;
+            } else {
+                $stats['pending']++;
+            }
+        }
 
         return view('site.my_team_orders', [
             'settings' => $this->settings,
@@ -1035,6 +1061,7 @@ class PageController extends Controller
             'fromDate' => $fromDate,
             'toDate' => $toDate,
             'perPage' => $perPage,
+            'saleId' => $saleId,
         ]);
     }
 

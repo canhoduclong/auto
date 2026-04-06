@@ -87,7 +87,7 @@
     }
     .tmo-page .tmo-summary-grid {
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: .6rem;
     }
     .tmo-page .tmo-summary-item {
@@ -102,6 +102,9 @@
         color: #64748b;
         letter-spacing: .03em;
         margin-bottom: .2rem;
+    }
+    .bg-card{
+        background-color:#e9eff5 !important;
     }
     .tmo-page .tmo-summary-value {
         font-size: 1rem;
@@ -166,7 +169,7 @@
         font-weight: 700;
         padding: .24rem .54rem;
     }
-    .tmo-page .tmo-status-pending { background: #0f172a; color: #f8fafc; }
+    .tmo-page .tmo-status-pending { background: #f59e0b; color: #000; }
     .tmo-page .tmo-status-approved { background: #d1e7dd; color: #0f5132; }
     .tmo-page .tmo-status-rejected { background: #f8d7da; color: #842029; }
     .tmo-page .tmo-status-default { background: #e2e8f0; color: #334155; }
@@ -269,17 +272,7 @@
         </div>
     </div>
 
-    <div class="row g-3 mb-3">
-        <div class="col-12 col-md-4">
-            <div class="card tmo-kpi"><div class="card-body"><div class="text-muted small">Tổng đơn</div><div class="value text-primary">{{ number_format($stats['total']) }}</div></div></div>
-        </div>
-        <div class="col-12 col-md-4">
-            <div class="card tmo-kpi"><div class="card-body"><div class="text-muted small">Chờ leader duyệt</div><div class="value text-warning">{{ number_format($stats['pending']) }}</div></div></div>
-        </div>
-        <div class="col-12 col-md-4">
-            <div class="card tmo-kpi"><div class="card-body"><div class="text-muted small">Đã duyệt</div><div class="value text-success">{{ number_format($stats['approved']) }}</div></div></div>
-        </div>
-    </div>
+    
 
     <div class="tmo-card mb-3">
         <div class="tmo-card-header d-flex justify-content-between align-items-center">
@@ -383,7 +376,7 @@
         <div class="col-12 col-lg-3">
             <div class="tmo-aside-sticky d-grid gap-3">
                 <div class="tmo-card">
-                    <div class="tmo-card-header fw-semibold">Lọc dữ liệu</div>
+                    <div class="tmo-card-header fw-semibold text-uppercase bg-card">Lọc dữ liệu</div>
                     <div class="tmo-card-body">
                         <form method="GET" action="{{ route('pages.my_tearm_orders') }}" class="row g-2 js-filter-form">
                             <div class="col-12">
@@ -410,7 +403,7 @@
                             </div>
                             <div class="col-12 d-grid gap-2">
                                 <button class="btn btn-primary" type="submit">Áp dụng lọc</button>
-                                <a href="{{ route('pages.my_tearm_orders') }}" class="btn btn-outline-secondary">Về hôm nay</a>
+                                <a href="{{ route('pages.my_tearm_orders') }}" class="btn btn-outline-secondary">Đơn hôm nay</a>
                             </div>
                         </form>
                     </div>
@@ -438,16 +431,33 @@
         </div>
 
         <div class="col-12 col-lg-9">
+
+            <div class="row g-3 mb-2">
+                <div class="col-12 col-md-3">
+                    <div class="card tmo-kpi"><div class="card-body"><div class="text-muted small">Tổng đơn</div><div class="value text-primary" id="sumTotal">{{ number_format($stats['total']) }}</div></div></div>
+                </div>
+                <div class="col-12 col-md-3">
+                    <div class="card tmo-kpi"><div class="card-body"><div class="text-muted small">Chờ leader duyệt</div><div class="value text-warning" id="sumPending">{{ number_format($stats['pending']) }}</div></div></div>
+                </div>
+                <div class="col-12 col-md-3">
+                    <div class="card tmo-kpi"><div class="card-body"><div class="text-muted small">Đã duyệt</div><div class="value text-success" id="sumApproved">{{ number_format($stats['approved']) }}</div></div></div>
+                </div>
+                <div class="col-12 col-md-3">
+                    <div class="card tmo-kpi">
+                        <div class="card-body">
+                            <div class="text-muted small"><span>Từ chối</span> <i class="bi bi-info-circle text-danger" ></i></div>  
+                            <div class="value tmo-summary-value text-danger" id="sumRejected">{{ number_format($stats['rejected']) }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
             <div class="tmo-summary mb-3" id="orderSummaryPanel">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <div class="fw-semibold">Thống kê theo bộ lọc</div>
                     <div class="tmo-mini">Tính trên danh sách đơn đang hiển thị</div>
                 </div>
                 <div class="tmo-summary-grid">
-                    <div class="tmo-summary-item">
-                        <div class="tmo-summary-label">Số đơn (Đã duyệt / Chưa duyệt / Từ chối)</div>
-                        <div class="tmo-summary-value" id="sumStatus">0 / 0 / 0</div>
-                    </div>
                     <div class="tmo-summary-item">
                         <div class="tmo-summary-label">Tổng hàng hóa</div>
                         <div class="tmo-summary-value" id="sumItemLines">0 mặt hàng</div>
@@ -464,7 +474,10 @@
                 <div class="tmo-product-stats">
                     <div class="d-flex justify-content-between align-items-center mb-1">
                         <div class="tmo-summary-label mb-0">Hàng - Số lượng</div>
-                        <button type="button" class="btn btn-sm btn-outline-secondary" id="toggleProductStatsBtn">Hiện chi tiết</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="toggleProductStatsBtn">
+                            <i class="bi bi-chevron-expand"></i>
+                            Chi tiết
+                        </button>
                     </div>
                     <div class="d-none" id="sumProductDetailWrap">
                         <div class="tmo-product-vertical" id="sumProductDetailList"></div>
@@ -478,21 +491,25 @@
                     <div class="tmo-mini" id="saleFilterState">Hiển thị toàn bộ đơn theo bộ lọc hiện tại.</div>
                 </div>
                 <div class="d-flex align-items-center gap-2">
-                    <label class="small text-muted mb-0" for="orderSort">Sắp xếp:</label>
-                    <select id="orderSort" class="form-select form-select-sm" style="min-width: 210px;">
-                        <option value="created_desc">Ngày tạo mới nhất</option>
-                        <option value="created_asc">Ngày tạo cũ nhất</option>
-                        <option value="total_desc">Giá trị đơn giảm dần</option>
-                        <option value="total_asc">Giá trị đơn tăng dần</option>
-                        <option value="delivery_asc">Giờ giao sớm nhất</option>
-                        <option value="delivery_desc">Giờ giao muộn nhất</option>
-                    </select>
-                    <label class="small text-muted mb-0" for="perPageSelect">Hiển thị:</label>
-                    <select id="perPageSelect" class="form-select form-select-sm" style="min-width: 96px;">
-                        @foreach([10, 15, 25, 50, 100] as $pp)
-                            <option value="{{ $pp }}" {{ (int) ($perPage ?? 15) === $pp ? 'selected' : '' }}>{{ $pp }}</option>
-                        @endforeach
-                    </select>
+                    <div class="d-flex align-items-center  gap-1">
+                        <label class="small text-muted mb-0" for="orderSort" style="min-width:60px">Sắp xếp:</label>
+                        <select id="orderSort" class="form-select form-select-sm" style="min-width: 210px;">
+                            <option value="created_desc">Ngày tạo mới nhất</option>
+                            <option value="created_asc">Ngày tạo cũ nhất</option>
+                            <option value="total_desc">Giá trị đơn giảm dần</option>
+                            <option value="total_asc">Giá trị đơn tăng dần</option>
+                            <option value="delivery_asc">Giờ giao sớm nhất</option>
+                            <option value="delivery_desc">Giờ giao muộn nhất</option>
+                        </select>
+                    </div>
+                    <div class="d-flex align-items-center gap-1">
+                        <label class="small text-muted mb-0" for="perPageSelect"  style="min-width:60px">Hiển thị:</label>
+                        <select id="perPageSelect" class="form-select form-select-sm" style="min-width: 96px;">
+                            @foreach([10, 15, 25, 50, 100] as $pp)
+                                <option value="{{ $pp }}" {{ (int) ($perPage ?? 15) === $pp ? 'selected' : '' }}>{{ $pp }}</option>
+                            @endforeach
+                        </select>
+                    </div>
                 </div>
             </div>
 
@@ -515,6 +532,12 @@
                             'approved' => 'tmo-status-approved',
                             'rejected' => 'tmo-status-rejected',
                             default => 'tmo-status-default',
+                        };
+                        $statusLabel = match ($visualStatus) {
+                            'pending_leader_approval' => 'Chờ Duyệt',
+                            'approved' => 'Đã Duyệt',
+                            'rejected' => 'Từ Chối',
+                            default => $visualStatus,
                         };
                         $isOldOrder = !optional($order->created_at)?->isToday();
                         $rowStateClass = match ($visualStatus) {
@@ -564,12 +587,12 @@
                                 <div class="tmo-mini">Giờ giao</div>
                             </div>
                             <div>
-                                <span class="tmo-status js-order-status {{ $statusClass }}">{{ $visualStatus }}</span>
+                                <span class="tmo-status js-order-status {{ $statusClass }}" data-status="{{ $visualStatus }}">{{ $statusLabel }}</span>
                                 <div class="tmo-mini mt-1">Bước: {{ $step?->step?->role_slug ?? 'Không có' }}</div>
                             </div>
                             <div class="d-flex gap-1 flex-wrap justify-content-end">
                                 <a href="{{ route('pages.team_order_detail', $order) }}" class="btn btn-sm btn-outline-primary">Chi tiết</a>
-                                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#quickOrder{{ $order->id }}" aria-expanded="false" aria-controls="quickOrder{{ $order->id }}">Xem nhanh đơn hàng</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#quickOrder{{ $order->id }}" aria-expanded="false" aria-controls="quickOrder{{ $order->id }}">Xem nhanh</button>
                                 @if($canProcess)
                                     <form method="POST" action="{{ route('orders.approve', $order) }}" class="js-approval-form" data-action="approve">
                                         @csrf
@@ -750,7 +773,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         rows.forEach(function (row) {
             const statusEl = row.querySelector('.js-order-status');
-            const status = (statusEl ? statusEl.textContent : '').trim().toLowerCase();
+            const status = (statusEl ? statusEl.dataset.status : '').trim().toLowerCase();
 
             if (status === 'approved') {
                 approved += 1;
@@ -936,7 +959,8 @@ document.addEventListener('DOMContentLoaded', function () {
         if (statusBadge) {
             statusBadge.classList.remove('tmo-status-pending', 'tmo-status-approved', 'tmo-status-rejected', 'tmo-status-default');
             statusBadge.classList.add(statusBadgeClass(newStatus));
-            statusBadge.textContent = newStatus;
+            statusBadge.dataset.status = newStatus;
+            statusBadge.textContent = newStatus === 'approved' ? 'Đã Duyệt' : newStatus === 'rejected' ? 'Từ Chối' : 'Chờ Duyệt';
         }
 
         const forms = row.querySelectorAll('.js-approval-form');
@@ -1039,7 +1063,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (toggleProductStatsBtn && sumProductDetailWrap) {
             const renderToggleLabel = function () {
-                toggleProductStatsBtn.textContent = productDetailVisible ? 'Ẩn chi tiết' : 'Hiện chi tiết';
+                toggleProductStatsBtn.textContent = productDetailVisible ? 'Ẩn chi tiết' : 'Chi tiết';
             };
 
             renderToggleLabel();
