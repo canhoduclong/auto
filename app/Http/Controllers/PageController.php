@@ -1591,8 +1591,8 @@ class PageController extends Controller
             });
 
         $cityFilter = $request->input('city');
-        $districtFilter = $request->input('district');
         $wardFilter = $request->input('ward');
+        $streetFilter = $request->input('street');
 
         $customers = (clone $customerQuery)
             ->withCount('orders')
@@ -1606,16 +1606,16 @@ class PageController extends Controller
                         ->orWhere('phone', 'like', "%{$s}%");
                 });
             })
-            ->when($cityFilter || $districtFilter || $wardFilter, function ($q) use ($cityFilter, $districtFilter, $wardFilter) {
-                $q->whereHas('addresses', function ($addressQuery) use ($cityFilter, $districtFilter, $wardFilter) {
+            ->when($cityFilter || $wardFilter || $streetFilter, function ($q) use ($cityFilter, $wardFilter, $streetFilter) {
+                $q->whereHas('addresses', function ($addressQuery) use ($cityFilter, $wardFilter, $streetFilter) {
                     if ($cityFilter) {
                         $addressQuery->where('city', $cityFilter);
                     }
-                    if ($districtFilter) {
-                        $addressQuery->where('district', $districtFilter);
-                    }
                     if ($wardFilter) {
                         $addressQuery->where('ward', $wardFilter);
+                    }
+                    if ($streetFilter) {
+                        $addressQuery->where('street', $streetFilter);
                     }
                 });
             })
@@ -1635,13 +1635,13 @@ class PageController extends Controller
             })
             ->whereNotNull('city')
             ->where('city', '!=', '')
-            ->get(['city', 'district', 'ward', 'customer_id']);
+            ->get(['city', 'ward', 'street', 'customer_id']);
 
         $locationTree = $locationAddresses
             ->groupBy('city')
             ->map(function ($cityGroup) {
-                return $cityGroup->groupBy('district')->map(function ($districtGroup) {
-                    return $districtGroup->pluck('ward')
+                return $cityGroup->groupBy('ward')->map(function ($wardGroup) {
+                    return $wardGroup->pluck('street')
                         ->filter()
                         ->unique()
                         ->values();
@@ -1667,8 +1667,8 @@ class PageController extends Controller
             });
 
         $cityFilter = $request->input('city');
-        $districtFilter = $request->input('district');
         $wardFilter = $request->input('ward');
+        $streetFilter = $request->input('street');
 
         $customers = (clone $customerQuery)
             ->withCount('orders')
@@ -1682,16 +1682,16 @@ class PageController extends Controller
                         ->orWhere('phone', 'like', "%{$s}%");
                 });
             })
-            ->when($cityFilter || $districtFilter || $wardFilter, function ($q) use ($cityFilter, $districtFilter, $wardFilter) {
-                $q->whereHas('addresses', function ($addressQuery) use ($cityFilter, $districtFilter, $wardFilter) {
+            ->when($cityFilter || $wardFilter || $streetFilter, function ($q) use ($cityFilter, $wardFilter, $streetFilter) {
+                $q->whereHas('addresses', function ($addressQuery) use ($cityFilter, $wardFilter, $streetFilter) {
                     if ($cityFilter) {
                         $addressQuery->where('city', $cityFilter);
                     }
-                    if ($districtFilter) {
-                        $addressQuery->where('district', $districtFilter);
-                    }
                     if ($wardFilter) {
                         $addressQuery->where('ward', $wardFilter);
+                    }
+                    if ($streetFilter) {
+                        $addressQuery->where('street', $streetFilter);
                     }
                 });
             })

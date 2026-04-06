@@ -173,17 +173,17 @@
         color: #1e293b;
         margin-bottom: 8px;
     }
-    .area-district {
+    .area-ward-group {
         margin-left: 12px;
         margin-bottom: 10px;
     }
-    .area-district-title {
+    .area-ward-title {
         font-size: 0.85rem;
         font-weight: 700;
         color: #334155;
         margin-bottom: 6px;
     }
-    .area-wards {
+    .area-streets {
         display: flex;
         flex-wrap: wrap;
         gap: 6px;
@@ -204,11 +204,11 @@
         background: #1d4ed8;
         color: #ffffff;
     }
-    .area-district-title a {
+    .area-ward-title a {
         color: inherit;
         text-decoration: none;
     }
-    .area-district-title a:hover {
+    .area-ward-title a:hover {
         text-decoration: underline;
     }
     .area-filter-summary {
@@ -351,7 +351,7 @@
                     <div class="mc-area-panel">
                         <div class="mc-area-title">Khu vực</div>
 
-                        @if(request('city') || request('district') || request('ward'))
+                        @if(request('city') || request('ward') || request('street'))
                             <div class="area-filter-summary mb-3">
                                 <span class="fw-semibold">Đang lọc:</span>
                                 @if(request('city'))
@@ -359,38 +359,38 @@
                                 @else
                                     <span>Tất cả tỉnh/thành</span>
                                 @endif
-                                @if(request('district'))
-                                    <span>» {{ request('district') }}</span>
-                                @endif
                                 @if(request('ward'))
                                     <span>» {{ request('ward') }}</span>
                                 @endif
-                                <a href="{{ route('pages.my_customer', request()->except(['page', 'city', 'district', 'ward'])) }}" class="ms-2 small text-decoration-none">Xóa bộ lọc</a>
+                                @if(request('street'))
+                                    <span>» {{ request('street') }}</span>
+                                @endif
+                                <a href="{{ route('pages.my_customer', request()->except(['page', 'city', 'ward', 'street'])) }}" class="ms-2 small text-decoration-none">Xóa bộ lọc</a>
                             </div>
                         @endif
 
                         @if(!empty($locationTree) && $locationTree->isNotEmpty())
-                            @foreach($locationTree as $city => $districts)
+                            @foreach($locationTree as $city => $wards)
                                 <div class="area-city">
                                     <div class="area-city-title">
-                                        <a href="{{ route('pages.my_customer', array_filter(array_merge(request()->except(['page', 'city', 'district', 'ward']), ['city' => $city]), function ($value) { return $value !== null && $value !== ''; })) }}" class="text-reset text-decoration-none">
+                                        <a href="{{ route('pages.my_customer', array_filter(array_merge(request()->except(['page', 'city', 'ward', 'street']), ['city' => $city]), function ($value) { return $value !== null && $value !== ''; })) }}" class="text-reset text-decoration-none">
                                             {{ $city }}
                                         </a>
                                     </div>
-                                    @foreach($districts as $district => $wards)
-                                        <div class="area-district">
-                                            <div class="area-district-title">
-                                                <a href="{{ route('pages.my_customer', array_filter(array_merge(request()->except(['page', 'city', 'district', 'ward']), ['city' => $city, 'district' => $district ?: null]), function ($value) { return $value !== null && $value !== ''; })) }}" class="text-reset text-decoration-none">
-                                                    {{ $district ?: 'Chưa rõ quận/huyện' }}
+                                    @foreach($wards as $ward => $streets)
+                                        <div class="area-ward-group">
+                                            <div class="area-ward-title">
+                                                <a href="{{ route('pages.my_customer', array_filter(array_merge(request()->except(['page', 'city', 'ward', 'street']), ['city' => $city, 'ward' => $ward ?: null]), function ($value) { return $value !== null && $value !== ''; })) }}" class="text-reset text-decoration-none">
+                                                    {{ $ward ?: 'Chưa rõ phường/xã' }}
                                                 </a>
                                             </div>
-                                            <div class="area-wards">
-                                                @forelse($wards as $ward)
-                                                    <a href="{{ route('pages.my_customer', array_filter(array_merge(request()->except(['page', 'city', 'district', 'ward']), ['city' => $city, 'district' => $district ?: null, 'ward' => $ward]), function ($value) { return $value !== null && $value !== ''; })) }}" class="area-ward{{ request('ward') === $ward ? ' active' : '' }}">
-                                                        {{ $ward }}
+                                            <div class="area-streets">
+                                                @forelse($streets as $street)
+                                                    <a href="{{ route('pages.my_customer', array_filter(array_merge(request()->except(['page', 'city', 'ward', 'street']), ['city' => $city, 'ward' => $ward ?: null, 'street' => $street]), function ($value) { return $value !== null && $value !== ''; })) }}" class="area-ward{{ request('street') === $street ? ' active' : '' }}">
+                                                        {{ $street ?: 'Chưa rõ đường' }}
                                                     </a>
                                                 @empty
-                                                    <span class="area-ward">Chưa rõ phường/xã</span>
+                                                    <span class="area-ward">Chưa rõ đường</span>
                                                 @endforelse
                                             </div>
                                         </div>
@@ -413,8 +413,8 @@
                                 <input type="text" name="search" class="form-control" placeholder="Tên, email, số điện thoại..." value="{{ $search ?? '' }}">
                             </div>
                             <input type="hidden" name="city" value="{{ request('city') }}">
-                            <input type="hidden" name="district" value="{{ request('district') }}">
                             <input type="hidden" name="ward" value="{{ request('ward') }}">
+                            <input type="hidden" name="street" value="{{ request('street') }}">
                             <div class="col-lg-3 col-md-6 d-flex gap-2">
                                 <button type="submit" class="btn btn-primary flex-fill">
                                     <i class="bi bi-search"></i> Lọc
@@ -592,8 +592,8 @@
     let currentParams = {
         search: '{{ $search ?? '' }}',
         city: '{{ request('city') }}',
-        district: '{{ request('district') }}',
         ward: '{{ request('ward') }}',
+        street: '{{ request('street') }}',
         sort_by: '{{ request('sort_by') }}',
         sort_dir: '{{ request('sort_dir') }}',
         per_page: {{ $currentPerPage }},
