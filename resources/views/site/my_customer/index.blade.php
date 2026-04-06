@@ -145,10 +145,7 @@
         font-size: .8rem;
     }
     .mc-actions {
-        display: flex;
-        gap: 6px;
-        justify-content: center;
-        flex-wrap: wrap;
+           
     }
     .mc-actions .btn {
         border-radius: 10px;
@@ -555,8 +552,10 @@
                                              <div class="text-end me-3">
                                                 <small class="text-muted">Đơn: {{ $customer->orders_count }}</small>
                                             </div>
-                                             <input type="checkbox" name="ids[]" value="{{ $customer->id }}" class="form-check-input customer-checkbox">
-                                            <div class="mc-actions justify-content-end pr-4 gap-2">
+                                            <div class="text-end me-3 mt-1">
+                                             <input type="checkbox" name="ids[]" value="{{ $customer->id }}" class=" customer-checkbox">
+                                            </div>
+                                             <div class="mc-actions justify-content-end gap-2">
                                                 <a href="{{ route('my_customer.show', $customer) }}" class="btn btn-outline-info btn-sm" title="Xem chi tiết"><i class="bi bi-eye"></i></a>
                                                 <a href="{{ route('my_customer.order.create', $customer) }}" class="btn btn-outline-success btn-sm" title="Lên đơn hàng"><i class="bi bi-file-text"></i></a>
                                                 <a href="{{ route('my_customer.show', ['customer' => $customer, 'tab' => 'payments']) }}" class="btn btn-outline-secondary btn-sm" title="Thanh toán"><i class="bi bi-cash"></i></a>
