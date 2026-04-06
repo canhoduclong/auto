@@ -528,20 +528,21 @@
                                 <div class="col-md-5 d-flex flex-column justify-content-between">
                                     <div class="row">
                                         <div class="col-12  text-end">
+                                            @if($customer->production)
+                                                <div class="col-6">
+                                                    <small class="text-muted">Sản lượng: {{ $customer->production }}</small>
+                                                </div>
+                                            @endif
+                                            @if($customer->size)
+                                                <div class="col-6">
+                                                    <small class="text-muted">Size: {{ $customer->size }}</small>
+                                                </div>
+                                            @endif
                                             <small class="text-muted">Mã KH: {{ $customer->customer_code ?: '#'.$customer->id }}</small>
                                         </div>
                                     </div>
                                     <div class="row g-2">
-                                        @if($customer->production)
-                                            <div class="col-6">
-                                                <small class="text-muted">Sản lượng: {{ $customer->production }}</small>
-                                            </div>
-                                        @endif
-                                        @if($customer->size)
-                                            <div class="col-6">
-                                                <small class="text-muted">Size: {{ $customer->size }}</small>
-                                            </div>
-                                        @endif
+                                        
                                         @if($customer->delivery_time)
                                             <div class="col-12  text-end">
                                                 <small class="text-muted">Giờ giao: {{ $customer->delivery_time }}</small>
