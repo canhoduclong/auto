@@ -152,6 +152,46 @@
         padding: 6px 9px;
         font-size: .8rem;
     }
+    .mc-alert-panel {
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        border-radius: 24px;
+        background: #fff;
+        padding: 22px;
+        margin-bottom: 24px;
+        box-shadow: 0 12px 34px rgba(15, 23, 42, 0.05);
+    }
+    .mc-alert-title {
+        font-size: .95rem;
+        font-weight: 700;
+        margin-bottom: 16px;
+        color: #0f172a;
+    }
+    .mc-alert-item {
+        border-radius: 18px;
+        padding: 14px 16px;
+        background: #f8fafc;
+        margin-bottom: 12px;
+    }
+    .mc-alert-item:last-child {
+        margin-bottom: 0;
+    }
+    .mc-alert-label {
+        color: #475569;
+        font-size: .82rem;
+        text-transform: uppercase;
+        letter-spacing: .08em;
+        margin-bottom: 6px;
+        display: block;
+    }
+    .mc-alert-value {
+        font-weight: 700;
+        color: #0f172a;
+        margin-bottom: 4px;
+    }
+    .mc-alert-meta {
+        color: #64748b;
+        font-size: .82rem;
+    }
     .mc-area-panel {
         padding: 22px;
     }
@@ -344,6 +384,34 @@
 
         <div class="row g-4">
             <div class="col-xl-4">
+                <div class="mc-alert-panel">
+                    <div class="mc-alert-title">Chú ý quan trọng</div>
+                    <div class="mc-alert-item">
+                        <span class="mc-alert-label">Lịch hẹn sắp tới</span>
+                        @if($upcomingReminders->isNotEmpty())
+                            @foreach($upcomingReminders as $reminder)
+                                <div class="mc-alert-value">{{ optional($reminder->customer)->name ?? 'Khách hàng chưa xác định' }}</div>
+                                <div class="mc-alert-meta">{{ $reminder->remind_at?->format('d/m/Y H:i') }} - {{ \Illuminate\Support\Str::limit($reminder->title ?? $reminder->note ?? 'Không có nội dung', 80) }}</div>
+                                @if(!$loop->last)
+                                    <hr class="my-2" style="border-color: rgba(148, 163, 184, .22);">
+                                @endif
+                            @endforeach
+                        @else
+                            <div class="mc-alert-value">Không có lịch hẹn mới.</div>
+                            <div class="mc-alert-meta">Tạo lịch nhắc hoặc cập nhật tình trạng khách hàng để theo dõi.</div>
+                        @endif
+                    </div>
+                    <div class="mc-alert-item">
+                        <span class="mc-alert-label">Ghi chú mới nhất</span>
+                        @if($latestCareLog)
+                            <div class="mc-alert-value">{{ optional($latestCareLog->customer)->name ?? 'Khách hàng chưa xác định' }}</div>
+                            <div class="mc-alert-meta">{{ $latestCareLog->created_at?->format('d/m/Y H:i') }} - {{ \Illuminate\Support\Str::limit($latestCareLog->note, 100) }}</div>
+                        @else
+                            <div class="mc-alert-value">Chưa có ghi chú chăm sóc.</div>
+                            <div class="mc-alert-meta">Hãy thêm ghi chú mới khi tương tác với khách.</div>
+                        @endif
+                    </div>
+                </div>
                 <div class="mc-panel mb-4">
                     <div class="mc-area-panel">
                         <div class="mc-area-title">Khu vực</div>
@@ -362,29 +430,30 @@
                                 @if(request('street'))
                                     <span>» {{ request('street') }}</span>
                                 @endif
+                                <span class="ms-2 text-secondary">Khách hàng: {{ number_format($selectedAreaCustomerCount) }}</span>
                                 <a href="{{ route('pages.my_customer', request()->except(['page', 'city', 'ward', 'street'])) }}" class="ms-2 small text-decoration-none">Xóa bộ lọc</a>
                             </div>
                         @endif
 
                         @if(!empty($locationTree) && $locationTree->isNotEmpty())
-                            @foreach($locationTree as $city => $wards)
+                            @foreach($locationTree as $city => $cityData)
                                 <div class="area-city">
                                     <div class="area-city-title">
                                         <a href="{{ route('pages.my_customer', array_filter(array_merge(request()->except(['page', 'city', 'ward', 'street']), ['city' => $city]), function ($value) { return $value !== null && $value !== ''; })) }}" class="text-reset text-decoration-none">
-                                            {{ $city }}
+                                            {{ $city }} <span class="text-muted">({{ number_format($cityData['customer_count']) }})</span>
                                         </a>
                                     </div>
-                                    @foreach($wards as $ward => $streets)
+                                    @foreach($cityData['wards'] as $ward => $wardData)
                                         <div class="area-ward-group">
                                             <div class="area-ward-title">
                                                 <a href="{{ route('pages.my_customer', array_filter(array_merge(request()->except(['page', 'city', 'ward', 'street']), ['city' => $city, 'ward' => $ward ?: null]), function ($value) { return $value !== null && $value !== ''; })) }}" class="text-reset text-decoration-none">
-                                                    {{ $ward ?: 'Chưa rõ phường/xã' }}
+                                                    {{ $ward ?: 'Chưa rõ phường/xã' }} <span class="text-muted">({{ number_format($wardData['customer_count']) }})</span>
                                                 </a>
                                             </div>
                                             <div class="area-streets">
-                                                @forelse($streets as $street)
-                                                    <a href="{{ route('pages.my_customer', array_filter(array_merge(request()->except(['page', 'city', 'ward', 'street']), ['city' => $city, 'ward' => $ward ?: null, 'street' => $street]), function ($value) { return $value !== null && $value !== ''; })) }}" class="area-ward{{ request('street') === $street ? ' active' : '' }}">
-                                                        {{ $street ?: 'Chưa rõ đường' }}
+                                                @forelse($wardData['streets'] as $streetData)
+                                                    <a href="{{ route('pages.my_customer', array_filter(array_merge(request()->except(['page', 'city', 'ward', 'street']), ['city' => $city, 'ward' => $ward ?: null, 'street' => $streetData['street']]), function ($value) { return $value !== null && $value !== ''; })) }}" class="area-ward{{ request('street') === $streetData['street'] ? ' active' : '' }}">
+                                                        {{ $streetData['street'] ?: 'Chưa rõ đường' }} <span class="text-muted">({{ number_format($streetData['customer_count']) }})</span>
                                                     </a>
                                                 @empty
                                                     <span class="area-ward">Chưa rõ đường</span>
@@ -553,6 +622,9 @@
                                                 <small class="text-muted">Đơn: {{ $customer->orders_count }}</small>
                                             </div>
                                             <div class="text-end me-3 mt-1">
+                                                <div class="text-muted">Công nợ: <strong>{{ number_format($customer->total_debt ?? 0, 0, ',', '.') }} đ</strong></div>
+                                            </div>
+                                            <div class="text-end me-3 mt-1">
                                              <input type="checkbox" name="ids[]" value="{{ $customer->id }}" class=" customer-checkbox">
                                             </div>
                                              <div class="mc-actions justify-content-end gap-2">
@@ -666,6 +738,7 @@
                             </div>
                             <div class="mt-2">
                                 <div class="d-flex justify-content-between align-items-center">
+                                    <div class="text-muted me-3">Công nợ: <strong>${Number(customer.total_debt || 0).toLocaleString('vi-VN')} đ</strong></div>
                                     <input type="checkbox" name="ids[]" value="${customer.id}" class="form-check-input customer-checkbox">
                                     <div class="mc-actions justify-content-end">
                                         <a href="{{ route('my_customer.show', ':id') }}".replace(':id', customer.id) class="btn btn-outline-info btn-sm" title="Xem chi tiết"><i class="bi bi-eye"></i></a>

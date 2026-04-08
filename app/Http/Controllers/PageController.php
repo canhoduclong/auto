@@ -12,6 +12,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Models\Customer;
 use App\Models\CustomerAddress;
+use App\Models\CustomerCareLog;
+use App\Models\CustomerReminder;
 use App\Models\Team;
 use App\Services\OrderService;
 use App\Services\ApprovalService;
@@ -1596,6 +1598,7 @@ class PageController extends Controller
 
         $customers = (clone $customerQuery)
             ->withCount('orders')
+            ->withSum('orders as total_debt', 'amount_due')
             ->with(['type', 'addresses' => function ($q) {
                 $q->where('is_default', true)->orWhere('is_default', null)->limit(1);
             }])
@@ -1628,6 +1631,26 @@ class PageController extends Controller
             ->orderByDesc('id')
             ->paginate($request->input('per_page', 10));
 
+        $upcomingReminders = CustomerReminder::with('customer')
+            ->whereHas('customer', function ($q) use ($userId) {
+                $q->where('user_id', $userId)
+                    ->orWhere('assigned_to', $userId);
+            })
+            ->where('is_done', false)
+            ->whereNotNull('remind_at')
+            ->where('remind_at', '>=', now())
+            ->orderBy('remind_at')
+            ->limit(3)
+            ->get();
+
+        $latestCareLog = CustomerCareLog::with('customer')
+            ->whereHas('customer', function ($q) use ($userId) {
+                $q->where('user_id', $userId)
+                    ->orWhere('assigned_to', $userId);
+            })
+            ->orderByDesc('created_at')
+            ->first();
+
         $locationAddresses = CustomerAddress::query()
             ->whereHas('customer', function ($q) use ($userId) {
                 $q->where('user_id', $userId)
@@ -1640,19 +1663,48 @@ class PageController extends Controller
         $locationTree = $locationAddresses
             ->groupBy('city')
             ->map(function ($cityGroup) {
-                return $cityGroup->groupBy('ward')->map(function ($wardGroup) {
-                    return $wardGroup->pluck('street')
-                        ->filter()
-                        ->unique()
-                        ->values();
-                });
+                $cityCount = $cityGroup->pluck('customer_id')->unique()->count();
+                return [
+                    'customer_count' => $cityCount,
+                    'wards' => $cityGroup->groupBy('ward')->map(function ($wardGroup) {
+                        $wardCount = $wardGroup->pluck('customer_id')->unique()->count();
+                        return [
+                            'customer_count' => $wardCount,
+                            'streets' => $wardGroup->groupBy('street')->map(function ($streetGroup) {
+                                return [
+                                    'street' => $streetGroup->first()->street,
+                                    'customer_count' => $streetGroup->pluck('customer_id')->unique()->count(),
+                                ];
+                            }),
+                        ];
+                    }),
+                ];
             });
+
+        $selectedAreaCustomerCount = (clone $customerQuery)
+            ->when($cityFilter || $wardFilter || $streetFilter, function ($q) use ($cityFilter, $wardFilter, $streetFilter) {
+                $q->whereHas('addresses', function ($addressQuery) use ($cityFilter, $wardFilter, $streetFilter) {
+                    if ($cityFilter) {
+                        $addressQuery->where('city', $cityFilter);
+                    }
+                    if ($wardFilter) {
+                        $addressQuery->where('ward', $wardFilter);
+                    }
+                    if ($streetFilter) {
+                        $addressQuery->where('street', $streetFilter);
+                    }
+                });
+            })
+            ->count();
 
         return view('site.my_customer.index', [
             'customers' => $customers,
             'search' => $request->search,
             'settings' => $this->settings,
             'locationTree' => $locationTree,
+            'upcomingReminders' => $upcomingReminders,
+            'latestCareLog' => $latestCareLog,
+            'selectedAreaCustomerCount' => $selectedAreaCustomerCount,
         ]);
     }
 
@@ -1672,6 +1724,7 @@ class PageController extends Controller
 
         $customers = (clone $customerQuery)
             ->withCount('orders')
+            ->withSum('orders as total_debt', 'amount_due')
             ->with(['type', 'addresses' => function ($q) {
                 $q->where('is_default', true)->orWhere('is_default', null)->limit(1);
             }])
@@ -1713,6 +1766,7 @@ class PageController extends Controller
             }
             $customer->address_text = $addressText;
             $customer->updated_at_formatted = $customer->updated_at ? $customer->updated_at->format('d/m/Y') : null;
+            $customer->total_debt = $customer->total_debt ?: 0;
             return $customer;
         });
 
