@@ -105,19 +105,19 @@
         background: #f8f9fa;
     }
     .task-item.status-pending {
-        border-left-color: #ffc107;
+        /*border-left-color: #ffc107;*/
     }
     .task-item.status-in_progress {
-        border-left-color: #0dcaf0;
+        /*border-left-color: #0dcaf0;*/
     }
     .task-item.status-completed {
-        border-left-color: #198754;
+        /*border-left-color: #198754;*/
     }
     .task-item.status-overdue {
-        border-left-color: #dc3545;
+        /*border-left-color: #dc3545;*/
     }
     .task-item.status-cancelled {
-        border-left-color: #6c757d;
+        /*border-left-color: #6c757d;*/
     }
     .task-item:last-child {
         border-bottom: none;
@@ -151,6 +151,7 @@
         background: #f8f9fa;
         border-radius: 8px;
         border-left: 3px solid #667eea;
+        background-color: #eabe3938;
     }
     .task-actions {
         display: flex;
@@ -167,8 +168,8 @@
         align-items: center;
         gap: 5px;
     }
-    .status-pending { background: #fff3cd; color: #856404; border: 1px solid #ffc107; }
-    .status-in_progress { background: #cfe2ff; color: #084298; border: 1px solid #0dcaf0; }
+    .status-pending { /*background: #fff3cd;*/ color: #856404; border: 1px solid #ffc107; }
+    .status-in_progress {/* background: #cfe2ff;*/ color: #084298; border: 1px solid #0dcaf0; }
     .status-completed { background: #d1e7dd; color: #0f5132; border: 1px solid #198754; }
     .status-overdue { background: #f8d7da; color: #842029; border: 1px solid #dc3545; }
     .status-cancelled { background: #e2e3e5; color: #383d41; border: 1px solid #6c757d; }
