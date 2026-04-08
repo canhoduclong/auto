@@ -153,6 +153,8 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/customers', [CeoDashboardController::class, 'customers'])->name('customers');
         Route::get('/alerts', [CeoDashboardController::class, 'alerts'])->name('alerts');
         Route::get('/reports', [CeoDashboardController::class, 'reports'])->name('reports');
+        Route::get('/weekly-report', [CeoDashboardController::class, 'weeklyReport'])->name('weekly-report');
+        Route::get('/weekly-customer-report', [CeoDashboardController::class, 'weeklyCustomerReport'])->name('weekly-customer-report');
     });
     Route::get('reports/revenue', [RevenueReportController::class, 'index'])
         ->name('reports.revenue')

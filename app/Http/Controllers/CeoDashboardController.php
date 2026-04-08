@@ -675,4 +675,142 @@ class CeoDashboardController extends Controller
 
         return $alerts;
     }
+
+    public function weeklyReport(Request $request)
+    {
+        // Tính tuần hiện tại (từ thứ 2 đến chủ nhật)
+        $now = Carbon::now();
+        $startOfWeek = $now->copy()->startOfWeek(Carbon::MONDAY);
+        $endOfWeek = $now->copy()->endOfWeek(Carbon::SUNDAY);
+
+        // Dữ liệu mẫu - thay thế bằng logic thực tế
+        $weeklyData = [
+            'Sản phẩm A' => [
+                'T2' => 10,
+                'T3' => 15,
+                'T4' => 8,
+                'T5' => 12,
+                'T6' => 20,
+                'T7' => 18,
+                'CN' => 25,
+                'total' => 108
+            ],
+            'Sản phẩm B' => [
+                'T2' => 5,
+                'T3' => 8,
+                'T4' => 12,
+                'T5' => 15,
+                'T6' => 10,
+                'T7' => 22,
+                'CN' => 18,
+                'total' => 90
+            ],
+            'Sản phẩm C' => [
+                'T2' => 20,
+                'T3' => 25,
+                'T4' => 18,
+                'T5' => 30,
+                'T6' => 35,
+                'T7' => 28,
+                'CN' => 40,
+                'total' => 196
+            ]
+        ];
+
+        // Giá sản phẩm mẫu (VNĐ)
+        $productPrices = [
+            'Sản phẩm A' => 150000, // 150k
+            'Sản phẩm B' => 200000, // 200k
+            'Sản phẩm C' => 100000, // 100k
+        ];
+
+        // Tính doanh thu theo ngày
+        $dailyRevenue = [];
+        $totalRevenue = 0;
+        $days = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+
+        foreach ($days as $day) {
+            $dailyRevenue[$day] = 0;
+            foreach ($weeklyData as $productName => $productData) {
+                $quantity = $productData[$day] ?? 0;
+                $price = $productPrices[$productName] ?? 0;
+                $dailyRevenue[$day] += $quantity * $price;
+            }
+            $totalRevenue += $dailyRevenue[$day];
+        }
+
+        $totalQuantity = 394; // Tổng số lượng
+
+        return view('ceo.weekly_report', compact('weeklyData', 'dailyRevenue', 'totalRevenue', 'totalQuantity'));
+    }
+
+    public function weeklyCustomerReport(Request $request)
+    {
+        // Tính tuần hiện tại (từ thứ 2 đến chủ nhật)
+        $now = Carbon::now();
+        $startOfWeek = $now->copy()->startOfWeek(Carbon::MONDAY);
+        $endOfWeek = $now->copy()->endOfWeek(Carbon::SUNDAY);
+
+        // Dữ liệu mẫu khách hàng - thay thế bằng logic thực tế
+        $customerWeeklyData = [
+            'Công ty TNHH ABC' => [
+                'T2' => 2500000,
+                'T3' => 1800000,
+                'T4' => 3200000,
+                'T5' => 4100000,
+                'T6' => 2800000,
+                'T7' => 3500000,
+                'CN' => 5200000,
+                'total' => 23100000
+            ],
+            'Cửa hàng XYZ' => [
+                'T2' => 1200000,
+                'T3' => 1500000,
+                'T4' => 800000,
+                'T5' => 2200000,
+                'T6' => 1900000,
+                'T7' => 2600000,
+                'CN' => 3100000,
+                'total' => 13300000
+            ],
+            'Siêu thị DEF' => [
+                'T2' => 3500000,
+                'T3' => 4200000,
+                'T4' => 3800000,
+                'T5' => 5100000,
+                'T6' => 4600000,
+                'T7' => 5800000,
+                'CN' => 7200000,
+                'total' => 34200000
+            ],
+            'Khách lẻ Online' => [
+                'T2' => 800000,
+                'T3' => 950000,
+                'T4' => 1200000,
+                'T5' => 1400000,
+                'T6' => 1100000,
+                'T7' => 1600000,
+                'CN' => 2100000,
+                'total' => 9150000
+            ]
+        ];
+
+        // Tính tổng doanh thu theo ngày
+        $dailyRevenue = [];
+        $totalRevenue = 0;
+        $days = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+
+        foreach ($days as $day) {
+            $dailyRevenue[$day] = 0;
+            foreach ($customerWeeklyData as $customerName => $customerData) {
+                $dailyRevenue[$day] += $customerData[$day] ?? 0;
+            }
+            $totalRevenue += $dailyRevenue[$day];
+        }
+
+        $totalCustomers = count($customerWeeklyData);
+        $avgDailyRevenue = $totalRevenue / 7;
+
+        return view('ceo.weekly_customer_report', compact('customerWeeklyData', 'dailyRevenue', 'totalRevenue', 'totalCustomers', 'avgDailyRevenue'));
+    }
 }

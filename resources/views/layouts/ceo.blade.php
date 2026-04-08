@@ -187,6 +187,12 @@
             <a href="{{ route('ceo.reports') }}" class="ceo-nav-link {{ request()->routeIs('ceo.reports') ? 'active' : '' }}">
                 <i class="bi bi-journal-text"></i> Báo cáo
             </a>
+            <a href="{{ route('ceo.weekly-report') }}" class="ceo-nav-link {{ request()->routeIs('ceo.weekly-report') ? 'active' : '' }}">
+                <i class="bi bi-calendar-week"></i> Báo cáo tuần
+            </a>
+            <a href="{{ route('ceo.weekly-customer-report') }}" class="ceo-nav-link {{ request()->routeIs('ceo.weekly-customer-report') ? 'active' : '' }}">
+                <i class="bi bi-people-fill"></i> Báo cáo KH tuần
+            </a>
         </nav>
         <div class="ceo-nav-footer">
             <form method="POST" action="{{ route('logout') }}" class="ceo-nav-form">
