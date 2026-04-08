@@ -161,7 +161,7 @@
             <table>
                 <thead>
                     <tr>
-                        <th style="text-align: left; width: 200px;">Mặt hàng</th>
+                        <th style=" width: 200px;" class="text-end">Mặt hàng</th>
                         <th>T2</th>
                         <th>T3</th>
                         <th>T4</th>

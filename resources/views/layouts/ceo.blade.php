@@ -194,7 +194,7 @@
                 <i class="bi bi-people-fill"></i> Báo cáo KH tuần
             </a>
             <a href="{{ route('ceo.task-management.index') }}" class="ceo-nav-link {{ request()->routeIs('ceo.task-management.*') ? 'active' : '' }}">
-                <i class="bi bi-list-task"></i> Giao việc
+                <i class="bi bi-checklist-rtl"></i> Giao việc
             </a>
         </nav>
         <div class="ceo-nav-footer">
