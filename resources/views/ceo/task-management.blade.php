@@ -168,7 +168,7 @@
         align-items: center;
         gap: 5px;
     }
-    .status-pending { /*background: #fff3cd;*/ color: #856404; border: 1px solid #ffc107; }
+    .status-pending { /*background: #fff3cd;*/ color: #856404; /*border: 1px solid #ffc107;*/ }
     .status-in_progress {/* background: #cfe2ff;*/ color: #084298; border: 1px solid #0dcaf0; }
     .status-completed { background: #d1e7dd; color: #0f5132; border: 1px solid #198754; }
     .status-overdue { background: #f8d7da; color: #842029; border: 1px solid #dc3545; }
