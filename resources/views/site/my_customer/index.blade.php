@@ -614,7 +614,9 @@
                                             </div>
                                         @endif
                                        <div class="text-end">
+                                            @if($customer->total_debt)
                                             <div class="text-muted">Công nợ: <strong>{{ number_format($customer->total_debt ?? 0, 0, ',', '.') }} đ</strong></div>
+                                            @endif
                                         </div>
                                     </div>
                                     <div class="mt-2">
