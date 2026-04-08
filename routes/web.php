@@ -45,6 +45,7 @@ use App\Http\Controllers\OrderMonitoringController;
 use App\Http\Controllers\WarehouseDashboardController;
 use App\Http\Controllers\ShipperDashboardController;
 use App\Http\Controllers\CeoDashboardController;
+use App\Http\Controllers\TaskManagementController;
 use App\Http\Controllers\AccountingDashboardController;
 
 
@@ -155,6 +156,14 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/reports', [CeoDashboardController::class, 'reports'])->name('reports');
         Route::get('/weekly-report', [CeoDashboardController::class, 'weeklyReport'])->name('weekly-report');
         Route::get('/weekly-customer-report', [CeoDashboardController::class, 'weeklyCustomerReport'])->name('weekly-customer-report');
+
+        // Task Management Routes
+        Route::get('/task-management', [TaskManagementController::class, 'index'])->name('task-management.index');
+        Route::post('/task-management', [TaskManagementController::class, 'store'])->name('task-management.store');
+        Route::patch('/task-management/{task}', [TaskManagementController::class, 'update'])->name('task-management.update');
+        Route::delete('/task-management/{task}', [TaskManagementController::class, 'destroy'])->name('task-management.destroy');
+        Route::patch('/task-management/{task}/status', [TaskManagementController::class, 'updateStatus'])->name('task-management.update-status');
+        Route::get('/task-management/customers', [TaskManagementController::class, 'getCustomers'])->name('task-management.customers');
     });
     Route::get('reports/revenue', [RevenueReportController::class, 'index'])
         ->name('reports.revenue')

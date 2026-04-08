@@ -39,6 +39,7 @@ class Customer extends Model
         'dob',
         'customer_type_id',
         'note',
+        'next_appointment',
         'delivery_time',
         'size',
         'production',
@@ -63,6 +64,7 @@ class Customer extends Model
 
     protected $casts = [
         'dob' => 'date',
+        'next_appointment' => 'datetime',
     ];
 
     public function transactions() {

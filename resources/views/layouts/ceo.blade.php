@@ -193,6 +193,9 @@
             <a href="{{ route('ceo.weekly-customer-report') }}" class="ceo-nav-link {{ request()->routeIs('ceo.weekly-customer-report') ? 'active' : '' }}">
                 <i class="bi bi-people-fill"></i> Báo cáo KH tuần
             </a>
+            <a href="{{ route('ceo.task-management.index') }}" class="ceo-nav-link {{ request()->routeIs('ceo.task-management.*') ? 'active' : '' }}">
+                <i class="bi bi-list-task"></i> Giao việc
+            </a>
         </nav>
         <div class="ceo-nav-footer">
             <form method="POST" action="{{ route('logout') }}" class="ceo-nav-form">
