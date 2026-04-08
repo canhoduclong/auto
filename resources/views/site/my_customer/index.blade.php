@@ -596,33 +596,31 @@
                                         <div class="col-12  text-end">
                                             @if($customer->production)
                                                  
-                                                    <small class="text-muted">Sản lượng: {{ $customer->production }}</small>
+                                                    <small class="text-muted">Sản lượng: <strong>{{ $customer->production }}</strong></small>
                                                 
                                             @endif
                                             @if($customer->size)
                                                 
-                                                    <small class="text-muted">Size: {{ $customer->size }}</small>
+                                                    <small class="text-muted">Size: <strong>{{ $customer->size }}</strong></small>
                                                 
                                             @endif
-                                            <small class="text-muted">Mã KH: {{ $customer->customer_code ?: '#'.$customer->id }}</small>
+                                            <small class="text-muted">Mã KH: <strong>{{ $customer->customer_code ?: '#'.$customer->id }}</strong></small>
                                         </div>
                                     </div>
                                     <div class="row g-2">
-                                        
                                         @if($customer->delivery_time)
                                             <div class="col-12  text-end">
                                                 <small class="text-muted">Giờ giao: {{ $customer->delivery_time }}</small>
                                             </div>
                                         @endif
-                                       
+                                       <div class="text-end">
+                                            <div class="text-muted">Công nợ: <strong>{{ number_format($customer->total_debt ?? 0, 0, ',', '.') }} đ</strong></div>
+                                        </div>
                                     </div>
                                     <div class="mt-2">
                                         <div class="d-flex justify-content-end align-items-center">
                                              <div class="text-end me-3">
                                                 <small class="text-muted">Đơn: {{ $customer->orders_count }}</small>
-                                            </div>
-                                            <div class="text-end me-3 mt-1">
-                                                <div class="text-muted">Công nợ: <strong>{{ number_format($customer->total_debt ?? 0, 0, ',', '.') }} đ</strong></div>
                                             </div>
                                             <div class="text-end me-3 mt-1">
                                              <input type="checkbox" name="ids[]" value="{{ $customer->id }}" class=" customer-checkbox">
