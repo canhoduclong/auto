@@ -48,6 +48,7 @@
                             <th>Sản phẩm</th>
                             <th>Số biến thể</th>
                             <th>Giá hiện tại</th>
+                            <th>Giá Min hiện tại</th>
                             <th class="text-end">Thao tác</th>
                         </tr>
                     </thead>
@@ -77,6 +78,14 @@
                                         {{ number_format((float) $product->current_price_max, 0, ',', '.') }} đ
                                     @endif
                                 </td>
+                                <td>
+                                    @if((float) $product->current_min_price_min === (float) $product->current_min_price_max)
+                                        {{ number_format((float) $product->current_min_price_min, 0, ',', '.') }} đ
+                                    @else
+                                        {{ number_format((float) $product->current_min_price_min, 0, ',', '.') }} đ -
+                                        {{ number_format((float) $product->current_min_price_max, 0, ',', '.') }} đ
+                                    @endif
+                                </td>
                                 <td class="text-end">
                                     <a href="{{ route('products.price-management.show', $product) }}" class="btn btn-sm btn-primary">
                                         Cập nhật giá
@@ -85,7 +94,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="5" class="text-center text-muted py-4">Không có sản phẩm phù hợp.</td>
+                                <td colspan="6" class="text-center text-muted py-4">Không có sản phẩm phù hợp.</td>
                             </tr>
                         @endforelse
                     </tbody>

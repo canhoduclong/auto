@@ -41,6 +41,10 @@
     };
 
     $subtotal = (float) $order->items->sum(function ($item) use ($parseSizeToKg) {
+        if ($item->total !== null) {
+            return (float) $item->total;
+        }
+
         $qty = (int) ($item->quantity ?? 0);
         $price = (float) ($item->price ?? $item->base_price ?? 0);
         $unitWeight = (float) ($item->unit_weight ?? 0);
@@ -48,12 +52,23 @@
             $unitWeight = $parseSizeToKg($item->variant?->size);
         }
 
-        return (float) ($qty * $unitWeight * $price);
+        $isPricedByKg = $item->is_priced_by_kg;
+        if ($isPricedByKg === null) {
+            $isPricedByKg = $item->variant?->is_priced_by_kg ?? $item->variant?->product?->is_priced_by_kg ?? true;
+        }
+        $factor = $isPricedByKg ? max($unitWeight, 0) : 1;
+
+        return (float) ($qty * $factor * $price);
     });
 
     $itemDiscount = (float) ($order->item_discount_total ?? $order->items->sum('discount_total'));
     $extraDiscount = (float) ($order->extra_discount_total ?? $order->order_discount ?? 0);
     $totalDiscount = (float) ($order->total_discount ?? ($itemDiscount + $extraDiscount));
+    $formatSignedMoney = static function (float $amount): string {
+        $prefix = $amount < 0 ? '+' : '-';
+
+        return $prefix . number_format(abs($amount), 0, ',', '.') . 'đ';
+    };
     $canProcessToday = optional($order->created_at)?->isToday();
 
     $recipientName = $order->recipient_name ?: ($order->customer?->name ?? '-');
@@ -428,6 +443,7 @@
                                 <div class="text-center">ĐVT</div>
                                 <div class="text-center">Size</div>
                                 <div class="text-end">KL tạm tính</div>
+                                <div class="text-center">Loại tính</div>
                                 <div class="text-end">Đơn giá</div>
                                 <div class="text-end">Tạm tính</div>
                             </div>
@@ -442,11 +458,14 @@
                                         }
 
                                         $lineWeight = (float) ($item->total_weight ?? ($qty * $unitWeight));
-                                        $lineTotal = $qty * $unitWeight * $price;
+                                        $isPricedByKg = $item->is_priced_by_kg;
+                                        if ($isPricedByKg === null) {
+                                            $isPricedByKg = $item->variant?->is_priced_by_kg ?? $item->variant?->product?->is_priced_by_kg ?? true;
+                                        }
+                                        $factor = $isPricedByKg ? max($unitWeight, 0) : 1;
+                                        $lineTotal = (float) ($item->total ?? ($qty * $factor * $price));
                                         $unitLabel = $item->variant?->product?->unit_label ?? 'Cái';
-                                        $weightUnitLabel = in_array((string) ($item->variant?->product?->unit ?? 'cai'), ['con', 'cai'], true)
-                                            ? 'Kg'
-                                            : $unitLabel;
+                                        $weightUnitLabel = $unitLabel;
                                         $sizeText = trim((string) ($item->variant?->size ?? ''));
                                         if ($sizeText === '') {
                                             $sizeText = $unitWeight > 0
@@ -467,6 +486,7 @@
                                             <div class="text-center text-muted small">{{ $unitLabel }}</div>
                                             <div class="text-center text-muted small">{{ $sizeText }}</div>
                                             <div class="team-item-cell">{{ number_format($lineWeight, 2, ',', '.') }} {{ $weightUnitLabel }}</div>
+                                            <div class="text-center text-muted small">{{ $isPricedByKg ? 'Theo kg' : 'Theo đơn vị' }}</div>
                                             <div class="team-item-cell">{{ number_format($price, 0, ',', '.') }} đ</div>
                                             <div class="team-item-cell"><strong>{{ number_format($lineTotal, 0, ',', '.') }} đ</strong></div>
                                         </div>
@@ -486,8 +506,8 @@
                                     <strong>{{ number_format($estimatedTotalWeight, 2, ',', '.') }} kg</strong>
                                 </div>
                                 <div class="team-summary-row">
-                                    <span>Giảm giá</span>
-                                    <strong>{{ number_format($totalDiscount, 0, ',', '.') }} đ</strong>
+                                    <span>Điều chỉnh</span>
+                                    <strong>{{ $formatSignedMoney($totalDiscount) }}</strong>
                                 </div>
                                 <div class="team-summary-row">
                                     <span>Phí ship</span>

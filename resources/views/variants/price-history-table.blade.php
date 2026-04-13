@@ -2,6 +2,7 @@
     <thead>
         <tr>
             <th>Giá</th>
+            <th>Giá Min</th>
             <th>Lý do</th>
             <th>Ngày áp dụng</th>
             <th>Người tạo</th>
@@ -11,6 +12,7 @@
         @foreach($rules as $rule)
         <tr>
             <td>{{ number_format($rule->price, 0, ',', '.') }} đ</td>
+            <td>{{ number_format((float) ($rule->min_price ?? 0), 0, ',', '.') }} đ</td>
             <td>{{ $rule->reason }}</td>
             <td>{{ \Carbon\Carbon::parse($rule->start_date)->format('d/m/Y H:i') }}</td>
             <td>{{ $rule->creator->name ?? '' }}</td>

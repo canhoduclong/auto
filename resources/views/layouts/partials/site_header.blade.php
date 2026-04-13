@@ -164,6 +164,7 @@
                             || Auth::user()->hasRole('manager_sale');
                         $offcanvasCanApproveDepartmentOrders = Auth::user()->hasRole('manager')
                             || Auth::user()->hasRole('manager_sale');
+                        $offcanvasCanManageAppointments = Auth::user()->isAdmin() || Auth::user()->isSalesFlowRole();
                     @endphp
                     <li><a href="{{ route('pages.my_dashboard') }}" class="d-block py-1"><i class="bi bi-person-circle me-1"></i> {{ __('site.profile') }}</a></li>
                     <li><a href="{{ route('pages.my_orders') }}" class="d-block py-1"><i class="bi bi-bag-check me-1"></i> {{ __('site.my_orders') }}</a></li>
@@ -177,6 +178,9 @@
                         <li><a href="{{ route('pages.all_team_orders') }}" class="d-block py-1"><i class="bi bi-check2-all me-1"></i> Duyệt đơn PKD</a></li>
                     @endif
                     <li><a href="{{ route('pages.my_customer') }}" class="d-block py-1"><i class="bi bi-people me-1"></i> {{ __('site.my_customers') }}</a></li>
+                    @if($offcanvasCanManageAppointments)
+                        <li><a href="{{ route('pages.my_customer_appointments') }}" class="d-block py-1"><i class="bi bi-camera me-1"></i> Cuộc hẹn khách hàng</a></li>
+                    @endif
                     <li><a href="{{ route('work-reports.index') }}" class="d-block py-1"><i class="bi bi-clipboard-data me-1"></i> Báo cáo công việc</a></li>
                     <li><a href="{{ url('/dashboard') }}" class="d-block py-1"><i class="bi bi-speedometer2 me-1"></i> {{ __('site.dashboard') }}</a></li>
                 </ul>
@@ -333,6 +337,7 @@
                                         </a>
                                         @php
                                             $isSalesFlowRole = Auth::user()->isSalesFlowRole();
+                                            $canManageCustomerAppointments = $isSalesFlowRole || Auth::user()->isAdmin();
                                             $canAccessSalesDailyPages = Auth::user()->canAccessSalesDailyFeatures();
                                             $canApproveTeamOrders = Auth::user()->hasRole('leader')
                                                 || Auth::user()->hasRole('leader_sale')
@@ -347,6 +352,11 @@
                                             </a>
                                             <a class="dropdown-item" href="{{ route('pages.my_orders.daily_inventories') }}">
                                                 <i class="bi bi-boxes"></i> Tồn kho hôm nay
+                                            </a>
+                                        @endif
+                                        @if($canManageCustomerAppointments)
+                                            <a class="dropdown-item" href="{{ route('pages.my_customer_appointments') }}">
+                                                <i class="bi bi-camera"></i> Cuộc hẹn khách hàng
                                             </a>
                                         @endif
                                         @if(!$isSalesFlowRole)

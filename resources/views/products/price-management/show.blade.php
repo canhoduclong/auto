@@ -65,11 +65,16 @@
                 </div>
 
                 <div class="col-md-3">
+                    <label class="form-label">Giá Min</label>
+                    <input type="number" step="0.01" min="0" name="min_price" class="form-control" value="{{ old('min_price', 0) }}" required>
+                </div>
+
+                <div class="col-md-3">
                     <label class="form-label">Ngày áp dụng</label>
                     <input type="date" name="effective_date" class="form-control" value="{{ old('effective_date', now()->toDateString()) }}" required>
                 </div>
 
-                <div class="col-md-6">
+                <div class="col-md-3">
                     <label class="form-label">Lý do thay đổi</label>
                     <input type="text" name="reason" class="form-control" maxlength="255" value="{{ old('reason') }}" placeholder="Ví dụ: Điều chỉnh theo bảng giá mới">
                 </div>
@@ -111,6 +116,7 @@
                             <th>Biến thể (SKU)</th>
                             <th>Giá cũ</th>
                             <th>Giá mới</th>
+                            <th>Giá Min</th>
                             <th>Ngày hiệu lực</th>
                             <th>Người cập nhật</th>
                             <th>Lý do</th>
@@ -123,13 +129,14 @@
                                 <td>{{ $log->variant?->sku ?? '-' }}</td>
                                 <td>{{ number_format((float) ($log->old_price ?? 0), 0, ',', '.') }} đ</td>
                                 <td>{{ number_format((float) $log->new_price, 0, ',', '.') }} đ</td>
+                                <td>{{ number_format((float) ($log->priceRule?->min_price ?? 0), 0, ',', '.') }} đ</td>
                                 <td>{{ $log->priceRule?->start_date ? \Carbon\Carbon::parse($log->priceRule->start_date)->format('d/m/Y') : '-' }}</td>
                                 <td>{{ $log->appliedBy?->name ?? '-' }}</td>
                                 <td>{{ $log->priceRule?->reason ?? '-' }}</td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="7" class="text-center text-muted py-4">Không có dữ liệu lịch sử trong khoảng thời gian đã chọn.</td>
+                                <td colspan="8" class="text-center text-muted py-4">Không có dữ liệu lịch sử trong khoảng thời gian đã chọn.</td>
                             </tr>
                         @endforelse
                     </tbody>

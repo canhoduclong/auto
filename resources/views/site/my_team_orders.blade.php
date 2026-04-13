@@ -546,8 +546,13 @@
                             'pending_leader_approval' => $isOldOrder ? 'tmo-row-old' : 'tmo-row-pending',
                             default => $isOldOrder ? 'tmo-row-old' : 'tmo-row-pending',
                         };
+                        $formatSignedMoney = static function (float $amount): string {
+                            $prefix = $amount < 0 ? '+' : '-';
+
+                            return $prefix . number_format(abs($amount), 0, ',', '.') . ' đ';
+                        };
                         $discountTotal = (float) ($order->total_discount
-                            ?? (($order->item_discount_total ?? 0) + ($order->extra_discount_total ?? 0) + ($order->order_discount ?? 0)));
+                            ?? (($order->item_discount_total ?? 0) + ($order->extra_discount_total ?? 0)));
                         $deliveryTs = 0;
                         try {
                             if (!empty($order->delivery_time)) {
@@ -568,6 +573,15 @@
                             $deliveryTs = 0;
                         }
                         $createdTs = optional($order->created_at)?->timestamp ?? 0;
+                        $hasInvalidSizeItems = $order->items->contains(function ($it) {
+                            $sl = $it->variant?->size ?? $it->variant?->name ?? '-';
+                            $av = 0;
+                            if (preg_match('/(\d+(\.\d+)?)/', $sl, $szm)) { $av = (float) $szm[1]; }
+                            $sv = $av > 0 ? $av : 1;
+                            $ew = (float) ($it->total_weight ?? 0);
+                            if ($ew <= 0) { $ew = (float) ($it->quantity ?? 0) * $sv; }
+                            return $av <= 0 || $ew <= 0;
+                        });
                     @endphp
 
                     <article class="tmo-order-row js-order-row {{ $rowStateClass }}"
@@ -591,7 +605,7 @@
                             </div>
                             <div>
                                 <div class="fw-semibold">{{ number_format((float) $order->total, 0, ',', '.') }} đ</div>
-                                <div class="tmo-mini">Giảm: {{ number_format($discountTotal, 0, ',', '.') }} đ</div>
+                                <div class="tmo-mini">Điều chỉnh: {{ $formatSignedMoney($discountTotal) }}</div>
                             </div>
                             <div>
                                 <div class="fw-semibold">{{ $order->delivery_time ? (function($timeStr) {
@@ -624,7 +638,14 @@
                                     <form method="POST" action="{{ route('orders.approve', $order) }}" class="js-approval-form" data-action="approve">
                                         @csrf
                                         <input type="hidden" name="note" value="Leader duyệt từ trang team orders">
-                                        <button type="submit" class="btn btn-sm btn-success">Duyệt</button>
+                                        <button type="submit" class="btn btn-sm btn-success js-approve-btn"
+                                            @if($hasInvalidSizeItems)
+                                                disabled
+                                                title="Có sản phẩm chưa có size hoặc KL tạm tính = 0. Vui lòng cập nhật size sản phẩm trước khi duyệt."
+                                            @endif>Duyệt</button>
+                                        @if($hasInvalidSizeItems)
+                                            <div class="text-danger" style="font-size:.72rem;margin-top:2px;">Size/KL = 0</div>
+                                        @endif
                                     </form>
                                     <form method="POST" action="{{ route('orders.reject', $order) }}" class="js-approval-form" data-action="reject">
                                         @csrf
@@ -654,13 +675,13 @@
                                             $sizeLabel = $item->variant->size ?? $item->variant->name ?? '-';
                                             $qty = (float) ($item->quantity ?? 0);
                                             $price = (float) ($item->price ?? 0);
+                                            $actualSizeValue = 0;
+                                            if (preg_match('/(\d+(\.\d+)?)/', $sizeLabel, $matches)) {
+                                                $actualSizeValue = (float) $matches[1];
+                                            }
+                                            $sizeValue = $actualSizeValue > 0 ? $actualSizeValue : 1; // mặc định = 1 nếu rỗng/invalid
                                             $estimatedWeight = (float) ($item->total_weight ?? 0);
                                             if ($estimatedWeight <= 0) {
-                                                // Lấy số từ size, ví dụ "1.5kg" -> 1.5
-                                                $sizeValue = 0;
-                                                if (preg_match('/(\d+(\.\d+)?)/', $sizeLabel, $matches)) {
-                                                    $sizeValue = (float) $matches[1];
-                                                }
                                                 $estimatedWeight = $qty * $sizeValue;
                                             }
                                             $lineSubtotal = (float) ($item->total ?? 0);
@@ -674,6 +695,7 @@
                                                 data-product-qty="{{ $qty }}"
                                                 data-product-unit="{{ $unitLabel }}"
                                                 data-product-size="{{ $sizeLabel }}"
+                                                data-product-size-val="{{ $actualSizeValue }}"
                                                 data-product-est-weight="{{ $estimatedWeight }}"
                                                 data-product-price="{{ $price }}"
                                                 data-product-subtotal="{{ $lineSubtotal }}">{{ $productName }}</div>
@@ -1113,6 +1135,31 @@ document.addEventListener('DOMContentLoaded', function () {
                 event.preventDefault();
                 if (form.dataset.action === 'reject' && !window.confirm('Xác nhận từ chối đơn này?')) {
                     return;
+                }
+                if (form.dataset.action === 'approve') {
+                    const row = form.closest('.js-order-row');
+                    if (row) {
+                        const invalidLines = [];
+                        row.querySelectorAll('.js-product-line').forEach(function (line) {
+                            const estWeight = parseFloat(line.dataset.productEstWeight || '0');
+                            const sizeVal = parseFloat(line.dataset.productSizeVal || '0');
+                            if (estWeight <= 0 || sizeVal <= 0) {
+                                invalidLines.push(line.dataset.productName || 'Sản phẩm');
+                            }
+                        });
+                        if (invalidLines.length > 0) {
+                            const errId = 'approveErr_' + (row.dataset.orderId || '');
+                            let errEl = document.getElementById(errId);
+                            if (!errEl) {
+                                errEl = document.createElement('div');
+                                errEl.id = errId;
+                                errEl.className = 'text-danger small mt-1';
+                                form.after(errEl);
+                            }
+                            errEl.textContent = 'Không thể duyệt: ' + invalidLines.join(', ') + ' có size hoặc KL tạm tính = 0.';
+                            return;
+                        }
+                    }
                 }
                 submitApproval(form);
             });

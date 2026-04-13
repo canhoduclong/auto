@@ -4,8 +4,11 @@ use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use App\Models\Customer;
 use App\Models\CustomerType;
 use App\Models\Order;
+use App\Models\Province;
 use App\Models\Transaction;
+use App\Models\TruckStation;
 use App\Models\User;
+use App\Models\Ward;
 use App\Services\AdminActivityService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -515,7 +518,13 @@ class CustomerController extends Controller
     public function create()
     {
         $types = CustomerType::orderBy('name')->get(['id', 'name']);
-        return view('customers.create', compact('types'));
+        $provinces = Province::query()->orderBy('name')->get(['id', 'name']);
+        $truckStations = TruckStation::query()
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name', 'province_id', 'ward_id']);
+
+        return view('customers.create', compact('types', 'provinces', 'truckStations'));
     }
 
     // Store
@@ -532,9 +541,14 @@ class CustomerController extends Controller
             'note' => 'nullable|string|max:2000',
             'address' => 'nullable|string|max:1000',
             'delivery_time' => 'nullable|string|max:255',
+            'company_name' => 'nullable|string|max:255',
+            'tax_code' => 'nullable|string|max:50',
+            'company_address' => 'nullable|string|max:255',
+            'company_email' => 'nullable|email|max:255',
             'foam_box_required' => 'nullable|boolean',
             'foam_box_price' => 'nullable|integer',
             'use_truck_station' => 'nullable|boolean',
+            'truck_station_id' => 'nullable|exists:truck_stations,id',
             'truck_station_address' => 'nullable|string|max:255',
             'truck_receive_time' => 'nullable|string|max:255',
             'truck_return_time' => 'nullable|string|max:255',
@@ -543,7 +557,30 @@ class CustomerController extends Controller
             'truck_delivery_image' => 'nullable|string|max:255',
             'truck_station_phone' => 'nullable|string|max:30',
             'truck_fee' => 'nullable|integer',
+            'province_id' => 'nullable|exists:provinces,id',
+            'ward_id' => 'nullable|exists:wards,id',
         ]);
+
+        if (!(bool) ($data['use_truck_station'] ?? false)) {
+            $data['truck_station_id'] = null;
+        }
+
+        if (!empty($data['ward_id']) && !empty($data['province_id'])) {
+            $wardBelongsToProvince = Ward::query()
+                ->whereKey($data['ward_id'])
+                ->where('province_id', $data['province_id'])
+                ->exists();
+
+            if (!$wardBelongsToProvince) {
+                return back()->withErrors([
+                    'ward_id' => 'Phường/Xã không thuộc Tỉnh/Thành đã chọn.',
+                ])->withInput();
+            }
+        }
+
+        $selectedProvinceId = $data['province_id'] ?? null;
+        $selectedWardId = $data['ward_id'] ?? null;
+        unset($data['province_id'], $data['ward_id']);
 
         $duplicateCustomer = Customer::query()
             ->where(function ($query) use ($data) {
@@ -572,8 +609,15 @@ class CustomerController extends Controller
 
         $customer = Customer::create($data);
 
-        if ($request->filled('address')) {
+        if ($request->filled('address') || $selectedProvinceId || $selectedWardId) {
+            $province = $selectedProvinceId ? Province::find($selectedProvinceId) : null;
+            $ward = $selectedWardId ? Ward::find($selectedWardId) : null;
+
             $customer->addresses()->create([
+                'city' => $province?->name,
+                'ward' => $ward?->name,
+                'province_id' => $province?->id,
+                'ward_id' => $ward?->id,
                 'note' => $request->address,
                 'is_default' => 1,
             ]);
@@ -586,7 +630,14 @@ class CustomerController extends Controller
     public function edit(Customer $customer)
     {
         $types = CustomerType::orderBy('name')->get(['id', 'name']);
-        return view('customers.edit', compact('customer', 'types'));
+        $provinces = Province::query()->orderBy('name')->get(['id', 'name']);
+        $truckStations = TruckStation::query()
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name', 'province_id', 'ward_id']);
+        $customer->load('addresses');
+
+        return view('customers.edit', compact('customer', 'types', 'provinces', 'truckStations'));
     }
 
     // Update
@@ -603,9 +654,14 @@ class CustomerController extends Controller
             'note' => 'nullable|string|max:2000',
             'address' => 'nullable|string|max:1000',
             'delivery_time' => 'nullable|string|max:255',
+            'company_name' => 'nullable|string|max:255',
+            'tax_code' => 'nullable|string|max:50',
+            'company_address' => 'nullable|string|max:255',
+            'company_email' => 'nullable|email|max:255',
             'foam_box_required' => 'nullable|boolean',
             'foam_box_price' => 'nullable|integer',
             'use_truck_station' => 'nullable|boolean',
+            'truck_station_id' => 'nullable|exists:truck_stations,id',
             'truck_station_address' => 'nullable|string|max:255',
             'truck_receive_time' => 'nullable|string|max:255',
             'truck_return_time' => 'nullable|string|max:255',
@@ -614,13 +670,46 @@ class CustomerController extends Controller
             'truck_delivery_image' => 'nullable|string|max:255',
             'truck_station_phone' => 'nullable|string|max:30',
             'truck_fee' => 'nullable|integer',
+            'province_id' => 'nullable|exists:provinces,id',
+            'ward_id' => 'nullable|exists:wards,id',
         ]);
+
+        if (!(bool) ($data['use_truck_station'] ?? false)) {
+            $data['truck_station_id'] = null;
+        }
+
+        if (!empty($data['ward_id']) && !empty($data['province_id'])) {
+            $wardBelongsToProvince = Ward::query()
+                ->whereKey($data['ward_id'])
+                ->where('province_id', $data['province_id'])
+                ->exists();
+
+            if (!$wardBelongsToProvince) {
+                return back()->withErrors([
+                    'ward_id' => 'Phường/Xã không thuộc Tỉnh/Thành đã chọn.',
+                ])->withInput();
+            }
+        }
+
+        $selectedProvinceId = $data['province_id'] ?? null;
+        $selectedWardId = $data['ward_id'] ?? null;
+        unset($data['province_id'], $data['ward_id']);
+
         $customer->update($data);
 
-        if ($request->filled('address')) {
+        if ($request->filled('address') || $selectedProvinceId || $selectedWardId) {
+            $province = $selectedProvinceId ? Province::find($selectedProvinceId) : null;
+            $ward = $selectedWardId ? Ward::find($selectedWardId) : null;
+
             $customer->addresses()->updateOrCreate(
                 ['is_default' => 1],
-                ['note' => $request->address]
+                [
+                    'note' => $request->address,
+                    'city' => $province?->name,
+                    'ward' => $ward?->name,
+                    'province_id' => $province?->id,
+                    'ward_id' => $ward?->id,
+                ]
             );
         }
 

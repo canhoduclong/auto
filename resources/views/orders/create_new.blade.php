@@ -71,7 +71,7 @@
                                 @php
                                     $sizeRaw = strtolower(str_replace(',', '.', trim((string) ($variant->size ?? ''))));
                                     preg_match('/([0-9]*\.?[0-9]+)/', $sizeRaw, $sizeMatches);
-                                    $defaultWeight = (float) ($sizeMatches[1] ?? 0);
+                                    $defaultWeight = (float) ($sizeMatches[1] ?? 1); // mặc định = 1 nếu rỗng/invalid
                                     if (str_contains($sizeRaw, 'g') && !str_contains($sizeRaw, 'kg')) {
                                         $defaultWeight = $defaultWeight / 1000;
                                     }

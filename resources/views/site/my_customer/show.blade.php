@@ -903,6 +903,7 @@
                     <div>
                         <h2 class="customer-section-title">Cuộc hẹn khách hàng</h2>
                         <p class="customer-section-subtitle">Lưu lịch hẹn và nhắc nhở chăm sóc khách đúng thời điểm.</p>
+                        <a href="{{ route('pages.my_customer_appointments') }}" class="btn btn-sm btn-outline-primary mt-2">Xem tất cả cuộc hẹn</a>
                     </div>
                     <div class="customer-card-head-right">
                         <button type="button" class="customer-collapse-btn" data-bs-toggle="collapse" data-bs-target="#customerReminderCollapse" aria-expanded="true" aria-controls="customerReminderCollapse">
@@ -912,7 +913,7 @@
                 </div>
                 <div class="customer-card-body">
                     <div class="collapse show" id="customerReminderCollapse">
-                        <form id="reminderForm" method="POST" action="{{ route('customer_reminders.store', $customer) }}" class="customer-form-grid customer-form-stack mt-2">
+                        <form id="reminderForm" method="POST" action="{{ route('customer_reminders.store', $customer) }}" class="customer-form-grid customer-form-stack mt-2" enctype="multipart/form-data">
                             @csrf
                             <div class="customer-field full">
                                 <label class="customer-label">Nội dung cuộc hẹn</label>
@@ -921,6 +922,10 @@
                             <div class="customer-field full">
                                 <label class="customer-label">Thời gian</label>
                                 <input type="datetime-local" name="remind_at" class="customer-input">
+                            </div>
+                            <div class="customer-field full">
+                                <label class="customer-label">Ảnh cuộc hẹn</label>
+                                <input type="file" name="image" class="customer-input" accept="image/*" capture="environment">
                             </div>
                             <div class="customer-field full" style="display:flex;align-items:flex-end;">
                                 <button class="customer-btn customer-btn-primary" type="submit" style="border:none;width:100%;">Thêm cuộc hẹn</button>
@@ -940,6 +945,12 @@
                                             <span class="customer-badge badge-warning">Nhắc trước 1 ngày</span>
                                         @endif
                                     </div>
+                                    @if(!empty($reminder->image_path))
+                                        <a href="{{ asset('storage/' . $reminder->image_path) }}" target="_blank" class="d-inline-flex align-items-center gap-2 mt-1 text-decoration-none">
+                                            <img src="{{ asset('storage/' . $reminder->image_path) }}" alt="Ảnh cuộc hẹn" style="width:54px;height:54px;object-fit:cover;border-radius:8px;border:1px solid #dbe4ef;">
+                                            <span class="small text-muted">Xem ảnh</span>
+                                        </a>
+                                    @endif
                                 </div>
                                 <div class="d-flex align-items-center gap-2">
                                     <button type="button" class="btn btn-link btn-sm text-primary p-0" data-bs-toggle="modal" data-bs-target="#editReminderModal{{ $reminder->id }}"><i class="bi bi-pencil-square"></i></button>
@@ -954,7 +965,7 @@
                             <div class="modal fade" id="editReminderModal{{ $reminder->id }}" tabindex="-1" aria-labelledby="editReminderModalLabel{{ $reminder->id }}" aria-hidden="true">
                                 <div class="modal-dialog">
                                     <div class="modal-content">
-                                        <form method="POST" action="{{ route('customer_reminders.update', [$customer, $reminder]) }}">
+                                        <form method="POST" action="{{ route('customer_reminders.update', [$customer, $reminder]) }}" enctype="multipart/form-data">
                                             @csrf
                                             @method('PUT')
                                             <div class="modal-header">
@@ -973,6 +984,19 @@
                                                 <div class="mb-2">
                                                     <label class="form-label">Ghi chú</label>
                                                     <textarea name="note" class="form-control">{{ $reminder->note }}</textarea>
+                                                </div>
+                                                <div class="mb-2">
+                                                    <label class="form-label">Ảnh cuộc hẹn</label>
+                                                    <input type="file" name="image" class="form-control" accept="image/*" capture="environment">
+                                                    @if(!empty($reminder->image_path))
+                                                        <div class="mt-2 d-flex align-items-center gap-2">
+                                                            <img src="{{ asset('storage/' . $reminder->image_path) }}" alt="Ảnh cuộc hẹn" style="width:60px;height:60px;object-fit:cover;border-radius:8px;border:1px solid #dbe4ef;">
+                                                            <div class="form-check">
+                                                                <input class="form-check-input" type="checkbox" value="1" name="remove_image" id="remove-image-{{ $reminder->id }}">
+                                                                <label class="form-check-label" for="remove-image-{{ $reminder->id }}">Xóa ảnh hiện tại</label>
+                                                            </div>
+                                                        </div>
+                                                    @endif
                                                 </div>
                                             </div>
                                             <div class="modal-footer">
@@ -1504,30 +1528,7 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    alert('Đã thêm cuộc hẹn.');
-                    reminderForm.reset();
-                    // Add new reminder to list
-                    const reminderList = document.querySelector('.customer-list-stack');
-                    if (reminderList) {
-                        const newReminder = document.createElement('div');
-                        newReminder.className = 'customer-list-item';
-                        const title = formData.get('title');
-                        const remindAt = formData.get('remind_at');
-                        newReminder.innerHTML = `
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div>
-                                    <div class="customer-list-item-title">${title}</div>
-                                    <div class="customer-list-meta">
-                                        <span><i class="bi bi-calendar me-1"></i>${new Date(remindAt).toLocaleDateString('vi-VN')}</span>
-                                    </div>
-                                </div>
-                                <button type="button" class="btn btn-link btn-sm text-danger p-0" onclick="deleteReminder(this, 0)">
-                                    <i class="bi bi-trash"></i>
-                                </button>
-                            </div>
-                        `;
-                        reminderList.appendChild(newReminder);
-                    }
+                    window.location.reload();
                 } else {
                     alert('Lỗi: ' + (data.message || 'Không thể thêm.'));
                 }

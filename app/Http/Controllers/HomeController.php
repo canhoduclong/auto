@@ -10,14 +10,26 @@ use App\Models\Product;
 use App\Models\Post;
 use App\Models\Media;
 use Illuminate\Support\Facades\Cache;
+use Throwable;
 
 class HomeController extends Controller
 {
+    private function loadSettings()
+    {
+        try {
+            return Cache::remember('settings', 60, function () {
+                return Setting::all()->keyBy('key');
+            });
+        } catch (Throwable $e) {
+            report($e);
+
+            return collect();
+        }
+    }
+
     public function index()
     {
-        $settings = Cache::remember('settings', 60, function () {
-            return Setting::all()->keyBy('key');
-        });
+        $settings = $this->loadSettings();
 
         $sliderIds = collect(range(1, 5))
             ->map(fn ($i) => $settings['slider_' . $i]->value ?? null)
@@ -57,9 +69,7 @@ class HomeController extends Controller
 
     public function variants(Request $request)
     {
-        $settings = Cache::remember('settings', 60, function () {
-            return Setting::all()->keyBy('key');
-        });
+        $settings = $this->loadSettings();
         $categories = \App\Models\Category::all();
         $query = \App\Models\ProductVariant::query()
             ->withAvailableStock()

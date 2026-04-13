@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Models\Province;
+use App\Models\Ward;
 
 class CustomerAddress extends Model
 {
@@ -27,6 +29,8 @@ class CustomerAddress extends Model
         'ward',
         'district',
         'city',
+        'province_id',
+        'ward_id',
         'is_default',
         'note',           // ghi chú thêm
     ];
@@ -37,5 +41,15 @@ class CustomerAddress extends Model
     public function customer()
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    public function province()
+    {
+        return $this->belongsTo(Province::class);
+    }
+
+    public function wardModel()
+    {
+        return $this->belongsTo(Ward::class, 'ward_id');
     }
 }

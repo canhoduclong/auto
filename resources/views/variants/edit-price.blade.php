@@ -20,6 +20,11 @@
         </div>
 
         <div class="mb-3">
+            <label class="form-label">Giá Min</label>
+            <input type="number" step="0.01" min="0" name="min_price" class="form-control" value="0" required>
+        </div>
+
+        <div class="mb-3">
             <label class="form-label">Lý do điều chỉnh</label>
             <input type="text" name="reason" class="form-control">
         </div>
@@ -41,6 +46,7 @@
                 <th>Ngày</th>
                 <th>Giá cũ</th>
                 <th>Giá mới</th>
+                       <th>Giá Min</th>
                 <th>Người thay đổi</th>
                 <th>Lý do</th>
             </tr>
@@ -56,6 +62,7 @@
                     {{ $log ? number_format($log->old_price, 0, ',', '.') : '-' }}
                 </td>
                 <td>{{ number_format($rule->price, 0, ',', '.') }}</td>
+                   <td>{{ number_format((float) ($rule->min_price ?? 0), 0, ',', '.') }}</td>
                 <td>{{ $log && $log->user ? $log->user->name : 'System' }}</td>
                 <td>{{ $rule->reason }}</td>
             </tr>

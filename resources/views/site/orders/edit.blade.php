@@ -161,6 +161,32 @@
         padding-top: 10px;
         border-top: 1px dashed rgba(148, 163, 184, 0.45);
     }
+    .discount-switch {
+        display: inline-flex;
+        width: 100%;
+    }
+    .discount-switch .btn {
+        padding: .2rem .55rem;
+        font-size: .78rem;
+    }
+    .selling-price-feedback {
+        display: none;
+        margin-top: .35rem;
+        font-size: .78rem;
+        color: #dc3545;
+    }
+    .selling-price-feedback.active {
+        display: block;
+    }
+    .price.price-invalid,
+    .row-total.row-total-invalid {
+        color: #dc3545;
+        font-weight: 700;
+    }
+    .discount-input.is-invalid {
+        border-color: #dc3545 !important;
+        box-shadow: 0 0 0 .2rem rgba(220,53,69,.15) !important;
+    }
 </style>
 @endpush
 
@@ -265,8 +291,7 @@
                                             <th class="text-center">Đơn giá</th>
                                             <th class="text-center">CK giá</th>
                                             <th class="text-center">SL</th>
-                                            <th class="text-center">ĐVT</th>
-                                            <th class="text-center">KL</th>
+                                            <th class="text-center">Tổng</th>
                                             <th class="text-center">Tạm tính</th>
                                             <th></th>
                                         </tr>
@@ -284,7 +309,6 @@
                                                 $unitPrice = (float) ($item->price ?? 0);
                                                 $qty = (int) ($item->quantity ?? 1);
                                                 $unitLabel = $variant?->product?->unit_label ?? 'Cái';
-                                                $weightUnitLabel = in_array((string) ($variant?->product?->unit ?? 'cai'), ['con', 'cai'], true) ? 'Kg' : $unitLabel;
                                                 $unitWeight = (float) old('item_weight.' . ($variant?->id), $item->unit_weight ?? 0);
                                                 if ($unitWeight <= 0) {
                                                     $sizeRaw = strtolower(str_replace(',', '.', trim((string) ($variant?->size ?? ''))));
@@ -296,10 +320,20 @@
                                                     $unitWeight = round(max(0, $unitWeight), 3);
                                                 }
                                                 $unitDiscount = (float) old('item_discount.' . ($variant?->id), $item->unit_discount ?? 0);
-                                                $unitDiscount = max(0, min($unitDiscount, $unitPrice));
-                                                $lineTotal = (float) ($item->total ?? (($unitPrice - $unitDiscount) * $qty));
+                                                $unitDiscountType = old('item_discount_type.' . ($variant?->id), $item->discount_type ?? 'decrease');
+                                                $unitDiscountType = $unitDiscountType === 'increase' ? 'increase' : 'decrease';
+                                                $isPricedByKg = old('item_is_priced_by_kg.' . ($variant?->id), $item->is_priced_by_kg ?? ($variant?->is_priced_by_kg ?? $variant?->product?->is_priced_by_kg ?? true));
+                                                $isPricedByKg = filter_var($isPricedByKg, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+                                                $isPricedByKg = $isPricedByKg === null ? true : $isPricedByKg;
+                                                $minPrice = (float) ($variant?->latestPriceRule?->min_price ?? 0);
+                                                $unitDiscount = max(0, $unitDiscount);
+                                                $lineUnitPrice = $unitDiscountType === 'increase'
+                                                    ? ($unitPrice + $unitDiscount)
+                                                    : ($unitPrice - $unitDiscount);
+                                                $pricingFactor = $isPricedByKg ? max($unitWeight, 0) : 1;
+                                                $lineTotal = (float) ($item->total ?? ($lineUnitPrice * $qty * $pricingFactor));
                                             @endphp
-                                            <tr class="cart-item-row" data-variant-id="{{ $variant?->id }}">
+                                            <tr class="cart-item-row" data-variant-id="{{ $variant?->id }}" data-is-priced-by-kg="{{ $isPricedByKg ? '1' : '0' }}">
                                                 <td>
                                                     <div class="checkout-product">
                                                         <img src="{{ $imageUrl }}" alt="{{ $variant?->product?->name ?? 'Product' }}">
@@ -311,8 +345,14 @@
                                                     <input type="hidden" name="items[{{ $index }}][variant_id]" value="{{ $variant?->id }}">
                                                 </td>
                                                 <td>{{ $variant?->size ?? '--' }}</td>
-                                                <td class="price" data-price="{{ $unitPrice }}">{{ number_format($unitPrice, 0, ',', '.') }}đ</td>
+                                                <td class="price" data-price="{{ $unitPrice }}" data-min-price="{{ $minPrice }}">{{ number_format($unitPrice, 0, ',', '.') }}đ</td>
                                                 <td>
+                                                    <div class="btn-group discount-switch mb-1" role="group" aria-label="Loai chiet khau">
+                                                        <input class="btn-check discount-type-input" type="radio" name="item_discount_type[{{ $variant?->id }}]" id="discount-decrease-{{ $variant?->id }}" value="decrease" {{ $unitDiscountType === 'decrease' ? 'checked' : '' }}>
+                                                        <label class="btn btn-outline-secondary" for="discount-decrease-{{ $variant?->id }}">Giảm</label>
+                                                        <input class="btn-check discount-type-input" type="radio" name="item_discount_type[{{ $variant?->id }}]" id="discount-increase-{{ $variant?->id }}" value="increase" {{ $unitDiscountType === 'increase' ? 'checked' : '' }}>
+                                                        <label class="btn btn-outline-secondary" for="discount-increase-{{ $variant?->id }}">Tăng</label>
+                                                    </div>
                                                     <input
                                                         type="number"
                                                         class="form-control form-control-sm discount-input min80"
@@ -321,14 +361,22 @@
                                                         step="1000"
                                                         max="{{ $unitPrice }}"
                                                         value="{{ number_format($unitDiscount, 0, '.', '') }}">
+                                                    <div class="selling-price-feedback"></div>
                                                 </td>
                                                 <td>
                                                     <input type="number" name="items[{{ $index }}][quantity]" class="form-control form-control-sm quantity-input min50" min="1" value="{{ $qty }}" required>
                                                 </td>
-                                                <td><span class="text-muted small">{{ $unitLabel }}</span></td>
                                                 <td class="text-end">
-                                                    <span class="line-weight" data-unit-weight="{{ number_format((float) $unitWeight, 3, '.', '') }}" data-weight-unit="{{ $weightUnitLabel }}">
-                                                        {{ number_format((float) ($unitWeight * $qty), 3, ',', '.') }} {{ $weightUnitLabel }}
+                                                    <span
+                                                        class="line-weight"
+                                                        data-unit-weight="{{ number_format((float) $unitWeight, 3, '.', '') }}"
+                                                        data-weight-unit="{{ $unitLabel }}"
+                                                        data-display-mode="{{ $isPricedByKg ? 'kg' : 'unit' }}">
+                                                        @if($isPricedByKg)
+                                                            {{ number_format((float) ($unitWeight * $qty), 3, ',', '.') }} kg
+                                                        @else
+                                                            {{ number_format((float) $qty, 0, ',', '.') }} {{ $unitLabel }}
+                                                        @endif
                                                     </span>
                                                 </td>
                                                 <td class="row-total text-end">{{ number_format($lineTotal, 0, ',', '.') }}đ</td>
@@ -371,6 +419,12 @@
                                 </div>
                                 <div class="checkout-kpi">
                                     <span class="checkout-kpi-label">CK tổng đơn</span>
+                                    <div class="btn-group discount-switch mb-1" role="group" aria-label="Loai chiet khau tong don" id="orderDiscountTypeSwitch">
+                                        <input class="btn-check order-discount-type-input" type="radio" name="order_discount_type" id="order-discount-decrease" value="decrease" {{ old('order_discount_type', $order->order_discount_type ?? 'decrease') === 'decrease' ? 'checked' : '' }}>
+                                        <label class="btn btn-outline-secondary" for="order-discount-decrease">Giảm</label>
+                                        <input class="btn-check order-discount-type-input" type="radio" name="order_discount_type" id="order-discount-increase" value="increase" {{ old('order_discount_type', $order->order_discount_type ?? 'decrease') === 'increase' ? 'checked' : '' }}>
+                                        <label class="btn btn-outline-secondary" for="order-discount-increase">Tăng</label>
+                                    </div>
                                     <input
                                         type="number"
                                         min="0"
@@ -419,8 +473,12 @@
                             </div>
 
                             <div class="d-flex gap-2 mt-3">
+                                <div class="alert alert-danger py-2 px-3 mb-0 d-none w-100" id="sellingPriceValidationAlert"></div>
+                            </div>
+
+                            <div class="d-flex gap-2 mt-2">
                                 <a href="{{ route('site.orders.show', $order) }}" class="btn btn-outline-secondary w-50">Quay lại</a>
-                                <button type="submit" class="btn btn-primary w-50">Lưu thay đổi</button>
+                                <button type="submit" class="btn btn-primary w-50" id="orderEditSubmitButton">Lưu thay đổi</button>
                             </div>
                         </div>
                     </div>
@@ -449,7 +507,10 @@ document.addEventListener('DOMContentLoaded', function () {
     const breakdownExtraDiscountEl = document.getElementById('breakdownExtraDiscount');
     const breakdownFinalTotalEl = document.getElementById('breakdownFinalTotal');
     const orderDiscountInput = document.getElementById('orderDiscountInput');
+    const getOrderDiscountTypeInput = () => document.querySelector('.order-discount-type-input:checked');
     const form = document.getElementById('my-order-edit-form');
+    const submitButton = document.getElementById('orderEditSubmitButton');
+    const validationAlert = document.getElementById('sellingPriceValidationAlert');
     let itemIndex = cartContainer.querySelectorAll('.cart-item-row').length;
     let searchTimeout = null;
     let currentVariantSearchPage = 1;
@@ -478,65 +539,136 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
+    function formatMoney(num) {
+        return `${formatNumber(Math.max(0, num))}đ`;
+    }
+
+    function toNumber(value, fallback = 0) {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : fallback;
+    }
+
+    function validateRowSellingPrice(row) {
+        const priceEl = row.querySelector('.price');
+        const discountInput = row.querySelector('.discount-input');
+        const discountTypeInput = row.querySelector('.discount-type-input:checked');
+        const feedbackEl = row.querySelector('.selling-price-feedback');
+        const rowTotalEl = row.querySelector('.row-total');
+
+        if (!priceEl || !discountInput || !feedbackEl) {
+            return false;
+        }
+
+        const basePrice = parseFloat(priceEl.getAttribute('data-price') || '0');
+        const minPrice = parseFloat(priceEl.getAttribute('data-min-price') || '0');
+        const discountValue = Math.max(0, parseFloat(discountInput.value || '0'));
+        const discountType = discountTypeInput?.value === 'increase' ? 'increase' : 'decrease';
+        const sellingPrice = discountType === 'increase'
+            ? basePrice + discountValue
+            : basePrice - discountValue;
+        const invalid = discountType === 'decrease' && sellingPrice < minPrice;
+
+        discountInput.classList.toggle('is-invalid', invalid);
+        priceEl.classList.toggle('price-invalid', invalid);
+        rowTotalEl?.classList.toggle('row-total-invalid', invalid);
+        feedbackEl.classList.toggle('active', invalid);
+        feedbackEl.textContent = invalid
+            ? `Giá bán ${formatMoney(sellingPrice)} thấp hơn giá Min ${formatMoney(minPrice)}.`
+            : '';
+
+        return invalid;
+    }
+
     function updateCartTotal() {
         let subtotal = 0;
         let itemDiscount = 0;
+        let hasInvalidSellingPrice = false;
         Array.from(cartContainer.querySelectorAll('.cart-item-row')).forEach((row) => {
             const priceEl = row.querySelector('.price');
             const qtyInput = row.querySelector('.quantity-input');
             const discountInput = row.querySelector('.discount-input');
+            const discountTypeInput = row.querySelector('.discount-type-input:checked');
             const rowTotalEl = row.querySelector('.row-total');
             const price = parseFloat(priceEl?.getAttribute('data-price') || '0');
+            const minPrice = parseFloat(priceEl?.getAttribute('data-min-price') || '0');
             const quantity = parseInt(qtyInput?.value || '0', 10);
-            let unitDiscount = parseFloat(discountInput?.value || '0');
-            unitDiscount = Math.max(0, Math.min(unitDiscount, price));
+            const isPricedByKg = row.dataset.isPricedByKg === '1';
+            let unitDiscount = toNumber(discountInput?.value, 0);
+            const discountType = discountTypeInput?.value === 'increase' ? 'increase' : 'decrease';
+            unitDiscount = Math.max(0, unitDiscount);
 
             const lineWeightEl = row.querySelector('.line-weight');
             if (lineWeightEl) {
                 const unitWeight = parseFloat(lineWeightEl.getAttribute('data-unit-weight') || '0');
                 const weightUnit = lineWeightEl.getAttribute('data-weight-unit') || 'Kg';
                 const lineWeight = Math.max(0, unitWeight * Math.max(quantity, 0));
-                lineWeightEl.textContent = `${lineWeight.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${weightUnit}`;
+                if (isPricedByKg) {
+                    lineWeightEl.textContent = `${lineWeight.toLocaleString('vi-VN', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg`;
+                } else {
+                    lineWeightEl.textContent = `${Math.max(quantity, 0).toLocaleString('vi-VN')} ${weightUnit}`;
+                }
             }
 
             if (discountInput) {
-                discountInput.max = String(price);
-                discountInput.value = String(Math.round(unitDiscount));
+                discountInput.max = discountType === 'decrease' ? String(Math.max(price - minPrice, 0)) : '';
             }
 
-            const lineSubtotal = price * quantity;
-            const lineDiscount = unitDiscount * quantity;
-            const lineTotal = Math.max(lineSubtotal - lineDiscount, 0);
+            const weightEl = row.querySelector('.line-weight');
+            const unitWeight = weightEl
+                ? parseFloat(weightEl.getAttribute('data-unit-weight') || '0')
+                : 0;
+            const pricingFactor = isPricedByKg ? Math.max(unitWeight, 0) : 1;
+            const lineSubtotal = price * quantity * pricingFactor;
+            const lineAdjustment = (discountType === 'increase' ? -1 : 1) * unitDiscount * quantity * pricingFactor;
+            const lineTotal = Math.max(lineSubtotal - lineAdjustment, 0);
 
             if (rowTotalEl) {
                 rowTotalEl.textContent = `${formatNumber(lineTotal)}đ`;
             }
             subtotal += lineSubtotal;
-            itemDiscount += lineDiscount;
+            itemDiscount += lineAdjustment;
+            hasInvalidSellingPrice = validateRowSellingPrice(row) || hasInvalidSellingPrice;
         });
 
         const subtotalAfterItemDiscount = Math.max(subtotal - itemDiscount, 0);
         let orderDiscount = parseFloat(orderDiscountInput?.value || '0');
-        orderDiscount = Math.max(0, Math.min(orderDiscount, subtotalAfterItemDiscount));
+        const orderDiscountType = getOrderDiscountTypeInput()?.value === 'increase' ? 'increase' : 'decrease';
+        orderDiscount = Math.max(0, orderDiscountType === 'decrease' ? Math.min(orderDiscount, subtotalAfterItemDiscount) : orderDiscount);
+        const orderAdjustment = (orderDiscountType === 'increase' ? -1 : 1) * orderDiscount;
 
         if (orderDiscountInput) {
             orderDiscountInput.value = String(Math.round(orderDiscount));
         }
 
-        const totalDiscount = itemDiscount + orderDiscount;
-        const finalTotal = Math.max(subtotalAfterItemDiscount - orderDiscount, 0);
+        const totalDiscount = itemDiscount + orderAdjustment;
+        const finalTotal = Math.max(subtotalAfterItemDiscount - orderAdjustment, 0);
         const lineCount = cartContainer.querySelectorAll('.cart-item-row').length;
 
+        const formatSigned = (value) => `${value < 0 ? '+' : '-'}${formatNumber(Math.abs(value))}đ`;
+
         subtotalEl.textContent = `${formatNumber(subtotal)}đ`;
-        itemDiscountEl.textContent = `${formatNumber(itemDiscount)}đ`;
-        discountEl.textContent = `${formatNumber(totalDiscount)}đ`;
+        itemDiscountEl.textContent = formatSigned(itemDiscount);
+        discountEl.textContent = formatSigned(totalDiscount);
         totalEl.textContent = `${formatNumber(finalTotal)}đ`;
         totalFooterEl.textContent = `${formatNumber(finalTotal)}đ`;
         lineCountEl.textContent = `${lineCount}`;
         breakdownGoodsEl.textContent = `${formatNumber(subtotal)}đ`;
-        breakdownItemDiscountEl.textContent = `${formatNumber(itemDiscount)}đ`;
-        breakdownExtraDiscountEl.textContent = `${formatNumber(orderDiscount)}đ`;
+        breakdownItemDiscountEl.textContent = formatSigned(itemDiscount);
+        breakdownExtraDiscountEl.textContent = formatSigned(orderAdjustment);
         breakdownFinalTotalEl.textContent = `${formatNumber(finalTotal)}đ`;
+
+        if (submitButton) {
+            submitButton.disabled = hasInvalidSellingPrice;
+        }
+
+        if (validationAlert) {
+            validationAlert.classList.toggle('d-none', !hasInvalidSellingPrice);
+            validationAlert.textContent = hasInvalidSellingPrice
+                ? 'Có sản phẩm đang có giá bán thấp hơn giá Min. Vui lòng điều chỉnh trước khi lưu đơn.'
+                : '';
+        }
+
+        return !hasInvalidSellingPrice;
     }
 
     function fetchVariantData(url, data) {
@@ -607,10 +739,13 @@ document.addEventListener('DOMContentLoaded', function () {
         const variantUnitLabel = addBtn.dataset.variantUnitLabel || 'Cái';
         const variantWeight = parseFloat(addBtn.dataset.variantWeight || '0');
         const variantWeightUnitLabel = addBtn.dataset.variantWeightUnitLabel || 'Kg';
+        const variantIsPricedByKg = addBtn.dataset.variantIsPricedByKg === '1';
+        const variantMinPrice = parseFloat(addBtn.dataset.variantMinPrice || '0');
 
         const row = document.createElement('tr');
         row.className = 'cart-item-row';
         row.setAttribute('data-variant-id', variantId);
+        row.setAttribute('data-is-priced-by-kg', variantIsPricedByKg ? '1' : '0');
         row.innerHTML = `
             <td>
                 <div class="checkout-product">
@@ -622,8 +757,14 @@ document.addEventListener('DOMContentLoaded', function () {
                 <input type="hidden" name="items[${itemIndex}][variant_id]" value="${variantId}">
             </td>
             <td>${variantSku}</td>
-            <td class="price" data-price="${variantPrice}">${formatNumber(variantPrice)}đ</td>
+            <td class="price" data-price="${variantPrice}" data-min-price="${variantMinPrice}">${formatNumber(variantPrice)}đ</td>
             <td>
+                <div class="btn-group discount-switch mb-1" role="group" aria-label="Loai chiet khau">
+                    <input class="btn-check discount-type-input" type="radio" name="item_discount_type[${variantId}]" id="discount-decrease-${variantId}" value="decrease" checked>
+                    <label class="btn btn-outline-secondary" for="discount-decrease-${variantId}">Giảm</label>
+                    <input class="btn-check discount-type-input" type="radio" name="item_discount_type[${variantId}]" id="discount-increase-${variantId}" value="increase">
+                    <label class="btn btn-outline-secondary" for="discount-increase-${variantId}">Tăng</label>
+                </div>
                 <input
                     type="number"
                     class="form-control form-control-sm discount-input"
@@ -632,14 +773,16 @@ document.addEventListener('DOMContentLoaded', function () {
                     step="1000"
                     max="${variantPrice}"
                     value="0">
+                <div class="selling-price-feedback"></div>
             </td>
             <td>
                 <input type="number" name="items[${itemIndex}][quantity]" class="form-control form-control-sm quantity-input" min="1" max="${variantStock > 0 ? variantStock : ''}" value="1" required>
             </td>
-            <td><span class="text-muted small">${variantUnitLabel}</span></td>
-            <td>
-                <span class="line-weight" data-unit-weight="${variantWeight.toFixed(3)}" data-weight-unit="${variantWeightUnitLabel}">
-                    ${variantWeight.toLocaleString('vi-VN', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} ${variantWeightUnitLabel}
+            <td class="text-end">
+                <span class="line-weight" data-unit-weight="${variantWeight.toFixed(3)}" data-weight-unit="${variantUnitLabel}" data-display-mode="${variantIsPricedByKg ? 'kg' : 'unit'}">
+                    ${variantIsPricedByKg
+                        ? `${variantWeight.toLocaleString('vi-VN', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg`
+                        : `1 ${variantUnitLabel}`}
                 </span>
             </td>
             <td class="row-total">${formatNumber(variantPrice)}đ</td>
@@ -722,9 +865,21 @@ document.addEventListener('DOMContentLoaded', function () {
         updateCartTotal();
     });
 
+    cartContainer.addEventListener('change', function (event) {
+        if (!event.target.classList.contains('discount-type-input')) {
+            return;
+        }
+
+        updateCartTotal();
+    });
+
     if (orderDiscountInput) {
         orderDiscountInput.addEventListener('input', updateCartTotal);
     }
+
+    document.querySelectorAll('.order-discount-type-input').forEach((input) => {
+        input.addEventListener('change', updateCartTotal);
+    });
 
     form.addEventListener('submit', function (event) {
         Array.from(cartContainer.querySelectorAll('.cart-item-row')).forEach((row) => {
@@ -741,6 +896,11 @@ document.addEventListener('DOMContentLoaded', function () {
         if (cartContainer.querySelectorAll('.cart-item-row').length < 1) {
             event.preventDefault();
             alert('Đơn hàng phải có ít nhất 1 sản phẩm.');
+            return;
+        }
+
+        if (!updateCartTotal()) {
+            event.preventDefault();
         }
     });
 

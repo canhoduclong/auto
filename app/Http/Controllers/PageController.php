@@ -32,6 +32,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\Database\Eloquent\Builder;
 use App\Models\Province;
 use App\Models\District;
+use App\Models\TruckStation;
 use App\Models\Ward;
 
 class PageController extends Controller
@@ -500,7 +501,15 @@ class PageController extends Controller
 
         $user = auth()->user();
 
-        $query = Order::with('customer')->where('user_id', $user->id);
+        $query = Order::with([
+            'customer.addresses',
+            'customer.truckStation.province',
+            'customer.truckStation.ward',
+            'user',
+            'items.product.avatar.media',
+            'items.variant.avatar.media',
+            'items.variant.product',
+        ])->where('user_id', $user->id);
 
         $selectedCustomerIds = collect($request->input('customer_ids', []))
             ->map(fn ($id) => (int) $id)
@@ -1786,7 +1795,18 @@ class PageController extends Controller
 
     public function myCustomerCreate()
     {
-        return view('site.my_customer.create', ['settings' => $this->settings]);
+        $provinces = Province::query()->orderBy('name')->get(['id', 'name']);
+        $truckStations = TruckStation::query()
+            ->where('is_active', true)
+            ->with(['province:id,name', 'ward:id,name'])
+            ->orderBy('name')
+            ->get(['id', 'name', 'province_id', 'ward_id']);
+
+        return view('site.my_customer.create', [
+            'settings' => $this->settings,
+            'provinces' => $provinces,
+            'truckStations' => $truckStations,
+        ]);
     }
 
     private function ensureManagedCustomer(Customer $customer): void
@@ -1811,10 +1831,19 @@ class PageController extends Controller
     public function myCustomerEdit(Customer $customer)
     {
         $this->ensureManagedCustomer($customer);
+        $customer->load('addresses');
+        $provinces = Province::query()->orderBy('name')->get(['id', 'name']);
+        $truckStations = TruckStation::query()
+            ->where('is_active', true)
+            ->with(['province:id,name', 'ward:id,name'])
+            ->orderBy('name')
+            ->get(['id', 'name', 'province_id', 'ward_id']);
 
         return view('site.my_customer.edit', [
             'customer' => $customer,
-            'settings' => $this->settings
+            'settings' => $this->settings,
+            'provinces' => $provinces,
+            'truckStations' => $truckStations,
         ]);
     }
 
@@ -1866,12 +1895,87 @@ class PageController extends Controller
         if ($request->has('tax_code')) {
             $rules['tax_code'] = ['nullable', 'string', 'max:50'];
         }
+        if ($request->has('company_name')) {
+            $rules['company_name'] = ['nullable', 'string', 'max:255'];
+        }
+        if ($request->has('company_address')) {
+            $rules['company_address'] = ['nullable', 'string', 'max:255'];
+        }
+        if ($request->has('company_email')) {
+            $rules['company_email'] = ['nullable', 'email', 'max:255'];
+        }
         if ($request->has('customer_code')) {
             $rules['customer_code'] = ['nullable', 'string', 'max:50'];
         }
+        if ($request->has('use_truck_station')) {
+            $rules['use_truck_station'] = ['nullable', 'boolean'];
+        }
+        if ($request->has('truck_station_id')) {
+            $rules['truck_station_id'] = ['nullable', 'exists:truck_stations,id'];
+        }
+        if ($request->has('truck_station_address')) {
+            $rules['truck_station_address'] = ['nullable', 'string', 'max:255'];
+        }
+        if ($request->has('truck_station_phone')) {
+            $rules['truck_station_phone'] = ['nullable', 'string', 'max:30'];
+        }
+        if ($request->has('truck_fee')) {
+            $rules['truck_fee'] = ['nullable', 'integer'];
+        }
+        if ($request->has('truck_receive_time')) {
+            $rules['truck_receive_time'] = ['nullable', 'string', 'max:255'];
+        }
+        if ($request->has('truck_return_time')) {
+            $rules['truck_return_time'] = ['nullable', 'string', 'max:255'];
+        }
+        if ($request->has('province_id')) {
+            $rules['province_id'] = ['nullable', 'exists:provinces,id'];
+        }
+        if ($request->has('ward_id')) {
+            $rules['ward_id'] = ['nullable', 'exists:wards,id'];
+        }
 
         $validated = $request->validate($rules);
+
+        if (array_key_exists('use_truck_station', $validated) && !(bool) $validated['use_truck_station']) {
+            $validated['truck_station_id'] = null;
+        }
+
+        if (!empty($validated['ward_id']) && !empty($validated['province_id'])) {
+            $wardBelongsToProvince = Ward::query()
+                ->whereKey($validated['ward_id'])
+                ->where('province_id', $validated['province_id'])
+                ->exists();
+
+            if (!$wardBelongsToProvince) {
+                return back()->withErrors([
+                    'ward_id' => 'Phường/Xã không thuộc Tỉnh/Thành đã chọn.',
+                ])->withInput();
+            }
+        }
+
+        $selectedProvinceId = $validated['province_id'] ?? null;
+        $selectedWardId = $validated['ward_id'] ?? null;
+        unset($validated['province_id'], $validated['ward_id']);
+
         $customer->update($validated);
+
+        if ($request->hasAny(['address', 'province_id', 'ward_id'])) {
+            $province = $selectedProvinceId ? Province::find($selectedProvinceId) : null;
+            $ward = $selectedWardId ? Ward::find($selectedWardId) : null;
+
+            $customer->addresses()->updateOrCreate(
+                ['is_default' => 1],
+                [
+                    'note' => $validated['address'] ?? $customer->address,
+                    'city' => $province?->name,
+                    'ward' => $ward?->name,
+                    'province_id' => $province?->id,
+                    'ward_id' => $ward?->id,
+                ]
+            );
+        }
+
         if ($request->expectsJson()) {
             return response()->json(['success' => true, 'message' => 'Đã cập nhật thông tin khách hàng thành công.']);
         }
@@ -2420,8 +2524,11 @@ class PageController extends Controller
             'note' => ['nullable', 'string', 'max:1000'],
             'shipper_note' => ['nullable', 'string', 'max:1000'],
             'order_discount' => ['nullable', 'numeric', 'min:0'],
+            'order_discount_type' => ['nullable', 'in:decrease,increase'],
             'item_discount' => ['nullable', 'array'],
             'item_discount.*' => ['nullable', 'numeric', 'min:0'],
+            'item_discount_type' => ['nullable', 'array'],
+            'item_discount_type.*' => ['nullable', 'in:decrease,increase'],
             'item_weight' => ['nullable', 'array'],
             'item_weight.*' => ['nullable', 'numeric', 'min:0'],
             'items' => ['required', 'array', 'min:1'],
@@ -2457,6 +2564,20 @@ class PageController extends Controller
                     'items' => 'Ton kho khong du cho SKU ' . ($variant->sku ?: $variant->id) . '.',
                 ])->withInput();
             }
+
+            $basePrice = (float) ($variant->latestPriceRule?->price ?? $variant->final_price ?? 0);
+            $minPrice = max(0, (float) ($variant->latestPriceRule?->min_price ?? 0));
+            $requestedUnitDiscount = max(0, (float) (($validated['item_discount'][(string) $variant->id] ?? 0)));
+            $discountType = strtolower((string) ($validated['item_discount_type'][(string) $variant->id] ?? 'decrease'));
+
+            if ($discountType !== 'increase') {
+                $maxAllowedDecrease = max($basePrice - $minPrice, 0);
+                if ($requestedUnitDiscount > $maxAllowedDecrease) {
+                    return back()->withErrors([
+                        'item_discount.' . $variant->id => 'Gia ban SKU ' . ($variant->sku ?: $variant->id) . ' khong duoc nho hon gia Min.',
+                    ])->withInput();
+                }
+            }
         }
 
         DB::transaction(function () use ($order, $validated, $itemsInput, $variants, $isCopiedOrder): void {
@@ -2484,48 +2605,98 @@ class PageController extends Controller
                 return round(max(0, $weight), 3);
             };
 
+            $resolveKg = static function ($variant) use ($parseWeightToKg): float {
+                $variantKg = (float) ($variant->kg ?? 0);
+                if ($variantKg > 0) {
+                    return $variantKg;
+                }
+
+                $productKg = (float) ($variant->product?->kg ?? 0);
+                if ($productKg > 0) {
+                    return $productKg;
+                }
+
+                $sizeKg = $parseWeightToKg($variant->size ?? null);
+                if ($sizeKg > 0) {
+                    return $sizeKg;
+                }
+
+                return 1.0;
+            };
+
+            $resolvePricedByKg = static function ($variant): bool {
+                if ($variant->is_priced_by_kg !== null) {
+                    return (bool) $variant->is_priced_by_kg;
+                }
+
+                return (bool) ($variant->product?->is_priced_by_kg ?? true);
+            };
+
             $subtotalAmount = 0;
             $itemDiscountTotal = 0;
             $totalBeforeOrderDiscount = 0;
             $orderDiscountInput = max(0, (float) ($validated['order_discount'] ?? 0));
+            $orderDiscountType = strtolower((string) ($validated['order_discount_type'] ?? 'decrease')) === 'increase'
+                ? 'increase'
+                : 'decrease';
             $itemDiscountInput = collect($validated['item_discount'] ?? []);
+            $itemDiscountTypeInput = collect($validated['item_discount_type'] ?? []);
             $itemWeightInput = collect($validated['item_weight'] ?? []);
 
             foreach ($itemsInput as $item) {
                 $variant = $variants->get($item['variant_id']);
                 $price = (float) ($variant->latestPriceRule?->price ?? $variant->final_price ?? 0);
                 $quantity = (int) $item['quantity'];
-                $lineSubtotal = round($price * $quantity, 2);
-                $requestedUnitDiscount = (float) $itemDiscountInput->get((string) $variant->id, 0);
-                $unitDiscount = max(0, min($requestedUnitDiscount, $price));
-                $defaultWeight = $parseWeightToKg($variant->size ?? null);
-                $unitWeight = (float) $itemWeightInput->get((string) $variant->id, $defaultWeight);
-                $unitWeight = max(0, round($unitWeight, 3));
+                $requestedUnitDiscount = max(0, (float) $itemDiscountInput->get((string) $variant->id, 0));
+                $unitDiscountType = strtolower((string) $itemDiscountTypeInput->get((string) $variant->id, 'decrease')) === 'increase'
+                    ? 'increase'
+                    : 'decrease';
+                $minPrice = max(0, (float) ($variant->latestPriceRule?->min_price ?? 0));
+
+                $unitDiscount = $requestedUnitDiscount;
+                if ($unitDiscountType === 'decrease') {
+                    $unitDiscount = min($unitDiscount, max($price - $minPrice, 0));
+                }
+
+                $unitWeight = round(max(0.01, $resolveKg($variant)), 3);
+                $isPricedByKg = $resolvePricedByKg($variant);
+                $pricingFactor = $isPricedByKg ? $unitWeight : 1;
                 $totalWeight = round($unitWeight * $quantity, 3);
-                $lineDiscount = round($unitDiscount * $quantity, 2);
-                $lineTotal = max($lineSubtotal - $lineDiscount, 0);
+                $lineSubtotal = round($price * $quantity * $pricingFactor, 2);
+                $lineAdjustment = round(($unitDiscountType === 'increase' ? -1 : 1) * $unitDiscount * $quantity * $pricingFactor, 2);
+                $finalUnitPrice = $unitDiscountType === 'increase'
+                    ? ($price + $unitDiscount)
+                    : ($price - $unitDiscount);
+                $lineTotal = max(round($finalUnitPrice * $quantity * $pricingFactor, 2), 0);
 
                 $order->items()->create([
                     'product_id' => $variant->product_id,
                     'product_variant_id' => $variant->id,
                     'quantity' => $quantity,
-                    'price' => $price,
+                    'price' => $finalUnitPrice,
                     'base_price' => $price,
                     'unit_discount' => $unitDiscount,
-                    'discount_total' => $lineDiscount,
+                    'discount_type' => $unitDiscountType,
+                    'discount_total' => $lineAdjustment,
                     'unit_weight' => $unitWeight,
+                    'is_priced_by_kg' => $isPricedByKg,
                     'total_weight' => $totalWeight,
                     'total' => $lineTotal,
                 ]);
 
                 $subtotalAmount += $lineSubtotal;
-                $itemDiscountTotal += $lineDiscount;
+                $itemDiscountTotal += $lineAdjustment;
                 $totalBeforeOrderDiscount += $lineTotal;
             }
 
-            $orderDiscount = min($orderDiscountInput, $totalBeforeOrderDiscount);
-            $newTotal = max($totalBeforeOrderDiscount - $orderDiscount, 0);
-            $totalDiscount = $itemDiscountTotal + $orderDiscount;
+            $orderDiscountAmount = $orderDiscountType === 'decrease'
+                ? min($orderDiscountInput, $totalBeforeOrderDiscount)
+                : $orderDiscountInput;
+            $orderAdjustment = $orderDiscountType === 'increase'
+                ? -1 * $orderDiscountAmount
+                : $orderDiscountAmount;
+            $newTotal = max($totalBeforeOrderDiscount - $orderAdjustment, 0);
+            $totalDiscount = $itemDiscountTotal + $orderAdjustment;
 
             $paid = (float) $order->transactions()->where('type', 'payment')->sum('amount')
                 - (float) $order->transactions()->where('type', 'refund')->sum('amount');
@@ -2542,8 +2713,9 @@ class PageController extends Controller
                 'shipper_note' => $validated['shipper_note'] ?? null,
                 'subtotal_amount' => $subtotalAmount,
                 'item_discount_total' => $itemDiscountTotal,
-                'extra_discount_total' => $orderDiscount,
-                'order_discount' => $orderDiscount,
+                'extra_discount_total' => $orderAdjustment,
+                'order_discount' => $orderDiscountAmount,
+                'order_discount_type' => $orderDiscountType,
                 'total_discount' => $totalDiscount,
                 'total' => $newTotal,
                 'amount_due' => max($newTotal - $paid, 0),
@@ -2702,7 +2874,37 @@ class PageController extends Controller
             'delivery_time' => 'nullable|string|max:255',
             'size' => 'nullable|string|max:255',
             'production' => 'nullable|numeric',
+            'company_name' => 'nullable|string|max:255',
+            'tax_code' => 'nullable|string|max:50',
+            'company_address' => 'nullable|string|max:255',
+            'company_email' => 'nullable|email|max:255',
+            'use_truck_station' => 'nullable|boolean',
+            'truck_station_id' => 'nullable|exists:truck_stations,id',
+            'truck_station_address' => 'nullable|string|max:255',
+            'truck_station_phone' => 'nullable|string|max:30',
+            'truck_receive_time' => 'nullable|string|max:255',
+            'truck_return_time' => 'nullable|string|max:255',
+            'truck_fee' => 'nullable|integer',
+            'province_id' => 'nullable|exists:provinces,id',
+            'ward_id' => 'nullable|exists:wards,id',
         ]);
+
+        if (!(bool) ($validated['use_truck_station'] ?? false)) {
+            $validated['truck_station_id'] = null;
+        }
+
+        if (!empty($validated['ward_id']) && !empty($validated['province_id'])) {
+            $wardBelongsToProvince = Ward::query()
+                ->whereKey($validated['ward_id'])
+                ->where('province_id', $validated['province_id'])
+                ->exists();
+
+            if (!$wardBelongsToProvince) {
+                return back()->withErrors([
+                    'ward_id' => 'Phường/Xã không thuộc Tỉnh/Thành đã chọn.',
+                ])->withInput();
+            }
+        }
 
         $customer = new \App\Models\Customer();
         $customer->user_id = $user->id;
@@ -2713,7 +2915,32 @@ class PageController extends Controller
         $customer->delivery_time = $validated['delivery_time'] ?? null;
         $customer->size = $validated['size'] ?? null;
         $customer->production = $validated['production'] ?? null;
+        $customer->company_name = $validated['company_name'] ?? null;
+        $customer->tax_code = $validated['tax_code'] ?? null;
+        $customer->company_address = $validated['company_address'] ?? null;
+        $customer->company_email = $validated['company_email'] ?? null;
+        $customer->use_truck_station = (bool) ($validated['use_truck_station'] ?? false);
+        $customer->truck_station_id = $validated['truck_station_id'] ?? null;
+        $customer->truck_station_address = $validated['truck_station_address'] ?? null;
+        $customer->truck_station_phone = $validated['truck_station_phone'] ?? null;
+        $customer->truck_receive_time = $validated['truck_receive_time'] ?? null;
+        $customer->truck_return_time = $validated['truck_return_time'] ?? null;
+        $customer->truck_fee = $validated['truck_fee'] ?? null;
         $customer->save();
+
+        if (!empty($validated['address']) || !empty($validated['province_id']) || !empty($validated['ward_id'])) {
+            $province = !empty($validated['province_id']) ? Province::find($validated['province_id']) : null;
+            $ward = !empty($validated['ward_id']) ? Ward::find($validated['ward_id']) : null;
+
+            $customer->addresses()->create([
+                'note' => $validated['address'] ?? null,
+                'city' => $province?->name,
+                'ward' => $ward?->name,
+                'province_id' => $province?->id,
+                'ward_id' => $ward?->id,
+                'is_default' => 1,
+            ]);
+        }
 
         return redirect()->route('pages.my_customer')->with('success', 'Đã thêm khách hàng thành công!');
     }

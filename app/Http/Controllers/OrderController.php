@@ -96,6 +96,40 @@ class OrderController extends Controller
         return Customer::query()->where('id', $customerId)->value('delivery_time');
     }
 
+    private function normalizeDiscountType(?string $type): string
+    {
+        return strtolower((string) $type) === 'increase' ? 'increase' : 'decrease';
+    }
+
+    private function resolveVariantKg(ProductVariant $variant): float
+    {
+        $variantKg = (float) ($variant->kg ?? 0);
+        if ($variantKg > 0) {
+            return $variantKg;
+        }
+
+        $productKg = (float) ($variant->product?->kg ?? 0);
+        if ($productKg > 0) {
+            return $productKg;
+        }
+
+        $sizeKg = $this->parseWeightToKg($variant->size);
+        if ($sizeKg > 0) {
+            return $sizeKg;
+        }
+
+        return 1.0;
+    }
+
+    private function resolveVariantPricedByKg(ProductVariant $variant): bool
+    {
+        if ($variant->is_priced_by_kg !== null) {
+            return (bool) $variant->is_priced_by_kg;
+        }
+
+        return (bool) ($variant->product?->is_priced_by_kg ?? true);
+    }
+
     private function logOrderHistory(Order $order, string $action, ?string $statusBefore, ?string $statusAfter, ?string $note = null, ?User $user = null): void
     {
         $actor = $user ?: auth()->user();
@@ -289,9 +323,12 @@ class OrderController extends Controller
             'delivery_time' => 'nullable|string|max:255',
             'item_discount' => 'nullable|array',
             'item_discount.*' => 'nullable|numeric|min:0',
+            'item_discount_type' => 'nullable|array',
+            'item_discount_type.*' => 'nullable|in:decrease,increase',
             'item_weight' => 'nullable|array',
             'item_weight.*' => 'nullable|numeric|min:0',
             'order_discount' => 'nullable|numeric|min:0',
+            'order_discount_type' => 'nullable|in:decrease,increase',
         ]);
 
         $customerId = (int) $request->input('customer_id');
@@ -309,6 +346,7 @@ class OrderController extends Controller
                 'price' => isset($item['price']) ? (float) $item['price'] : null,
                 'base_price' => isset($item['base_price']) ? (float) $item['base_price'] : null,
                 'unit_discount' => (float) $request->input('item_discount.' . $variantId, 0),
+                'unit_discount_type' => $this->normalizeDiscountType($request->input('item_discount_type.' . $variantId)),
                 'unit_weight' => $request->input('item_weight.' . $variantId) !== null ? (float) $request->input('item_weight.' . $variantId) : null,
             ];
         })->values()->all();
@@ -324,6 +362,7 @@ class OrderController extends Controller
                     'payment_status' => PaymentStatus::Unpaid->value,
                     'delivery_status' => DeliveryStatus::NotShipped->value,
                     'order_discount' => max(0, (float) $request->input('order_discount', 0)),
+                    'order_discount_type' => $this->normalizeDiscountType($request->input('order_discount_type')),
                 ],
                 approvalService: $approvalService
             );
@@ -343,9 +382,12 @@ class OrderController extends Controller
             'delivery_time' => 'nullable|string|max:255',
             'item_discount' => 'nullable|array',
             'item_discount.*' => 'nullable|numeric|min:0',
+            'item_discount_type' => 'nullable|array',
+            'item_discount_type.*' => 'nullable|in:decrease,increase',
             'item_weight' => 'nullable|array',
             'item_weight.*' => 'nullable|numeric|min:0',
             'order_discount' => 'nullable|numeric|min:0',
+            'order_discount_type' => 'nullable|in:decrease,increase',
         ]);
 
         $customerId = (int) $request->input('customer_id');
@@ -363,6 +405,7 @@ class OrderController extends Controller
                 'price' => isset($item['price']) ? (float) $item['price'] : null,
                 'base_price' => isset($item['base_price']) ? (float) $item['base_price'] : null,
                 'unit_discount' => (float) $request->input('item_discount.' . $variantId, 0),
+                'unit_discount_type' => $this->normalizeDiscountType($request->input('item_discount_type.' . $variantId)),
                 'unit_weight' => $request->input('item_weight.' . $variantId) !== null ? (float) $request->input('item_weight.' . $variantId) : null,
             ];
         })->values()->all();
@@ -378,6 +421,7 @@ class OrderController extends Controller
                     'payment_status' => PaymentStatus::Unpaid->value,
                     'delivery_status' => DeliveryStatus::NotShipped->value,
                     'order_discount' => max(0, (float) $request->input('order_discount', 0)),
+                    'order_discount_type' => $this->normalizeDiscountType($request->input('order_discount_type')),
                 ],
                 approvalService: $approvalService
             );
@@ -402,9 +446,12 @@ class OrderController extends Controller
             'delivery_time' => 'nullable|string|max:255',
             'item_discount' => 'nullable|array',
             'item_discount.*' => 'nullable|numeric|min:0',
+            'item_discount_type' => 'nullable|array',
+            'item_discount_type.*' => 'nullable|in:decrease,increase',
             'item_weight' => 'nullable|array',
             'item_weight.*' => 'nullable|numeric|min:0',
             'order_discount' => 'nullable|numeric|min:0',
+            'order_discount_type' => 'nullable|in:decrease,increase',
         ]);
 
         $cart = session()->get('cart', []);
@@ -479,7 +526,8 @@ class OrderController extends Controller
         foreach ($cart as $variantId => $details) {
             $basePrice = (float) ($details['price'] ?? 0);
             $unitDiscount = (float) $request->input('item_discount.' . $variantId, 0);
-            $unitDiscount = max(0, min($unitDiscount, $basePrice));
+            $unitDiscount = max(0, $unitDiscount);
+            $unitDiscountType = $this->normalizeDiscountType($request->input('item_discount_type.' . $variantId));
 
             $defaultWeight = (float) ($details['unit_weight'] ?? 0);
             if ($defaultWeight <= 0) {
@@ -494,7 +542,8 @@ class OrderController extends Controller
                 'quantity' => (int) ($details['quantity'] ?? 0),
                 'base_price' => $basePrice,
                 'unit_discount' => $unitDiscount,
-                'price' => max($basePrice - $unitDiscount, 0),
+                'unit_discount_type' => $unitDiscountType,
+                'price' => null,
                 'unit_weight' => $unitWeight,
             ];
         }
@@ -511,6 +560,7 @@ class OrderController extends Controller
                     'delivery_time' => $orderDeliveryTime,
                     'note' => $request->note,
                     'order_discount' => (float) $request->input('order_discount', 0),
+                    'order_discount_type' => $this->normalizeDiscountType($request->input('order_discount_type')),
                     'status' => OrderStatus::Pending->value,
                     'payment_status' => PaymentStatus::Unpaid->value,
                     'delivery_status' => DeliveryStatus::NotShipped->value,
@@ -777,7 +827,7 @@ class OrderController extends Controller
         $order->load('items.variant.product');
         $items = $order->items;
         $total = (float) $items->sum(function ($item) {
-            return (float) $item->quantity * (float) $item->price;
+            return (float) ($item->total ?? ((float) $item->quantity * (float) $item->price));
         });
 
         return view('orders.list_variant', compact('items', 'total'));
@@ -794,13 +844,18 @@ class OrderController extends Controller
 
         if ($existingItem) {
             $existingItem->increment('quantity');
+            $pricingFactor = (bool) ($existingItem->is_priced_by_kg ?? true)
+                ? max(0.01, (float) ($existingItem->unit_weight ?? 1))
+                : 1;
             $existingItem->update([
                 'total_weight' => round((float) ($existingItem->unit_weight ?? 0) * (int) $existingItem->quantity, 3),
-                'total' => (float) $existingItem->price * (int) $existingItem->quantity,
+                'total' => (float) $existingItem->price * (int) $existingItem->quantity * $pricingFactor,
             ]);
         } else {
             $price = (float) ($variant->latestPriceRule?->price ?? $variant->final_price ?? $variant->product?->default_price ?? 0);
-            $unitWeight = $this->parseWeightToKg($variant->size);
+            $unitWeight = round(max(0.01, $this->resolveVariantKg($variant)), 3);
+            $isPricedByKg = $this->resolveVariantPricedByKg($variant);
+            $pricingFactor = $isPricedByKg ? $unitWeight : 1;
 
             $order->items()->create($this->filterExistingColumns('order_items', [
                 'product_id' => $variant->product_id,
@@ -809,10 +864,12 @@ class OrderController extends Controller
                 'price' => $price,
                 'base_price' => $price,
                 'unit_discount' => 0,
+                'discount_type' => 'decrease',
                 'discount_total' => 0,
                 'unit_weight' => $unitWeight,
+                'is_priced_by_kg' => $isPricedByKg,
                 'total_weight' => round($unitWeight, 3),
-                'total' => $price,
+                'total' => $price * $pricingFactor,
             ]));
         }
 
@@ -1138,7 +1195,7 @@ class OrderController extends Controller
             $managedWarehouseId = $this->getManagedWarehouseId();
             $variantsData = [];
             $subtotalBeforeDiscount = 0;
-            $subtotalAfterItemDiscount = 0;
+            $subtotalAfterItemAdjustment = 0;
             $itemDiscountTotal = 0;
             $totalWeight = 0;
 
@@ -1159,26 +1216,35 @@ class OrderController extends Controller
                     ]));
                 }
 
-                $price = isset($item['price']) && $item['price'] !== null
-                    ? (float) $item['price']
-                    : (float) ($variant->latestPriceRule?->price ?? 0);
-
                 $basePrice = isset($item['base_price']) && $item['base_price'] !== null
                     ? (float) $item['base_price']
-                    : $price;
+                    : (float) ($variant->latestPriceRule?->price ?? $variant->final_price ?? 0);
 
                 $unitDiscount = isset($item['unit_discount']) && $item['unit_discount'] !== null
                     ? (float) $item['unit_discount']
-                    : max($basePrice - $price, 0);
+                    : 0;
 
-                $unitDiscount = max(0, min($unitDiscount, $basePrice));
+                $unitDiscountType = $this->normalizeDiscountType($item['unit_discount_type'] ?? null);
+                $minPrice = max(0, (float) ($variant->latestPriceRule?->min_price ?? 0));
 
-                $unitWeight = isset($item['unit_weight']) && $item['unit_weight'] !== null
-                    ? (float) $item['unit_weight']
-                    : $this->parseWeightToKg($variant->size);
+                $unitDiscount = max(0, $unitDiscount);
+                if ($unitDiscountType === 'decrease') {
+                    $maxAllowedDecrease = max($basePrice - $minPrice, 0);
+                    if ($unitDiscount > $maxAllowedDecrease) {
+                        throw new \RuntimeException('Gia ban SKU ' . ($variant->sku ?: $variant->id) . ' khong duoc nho hon gia Min.');
+                    }
+                }
 
-                $unitWeight = max(0, round($unitWeight, 3));
-                $lineDiscount = $unitDiscount * $quantity;
+                $price = $unitDiscountType === 'increase'
+                    ? ($basePrice + $unitDiscount)
+                    : ($basePrice - $unitDiscount);
+
+                $unitDiscount = max(0, $unitDiscount);
+
+                $unitWeight = round(max(0.01, $this->resolveVariantKg($variant)), 3);
+                $isPricedByKg = $this->resolveVariantPricedByKg($variant);
+                $pricingFactor = $isPricedByKg ? $unitWeight : 1;
+                $lineDiscount = ($unitDiscountType === 'increase' ? -1 : 1) * $unitDiscount * $quantity * $pricingFactor;
                 $lineWeight = $unitWeight * $quantity;
 
                 $variantsData[] = [
@@ -1187,21 +1253,31 @@ class OrderController extends Controller
                     'quantity' => $quantity,
                     'base_price' => $basePrice,
                     'unit_discount' => $unitDiscount,
+                    'discount_type' => $unitDiscountType,
                     'discount_total' => $lineDiscount,
                     'unit_weight' => $unitWeight,
+                    'is_priced_by_kg' => $isPricedByKg,
                     'total_weight' => $lineWeight,
                     'price' => $price,
+                    'pricing_factor' => $pricingFactor,
                 ];
 
-                $subtotalBeforeDiscount += $basePrice * $quantity;
-                $subtotalAfterItemDiscount += $price * $quantity;
+                $subtotalBeforeDiscount += $basePrice * $quantity * $pricingFactor;
+                $subtotalAfterItemAdjustment += $price * $quantity * $pricingFactor;
                 $itemDiscountTotal += $lineDiscount;
                 $totalWeight += $lineWeight;
             }
 
-            $orderLevelDiscount = max(0, (float) ($orderData['order_discount'] ?? 0));
-            $orderLevelDiscount = min($orderLevelDiscount, $subtotalAfterItemDiscount);
-            $total = max($subtotalAfterItemDiscount - $orderLevelDiscount, 0);
+            $orderDiscountType = $this->normalizeDiscountType($orderData['order_discount_type'] ?? null);
+            $orderLevelDiscountAmount = max(0, (float) ($orderData['order_discount'] ?? 0));
+            if ($orderDiscountType === 'decrease') {
+                $orderLevelDiscountAmount = min($orderLevelDiscountAmount, $subtotalAfterItemAdjustment);
+            }
+            $orderLevelDiscount = $orderDiscountType === 'increase'
+                ? -1 * $orderLevelDiscountAmount
+                : $orderLevelDiscountAmount;
+
+            $total = max($subtotalAfterItemAdjustment - $orderLevelDiscount, 0);
             $totalDiscount = $itemDiscountTotal + $orderLevelDiscount;
 
             $orderInsert = $this->filterExistingColumns('orders', [
@@ -1220,7 +1296,8 @@ class OrderController extends Controller
                 'item_discount_total' => $itemDiscountTotal,
                 'extra_discount_total' => $orderLevelDiscount,
                 'total_discount' => $totalDiscount,
-                'order_discount' => $orderLevelDiscount,
+                'order_discount' => $orderLevelDiscountAmount,
+                'order_discount_type' => $orderDiscountType,
                 'total_weight' => round($totalWeight, 3),
             ]);
 
@@ -1240,10 +1317,12 @@ class OrderController extends Controller
                     'price' => $info['price'],
                     'base_price' => $info['base_price'],
                     'unit_discount' => $info['unit_discount'],
+                    'discount_type' => $info['discount_type'],
                     'discount_total' => $info['discount_total'],
                     'unit_weight' => $info['unit_weight'],
+                    'is_priced_by_kg' => $info['is_priced_by_kg'],
                     'total_weight' => round($info['total_weight'], 3),
-                    'total' => $info['quantity'] * $info['price'],
+                    'total' => $info['quantity'] * $info['price'] * $info['pricing_factor'],
                 ]);
 
                 $order->items()->create($itemInsert);
@@ -1286,18 +1365,46 @@ class OrderController extends Controller
         $order->loadMissing('items');
 
         $subtotalAmount = (float) $order->items->sum(function ($item) {
-            return (float) ($item->base_price ?? $item->price ?? 0) * (int) $item->quantity;
+            $kg = max(0.01, (float) ($item->unit_weight ?? 1));
+            $factor = (bool) ($item->is_priced_by_kg ?? true) ? $kg : 1;
+            return (float) ($item->base_price ?? $item->price ?? 0) * (int) $item->quantity * $factor;
         });
 
         $itemDiscountTotal = (float) $order->items->sum(function ($item) {
-            return (float) ($item->discount_total ?? 0);
+            if ($item->discount_total !== null) {
+                return (float) $item->discount_total;
+            }
+
+            $kg = max(0.01, (float) ($item->unit_weight ?? 1));
+            $factor = (bool) ($item->is_priced_by_kg ?? true) ? $kg : 1;
+            $amount = (float) ($item->unit_discount ?? 0) * (int) $item->quantity * $factor;
+            $type = strtolower((string) ($item->discount_type ?? 'decrease'));
+
+            return $type === 'increase' ? -1 * $amount : $amount;
         });
 
         $subtotalAfterItemDiscount = (float) $order->items->sum(function ($item) {
-            return (float) $item->price * (int) $item->quantity;
+            if ($item->total !== null) {
+                return (float) $item->total;
+            }
+
+            $kg = max(0.01, (float) ($item->unit_weight ?? 1));
+            $factor = (bool) ($item->is_priced_by_kg ?? true) ? $kg : 1;
+            return (float) $item->price * (int) $item->quantity * $factor;
         });
 
-        $orderLevelDiscount = (float) ($order->order_discount ?? $order->extra_discount_total ?? 0);
+        $orderLevelDiscountAmount = (float) ($order->order_discount ?? 0);
+        $orderLevelDiscountType = $this->normalizeDiscountType($order->order_discount_type ?? null);
+        $orderLevelDiscount = $orderLevelDiscountType === 'increase'
+            ? -1 * $orderLevelDiscountAmount
+            : $orderLevelDiscountAmount;
+
+        if ($orderLevelDiscountAmount <= 0 && $order->extra_discount_total !== null) {
+            $orderLevelDiscount = (float) $order->extra_discount_total;
+            $orderLevelDiscountType = $orderLevelDiscount < 0 ? 'increase' : 'decrease';
+            $orderLevelDiscountAmount = abs($orderLevelDiscount);
+        }
+
         $totalWeight = (float) $order->items->sum(function ($item) {
             return (float) ($item->total_weight ?? 0);
         });
@@ -1306,6 +1413,8 @@ class OrderController extends Controller
             'subtotal_amount' => $subtotalAmount,
             'item_discount_total' => $itemDiscountTotal,
             'extra_discount_total' => $orderLevelDiscount,
+            'order_discount' => $orderLevelDiscountAmount,
+            'order_discount_type' => $orderLevelDiscountType,
             'total_discount' => $itemDiscountTotal + $orderLevelDiscount,
             'total_weight' => round($totalWeight, 3),
             'total' => max($subtotalAfterItemDiscount - $orderLevelDiscount, 0),

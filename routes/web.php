@@ -47,6 +47,8 @@ use App\Http\Controllers\ShipperDashboardController;
 use App\Http\Controllers\CeoDashboardController;
 use App\Http\Controllers\TaskManagementController;
 use App\Http\Controllers\AccountingDashboardController;
+use App\Http\Controllers\TruckStationController;
+use App\Http\Controllers\CustomerAppointmentController;
 
 
 
@@ -84,6 +86,10 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/my-customer/{customer}/reminders', [\App\Http\Controllers\CustomerReminderController::class, 'store'])->name('customer_reminders.store');
         Route::put('/my-customer/{customer}/reminders/{reminder}', [\App\Http\Controllers\CustomerReminderController::class, 'update'])->name('customer_reminders.update');
         Route::delete('/my-customer/{customer}/reminders/{reminder}', [\App\Http\Controllers\CustomerReminderController::class, 'destroy'])->name('customer_reminders.destroy');
+        Route::get('/my-customer-appointments', [CustomerAppointmentController::class, 'index'])->name('pages.my_customer_appointments');
+        Route::post('/my-customer-appointments', [CustomerAppointmentController::class, 'store'])->name('customer_appointments.store');
+        Route::put('/my-customer-appointments/{reminder}', [CustomerAppointmentController::class, 'update'])->name('customer_appointments.update');
+        Route::delete('/my-customer-appointments/{reminder}', [CustomerAppointmentController::class, 'destroy'])->name('customer_appointments.destroy');
     // Báo cáo công việc cho user frontend
     Route::get('work-reports', [\App\Http\Controllers\WorkReportController::class, 'index'])
         ->name('work-reports.index');
@@ -286,6 +292,9 @@ Route::middleware(['auth'])->group(function () {
     Route::post('customers/{customer}/payments', [CustomerController::class, 'storePayment'])->name('customers.payments.store')->middleware('permission');
     Route::get('customers/{customer}/report', [CustomerController::class, 'report'])->name('customers.report')->middleware('permission');
     Route::resource('customers', CustomerController::class)->middleware('permission');
+    Route::resource('truck-stations', TruckStationController::class)
+        ->except('show')
+        ->middleware('role:admin,sale,leader,leader_sale,sale_manager');
 
     // Xóa nhiều khách hàng
     Route::post('customers/bulk-delete', [CustomerController::class, 'bulkDelete'])->name('customers.bulkDelete')->middleware('permission');

@@ -14,6 +14,7 @@ class CustomerReminder extends Model
         'user_id',
         'title',
         'note',
+        'image_path',
         'remind_at',
         'is_done',
     ];

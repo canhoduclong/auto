@@ -55,12 +55,15 @@ class ProductVariantController extends Controller
             'product_id' => 'sometimes|exists:products,id',
             'sku' => 'required|string|unique:product_variants,sku,' . $variant->id,
             'size' => 'nullable|string',
+            'kg' => 'required|numeric|gt:0',
+            'is_priced_by_kg' => 'nullable|boolean',
             'quality' => 'nullable|string',
             'production_date' => 'nullable|date',
             'stock' => 'nullable|integer',
             'media_id' => 'nullable|integer|exists:media,id',
             'price' => 'nullable|numeric|min:0',
         ]);
+        $data['is_priced_by_kg'] = $request->boolean('is_priced_by_kg');
         $variant->update($data);
         // Cập nhật giá nếu có thay đổi
         if (isset($data['price'])) {
@@ -164,12 +167,15 @@ class ProductVariantController extends Controller
             'product_id' => 'required|exists:products,id',
             'sku' => 'required|string|unique:product_variants,sku',
             'size' => 'nullable|string',
+            'kg' => 'required|numeric|gt:0',
+            'is_priced_by_kg' => 'nullable|boolean',
             'quality' => 'nullable|string',
             'production_date' => 'nullable|date',
             'stock' => 'nullable|integer',
             'media_id' => 'nullable|integer|exists:media,id',
             'price' => 'nullable|numeric|min:0',
         ]);
+        $data['is_priced_by_kg'] = $request->boolean('is_priced_by_kg');
         $variant = ProductVariant::create($data);
         // Gán media nếu có
         if (!empty($data['media_id'])) {

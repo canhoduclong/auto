@@ -1,4 +1,13 @@
-<div class="row gy-2">
+@php
+    $defaultAddress = isset($customer)
+        ? ($customer->addresses->where('is_default', 1)->first() ?? $customer->addresses->first())
+        : null;
+
+    $selectedProvinceId = old('province_id', $defaultAddress->province_id ?? '');
+    $selectedWardId = old('ward_id', $defaultAddress->ward_id ?? '');
+@endphp
+
+<div class="row gy-3">
     <div class="col-md-6">
         <label class="form-label">{{ __('customers.form.name') }}</label>
         <input type="text" name="name" class="form-control" value="{{ old('name', $customer->name ?? '') }}" required>
@@ -25,8 +34,27 @@
 
     <div class="col-12">
         <label class="form-label">{{ __('customers.form.address') }}</label>
-        <textarea name="address" class="form-control" rows="3">{{ old('address', $customer->addresses->where('is_default', 1)->first()->note ?? '') }}</textarea>
+        <textarea name="address" class="form-control" rows="3">{{ old('address', $defaultAddress->note ?? '') }}</textarea>
         @error('address') <div class="text-danger small">{{ $message }}</div> @enderror
+    </div>
+
+    <div class="col-md-6">
+        <label class="form-label">Tỉnh/Thành</label>
+        <select name="province_id" id="province_id" class="form-select" data-selected-province="{{ $selectedProvinceId }}">
+            <option value="">-- Chọn Tỉnh/Thành --</option>
+            @foreach(($provinces ?? []) as $province)
+                <option value="{{ $province->id }}" {{ (string) $selectedProvinceId === (string) $province->id ? 'selected' : '' }}>{{ $province->name }}</option>
+            @endforeach
+        </select>
+        @error('province_id') <div class="text-danger small">{{ $message }}</div> @enderror
+    </div>
+
+    <div class="col-md-6">
+        <label class="form-label">Phường/Xã</label>
+        <select name="ward_id" id="ward_id" class="form-select" data-selected-ward="{{ $selectedWardId }}">
+            <option value="">-- Chọn Phường/Xã --</option>
+        </select>
+        @error('ward_id') <div class="text-danger small">{{ $message }}</div> @enderror
     </div>
 
     <div class="col-md-3">
@@ -64,6 +92,31 @@
         <textarea name="note" class="form-control" rows="3">{{ old('note', $customer->note ?? '') }}</textarea>
         @error('note') <div class="text-danger small">{{ $message }}</div> @enderror
     </div>
+
+    <div class="col-12 mt-1">
+        <h6 class="fw-bold mb-2">Thông tin xuất hóa đơn</h6>
+    </div>
+    <div class="col-md-4">
+        <label class="form-label">Tên công ty</label>
+        <input type="text" name="company_name" class="form-control" value="{{ old('company_name', $customer->company_name ?? '') }}">
+        @error('company_name') <div class="text-danger small">{{ $message }}</div> @enderror
+    </div>
+    <div class="col-md-4">
+        <label class="form-label">Mã số thuế</label>
+        <input type="text" name="tax_code" class="form-control" value="{{ old('tax_code', $customer->tax_code ?? '') }}">
+        @error('tax_code') <div class="text-danger small">{{ $message }}</div> @enderror
+    </div>
+    <div class="col-md-4">
+        <label class="form-label">Email công ty</label>
+        <input type="email" name="company_email" class="form-control" value="{{ old('company_email', $customer->company_email ?? '') }}">
+        @error('company_email') <div class="text-danger small">{{ $message }}</div> @enderror
+    </div>
+    <div class="col-12">
+        <label class="form-label">Địa chỉ công ty</label>
+        <input type="text" name="company_address" class="form-control" value="{{ old('company_address', $customer->company_address ?? '') }}">
+        @error('company_address') <div class="text-danger small">{{ $message }}</div> @enderror
+    </div>
+
     <div class="col-md-4">
         <label class="form-label">{{ __('customers.form.delivery_time') }}</label>
         <input type="text" name="delivery_time" class="form-control" value="{{ old('delivery_time', $customer->delivery_time ?? '') }}" placeholder="{{ __('customers.form.delivery_time_placeholder') }}">
@@ -85,7 +138,20 @@
         </select>
         @error('use_truck_station') <div class="text-danger small">{{ $message }}</div> @enderror
     </div>
+
     <div id="truck_fields" style="display: none;">
+        <div class="col-md-6">
+            <label class="form-label">Nhà xe</label>
+            <select name="truck_station_id" class="form-select">
+                <option value="">-- Chọn nhà xe --</option>
+                @foreach(($truckStations ?? []) as $station)
+                    <option value="{{ $station->id }}" {{ (string) old('truck_station_id', $customer->truck_station_id ?? '') === (string) $station->id ? 'selected' : '' }}>
+                        {{ $station->name }}
+                    </option>
+                @endforeach
+            </select>
+            @error('truck_station_id') <div class="text-danger small">{{ $message }}</div> @enderror
+        </div>
         <div class="col-md-6">
             <label class="form-label">{{ __('customers.form.truck_station_address') }}</label>
             <input type="text" name="truck_station_address" class="form-control" value="{{ old('truck_station_address', $customer->truck_station_address ?? '') }}">
@@ -130,6 +196,42 @@
 </div>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    const provinceSelect = document.getElementById('province_id');
+    const wardSelect = document.getElementById('ward_id');
+
+    function loadWards(provinceId, selectedWardId) {
+        if (!provinceId) {
+            wardSelect.innerHTML = '<option value="">-- Chọn Phường/Xã --</option>';
+            return;
+        }
+
+        fetch(`{{ route('api.wards') }}?province_id=${provinceId}`)
+            .then((response) => response.json())
+            .then((wards) => {
+                let html = '<option value="">-- Chọn Phường/Xã --</option>';
+                wards.forEach((ward) => {
+                    const selected = String(selectedWardId || '') === String(ward.id) ? 'selected' : '';
+                    html += `<option value="${ward.id}" ${selected}>${ward.name}</option>`;
+                });
+                wardSelect.innerHTML = html;
+            })
+            .catch(() => {
+                wardSelect.innerHTML = '<option value="">-- Chọn Phường/Xã --</option>';
+            });
+    }
+
+    if (provinceSelect && wardSelect) {
+        const selectedWard = wardSelect.dataset.selectedWard || '';
+
+        if (provinceSelect.value) {
+            loadWards(provinceSelect.value, selectedWard);
+        }
+
+        provinceSelect.addEventListener('change', function () {
+            loadWards(this.value, '');
+        });
+    }
+
     function toggleTruckFields() {
         var val = document.getElementById('use_truck_station').value;
         document.getElementById('truck_fields').style.display = val == '1' ? '' : 'none';

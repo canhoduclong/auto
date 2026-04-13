@@ -269,8 +269,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 const formula = itemContainer.querySelector('.cart-line-formula');
                 if (formula) {
+                    const pricingLabel = data.item.is_priced_by_kg ? 'kg' : 'đơn vị';
                     formula.textContent =
-                        `${data.item.quantity} × ${data.item.unit_weight}kg × ${data.item.unit_price} = `;
+                        `${data.item.quantity} × ${data.item.unit_weight}${pricingLabel} × ${data.item.unit_price} = `;
                 }
             });
 
@@ -389,10 +390,12 @@ document.addEventListener('DOMContentLoaded', function () {
                                         <tbody>
                                             @foreach(session('cart') as $id => $details)
                                                 @php
-                                                    $unitWeight = isset($details['size']) && $details['size'] > 0 ?  (float)$details['size'] : 1;
+                                                    $unitWeight = isset($details['unit_weight']) && $details['unit_weight'] > 0 ?  (float) $details['unit_weight'] : 1;
+                                                    $isPricedByKg = (bool) ($details['is_priced_by_kg'] ?? true);
+                                                    $pricingFactor = $isPricedByKg ? $unitWeight : 1;
                                                     $quantity = (int) $details['quantity'];
                                                     $price = (float) $details['price'];
-                                                    $lineTotal = $quantity * $unitWeight * $price;
+                                                    $lineTotal = $quantity * $pricingFactor * $price;
                                                 @endphp
                                                 <tr data-id="{{ $id }}">
                                                     <td>
@@ -415,7 +418,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                                         <input type="number" value="{{ $quantity }}" class="form-control cart-qty update-cart" min="1">
                                                     </td>
                                                     <td>
-                                                        <div class="cart-item-weight text-muted small">{{ $details['size'] }}kg</div>
+                                                        <div class="cart-item-weight text-muted small">{{ number_format($unitWeight, 3, ',', '.') }} {{ $details['unit_label'] ?? 'Cái' }} | {{ $isPricedByKg ? 'Theo kg' : 'Theo đơn vị' }}</div>
                                                     </td>
                                                     <td class="fw-semibold cart-line-subtotal"> 
                                                         <span class="cart-line-total-money">{{ number_format($lineTotal) }}d</span>
@@ -435,9 +438,11 @@ document.addEventListener('DOMContentLoaded', function () {
                                     @foreach(session('cart') as $id => $details)
                                         @php
                                             $unitWeight = isset($details['unit_weight']) && $details['unit_weight'] > 0 ? $details['unit_weight'] : 1;
+                                            $isPricedByKg = (bool) ($details['is_priced_by_kg'] ?? true);
+                                            $pricingFactor = $isPricedByKg ? $unitWeight : 1;
                                             $quantity = (int) $details['quantity'];
                                             $price = (float) $details['price'];
-                                            $lineTotal = $quantity * $unitWeight * $price;
+                                            $lineTotal = $quantity * $pricingFactor * $price;
                                         @endphp
                                         <div class="cart-mobile-item" data-id="{{ $id }}">
                                             <div class="cart-mobile-top">
@@ -451,7 +456,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                                 <div class="flex-grow-1">
                                                     <div class="cart-item-name">{{ $details['name'] }}</div>
                                                     <div class="cart-item-sku">SKU: {{ $details['sku'] }}</div>
-                                                    <div class="cart-item-weight text-muted small" data-weight="{{ $unitWeight }}">{{ $unitWeight }} kg</div>
+                                                    <div class="cart-item-weight text-muted small" data-weight="{{ $unitWeight }}">{{ number_format((float) $unitWeight, 3, ',', '.') }} {{ $details['unit_label'] ?? 'Cái' }} | {{ $isPricedByKg ? 'Theo kg' : 'Theo đơn vị' }}</div>
                                                 </div>
                                                 <button class="btn btn-outline-danger btn-sm remove-from-cart">
                                                     <i class="bi bi-trash"></i>
@@ -490,6 +495,9 @@ document.addEventListener('DOMContentLoaded', function () {
                                 <div class="cart-summary-row cart-summary-total">
                                     <span>Tổng tạm tính</span>
                                     <span class="summary-total">{{ number_format($total) }}d</span>
+                                </div>
+                                <div class="alert alert-warning py-2 px-3 mt-2 mb-0 small">
+                                    Khi thay đổi chiết khấu ở bước checkout, hệ thống sẽ cảnh báo ngay nếu giá bán nhỏ hơn <strong>Giá Min</strong>.
                                 </div>
                                 <a href="{{ route('cart.checkout') }}" class="btn btn-success w-100 mt-2">
                                     <i class="bi bi-credit-card me-1"></i>Tiến hành đặt hàng

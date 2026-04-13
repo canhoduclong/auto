@@ -44,11 +44,15 @@ class Customer extends Model
         'size',
         'production',
         'brand',
+        'company_name',
         'tax_code',
+        'company_address',
+        'company_email',
         'customer_code',
         'foam_box_required',
         'foam_box_price',
         'use_truck_station',
+        'truck_station_id',
         'truck_station_address',
         'truck_receive_time',
         'truck_return_time',
@@ -103,5 +107,10 @@ class Customer extends Model
     public function orders()
     {
         return $this->hasMany(Order::class);
+    }
+
+    public function truckStation()
+    {
+        return $this->belongsTo(TruckStation::class);
     }
 }

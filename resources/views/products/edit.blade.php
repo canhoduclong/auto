@@ -82,6 +82,33 @@
                     @enderror
                 </div>
 
+                <div class="mb-3">
+                    <label for="kg" class="form-label">Kg quy đổi <span class="text-danger">*</span></label>
+                    <input
+                        type="number"
+                        name="kg"
+                        id="kg"
+                        class="form-control @error('kg') is-invalid @enderror"
+                        value="{{ old('kg', $product->kg ?? 1) }}"
+                        min="0.01"
+                        step="0.01"
+                        required>
+                    @error('kg')
+                        <div class="invalid-feedback">{{ $message }}</div>
+                    @enderror
+                </div>
+
+                <div class="mb-3 form-check">
+                    <input
+                        type="checkbox"
+                        class="form-check-input"
+                        id="is_priced_by_kg"
+                        name="is_priced_by_kg"
+                        value="1"
+                        {{ old('is_priced_by_kg', $product->is_priced_by_kg ?? true) ? 'checked' : '' }}>
+                    <label class="form-check-label" for="is_priced_by_kg">Tính tiền theo kg</label>
+                </div>
+
                 {{-- Ảnh đại diện --}}
                 <div class="form-group">
                     <label>Ảnh đại diện</label>
@@ -127,6 +154,8 @@
                             <tr>
                                 <th>SKU</th>
                                 <th>Size</th>
+                                <th>Kg</th>
+                                <th>Theo Kg</th>
                                 <th>Chất lượng</th>
                                 <th>Ngày SX</th>
                                 <th>Hình ảnh</th>
@@ -146,6 +175,14 @@
                                 <td>
                                     <input type="text" name="variants[{{ $variant->id }}][size]" class="form-control"
                                         value="{{ old('variants.'.$variant->id.'.size', $variant->size) }}">
+                                </td>
+                                <td>
+                                    <input type="number" name="variants[{{ $variant->id }}][kg]" class="form-control" min="0.01" step="0.01"
+                                        value="{{ old('variants.'.$variant->id.'.kg', $variant->kg ?? 1) }}" required>
+                                </td>
+                                <td class="text-center">
+                                    <input type="checkbox" name="variants[{{ $variant->id }}][is_priced_by_kg]" value="1"
+                                        {{ old('variants.'.$variant->id.'.is_priced_by_kg', $variant->is_priced_by_kg ?? true) ? 'checked' : '' }}>
                                 </td>
                                 <td>
                                     <input type="text" name="variants[{{ $variant->id }}][quality]" class="form-control"
@@ -360,6 +397,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 <tr>
                     <td><input type="text" name="variants[new_${index}][sku]" class="form-control"></td>
                     <td><input type="text" name="variants[new_${index}][size]" class="form-control"></td>
+                    <td><input type="number" name="variants[new_${index}][kg]" class="form-control" min="0.01" step="0.01" value="1" required></td>
+                    <td class="text-center"><input type="checkbox" name="variants[new_${index}][is_priced_by_kg]" value="1" checked></td>
                     <td><input type="text" name="variants[new_${index}][quality]" class="form-control"></td>
                     <td><input type="date" name="variants[new_${index}][production_date]" class="form-control"></td>
                     <td>

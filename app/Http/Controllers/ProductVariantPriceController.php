@@ -25,15 +25,22 @@ class ProductVariantPriceController extends Controller
         $variant = ProductVariant::findOrFail($id);
         $request->validate([
             'new_price' => 'required|numeric|min:0',
+            'min_price' => 'nullable|numeric|min:0|lte:new_price',
             'reason'    => 'nullable|string|max:255',
         ]);
         $newPrice = $request->input('new_price');
+        $newMinPrice = (float) $request->input('min_price', 0);
         $reason = $request->input('reason', 'Điều chỉnh giá');
         $currentRule = $variant->priceRules()->whereNull('end_date')->latest('start_date')->first();
-        if (!$currentRule || $currentRule->price != $newPrice) {
+        if (
+            !$currentRule
+            || (float) $currentRule->price !== (float) $newPrice
+            || (float) ($currentRule->min_price ?? 0) !== $newMinPrice
+        ) {
             $rule = $variant->priceRules()->create([
                 'reason'     => $reason,
                 'price'      => $newPrice,
+                'min_price'  => $newMinPrice,
                 'start_date' => now(),
                 'created_by' => Auth::id(),
             ]);
@@ -58,6 +65,7 @@ class ProductVariantPriceController extends Controller
     {
         $request->validate([
             'price'  => 'required|numeric|min:0',
+            'min_price' => 'nullable|numeric|min:0|lte:price',
             'reason' => 'nullable|string|max:255',
         ]);
 
@@ -71,6 +79,7 @@ class ProductVariantPriceController extends Controller
         // tạo rule mới
         $rule = $variant->priceRules()->create([
             'price'      => $request->price,
+            'min_price'  => (float) $request->input('min_price', 0),
             'reason'     => $request->reason,
             'start_date' => now(),
         ]);

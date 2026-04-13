@@ -72,6 +72,17 @@
         border-radius: 14px;
         font-weight: 700;
     }
+    .orders-side-panel {
+        position: sticky;
+        top: 84px;
+    }
+    .orders-side-head {
+        padding: 22px 22px 12px;
+        border-bottom: 1px solid #eef2f7;
+    }
+    .orders-side-body {
+        padding: 14px 22px 22px;
+    }
     .customer-picker {
         border: 1px solid #e5eaf3;
         border-radius: 16px;
@@ -83,11 +94,12 @@
         border-radius: 12px !important;
         font-weight: 700;
     }
-    .customer-collapse-toggle .customer-collapse-icon {
-        transition: transform .2s ease;
-    }
-    .customer-collapse-toggle[aria-expanded="true"] .customer-collapse-icon {
-        transform: rotate(180deg);
+    .customer-collapse-action {
+        font-size: .78rem;
+        font-weight: 700;
+        color: #1d4ed8;
+        text-transform: uppercase;
+        letter-spacing: .04em;
     }
     .customer-list-scroll {
         max-height: 280px;
@@ -159,6 +171,198 @@
         font-size: .82rem;
         color: #64748b;
     }
+    .orders-products {
+        display: grid;
+        gap: 6px;
+    }
+    .orders-products-head {
+        display: grid;
+        grid-template-columns: 2fr 80px 120px 120px 120px;
+        gap: 8px;
+        border: 1px solid #dbe4ef;
+        border-radius: 8px;
+        background: #eef3f9;
+        padding: 6px 10px;
+        font-size: .72rem;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        color: #475569;
+        font-weight: 700;
+    }
+    .orders-product-line {
+        display: grid;
+        grid-template-columns: 2fr 80px 120px 120px 120px;
+        gap: 8px;
+        border: 1px solid #e5eaf3;
+        border-radius: 8px;
+        padding: 6px 10px;
+        background: #f8fafc;
+        font-size: .8rem;
+        align-items: center;
+    }
+    .orders-product-name {
+        color: #0f172a;
+        font-weight: 600;
+    }
+    .orders-product-cell {
+        color: #334155;
+        text-align: right;
+        white-space: nowrap;
+    }
+    .orders-product-qty {
+        color: #334155;
+        font-weight: 700;
+        text-align: right;
+        white-space: nowrap;
+    }
+    .orders-product-total {
+        color: #0f172a;
+        font-weight: 700;
+    }
+    .mc-customer-card {
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        transition: box-shadow 0.2s ease;
+    }
+    .mc-customer-card:hover {
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    }
+    .row-table {
+        display: grid;
+        grid-template-columns: 102px minmax(106px, 1.4fr) 88px;
+        gap: 4px;
+        align-items: center;
+    }
+    .row-title {   
+        color: #64748b; 
+        padding-right: 5px;
+    }
+    .customer-body{  
+        padding: 0;
+    }
+    .customer-tax-body{  
+        padding: 0 0 0 14px;
+    }
+    .transport-info-body{  
+        padding: 0 0 0 14px;
+    }
+    .logistics-body {  
+        padding: 0 0 0 14px;
+    }
+    .transport-body {  
+        padding: 0 0 0 14px;
+    }
+    .wh-order-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+        padding-bottom: 7px;
+        border-bottom: 1px solid #eef2f7;
+    }
+    .wh-meta-label {
+        font-size: .72rem;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+    }
+    .wh-meta-value {
+        font-size: .92rem;
+        font-weight: 700;
+        color: #0f172a;
+    }
+    .wh-section {
+        padding: 12px 0;
+        border-top: 1px dashed #e2e8f0;
+    }
+    .transport-info {
+        margin-top: 12px;
+    }
+    .transport-info-tax {
+        margin-top: 12px;
+    }
+    .wh-logistics-title, .logistics-title, .customer-title, .customer-tax-title,.transport-title {
+        font-size: .78rem;
+        font-weight: 700;
+        color: #334155;
+        margin-bottom: 8px;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+    }
+    
+    .wh-item-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 6px;
+    }
+    .wh-item-table-wrap {
+        overflow-x: auto;
+    }
+    .wh-item-table-head,
+    .wh-item-table-row {
+        display: grid;
+        grid-template-columns: 48px minmax(180px, 1.4fr) 50px 50px 49px 76px 85px;
+        gap: 8px;
+        align-items: center;
+    }
+    .wh-item-table-head {
+        font-size: .72rem;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+        color: #64748b;
+        font-weight: 700;
+        padding: 0 0 6px;
+        border-bottom: 1px solid #e2e8f0;
+        margin-bottom: 6px;
+    }
+    .wh-item-row {
+        border-bottom: 1px solid #f1f5f9;
+        padding-bottom: 6px;
+    }
+    .wh-item-row:last-child {
+        border-bottom: 0;
+        padding-bottom: 0;
+    }
+    .wh-item-thumb {
+        width: 40px;
+        height: 40px;
+        border-radius: 8px;
+        object-fit: cover;
+        border: 1px solid #e2e8f0;
+        background: #fff;
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    .wh-item-thumb-placeholder {
+        width: 40px;
+        height: 40px;
+        border-radius: 8px;
+        border: 1px dashed #cbd5e1;
+        color: #94a3b8;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #f8fafc;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    .wh-item-name {
+        font-size: .86rem;
+        font-weight: 700;
+        color: #0f172a;
+        line-height: 1.25;
+        min-width: 0;
+    }
+    .wh-item-cell {
+        font-size: .8rem;
+        color: #475569;
+        text-align: center;
+    }
+    .wh-item-cell strong {
+        color: #0f172a;
+    }
     .status-pill {
         display: inline-flex;
         align-items: center;
@@ -216,10 +420,24 @@
         text-align: center;
         color: #64748b;
     }
+    .order-total-table-wrap {
+        overflow-x: auto;
+    }
+    .order-total-table-head {
+        display: grid;
+        grid-template-columns: 84px minmax(106px, 1.4fr) 88px;
+        gap: 4px;
+        align-items: center;
+    }
+
+
     @media (max-width: 991.98px) {
         .orders-hero {
             padding: 22px;
             border-radius: 24px;
+        }
+        .orders-side-panel {
+            position: static;
         }
         .orders-filter {
             padding: 20px;
@@ -246,6 +464,20 @@
         }
         .orders-mobile-grid {
             grid-template-columns: 1fr;
+        }
+        .orders-products-head,
+        .orders-product-line {
+            grid-template-columns: 1fr;
+            gap: 4px;
+        }
+        .wh-item-table-head,
+        .wh-item-table-row {
+            grid-template-columns: 1fr;
+            gap: 4px;
+        }
+        .orders-product-cell,
+        .orders-product-qty {
+            text-align: left;
         }
         .orders-actions {
             justify-content: stretch;
@@ -356,98 +588,13 @@
             </div>
         </div>
 
-        <div class="orders-panel mb-4">
-            <div class="orders-filter">
-                @php
-                    $hasCustomerTargetFilter = !empty($selectedCustomerIds ?? []) || !empty($customerSearch ?? '');
-                @endphp
-
-                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-                    <div>
-                        <h2 class="h5 mb-1 fw-bold">Bộ lọc đơn hàng</h2>
-                        <p class="mb-0 text-muted">Rút gọn danh sách theo khách hàng và khoảng thời gian.</p>
-                    </div>
-                    @if(request()->filled('customer_id') || !empty(request('customer_ids', [])) || request()->filled('customer_query') || request()->filled('payment_status') || request()->filled('status') || request()->filled('from_date') || request()->filled('to_date'))
-                        <a href="{{ route('pages.my_orders') }}" class="btn btn-outline-secondary">
-                            <i class="fa fa-refresh me-2"></i>Xóa bộ lọc
-                        </a>
-                    @endif
-                </div>
-
-                <form action="{{ route('pages.my_orders') }}" method="GET" class="row g-3 align-items-end" id="ordersFilterForm">
-                    <input type="hidden" name="customer_query" id="customer_query" value="{{ $customerSearch ?? '' }}">
-                    <input type="hidden" name="sort_by" value="{{ $currentSortBy }}">
-                    <input type="hidden" name="sort_dir" value="{{ $currentSortDir }}">
-                    <div id="selectedCustomerInputs">
-                        @foreach(($selectedCustomerIds ?? []) as $selectedCustomerId)
-                            <input type="hidden" name="customer_ids[]" value="{{ (int) $selectedCustomerId }}">
-                        @endforeach
-                    </div>
-                    <div class="col-md-2">
-                        <label for="payment_status" class="form-label fw-bold">Thanh toán</label>
-                        <select name="payment_status" id="payment_status" class="form-select">
-                            <option value="">Tất cả</option>
-                            <option value="unpaid" {{ request('payment_status') === 'unpaid' ? 'selected' : '' }}>Chưa thanh toán</option>
-                            <option value="partial" {{ request('payment_status') === 'partial' ? 'selected' : '' }}>Thanh toán một phần</option>
-                            <option value="paid" {{ request('payment_status') === 'paid' ? 'selected' : '' }}>Đã thanh toán</option>
-                        </select>
-                    </div>
-                    <div class="col-md-2">
-                        <label for="status" class="form-label fw-bold">Trạng thái</label>
-                        <select name="status" id="status" class="form-select">
-                            <option value="">Tất cả</option>
-                            @foreach($statusLabels as $statusKey => $statusName)
-                                <option value="{{ $statusKey }}" {{ request('status') === $statusKey ? 'selected' : '' }}>{{ $statusName }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="col-md-1">
-                        <label for="from_date" class="form-label fw-bold">Từ ngày</label>
-                        <input type="date" name="from_date" id="from_date" class="form-control" value="{{ request('from_date') }}">
-                    </div>
-                    <div class="col-md-1">
-                        <label for="to_date" class="form-label fw-bold">Đến ngày</label>
-                        <input type="date" name="to_date" id="to_date" class="form-control" value="{{ request('to_date') }}">
-                    </div>
-                    <div class="col-md-2">
-                        <label for="per_page" class="form-label fw-bold">Hiển thị</label>
-                        <select name="per_page" id="per_page" class="form-select">
-                            @foreach([10, 20, 50, 100] as $size)
-                                <option value="{{ $size }}" {{ (int) ($perPage ?? request('per_page', 10)) === $size ? 'selected' : '' }}>{{ $size }} / trang</option>
-                            @endforeach
-                        </select>
-                    </div>
-                     <div class="col-md-2">
-                        <button type="button" class="btn btn-outline-primary" onclick="setTodayOrders()" style="font-size:0.95rem;">
-                            Đơn hôm nay
-                        </button>
-                    </div> 
-                    <div class="col-md-2">
-                        <button type="submit" class="btn btn-primary">
-                            <i class="fa fa-search me-1"></i>Lọc đơn
-                        </button> 
-                    </div>
-                    
-                </form>
-                <div class="mt-3">
-                    <button
-                        type="button"
-                        class="btn btn-outline-secondary customer-collapse-toggle {{ $hasCustomerTargetFilter ? '' : 'collapsed' }}"
-                        data-bs-toggle="collapse"
-                        data-bs-target="#customerTargetFilterCollapse"
-                        aria-expanded="{{ $hasCustomerTargetFilter ? 'true' : 'false' }}"
-                        aria-controls="customerTargetFilterCollapse"
-                    >
-                        <i class="fa fa-users me-1"></i>
-                        Lọc khách hàng mục tiêu
-                        <i class="fa fa-chevron-down ms-2 customer-collapse-icon"></i>
-                    </button>
-                </div>
-
-                <div id="customerTargetFilterCollapse" class="collapse {{ $hasCustomerTargetFilter ? 'show' : '' }}">
-                    <div class="customer-picker mt-3">
-                        <div class="row g-3">
-                            <div class="col-lg-6">
+        <div class="row g-4">
+            <div class="col-xl-4">
+                <div class="orders-panel orders-side-panel">
+                     
+                    <div class="orders-side-body mx-0 my-0 px-0 py-0">
+                        <div class="customer-picker">
+                            <div class="mb-3">
                                 <label for="customerSearchInput" class="form-label fw-bold">Tìm khách hàng</label>
                                 <input
                                     type="text"
@@ -457,169 +604,231 @@
                                     placeholder="Tìm theo tên, SĐT hoặc email"
                                 >
                             </div>
-                            <div class="col-lg-6 d-flex align-items-end">
-                                <div class="d-flex align-items-center justify-content-between gap-2 w-100">
-                                    <div class="small text-muted" id="selectedCustomerLabel">
-                                        @if(!empty($selectedCustomerIds ?? []))
-                                            Đã chọn: <strong>{{ count($selectedCustomerIds) }} khách hàng</strong>
-                                        @else
-                                            Đã chọn: <strong>Tất cả khách hàng</strong>
-                                        @endif
-                                    </div>
-                                    <button type="button" class="btn btn-sm btn-outline-secondary" id="clearCustomerSelection">
-                                        Bỏ chọn
-                                    </button>
+                            <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
+                                <div class="small text-muted" id="selectedCustomerLabel">
+                                    @if(!empty($selectedCustomerIds ?? []))
+                                        Đã chọn: <strong>{{ count($selectedCustomerIds) }} khách hàng</strong>
+                                    @else
+                                        Đã chọn: <strong>Tất cả khách hàng</strong>
+                                    @endif
                                 </div>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" id="clearCustomerSelection">
+                                    Bỏ chọn
+                                </button>
                             </div>
-                        </div>
 
-                        <div class="mt-3" id="customerListingContainer">
-                            @include('site.orders.partials.customer_listing', [
-                                'customers' => $customers,
-                                'selectedCustomerIds' => $selectedCustomerIds ?? [],
-                            ])
+                            <div id="customerListingContainer">
+                                @include('site.orders.partials.customer_listing', [
+                                    'customers' => $customers,
+                                    'selectedCustomerIds' => $selectedCustomerIds ?? [],
+                                ])
+                            </div>
                         </div>
                     </div>
                 </div>
-                <script>
-                    function setTodayOrders() {
-                        const today = new Date().toISOString().slice(0, 10);
-                        document.getElementById('from_date').value = today;
-                        document.getElementById('to_date').value = today;
-                        if (typeof window.refreshOrdersList === 'function') {
-                            window.refreshOrdersList(1);
-                            return;
-                        }
-                        document.querySelector('.orders-filter form').submit();
-                    }
+            </div>
 
-                    (function () {
-                        const endpoint = @json(route('site.orders.customers.ajax'));
-                        const searchInput = document.getElementById('customerSearchInput');
-                        const selectedInputsContainer = document.getElementById('selectedCustomerInputs');
-                        const customerQueryInput = document.getElementById('customer_query');
-                        const listingContainer = document.getElementById('customerListingContainer');
-                        const selectedCustomerLabel = document.getElementById('selectedCustomerLabel');
-                        const clearCustomerSelectionButton = document.getElementById('clearCustomerSelection');
-                        const selectedIds = new Set(@json(array_map('intval', $selectedCustomerIds ?? [])));
-                        let debounceTimer = null;
+            <div class="col-xl-8">
+                <div class="orders-panel mb-4">
+                    <div class="orders-filter">
+                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                            <div>
+                                <h2 class="h5 mb-1 fw-bold">Bộ lọc đơn hàng</h2>
+                                <p class="mb-0 text-muted">Lọc theo trạng thái, thanh toán và thời gian tạo đơn.</p>
+                            </div>
+                            @if(request()->filled('customer_id') || !empty(request('customer_ids', [])) || request()->filled('customer_query') || request()->filled('payment_status') || request()->filled('status') || request()->filled('from_date') || request()->filled('to_date'))
+                                <a href="{{ route('pages.my_orders') }}" class="btn btn-outline-secondary">
+                                    <i class="fa fa-refresh me-2"></i>Xóa bộ lọc
+                                </a>
+                            @endif
+                        </div>
 
-                        const syncSelectedInputs = () => {
-                            selectedInputsContainer.innerHTML = '';
-                            Array.from(selectedIds).sort((a, b) => a - b).forEach((id) => {
-                                const input = document.createElement('input');
-                                input.type = 'hidden';
-                                input.name = 'customer_ids[]';
-                                input.value = String(id);
-                                selectedInputsContainer.appendChild(input);
-                            });
-                        };
+                        <form action="{{ route('pages.my_orders') }}" method="GET" class="row g-3 align-items-end" id="ordersFilterForm">
+                            <input type="hidden" name="customer_query" id="customer_query" value="{{ $customerSearch ?? '' }}">
+                            <input type="hidden" name="sort_by" value="{{ $currentSortBy }}">
+                            <input type="hidden" name="sort_dir" value="{{ $currentSortDir }}">
+                            <div id="selectedCustomerInputs">
+                                @foreach(($selectedCustomerIds ?? []) as $selectedCustomerId)
+                                    <input type="hidden" name="customer_ids[]" value="{{ (int) $selectedCustomerId }}">
+                                @endforeach
+                            </div>
 
-                        const updateSelectedLabel = () => {
-                            const count = selectedIds.size;
-                            if (count > 0) {
-                                selectedCustomerLabel.innerHTML = 'Đã chọn: <strong>' + count + ' khách hàng</strong>';
-                            } else {
-                                selectedCustomerLabel.innerHTML = 'Đã chọn: <strong>Tất cả khách hàng</strong>';
-                            }
-                        };
+                            <div class="col-md-3">
+                                <label for="payment_status" class="form-label fw-bold">Thanh toán</label>
+                                <select name="payment_status" id="payment_status" class="form-select">
+                                    <option value="">Tất cả</option>
+                                    <option value="unpaid" {{ request('payment_status') === 'unpaid' ? 'selected' : '' }}>Chưa thanh toán</option>
+                                    <option value="partial" {{ request('payment_status') === 'partial' ? 'selected' : '' }}>Thanh toán một phần</option>
+                                    <option value="paid" {{ request('payment_status') === 'paid' ? 'selected' : '' }}>Đã thanh toán</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="status" class="form-label fw-bold">Trạng thái</label>
+                                <select name="status" id="status" class="form-select">
+                                    <option value="">Tất cả</option>
+                                    @foreach($statusLabels as $statusKey => $statusName)
+                                        <option value="{{ $statusKey }}" {{ request('status') === $statusKey ? 'selected' : '' }}>{{ $statusName }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label for="from_date" class="form-label fw-bold">Từ ngày</label>
+                                <input type="date" name="from_date" id="from_date" class="form-control" value="{{ request('from_date') }}">
+                            </div>
+                            <div class="col-md-2">
+                                <label for="to_date" class="form-label fw-bold">Đến ngày</label>
+                                <input type="date" name="to_date" id="to_date" class="form-control" value="{{ request('to_date') }}">
+                            </div>
+                            <div class="col-md-2">
+                                <label for="per_page" class="form-label fw-bold">Hiển thị</label>
+                                <select name="per_page" id="per_page" class="form-select">
+                                    @foreach([10, 20, 50, 100] as $size)
+                                        <option value="{{ $size }}" {{ (int) ($perPage ?? request('per_page', 10)) === $size ? 'selected' : '' }}>{{ $size }} / trang</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-md-6 d-grid">
+                                <button type="button" class="btn btn-outline-primary" onclick="setTodayOrders()" style="font-size:0.95rem;">
+                                    Đơn hôm nay
+                                </button>
+                            </div>
+                            <div class="col-md-6 d-grid">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fa fa-search me-1"></i>Lọc đơn
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
 
-                        const loadCustomers = (page = 1) => {
-                            const params = new URLSearchParams();
-                            params.set('q', searchInput.value || '');
-                            params.set('page', String(page));
-                            params.set('selected_ids', Array.from(selectedIds).join(','));
-
-                            fetch(endpoint + '?' + params.toString(), {
-                                headers: {
-                                    'X-Requested-With': 'XMLHttpRequest'
-                                }
-                            })
-                                .then((response) => response.json())
-                                .then((data) => {
-                                    listingContainer.innerHTML = data.html || '';
-                                    customerQueryInput.value = searchInput.value || '';
-                                })
-                                .catch(() => {
-                                    listingContainer.innerHTML = '<div class="small text-danger">Không thể tải danh sách khách hàng.</div>';
-                                });
-                        };
-
-                        searchInput.addEventListener('input', function () {
-                            clearTimeout(debounceTimer);
-                            debounceTimer = setTimeout(() => loadCustomers(1), 300);
-                        });
-
-                        listingContainer.addEventListener('click', function (event) {
-                            const pageButton = event.target.closest('[data-customer-page]');
-                            if (pageButton) {
-                                const page = parseInt(pageButton.getAttribute('data-customer-page') || '1', 10);
-                                loadCustomers(page > 0 ? page : 1);
-                            }
-                        });
-
-                        listingContainer.addEventListener('change', function (event) {
-                            const checkbox = event.target.closest('.customer-checkbox');
-                            if (!checkbox) {
-                                return;
-                            }
-
-                            const customerId = parseInt(checkbox.getAttribute('data-customer-id') || '0', 10);
-                            const listItem = checkbox.closest('.customer-list-item');
-
-                            if (customerId === 0) {
-                                selectedIds.clear();
-                                loadCustomers();
-                                syncSelectedInputs();
-                                updateSelectedLabel();
-                                if (typeof window.refreshOrdersList === 'function') {
-                                    window.refreshOrdersList(1);
-                                }
-                                return;
-                            }
-
-                            if (checkbox.checked) {
-                                selectedIds.add(customerId);
-                            } else {
-                                selectedIds.delete(customerId);
-                            }
-
-                            if (listItem) {
-                                listItem.classList.toggle('active', checkbox.checked);
-                            }
-
-                            syncSelectedInputs();
-                            updateSelectedLabel();
-                            if (typeof window.refreshOrdersList === 'function') {
-                                window.refreshOrdersList(1);
-                            }
-                        });
-
-                        clearCustomerSelectionButton.addEventListener('click', function () {
-                            selectedIds.clear();
-                            syncSelectedInputs();
-                            updateSelectedLabel();
-                            loadCustomers(1);
-                            if (typeof window.refreshOrdersList === 'function') {
-                                window.refreshOrdersList(1);
-                            }
-                        });
-
-                        syncSelectedInputs();
-                        updateSelectedLabel();
-                    })();
-                </script>
+                <div id="ordersListingContainer">
+                    @include('site.orders.partials.orders_listing', [
+                        'orders' => $orders,
+                        'user' => $user,
+                        'sortBy' => $currentSortBy,
+                        'sortDir' => $currentSortDir,
+                    ])
+                </div>
             </div>
         </div>
 
-        <div id="ordersListingContainer">
-            @include('site.orders.partials.orders_listing', [
-                'orders' => $orders,
-                'user' => $user,
-                'sortBy' => $currentSortBy,
-                'sortDir' => $currentSortDir,
-            ])
-        </div>
+        <script>
+            (function () {
+                const endpoint = @json(route('site.orders.customers.ajax'));
+                const searchInput = document.getElementById('customerSearchInput');
+                const selectedInputsContainer = document.getElementById('selectedCustomerInputs');
+                const customerQueryInput = document.getElementById('customer_query');
+                const listingContainer = document.getElementById('customerListingContainer');
+                const selectedCustomerLabel = document.getElementById('selectedCustomerLabel');
+                const clearCustomerSelectionButton = document.getElementById('clearCustomerSelection');
+                const selectedIds = new Set(@json(array_map('intval', $selectedCustomerIds ?? [])));
+                let debounceTimer = null;
+
+                const syncSelectedInputs = () => {
+                    selectedInputsContainer.innerHTML = '';
+                    Array.from(selectedIds).sort((a, b) => a - b).forEach((id) => {
+                        const input = document.createElement('input');
+                        input.type = 'hidden';
+                        input.name = 'customer_ids[]';
+                        input.value = String(id);
+                        selectedInputsContainer.appendChild(input);
+                    });
+                };
+
+                const updateSelectedLabel = () => {
+                    const count = selectedIds.size;
+                    if (count > 0) {
+                        selectedCustomerLabel.innerHTML = 'Đã chọn: <strong>' + count + ' khách hàng</strong>';
+                    } else {
+                        selectedCustomerLabel.innerHTML = 'Đã chọn: <strong>Tất cả khách hàng</strong>';
+                    }
+                };
+
+                const loadCustomers = (page = 1) => {
+                    const params = new URLSearchParams();
+                    params.set('q', searchInput.value || '');
+                    params.set('page', String(page));
+                    params.set('selected_ids', Array.from(selectedIds).join(','));
+
+                    fetch(endpoint + '?' + params.toString(), {
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    })
+                        .then((response) => response.json())
+                        .then((data) => {
+                            listingContainer.innerHTML = data.html || '';
+                            customerQueryInput.value = searchInput.value || '';
+                        })
+                        .catch(() => {
+                            listingContainer.innerHTML = '<div class="small text-danger">Không thể tải danh sách khách hàng.</div>';
+                        });
+                };
+
+                searchInput.addEventListener('input', function () {
+                    clearTimeout(debounceTimer);
+                    debounceTimer = setTimeout(() => loadCustomers(1), 300);
+                });
+
+                listingContainer.addEventListener('click', function (event) {
+                    const pageButton = event.target.closest('[data-customer-page]');
+                    if (pageButton) {
+                        const page = parseInt(pageButton.getAttribute('data-customer-page') || '1', 10);
+                        loadCustomers(page > 0 ? page : 1);
+                    }
+                });
+
+                listingContainer.addEventListener('change', function (event) {
+                    const checkbox = event.target.closest('.customer-checkbox');
+                    if (!checkbox) {
+                        return;
+                    }
+
+                    const customerId = parseInt(checkbox.getAttribute('data-customer-id') || '0', 10);
+                    const listItem = checkbox.closest('.customer-list-item');
+
+                    if (customerId === 0) {
+                        selectedIds.clear();
+                        loadCustomers();
+                        syncSelectedInputs();
+                        updateSelectedLabel();
+                        if (typeof window.refreshOrdersList === 'function') {
+                            window.refreshOrdersList(1);
+                        }
+                        return;
+                    }
+
+                    if (checkbox.checked) {
+                        selectedIds.add(customerId);
+                    } else {
+                        selectedIds.delete(customerId);
+                    }
+
+                    if (listItem) {
+                        listItem.classList.toggle('active', checkbox.checked);
+                    }
+
+                    syncSelectedInputs();
+                    updateSelectedLabel();
+                    if (typeof window.refreshOrdersList === 'function') {
+                        window.refreshOrdersList(1);
+                    }
+                });
+
+                clearCustomerSelectionButton.addEventListener('click', function () {
+                    selectedIds.clear();
+                    syncSelectedInputs();
+                    updateSelectedLabel();
+                    loadCustomers(1);
+                    if (typeof window.refreshOrdersList === 'function') {
+                        window.refreshOrdersList(1);
+                    }
+                });
+
+                syncSelectedInputs();
+                updateSelectedLabel();
+            })();
+        </script>
 
         <script>
             (function () {
@@ -628,6 +837,18 @@
                 const ordersListingContainer = document.getElementById('ordersListingContainer');
                 const sortByInput = ordersFilterForm.querySelector('input[name="sort_by"]');
                 const sortDirInput = ordersFilterForm.querySelector('input[name="sort_dir"]');
+
+                const syncCollapseActionLabels = () => {
+                    const collapseButtons = ordersListingContainer.querySelectorAll('[data-bs-toggle="collapse"][data-bs-target]');
+                    collapseButtons.forEach((button) => {
+                        const actionLabel = button.querySelector('[data-collapse-label]');
+                        if (!actionLabel) {
+                            return;
+                        }
+
+                        actionLabel.textContent = button.getAttribute('aria-expanded') === 'true' ? 'Hide' : 'Show';
+                    });
+                };
 
                 const buildFormParams = () => {
                     const formData = new FormData(ordersFilterForm);
@@ -656,6 +877,7 @@
                         .then((response) => response.json())
                         .then((data) => {
                             ordersListingContainer.innerHTML = data.html || '';
+                            syncCollapseActionLabels();
                             const nextUrl = ordersEndpoint + '?' + params.toString();
                             window.history.replaceState({}, '', nextUrl);
                         })
@@ -708,6 +930,16 @@
                         loadOrders(page > 0 ? page : 1);
                     }
                 });
+
+                ordersListingContainer.addEventListener('shown.bs.collapse', function () {
+                    syncCollapseActionLabels();
+                });
+
+                ordersListingContainer.addEventListener('hidden.bs.collapse', function () {
+                    syncCollapseActionLabels();
+                });
+
+                syncCollapseActionLabels();
 
             })();
         </script>

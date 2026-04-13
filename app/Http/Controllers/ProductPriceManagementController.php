@@ -27,8 +27,11 @@ class ProductPriceManagementController extends Controller
 
         $products->getCollection()->transform(function (Product $product) {
             [$minPrice, $maxPrice] = $this->resolvePriceRange($product);
+            [$minAllowedPrice, $maxAllowedPrice] = $this->resolveMinPriceRange($product);
             $product->current_price_min = $minPrice;
             $product->current_price_max = $maxPrice;
+            $product->current_min_price_min = $minAllowedPrice;
+            $product->current_min_price_max = $maxAllowedPrice;
 
             return $product;
         });
@@ -76,11 +79,13 @@ class ProductPriceManagementController extends Controller
     {
         $validated = $request->validate([
             'price' => 'required|numeric|min:0',
+            'min_price' => 'nullable|numeric|min:0|lte:price',
             'effective_date' => 'required|date',
             'reason' => 'nullable|string|max:255',
         ]);
 
         $newPrice = (float) $validated['price'];
+        $newMinPrice = (float) ($validated['min_price'] ?? 0);
         $effectiveDate = Carbon::parse($validated['effective_date'])->toDateString();
         $reason = $validated['reason'] ?? 'Cập nhật giá theo sản phẩm';
 
@@ -92,7 +97,7 @@ class ProductPriceManagementController extends Controller
 
         $updatedCount = 0;
 
-        DB::transaction(function () use ($variants, $newPrice, $effectiveDate, $reason, &$updatedCount) {
+        DB::transaction(function () use ($variants, $newPrice, $newMinPrice, $effectiveDate, $reason, &$updatedCount) {
             foreach ($variants as $variant) {
                 $currentRule = $variant->priceRules()
                     ->where(function ($query) use ($effectiveDate) {
@@ -109,7 +114,11 @@ class ProductPriceManagementController extends Controller
 
                 $oldPrice = (float) ($currentRule?->price ?? $variant->final_price ?? 0);
 
-                if ($currentRule && (float) $currentRule->price === $newPrice) {
+                if (
+                    $currentRule
+                    && (float) $currentRule->price === $newPrice
+                    && (float) ($currentRule->min_price ?? 0) === $newMinPrice
+                ) {
                     continue;
                 }
 
@@ -140,6 +149,7 @@ class ProductPriceManagementController extends Controller
                     'product_variant_id' => $variant->id,
                     'reason' => $reason,
                     'price' => $newPrice,
+                    'min_price' => $newMinPrice,
                     'start_date' => $effectiveDate,
                     'end_date' => $endDate,
                     'created_by' => Auth::id(),
@@ -188,5 +198,23 @@ class ProductPriceManagementController extends Controller
         }
 
         return [$prices->min(), $prices->max()];
+    }
+
+    private function resolveMinPriceRange(Product $product): array
+    {
+        $minPrices = $product->variants
+            ->map(function ($variant) {
+                return (float) ($variant->latestPriceRule?->min_price ?? 0);
+            })
+            ->filter(function ($price) {
+                return $price >= 0;
+            })
+            ->values();
+
+        if ($minPrices->isEmpty()) {
+            return [0, 0];
+        }
+
+        return [$minPrices->min(), $minPrices->max()];
     }
 }

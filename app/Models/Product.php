@@ -17,9 +17,17 @@ class Product extends Model
         'status',
         'name',
         'unit',
+        'kg',
+        'is_priced_by_kg',
         'slug',
         'description', 
         'image',
+    ];
+
+    protected $casts = [
+        'kg' => 'float',
+        'is_priced_by_kg' => 'boolean',
+        'status' => 'boolean',
     ];
 
     public function getUnitLabelAttribute(): string

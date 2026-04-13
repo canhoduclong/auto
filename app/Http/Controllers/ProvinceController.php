@@ -79,26 +79,70 @@ class ProvinceController extends Controller
 
     public function storeWard(Request $request, Province $province)
     {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
+        $validated = $request->validateWithBag('storeWard', [
+            'name' => 'nullable|string|max:255',
+            'wards' => 'nullable|string',
         ]);
 
-        $province->wards()->create([
-            'name' => $validated['name'],
-            'code' => $this->generateUniqueCode($validated['name'], Ward::class),
-            'type' => 'Phường/Xã',
-        ]);
+        $lines = $validated['wards'] ?? '';
 
-        return redirect()->route('provinces.show', $province)->with('success', 'Đã thêm phường/xã mới.');
+        if (! empty($validated['name'])) {
+            $lines = trim($lines) . "\n" . trim($validated['name']);
+        }
+
+        $names = collect(explode("\n", (string) $lines))
+            ->map(fn ($line) => trim($line))
+            ->filter()
+            ->unique();
+
+        if ($names->isEmpty()) {
+            return back()
+                ->withErrors(['wards' => 'Vui lòng nhập ít nhất 1 phường/xã.'], 'storeWard')
+                ->withInput();
+        }
+
+        $existingNames = $province->wards()
+            ->get(['name'])
+            ->pluck('name')
+            ->map(fn ($name) => mb_strtolower(trim((string) $name)))
+            ->all();
+
+        $added = 0;
+
+        foreach ($names as $name) {
+            if (in_array(mb_strtolower($name), $existingNames, true)) {
+                continue;
+            }
+
+            $province->wards()->create([
+                'name' => $name,
+                'code' => $this->generateUniqueCode($name, Ward::class),
+                'type' => 'Phường/Xã',
+            ]);
+
+            $existingNames[] = mb_strtolower($name);
+            $added++;
+        }
+
+        if ($added === 0) {
+            return redirect()->route('provinces.show', $province)
+                ->with('success', 'Không có phường/xã mới được thêm (danh sách nhập bị trùng).');
+        }
+
+        return redirect()->route('provinces.show', $province)
+            ->with('success', "Đã thêm {$added} phường/xã mới.");
     }
 
     public function updateWard(Request $request, Province $province, Ward $ward)
     {
         abort_unless($ward->province_id === $province->id, 404);
 
-        $validated = $request->validate([
+        $validated = $request->validateWithBag('updateWard', [
             'name' => 'required|string|max:255',
+            'ward_id' => 'required|integer',
         ]);
+
+        abort_unless((int) $validated['ward_id'] === (int) $ward->id, 404);
 
         $ward->update(['name' => $validated['name']]);
 

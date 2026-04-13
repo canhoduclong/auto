@@ -23,6 +23,14 @@
             <input type="text" name="size" class="form-control" value="{{ $variant->size }}">
         </div>
         <div class="mb-3">
+            <label class="form-label">Kg quy đổi <span class="text-danger">*</span></label>
+            <input type="number" name="kg" class="form-control" value="{{ old('kg', $variant->kg ?? 1) }}" min="0.01" step="0.01" required>
+        </div>
+        <div class="mb-3 form-check">
+            <input type="checkbox" class="form-check-input" id="is_priced_by_kg" name="is_priced_by_kg" value="1" {{ old('is_priced_by_kg', $variant->is_priced_by_kg ?? true) ? 'checked' : '' }}>
+            <label class="form-check-label" for="is_priced_by_kg">Tính tiền theo kg</label>
+        </div>
+        <div class="mb-3">
             <label class="form-label">Chất lượng</label>
             <input type="text" name="quality" class="form-control" value="{{ $variant->quality }}">
         </div>

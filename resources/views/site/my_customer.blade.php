@@ -1,69 +1,8 @@
 @extends('layouts.site')
 
 @section('content')
-<div class="container-fluid">
-    <div class="row">
-        <!-- Sidebar Alerts -->
-        <div class="col-md-3">
-            <div class="card">
-                <div class="card-header bg-warning text-dark">
-                    <h5 class="mb-0"><i class="bi bi-exclamation-triangle"></i> Cảnh báo</h5>
-                </div>
-                <div class="card-body">
-                    <!-- Upcoming Appointments -->
-                    <h6 class="text-primary"><i class="bi bi-calendar-event"></i> Lịch hẹn sắp tới</h6>
-                    @php
-                        $upcomingAppointments = collect();
-                        foreach($customers as $customer) {
-                            if($customer->next_appointment && $customer->next_appointment->isFuture()) {
-                                $upcomingAppointments->push($customer);
-                            }
-                        }
-                        $upcomingAppointments = $upcomingAppointments->sortBy('next_appointment')->take(5);
-                    @endphp
-                    @if($upcomingAppointments->count() > 0)
-                        @foreach($upcomingAppointments as $customer)
-                            <div class="alert alert-info py-2 mb-2">
-                                <small>
-                                    <strong>{{ $customer->name }}</strong><br>
-                                    {{ $customer->next_appointment->format('d/m/Y H:i') }}
-                                </small>
-                            </div>
-                        @endforeach
-                    @else
-                        <p class="text-muted small">Không có lịch hẹn nào sắp tới</p>
-                    @endif
-
-                    <!-- Recent Notes -->
-                    <h6 class="text-success mt-3"><i class="bi bi-sticky"></i> Ghi chú mới</h6>
-                    @php
-                        $recentNotes = collect();
-                        foreach($customers as $customer) {
-                            if($customer->note && $customer->updated_at->diffInDays(now()) <= 7) {
-                                $recentNotes->push($customer);
-                            }
-                        }
-                        $recentNotes = $recentNotes->sortByDesc('updated_at')->take(5);
-                    @endphp
-                    @if($recentNotes->count() > 0)
-                        @foreach($recentNotes as $customer)
-                            <div class="alert alert-success py-2 mb-2">
-                                <small>
-                                    <strong>{{ $customer->name }}</strong><br>
-                                    {{ Str::limit($customer->note, 50) }}
-                                </small>
-                            </div>
-                        @endforeach
-                    @else
-                        <p class="text-muted small">Không có ghi chú mới</p>
-                    @endif
-                </div>
-            </div>
-        </div>
-
-        <!-- Main Content -->
-        <div class="col-md-9">
-            <h1>Khách hàng của bạn</h1>
+<div class="container">
+    <h1>Khách hàng của bạn</h1>
 
             @if(session('success'))
                 <div class="alert alert-success">

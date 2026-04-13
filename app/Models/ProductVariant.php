@@ -9,7 +9,13 @@ use Illuminate\Support\Str;
 class ProductVariant extends Model
 {
     use HasFactory;
-    protected $fillable = ['product_id', 'sku', 'name', 'slug', 'size', 'quality', 'production_date', 'stock']; // đã có sku, giá xử lý qua priceRules
+    protected $fillable = ['product_id', 'sku', 'name', 'slug', 'size', 'quality', 'production_date', 'stock', 'kg', 'is_priced_by_kg']; // đã có sku, giá xử lý qua priceRules
+
+    protected $casts = [
+        'kg' => 'float',
+        'is_priced_by_kg' => 'boolean',
+        'status' => 'boolean',
+    ];
 
     public function scopeWithAvailableStock(Builder $query): Builder
     {
@@ -138,6 +144,30 @@ class ProductVariant extends Model
     public function getUnitLabelAttribute(): string
     {
         return strtolower($this->product?->unit_label ?? 'cai');
+    }
+
+    public function getEffectiveKgAttribute(): float
+    {
+        $variantKg = (float) ($this->kg ?? 0);
+        if ($variantKg > 0) {
+            return $variantKg;
+        }
+
+        $productKg = (float) ($this->product?->kg ?? 0);
+        if ($productKg > 0) {
+            return $productKg;
+        }
+
+        return 1.0;
+    }
+
+    public function getEffectivePricedByKgAttribute(): bool
+    {
+        if ($this->is_priced_by_kg !== null) {
+            return (bool) $this->is_priced_by_kg;
+        }
+
+        return (bool) ($this->product?->is_priced_by_kg ?? true);
     }
 
     public function mediaLinks()

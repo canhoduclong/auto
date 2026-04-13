@@ -15,7 +15,7 @@ class Order extends Model
         'warehouse_id', 'return_warehouse_id',
         'recipient_name', 'recipient_phone', 'recipient_email', 'recipient_address', 'note',
         'subtotal_amount', 'item_discount_total', 'extra_discount_total',
-        'total_discount', 'order_discount', 'total_weight', 'actual_weight', 'charge_shipping_fee', 'shipping_fee',
+        'total_discount', 'order_discount', 'order_discount_type', 'total_weight', 'actual_weight', 'charge_shipping_fee', 'shipping_fee',
         'charge_foam_box_fee', 'foam_box_price',
         'amount_paid', 'amount_due', 'payment_method', 'payment_status',
         'qr_code', 'packed_image_path', 'delivered_image_path', 'has_return_order',

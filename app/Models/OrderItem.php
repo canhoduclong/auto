@@ -14,8 +14,10 @@ class OrderItem extends Model
         'price',
         'base_price',
         'unit_discount',
+        'discount_type',
         'discount_total',
         'unit_weight',
+        'is_priced_by_kg',
         'total_weight',
         'actual_weight',
         'total',
@@ -23,6 +25,7 @@ class OrderItem extends Model
 
     protected $casts = [
         'actual_weight' => 'decimal:3',
+        'is_priced_by_kg' => 'boolean',
     ];
 
     public function order() { return $this->belongsTo(Order::class); }

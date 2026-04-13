@@ -5,6 +5,7 @@
     $summarySubtotal = 0;
     $summaryItemDiscount = 0;
     $summaryOrderDiscount = max(0, (float) old('order_discount', 0));
+    $summaryOrderDiscountType = old('order_discount_type', (string) session('order_discount_type', 'decrease')) === 'increase' ? 'increase' : 'decrease';
     $summaryDiscount = 0;
     $summaryTotal = 0;
     $summaryWeight = 0;
@@ -13,12 +14,19 @@
         $unitPrice = (float) ($details['price'] ?? 0);
         $quantity = (int) ($details['quantity'] ?? 0);
         $inputDiscount = (float) old('item_discount.' . $id, 0);
+        $inputDiscountType = old('item_discount_type.' . $id, (string) ($details['discount_type'] ?? 'decrease')) === 'increase' ? 'increase' : 'decrease';
         $defaultWeight = (float) ($details['unit_weight'] ?? 0);
         $inputWeight = (float) old('item_weight.' . $id, $defaultWeight);
-        $unitDiscount = max(0, min($inputDiscount, $unitPrice));
+        $isPricedByKg = (bool) ($details['is_priced_by_kg'] ?? true);
+        $minPrice = (float) ($details['min_price'] ?? 0);
+        $unitDiscount = max(0, $inputDiscount);
+        if ($inputDiscountType === 'decrease') {
+            $unitDiscount = min($unitDiscount, max($unitPrice - $minPrice, 0));
+        }
         $unitWeight = max(0, round($inputWeight, 3));
-        $lineSubtotal = $unitPrice * $quantity;
-        $lineDiscount = $unitDiscount * $quantity;
+        $pricingFactor = $isPricedByKg ? $unitWeight : 1;
+        $lineSubtotal = $unitPrice * $quantity * $pricingFactor;
+        $lineDiscount = ($inputDiscountType === 'increase' ? -1 : 1) * $unitDiscount * $quantity * $pricingFactor;
         $lineTotal = max($lineSubtotal - $lineDiscount, 0);
         $lineWeight = $unitWeight * $quantity;
 
@@ -28,9 +36,12 @@
         $summaryWeight += $lineWeight;
     }
 
-    $summaryOrderDiscount = min($summaryOrderDiscount, $summaryTotal);
-    $summaryDiscount = $summaryItemDiscount + $summaryOrderDiscount;
-    $summaryTotal = max($summaryTotal - $summaryOrderDiscount, 0);
+    if ($summaryOrderDiscountType === 'decrease') {
+        $summaryOrderDiscount = min($summaryOrderDiscount, $summaryTotal);
+    }
+    $summaryOrderDiscountSigned = $summaryOrderDiscountType === 'increase' ? -1 * $summaryOrderDiscount : $summaryOrderDiscount;
+    $summaryDiscount = $summaryItemDiscount + $summaryOrderDiscountSigned;
+    $summaryTotal = max($summaryTotal - $summaryOrderDiscountSigned, 0);
 @endphp
 
 @push('styles')
@@ -221,6 +232,38 @@
         margin-top: 4px;
         font-size: 0.74rem;
         color: var(--checkout-muted);
+    }
+
+    .discount-switch {
+        display: inline-flex;
+        width: 100%;
+    }
+
+    .discount-switch .btn {
+        padding: .2rem .55rem;
+        font-size: 0.78rem;
+    }
+
+    .selling-price-feedback {
+        display: none;
+        margin-top: 0.35rem;
+        font-size: 0.78rem;
+        color: #dc3545;
+    }
+
+    .selling-price-feedback.active {
+        display: block;
+    }
+
+    .checkout-price.price-invalid,
+    .checkout-line-total.row-total-invalid {
+        color: #dc3545;
+        font-weight: 700;
+    }
+
+    .checkout-discount-input.is-invalid {
+        border-color: #dc3545 !important;
+        box-shadow: 0 0 0 .2rem rgba(220, 53, 69, .15) !important;
     }
 
     .checkout-summary {
@@ -561,14 +604,21 @@
                                                     $quantity = (int) ($details['quantity'] ?? 0);
                                                     $inputDiscount = (float) old('item_discount.' . $id, 0);
                                                     $unitSize = (float) ($details['unit_weight'] ?? 0);
-                                                    $unitDiscount = max(0, min($inputDiscount, $unitPrice)); 
-                                                    $lineSubtotal = $unitPrice * $quantity;
-                                                    $lineTotal = max($lineSubtotal - ($unitDiscount * $quantity), 0);
+                                                    $isPricedByKg = (bool) ($details['is_priced_by_kg'] ?? true);
+                                                    $inputDiscountType = old('item_discount_type.' . $id, (string) ($details['discount_type'] ?? 'decrease')) === 'increase' ? 'increase' : 'decrease';
+                                                    $minPrice = (float) ($details['min_price'] ?? 0);
+                                                    $unitDiscount = max(0, $inputDiscount);
+                                                    $pricingFactor = $isPricedByKg ? max($unitSize, 0) : 1;
+                                                    $lineSubtotal = $unitPrice * $quantity * $pricingFactor;
+                                                    $lineAdjustment = ($inputDiscountType === 'increase' ? -1 : 1) * $unitDiscount * $quantity * $pricingFactor;
+                                                    $lineTotal = max($lineSubtotal - $lineAdjustment, 0);
                                                 @endphp
                                                 <tr class="checkout-item-row"
                                                     data-unit-price="{{ $unitPrice }}"
                                                     data-quantity="{{ $quantity }}"
                                                     data-unit-size="{{ $unitSize }}"
+                                                    data-is-priced-by-kg="{{ $isPricedByKg ? '1' : '0' }}"
+                                                    data-min-price="{{ $minPrice }}"
                                                     data-variant-id="{{ $id }}">
                                                     <td>
                                                         <div class="checkout-product">
@@ -584,19 +634,27 @@
                                                     <td class="checkout-price">{{ number_format($unitPrice, 0, ',', '.') }}đ</td>
                                                     
                                                     <td>
+                                                        <div class="btn-group discount-switch mb-1" role="group" aria-label="Loai chiet khau">
+                                                            <input class="btn-check checkout-discount-type" type="radio" name="item_discount_type[{{ $id }}]" id="checkout-discount-decrease-{{ $id }}" value="decrease" data-discount-type-input {{ $inputDiscountType === 'decrease' ? 'checked' : '' }}>
+                                                            <label class="btn btn-outline-secondary" for="checkout-discount-decrease-{{ $id }}">Giảm</label>
+                                                            <input class="btn-check checkout-discount-type" type="radio" name="item_discount_type[{{ $id }}]" id="checkout-discount-increase-{{ $id }}" value="increase" data-discount-type-input {{ $inputDiscountType === 'increase' ? 'checked' : '' }}>
+                                                            <label class="btn btn-outline-secondary" for="checkout-discount-increase-{{ $id }}">Tăng</label>
+                                                        </div>
                                                         <input
                                                             type="number"
                                                             min="0"
                                                             step="1000"
-                                                            max="{{ $unitPrice }}"
+                                                            max="{{ $inputDiscountType === 'decrease' ? max($unitPrice - $minPrice, 0) : '' }}"
                                                             class="form-control form-control-sm checkout-discount-input"
                                                             name="item_discount[{{ $id }}]"
                                                             value="{{ old('item_discount.' . $id, 0) }}"
-                                                            data-discount-input> 
+                                                            data-discount-input>
+                                                        <div class="selling-price-feedback"></div>
                                                     </td>
                                                     <td class="checkout-qty">{{ $quantity }}</td>
                                                     <td>
-                                                        <div class="checkout-weight">{{ $unitSize }} </div>
+                                                        <div class="checkout-weight">{{ number_format((float) $unitSize, 3, ',', '.') }} {{ $details['unit_label'] ?? 'Cái' }}</div>
+                                                        <div class="text-muted small">{{ $isPricedByKg ? 'Tính theo kg' : 'Tính theo đơn vị' }}</div>
                                                          
                                                     </td>
                                                     <td class="checkout-line-total" data-line-total>{{ number_format($lineTotal, 0, ',', '.') }}đ</td>
@@ -633,6 +691,12 @@
                                     <div class="checkout-kpi">
                                         <span class="checkout-kpi-label">Discount tổng đơn</span>
                                         <div class="mt-1">
+                                            <div class="btn-group discount-switch mb-1" role="group" aria-label="Loai chiet khau tong don">
+                                                <input class="btn-check order-discount-type-input" type="radio" name="order_discount_type" id="checkout-order-discount-decrease" value="decrease" {{ $summaryOrderDiscountType === 'decrease' ? 'checked' : '' }}>
+                                                <label class="btn btn-outline-secondary" for="checkout-order-discount-decrease">Giảm</label>
+                                                <input class="btn-check order-discount-type-input" type="radio" name="order_discount_type" id="checkout-order-discount-increase" value="increase" {{ $summaryOrderDiscountType === 'increase' ? 'checked' : '' }}>
+                                                <label class="btn btn-outline-secondary" for="checkout-order-discount-increase">Tăng</label>
+                                            </div>
                                             <input type="number" min="0" step="1000" class="form-control form-control-sm" id="orderDiscountInput" name="order_discount" value="{{ old('order_discount', 0) }}">
                                             <small class="checkout-discount-note">Giảm trực tiếp trên tổng đơn sau discount sản phẩm.</small>
                                         </div>
@@ -683,9 +747,11 @@
                                     Discount theo giá bán sản phẩm và discount tổng đơn sẽ được áp dụng và lưu trực tiếp vào đơn hàng.
                                 </div>
 
+                                <div class="alert alert-danger py-2 px-3 mt-2 mb-0 d-none" id="sellingPriceValidationAlert"></div>
+
                                 <div class="checkout-actions">
                                     <a href="{{ route('cart.show') }}" class="btn btn-outline-secondary flex-grow-1">Quay lại giỏ hàng</a>
-                                    <button type="submit" class="btn checkout-btn-submit flex-grow-1">Đặt hàng</button>
+                                    <button type="submit" class="btn checkout-btn-submit flex-grow-1" id="checkoutSubmitButton">Đặt hàng</button>
                                 </div>
                             </div>
                         </div>
@@ -714,11 +780,17 @@
     const breakdownItemDiscountEl = document.getElementById('breakdownItemDiscount');
     const breakdownExtraDiscountEl = document.getElementById('breakdownExtraDiscount');
     const breakdownFinalTotalEl = document.getElementById('breakdownFinalTotal');
+    const getOrderDiscountTypeInput = () => document.querySelector('.order-discount-type-input:checked');
+    const submitButton = document.getElementById('checkoutSubmitButton');
+    const validationAlert = document.getElementById('sellingPriceValidationAlert');
 
     if (!rows.length) return;
 
     const formatMoney = value =>
         new Intl.NumberFormat('vi-VN').format(Math.max(0, value)) + 'đ';
+
+    const formatSignedMoney = value =>
+        `${value < 0 ? '+' : '-'}${new Intl.NumberFormat('vi-VN').format(Math.abs(value))}đ`;
 
     const formatWeight = value =>
         new Intl.NumberFormat('vi-VN', {
@@ -726,27 +798,69 @@
             maximumFractionDigits: 3
         }).format(Math.max(0, value)) + ' kg';
 
+    const toNumber = (value, fallback = 0) => {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : fallback;
+    };
+
+    function validateSellingPriceRow(row) {
+        const unitPrice = toNumber(row.dataset.unitPrice, 0);
+        const minPrice = toNumber(row.dataset.minPrice, 0);
+        const discountInput = row.querySelector('[data-discount-input]');
+        const discountTypeInput = row.querySelector('[data-discount-type-input]:checked');
+        const linePriceEl = row.querySelector('.checkout-price');
+        const lineTotalEl = row.querySelector('[data-line-total]');
+        const feedbackEl = row.querySelector('.selling-price-feedback');
+
+        if (!discountInput || !feedbackEl) {
+            return false;
+        }
+
+        const discountValue = Math.max(0, toNumber(discountInput.value, 0));
+        const discountType = discountTypeInput?.value === 'increase' ? 'increase' : 'decrease';
+        const sellingPrice = discountType === 'increase'
+            ? unitPrice + discountValue
+            : unitPrice - discountValue;
+        const invalid = discountType === 'decrease' && sellingPrice < minPrice;
+
+        discountInput.classList.toggle('is-invalid', invalid);
+        linePriceEl?.classList.toggle('price-invalid', invalid);
+        lineTotalEl?.classList.toggle('row-total-invalid', invalid);
+        feedbackEl.classList.toggle('active', invalid);
+        feedbackEl.textContent = invalid
+            ? `Giá Min : ${formatMoney(minPrice)}. Giá bán hiện tại: ${formatMoney(sellingPrice)}.`
+            : '';
+
+        return invalid;
+    }
+
     function recalcLocal() {
         let subtotal = 0;
         let itemDiscount = 0;
         let totalWeight = 0;
+        let hasInvalidSellingPrice = false;
 
         rows.forEach(row => {
-            const unitPrice = Number(row.dataset.unitPrice || 0);
-            const quantity = Number(row.dataset.quantity || 0);
-            const unitSize = Number(row.dataset.unitSize || 0);
+            const unitPrice = toNumber(row.dataset.unitPrice, 0);
+            const quantity = toNumber(row.dataset.quantity, 0);
+            const unitSize = toNumber(row.dataset.unitSize, 0);
+            const isPricedByKg = row.dataset.isPricedByKg === '1';
+            const minPrice = toNumber(row.dataset.minPrice, 0);
 
             const discountInput = row.querySelector('[data-discount-input]');
+            const discountTypeInput = row.querySelector('[data-discount-type-input]:checked');
             const lineTotalEl = row.querySelector('[data-line-total]');
 
             if (!discountInput || !lineTotalEl) return;
 
-            let unitDiscount = Number(discountInput.value || 0);
-            unitDiscount = Math.max(0, Math.min(unitDiscount, unitPrice));
-            discountInput.value = Math.round(unitDiscount);
+            let unitDiscount = toNumber(discountInput.value, 0);
+            const discountType = discountTypeInput?.value === 'increase' ? 'increase' : 'decrease';
+            unitDiscount = Math.max(0, unitDiscount);
+            discountInput.max = discountType === 'decrease' ? String(Math.max(unitPrice - minPrice, 0)) : '';
 
-            const lineSubtotal = unitPrice * quantity;
-            const lineDiscount = unitDiscount * quantity;
+            const pricingFactor = isPricedByKg ? Math.max(unitSize, 0) : 1;
+            const lineSubtotal = unitPrice * quantity * pricingFactor;
+            const lineDiscount = (discountType === 'increase' ? -1 : 1) * unitDiscount * quantity * pricingFactor;
             const lineTotal = Math.max(lineSubtotal - lineDiscount, 0);
 
             subtotal += lineSubtotal;
@@ -754,30 +868,52 @@
             totalWeight += unitSize * quantity;
 
             lineTotalEl.textContent = formatMoney(lineTotal);
+            hasInvalidSellingPrice = validateSellingPriceRow(row) || hasInvalidSellingPrice;
         });
 
-        let orderDiscount = Number(orderDiscountInput.value || 0);
+        let orderDiscount = toNumber(orderDiscountInput.value, 0);
         const subtotalAfterItemDiscount = Math.max(subtotal - itemDiscount, 0);
+        const orderDiscountType = getOrderDiscountTypeInput()?.value === 'increase' ? 'increase' : 'decrease';
 
-        orderDiscount = Math.max(0, Math.min(orderDiscount, subtotalAfterItemDiscount));
-        orderDiscountInput.value = Math.round(orderDiscount);
+        orderDiscount = Math.max(0, orderDiscountType === 'decrease' ? Math.min(orderDiscount, subtotalAfterItemDiscount) : orderDiscount);
+        if (orderDiscount < 0) {
+            orderDiscountInput.value = '0';
+        }
+        const orderAdjustment = orderDiscountType === 'increase' ? -1 * orderDiscount : orderDiscount;
 
-        const totalDiscount = itemDiscount + orderDiscount;
-        const total = Math.max(subtotalAfterItemDiscount - orderDiscount, 0);
+        const totalDiscount = itemDiscount + orderAdjustment;
+        const total = Math.max(subtotalAfterItemDiscount - orderAdjustment, 0);
 
         subtotalEl.textContent = formatMoney(subtotal);
-        itemDiscountEl.textContent = formatMoney(itemDiscount);
-        discountEl.textContent = formatMoney(totalDiscount);
+        itemDiscountEl.textContent = formatSignedMoney(itemDiscount);
+        discountEl.textContent = formatSignedMoney(totalDiscount);
         totalEl.textContent = formatMoney(total);
         weightEl.textContent = formatWeight(totalWeight);
         totalFooterEl.textContent = formatMoney(total);
         breakdownGoodsEl.textContent = formatMoney(subtotal);
-        breakdownItemDiscountEl.textContent = formatMoney(itemDiscount);
-        breakdownExtraDiscountEl.textContent = formatMoney(orderDiscount);
+        breakdownItemDiscountEl.textContent = formatSignedMoney(itemDiscount);
+        breakdownExtraDiscountEl.textContent = formatSignedMoney(orderAdjustment);
         breakdownFinalTotalEl.textContent = formatMoney(total);
+
+        if (submitButton) {
+            submitButton.disabled = hasInvalidSellingPrice;
+        }
+
+        if (validationAlert) {
+            validationAlert.classList.toggle('d-none', !hasInvalidSellingPrice);
+            validationAlert.textContent = hasInvalidSellingPrice
+                ? 'Có sản phẩm vi phạm giá tối thiểu. Giá Min : vui lòng kiểm tra các ô discount đang tô đỏ.'
+                : '';
+        }
+
+        return !hasInvalidSellingPrice;
     }
 
     async function syncDiscountAjax() {
+        if (!recalcLocal()) {
+            return;
+        }
+
         const itemDiscount = {};
 
         rows.forEach(row => {
@@ -798,7 +934,14 @@
                 },
                 body: JSON.stringify({
                     item_discount: itemDiscount,
-                    order_discount: orderDiscountInput.value
+                    item_discount_type: Object.fromEntries(rows.map((row) => {
+                        const variantId = row.dataset.variantId;
+                        const typeInput = row.querySelector('[data-discount-type-input]:checked');
+
+                        return [variantId, typeInput?.value || 'decrease'];
+                    })),
+                    order_discount: orderDiscountInput.value,
+                    order_discount_type: getOrderDiscountTypeInput()?.value || 'decrease'
                 })
             });
 
@@ -823,8 +966,10 @@
     }
 
     function triggerUpdate() {
-        recalcLocal();
-        syncDiscountAjax();
+        const isValid = recalcLocal();
+        if (isValid) {
+            syncDiscountAjax();
+        }
     }
 
     rows.forEach(row => {
@@ -837,6 +982,22 @@
 
     orderDiscountInput.addEventListener('input', triggerUpdate);
     orderDiscountInput.addEventListener('change', triggerUpdate);
+
+    document.querySelectorAll('.order-discount-type-input').forEach((input) => {
+        input.addEventListener('change', triggerUpdate);
+    });
+
+    rows.forEach(row => {
+        row.querySelectorAll('[data-discount-type-input]').forEach((discountTypeInput) => {
+            discountTypeInput.addEventListener('change', triggerUpdate);
+        });
+    });
+
+    document.getElementById('checkoutForm')?.addEventListener('submit', (event) => {
+        if (!recalcLocal()) {
+            event.preventDefault();
+        }
+    });
 
     recalcLocal();
 })();

@@ -17,18 +17,43 @@
         <div class="alert alert-success">{{ session('success') }}</div>
     @endif
 
+    @if ($errors->storeWard->any())
+        <div class="alert alert-danger">
+            <ul class="mb-0">
+                @foreach ($errors->storeWard->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
+    @if ($errors->updateWard->any())
+        <div class="alert alert-danger">
+            <ul class="mb-0">
+                @foreach ($errors->updateWard->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
     <div class="row">
         <div class="col-lg-5 mb-4">
             <div class="card">
-                <div class="card-header">Thêm Phường / Xã</div>
+                <div class="card-header">Thêm Nhiều Phường / Xã</div>
                 <div class="card-body">
                     <form action="{{ route('provinces.wards.store', $province) }}" method="POST">
                         @csrf
                         <div class="mb-3">
-                            <label class="form-label">Tên phường/xã</label>
-                            <input type="text" name="name" class="form-control" value="{{ old('name') }}" required>
+                            <label class="form-label">Danh sách phường/xã</label>
+                            <textarea name="wards" class="form-control" rows="7" placeholder="Nhập mỗi phường/xã trên một dòng">{{ old('wards') }}</textarea>
+                            <div class="form-text">Mỗi dòng sẽ tạo một phường/xã riêng. Hệ thống tự bỏ qua dòng trống và tên trùng trong cùng tỉnh.</div>
                         </div>
-                        <button type="submit" class="btn btn-primary">Thêm mới</button>
+                        <div class="mb-3">
+                            <label class="form-label">Hoặc nhập nhanh 1 phường/xã</label>
+                            <input type="text" name="name" class="form-control" value="{{ old('name') }}" placeholder="Ví dụ: Phường 1">
+                        </div>
+                        <button type="submit" class="btn btn-primary">Thêm phường/xã</button>
                     </form>
                 </div>
             </div>
@@ -54,7 +79,8 @@
                                         <form action="{{ route('provinces.wards.update', [$province, $ward]) }}" method="POST" class="d-flex gap-2 align-items-center">
                                             @csrf
                                             @method('PUT')
-                                            <input type="text" name="name" value="{{ old('name', $ward->name) }}" class="form-control" required>
+                                            <input type="hidden" name="ward_id" value="{{ $ward->id }}">
+                                            <input type="text" name="name" value="{{ old('ward_id') == $ward->id ? old('name') : $ward->name }}" class="form-control" required>
                                             <button type="submit" class="btn btn-sm btn-primary">Lưu</button>
                                         </form>
                                     </td>

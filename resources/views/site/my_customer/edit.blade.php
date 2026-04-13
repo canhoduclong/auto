@@ -1,6 +1,11 @@
 @extends('layouts.site')
 
 @section('content')
+@php
+    $defaultAddress = $customer->addresses->where('is_default', 1)->first() ?? $customer->addresses->first();
+    $selectedProvinceId = old('province_id', $defaultAddress->province_id ?? '');
+    $selectedWardId = old('ward_id', $defaultAddress->ward_id ?? '');
+@endphp
 <style>
     .mc-edit-shell {
         background: linear-gradient(180deg, #f7fafc 0%, #eef2f7 100%);
@@ -167,7 +172,7 @@
                                     name="address"
                                     rows="3"
                                     placeholder="Nhập địa chỉ đầy đủ của khách hàng"
-                                >{{ old('address', $customer->address) }}</textarea>
+                                >{{ old('address', $defaultAddress->note ?? $customer->address) }}</textarea>
                                 <div class="mc-help mt-1">Địa chỉ này dùng làm mặc định khi tạo đơn cho khách nếu chưa nhập địa chỉ giao riêng.</div>
                             </div>
 
@@ -176,13 +181,35 @@
                                     <label for="province_id" class="form-label mc-form-label">Tỉnh / Thành phố</label>
                                     <select class="form-select mc-form-control" id="province_id" name="province_id">
                                         <option value="">-- Chọn tỉnh/thành phố --</option>
+                                        @foreach(($provinces ?? []) as $province)
+                                            <option value="{{ $province->id }}" {{ (string) $selectedProvinceId === (string) $province->id ? 'selected' : '' }}>{{ $province->name }}</option>
+                                        @endforeach
                                     </select>
                                 </div>
                                 <div class="col-md-6">
                                     <label for="ward_id" class="form-label mc-form-label">Phường / Xã</label>
-                                    <select class="form-select mc-form-control" id="ward_id" name="ward_id" disabled>
+                                    <select class="form-select mc-form-control" id="ward_id" name="ward_id" data-selected-ward="{{ $selectedWardId }}" disabled>
                                         <option value="">-- Chọn phường/xã --</option>
                                     </select>
+                                </div>
+                            </div>
+
+                            <div class="row mb-3">
+                                <div class="col-md-4">
+                                    <label for="company_name" class="form-label mc-form-label">Tên công ty</label>
+                                    <input type="text" class="form-control mc-form-control" id="company_name" name="company_name" value="{{ old('company_name', $customer->company_name) }}">
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="tax_code" class="form-label mc-form-label">Mã số thuế</label>
+                                    <input type="text" class="form-control mc-form-control" id="tax_code" name="tax_code" value="{{ old('tax_code', $customer->tax_code) }}">
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="company_email" class="form-label mc-form-label">Email công ty</label>
+                                    <input type="email" class="form-control mc-form-control" id="company_email" name="company_email" value="{{ old('company_email', $customer->company_email) }}">
+                                </div>
+                                <div class="col-12 mt-3">
+                                    <label for="company_address" class="form-label mc-form-label">Địa chỉ công ty</label>
+                                    <input type="text" class="form-control mc-form-control" id="company_address" name="company_address" value="{{ old('company_address', $customer->company_address) }}">
                                 </div>
                             </div>
 
@@ -201,6 +228,48 @@
                                 <label for="production" class="form-label mc-form-label">Sản lượng</label>
                                 <input type="number" step="any" class="form-control mc-form-control" id="production" name="production" value="{{ old('production', $customer->production) }}" placeholder="Nhập sản lượng (nếu có)">
                                 <div class="mc-help mt-1">Điền sản lượng trung bình theo đơn vị bạn đang theo dõi (ví dụ: kg/tháng).</div>
+                            </div>
+
+                            <div class="row mb-3">
+                                <div class="col-md-4">
+                                    <label for="use_truck_station" class="form-label mc-form-label">Gửi qua nhà xe</label>
+                                    <select class="form-select mc-form-control" id="use_truck_station" name="use_truck_station">
+                                        <option value="0" {{ old('use_truck_station', (string) ($customer->use_truck_station ? 1 : 0)) === '0' ? 'selected' : '' }}>Không</option>
+                                        <option value="1" {{ old('use_truck_station', (string) ($customer->use_truck_station ? 1 : 0)) === '1' ? 'selected' : '' }}>Có</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div id="truck_section" style="display:none;">
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <label for="truck_station_id" class="form-label mc-form-label">Nhà xe</label>
+                                        <select class="form-select mc-form-control" id="truck_station_id" name="truck_station_id">
+                                            <option value="">-- Chọn nhà xe --</option>
+                                            @foreach(($truckStations ?? []) as $station)
+                                                <option value="{{ $station->id }}" {{ (string) old('truck_station_id', $customer->truck_station_id) === (string) $station->id ? 'selected' : '' }}>
+                                                    {{ $station->name }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="truck_station_phone" class="form-label mc-form-label">Số điện thoại nhà xe</label>
+                                        <input type="text" class="form-control mc-form-control" id="truck_station_phone" name="truck_station_phone" value="{{ old('truck_station_phone', $customer->truck_station_phone) }}">
+                                    </div>
+                                    <div class="col-md-6 mt-3">
+                                        <label for="truck_station_address" class="form-label mc-form-label">Địa chỉ giao nhà xe</label>
+                                        <input type="text" class="form-control mc-form-control" id="truck_station_address" name="truck_station_address" value="{{ old('truck_station_address', $customer->truck_station_address) }}">
+                                    </div>
+                                    <div class="col-md-3 mt-3">
+                                        <label for="truck_receive_time" class="form-label mc-form-label">Giờ nhận</label>
+                                        <input type="text" class="form-control mc-form-control" id="truck_receive_time" name="truck_receive_time" value="{{ old('truck_receive_time', $customer->truck_receive_time) }}">
+                                    </div>
+                                    <div class="col-md-3 mt-3">
+                                        <label for="truck_return_time" class="form-label mc-form-label">Giờ trả</label>
+                                        <input type="text" class="form-control mc-form-control" id="truck_return_time" name="truck_return_time" value="{{ old('truck_return_time', $customer->truck_return_time) }}">
+                                    </div>
+                                </div>
                             </div>
 
                             <div class="mc-actions pt-2">
@@ -228,7 +297,7 @@
                         </div>
                         <div class="mc-meta-item">
                             <span class="mc-meta-label">Địa chỉ hiện tại</span>
-                            <span class="mc-meta-value">{{ $customer->address ?: '-' }}</span>
+                            <span class="mc-meta-value">{{ $defaultAddress->note ?? $customer->address ?: '-' }}</span>
                         </div>
                         <div class="mc-meta-item">
                             <span class="mc-meta-label">Cập nhật gần nhất</span>
@@ -250,46 +319,48 @@
     document.addEventListener('DOMContentLoaded', function() {
         const provinceSelect = document.getElementById('province_id');
         const wardSelect = document.getElementById('ward_id');
+        const useTruckSelect = document.getElementById('use_truck_station');
+        const truckSection = document.getElementById('truck_section');
 
-        // Load provinces on page load
-        loadProvinces();
-
-        // Load wards when province changes
-        provinceSelect.addEventListener('change', function() {
-            if (this.value) {
-                loadWardsByProvince(this.value);
-                wardSelect.disabled = false;
-            } else {
+        function loadWardsByProvince(provinceId, selectedWardId = '') {
+            if (!provinceId) {
                 wardSelect.disabled = true;
                 wardSelect.innerHTML = '<option value="">-- Chọn phường/xã --</option>';
+                return;
             }
-        });
 
-        function loadProvinces() {
-            fetch('{{ route("api.provinces") }}')
-                .then(response => response.json())
-                .then(data => {
-                    let html = '<option value="">-- Chọn tỉnh/thành phố --</option>';
-                    data.forEach(province => {
-                        html += `<option value="${province.id}">${province.name}</option>`;
-                    });
-                    provinceSelect.innerHTML = html;
-                })
-                .catch(error => console.error('Error loading provinces:', error));
-        }
-
-        function loadWardsByProvince(provinceId) {
-            fetch(`{{ route("api.wards") }}?province_id=${provinceId}`)
+            fetch(`{{ route('api.wards') }}?province_id=${provinceId}`)
                 .then(response => response.json())
                 .then(data => {
                     let html = '<option value="">-- Chọn phường/xã --</option>';
                     data.forEach(ward => {
-                        html += `<option value="${ward.id}">${ward.name}</option>`;
+                        const selected = String(selectedWardId || '') === String(ward.id) ? 'selected' : '';
+                        html += `<option value="${ward.id}" ${selected}>${ward.name}</option>`;
                     });
                     wardSelect.innerHTML = html;
+                    wardSelect.disabled = false;
                 })
-                .catch(error => console.error('Error loading wards:', error));
+                .catch(() => {
+                    wardSelect.disabled = true;
+                    wardSelect.innerHTML = '<option value="">-- Chọn phường/xã --</option>';
+                });
         }
+
+        function toggleTruckSection() {
+            truckSection.style.display = useTruckSelect.value === '1' ? '' : 'none';
+        }
+
+        provinceSelect.addEventListener('change', function() {
+            loadWardsByProvince(this.value, '');
+        });
+
+        useTruckSelect.addEventListener('change', toggleTruckSection);
+
+        if (provinceSelect.value) {
+            loadWardsByProvince(provinceSelect.value, wardSelect.dataset.selectedWard || '');
+        }
+
+        toggleTruckSection();
     });
 </script>
 @endpush

@@ -13,6 +13,7 @@ class ProductPriceRule extends Model
         'product_variant_id',
         'reason',
         'price',
+        'min_price',
         'start_date',
         'end_date',
         'created_by',

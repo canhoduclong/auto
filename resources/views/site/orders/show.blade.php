@@ -32,6 +32,11 @@
     $orderExtraDiscount = (float) ($order->extra_discount_total ?? $order->order_discount ?? 0);
     $orderTotalDiscount = (float) ($order->total_discount ?? ($orderItemDiscount + $orderExtraDiscount));
     $orderTotalWeight = (float) ($order->total_weight ?? $order->items->sum('total_weight'));
+    $formatSignedMoney = static function (float $amount): string {
+        $prefix = $amount < 0 ? '+' : '-';
+
+        return $prefix . number_format(abs($amount), 0, ',', '.') . 'đ';
+    };
     $isCopiedOrder = !empty($order->copied_from_order_id);
     $canEdit = $isCopiedOrder
         || ($order->status === \App\Models\Order::STATUS_PENDING_LEADER_APPROVAL
@@ -297,19 +302,19 @@
                             </div>
                             <div class="order-meta-item">
                                 <span class="order-meta-label">Tiền giảm (discount)</span>
-                                <div class="order-meta-value">{{ number_format($orderItemDiscount, 0, ',', '.') }}đ</div>
+                                <div class="order-meta-value">{{ $formatSignedMoney($orderItemDiscount) }}</div>
                             </div>
                             <div class="order-meta-item">
-                                <span class="order-meta-label">Giảm thêm (discount ngoài)</span>
-                                <div class="order-meta-value">{{ number_format($orderExtraDiscount, 0, ',', '.') }}đ</div>
+                                <span class="order-meta-label">Điều chỉnh tổng đơn</span>
+                                <div class="order-meta-value">{{ $formatSignedMoney($orderExtraDiscount) }}</div>
                             </div>
                             <div class="order-meta-item">
                                 <span class="order-meta-label">Tổng tiền cuối cùng</span>
                                 <div class="order-meta-value">{{ number_format((float) $order->total, 0, ',', '.') }}đ</div>
                             </div>
                             <div class="order-meta-item">
-                                <span class="order-meta-label">Tổng discount</span>
-                                <div class="order-meta-value">{{ number_format($orderTotalDiscount, 0, ',', '.') }}đ</div>
+                                <span class="order-meta-label">Tổng điều chỉnh</span>
+                                <div class="order-meta-value">{{ $formatSignedMoney($orderTotalDiscount) }}</div>
                             </div>
                             <div class="order-meta-item">
                                 <span class="order-meta-label">Tổng khối lượng</span>
@@ -365,9 +370,11 @@
                                 <th>Biến thể</th>
                                 <th>SL</th>
                                 <th>ĐVT</th>
-                                <th>Kg/SP</th>
+                                <th>Kg</th>
+                                <th>Loại tính</th>
+                                <th>Giá Min</th>
                                 <th>Đơn giá</th>
-                                <th>Discount</th>
+                                <th>Điều chỉnh</th>
                                 <th>Thành tiền</th>
                             </tr>
                         </thead>
@@ -376,9 +383,11 @@
                             @php
                                 $variant = $item->variant;
                                 $unitLabel = optional(optional($item->variant)->product)->unit_label ?? 'Cái';
-                                $weightUnitLabel = in_array((string) (optional(optional($item->variant)->product)->unit ?? 'cai'), ['con', 'cai'], true)
-                                    ? 'Kg'
-                                    : $unitLabel;
+                                $weightUnitLabel = $unitLabel;
+                                $isPricedByKg = $item->is_priced_by_kg;
+                                if ($isPricedByKg === null) {
+                                    $isPricedByKg = optional(optional($item->variant)->product)->is_priced_by_kg ?? true;
+                                }
                                 $imageUrl = $variant?->media_url
                                     ?? ($variant?->product?->avatar?->media
                                         ? asset('storage/' . $variant->product->avatar->media->file_path)
@@ -396,15 +405,17 @@
                                 <td class="order-qty">{{ number_format((float) $item->quantity, 0, ',', '.') }}</td>
                                 <td class="order-qty">{{ $unitLabel }}</td>
                                 <td class="order-qty">{{ number_format((float) ($item->unit_weight ?? 0), 3, ',', '.') }} {{ $weightUnitLabel }}</td>
+                                <td class="order-qty">{{ $isPricedByKg ? 'Theo kg' : 'Theo đơn vị' }}</td>
+                                <td class="order-money">{{ number_format((float) ($variant?->latestPriceRule?->min_price ?? 0), 0, ',', '.') }}đ</td>
                                 <td class="order-money">{{ number_format((float) $item->price, 0, ',', '.') }}đ</td>
-                                <td class="order-money">{{ number_format((float) ($item->discount_total ?? 0), 0, ',', '.') }}đ</td>
-                                <td class="order-money">{{ number_format((float) ($item->price * $item->quantity), 0, ',', '.') }}đ</td>
+                                <td class="order-money">{{ $formatSignedMoney((float) ($item->discount_total ?? 0)) }}</td>
+                                <td class="order-money">{{ number_format((float) ($item->total ?? ($item->price * $item->quantity)), 0, ',', '.') }}đ</td>
                             </tr>
                             @endforeach
                         </tbody>
                         <tfoot>
                             <tr>
-                                <td colspan="8" class="text-end"><strong>Tổng cộng</strong></td>
+                                <td colspan="10" class="text-end"><strong>Tổng cộng</strong></td>
                                 <td class="order-money"><strong>{{ number_format((float) $order->total, 0, ',', '.') }}đ</strong></td>
                             </tr>
                         </tfoot>

@@ -1,6 +1,13 @@
 @extends('layouts.app')
 @section('content')
 <div class="container">
+    @php
+        $formatSignedMoney = static function (float $amount): string {
+            $prefix = $amount < 0 ? '+' : '-';
+
+            return $prefix . number_format(abs($amount), 0, ',', '.') . ' đ';
+        };
+    @endphp
     <div class="d-flex align-items-center justify-content-between mb-3">
         <h4 class="mb-0">{{ __('orders.titles.detail', ['code' => $order->code]) }}</h4>
         <a href="{{ route('orders.index') }}" class="btn btn-secondary">{{ __('orders.buttons.back_to_list') }}</a>
@@ -261,7 +268,10 @@
                 <th>{{ __('orders.titles.products') }}</th>
                 <th>{{ __('orders.labels.variant') }}</th>
                 <th>{{ __('orders.labels.quantity') }}</th>
+                <th>Giá gốc</th>
+                <th>Giá Min</th>
                 <th>{{ __('orders.labels.unit_price') }}</th>
+                <th>Điều chỉnh</th>
                 <th>{{ __('orders.labels.line_total') }}</th>
             </tr>
         </thead>
@@ -271,7 +281,10 @@
                 <td>{{ $item->variant->product->name ?? '' }}</td>
                 <td>{{ $item->variant->variant_name ?? ($item->variant->sku ?? '') }}</td>
                 <td>{{ $item->quantity }}</td>
+                <td>{{ number_format((float) ($item->base_price ?? $item->price), 0, ',', '.') }} đ</td>
+                <td>{{ number_format((float) ($item->variant->latestPriceRule->min_price ?? 0), 0, ',', '.') }} đ</td>
                 <td>{{ number_format($item->price, 0, ',', '.') }} đ</td>
+                <td>{{ $formatSignedMoney((float) ($item->discount_total ?? 0)) }}</td>
                 <td>{{ number_format($item->price * $item->quantity, 0, ',', '.') }} đ</td>
             </tr>
             @endforeach

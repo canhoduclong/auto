@@ -55,8 +55,13 @@ class CartController extends Controller
         foreach ($cart as $details) {
             $quantity = (int) ($details['quantity'] ?? 0);
             $price = (float) ($details['price'] ?? 0);
-            $unitWeight = isset($details['unit_weight']) && $details['unit_weight'] > 0 ? (float)$details['unit_weight'] : 1;
-            $total += $price * $quantity * $unitWeight;
+            $kg = isset($details['unit_weight']) && $details['unit_weight'] > 0 ? (float) $details['unit_weight'] : 1;
+            $isPricedByKg = array_key_exists('is_priced_by_kg', $details)
+                ? (bool) $details['is_priced_by_kg']
+                : true;
+            $pricingFactor = $isPricedByKg ? $kg : 1;
+
+            $total += $price * $quantity * $pricingFactor;
             $itemCount += $quantity;
         }
         return [
@@ -79,50 +84,83 @@ class CartController extends Controller
         $cart = session()->get('cart', []);
 
         $itemDiscounts = $request->input('item_discount', []);
+        $itemDiscountTypes = $request->input('item_discount_type', []);
         $orderDiscount = (float) $request->input('order_discount', 0);
+        $orderDiscountType = strtolower((string) $request->input('order_discount_type', 'decrease')) === 'increase'
+            ? 'increase'
+            : 'decrease';
 
         $subtotal = 0;
-        $itemDiscountTotal = 0;
+        $itemAdjustmentTotal = 0;
         $totalWeight = 0;
 
         foreach ($cart as $id => &$item) {
             $price = $item['price'] ?? 0;
             $quantity = $item['quantity'] ?? 1;
-            $unitWeight = $item['unit_weight'] ?? 1;
+            $kg = isset($item['unit_weight']) && (float) $item['unit_weight'] > 0 ? (float) $item['unit_weight'] : 1;
+            $isPricedByKg = array_key_exists('is_priced_by_kg', $item)
+                ? (bool) $item['is_priced_by_kg']
+                : true;
+            $pricingFactor = $isPricedByKg ? $kg : 1;
 
-            $discount = isset($itemDiscounts[$id]) ? (float)$itemDiscounts[$id] : 0;
-            $discount = max(0, min($discount, $price));
+            $discount = isset($itemDiscounts[$id]) ? (float) $itemDiscounts[$id] : 0;
+            $discount = max(0, $discount);
+            $discountType = strtolower((string) ($itemDiscountTypes[$id] ?? 'decrease')) === 'increase'
+                ? 'increase'
+                : 'decrease';
+            $minPrice = max(0, (float) ($item['min_price'] ?? 0));
+
+            if ($discountType === 'decrease') {
+                $maxAllowedDecrease = max($price - $minPrice, 0);
+                $discount = min($discount, $maxAllowedDecrease);
+            }
 
             // Lưu discount vào cart session
             $item['discount'] = $discount;
+            $item['discount_type'] = $discountType;
 
-            $lineSubtotal = $price * $quantity;
-            $lineDiscount = $discount * $quantity;
+            $lineSubtotal = $price * $quantity * $pricingFactor;
+            $lineAdjustment = ($discountType === 'increase' ? -1 : 1) * $discount * $quantity * $pricingFactor;
 
             $subtotal += $lineSubtotal;
-            $itemDiscountTotal += $lineDiscount;
-            $totalWeight += $unitWeight * $quantity;
+            $itemAdjustmentTotal += $lineAdjustment;
+            $totalWeight += $kg * $quantity;
         }
 
         unset($item);
 
-        $afterItemDiscount = max($subtotal - $itemDiscountTotal, 0);
+        $afterItemDiscount = max($subtotal - $itemAdjustmentTotal, 0);
 
-        $orderDiscount = max(0, min($orderDiscount, $afterItemDiscount));
+        if ($orderDiscountType === 'decrease') {
+            $orderDiscount = max(0, min($orderDiscount, $afterItemDiscount));
+        } else {
+            $orderDiscount = max(0, $orderDiscount);
+        }
+
+        $orderAdjustment = $orderDiscountType === 'increase'
+            ? -1 * $orderDiscount
+            : $orderDiscount;
 
         // Lưu order discount session
         session()->put('cart', $cart);
         session()->put('order_discount', $orderDiscount);
+        session()->put('order_discount_type', $orderDiscountType);
 
-        $total = max($afterItemDiscount - $orderDiscount, 0);
+        $total = max($afterItemDiscount - $orderAdjustment, 0);
+
+        $formatSignedMoney = static function (float $amount): string {
+            $prefix = $amount < 0 ? '+' : '-';
+
+            return $prefix . number_format(abs($amount), 0, ',', '.') . 'đ';
+        };
 
         return response()->json([
             'success' => true,
             'summary' => [
                 'formatted_subtotal' => number_format($subtotal, 0, ',', '.') . 'đ',
-                'formatted_item_discount' => number_format($itemDiscountTotal, 0, ',', '.') . 'đ',
-                'formatted_order_discount' => number_format($orderDiscount, 0, ',', '.') . 'đ',
-                'formatted_discount' => number_format($itemDiscountTotal + $orderDiscount, 0, ',', '.') . 'đ',
+                'formatted_item_discount' => $formatSignedMoney($itemAdjustmentTotal),
+                'formatted_order_discount' => $formatSignedMoney($orderAdjustment),
+                'formatted_discount' => $formatSignedMoney($itemAdjustmentTotal + $orderAdjustment),
                 'formatted_total' => number_format($total, 0, ',', '.') . 'đ',
                 'formatted_weight' => number_format($totalWeight, 3, ',', '.') . ' kg',
             ]
@@ -142,7 +180,8 @@ class CartController extends Controller
         if (!empty($variantIds)) {
             $variants = ProductVariant::query()
                 ->whereIn('id', $variantIds)
-                ->get(['id', 'size'])
+                ->with('product:id,kg,is_priced_by_kg')
+                ->get(['id', 'product_id', 'size', 'kg', 'is_priced_by_kg'])
                 ->keyBy('id');
 
             foreach ($cart as $variantId => $details) {
@@ -156,7 +195,18 @@ class CartController extends Controller
                 }
 
                 if (!array_key_exists('unit_weight', $details) || (float) $details['unit_weight'] <= 0) {
-                    $cart[$variantId]['unit_weight'] = $this->parseWeightToKg($variant->size);
+                    $variantKg = (float) ($variant->kg ?? 0);
+                    $productKg = (float) ($variant->product?->kg ?? 0);
+                    $resolvedKg = $variantKg > 0
+                        ? $variantKg
+                        : ($productKg > 0 ? $productKg : $this->parseWeightToKg($variant->size));
+                    $cart[$variantId]['unit_weight'] = max(0.01, round($resolvedKg, 3));
+                }
+
+                if (!array_key_exists('is_priced_by_kg', $details)) {
+                    $cart[$variantId]['is_priced_by_kg'] = $variant->is_priced_by_kg !== null
+                        ? (bool) $variant->is_priced_by_kg
+                        : (bool) ($variant->product?->is_priced_by_kg ?? true);
                 }
             }
 
@@ -235,13 +285,28 @@ class CartController extends Controller
 
     public function add(Request $request)
     {
-        $variant = ProductVariant::findOrFail($request->variant_id);
+        $variant = ProductVariant::with('latestPriceRule', 'product.avatar.media')->findOrFail($request->variant_id);
         $quantity = $request->input('quantity', 1);
 
         $cart = session()->get('cart', []);
 
+        $resolvedKg = (float) ($variant->kg ?? 0);
+        if ($resolvedKg <= 0) {
+            $resolvedKg = (float) ($variant->product?->kg ?? 0);
+        }
+        if ($resolvedKg <= 0) {
+            $resolvedKg = $this->parseWeightToKg($variant->size);
+        }
+        $resolvedKg = max(0.01, round($resolvedKg, 3));
+        $isPricedByKg = $variant->is_priced_by_kg !== null
+            ? (bool) $variant->is_priced_by_kg
+            : (bool) ($variant->product?->is_priced_by_kg ?? true);
+
         if (isset($cart[$variant->id])) {
             $cart[$variant->id]['quantity'] += $quantity;
+            $cart[$variant->id]['min_price'] = (float) ($variant->latestPriceRule?->min_price ?? ($cart[$variant->id]['min_price'] ?? 0));
+            $cart[$variant->id]['unit_weight'] = $resolvedKg;
+            $cart[$variant->id]['is_priced_by_kg'] = $isPricedByKg;
         } else {
             $cart[$variant->id] = [
                 'name' => $variant->product->name,
@@ -253,7 +318,9 @@ class CartController extends Controller
                 'unit' => $variant->product->unit,
                 'unit_label' => $variant->product->unit_label ?? 'Cái',
                 'don_vi_tinh' => $variant->product->unit_label ?? 'Cái',
-                'unit_weight' => $this->parseWeightToKg($variant->size),
+                'unit_weight' => $resolvedKg,
+                'is_priced_by_kg' => $isPricedByKg,
+                'min_price' => (float) ($variant->latestPriceRule?->min_price ?? 0),
             ];
         }
 
@@ -267,6 +334,7 @@ class CartController extends Controller
             'unit_label' => $variant->product->unit_label ?? 'Cái',
             'don_vi_tinh' => $variant->product->unit_label ?? 'Cái',
             'weight' => (float) ($cart[$variant->id]['unit_weight'] ?? 0),
+            'is_priced_by_kg' => (bool) ($cart[$variant->id]['is_priced_by_kg'] ?? true),
         ]);
     }
 
@@ -356,8 +424,10 @@ class CartController extends Controller
         session()->put('cart', $cart);
 
         $price = (float) ($cart[$itemId]['price'] ?? 0);
-        $uw = isset($cart[$itemId]['unit_weight']) && $cart[$itemId]['unit_weight'] > 0 ? (float)$cart[$itemId]['unit_weight'] : 1;
-        $itemSubtotal = $price * $quantity * $uw;
+        $uw = isset($cart[$itemId]['unit_weight']) && $cart[$itemId]['unit_weight'] > 0 ? (float) $cart[$itemId]['unit_weight'] : 1;
+        $isPricedByKg = (bool) ($cart[$itemId]['is_priced_by_kg'] ?? true);
+        $pricingFactor = $isPricedByKg ? $uw : 1;
+        $itemSubtotal = $price * $quantity * $pricingFactor;
         $summary = $this->buildCartSummary($cart);
 
         return response()->json([
@@ -371,6 +441,7 @@ class CartController extends Controller
                 'don_vi_tinh' => $cart[$itemId]['unit_label'] ?? 'Cái',
                 'weight' => $uw,
                 'unit_weight' => $uw,
+                'is_priced_by_kg' => $isPricedByKg,
                 'unit_price' => number_format($price),
                 'subtotal' => $itemSubtotal,
                 'formatted_subtotal' => number_format($itemSubtotal) . 'd',

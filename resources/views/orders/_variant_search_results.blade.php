@@ -19,16 +19,24 @@
         @foreach($variants as $variant)
             @php
                 $unitValue = (string) ($variant->product->unit ?? 'cai');
-                $weightUnitLabel = in_array($unitValue, ['con', 'cai'], true)
-                    ? 'Kg'
-                    : ($variant->product->unit_label ?? 'Cái');
+                $weightUnitLabel = $variant->product->unit_label ?? 'Cái';
                 $sizeRaw = strtolower(str_replace(',', '.', trim((string) ($variant->size ?? ''))));
                 preg_match('/([0-9]*\.?[0-9]+)/', $sizeRaw, $sizeMatches);
-                $defaultWeight = (float) ($sizeMatches[1] ?? 0);
+                $sizeKg = (float) ($sizeMatches[1] ?? 0);
                 if (str_contains($sizeRaw, 'g') && !str_contains($sizeRaw, 'kg')) {
-                    $defaultWeight = $defaultWeight / 1000;
+                    $sizeKg = $sizeKg / 1000;
                 }
-                $defaultWeight = round(max(0, $defaultWeight), 3);
+                $defaultWeight = (float) ($variant->kg ?? 0);
+                if ($defaultWeight <= 0) {
+                    $defaultWeight = (float) ($variant->product->kg ?? 0);
+                }
+                if ($defaultWeight <= 0) {
+                    $defaultWeight = $sizeKg;
+                }
+                $defaultWeight = round(max(0.01, $defaultWeight), 3);
+                $isPricedByKg = $variant->is_priced_by_kg !== null
+                    ? (bool) $variant->is_priced_by_kg
+                    : (bool) ($variant->product->is_priced_by_kg ?? true);
             @endphp
             <li class="list-group-item d-flex justify-content-between align-items-center">
                 <div class="d-flex align-items-center">
@@ -53,11 +61,13 @@
                     data-variant-name="{{ $variant->product->name }}"
                     data-variant-sku="{{ $variant->sku }}"
                     data-variant-price="{{ $variant->latestPriceRule?->price ?? 0 }}"
+                    data-variant-min-price="{{ $variant->latestPriceRule?->min_price ?? 0 }}"
                     data-variant-stock="{{ $variant->available_stock }}"
                     data-variant-unit="{{ $unitValue }}"
                     data-variant-unit-label="{{ $variant->product->unit_label ?? 'Cái' }}"
                     data-variant-weight="{{ number_format($defaultWeight, 3, '.', '') }}"
                     data-variant-weight-unit-label="{{ $weightUnitLabel }}"
+                    data-variant-is-priced-by-kg="{{ $isPricedByKg ? '1' : '0' }}"
                     data-variant-image="{{ $imageUrl }}">
                     {{ __('inventory.buttons.add_item') }}
                 </a>
