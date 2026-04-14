@@ -550,7 +550,7 @@
                                     <div>Ảnh</div>
                                     <div>Sản phẩm</div>
                                     <div class="text-center">SL</div>
-                                    <div class="text-center">ĐVT</div>
+                                    <div class="text-center">Tổng</div>
                                     <div class="text-center">Size</div>
                                     <div class="text-center">Khối lượng</div>
                                     <div class="text-center">Đơn giá</div>
@@ -598,7 +598,7 @@
                                                     @endif
                                                 </div>
                                                 <div class="wh-item-cell"><strong>{{ number_format($orderedQty) }}</strong></div>
-                                                <div class="wh-item-cell"><strong>{{ $unitLabel }}</strong></div>
+                                                <div class="wh-item-cell"><strong>{{ $item->display_total_label }}</strong></div>
                                                 <div class="wh-item-cell"><strong>{{ $formattedVariantSize }}</strong></div>
                                                
                                                 @if(!$isPackedReadonly && $canProcessThisOrder)

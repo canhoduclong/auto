@@ -662,7 +662,7 @@
                                     <div class="tmo-product-line tmo-product-head">
                                         <div>Sản phẩm</div>
                                         <div>Số lượng</div>
-                                        <div>ĐVT</div>
+                                        <div>Tổng</div>
                                         <div>Size</div>
                                         <div>KL tạm tính</div>
                                         <div>Đơn giá</div>
@@ -674,6 +674,9 @@
                                             $unitLabel = strtoupper((string) ($item->product?->unit_label ?? $item->variant?->product?->unit_label ?? 'cai'));
                                             $sizeLabel = $item->variant->size ?? $item->variant->name ?? '-';
                                             $qty = (float) ($item->quantity ?? 0);
+                                            $displayTotalValue = (float) ($item->display_total_value ?? 0);
+                                            $displayTotalUnit = (string) ($item->display_total_unit ?? $unitLabel);
+                                            $displayTotalLabel = (string) ($item->display_total_label ?? ($qty . ' ' . $displayTotalUnit));
                                             $price = (float) ($item->price ?? 0);
                                             $actualSizeValue = 0;
                                             if (preg_match('/(\d+(\.\d+)?)/', $sizeLabel, $matches)) {
@@ -693,14 +696,15 @@
                                             <div class="fw-semibold js-product-line"
                                                 data-product-name="{{ $productName }}"
                                                 data-product-qty="{{ $qty }}"
-                                                data-product-unit="{{ $unitLabel }}"
+                                                data-product-total-value="{{ $displayTotalValue }}"
+                                                data-product-total-unit="{{ $displayTotalUnit }}"
                                                 data-product-size="{{ $sizeLabel }}"
                                                 data-product-size-val="{{ $actualSizeValue }}"
                                                 data-product-est-weight="{{ $estimatedWeight }}"
                                                 data-product-price="{{ $price }}"
                                                 data-product-subtotal="{{ $lineSubtotal }}">{{ $productName }}</div>
                                             <div>{{ rtrim(rtrim(number_format($qty, 3, '.', ''), '0'), '.') }}</div>
-                                            <div>{{ $unitLabel }}</div>
+                                            <div>{{ $displayTotalLabel }}</div>
                                             <div>{{ $sizeLabel }}</div>
                                             <div>{{ rtrim(rtrim(number_format($estimatedWeight, 3, '.', ''), '0'), '.') }}</div>
                                             <div>{{ number_format($price, 0, ',', '.') }} đ</div>
@@ -840,9 +844,10 @@ document.addEventListener('DOMContentLoaded', function () {
             totalValue += Number(row.dataset.total || 0);
             row.querySelectorAll('.js-product-line').forEach(function (line) {
                 const name = (line.dataset.productName || '').trim();
-                const unit = (line.dataset.productUnit || '').trim();
+                const totalUnit = (line.dataset.productTotalUnit || '').trim();
                 const size = (line.dataset.productSize || '').trim();
                 const qty = Number(line.dataset.productQty || 0);
+                const totalValue = Number(line.dataset.productTotalValue || 0);
                 const estWeight = Number(line.dataset.productEstWeight || 0);
                 const price = Number(line.dataset.productPrice || 0);
                 const subtotal = Number(line.dataset.productSubtotal || 0);
@@ -851,18 +856,20 @@ document.addEventListener('DOMContentLoaded', function () {
                     return;
                 }
 
-                const key = [name, unit, size, price].join('||');
+                const key = [name, totalUnit, size, price].join('||');
                 const current = itemMap.get(key) || {
                     name: name,
-                    unit: unit || '-',
+                    totalUnit: totalUnit || '-',
                     size: size || '-',
                     qty: 0,
+                    totalValue: 0,
                     estWeight: 0,
                     price: price,
                     subtotal: 0,
                 };
 
                 current.qty += qty;
+                current.totalValue += totalValue;
                 current.estWeight += estWeight;
                 current.subtotal += subtotal;
 
@@ -902,13 +909,15 @@ document.addEventListener('DOMContentLoaded', function () {
             if (!items.length) {
                 sumProductDetailList.innerHTML = '<div class="tmo-mini">Không có dữ liệu hàng hóa.</div>';
             } else {
-                const head = '<div class="tmo-product-vertical-row tmo-product-vertical-head"><div>STT</div><div>Sản phẩm</div><div>Số lượng</div><div>ĐVT</div><div>Size</div><div>KL tạm tính</div><div>Đơn giá</div><div>Tạm tính</div></div>';
+                const head = '<div class="tmo-product-vertical-row tmo-product-vertical-head"><div>STT</div><div>Sản phẩm</div><div>Số lượng</div><div>Tổng</div><div>Size</div><div>KL tạm tính</div><div>Đơn giá</div><div>Tạm tính</div></div>';
                 const body = items.map(function (item, index) {
+                    const displayTotalText = formatQty(item.totalValue) + ' ' + item.totalUnit;
+
                     return '<div class="tmo-product-vertical-row">'
                         + '<div>' + (index + 1) + '</div>'
                         + '<div class="fw-semibold">' + item.name + '</div>'
                         + '<div>' + formatQty(item.qty) + '</div>'
-                        + '<div>' + item.unit + '</div>'
+                        + '<div>' + displayTotalText + '</div>'
                         + '<div>' + item.size + '</div>'
                         + '<div>' + formatQty(item.estWeight) + '</div>'
                         + '<div>' + formatMoney(item.price) + '</div>'

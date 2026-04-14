@@ -36,7 +36,7 @@
     .sp-my-meta-value {
         font-weight: 700;
         color: #0f172a;
-        font-size: .92rem;
+        font-size: .92rem;  
     }
     .sp-my-section {
         border-top: 1px dashed #e2e8f0;
@@ -46,7 +46,7 @@
     .sp-my-table-head,
     .sp-my-table-row {
         display: grid;
-        grid-template-columns: minmax(0, 2fr) 64px 100px 120px;
+        grid-template-columns: minmax(0, 2fr) 52px 52px 76px 64px 73px 91px;
         gap: 8px;
         align-items: center;
     }
@@ -87,8 +87,7 @@
         text-overflow: ellipsis;
         white-space: nowrap;
     }
-    .sp-my-item-cell {
-        font-size: .8rem;
+    .sp-my-item-cell { 
         color: #475569;
         text-align: right;
     }
@@ -114,7 +113,7 @@
     @media (max-width: 575px) {
         .sp-my-table-head,
         .sp-my-table-row {
-            grid-template-columns: minmax(0, 1.3fr) 50px 84px 96px;
+            grid-template-columns: minmax(0, 1.3fr) 46px 56px 84px 64px 84px 96px;
             gap: 6px;
         }
     }
@@ -184,13 +183,17 @@
         }
 
         $itemsSubtotal = (float) $order->items->sum(function ($item) {
-            return (float) $item->price * (int) $item->quantity;
+            if ($item->total !== null) {
+                return (float) $item->total;
+            }
+
+            return (float) ($item->price ?? 0) * (float) ($item->display_total_value ?? 0);
         });
         $shippingFee = (float) ($order->shipping_fee ?? 0);
         $foamBoxFee = (float) (($order->charge_foam_box_fee ?? false) ? ($order->foam_box_price ?? 0) : 0);
         $codAmount = (float) ($order->total ?? ($itemsSubtotal + $shippingFee + $foamBoxFee));
     @endphp
-    <div class="col-md-6 col-xl-4">
+    <div class="col-md-6 col-xl-6">
         <div class="card sp-my-card h-100">
             <div class="card-header bg-white d-flex justify-content-between align-items-center">
                 <div class="sp-my-head w-100">
@@ -209,18 +212,18 @@
                 <div class="mb-2">
                     <div class="fw-semibold">{{ $recipientName }}</div>
                     @if($recipientPhone)
-                        <div class="text-muted small"><i class="bi bi-telephone me-1"></i>{{ $recipientPhone }}</div>
+                        <div class="text-muted"><i class="bi bi-telephone me-1"></i>{{ $recipientPhone }}</div>
                     @endif
                     @if($deliveryAddress)
-                        <div class="text-muted small"><i class="bi bi-geo-alt me-1"></i>Địa chỉ giao: {{ $deliveryAddress }}</div>
+                        <div class="text-muted"><i class="bi bi-geo-alt me-1"></i>Địa chỉ giao: {{ $deliveryAddress }}</div>
                     @else
-                        <div class="text-muted small"><i class="bi bi-geo-alt me-1"></i>Chưa có địa chỉ giao hàng</div>
+                        <div class="text-muted"><i class="bi bi-geo-alt me-1"></i>Chưa có địa chỉ giao hàng</div>
                     @endif
                     @if($alternateAddress)
-                        <div class="text-muted small"><i class="bi bi-pin-map me-1"></i>Địa chỉ KH khác: {{ $alternateAddress }}</div>
+                        <div class="text-muted"><i class="bi bi-pin-map me-1"></i>Địa chỉ KH khác: {{ $alternateAddress }}</div>
                     @endif
-                    <div class="text-muted small"><i class="bi bi-clock me-1"></i>Giờ giao hàng: {{ $customerDeliveryTime ?: 'Chưa cập nhật' }}</div>
-                    <div class="text-muted small"><i class="bi bi-box-seam me-1"></i>Từ kho: {{ $sourceWarehouseName ?: 'Chưa xác định' }}</div>
+                    <div class="text-muted"><i class="bi bi-clock me-1"></i>Giờ giao hàng: {{ $customerDeliveryTime ?: 'Chưa cập nhật' }}</div>
+                    <div class="text-muted"><i class="bi bi-box-seam me-1"></i>Từ kho: {{ $sourceWarehouseName ?: 'Chưa xác định' }}</div>
                 </div>
  
 
@@ -228,6 +231,9 @@
                     <div class="sp-my-table-head">
                         <div>Sản phẩm</div>
                         <div class="text-end">SL</div>
+                        <div class="text-end">Size</div>
+                        <div class="text-end">Tổng</div>
+                        <div class="text-end">Kg</div>
                         <div class="text-end">Đơn giá</div>
                         <div class="text-end">Thành tiền</div>
                     </div>
@@ -236,17 +242,34 @@
                             @php
                                 $qty = (int) $item->quantity;
                                 $unitPrice = (float) ($item->price ?? 0);
-                                $lineTotal = $qty * $unitPrice;
+                                $lineTotal = (float) ($item->total ?? ($unitPrice * (float) ($item->display_total_value ?? 0)));
+                                $variantSize = $item->variant?->size;
+                                $formattedVariantSize = (!is_null($variantSize) && $variantSize !== '')
+                                    ? rtrim(rtrim(number_format((float) $variantSize, 2, '.', ''), '0'), '.')
+                                    : '-';
+                                $lineWeight = (float) ($item->actual_weight ?? 0);
+                                if ($lineWeight <= 0) {
+                                    $lineWeight = (float) ($item->total_weight ?? 0);
+                                }
+                                if ($lineWeight <= 0) {
+                                    $lineWeight = round((float) $qty * (float) ($item->effective_unit_weight ?? 0), 3);
+                                }
+                                $formattedLineWeight = $lineWeight > 0
+                                    ? rtrim(rtrim(number_format($lineWeight, 3, '.', ''), '0'), '.') . ' kg'
+                                    : '-';
                             @endphp
                             <li class="sp-my-item-row">
                                 <div class="sp-my-table-row">
                                     <div class="sp-my-item-name">
                                         {{ $item->variant?->name ?? $item->variant?->sku ?? 'Sản phẩm' }}
                                         @if($item->variant?->sku)
-                                            <span class="text-muted small">({{ $item->variant->sku }})</span>
+                                            <span class="text-muted">({{ $item->variant->sku }})</span>
                                         @endif
                                     </div>
                                     <div class="sp-my-item-cell"><strong>{{ $qty }}</strong></div>
+                                    <div class="sp-my-item-cell"><strong>{{ $formattedVariantSize }}</strong></div>
+                                    <div class="sp-my-item-cell"><strong>{{ $item->display_total_label }}</strong></div>
+                                    <div class="sp-my-item-cell"><strong>{{ $formattedLineWeight }}</strong></div>
                                     <div class="sp-my-item-cell">{{ number_format($unitPrice) }}đ</div>
                                     <div class="sp-my-item-cell"><strong>{{ number_format($lineTotal) }}đ</strong></div>
                                 </div>

@@ -162,10 +162,10 @@
 
                                 <div class="customer-info g-3">
                                     <div class="customer-info-logistics mt-2">
-                                        <button class="btn btn-sm btn-outline-secondary w-100 d-flex justify-content-between align-items-center customer-collapse-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#{{ $deliveryCollapseId }}" aria-expanded="true" aria-controls="{{ $deliveryCollapseId }}">
+                                        <a class="w-100 d-flex justify-content-between align-items-center customer-collapse-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#{{ $deliveryCollapseId }}" aria-expanded="true" aria-controls="{{ $deliveryCollapseId }}">
                                             <span class="logistics-title mb-0">Giao hàng</span>
                                             <span class="customer-collapse-action" data-collapse-label="1">Hide</span>
-                                        </button>
+                                        </a>
                                         <div id="{{ $deliveryCollapseId }}" class="collapse show logistics-body pt-2">
                                             <div class="small text-muted mb-1">
                                                 <i class="bi bi-geo-alt me-1"></i>
@@ -240,8 +240,8 @@
                                             <div>Ảnh</div>
                                             <div>Sản phẩm</div>
                                             <div class="text-center">SL</div>
-                                            <div class="text-center">ĐVT</div>
                                             <div class="text-center">Size</div>
+                                            <div class="text-center">Tổng</div>
                                             <div class="text-center">Đơn giá</div>
                                             <!--div class="text-center">Chiết khấu</div-->
                                             <div class="text-end">Thành tiền</div>
@@ -265,7 +265,6 @@
                                                     if ($lineTotal <= 0) {
                                                         $lineTotal = ($qty * $unitPrice) - $lineDiscount;
                                                     }
-                                                    $unitLabel = $product?->unit_label ?? $variant?->product?->unit_label ?? 'Cái';
                                                     $variantSize = $variant?->size;
                                                     $formattedVariantSize = (!is_null($variantSize) && $variantSize !== '')
                                                         ? rtrim(rtrim(number_format((float) $variantSize, 2, '.', ''), '0'), '.')
@@ -292,8 +291,8 @@
                                                             @endif
                                                         </div>
                                                         <div class="wh-item-cell"><strong>{{ rtrim(rtrim(number_format($qty, 3, '.', ''), '0'), '.') }}</strong></div>
-                                                        <div class="wh-item-cell"><strong>{{ $unitLabel }}</strong></div>
                                                         <div class="wh-item-cell"><strong>{{ $formattedVariantSize }}</strong></div>
+                                                        <div class="wh-item-cell"><strong>{{ $item->display_total_label }}</strong></div>                                                        
                                                         <div class="wh-item-cell">{{ number_format($unitPrice, 0, ',', '.') }}đ</div>
                                                         <!--div class="wh-item-cell">{{ number_format($lineDiscount, 0, ',', '.') }}đ</div-->
                                                         <div class="wh-item-cell text-end"><strong>{{ number_format($lineTotal, 0, ',', '.') }}đ</strong></div>

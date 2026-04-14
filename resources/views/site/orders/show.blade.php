@@ -25,13 +25,20 @@
     $createdAt = optional($order->created_at)->format('d/m/Y H:i');
     $itemCount = (int) $order->items->sum('quantity');
     $lineCount = (int) $order->items->count();
+    $totalQty = (float) $order->items->sum('quantity');
     $orderSubtotalAmount = (float) ($order->subtotal_amount ?? $order->items->sum(function ($item) {
         return (float) (($item->base_price ?? $item->price ?? 0) * ($item->quantity ?? 0));
     }));
     $orderItemDiscount = (float) ($order->item_discount_total ?? $order->items->sum('discount_total'));
     $orderExtraDiscount = (float) ($order->extra_discount_total ?? $order->order_discount ?? 0);
     $orderTotalDiscount = (float) ($order->total_discount ?? ($orderItemDiscount + $orderExtraDiscount));
-    $orderTotalWeight = (float) ($order->total_weight ?? $order->items->sum('total_weight'));
+    $orderTotalWeight = (float) $order->items->sum(function ($item) {
+        if (!($item->effective_priced_by_kg ?? false)) {
+            return 0;
+        }
+
+        return (float) ($item->display_total_value ?? 0);
+    });
     $formatSignedMoney = static function (float $amount): string {
         $prefix = $amount < 0 ? '+' : '-';
 
@@ -41,198 +48,609 @@
     $canEdit = $isCopiedOrder
         || ($order->status === \App\Models\Order::STATUS_PENDING_LEADER_APPROVAL
             && $order->created_at?->isToday());
+
+    $statusText = \App\Models\Order::statusOptions()[$order->status] ?? ucfirst(str_replace('_', ' ', (string) $order->status));
+    $paymentStatusText = match((string) $order->payment_status) {
+        'paid' => 'Đã thanh toán',
+        'partial' => 'Thanh toán một phần',
+        'unpaid' => 'Chưa thanh toán',
+        default => ucfirst(str_replace('_', ' ', (string) ($order->payment_status ?: 'unknown'))),
+    };
+    $deliveryStatusText = match((string) $order->delivery_status) {
+        'delivered' => 'Đã giao',
+        'shipping', 'shipped' => 'Đang giao',
+        'pending' => 'Chờ giao',
+        default => ucfirst(str_replace('_', ' ', (string) ($order->delivery_status ?: 'pending'))),
+    };
+
+    $recipientName = $order->recipient_name ?: ($order->customer?->name ?: 'Chưa cập nhật');
+    $recipientPhone = $order->recipient_phone ?: ($order->customer?->phone ?: 'Chưa cập nhật');
+    $deliveryTime = $order->delivery_time ?: ($order->customer?->delivery_time ?: 'Chưa cập nhật');
+    $defaultAddress = $order->customer?->addresses?->firstWhere('is_default', 1) ?? $order->customer?->addresses?->first();
+    $deliveryAddress = $order->recipient_address
+        ?: ($defaultAddress?->note ?: ($order->customer?->address ?: 'Chưa cập nhật'));
+    $wardLine = $defaultAddress?->ward;
+    $cityLine = $defaultAddress?->city;
+    $hasInvoiceInfo = filled($order->customer?->company_name)
+        || filled($order->customer?->tax_code)
+        || filled($order->customer?->company_address);
+    $showTruckStation = (bool) ($order->customer?->use_truck_station ?? false);
+    $station = $order->customer?->truckStation;
+    $deliveryCollapseId = 'delivery-info-' . $order->id;
+    $invoiceCollapseId = 'invoice-info-' . $order->id;
+    $truckCollapseId = 'truck-info-' . $order->id;
 @endphp
 
 @push('styles')
 <style>
     .order-detail-page {
-        --order-ink: #0f172a;
-        --order-muted: #64748b;
-        --order-line: rgba(148, 163, 184, 0.26);
-        --order-surface: #ffffff;
         background:
-            radial-gradient(circle at top left, rgba(20, 184, 166, 0.09), transparent 24%),
-            radial-gradient(circle at top right, rgba(59, 130, 246, 0.08), transparent 24%),
-            linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
-        padding: 32px 0 48px;
+            radial-gradient(circle at top right, rgba(196, 164, 132, 0.18), transparent 32%),
+            linear-gradient(180deg, #f8f5ef 0%, #ffffff 38%, #f6f7fb 100%);
+        padding: 42px 0 72px;
     }
 
     .order-shell {
         max-width: 1180px;
+        margin: 0 auto;
     }
 
     .order-hero {
-        border: 1px solid rgba(255, 255, 255, 0.22);
-        border-radius: 20px;
-        background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(15, 118, 110, 0.88));
-        box-shadow: 0 16px 42px rgba(15, 23, 42, 0.14);
-        color: #f8fafc;
-        padding: 22px 24px;
-        margin-bottom: 16px;
+        border: 1px solid rgba(41, 52, 98, 0.08);
+        border-radius: 28px;
+        background: linear-gradient(135deg, #152238 0%, #23385f 55%, #39598a 100%);
+        color: #fff;
+        padding: 28px;
+        box-shadow: 0 22px 60px rgba(21, 34, 56, 0.18);
+        overflow: hidden;
+        position: relative;
+        margin-bottom: 20px;
+    }
+
+    .order-hero::after {
+        content: '';
+        position: absolute;
+        width: 220px;
+        height: 220px;
+        right: -60px;
+        top: -60px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.08);
     }
 
     .order-hero h1 {
-        margin: 8px 0 6px;
-        font-size: clamp(1.35rem, 2.2vw, 1.95rem);
+        margin: 12px 0;
+        font-size: 2rem;
         font-weight: 900;
-        letter-spacing: -0.02em;
     }
 
     .order-hero p {
         margin: 0;
-        color: rgba(248, 250, 252, 0.84);
-        font-size: 0.9rem;
+        color: rgba(255, 255, 255, 0.8);
+        font-size: .95rem;
     }
 
     .order-eyebrow {
         display: inline-flex;
         align-items: center;
-        gap: 6px;
-        padding: 6px 10px;
-        border-radius: 999px;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        background: rgba(255, 255, 255, 0.08);
-        font-size: 0.72rem;
+        gap: 8px;
+        font-size: .78rem;
         font-weight: 700;
-        letter-spacing: 0.07em;
+        letter-spacing: .12em;
         text-transform: uppercase;
+        color: rgba(255,255,255,.68);
     }
 
     .order-kpis {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 10px;
-        margin-top: 14px;
+        gap: 12px;
     }
 
     .order-kpi {
-        padding: 12px 14px;
-        border-radius: 12px;
-        border: 1px solid rgba(255, 255, 255, 0.16);
-        background: rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 20px;
+        padding: 18px;
+        min-height: 100%;
+        backdrop-filter: blur(6px);
     }
 
     .order-kpi-label {
-        display: block;
-        font-size: 0.72rem;
-        color: rgba(248, 250, 252, 0.72);
+        font-size: .78rem;
+        color: rgba(255, 255, 255, 0.68);
         text-transform: uppercase;
-        letter-spacing: 0.06em;
-        margin-bottom: 4px;
+        letter-spacing: .08em;
+        margin-bottom: 8px;
     }
 
     .order-kpi-value {
-        font-size: 1.03rem;
+        font-size: 1.45rem;
         font-weight: 800;
         color: #fff;
+        line-height: 1.05;
     }
 
     .order-panel {
-        border: 1px solid var(--order-line);
-        border-radius: 18px;
-        background: var(--order-surface);
-        box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
-        overflow: hidden;
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        border-radius: 24px;
+        background: #fff;
+        box-shadow: 0 12px 34px rgba(15, 23, 42, 0.06);
+    }
+
+    .order-side-panel {
+        position: sticky;
+        top: 84px;
     }
 
     .order-panel-body {
-        padding: 18px;
+        padding: 22px;
     }
 
     .order-title {
-        margin: 0;
-        font-size: 1rem;
+        margin: 0 0 6px;
+        font-size: 1.05rem;
         font-weight: 800;
-        color: var(--order-ink);
+        color: #0f172a;
     }
 
     .order-subtitle {
-        margin: 6px 0 0;
-        color: var(--order-muted);
-        font-size: 0.86rem;
+        margin: 0;
+        color: #64748b;
+        font-size: .84rem;
     }
 
     .order-meta-grid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 10px;
+        gap: 12px;
         margin-top: 14px;
     }
 
-    .order-meta-item {
-        border: 1px solid rgba(148, 163, 184, 0.24);
-        border-radius: 12px;
-        padding: 10px 12px;
+    .order-meta-item { 
+        padding: 7px; 
         background: #f8fafc;
     }
 
     .order-meta-label {
         display: block;
-        font-size: 0.72rem;
+        font-size: .72rem;
         text-transform: uppercase;
-        letter-spacing: 0.06em;
-        color: var(--order-muted);
-        margin-bottom: 4px;
+        letter-spacing: .06em;
+        color: #64748b;
+        margin-bottom: 6px;
     }
 
     .order-meta-value {
-        font-size: 0.93rem;
+        font-size: .94rem;
         font-weight: 700;
-        color: var(--order-ink);
+        color: #0f172a;
     }
 
-    .order-badges {
+    .order-status-row {
         display: flex;
-        gap: 8px;
+        gap: 10px;
         flex-wrap: wrap;
-        margin-top: 12px;
+        margin-top: 14px;
     }
 
-    .order-table {
-        margin-bottom: 0;
-        vertical-align: middle;
-    }
-
-    .order-table thead th {
-        white-space: nowrap;
-        background: #f8fafc;
-        color: #334155;
-        font-size: 0.8rem;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-    }
-
-    .order-product {
-        min-width: 230px;
-    }
-
-    .order-product strong {
-        display: block;
-        color: var(--order-ink);
-    }
-
-    .order-product small {
-        color: var(--order-muted);
-    }
-
-    .order-money,
-    .order-qty {
+    .order-status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        font-size: .78rem;
         font-weight: 700;
-        color: var(--order-ink);
+    }
+
+    .status-success { background: #ecfdf5; color: #047857; }
+    .status-warning { background: #fff7ed; color: #c2410c; }
+    .status-info { background: #eff6ff; color: #1d4ed8; }
+    .status-danger { background: #fef2f2; color: #b91c1c; }
+    .status-secondary { background: #f1f5f9; color: #475569; }
+
+    .order-stack {
+        display: grid;
+        gap: 16px;
+    }
+
+    .order-info-list {
+        display: grid;
+        gap: 12px;
+        margin-top: 16px;
+    }
+
+    .order-info-card {
+        border: 1px solid #e5eaf3;
+        border-radius: 16px;
+        background: #fff;
+        overflow: hidden;
+    }
+
+    .order-info-head {
+        padding: 14px 16px 10px;
+        border-bottom: 1px solid #eef2f7;
+        font-size: .8rem;
+        font-weight: 800;
+        color: #334155;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+    }
+
+    .order-info-body {
+        padding: 14px 16px;
+    }
+
+    .order-info-row {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 8px;
+        color: #475569;
+        font-size: .9rem;
+    }
+
+    .order-info-row:last-child {
+        margin-bottom: 0;
+    }
+
+    .order-info-key {
+        width: 112px;
+        flex: 0 0 112px;
+        color: #64748b;
+    }
+
+    .order-items-wrap {
+        margin-top: 18px;
+        overflow-x: auto;
+    }
+
+    .order-items-head,
+    .order-items-row {
+        display: grid;
+        grid-template-columns: minmax(240px, 2fr) 84px 120px 90px 120px 130px;
+        gap: 10px;
+        align-items: center;
+    }
+
+    .order-items-head {
+        border: 1px solid #dbe4ef;
+        border-radius: 12px;
+        background: #eef3f9;
+        padding: 10px 12px;
+        font-size: .72rem;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        color: #475569;
+        font-weight: 700;
+    }
+
+    .order-items-list {
+        list-style: none;
+        margin: 10px 0 0;
+        padding: 0;
+        display: grid;
+        gap: 8px;
+    }
+
+    .order-items-row {
+        border: 1px solid #e5eaf3;
+        border-radius: 12px;
+        padding: 10px 12px;
+        background: #f8fafc;
+        font-size: .84rem;
+    }
+
+    .order-item-product {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        min-width: 0;
+    }
+
+    .order-item-thumb {
+        width: 48px;
+        height: 48px;
+        border-radius: 10px;
+        object-fit: cover;
+        border: 1px solid #e2e8f0;
+        background: #fff;
+        flex: 0 0 48px;
+    }
+
+    .order-item-thumb-placeholder {
+        width: 48px;
+        height: 48px;
+        border-radius: 10px;
+        border: 1px dashed #cbd5e1;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #94a3b8;
+        background: #fff;
+        flex: 0 0 48px;
+    }
+
+    .order-item-name {
+        font-weight: 700;
+        color: #0f172a;
+        line-height: 1.25;
+    }
+
+    .order-item-sub {
+        color: #64748b;
+        font-size: .78rem;
+        margin-top: 2px;
+    }
+
+    .order-item-cell {
+        text-align: right;
+        color: #334155;
         white-space: nowrap;
+        font-weight: 600;
+    }
+
+    .order-item-total {
+        color: #0f172a;
+        font-weight: 800;
     }
 
     .order-actions {
-        margin-top: 14px;
         display: flex;
+        gap: 10px;
         justify-content: flex-end;
-        padding: 0 18px 18px;
+        flex-wrap: wrap;
+        margin-top: 18px;
+    }
+
+    .order-actions .btn {
+        border-radius: 12px;
+        font-weight: 700;
+        padding: 10px 16px;
+    }
+
+    .mc-customer-card {
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        transition: box-shadow 0.2s ease;
+    }
+
+    .mc-customer-card:hover {
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    }
+
+    .orders-code {
+        font-weight: 800;
+        color: #1e293b;
+    }
+
+    .wh-order-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+        padding-bottom: 7px;
+        border-bottom: 1px solid #eef2f7;
+    }
+
+    .wh-meta-label {
+        font-size: .72rem;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+    }
+
+    .wh-meta-value {
+        font-size: .92rem;
+        font-weight: 700;
+        color: #0f172a;
+    }
+
+    .wh-section {
+        padding: 12px 0;
+        border-top: 1px dashed #e2e8f0;
+    }
+
+    .wh-logistics-title,
+    .logistics-title,
+    .customer-tax-title,
+    .transport-title {
+        font-size: .78rem;
+        font-weight: 700;
+        color: #334155;
+        margin-bottom: 8px;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+    }
+
+    .customer-collapse-toggle {
+        min-height: 40px;
+        border-radius: 12px;
+        font-weight: 700;
+        border: 1px solid #dbe4ef;
+        background: #fff;
+        color: #334155;
+        padding: 8px 12px;
+        text-decoration: none;
+    }
+
+    .customer-collapse-action {
+        font-size: .78rem;
+        font-weight: 700;
+        color: #1d4ed8;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+    }
+
+    .customer-tax-body,
+    .logistics-body,
+    .transport-body {
+        padding: 0 0 0 14px;
+    }
+
+    .row-title {
+        width: 96px;
+        flex: 0 0 96px;
+        color: #64748b;
+        padding-right: 5px;
+    }
+
+    .wh-item-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 6px;
+    }
+
+    .wh-item-table-wrap {
+        overflow-x: auto;
+    }
+
+    .wh-item-table-head,
+    .wh-item-table-row {
+        display: grid;
+        grid-template-columns: 48px minmax(180px, 1.4fr) 54px 55px 84px 84px 98px;
+        gap: 8px;
+        align-items: center;
+    }
+
+    .wh-item-table-head {
+        font-size: .72rem;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+        color: #64748b;
+        font-weight: 700;
+        padding: 0 0 6px;
+        border-bottom: 1px solid #e2e8f0;
+        margin-bottom: 6px;
+    }
+
+    .wh-item-row {
+        border-bottom: 1px solid #f1f5f9;
+        padding-bottom: 6px;
+    }
+
+    .wh-item-row:last-child {
+        border-bottom: 0;
+        padding-bottom: 0;
+    }
+
+    .wh-item-thumb {
+        width: 40px;
+        height: 40px;
+        border-radius: 8px;
+        object-fit: cover;
+        border: 1px solid #e2e8f0;
+        background: #fff;
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .wh-item-thumb-placeholder {
+        width: 40px;
+        height: 40px;
+        border-radius: 8px;
+        border: 1px dashed #cbd5e1;
+        color: #94a3b8;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #f8fafc;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .wh-item-name {
+        font-size: .86rem;
+        font-weight: 700;
+        color: #0f172a;
+        line-height: 1.25;
+        min-width: 0;
+    }
+
+    .wh-item-cell {
+        font-size: .8rem;
+        color: #475569;
+        text-align: center;
+    }
+
+    .wh-item-cell strong {
+        color: #0f172a;
+    }
+
+    .status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        font-size: .78rem;
+        font-weight: 700;
+    }
+
+    .orders-actions {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+    }
+
+    .orders-actions .btn {
+        border-radius: 12px;
+        font-weight: 700;
+        padding: 9px 14px;
     }
 
     @media (max-width: 991.98px) {
+        .order-hero {
+            padding: 22px;
+            border-radius: 24px;
+        }
+        .order-side-panel {
+            position: static;
+        }
         .order-kpis,
         .order-meta-grid {
             grid-template-columns: 1fr;
+        }
+        .wh-order-head {
+            flex-direction: column;
+        }
+    }
+
+    @media (max-width: 767.98px) {
+        .order-detail-page {
+            padding: 20px 0 48px;
+        }
+        .order-shell {
+            padding: 0 12px;
+        }
+        .order-hero {
+            padding: 18px;
+        }
+        .order-kpi-value {
+            font-size: 1.25rem;
+        }
+        .order-items-head,
+        .order-items-row {
+            grid-template-columns: 1fr;
+        }
+        .wh-item-table-head,
+        .wh-item-table-row {
+            grid-template-columns: 1fr;
+            gap: 4px;
+        }
+        .order-item-cell {
+            text-align: left;
+        }
+        .order-info-row {
+            flex-direction: column;
+            gap: 2px;
+        }
+        .order-info-key {
+            width: auto;
+            flex-basis: auto;
         }
     }
 </style>
@@ -242,22 +660,27 @@
 <section class="order-detail-page">
     <div class="container order-shell">
         <div class="order-hero">
-            <span class="order-eyebrow"><i class="bi bi-receipt"></i> Chi tiết đơn hàng</span>
-            <h1>Đơn {{ $orderCode }}</h1>
-            <p>Thông tin đơn, người nhận và danh sách sản phẩm được trình bày rõ ràng để theo dõi nhanh và chính xác.</p>
-
-            <div class="order-kpis">
-                <div class="order-kpi">
-                    <span class="order-kpi-label">Ngày tạo</span>
-                    <span class="order-kpi-value">{{ $createdAt ?: '-' }}</span>
+            <div class="row g-4 align-items-end position-relative">
+                <div class="col-lg-5">
+                    <div class="order-eyebrow"><i class="bi bi-receipt"></i> Order Center</div>
+                    <h1>Đơn {{ $orderCode }}</h1>
+                    <p>Theo dõi chi tiết đơn hàng, thông tin khách mua, xuất hóa đơn và nhà xe trên cùng một màn hình hai cột.</p>
                 </div>
-                <div class="order-kpi">
-                    <span class="order-kpi-label">Số lượng sản phẩm</span>
-                    <span class="order-kpi-value">{{ number_format($itemCount, 0, ',', '.') }}</span>
-                </div>
-                <div class="order-kpi">
-                    <span class="order-kpi-label">Tổng thanh toán</span>
-                    <span class="order-kpi-value">{{ number_format((float) $order->total, 0, ',', '.') }}đ</span>
+                <div class="col-lg-7">
+                    <div class="order-kpis">
+                        <div class="order-kpi">
+                            <div class="order-kpi-label">Ngày tạo</div>
+                            <div class="order-kpi-value">{{ $createdAt ?: '-' }}</div>
+                        </div>
+                        <div class="order-kpi">
+                            <div class="order-kpi-label">Số dòng sản phẩm</div>
+                            <div class="order-kpi-value">{{ number_format($lineCount, 0, ',', '.') }}</div>
+                        </div>
+                        <div class="order-kpi">
+                            <div class="order-kpi-label">Tổng thanh toán</div>
+                            <div class="order-kpi-value">{{ number_format((float) $order->total, 0, ',', '.') }}đ</div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -266,17 +689,93 @@
             <div class="alert alert-success">{{ session('success') }}</div>
         @endif
 
-        <div class="row g-3">
-            <div class="col-lg-6">
-                <div class="order-panel h-100">
+        <div class="row g-4">
+            <div class="col-xl-4">
+                <div class="order-panel order-side-panel">
                     <div class="order-panel-body">
-                        <h2 class="order-title">Thông tin đơn hàng</h2>
-                        <p class="order-subtitle">Các chỉ số trạng thái chính của đơn hiện tại.</p>
+                        <h2 class="order-title">Khách hàng có đơn</h2>
+                        <p class="order-subtitle">Thông tin khách mua gắn với đơn hàng hiện tại.</p>
 
-                        <div class="order-badges">
-                            <span class="badge text-bg-{{ $statusClass }}">Trạng thái: {{ $order->status ?: 'N/A' }}</span>
-                            <span class="badge text-bg-{{ $paymentClass }}">Thanh toán: {{ $order->payment_status ?: 'N/A' }}</span>
-                            <span class="badge text-bg-{{ $deliveryClass }}">Giao hàng: {{ $order->delivery_status ?: 'N/A' }}</span>
+                        <div class="order-meta-grid">
+                            <div class="order-meta-item">
+                                <span class="order-meta-label">Khách hàng</span>
+                                <div class="order-meta-value">{{ $order->customer?->name ?: 'Chưa cập nhật' }}</div>
+                            </div>
+                            <div class="order-meta-item">
+                                <span class="order-meta-label">Mã khách hàng</span>
+                                <div class="order-meta-value">{{ $order->customer?->customer_code ?: ('#' . ($order->customer?->id ?? '')) }}</div>
+                            </div>
+                            <div class="order-meta-item">
+                                <span class="order-meta-label">Người nhận</span>
+                                <div class="order-meta-value">{{ $recipientName }}</div>
+                            </div>
+                            <div class="order-meta-item">
+                                <span class="order-meta-label">Điện thoại</span>
+                                <div class="order-meta-value">{{ $recipientPhone }}</div>
+                            </div>
+                            <div class="order-meta-item">
+                                <span class="order-meta-label">Trạng thái</span>
+                                <div class="order-meta-value">{{ $statusText }}</div>
+                            </div>
+                            <div class="order-meta-item">
+                                <span class="order-meta-label">Thanh toán</span>
+                                <div class="order-meta-value">{{ $paymentStatusText }}</div>
+                            </div>
+                            <div class="order-meta-item" style="grid-column: 1 / -1;">
+                                <span class="order-meta-label">Địa chỉ khách</span>
+                                <div class="order-meta-value">{{ $order->customer?->address ?: 'Chưa cập nhật' }}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-8">
+                <div class="mc-customer-card border rounded p-3 bg-white">
+                    <div class="wh-order-head">
+                        <div>
+                            <div class="orders-code">{{ $order->customer?->name ?? '—' }}</div>
+                            <small class="text-muted">
+                                <i class="bi bi-clock"></i>
+                                {{ $createdAt ?: '-' }},
+                                Mã KH: {{ $order->customer?->customer_code ?? ('#' . ($order->customer?->id ?? '')) }}
+                                @if($order->customer?->phone)
+                                    , <i class="bi bi-telephone me-1"></i>{{ $order->customer->phone }}
+                                @endif
+                            </small>
+                            @if($isCopiedOrder)
+                                <div><span class="badge bg-warning text-dark mt-2">Đơn copy mới</span></div>
+                            @endif
+                        </div>
+                        <div class="text-end">
+                            <div class="wh-section">
+                                <div class="order-meta-grid mt-0">
+                                    <div class="order-meta-item">
+                                        <div class="wh-meta-label">Số dòng SP</div>
+                                        <div class="wh-meta-value">{{ $lineCount }}</div>
+                                    </div>
+                                    <div class="order-meta-item">
+                                        <div class="wh-meta-label">Tổng số lượng</div>
+                                        <div class="wh-meta-value">{{ rtrim(rtrim(number_format($totalQty, 3, '.', ''), '0'), '.') }}</div>
+                                    </div>
+                                    <div class="order-meta-item">
+                                        <div class="wh-meta-label">Thành tiền</div>
+                                        <div class="wh-meta-value text-primary">{{ number_format((float) $order->total, 0, ',', '.') }}đ</div>
+                                    </div>
+                                    <div class="order-meta-item">
+                                        <div class="wh-meta-label">Tổng điều chỉnh</div>
+                                        <div class="wh-meta-value">{{ $formatSignedMoney($orderTotalDiscount) }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="wh-section border-top-0">
+                        <div class="order-status-row">
+                            <span class="status-pill status-{{ $statusClass }}">{{ $statusText }}</span>
+                            <span class="status-pill status-{{ $paymentClass }}">{{ $paymentStatusText }}</span>
+                            <span class="status-pill status-{{ $deliveryClass }}">{{ $deliveryStatusText }}</span>
                         </div>
 
                         <div class="order-meta-grid">
@@ -285,149 +784,198 @@
                                 <div class="order-meta-value">{{ $orderCode }}</div>
                             </div>
                             <div class="order-meta-item">
-                                <span class="order-meta-label">Khách hàng</span>
-                                <div class="order-meta-value">{{ optional($order->customer)->name ?? 'N/A' }}</div>
-                            </div>
-                            <div class="order-meta-item">
-                                <span class="order-meta-label">Số dòng sản phẩm</span>
-                                <div class="order-meta-value">{{ number_format($lineCount, 0, ',', '.') }}</div>
-                            </div>
-                            <div class="order-meta-item">
-                                <span class="order-meta-label">Tổng tiền</span>
-                                <div class="order-meta-value">{{ number_format((float) $order->total, 0, ',', '.') }}đ</div>
-                            </div>
-                            <div class="order-meta-item">
                                 <span class="order-meta-label">Tiền hàng</span>
                                 <div class="order-meta-value">{{ number_format($orderSubtotalAmount, 0, ',', '.') }}đ</div>
                             </div>
                             <div class="order-meta-item">
-                                <span class="order-meta-label">Tiền giảm (discount)</span>
+                                <span class="order-meta-label">Giảm giá SP</span>
                                 <div class="order-meta-value">{{ $formatSignedMoney($orderItemDiscount) }}</div>
                             </div>
                             <div class="order-meta-item">
-                                <span class="order-meta-label">Điều chỉnh tổng đơn</span>
+                                <span class="order-meta-label">Điều chỉnh đơn</span>
                                 <div class="order-meta-value">{{ $formatSignedMoney($orderExtraDiscount) }}</div>
-                            </div>
-                            <div class="order-meta-item">
-                                <span class="order-meta-label">Tổng tiền cuối cùng</span>
-                                <div class="order-meta-value">{{ number_format((float) $order->total, 0, ',', '.') }}đ</div>
-                            </div>
-                            <div class="order-meta-item">
-                                <span class="order-meta-label">Tổng điều chỉnh</span>
-                                <div class="order-meta-value">{{ $formatSignedMoney($orderTotalDiscount) }}</div>
                             </div>
                             <div class="order-meta-item">
                                 <span class="order-meta-label">Tổng khối lượng</span>
                                 <div class="order-meta-value">{{ number_format($orderTotalWeight, 3, ',', '.') }} kg</div>
                             </div>
+                            <div class="order-meta-item">
+                                <span class="order-meta-label">Tổng thanh toán</span>
+                                <div class="order-meta-value">{{ number_format((float) $order->total, 0, ',', '.') }}đ</div>
+                            </div>
                         </div>
                     </div>
-                </div>
-            </div>
 
-            <div class="col-lg-6">
-                <div class="order-panel h-100">
-                    <div class="order-panel-body">
-                        <h2 class="order-title">Thông tin người nhận</h2>
-                        <p class="order-subtitle">Địa chỉ và liên hệ giao nhận của đơn hàng.</p>
+                    <div class="wh-section border-top-0">
+                        <div class="customer-info g-3">
+                            <div class="customer-info-logistics mt-2">
+                                <a class="w-100 d-flex justify-content-between align-items-center customer-collapse-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#{{ $deliveryCollapseId }}" aria-expanded="true" aria-controls="{{ $deliveryCollapseId }}">
+                                    <span class="logistics-title mb-0">Giao hàng</span>
+                                    <span class="customer-collapse-action" data-collapse-label="1">Hide</span>
+                                </a>
+                                <div id="{{ $deliveryCollapseId }}" class="collapse show logistics-body pt-2">
+                                    <div class="small text-muted mb-1">
+                                        <i class="bi bi-geo-alt me-1"></i>
+                                        Địa chỉ nhận hàng: {{ $deliveryAddress }}
+                                    </div>
+                                    @if($wardLine || $cityLine)
+                                        <div class="small text-muted mb-1">
+                                            <i class="bi bi-pin-map me-1"></i>
+                                            Khu vực: {{ collect([$wardLine, $cityLine])->filter()->implode(', ') }}
+                                        </div>
+                                    @endif
+                                    <div class="small text-muted mb-1">
+                                        <i class="bi bi-clock me-1"></i>
+                                        Giờ giao: {{ $deliveryTime }}
+                                    </div>
+                                    @if($order->note)
+                                        <div class="small text-muted mb-1">
+                                            <i class="bi bi-sticky me-1"></i>
+                                            Ghi chú: {{ $order->note }}
+                                        </div>
+                                    @endif
+                                </div>
+                            </div>
 
-                        <div class="order-meta-grid">
-                            <div class="order-meta-item">
-                                <span class="order-meta-label">Tên người nhận</span>
-                                <div class="order-meta-value">{{ $order->recipient_name ?: 'N/A' }}</div>
-                            </div>
-                            <div class="order-meta-item">
-                                <span class="order-meta-label">Số điện thoại</span>
-                                <div class="order-meta-value">{{ $order->recipient_phone ?: 'N/A' }}</div>
-                            </div>
-                            <div class="order-meta-item" style="grid-column: 1 / -1;">
-                                <span class="order-meta-label">Địa chỉ</span>
-                                <div class="order-meta-value">{{ $order->recipient_address ?: 'N/A' }}</div>
-                            </div>
-                            @if($order->note)
-                            <div class="order-meta-item" style="grid-column: 1 / -1;">
-                                <span class="order-meta-label">Ghi chú</span>
-                                <div class="order-meta-value">{{ $order->note }}</div>
-                            </div>
+                            @if($hasInvoiceInfo)
+                                <div class="customer-info-tax mt-3 mt-md-2">
+                                    <button class="btn btn-sm btn-outline-secondary w-100 d-flex justify-content-between align-items-center customer-collapse-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#{{ $invoiceCollapseId }}" aria-expanded="false" aria-controls="{{ $invoiceCollapseId }}">
+                                        <span class="customer-tax-title mb-0">Thuế / xuất hóa đơn</span>
+                                        <span class="customer-collapse-action" data-collapse-label="1">Show</span>
+                                    </button>
+                                    <div id="{{ $invoiceCollapseId }}" class="collapse customer-tax-body pt-2">
+                                        <div class="text-muted small mb-1 d-flex">
+                                            <div class="row-title">Tên công ty:</div>
+                                            <div class="row-value">{{ $order->customer?->company_name ?: 'Chưa cập nhật' }}</div>
+                                        </div>
+                                        <div class="text-muted small mb-1 d-flex">
+                                            <div class="row-title">Mã số thuế:</div>
+                                            <div class="row-value">{{ $order->customer?->tax_code ?: 'Chưa cập nhật' }}</div>
+                                        </div>
+                                        <div class="text-muted small d-flex">
+                                            <div class="row-title">Địa chỉ Cty:</div>
+                                            <div class="row-value">{{ $order->customer?->company_address ?: 'Chưa cập nhật' }}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            @endif
+
+                            @if($showTruckStation)
+                                <div class="transport-info mt-3 mt-md-2">
+                                    <button class="btn btn-sm btn-outline-secondary w-100 d-flex justify-content-between align-items-center customer-collapse-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#{{ $truckCollapseId }}" aria-expanded="false" aria-controls="{{ $truckCollapseId }}">
+                                        <span class="transport-title mb-0">Thông tin nhà xe</span>
+                                        <span class="customer-collapse-action" data-collapse-label="1">Show</span>
+                                    </button>
+                                    <div id="{{ $truckCollapseId }}" class="collapse transport-body pt-2">
+                                        <div class="text-muted small mb-1">Nhà xe: {{ $station?->name ?: 'Chưa chọn nhà xe' }}</div>
+                                        @if($station)
+                                            <div class="text-muted small mb-1">
+                                                Khu vực: {{ collect([$station->ward?->name, $station->province?->name])->filter()->implode(', ') ?: 'Chưa cập nhật' }}
+                                            </div>
+                                        @endif
+                                        <div class="text-muted small mb-1">Địa chỉ gửi: {{ $order->customer?->truck_station_address ?: ($station?->address ?: 'Chưa cập nhật') }}</div>
+                                        <div class="small text-muted mb-1">
+                                            <i class="bi bi-clock me-1"></i>
+                                            Giờ nhận: {{ $order->customer?->truck_receive_time ?: 'Chưa cập nhật' }}
+                                        </div>
+                                        <div class="text-muted small"><i class="bi bi-telephone me-1"></i>{{ $order->customer?->truck_station_phone ?: ($station?->phone ?: 'Chưa cập nhật') }}</div>
+                                    </div>
+                                </div>
                             @endif
                         </div>
                     </div>
+
+                    <div class="wh-section pb-0">
+                        <div class="wh-logistics-title">Danh sách sản phẩm</div>
+                        @if(($order->items ?? collect())->isNotEmpty())
+                            <div class="wh-item-table-wrap">
+                                <div class="wh-item-table-head">
+                                    <div>Ảnh</div>
+                                    <div>Sản phẩm</div>
+                                    <div class="text-center">SL</div>
+                                    <div class="text-center">Size</div>
+                                    <div class="text-center">Tổng</div>
+                                    <div class="text-center">Giá bán</div>
+                                    <div class="text-end">Thành tiền</div>
+                                </div>
+                                <ul class="wh-item-list">
+                                    @foreach($order->items as $item)
+                                        @php
+                                            $variant = $item->variant;
+                                            $product = $item->product ?? $variant?->product;
+                                            $productName = $product?->name ?? $variant?->name ?? 'Sản phẩm';
+                                            $qty = (float) ($item->quantity ?? 0);
+                                            $basePrice = (float) ($item->base_price ?? $item->price ?? 0);
+                                            $unitDiscount = (float) ($item->unit_discount ?? 0);
+                                            $discountType = $item->discount_type === 'increase' ? 'increase' : 'decrease';
+                                            $sellingPrice = $discountType === 'increase'
+                                                ? ($basePrice + $unitDiscount)
+                                                : ($basePrice - $unitDiscount);
+                                            $lineTotal = (float) ($item->total ?? 0);
+                                            if ($lineTotal <= 0) {
+                                                $lineTotal = $sellingPrice * (float) ($item->display_total_value ?? $qty);
+                                            }
+                                            $variantSize = $variant?->size;
+                                            $formattedVariantSize = (!is_null($variantSize) && $variantSize !== '')
+                                                ? rtrim(rtrim(number_format((float) $variantSize, 2, '.', ''), '0'), '.')
+                                                : '-';
+                                            $imagePath = $variant?->avatar?->media?->file_path
+                                                ?? $product?->avatar?->media?->file_path
+                                                ?? null;
+                                        @endphp
+                                        <li class="wh-item-row">
+                                            <div class="wh-item-table-row">
+                                                <div>
+                                                    @if($imagePath)
+                                                        <img class="wh-item-thumb" src="{{ asset('storage/' . $imagePath) }}" alt="{{ $productName }}">
+                                                    @else
+                                                        <span class="wh-item-thumb-placeholder">
+                                                            <i class="bi bi-image"></i>
+                                                        </span>
+                                                    @endif
+                                                </div>
+                                                <div class="wh-item-name">
+                                                    {{ $productName }}
+                                                    @if($variant?->sku)
+                                                        <span class="text-muted small">({{ $variant->sku }})</span>
+                                                    @endif
+                                                </div>
+                                                <div class="wh-item-cell"><strong>{{ rtrim(rtrim(number_format($qty, 3, '.', ''), '0'), '.') }}</strong></div>
+                                                <div class="wh-item-cell"><strong>{{ $formattedVariantSize }}</strong></div>
+                                                <div class="wh-item-cell"><strong>{{ $item->display_total_label }}</strong></div>
+                                                <div class="wh-item-cell">{{ number_format($sellingPrice, 0, ',', '.') }}đ</div>
+                                                <div class="wh-item-cell text-end"><strong>{{ number_format($lineTotal, 0, ',', '.') }}đ</strong></div>
+                                            </div>
+                                        </li>
+                                    @endforeach
+                                </ul>
+                            </div>
+                        @else
+                            <div class="order-subtitle mt-3">Không có sản phẩm</div>
+                        @endif
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center mt-4 flex-wrap gap-3">
+                        <div class="code small">
+                            {{ $order->code }}
+                        </div>
+                        <div class="d-flex justify-content-end align-items-center flex-wrap gap-2">
+                            <span class="status-pill status-{{ $statusClass }}">
+                                <i class="fa fa-circle" style="font-size:8px;"></i>{{ $statusText }}
+                            </span>
+                            <div class="orders-actions">
+                                @if($canEdit)
+                                    <a href="{{ route('site.orders.edit', $order) }}" class="btn btn-success btn-sm">
+                                        <i class="fa fa-pencil me-1"></i>Sửa
+                                    </a>
+                                @endif
+                                <a href="{{ route('pages.my_orders') }}" class="btn btn-outline-primary btn-sm">
+                                    Quay lại danh sách đơn
+                                </a>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            </div>
-        </div>
-
-        <div class="order-panel mt-3">
-            <div class="order-panel-body">
-                <h2 class="order-title">Danh sách sản phẩm</h2>
-                <p class="order-subtitle">Chi tiết từng dòng sản phẩm trong đơn hàng.</p>
-
-                <div class="table-responsive mt-3">
-                    <table class="table order-table">
-                        <thead>
-                            <tr>
-                                <th>Ảnh</th>
-                                <th>Sản phẩm</th>
-                                <th>Biến thể</th>
-                                <th>SL</th>
-                                <th>ĐVT</th>
-                                <th>Kg</th>
-                                <th>Loại tính</th>
-                                <th>Giá Min</th>
-                                <th>Đơn giá</th>
-                                <th>Điều chỉnh</th>
-                                <th>Thành tiền</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach($order->items as $item)
-                            @php
-                                $variant = $item->variant;
-                                $unitLabel = optional(optional($item->variant)->product)->unit_label ?? 'Cái';
-                                $weightUnitLabel = $unitLabel;
-                                $isPricedByKg = $item->is_priced_by_kg;
-                                if ($isPricedByKg === null) {
-                                    $isPricedByKg = optional(optional($item->variant)->product)->is_priced_by_kg ?? true;
-                                }
-                                $imageUrl = $variant?->media_url
-                                    ?? ($variant?->product?->avatar?->media
-                                        ? asset('storage/' . $variant->product->avatar->media->file_path)
-                                        : 'https://via.placeholder.com/56');
-                            @endphp
-                            <tr>
-                                <td>
-                                    <img src="{{ $imageUrl }}" alt="{{ optional(optional($item->variant)->product)->name ?? 'Product' }}" width="56" class="rounded border">
-                                </td>
-                                <td class="order-product">
-                                    <strong>{{ optional(optional($item->variant)->product)->name ?? 'N/A' }}</strong>
-                                    <small>SKU: {{ optional($item->variant)->sku ?? 'N/A' }}</small>
-                                </td>
-                                <td>{{ optional($item->variant)->name ?? 'N/A' }}</td>
-                                <td class="order-qty">{{ number_format((float) $item->quantity, 0, ',', '.') }}</td>
-                                <td class="order-qty">{{ $unitLabel }}</td>
-                                <td class="order-qty">{{ number_format((float) ($item->unit_weight ?? 0), 3, ',', '.') }} {{ $weightUnitLabel }}</td>
-                                <td class="order-qty">{{ $isPricedByKg ? 'Theo kg' : 'Theo đơn vị' }}</td>
-                                <td class="order-money">{{ number_format((float) ($variant?->latestPriceRule?->min_price ?? 0), 0, ',', '.') }}đ</td>
-                                <td class="order-money">{{ number_format((float) $item->price, 0, ',', '.') }}đ</td>
-                                <td class="order-money">{{ $formatSignedMoney((float) ($item->discount_total ?? 0)) }}</td>
-                                <td class="order-money">{{ number_format((float) ($item->total ?? ($item->price * $item->quantity)), 0, ',', '.') }}đ</td>
-                            </tr>
-                            @endforeach
-                        </tbody>
-                        <tfoot>
-                            <tr>
-                                <td colspan="10" class="text-end"><strong>Tổng cộng</strong></td>
-                                <td class="order-money"><strong>{{ number_format((float) $order->total, 0, ',', '.') }}đ</strong></td>
-                            </tr>
-                        </tfoot>
-                    </table>
-                </div>
-            </div>
-
-            <div class="order-actions">
-                @if($canEdit)
-                    <a href="{{ route('site.orders.edit', $order) }}" class="btn btn-primary me-2"><i class="fa fa-pencil me-1"></i> Sửa đơn</a>
-                @endif
-                <a href="{{ route('pages.my_orders') }}" class="btn btn-outline-primary">Quay lại danh sách đơn</a>
             </div>
         </div>
     </div>

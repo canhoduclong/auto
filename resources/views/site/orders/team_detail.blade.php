@@ -440,7 +440,7 @@
                             <div class="team-item-table-head">
                                 <div>Sản phẩm</div>                                
                                 <div class="text-end">Số Lượng</div>
-                                <div class="text-center">ĐVT</div>
+                                <div class="text-center">Tổng</div>
                                 <div class="text-center">Size</div>
                                 <div class="text-end">KL tạm tính</div>
                                 <div class="text-center">Loại tính</div>
@@ -483,7 +483,7 @@
                                             </div>
                                             
                                             <div class="team-item-cell"><strong>{{ number_format($qty, 0, ',', '.') }}</strong></div>
-                                            <div class="text-center text-muted small">{{ $unitLabel }}</div>
+                                            <div class="text-center text-muted small">{{ $item->display_total_label }}</div>
                                             <div class="text-center text-muted small">{{ $sizeText }}</div>
                                             <div class="team-item-cell">{{ number_format($lineWeight, 2, ',', '.') }} {{ $weightUnitLabel }}</div>
                                             <div class="text-center text-muted small">{{ $isPricedByKg ? 'Theo kg' : 'Theo đơn vị' }}</div>
