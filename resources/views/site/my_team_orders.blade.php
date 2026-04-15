@@ -574,13 +574,8 @@
                         }
                         $createdTs = optional($order->created_at)?->timestamp ?? 0;
                         $hasInvalidSizeItems = $order->items->contains(function ($it) {
-                            $sl = $it->variant?->size ?? $it->variant?->name ?? '-';
-                            $av = 0;
-                            if (preg_match('/(\d+(\.\d+)?)/', $sl, $szm)) { $av = (float) $szm[1]; }
-                            $sv = $av > 0 ? $av : 1;
-                            $ew = (float) ($it->total_weight ?? 0);
-                            if ($ew <= 0) { $ew = (float) ($it->quantity ?? 0) * $sv; }
-                            return $av <= 0 || $ew <= 0;
+                            $unitWeight = (float) ($it->effective_unit_weight ?? 0);
+                            return $unitWeight <= 0;
                         });
                     @endphp
 
@@ -656,6 +651,18 @@
                             </div>
                         </div>
 
+                        @if($hasInvalidSizeItems)
+                            @php
+                                $invalidItemNames = $order->items
+                                    ->filter(fn($it) => (float)($it->effective_unit_weight ?? 0) <= 0)
+                                    ->map(fn($it) => $it->product?->name ?? $it->variant?->name ?? 'Sản phẩm')
+                                    ->implode(', ');
+                            @endphp
+                            <div id="approveErr_{{ $order->id }}" class="text-danger small mt-2 px-1">
+                                <i class="bi bi-exclamation-triangle-fill me-1"></i>Không thể duyệt: <strong>{{ $invalidItemNames }}</strong> có KL quy đổi = 0. Vui lòng cập nhật size/KL sản phẩm.
+                            </div>
+                        @endif
+
                         <div class="collapse tmo-detail" id="quickOrder{{ $order->id }}">
                             @if(($order->items ?? collect())->isNotEmpty())
                                 <div class="tmo-products">
@@ -683,10 +690,8 @@
                                                 $actualSizeValue = (float) $matches[1];
                                             }
                                             $sizeValue = $actualSizeValue > 0 ? $actualSizeValue : 1; // mặc định = 1 nếu rỗng/invalid
-                                            $estimatedWeight = (float) ($item->total_weight ?? 0);
-                                            if ($estimatedWeight <= 0) {
-                                                $estimatedWeight = $qty * $sizeValue;
-                                            }
+                                            $effectiveUnitWeight = (float) ($item->effective_unit_weight ?? 0);
+                                            $estimatedWeight = round($qty * $effectiveUnitWeight, 3);
                                             $lineSubtotal = (float) ($item->total ?? 0);
                                             if ($lineSubtotal <= 0) {
                                                 $lineSubtotal = $qty * $price;
@@ -1151,8 +1156,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         const invalidLines = [];
                         row.querySelectorAll('.js-product-line').forEach(function (line) {
                             const estWeight = parseFloat(line.dataset.productEstWeight || '0');
-                            const sizeVal = parseFloat(line.dataset.productSizeVal || '0');
-                            if (estWeight <= 0 || sizeVal <= 0) {
+                            if (estWeight <= 0) {
                                 invalidLines.push(line.dataset.productName || 'Sản phẩm');
                             }
                         });
@@ -1162,10 +1166,15 @@ document.addEventListener('DOMContentLoaded', function () {
                             if (!errEl) {
                                 errEl = document.createElement('div');
                                 errEl.id = errId;
-                                errEl.className = 'text-danger small mt-1';
-                                form.after(errEl);
+                                errEl.className = 'text-danger small mt-2 px-1';
+                                const orderTop = row.querySelector('.tmo-order-top');
+                                if (orderTop) {
+                                    orderTop.insertAdjacentElement('afterend', errEl);
+                                } else {
+                                    row.appendChild(errEl);
+                                }
                             }
-                            errEl.textContent = 'Không thể duyệt: ' + invalidLines.join(', ') + ' có size hoặc KL tạm tính = 0.';
+                            errEl.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-1"></i>Không thể duyệt: <strong>' + invalidLines.join(', ') + '</strong> có KL quy đổi = 0.';
                             return;
                         }
                     }

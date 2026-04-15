@@ -2744,6 +2744,183 @@ class PageController extends Controller
             ->with('success', 'Da cap nhat don hang thanh cong.');
     }
     
+    /**
+     * Xác nhận đơn copy: tái xử lý dữ liệu hiện có (giá, trọng lượng), xóa cờ copy, chuyển sang pending_leader_approval.
+     */
+    public function confirmCopyOrder(Order $order)
+    {
+        $user = auth()->user();
+
+        if (!$user || $order->user_id !== $user->id) {
+            abort(403);
+        }
+
+        if (!$this->hasOrderColumn('copied_from_order_id') || empty($order->copied_from_order_id)) {
+            return back()->with('error', 'Đơn hàng này không phải đơn copy mới.');
+        }
+
+        $order->load(['items', 'transactions']);
+
+        if ($order->items->isEmpty()) {
+            return back()->with('error', 'Đơn hàng không có sản phẩm nào. Vui lòng sửa đơn trước khi xác nhận.');
+        }
+
+        $variantIds = $order->items->pluck('product_variant_id')->filter()->unique()->values()->all();
+        $variants = ProductVariant::query()
+            ->with(['latestPriceRule', 'product'])
+            ->whereIn('id', $variantIds)
+            ->get()
+            ->keyBy('id');
+
+        foreach ($order->items as $item) {
+            if (!$variants->has($item->product_variant_id)) {
+                return back()->with('error', 'Một số sản phẩm trong đơn không còn tồn tại. Vui lòng sửa đơn hàng trước.');
+            }
+        }
+
+        DB::transaction(function () use ($order, $variants): void {
+            $parseWeightToKg = static function ($size): float {
+                $normalized = strtolower(str_replace(',', '.', trim((string) $size)));
+                if ($normalized === '') {
+                    return 0.0;
+                }
+                if (!preg_match('/([0-9]*\.?[0-9]+)/', $normalized, $matches)) {
+                    return 0.0;
+                }
+                $weight = (float) ($matches[1] ?? 0);
+                if ($weight <= 0) {
+                    return 0.0;
+                }
+                if (str_contains($normalized, 'g') && !str_contains($normalized, 'kg')) {
+                    $weight = $weight / 1000;
+                }
+                return round(max(0, $weight), 3);
+            };
+
+            $resolveKg = static function ($variant) use ($parseWeightToKg): float {
+                $variantKg = (float) ($variant->kg ?? 0);
+                if ($variantKg > 0) {
+                    return $variantKg;
+                }
+                $productKg = (float) ($variant->product?->kg ?? 0);
+                if ($productKg > 0) {
+                    return $productKg;
+                }
+                $sizeKg = $parseWeightToKg($variant->size ?? null);
+                if ($sizeKg > 0) {
+                    return $sizeKg;
+                }
+                return 1.0;
+            };
+
+            $resolvePricedByKg = static function ($variant): bool {
+                if ($variant->is_priced_by_kg !== null) {
+                    return (bool) $variant->is_priced_by_kg;
+                }
+                return (bool) ($variant->product?->is_priced_by_kg ?? true);
+            };
+
+            $subtotalAmount = 0;
+            $itemDiscountTotal = 0;
+            $totalBeforeOrderDiscount = 0;
+
+            $existingItems = $order->items->map(fn ($it) => [
+                'variant_id'    => (int) $it->product_variant_id,
+                'quantity'      => max(1, (int) $it->quantity),
+                'unit_discount' => max(0, (float) ($it->unit_discount ?? 0)),
+                'discount_type' => strtolower((string) ($it->discount_type ?? 'decrease')) === 'increase' ? 'increase' : 'decrease',
+            ])->values();
+
+            $order->items()->delete();
+
+            foreach ($existingItems as $itemData) {
+                $variant = $variants->get($itemData['variant_id']);
+                if (!$variant) {
+                    continue;
+                }
+
+                $price     = (float) ($variant->latestPriceRule?->price ?? $variant->final_price ?? 0);
+                $minPrice  = max(0, (float) ($variant->latestPriceRule?->min_price ?? 0));
+                $quantity  = $itemData['quantity'];
+                $unitDiscount = $itemData['unit_discount'];
+                $discountType = $itemData['discount_type'];
+
+                if ($discountType !== 'increase') {
+                    $unitDiscount = min($unitDiscount, max($price - $minPrice, 0));
+                }
+
+                $unitWeight    = round(max(0.01, $resolveKg($variant)), 3);
+                $isPricedByKg  = $resolvePricedByKg($variant);
+                $pricingFactor = $isPricedByKg ? $unitWeight : 1;
+                $totalWeight   = round($unitWeight * $quantity, 3);
+                $lineSubtotal  = round($price * $quantity * $pricingFactor, 2);
+                $lineAdjustment = round(($discountType === 'increase' ? -1 : 1) * $unitDiscount * $quantity * $pricingFactor, 2);
+                $finalUnitPrice = $discountType === 'increase' ? ($price + $unitDiscount) : ($price - $unitDiscount);
+                $lineTotal = max(round($finalUnitPrice * $quantity * $pricingFactor, 2), 0);
+
+                $order->items()->create([
+                    'product_id'         => $variant->product_id,
+                    'product_variant_id' => $variant->id,
+                    'quantity'           => $quantity,
+                    'price'              => $finalUnitPrice,
+                    'base_price'         => $price,
+                    'unit_discount'      => $unitDiscount,
+                    'discount_type'      => $discountType,
+                    'discount_total'     => $lineAdjustment,
+                    'unit_weight'        => $unitWeight,
+                    'is_priced_by_kg'    => $isPricedByKg,
+                    'total_weight'       => $totalWeight,
+                    'total'              => $lineTotal,
+                ]);
+
+                $subtotalAmount     += $lineSubtotal;
+                $itemDiscountTotal  += $lineAdjustment;
+                $totalBeforeOrderDiscount += $lineTotal;
+            }
+
+            $orderDiscountAmount = (float) ($order->order_discount ?? 0);
+            $orderDiscountType   = strtolower((string) ($order->order_discount_type ?? 'decrease')) === 'increase' ? 'increase' : 'decrease';
+            $orderAdjustment     = $orderDiscountType === 'increase' ? -1 * $orderDiscountAmount : $orderDiscountAmount;
+            $newTotal            = max($totalBeforeOrderDiscount - $orderAdjustment, 0);
+            $totalDiscount       = $itemDiscountTotal + $orderAdjustment;
+
+            $paid = (float) $order->transactions->where('type', 'payment')->sum('amount')
+                  - (float) $order->transactions->where('type', 'refund')->sum('amount');
+
+            $updateData = [
+                'copied_from_order_id' => null,
+                'status'               => Order::STATUS_PENDING_LEADER_APPROVAL,
+                'subtotal_amount'      => $subtotalAmount,
+                'item_discount_total'  => $itemDiscountTotal,
+                'extra_discount_total' => $orderAdjustment,
+                'order_discount'       => $orderDiscountAmount,
+                'order_discount_type'  => $orderDiscountType,
+                'total_discount'       => $totalDiscount,
+                'total'                => $newTotal,
+                'amount_due'           => max($newTotal - $paid, 0),
+            ];
+
+            $order->update(array_filter(
+                $updateData,
+                fn (string $column): bool => $this->hasOrderColumn($column),
+                ARRAY_FILTER_USE_KEY
+            ));
+
+            if ($this->hasOrderColumn('created_at')) {
+                DB::table('orders')
+                    ->where('id', $order->id)
+                    ->update(['created_at' => now()]);
+                $order->refresh();
+            }
+
+            $order->approvals()->delete();
+            app(ApprovalService::class)->initOrderApproval($order->fresh());
+        });
+
+        return redirect()->route('pages.my_orders')
+            ->with('success', 'Đã xác nhận đơn copy #' . $order->code . '. Đơn đang chờ leader duyệt.');
+    }
+
     public function copyOrder($id)
     {
        $user = auth()->user();

@@ -444,6 +444,7 @@ Route::get('/my-orders/{order}', [PageController::class, 'myOrderDetail'])->name
 Route::get('/my-orders/{order}/edit', [PageController::class, 'myOrderEdit'])->name('site.orders.edit')->middleware('auth');
 Route::put('/my-orders/{order}', [PageController::class, 'myOrderUpdate'])->name('site.orders.update')->middleware('auth');
 Route::get('/my-orders/{id}/copy', [PageController::class, 'copyOrder'])->name('site.orders.copy')->middleware('auth');
+Route::post('/my-orders/{order}/confirm-copy', [PageController::class, 'confirmCopyOrder'])->name('site.orders.confirm-copy')->middleware('auth');
 
 Route::get('/page/{slug}', [PageController::class, 'show'])->name('pages.show');
 

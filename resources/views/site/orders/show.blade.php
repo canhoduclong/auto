@@ -964,6 +964,15 @@
                                 <i class="fa fa-circle" style="font-size:8px;"></i>{{ $statusText }}
                             </span>
                             <div class="orders-actions">
+                                @if($isCopiedOrder)
+                                    <form action="{{ route('site.orders.confirm-copy', $order) }}" method="POST" class="d-inline"
+                                          onsubmit="return confirm('Xác nhận đơn copy #{{ $order->code }}? Hệ thống sẽ cập nhật giá và chuyển đơn sang Chờ leader duyệt.')">
+                                        @csrf
+                                        <button type="submit" class="btn btn-warning btn-sm text-dark">
+                                            <i class="fa fa-check me-1"></i>Xác nhận
+                                        </button>
+                                    </form>
+                                @endif
                                 @if($canEdit)
                                     <a href="{{ route('site.orders.edit', $order) }}" class="btn btn-success btn-sm">
                                         <i class="fa fa-pencil me-1"></i>Sửa

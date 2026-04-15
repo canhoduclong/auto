@@ -167,7 +167,29 @@ class WarehouseDashboardController extends Controller
             ]);
         });
 
-        return view('warehouse.orders.index', compact('orders', 'selectedDate', 'status', 'quickDates'));
+        // Tính tồn kho theo ngày được chọn:
+        // stock_on_date = tồn kho hiện tại - tổng biến động sau ngày đó (để suy ngược về cuối ngày đó)
+        $variantIds = $orders->flatMap->items->pluck('product_variant_id')->filter()->unique()->values()->all();
+        $historicalStocks = collect();
+        if (!empty($variantIds)) {
+            $historicalStocks = DB::table('inventories')
+                ->select('inventories.product_variant_id')
+                ->selectRaw('GREATEST(0, CAST(SUM(inventories.quantity - inventories.reserved_quantity) AS SIGNED) - COALESCE(SUM(future_movements.qty), 0)) as stock_on_date')
+                ->leftJoinSub(
+                    DB::table('inventory_movements')
+                        ->select('inventory_id')
+                        ->selectRaw('SUM(quantity) as qty')
+                        ->whereDate('created_at', '>', $selectedDate)
+                        ->groupBy('inventory_id'),
+                    'future_movements',
+                    'future_movements.inventory_id', '=', 'inventories.id'
+                )
+                ->whereIn('inventories.product_variant_id', $variantIds)
+                ->groupBy('inventories.product_variant_id')
+                ->pluck('stock_on_date', 'product_variant_id');
+        }
+
+        return view('warehouse.orders.index', compact('orders', 'selectedDate', 'status', 'quickDates', 'historicalStocks'));
     }
 
     /**
