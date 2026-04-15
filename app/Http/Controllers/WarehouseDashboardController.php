@@ -702,7 +702,7 @@ class WarehouseDashboardController extends Controller
     {
         $managedWarehouseId = Auth::user()->warehouse_id ? (int) Auth::user()->warehouse_id : null;
 
-        $orders = Order::with(['customer', 'shipper', 'items', 'warehouse', 'returnWarehouse'])
+        $orders = Order::with(['customer', 'shipper', 'items.variant', 'items.product', 'warehouse', 'returnWarehouse'])
             ->where('status', Order::STATUS_RETURNING)
             ->orderBy('updated_at', 'desc')
             ->get();
