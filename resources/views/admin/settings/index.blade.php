@@ -223,6 +223,25 @@
                             </div>
                         </div>
                     </div>
+
+                    <div class="col-xl-4 col-md-6">
+                        @php $loginBgMedia = isset($settings['login_bg']) ? App\Models\Media::find($settings['login_bg']->value) : null; @endphp
+                        <div class="media-field">
+                            <div class="media-field__label">Hình nền trang đăng nhập</div>
+                            <div class="media-preview" id="login-bg-preview">
+                                @if($loginBgMedia)
+                                    <img src="{{ asset('storage/' . $loginBgMedia->file_path) }}" class="media-preview__img" alt="Login Background">
+                                @else
+                                    <span class="media-preview__empty">Chưa chọn ảnh</span>
+                                @endif
+                            </div>
+                            <input type="hidden" name="login_bg" id="login-bg-media-id" value="{{ $settings['login_bg']->value ?? '' }}">
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-primary btn-sm" id="btnSelectLoginBg">Chọn ảnh</button>
+                                <button type="button" class="btn btn-light btn-sm border" data-clear-target="login-bg">Bỏ chọn</button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -460,6 +479,7 @@ document.addEventListener('DOMContentLoaded', function () {
     setupMediaSelector('btnSelectLogo', 'logo-preview', 'logo-media-id');
     setupMediaSelector('btnSelectBanner', 'banner-preview', 'banner-media-id');
     setupMediaSelector('btnSelectFooterLogo', 'footer-logo-preview', 'footer-logo-media-id');
+    setupMediaSelector('btnSelectLoginBg', 'login-bg-preview', 'login-bg-media-id');
     @for ($i = 1; $i <= 5; $i++)
         setupMediaSelector('btnSelectSlider{{ $i }}', 'slider_{{ $i }}-preview', 'slider_{{ $i }}-media-id');
     @endfor
@@ -468,6 +488,7 @@ document.addEventListener('DOMContentLoaded', function () {
         'logo': { previewId: 'logo-preview', inputId: 'logo-media-id' },
         'banner': { previewId: 'banner-preview', inputId: 'banner-media-id' },
         'footer-logo': { previewId: 'footer-logo-preview', inputId: 'footer-logo-media-id' },
+        'login-bg':    { previewId: 'login-bg-preview',    inputId: 'login-bg-media-id' },
         @for ($i = 1; $i <= 5; $i++)
         'slider_{{ $i }}': { previewId: 'slider_{{ $i }}-preview', inputId: 'slider_{{ $i }}-media-id' },
         @endfor
