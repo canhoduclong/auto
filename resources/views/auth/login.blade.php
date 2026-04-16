@@ -261,10 +261,6 @@
             <button class="btn btn-primary btn-login w-100">{{ __('common.actions.login') }}</button>
         </form>
 
-        <div class="login-links">
-            <a href="{{ url('/register') }}" class="login-register">{{ __('auth.register_link') }}</a>
-        </div>
-
         <div class="login-copyright">
             © {{ date('Y') }} {{ $loginBrandName }}
         </div>
