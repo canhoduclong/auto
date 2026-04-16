@@ -299,8 +299,8 @@
     $packedLikeStatuses = ['packed', 'packed_waiting_pickup', 'delivering', 'delivered', 'completed'];
 
     $inventoryStats = $orders
-        ->flatMap(function ($order) use ($packedLikeStatuses, $historicalStocks) {
-            return $order->items->map(function ($item) use ($order, $packedLikeStatuses, $historicalStocks) {
+        ->flatMap(function ($order) use ($packedLikeStatuses) {
+            return $order->items->map(function ($item) use ($order, $packedLikeStatuses) {
                 $variant = $item->variant;
                 $productName = $variant?->name ?? $item->product?->name ?? 'Sản phẩm';
                 $orderedQty = (float) ($item->quantity ?? 0);
@@ -309,7 +309,7 @@
                 return [
                     'variant_id' => (int) ($item->product_variant_id ?? 0),
                     'name' => $productName,
-                    'available_stock' => max(0, (float) ($historicalStocks->get($item->product_variant_id) ?? $variant?->available_stock ?? 0)),
+                    'available_stock' => max(0, (float) ($variant?->available_stock ?? 0)),
                     'ordered_qty' => $orderedQty,
                     'packed_qty' => $packedQty,
                 ];
@@ -395,7 +395,7 @@
     <div class="card wh-stock-panel mb-3">
         <div class="card-header d-flex justify-content-between align-items-center">
             <div class="fw-semibold">
-                <i class="bi bi-bar-chart-steps me-1"></i>Tồn kho theo ngày {{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}
+                <i class="bi bi-bar-chart-steps me-1"></i>Show tồn kho theo sản phẩm
             </div>
             <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#warehouseStockCollapse" aria-expanded="false" aria-controls="warehouseStockCollapse">
                 Mở / Thu gọn
@@ -419,7 +419,7 @@
 
                                 <div class="stock-bar-wrap">
                                     <div class="stock-bar-meta">
-                                        <span>1. Tồn kho cuối ngày {{ \Carbon\Carbon::parse($selectedDate)->format('d/m') }}</span>
+                                        <span>1. Số lượng tồn kho</span>
                                         <strong>{{ number_format($stockItem['available_stock'], 0, ',', '.') }}</strong>
                                     </div>
                                     <div class="stock-bar-track">

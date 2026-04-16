@@ -52,7 +52,6 @@ use App\Http\Controllers\CustomerAppointmentController;
 
 
 
-Route::get('/', [HomeController::class, 'index'])->name('home');
 Route::get('/locale/{locale}', function (string $locale) {
     abort_unless(in_array($locale, ['vi', 'en'], true), 404);
 
@@ -60,10 +59,6 @@ Route::get('/locale/{locale}', function (string $locale) {
 
     return back();
 })->name('locale.switch');
-Route::get('/variants', [HomeController::class, 'variants'])->name('site.variants');
-Route::get('/products/search', [ProductController::class, 'search'])->name('products.search');
-Route::post('/media/upload', [MediaController::class, 'upload'])->name('media.upload');
-Route::get('/media/browse', [MediaController::class, 'browse'])->name('media.browse');
 
 // Auth pages
 Route::middleware('guest')->group(function () {
@@ -72,15 +67,18 @@ Route::middleware('guest')->group(function () {
         ->middleware('throttle:5,1'); // 5 lần/phút chống brute-force
     Route::get('/register', [AuthController::class, 'showRegistrationForm'])->name('register');
     Route::post('/register', [AuthController::class, 'register']);
-
-    
-
-    //----
-    Route::get('/product/{product:slug}', [PageController::class, 'productDetail'])->name('pages.product_detail');
-    
 });
 
+
 Route::middleware(['auth'])->group(function () {
+
+        // Public-facing pages (require login)
+        Route::get('/', [HomeController::class, 'index'])->name('home');
+        Route::get('/variants', [HomeController::class, 'variants'])->name('site.variants');
+        Route::get('/products/search', [ProductController::class, 'search'])->name('products.search');
+        Route::post('/media/upload', [MediaController::class, 'upload'])->name('media.upload');
+        Route::get('/media/browse', [MediaController::class, 'browse'])->name('media.browse');
+        Route::get('/product/{product:slug}', [PageController::class, 'productDetail'])->name('pages.product_detail');
 
         // Customer Reminders
         Route::post('/my-customer/{customer}/reminders', [\App\Http\Controllers\CustomerReminderController::class, 'store'])->name('customer_reminders.store');
@@ -399,6 +397,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/all-team-orders', [PageController::class, 'allTearmOrders'])->name('pages.all_team_orders');
     Route::post('/all-tearm-orders/auto-approve', [PageController::class, 'allTearmOrdersAutoApprove'])->name('pages.all_tearm_orders.auto_approve');
     Route::get('/team-orders/{order}', [PageController::class, 'teamOrderDetail'])->name('pages.team_order_detail');
+    Route::get('/team-orders/{order}/customer-orders', [PageController::class, 'teamOrderCustomerOrders'])->name('pages.team_order_customer_orders');
 });
 
 

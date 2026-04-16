@@ -75,6 +75,15 @@
     $recipientPhone = $order->recipient_phone ?: ($order->customer?->phone ?? '-');
     $deliveryAddress = $order->recipient_address ?: ($order->customer?->address ?? '-');
     $deliveryTime = $order->delivery_time ?: ($order->customer?->delivery_time ?? 'Chưa cập nhật');
+
+    $hasInvoiceInfo = filled($order->customer?->company_name)
+        || filled($order->customer?->tax_code)
+        || filled($order->customer?->company_address);
+    $showTruckStation = (bool) ($order->customer?->use_truck_station ?? false);
+    $station = $order->customer?->truckStation;
+    $invoiceCollapseId = 'td-invoice-' . $order->id;
+    $truckCollapseId   = 'td-truck-'   . $order->id;
+    $ajaxOrdersUrl = route('pages.team_order_customer_orders', $order->id);
     $createdAt = optional($order->created_at)->format('d/m/Y H:i') ?: '-';
     $updatedAt = optional($order->updated_at)->format('d/m/Y H:i') ?: '-';
 
@@ -247,7 +256,7 @@
     .team-item-table-head,
     .team-item-table-row {
         display: grid;
-        grid-template-columns: minmax(0, 2fr) 64px 58px 72px 88px 92px 92px;
+        grid-template-columns: minmax(0, 2fr) 64px 58px 72px 92px 110px;
         gap: 8px;
         align-items: center;
     }
@@ -325,7 +334,7 @@
     @media (max-width: 575px) {
         .team-item-table-head,
         .team-item-table-row {
-            grid-template-columns: minmax(0, 1.25fr) 48px 50px 62px 82px 82px 82px;
+            grid-template-columns: minmax(0, 1.25fr) 48px 50px 62px 80px 100px;
             gap: 6px;
         }
     }
@@ -425,6 +434,97 @@
                                 </div>
                             @endif
                         </div>
+
+                        {{-- Xuất hóa đơn --}}
+                        @if($hasInvoiceInfo)
+                        <div class="team-order-section">
+                            <button class="btn btn-sm btn-outline-secondary w-100 d-flex justify-content-between align-items-center" type="button" data-bs-toggle="collapse" data-bs-target="#{{ $invoiceCollapseId }}" aria-expanded="false">
+                                <span style="font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;">
+                                    <i class="bi bi-file-earmark-text me-1"></i>Xuất hóa đơn
+                                </span>
+                                <i class="bi bi-chevron-down" style="font-size:.7rem;"></i>
+                            </button>
+                            <div id="{{ $invoiceCollapseId }}" class="collapse pt-2">
+                                <div class="team-delivery-line">Tên công ty: <strong>{{ $order->customer?->company_name ?: 'Chưa cập nhật' }}</strong></div>
+                                <div class="team-delivery-line">Mã số thuế: <strong>{{ $order->customer?->tax_code ?: 'Chưa cập nhật' }}</strong></div>
+                                <div class="team-delivery-line">Địa chỉ Cty: {{ $order->customer?->company_address ?: 'Chưa cập nhật' }}</div>
+                            </div>
+                        </div>
+                        @endif
+
+                        {{-- Nhà xe --}}
+                        @if($showTruckStation)
+                        <div class="team-order-section">
+                            <button class="btn btn-sm btn-outline-secondary w-100 d-flex justify-content-between align-items-center" type="button" data-bs-toggle="collapse" data-bs-target="#{{ $truckCollapseId }}" aria-expanded="false">
+                                <span style="font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;">
+                                    <i class="bi bi-truck me-1"></i>Thông tin nhà xe
+                                </span>
+                                <i class="bi bi-chevron-down" style="font-size:.7rem;"></i>
+                            </button>
+                            <div id="{{ $truckCollapseId }}" class="collapse pt-2">
+                                <div class="team-delivery-line">Nhà xe: <strong>{{ $station?->name ?: 'Chưa chọn' }}</strong></div>
+                                @if($station)
+                                    <div class="team-delivery-line">Khu vực: {{ collect([$station->ward?->name, $station->province?->name])->filter()->implode(', ') ?: 'Chưa cập nhật' }}</div>
+                                @endif
+                                <div class="team-delivery-line">Địa chỉ gửi: {{ $order->customer?->truck_station_address ?: ($station?->address ?: 'Chưa cập nhật') }}</div>
+                                <div class="team-delivery-line">Giờ nhận: {{ $order->customer?->truck_receive_time ?: 'Chưa cập nhật' }}</div>
+                                <div class="team-delivery-line"><i class="bi bi-telephone me-1"></i>{{ $order->customer?->truck_station_phone ?: ($station?->phone ?: 'Chưa cập nhật') }}</div>
+                            </div>
+                        </div>
+                        @endif
+
+                        {{-- Công nợ --}}
+                        @if($customerDebt)
+                        <div class="team-order-section">
+                            <div class="team-order-section-title">Công nợ khách hàng</div>
+                            <div class="d-flex gap-2 flex-wrap">
+                                <div class="team-order-meta-box flex-fill">
+                                    <div class="team-order-label">Tổng đơn</div>
+                                    <div class="team-order-value text-primary">{{ number_format((float)$customerDebt->grand_total, 0, ',', '.') }} đ</div>
+                                </div>
+                                <div class="team-order-meta-box flex-fill">
+                                    <div class="team-order-label">Đã thanh toán</div>
+                                    <div class="team-order-value text-success">{{ number_format((float)$customerDebt->total_paid, 0, ',', '.') }} đ</div>
+                                </div>
+                                <div class="team-order-meta-box flex-fill">
+                                    <div class="team-order-label">Còn nợ</div>
+                                    <div class="team-order-value text-danger">{{ number_format((float)$customerDebt->total_due, 0, ',', '.') }} đ</div>
+                                </div>
+                            </div>
+                        </div>
+                        @endif
+
+                        {{-- Đơn hàng gần nhất (AJAX) --}}
+                        @if($order->customer_id)
+                        <div class="team-order-section">
+                            <div class="team-order-section-title">Đơn hàng gần nhất</div>
+                            <div class="d-flex gap-2 mb-2 flex-wrap align-items-end">
+                                <div>
+                                    <label class="team-order-label mb-1">Số đơn</label>
+                                    <select id="td-limit" class="form-select form-select-sm" style="width:80px;">
+                                        <option value="5">5</option>
+                                        <option value="10" selected>10</option>
+                                        <option value="20">20</option>
+                                        <option value="50">50</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="team-order-label mb-1">Từ ngày</label>
+                                    <input type="date" id="td-from" class="form-control form-control-sm" style="width:140px;">
+                                </div>
+                                <div>
+                                    <label class="team-order-label mb-1">Đến ngày</label>
+                                    <input type="date" id="td-to" class="form-control form-control-sm" style="width:140px;">
+                                </div>
+                                <button type="button" id="td-load-btn" class="btn btn-sm btn-primary">
+                                    <i class="bi bi-search me-1"></i>Tìm
+                                </button>
+                            </div>
+                            <div id="td-orders-wrap">
+                                <div class="text-muted small">Nhấn Tìm để tải danh sách đơn.</div>
+                            </div>
+                        </div>
+                        @endif
                         
                     </div>
                 </div>
@@ -442,8 +542,6 @@
                                 <div class="text-end">Số Lượng</div>
                                 <div class="text-center">Tổng</div>
                                 <div class="text-center">Size</div>
-                                <div class="text-end">KL tạm tính</div>
-                                <div class="text-center">Loại tính</div>
                                 <div class="text-end">Đơn giá</div>
                                 <div class="text-end">Tạm tính</div>
                             </div>
@@ -485,8 +583,6 @@
                                             <div class="team-item-cell"><strong>{{ number_format($qty, 0, ',', '.') }}</strong></div>
                                             <div class="text-center text-muted small">{{ $item->display_total_label }}</div>
                                             <div class="text-center text-muted small">{{ $sizeText }}</div>
-                                            <div class="team-item-cell">{{ number_format($lineWeight, 2, ',', '.') }} {{ $weightUnitLabel }}</div>
-                                            <div class="text-center text-muted small">{{ $isPricedByKg ? 'Theo kg' : 'Theo đơn vị' }}</div>
                                             <div class="team-item-cell">{{ number_format($price, 0, ',', '.') }} đ</div>
                                             <div class="team-item-cell"><strong>{{ number_format($lineTotal, 0, ',', '.') }} đ</strong></div>
                                         </div>
@@ -501,22 +597,22 @@
                                     <span>Tạm tính</span>
                                     <strong>{{ number_format($subtotal, 0, ',', '.') }} đ</strong>
                                 </div>
-                                <div class="team-summary-row">
-                                    <span>Khối lượng tạm tính</span>
-                                    <strong>{{ number_format($estimatedTotalWeight, 2, ',', '.') }} kg</strong>
-                                </div>
+                                @if($totalDiscount != 0)
                                 <div class="team-summary-row">
                                     <span>Điều chỉnh</span>
                                     <strong>{{ $formatSignedMoney($totalDiscount) }}</strong>
                                 </div>
+                                @endif
                                 <div class="team-summary-row">
                                     <span>Phí ship</span>
                                     <strong>{{ number_format($shippingFee, 0, ',', '.') }} đ</strong>
                                 </div>
+                                @if($foamBoxFee > 0)
                                 <div class="team-summary-row">
                                     <span>Thùng xốp</span>
                                     <strong>{{ number_format($foamBoxFee, 0, ',', '.') }} đ</strong>
                                 </div>
+                                @endif
                                 <div class="team-summary-row total">
                                     <span>Tổng thanh toán</span>
                                     <span class="text-success">{{ number_format((float) $order->total, 0, ',', '.') }} đ</span>
@@ -567,4 +663,57 @@
         
     </div>
 </section>
+
+@push('scripts')
+<script>
+(function () {
+    const ajaxUrl = @json($ajaxOrdersUrl);
+
+    function renderOrders(rows) {
+        if (!rows.length) {
+            return '<div class="text-muted small">Không có đơn hàng nào.</div>';
+        }
+        let html = '<table class="table table-sm table-borderless mb-0" style="font-size:.78rem;">'
+            + '<thead><tr class="text-muted"><th>Mã đơn</th><th class="text-end">Tổng</th><th class="text-end">Còn nợ</th><th class="text-center">TT</th><th>Ngày</th></tr></thead><tbody>';
+        rows.forEach(function (r) {
+            const url = ajaxUrl.replace(/\/customer-orders.*$/, '').replace(/\/\d+$/, '/' + r.id);
+            html += `<tr>
+                <td><a href="${url}" target="_blank">${r.code}</a></td>
+                <td class="text-end">${r.total}</td>
+                <td class="text-end text-danger">${r.amount_due}</td>
+                <td class="text-center"><span class="badge bg-${r.pay_class}">${r.pay_text}</span></td>
+                <td>${r.created_at}</td>
+            </tr>`;
+        });
+        html += '</tbody></table>';
+        return html;
+    }
+
+    function loadOrders() {
+        const btn  = document.getElementById('td-load-btn');
+        const wrap = document.getElementById('td-orders-wrap');
+        if (!btn || !wrap) return;
+
+        const limit = document.getElementById('td-limit')?.value || 10;
+        const from  = document.getElementById('td-from')?.value || '';
+        const to    = document.getElementById('td-to')?.value || '';
+
+        const params = new URLSearchParams({ limit, from, to });
+        wrap.innerHTML = '<div class="text-muted small"><i class="bi bi-hourglass-split me-1"></i>Đang tải...</div>';
+        btn.disabled = true;
+
+        fetch(ajaxUrl + '?' + params.toString(), {
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+        })
+        .then(r => r.json())
+        .then(data => { wrap.innerHTML = renderOrders(data.rows || []); })
+        .catch(() => { wrap.innerHTML = '<div class="text-danger small">Lỗi tải dữ liệu.</div>'; })
+        .finally(() => { btn.disabled = false; });
+    }
+
+    document.getElementById('td-load-btn')?.addEventListener('click', loadOrders);
+})();
+</script>
+@endpush
+
 @endsection

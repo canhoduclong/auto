@@ -121,7 +121,7 @@
     }
     .tmo-page .tmo-product-vertical-row {
         display: grid;
-        grid-template-columns: 56px 1.5fr repeat(6, minmax(90px, auto));
+        grid-template-columns: 56px 1.5fr repeat(5, minmax(90px, auto));
         gap: .35rem;
         border: 1px solid #e5edf7;
         border-radius: 8px;
@@ -206,7 +206,7 @@
     }
     .tmo-page .tmo-product-line {
         display: grid;
-        grid-template-columns: 1.2fr repeat(6, minmax(90px, auto));
+        grid-template-columns: 1.2fr repeat(4, minmax(90px, auto));
         gap: .35rem;
         align-items: center;
         font-size: .82rem;
@@ -671,7 +671,6 @@
                                         <div>Số lượng</div>
                                         <div>Tổng</div>
                                         <div>Size</div>
-                                        <div>KL tạm tính</div>
                                         <div>Đơn giá</div>
                                         <div>Tạm tính</div>
                                     </div>
@@ -711,7 +710,6 @@
                                             <div>{{ rtrim(rtrim(number_format($qty, 3, '.', ''), '0'), '.') }}</div>
                                             <div>{{ $displayTotalLabel }}</div>
                                             <div>{{ $sizeLabel }}</div>
-                                            <div>{{ rtrim(rtrim(number_format($estimatedWeight, 3, '.', ''), '0'), '.') }}</div>
                                             <div>{{ number_format($price, 0, ',', '.') }} đ</div>
                                             <div>{{ number_format($lineSubtotal, 0, ',', '.') }} đ</div>
                                         </div>
@@ -914,7 +912,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (!items.length) {
                 sumProductDetailList.innerHTML = '<div class="tmo-mini">Không có dữ liệu hàng hóa.</div>';
             } else {
-                const head = '<div class="tmo-product-vertical-row tmo-product-vertical-head"><div>STT</div><div>Sản phẩm</div><div>Số lượng</div><div>Tổng</div><div>Size</div><div>KL tạm tính</div><div>Đơn giá</div><div>Tạm tính</div></div>';
+                const head = '<div class="tmo-product-vertical-row tmo-product-vertical-head"><div>STT</div><div>Sản phẩm</div><div>Số lượng</div><div>Tổng</div><div>Size</div><div>Đơn giá</div><div>Tạm tính</div></div>';
                 const body = items.map(function (item, index) {
                     const displayTotalText = formatQty(item.totalValue) + ' ' + item.totalUnit;
 
@@ -924,7 +922,6 @@ document.addEventListener('DOMContentLoaded', function () {
                         + '<div>' + formatQty(item.qty) + '</div>'
                         + '<div>' + displayTotalText + '</div>'
                         + '<div>' + item.size + '</div>'
-                        + '<div>' + formatQty(item.estWeight) + '</div>'
                         + '<div>' + formatMoney(item.price) + '</div>'
                         + '<div>' + formatMoney(item.subtotal) + '</div>'
                         + '</div>';
