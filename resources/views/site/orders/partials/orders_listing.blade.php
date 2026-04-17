@@ -306,7 +306,7 @@
                                 @endif
                             </div>
                             
-                            <div class="order-tootls d-flex justify-content-between align-items-center mt-4">
+                            <div class="order-tootls d-md-flex justify-content-between align-items-center mt-4">
                                 <div class="code small mt-3">
                                     {{ $order->code }}
                                 </div>
