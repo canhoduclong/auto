@@ -117,6 +117,10 @@
         padding: .7rem .8rem;
         transition: background-color .28s ease, border-color .28s ease, box-shadow .28s ease, transform .22s ease;
     }
+    .tmo-page .tmo-order-row.flash {
+        transform: scale(1.01);
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+    }
     .tmo-page .tmo-order-top {
         display: grid;
         grid-template-columns: 1.3fr 1fr 1fr 1fr 1fr auto;
@@ -448,15 +452,15 @@
                             <div class="d-flex gap-1 flex-wrap justify-content-end">
                                 <a href="{{ route('pages.team_order_detail', $order) }}" class="btn btn-sm btn-outline-primary">Chi tiet</a>
                                 @if($canProcess)
-                                    <form method="POST" action="{{ route('site.orders.approve', $order) }}">
+                                    <form method="POST" action="{{ route('site.orders.approve', $order) }}" class="js-approval-form" data-action="approve">
                                         @csrf
                                         <input type="hidden" name="note" value="Manager duyet tu trang all team orders">
                                         <button type="submit" class="btn btn-sm btn-success">Duyet</button>
                                     </form>
-                                    <form method="POST" action="{{ route('site.orders.reject', $order) }}">
+                                    <form method="POST" action="{{ route('site.orders.reject', $order) }}" class="js-approval-form" data-action="reject">
                                         @csrf
                                         <input type="hidden" name="note" value="Manager tu choi tu trang all team orders">
-                                        <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Xac nhan tu choi don nay?')">Tu choi</button>
+                                        <button type="submit" class="btn btn-sm btn-danger">Tu choi</button>
                                     </form>
                                 @endif
                             </div>
@@ -477,6 +481,91 @@
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     let activeSaleId = null;
+
+    /* ── Toast helper ── */
+    function showToast(message, type) {
+        type = type || 'info';
+        const colors = { success: '#15803d', error: '#dc2626', warning: '#d97706', info: '#0f766e' };
+        const icon = type === 'success' ? '✓' : type === 'error' ? '✕' : 'ℹ';
+        const toast = document.createElement('div');
+        toast.style.cssText = 'position:fixed;bottom:1.2rem;right:1.2rem;z-index:9999;padding:.65rem 1rem;border-radius:10px;background:' + (colors[type] || colors.info) + ';color:#fff;font-size:.9rem;box-shadow:0 4px 16px rgba(0,0,0,.18);display:flex;align-items:center;gap:.5rem;max-width:320px;';
+        toast.innerHTML = '<span style="font-weight:700">' + icon + '</span><span>' + message + '</span>';
+        document.body.appendChild(toast);
+        setTimeout(function () { toast.style.opacity = '0'; toast.style.transition = 'opacity .4s'; }, 2600);
+        setTimeout(function () { toast.remove(); }, 3100);
+    }
+
+    function rowStateClass(status) {
+        if (status === 'approved') return 'tmo-row-approved';
+        if (status === 'rejected') return 'tmo-row-rejected';
+        return 'tmo-row-pending';
+    }
+
+    function statusBadgeClass(status) {
+        if (status === 'approved') return 'tmo-status-approved';
+        if (status === 'rejected') return 'tmo-status-rejected';
+        if (status === 'pending_manager_approval') return 'tmo-status-pending';
+        return 'tmo-status-default';
+    }
+
+    async function submitApproval(form) {
+        const action = form.dataset.action;
+        const row = form.closest('.js-order-row');
+        if (!row) return;
+
+        let data;
+        try {
+            const response = await fetch(form.action, {
+                method: 'POST',
+                body: new FormData(form),
+                headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+            });
+            data = await response.json();
+        } catch (e) {
+            showToast('Không thể kết nối máy chủ.', 'error');
+            return;
+        }
+
+        if (!data.success) {
+            showToast(data.message || 'Không thể cập nhật trạng thái đơn.', 'error');
+            return;
+        }
+
+        const newStatus = action === 'approve' ? 'approved' : 'rejected';
+        const statusBadge = row.querySelector('.js-order-status');
+
+        row.classList.remove('tmo-row-pending', 'tmo-row-approved', 'tmo-row-rejected');
+        row.classList.add(rowStateClass(newStatus));
+        row.classList.add('flash');
+
+        if (statusBadge) {
+            statusBadge.classList.remove('tmo-status-pending', 'tmo-status-approved', 'tmo-status-rejected', 'tmo-status-default');
+            statusBadge.classList.add(statusBadgeClass(newStatus));
+            statusBadge.dataset.status = newStatus;
+            statusBadge.textContent = newStatus === 'approved' ? 'Da Duyet' : newStatus === 'rejected' ? 'Tu Choi' : 'Cho Duyet';
+        }
+
+        row.querySelectorAll('.js-approval-form button[type="submit"]').forEach(function (btn) {
+            btn.disabled = true;
+        });
+
+        setTimeout(function () { row.classList.remove('flash'); }, 600);
+        showToast(data.message || (action === 'approve' ? 'Đơn đã được duyệt.' : 'Đơn đã bị từ chối.'), action === 'approve' ? 'success' : 'warning');
+        recalcSummary();
+    }
+
+    /* Bind AJAX approval forms */
+    function bindApprovalForms() {
+        document.querySelectorAll('.js-approval-form').forEach(function (form) {
+            form.addEventListener('submit', function (event) {
+                event.preventDefault();
+                if (form.dataset.action === 'reject' && !window.confirm('Xac nhan tu choi don nay?')) return;
+                submitApproval(form);
+            });
+        });
+    }
+
+    bindApprovalForms();
 
     function getRows() {
         const orderList = document.getElementById('orderList');
