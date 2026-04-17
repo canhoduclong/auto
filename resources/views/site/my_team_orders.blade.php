@@ -206,7 +206,7 @@
     }
     .tmo-page .tmo-product-line {
         display: grid;
-        grid-template-columns: 1.2fr repeat(4, minmax(90px, auto));
+        grid-template-columns: 1.2fr repeat(5, minmax(90px, auto));
         gap: .35rem;
         align-items: center;
         font-size: .82rem;
