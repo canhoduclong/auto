@@ -2879,7 +2879,10 @@ class PageController extends Controller
             // reset các field quan trọng
             $newOrder->customer_id = $resolvedCustomerId;
             $newOrder->shipper_id = null;
-            $newOrder->code = 'OD' . time();
+            do {
+                $newCode = 'OD' . time() . rand(10, 99);
+            } while (Order::where('code', $newCode)->exists());
+            $newOrder->code = $newCode;
             $newOrder->status = Order::STATUS_PENDING_LEADER_APPROVAL;
             $newOrder->payment_status = 'unpaid';
             $newOrder->delivery_status = 'not_shipped';
