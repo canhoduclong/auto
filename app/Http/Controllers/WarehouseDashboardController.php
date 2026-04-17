@@ -156,7 +156,9 @@ class WarehouseDashboardController extends Controller
             ->get();
 
         $managedWarehouseId = Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
-        $stockGuardMap = $this->buildPackingQueueStockGuards($orders, $managedWarehouseId);
+        $stockGuardResult = $this->buildPackingQueueStockGuards($orders, $managedWarehouseId);
+        $stockGuardMap = $stockGuardResult['guards'];
+        $fifoRemainingStock = $stockGuardResult['remaining_by_variant']; // variantId => float remaining after FIFO
 
         $orders->each(function (Order $order) use ($stockGuardMap) {
             $order->setAttribute('stock_guard', $stockGuardMap[$order->id] ?? [
@@ -167,7 +169,7 @@ class WarehouseDashboardController extends Controller
             ]);
         });
 
-        return view('warehouse.orders.index', compact('orders', 'selectedDate', 'status', 'quickDates'));
+        return view('warehouse.orders.index', compact('orders', 'selectedDate', 'status', 'quickDates', 'fifoRemainingStock'));
     }
 
     /**
@@ -254,60 +256,15 @@ class WarehouseDashboardController extends Controller
 
     private function evaluateSingleOrderStock(Order $order, ?int $warehouseId): array
     {
-        $order->loadMissing(['items.product', 'items.variant.product']);
+        // Run full FIFO simulation so that prior queue orders consume stock before this one
+        $singleCollection = collect([$order]);
+        $result = $this->buildPackingQueueStockGuards($singleCollection, $warehouseId);
 
-        $itemRows = $order->items
-            ->filter(fn ($item) => !empty($item->product_variant_id) && (int) $item->quantity > 0)
-            ->values();
-
-        if ($itemRows->isEmpty()) {
-            return [
-                'has_shortage' => false,
-                'can_start_packing' => true,
-                'message' => null,
-                'shortages' => [],
-            ];
-        }
-
-        $variantIds = $itemRows->pluck('product_variant_id')->map(fn ($id) => (int) $id)->unique()->values();
-        $orderItemIds = $itemRows->pluck('id')->map(fn ($id) => (int) $id)->unique()->values();
-
-        $availableByVariant = $this->getAvailableByVariant($variantIds, $warehouseId);
-        $reservedByOrderItem = $this->getReservedByOrderItem($orderItemIds, $warehouseId);
-
-        $shortages = [];
-
-        foreach ($itemRows as $item) {
-            $variantId = (int) $item->product_variant_id;
-            $requiredQty = max(0, (int) $item->quantity);
-            $reservedForItem = max(0, (int) ($reservedByOrderItem[$item->id] ?? 0));
-            $availableQty = max(0, (int) ($availableByVariant[$variantId] ?? 0));
-            $effectiveQty = $availableQty + $reservedForItem;
-
-            if ($effectiveQty >= $requiredQty) {
-                continue;
-            }
-
-            $shortages[] = [
-                'order_id' => (int) $order->id,
-                'order_code' => (string) $order->code,
-                'order_item_id' => (int) $item->id,
-                'variant_id' => $variantId,
-                'variant_name' => (string) ($item->variant?->name ?? $item->product?->name ?? ('SP #' . $variantId)),
-                'required_qty' => $requiredQty,
-                'available_qty' => $effectiveQty,
-                'short_qty' => max(0, $requiredQty - $effectiveQty),
-                'reason' => 'insufficient_stock',
-            ];
-        }
-
-        $hasShortage = !empty($shortages);
-
-        return [
-            'has_shortage' => $hasShortage,
-            'can_start_packing' => !$hasShortage,
-            'message' => $hasShortage ? 'Không đủ tồn kho để đóng hàng' : null,
-            'shortages' => $shortages,
+        return $result['guards'][$order->id] ?? [
+            'has_shortage' => false,
+            'can_start_packing' => true,
+            'message' => null,
+            'shortages' => [],
         ];
     }
 
@@ -323,7 +280,7 @@ class WarehouseDashboardController extends Controller
             ->toArray();
 
         if (empty($displayedOrderIds)) {
-            return [];
+            return ['guards' => [], 'remaining_by_variant' => []];
         }
 
         // Load ALL pending-packing orders globally for FIFO simulation (oldest first)
@@ -334,7 +291,7 @@ class WarehouseDashboardController extends Controller
             ->get();
 
         if ($allQueueOrders->isEmpty()) {
-            return [];
+            return ['guards' => [], 'remaining_by_variant' => []];
         }
 
         $variantIds = $allQueueOrders
@@ -344,19 +301,17 @@ class WarehouseDashboardController extends Controller
             ->unique()
             ->values();
 
-        // Available stock snapshot (free stock = quantity - reserved_quantity, summed across warehouses)
+        // Available stock snapshot (free stock = quantity - reserved_quantity)
         $stockByVariant = $this->getAvailableByVariant($variantIds, $warehouseId);
 
-        // Running pool of remaining stock — only decremented when an order CAN fully pack.
-        // If an order has any shortage it does NOT consume anything from the pool,
-        // so the remaining stock stays available for later orders in the queue.
+        // Running pool — decremented only when a complete order can be packed (FIFO)
         $remainingByVariant = array_map(fn ($v) => (float) $v, $stockByVariant);
 
         $guards = [];
 
         foreach ($allQueueOrders as $order) {
-            $shortages        = [];
-            $pendingDeductions = [];   // [variantId => float] staged per-order; applied only if no shortage
+            $shortages         = [];
+            $pendingDeductions = [];  // staged; applied only if order has NO shortage
 
             foreach ($order->items as $item) {
                 $variantId   = (int) $item->product_variant_id;
@@ -381,7 +336,6 @@ class WarehouseDashboardController extends Controller
                         'reason'        => $remaining <= 0 ? 'blocked_by_prior_order' : 'insufficient_stock',
                     ];
                 } else {
-                    // Enough stock — stage the deduction (not applied yet)
                     $pendingDeductions[$variantId] = ($pendingDeductions[$variantId] ?? 0.0) + $neededQty;
                 }
             }
@@ -389,7 +343,6 @@ class WarehouseDashboardController extends Controller
             $hasShortage = !empty($shortages);
 
             if (!$hasShortage) {
-                // Order can be fully packed: consume staged stock from the pool
                 foreach ($pendingDeductions as $vid => $consume) {
                     $remainingByVariant[$vid] = max(0.0, ($remainingByVariant[$vid] ?? 0.0) - $consume);
                 }
@@ -406,7 +359,10 @@ class WarehouseDashboardController extends Controller
             }
         }
 
-        return $guards;
+        return [
+            'guards'               => $guards,
+            'remaining_by_variant' => $remainingByVariant,  // stock left after FIFO queue consumed
+        ];
     }
 
     private function getAvailableByVariant(Collection $variantIds, ?int $warehouseId): array

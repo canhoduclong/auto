@@ -280,6 +280,7 @@
 
 @section('content')
 @php
+    $fifoRemainingStock = $fifoRemainingStock ?? [];
     $statusMeta = [
         'approved' => ['label' => 'Chờ đóng gói', 'class' => 'bg-primary'],
         'ready_to_pack' => ['label' => 'Chờ đóng gói', 'class' => 'bg-primary'],
@@ -309,7 +310,7 @@
                 return [
                     'variant_id' => (int) ($item->product_variant_id ?? 0),
                     'name' => $productName,
-                    'available_stock' => max(0, (float) ($variant?->available_stock ?? 0)),
+                    'raw_available_stock' => max(0, (float) ($variant?->available_stock ?? 0)),
                     'ordered_qty' => $orderedQty,
                     'packed_qty' => $packedQty,
                 ];
@@ -317,11 +318,15 @@
         })
         ->filter(fn($row) => (int) ($row['variant_id'] ?? 0) > 0)
         ->groupBy('variant_id')
-        ->map(function ($rows) {
+        ->map(function ($rows) use ($fifoRemainingStock) {
             $first = $rows->first();
+            $variantId = (int) ($first['variant_id'] ?? 0);
+            $fifoStock = isset($fifoRemainingStock[$variantId])
+                ? max(0, (float) $fifoRemainingStock[$variantId])
+                : (float) ($first['raw_available_stock'] ?? 0);
             return [
                 'name' => $first['name'] ?? 'Sản phẩm',
-                'available_stock' => (float) ($first['available_stock'] ?? 0),
+                'available_stock' => $fifoStock,
                 'ordered_qty' => (float) $rows->sum('ordered_qty'),
                 'packed_qty' => (float) $rows->sum('packed_qty'),
             ];
