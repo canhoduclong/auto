@@ -1,5 +1,14 @@
 @extends('layouts.site')
 
+@php
+    if (!function_exists('format_kg')) {
+        function format_kg($value): string {
+            $str = rtrim(rtrim(number_format((float) $value, 3, '.', ''), '0'), '.');
+            return $str . 'kg';
+        }
+    }
+@endphp
+
 @section('breadcrumb')
 <x-breadcrumb :items="[
     ['label' => 'Giỏ hàng', 'url' => route('cart.show')], 

@@ -341,6 +341,7 @@ class SettingController extends Controller
         $allowed = [
             'dump-autoload'       => ['title' => 'composer dump-autoload',     'command' => 'cd /var/www/auto.com && composer dump-autoload --no-interaction 2>&1'],
             'fpm-reload'          => ['title' => 'PHP-FPM reload',             'command' => 'sudo service php8.2-fpm reload 2>&1'],
+            'fpm-restart'         => ['title' => 'PHP-FPM restart (flush OPcache)', 'command' => 'sudo service php8.2-fpm restart 2>&1'],
             'view-clear'          => ['title' => 'php artisan view:clear',      'command' => 'cd /var/www/auto.com && php artisan view:clear 2>&1'],
             'cache-clear'         => ['title' => 'php artisan cache:clear',     'command' => 'cd /var/www/auto.com && php artisan cache:clear 2>&1'],
             'config-clear'        => ['title' => 'php artisan config:clear',    'command' => 'cd /var/www/auto.com && php artisan config:clear 2>&1'],

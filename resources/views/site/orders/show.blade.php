@@ -1,6 +1,12 @@
 @extends('layouts.site')
 
 @php
+    if (!function_exists('format_kg')) {
+        function format_kg($value): string {
+            $str = rtrim(rtrim(number_format((float) $value, 3, '.', ''), '0'), '.');
+            return $str . 'kg';
+        }
+    }
     $orderCode = $order->code ?: ('#' . $order->id);
 
     $statusClass = match((string) $order->status) {

@@ -64,6 +64,7 @@
             @foreach([
                 ['cmd' => 'dump-autoload',  'label' => 'composer dump-autoload',     'icon' => 'bi-arrow-repeat',        'color' => 'btn-primary'],
                 ['cmd' => 'fpm-reload',     'label' => 'PHP-FPM reload',             'icon' => 'bi-lightning-charge',    'color' => 'btn-warning text-dark'],
+                ['cmd' => 'fpm-restart',    'label' => 'PHP-FPM restart',            'icon' => 'bi-arrow-counterclockwise','color' => 'btn-danger'],
                 ['cmd' => 'optimize-clear', 'label' => 'optimize:clear',             'icon' => 'bi-trash3',              'color' => 'btn-secondary'],
                 ['cmd' => 'view-clear',     'label' => 'view:clear',                 'icon' => 'bi-eye-slash',           'color' => 'btn-outline-secondary'],
                 ['cmd' => 'cache-clear',    'label' => 'cache:clear',                'icon' => 'bi-database-x',          'color' => 'btn-outline-secondary'],
