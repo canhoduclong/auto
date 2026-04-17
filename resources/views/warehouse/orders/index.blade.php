@@ -762,13 +762,36 @@
                                         </button>
                                     </form>
                                 @else
-                                    <div class="d-grid gap-2">
-                                        <button class="btn btn-outline-danger btn-sm" type="button" disabled>
-                                            Unable
+                                    <div class="d-grid gap-1">
+                                        <button class="btn btn-danger btn-sm" type="button" disabled>
+                                            <i class="bi bi-exclamation-triangle-fill me-1"></i>Không đủ hàng – Chờ nhập kho
                                         </button>
-                                        <a href="{{ route('warehouse.stock-in') }}" class="btn btn-warning btn-sm">
-                                            Bạn cần Nhập kho để thực hiện công việc tiếp
-                                        </a>
+                                        @if($stockShortages->isNotEmpty())
+                                            <div class="wh-stock-alert mt-1">
+                                                <details>
+                                                    <summary>Chi tiết thiếu hàng ({{ $stockShortages->count() }} sản phẩm)</summary>
+                                                    <ul>
+                                                        @foreach($stockShortages as $shortage)
+                                                            <li>
+                                                                <strong>{{ $shortage['variant_name'] ?? 'Sản phẩm' }}</strong>:
+                                                                cần {{ number_format((float)($shortage['required_qty'] ?? 0), 0) }},
+                                                                còn {{ number_format((float)($shortage['available_qty'] ?? 0), 0) }}
+                                                                @php $shortQty = (float)($shortage['short_qty'] ?? 0); @endphp
+                                                                @if($shortQty > 0)
+                                                                    <span class="text-danger">(thiếu {{ number_format($shortQty, 0) }})</span>
+                                                                @endif
+                                                                @if(($shortage['reason'] ?? '') === 'blocked_by_prior_order')
+                                                                    <span class="text-warning">– bị chặn bởi đơn ưu tiên trước</span>
+                                                                @endif
+                                                            </li>
+                                                        @endforeach
+                                                    </ul>
+                                                    <div class="mt-1">
+                                                        <a href="{{ route('warehouse.stock-in') }}">Nhập kho để tiếp tục</a>
+                                                    </div>
+                                                </details>
+                                            </div>
+                                        @endif
                                     </div>
                                 @endif
                             @endif
