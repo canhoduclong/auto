@@ -259,6 +259,90 @@
             grid-template-columns: 1fr;
         }
     }
+
+    @media (max-width: 767.98px) {
+        /* Hero */
+        .tmo-page .tmo-hero {
+            padding: .75rem .85rem;
+            border-radius: 10px;
+        }
+        .tmo-page .tmo-hero h4 { font-size: 1.05rem; }
+
+        /* Order row — stack thành 2 cột thay vì 6 cột */
+        .tmo-page .tmo-order-top {
+            grid-template-columns: 1fr 1fr;
+            gap: .4rem;
+        }
+        /* Cột cuối (nút duyệt/từ chối) chiếm full width */
+        .tmo-page .tmo-order-top > div:last-child {
+            grid-column: 1 / -1;
+            display: flex;
+            flex-wrap: wrap;
+            gap: .4rem;
+        }
+        /* Toolbar filter */
+        .tmo-page .tmo-order-toolbar {
+            padding: .5rem .6rem;
+        }
+        .tmo-page .tmo-order-toolbar .row { gap: .4rem 0; }
+
+        /* Summary 2 cột */
+        .tmo-page .tmo-summary-grid {
+            grid-template-columns: 1fr 1fr;
+        }
+        .tmo-page .tmo-summary-value { font-size: .9rem; }
+
+        /* Sale chips dạng ngang cuộn */
+        .tmo-page .tmo-sales-list {
+            display: flex;
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            gap: .4rem;
+            max-height: none;
+            padding-bottom: .25rem;
+            -webkit-overflow-scrolling: touch;
+        }
+        .tmo-page .tmo-sale-chip {
+            white-space: nowrap;
+            flex: 0 0 auto;
+            padding: .35rem .6rem;
+        }
+
+        /* Product stats table stack */
+        .tmo-page .tmo-product-vertical-row {
+            grid-template-columns: 1fr 1fr;
+        }
+        .tmo-page .tmo-product-vertical-head { display: none; }
+
+        /* Product quick-view lines stack */
+        .tmo-page .tmo-product-line {
+            grid-template-columns: 1fr 1fr;
+        }
+        .tmo-page .tmo-product-head { display: none; }
+
+        /* Card padding tighter */
+        .tmo-page .tmo-card-body { padding: .65rem; }
+        .tmo-page .tmo-order-row { padding: .6rem .65rem; }
+
+        /* Buttons full width on phones */
+        .tmo-page .tmo-order-top .btn { font-size: .78rem; padding: .28rem .55rem; }
+
+        /* tmo-mini font nhỏ hơn */
+        .tmo-page .tmo-mini { font-size: .72rem; }
+    }
+
+    @media (max-width: 479.98px) {
+        /* Very small phones: 1 cột */
+        .tmo-page .tmo-order-top {
+            grid-template-columns: 1fr;
+        }
+        .tmo-page .tmo-summary-grid {
+            grid-template-columns: 1fr;
+        }
+        .tmo-page .tmo-product-vertical-row {
+            grid-template-columns: 1fr;
+        }
+    }
 </style>
 
 <div class="container py-3 tmo-page">

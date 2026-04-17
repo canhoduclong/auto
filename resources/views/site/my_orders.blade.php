@@ -445,49 +445,129 @@
     }
     @media (max-width: 767.98px) {
         .orders-page {
-            padding: 20px 0 48px;
+            padding: 12px 0 48px;
         }
         .orders-shell {
-            padding: 0 12px;
+            padding: 0 10px;
         }
+        /* Hero */
         .orders-hero {
-            padding: 18px;
+            padding: 14px;
+            border-radius: 16px;
         }
+        .orders-hero h4 { font-size: 1rem; margin-bottom: 4px; }
         .orders-kpi-value {
-            font-size: 1.35rem;
+            font-size: 1.15rem;
         }
+        .orders-kpi {
+            padding: 10px 12px;
+            border-radius: 14px;
+        }
+        /* Filter panel */
+        .orders-filter {
+            padding: 12px;
+        }
+
+        /* Table ẩn, mobile list hiện */
         .orders-table-wrap {
             display: none;
         }
         .orders-mobile-list {
             display: block;
+            padding: 0;
+        }
+        .orders-mobile-card {
+            border-radius: 14px;
+            padding: 12px;
         }
         .orders-mobile-grid {
-            grid-template-columns: 1fr;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
         }
+
+        /* Order head: stack dọc */
+        .wh-order-head {
+            flex-direction: column;
+            gap: 8px;
+            align-items: flex-start;
+        }
+
+        /* Item table: scroll ngang thay vì stack */
+        .wh-item-table-wrap {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        .wh-item-table-head,
+        .wh-item-table-row {
+            grid-template-columns: 36px minmax(120px, 1.6fr) 44px 44px 44px 64px 72px;
+            gap: 5px;
+            font-size: .74rem;
+        }
+        .wh-item-thumb, .wh-item-thumb-placeholder {
+            width: 32px;
+            height: 32px;
+        }
+        .wh-item-name { font-size: .79rem; }
+        .wh-item-cell { font-size: .74rem; }
+
+        /* Product line (orders-products) stack */
         .orders-products-head,
         .orders-product-line {
             grid-template-columns: 1fr;
             gap: 4px;
         }
-        .wh-item-table-head,
-        .wh-item-table-row {
-            grid-template-columns: 1fr;
-            gap: 4px;
-        }
-        .orders-product-cell,
-        .orders-product-qty {
-            text-align: left;
-        }
+
+        /* Actions: stretch full width */
         .orders-actions {
             justify-content: stretch;
+            flex-wrap: wrap;
         }
         .orders-actions .btn {
             flex: 1 1 auto;
             text-align: center;
+            padding: 7px 10px;
+            font-size: .8rem;
+            border-radius: 10px;
         }
+
+        /* Customer list */
         .customer-list-scroll {
-            max-height: 220px;
+            max-height: 200px;
+        }
+
+        /* row-table trong collapse sections */
+        .row-table {
+            grid-template-columns: 90px 1fr;
+        }
+
+        /* Collapse sections padding */
+        .customer-body, .customer-tax-body,
+        .transport-info-body, .logistics-body, .transport-body {
+            padding: 0;
+        }
+
+        /* Section headings */
+        .wh-logistics-title, .logistics-title, .customer-title,
+        .customer-tax-title, .transport-title {
+            font-size: .72rem;
+        }
+
+        /* KPI bar 2 cols */
+        .orders-kpi-row {
+            grid-template-columns: 1fr 1fr !important;
+        }
+    }
+
+    @media (max-width: 479.98px) {
+        .orders-mobile-grid {
+            grid-template-columns: 1fr;
+        }
+        .row-table {
+            grid-template-columns: 80px 1fr;
+            font-size: .78rem;
+        }
+        .orders-actions .btn {
+            width: 100%;
         }
     }
 </style>
