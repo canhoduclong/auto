@@ -787,6 +787,7 @@
                         'user' => $user,
                         'sortBy' => $currentSortBy,
                         'sortDir' => $currentSortDir,
+                        'stockWarnings' => $stockWarnings ?? [],
                     ])
                 </div>
             </div>

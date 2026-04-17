@@ -10,6 +10,9 @@
         'picked_up' => 'Đã lấy hàng',
     ];
 
+    $stockWarnings = $stockWarnings ?? [];
+
+
     $statusClasses = [
         \App\Models\Order::STATUS_COMPLETED => 'status-success',
         \App\Models\Order::STATUS_DELIVERED => 'status-success',
@@ -343,6 +346,25 @@
                                     </div>
                                 </div>
                              </div>
+
+                            @if(!empty($stockWarnings[$order->id]))
+                                <div class="stock-warning-alert mt-2 p-2 rounded border border-warning bg-warning bg-opacity-10">
+                                    <div class="d-flex align-items-center gap-1 mb-1">
+                                        <i class="bi bi-exclamation-triangle-fill text-warning"></i>
+                                        <strong class="small text-warning-emphasis">Cảnh báo thiếu hàng đóng đơn</strong>
+                                    </div>
+                                    <ul class="mb-0 ps-3" style="font-size:.8rem;">
+                                        @foreach($stockWarnings[$order->id] as $shortage)
+                                            <li>
+                                                <span class="fw-semibold">{{ $shortage['name'] }}</span>:
+                                                cần {{ rtrim(rtrim(number_format($shortage['needed'], 3, '.', ''), '0'), '.') }},
+                                                còn lại {{ rtrim(rtrim(number_format($shortage['available'], 3, '.', ''), '0'), '.') }}
+                                                <span class="text-danger fw-bold">(thiếu {{ rtrim(rtrim(number_format($shortage['needed'] - $shortage['available'], 3, '.', ''), '0'), '.') }})</span>
+                                            </li>
+                                        @endforeach
+                                    </ul>
+                                </div>
+                            @endif
                         </div>
                     </div>
                 @endforeach

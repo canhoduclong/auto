@@ -18,6 +18,7 @@ use App\Models\Team;
 use App\Services\OrderService;
 use App\Services\ApprovalService;
 use App\Models\Order;
+use App\Models\Inventory;
 use App\Models\Transaction;
 use App\Services\AdminActivityService;
 use Carbon\Carbon;
@@ -597,12 +598,15 @@ class PageController extends Controller
 
         $orders = $query->paginate($perPage)->appends($request->query());
 
+        $stockWarnings = $this->buildStockWarnings($orders->getCollection());
+
         if ($request->ajax() || $request->boolean('ajax')) {
             $html = view('site.orders.partials.orders_listing', [
                 'orders' => $orders,
                 'user' => $user,
                 'sortBy' => $sortBy,
                 'sortDir' => $sortDir,
+                'stockWarnings' => $stockWarnings,
             ])->render();
 
             return response()->json([
@@ -620,6 +624,7 @@ class PageController extends Controller
             'perPage' => $perPage,
             'sortBy' => $sortBy,
             'sortDir' => $sortDir,
+            'stockWarnings' => $stockWarnings,
         ]);
     }
 
@@ -3320,5 +3325,100 @@ class PageController extends Controller
                 'can_edit' => true,
             ],
         ]);
+    }
+
+    /**
+     * Compute which orders lack sufficient inventory to be packed,
+     * respecting FIFO order sequence and already-packed orders.
+     *
+     * Returns an array keyed by order_id → array of ['variant_id', 'name', 'needed', 'available'] for shortage items.
+     *
+     * @param  \Illuminate\Support\Collection  $pageOrders  Orders currently being displayed
+     * @return array<int, list<array{variant_id:int, name:string, needed:float, available:float}>>
+     */
+    private function buildStockWarnings(\Illuminate\Support\Collection $pageOrders): array
+    {
+        // Statuses considered "queued for packing" (have not been packed yet)
+        $queueStatuses = [
+            Order::STATUS_APPROVED,
+            Order::STATUS_ORDER_CONFIRMED,
+            Order::STATUS_READY_TO_PACK,
+            Order::STATUS_PACKING,
+        ];
+
+        // Load all pending orders across all users, FIFO order
+        $allPending = Order::whereIn('status', $queueStatuses)
+            ->with('items')
+            ->orderBy('created_at', 'asc')
+            ->orderBy('id', 'asc')
+            ->get();
+
+        if ($allPending->isEmpty()) {
+            return [];
+        }
+
+        // Collect all variant IDs referenced
+        $variantIds = $allPending
+            ->flatMap(fn ($o) => $o->items->pluck('product_variant_id'))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        if (empty($variantIds)) {
+            return [];
+        }
+
+        // Available stock per variant (sum across all warehouses)
+        $stockMap = Inventory::whereIn('product_variant_id', $variantIds)
+            ->selectRaw('product_variant_id, SUM(GREATEST(0, quantity - reserved_quantity)) as avail')
+            ->groupBy('product_variant_id')
+            ->pluck('avail', 'product_variant_id')
+            ->map(fn ($v) => (float) $v)
+            ->toArray();
+
+        // Variant name cache
+        $variantNames = \App\Models\ProductVariant::whereIn('id', $variantIds)
+            ->pluck('name', 'id')
+            ->toArray();
+
+        // Page order IDs we care about (for fast lookup)
+        $pageOrderIds = $pageOrders->pluck('id')->flip()->toArray();
+
+        // Walk orders in FIFO sequence
+        $warnings = [];
+        $remaining = $stockMap;
+
+        foreach ($allPending as $order) {
+            $shortages = [];
+
+            foreach ($order->items as $item) {
+                $vid = (int) $item->product_variant_id;
+                if (!$vid) {
+                    continue;
+                }
+                $needed   = (float) $item->quantity;
+                $avail    = $remaining[$vid] ?? 0.0;
+
+                if ($avail < $needed) {
+                    $shortages[] = [
+                        'variant_id' => $vid,
+                        'name'       => $variantNames[$vid] ?? ("Variant #{$vid}"),
+                        'needed'     => $needed,
+                        'available'  => max(0.0, $avail),
+                    ];
+                }
+
+                // Deduct from remaining regardless (higher-priority orders consume stock first)
+                $remaining[$vid] = max(0.0, $avail - $needed);
+            }
+
+            // Only record warnings for orders visible on the current page
+            if (!empty($shortages) && isset($pageOrderIds[$order->id])) {
+                $warnings[$order->id] = $shortages;
+            }
+        }
+
+        return $warnings;
     }
 }

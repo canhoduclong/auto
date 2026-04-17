@@ -315,51 +315,56 @@ class WarehouseDashboardController extends Controller
     {
         $queueStatuses = array_merge(self::READY_TO_PACK_STATUSES, [Order::STATUS_PACKING]);
 
-        $queueOrders = $orders
+        // IDs of the orders currently displayed on the page
+        $displayedOrderIds = $orders
             ->filter(fn (Order $order) => in_array($order->status, $queueStatuses, true))
-            ->sort(function (Order $a, Order $b) {
-                $aTime = $a->created_at?->getTimestamp() ?? 0;
-                $bTime = $b->created_at?->getTimestamp() ?? 0;
+            ->pluck('id')
+            ->flip()
+            ->toArray();
 
-                if ($aTime === $bTime) {
-                    return $a->id <=> $b->id;
-                }
-
-                return $aTime <=> $bTime;
-            })
-            ->values();
-
-        if ($queueOrders->isEmpty()) {
+        if (empty($displayedOrderIds)) {
             return [];
         }
 
-        $queueOrders->loadMissing(['items.product', 'items.variant.product']);
+        // Load ALL pending-packing orders globally (including older dates) for correct FIFO simulation.
+        $allQueueOrders = Order::with(['items.product', 'items.variant.product'])
+            ->whereIn('status', $queueStatuses)
+            ->orderBy('created_at', 'asc')
+            ->orderBy('id', 'asc')
+            ->get();
 
-        $variantIds = $queueOrders
+        if ($allQueueOrders->isEmpty()) {
+            return [];
+        }
+
+        $variantIds = $allQueueOrders
             ->flatMap(fn (Order $order) => $order->items->pluck('product_variant_id'))
             ->filter()
             ->map(fn ($id) => (int) $id)
             ->unique()
             ->values();
 
-        $orderItemIds = $queueOrders
+        // Only compute reservations for the displayed orders
+        $displayedItemIds = $orders
+            ->filter(fn (Order $order) => in_array($order->status, $queueStatuses, true))
             ->flatMap(fn (Order $order) => $order->items->pluck('id'))
             ->filter()
             ->map(fn ($id) => (int) $id)
             ->unique()
             ->values();
 
+        // Running available pool — updated only when an order can be fully packed
         $availableByVariant = $this->getAvailableByVariant($variantIds, $warehouseId);
-        $reservedByOrderItem = $this->getReservedByOrderItem($orderItemIds, $warehouseId);
+        $reservedByOrderItem = $this->getReservedByOrderItem($displayedItemIds, $warehouseId);
 
-        $blockedVariantIds = [];
         $guards = [];
 
-        foreach ($queueOrders as $order) {
-            $shortages = [];
+        foreach ($allQueueOrders as $order) {
+            $shortages       = [];
+            $pendingDeductions = [];  // staged deductions, applied only if order has NO shortage
 
             foreach ($order->items as $item) {
-                $variantId = (int) $item->product_variant_id;
+                $variantId   = (int) $item->product_variant_id;
                 $requiredQty = max(0, (int) $item->quantity);
 
                 if ($variantId <= 0 || $requiredQty <= 0) {
@@ -367,57 +372,46 @@ class WarehouseDashboardController extends Controller
                 }
 
                 $reservedForItem = max(0, (int) ($reservedByOrderItem[$item->id] ?? 0));
-                $availableQty = max(0, (int) ($availableByVariant[$variantId] ?? 0));
-                $effectiveQty = $availableQty + $reservedForItem;
-
-                $isBlockedByPriorOrder = in_array($variantId, $blockedVariantIds, true);
-
-                if ($isBlockedByPriorOrder) {
-                    $shortages[] = [
-                        'order_id' => (int) $order->id,
-                        'order_code' => (string) $order->code,
-                        'order_item_id' => (int) $item->id,
-                        'variant_id' => $variantId,
-                        'variant_name' => (string) ($item->variant?->name ?? $item->product?->name ?? ('SP #' . $variantId)),
-                        'required_qty' => $requiredQty,
-                        'available_qty' => $effectiveQty,
-                        'short_qty' => max(1, $requiredQty - $effectiveQty),
-                        'reason' => 'blocked_by_prior_order',
-                    ];
-
-                    continue;
-                }
+                $availableQty   = max(0, (int) ($availableByVariant[$variantId] ?? 0));
+                $effectiveQty   = $availableQty + $reservedForItem;
 
                 if ($effectiveQty < $requiredQty) {
                     $shortages[] = [
-                        'order_id' => (int) $order->id,
-                        'order_code' => (string) $order->code,
+                        'order_id'      => (int) $order->id,
+                        'order_code'    => (string) $order->code,
                         'order_item_id' => (int) $item->id,
-                        'variant_id' => $variantId,
-                        'variant_name' => (string) ($item->variant?->name ?? $item->product?->name ?? ('SP #' . $variantId)),
-                        'required_qty' => $requiredQty,
+                        'variant_id'    => $variantId,
+                        'variant_name'  => (string) ($item->variant?->name ?? $item->product?->name ?? ('SP #' . $variantId)),
+                        'required_qty'  => $requiredQty,
                         'available_qty' => $effectiveQty,
-                        'short_qty' => max(0, $requiredQty - $effectiveQty),
-                        'reason' => 'insufficient_stock',
+                        'short_qty'     => $requiredQty - $effectiveQty,
+                        'reason'        => 'insufficient_stock',
                     ];
-
-                    $blockedVariantIds[] = $variantId;
-
-                    continue;
+                } else {
+                    // Sufficient — stage the deduction
+                    $consume = max(0, $requiredQty - $reservedForItem);
+                    $pendingDeductions[$variantId] = ($pendingDeductions[$variantId] ?? 0) + $consume;
                 }
-
-                $consumeFromAvailable = max(0, $requiredQty - $reservedForItem);
-                $availableByVariant[$variantId] = max(0, $availableQty - $consumeFromAvailable);
             }
 
             $hasShortage = !empty($shortages);
 
-            $guards[$order->id] = [
-                'has_shortage' => $hasShortage,
-                'can_start_packing' => !$hasShortage,
-                'message' => $hasShortage ? 'Không đủ tồn kho để đóng hàng' : null,
-                'shortages' => $shortages,
-            ];
+            if (!$hasShortage) {
+                // Order can be fully packed: consume stock from the pool for subsequent orders
+                foreach ($pendingDeductions as $variantId => $consume) {
+                    $availableByVariant[$variantId] = max(0, ($availableByVariant[$variantId] ?? 0) - $consume);
+                }
+            }
+            // If order has shortage: deduct NOTHING — stock remains for later orders in FIFO queue
+
+            if (isset($displayedOrderIds[$order->id])) {
+                $guards[$order->id] = [
+                    'has_shortage'      => $hasShortage,
+                    'can_start_packing' => !$hasShortage,
+                    'message'           => $hasShortage ? 'Không đủ tồn kho để đóng hàng' : null,
+                    'shortages'         => $shortages,
+                ];
+            }
         }
 
         return $guards;
