@@ -663,6 +663,12 @@ class PageController extends Controller
         $fromDate = $request->input('from_date');
         $toDate = $request->input('to_date');
 
+        // Mặc định hiển thị đơn trong ngày nếu không có filter ngày
+        if (!$fromDate && !$toDate && !$request->hasAny(['from_date', 'to_date'])) {
+            $fromDate = Carbon::today()->toDateString();
+            $toDate = $fromDate;
+        }
+
         if ($fromDate && $toDate) {
             $from = Carbon::parse($fromDate)->startOfDay();
             $to = Carbon::parse($toDate)->endOfDay();
