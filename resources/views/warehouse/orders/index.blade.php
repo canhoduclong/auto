@@ -611,10 +611,12 @@
                                                         <form action="{{ route('warehouse.orders.logistics', $order) }}" method="POST" class="js-logistics-item-form wh-compact-form justify-content-end">
                                                             @csrf
                                                             <input type="hidden" name="item_id" value="{{ $item->id }}">
-                                                            <input type="number" name="item_actual_weight" class="form-control form-control-sm actual_weight"
+                                                            <input type="number" name="item_actual_weight" class="form-control form-control-sm actual_weight js-weight-input"
                                                                 value="{{ $itemWeightDefault }}"
                                                                 placeholder="{{ $weightUnitLabel }}"
-                                                                min="0" step="0.001" required>
+                                                                min="0" step="0.001" required
+                                                                data-qty="{{ $orderedQty }}"
+                                                                data-size="{{ is_numeric($variantSize) && (float)$variantSize > 0 ? (float)$variantSize : 0 }}">
                                                             <button class="btn btn-outline-primary btn-sm js-logistics-submit-btn" type="submit">Lưu</button>
                                                         </form>
                                                     </div>
@@ -630,6 +632,7 @@
                                                     <strong>{{ !is_null($lineTotal) ? number_format($lineTotal) . 'đ' : '---' }}</strong>
                                                 </div>
                                              </div>
+                                             <div class="js-weight-error text-danger text-center px-1" style="font-size:.72rem;display:none;"></div>
                                         </li>
                                     @endforeach
                                 </ul>
@@ -870,9 +873,42 @@
             }
         }
 
+        function validateWeightInput(input) {
+            const qty = parseFloat(input.dataset.qty || '0');
+            const size = parseFloat(input.dataset.size || '0');
+            const val = parseFloat(input.value);
+            const errEl = input.closest('li')?.querySelector('.js-weight-error');
+            const submitBtn = input.closest('form')?.querySelector('.js-logistics-submit-btn');
+            function setInvalid(msg) {
+                if (errEl) { errEl.textContent = msg; errEl.style.display = ''; }
+                if (submitBtn) { submitBtn.disabled = true; submitBtn.classList.add('btn-secondary'); submitBtn.classList.remove('btn-outline-primary'); }
+                return false;
+            }
+            function setValid() {
+                if (errEl) errEl.style.display = 'none';
+                if (submitBtn) { submitBtn.disabled = false; submitBtn.classList.remove('btn-secondary'); submitBtn.classList.add('btn-outline-primary'); }
+                return true;
+            }
+            if (!errEl) return true;
+            if (size <= 0 || isNaN(qty) || qty <= 0) return setValid();
+            if (isNaN(val)) return setInvalid('Nhập số kg hợp lệ.');
+            const min = qty * (size - 0.25);
+            const max = qty * (size + 0.25);
+            if (val < min || val > max) {
+                return setInvalid(`Kg phải trong khoảng ${min.toFixed(3)} – ${max.toFixed(3)} (SL ${qty} × size ${size} ± 0.25)`);
+            }
+            return setValid();
+        }
+
+        document.querySelectorAll('.js-weight-input').forEach(function (input) {
+            input.addEventListener('input', function () { validateWeightInput(input); });
+        });
+
         document.querySelectorAll('.js-logistics-item-form, .js-logistics-fee-form').forEach(function (form) {
             form.addEventListener('submit', function (event) {
                 event.preventDefault();
+                const weightInput = form.querySelector('.js-weight-input');
+                if (weightInput && !validateWeightInput(weightInput)) return;
                 submitLogisticsForm(form);
             });
         });
