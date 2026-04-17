@@ -330,4 +330,39 @@ class SettingController extends Controller
 
         return $host === 'hoanglongtnt.com' || $host === 'www.hoanglongtnt.com';
     }
+
+    public function artisan(Request $request)
+    {
+        $user = $request->user();
+        if (!$user || !$user->hasRole('admin')) {
+            abort(403);
+        }
+
+        $allowed = [
+            'dump-autoload'       => ['title' => 'composer dump-autoload',     'command' => 'cd /var/www/auto.com && composer dump-autoload --no-interaction 2>&1'],
+            'fpm-reload'          => ['title' => 'PHP-FPM reload',             'command' => 'sudo service php8.2-fpm reload 2>&1'],
+            'view-clear'          => ['title' => 'php artisan view:clear',      'command' => 'cd /var/www/auto.com && php artisan view:clear 2>&1'],
+            'cache-clear'         => ['title' => 'php artisan cache:clear',     'command' => 'cd /var/www/auto.com && php artisan cache:clear 2>&1'],
+            'config-clear'        => ['title' => 'php artisan config:clear',    'command' => 'cd /var/www/auto.com && php artisan config:clear 2>&1'],
+            'route-clear'         => ['title' => 'php artisan route:clear',     'command' => 'cd /var/www/auto.com && php artisan route:clear 2>&1'],
+            'optimize-clear'      => ['title' => 'php artisan optimize:clear',  'command' => 'cd /var/www/auto.com && php artisan optimize:clear 2>&1'],
+            'migrate'             => ['title' => 'php artisan migrate --force', 'command' => 'cd /var/www/auto.com && php artisan migrate --force 2>&1'],
+            'queue-restart'       => ['title' => 'php artisan queue:restart',   'command' => 'cd /var/www/auto.com && php artisan queue:restart 2>&1'],
+        ];
+
+        $cmd = $request->input('cmd');
+        if (!array_key_exists($cmd, $allowed)) {
+            return back()->with('error', 'Lệnh không hợp lệ.');
+        }
+
+        $item = $allowed[$cmd];
+        [, $output] = $this->runDeployCommand($item['command']);
+
+        $log = implode("\n", $output);
+
+        return back()
+            ->with('artisan_output', $log)
+            ->with('artisan_title', $item['title'])
+            ->with('artisan_status', 'success');
+    }
 }

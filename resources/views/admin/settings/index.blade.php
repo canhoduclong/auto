@@ -44,6 +44,45 @@
         </div>
     @endif
 
+    @if(session('artisan_output'))
+        <div class="card border-0 shadow-sm mb-3 border-success">
+            <div class="card-header bg-success bg-opacity-10 border-0">
+                <strong><i class="bi bi-terminal me-1"></i>Kết quả: {{ session('artisan_title') }}</strong>
+            </div>
+            <div class="card-body">
+                <pre class="settings-deploy-log mb-0">{{ session('artisan_output') }}</pre>
+            </div>
+        </div>
+    @endif
+
+    <div class="card border-0 shadow-sm mb-3">
+        <div class="card-header bg-white border-0 pt-3 pb-0">
+            <h5 class="mb-1">Lệnh hệ thống</h5>
+            <p class="text-muted small mb-0">Thực thi các lệnh artisan / composer / PHP-FPM cần thiết sau khi pull code.</p>
+        </div>
+        <div class="card-body d-flex flex-wrap gap-2">
+            @foreach([
+                ['cmd' => 'dump-autoload',  'label' => 'composer dump-autoload',     'icon' => 'bi-arrow-repeat',        'color' => 'btn-primary'],
+                ['cmd' => 'fpm-reload',     'label' => 'PHP-FPM reload',             'icon' => 'bi-lightning-charge',    'color' => 'btn-warning text-dark'],
+                ['cmd' => 'optimize-clear', 'label' => 'optimize:clear',             'icon' => 'bi-trash3',              'color' => 'btn-secondary'],
+                ['cmd' => 'view-clear',     'label' => 'view:clear',                 'icon' => 'bi-eye-slash',           'color' => 'btn-outline-secondary'],
+                ['cmd' => 'cache-clear',    'label' => 'cache:clear',                'icon' => 'bi-database-x',          'color' => 'btn-outline-secondary'],
+                ['cmd' => 'config-clear',   'label' => 'config:clear',               'icon' => 'bi-gear-wide',           'color' => 'btn-outline-secondary'],
+                ['cmd' => 'route-clear',    'label' => 'route:clear',                'icon' => 'bi-signpost-split',      'color' => 'btn-outline-secondary'],
+                ['cmd' => 'migrate',        'label' => 'migrate --force',            'icon' => 'bi-database-up',         'color' => 'btn-danger'],
+                ['cmd' => 'queue-restart',  'label' => 'queue:restart',              'icon' => 'bi-arrow-clockwise',     'color' => 'btn-outline-dark'],
+            ] as $btn)
+                <form method="POST" action="{{ route('admin.settings.artisan') }}" class="d-inline" onsubmit="return confirm('Chạy lệnh: {{ $btn['label'] }}?')">
+                    @csrf
+                    <input type="hidden" name="cmd" value="{{ $btn['cmd'] }}">
+                    <button type="submit" class="btn btn-sm {{ $btn['color'] }}">
+                        <i class="bi {{ $btn['icon'] }} me-1"></i>{{ $btn['label'] }}
+                    </button>
+                </form>
+            @endforeach
+        </div>
+    </div>
+
     <div class="card border-0 shadow-sm mb-3">
         <div class="card-header bg-white border-0 pt-3 pb-0 d-flex justify-content-between align-items-center gap-2 flex-wrap">
             <div>
