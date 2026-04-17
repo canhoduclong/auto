@@ -668,9 +668,9 @@
                                 <div class="tmo-products">
                                     <div class="tmo-product-line tmo-product-head">
                                         <div>Sản phẩm</div>
-                                        <div>Số lượng</div>
-                                        <div>Tổng</div>
                                         <div>Size</div>
+                                        <div>Số lượng</div>
+                                        <div>Tổng</div>                                        
                                         <div>Đơn giá</div>
                                         <div>Tạm tính</div>
                                     </div>
@@ -707,9 +707,10 @@
                                                 data-product-est-weight="{{ $estimatedWeight }}"
                                                 data-product-price="{{ $price }}"
                                                 data-product-subtotal="{{ $lineSubtotal }}">{{ $productName }}</div>
+                                            <div>{{ $sizeLabel }}</div>
                                             <div>{{ rtrim(rtrim(number_format($qty, 3, '.', ''), '0'), '.') }}</div>
                                             <div>{{ $displayTotalLabel }}</div>
-                                            <div>{{ $sizeLabel }}</div>
+                                            
                                             <div>{{ number_format($price, 0, ',', '.') }} đ</div>
                                             <div>{{ number_format($lineSubtotal, 0, ',', '.') }} đ</div>
                                         </div>
