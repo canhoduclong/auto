@@ -91,12 +91,9 @@ class ProductController extends Controller
             'brand_id' => 'nullable|numeric',
             'stock' => 'required|numeric',
             'unit' => ['required', Rule::in(ProductUnit::values())],
-            'kg' => 'required|numeric|gt:0',
-            'is_priced_by_kg' => 'nullable|boolean',
             'media_id' => 'nullable|integer|exists:media,id',
         ]);
         $data['user_id'] = Auth::id();
-        $data['is_priced_by_kg'] = $request->boolean('is_priced_by_kg');
         
         if (isset($data['price'])) {
             $data['price'] = str_replace(',', '', $data['price']);
@@ -172,8 +169,6 @@ class ProductController extends Controller
                 'price' => 'nullable|numeric',
                 'stock' => 'nullable|numeric',
                 'unit'  => ['required', Rule::in(ProductUnit::values())],
-                'kg' => 'required|numeric|gt:0',
-                'is_priced_by_kg' => 'nullable|boolean',
                 'media_id' => 'nullable|integer|exists:media,id',
             ]);
 
@@ -185,8 +180,6 @@ class ProductController extends Controller
                 $product->stock = $validated['stock'];
             }
             $product->unit = $validated['unit'];
-            $product->kg = (float) $validated['kg'];
-            $product->is_priced_by_kg = $request->boolean('is_priced_by_kg');
 
             if ($request->filled('media_id')) {
                 MediaLink::where('model_id', $product->id)
@@ -215,8 +208,6 @@ class ProductController extends Controller
                     'stock' => $product->stock,
                     'unit' => $product->unit,
                     'unit_label' => $product->unit_label,
-                    'kg' => (float) $product->kg,
-                    'is_priced_by_kg' => (bool) $product->is_priced_by_kg,
                     'image_url' => $product->avatar && $product->avatar->media ? asset('storage/' . $product->avatar->media->file_path) : null,
                 ]
             ]);
@@ -231,8 +222,6 @@ class ProductController extends Controller
                 'category_id' => 'required|numeric',
                 'brand_id' => 'nullable|numeric',
                 'unit' => ['required', Rule::in(ProductUnit::values())],
-                'kg' => 'required|numeric|gt:0',
-                'is_priced_by_kg' => 'nullable|boolean',
                 'media_id'    => 'nullable|integer|exists:media,id',
                 'gallery'     => 'nullable|array',
                 'gallery.*'   => 'integer|exists:media,id',
@@ -247,8 +236,6 @@ class ProductController extends Controller
                 'category_id' => $validated['category_id'],
                 'brand_id' => $validated['brand_id'],
                 'unit' => $validated['unit'],
-                'kg' => (float) $validated['kg'],
-                'is_priced_by_kg' => $request->boolean('is_priced_by_kg'),
                 'description' => $validated['description'] ?? $product->description,
             ]);
 

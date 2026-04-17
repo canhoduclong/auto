@@ -275,13 +275,11 @@
                                     <thead>
                                         <tr>
                                             <th>Sản phẩm</th>
-                                            <th class="text-center">SKU</th>
+                                            <th class="text-center">Size</th>
                                             <th class="text-center">Đơn giá</th>
                                             <th class="text-center">CK giá</th>
                                             <th class="text-center">SL</th>
-                                            <th class="text-center">ĐVT</th>
-                                            <th class="text-center">KL</th>
-                                            <th class="text-center">Loại tính</th>
+                                            <th class="text-center">Tổng cộng</th>
                                             <th class="text-center">Tạm tính</th>
                                             <th></th>
                                         </tr>
@@ -424,6 +422,30 @@ document.addEventListener('DOMContentLoaded', function () {
         return new Intl.NumberFormat('vi-VN').format(num);
     }
 
+    /**
+     * Chuẩn hóa hiển thị kg.
+     * Input:  "1,000 kg" | "1.250 kg" | "1.200 kg" | 1.25 (number)
+     * Output: "1kg"      | "1.25kg"   | "1.2kg"    | "1.25kg"
+     */
+    function formatKg(value) {
+        // Nếu là number, dùng trực tiếp; nếu là string thì parse
+        let num;
+        if (typeof value === 'number') {
+            num = value;
+        } else {
+            const cleaned = String(value)
+                .replace(/\s/g, '')         // bỏ khoảng trắng
+                .replace(/kg/gi, '')        // bỏ chữ kg
+                .replace(/\./g, '')         // bỏ dấu chấm phân cách hàng nghìn (vi-VN dùng . cho nghìn)
+                .replace(',', '.');         // chuyển dấu , thập phân thành .
+            num = parseFloat(cleaned);
+        }
+        if (!isFinite(num)) return value;
+        // Loại bỏ số 0 dư ở cuối thập phân, tối đa 3 chữ số thập phân
+        const str = num.toFixed(3).replace(/\.?0+$/, '');
+        return `${str}kg`;
+    }
+
     function getCartVariantIds() {
         return Array.from(cartContainer.querySelectorAll('.cart-item-row'))
             .map((row) => row.getAttribute('data-variant-id'))
@@ -509,7 +531,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 const unitWeight = parseFloat(lineWeightEl.getAttribute('data-unit-weight') || '0');
                 const weightUnit = lineWeightEl.getAttribute('data-weight-unit') || 'Kg';
                 const lineWeight = Math.max(0, unitWeight * quantity);
-                lineWeightEl.textContent = `${lineWeight.toLocaleString('vi-VN', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} ${weightUnit}`;
+                lineWeightEl.textContent = formatKg(lineWeight);
             }
 
             discountInput.max = discountType === 'decrease' ? String(Math.max(price - minPrice, 0)) : '';
@@ -634,6 +656,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const variantName = addBtn.dataset.variantName || 'N/A';
         const variantSku = addBtn.dataset.variantSku || 'N/A';
+        const variantSize = addBtn.dataset.variantSize || '';
         const variantPrice = parseFloat(addBtn.dataset.variantPrice || '0');
         const variantStock = parseInt(addBtn.dataset.variantStock || '0', 10);
         const variantImage = addBtn.dataset.variantImage || 'https://via.placeholder.com/48';
@@ -661,7 +684,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 <input type="hidden" name="items[${itemIndex}][base_price]" value="${variantPrice}">
                 <input type="hidden" name="item_weight[${variantId}]" value="${variantWeight.toFixed(3)}">
             </td>
-            <td class="text-center">${variantSku}</td>
+            <td class="text-center">${variantSize || variantSku}</td>
             <td class="text-center price" data-price="${variantPrice}" data-min-price="${variantMinPrice}">${formatNumber(variantPrice)}đ</td>
             <td class="text-center">
                 <div class="btn-group discount-switch mb-1" role="group" aria-label="Loai chiet khau">
@@ -683,14 +706,14 @@ document.addEventListener('DOMContentLoaded', function () {
             <td class="text-center">
                 <input type="number" name="items[${itemIndex}][quantity]" class="form-control form-control-sm quantity-input min50" min="1" max="${variantStock > 0 ? variantStock : ''}" value="1" required>
             </td>
-            <td class="text-center"><span class="text-muted small">${variantUnitLabel}</span></td>
-            <td class="text-end">
-                <span class="line-weight" data-unit-weight="${variantWeight.toFixed(3)}" data-weight-unit="${variantWeightUnitLabel}">
-                    ${variantWeight.toLocaleString('vi-VN', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} ${variantWeightUnitLabel}
-                </span>
-            </td>
             <td class="text-center">
-                <span class="badge bg-${variantIsPricedByKg ? 'primary' : 'secondary'}">${variantIsPricedByKg ? 'Theo kg' : 'Theo đơn vị'}</span>
+                ${variantIsPricedByKg
+                    ? `<span class="line-weight fw-bold" data-unit-weight="${variantWeight.toFixed(3)}" data-weight-unit="${variantWeightUnitLabel}">
+                        ${formatKg(variantWeight * 1)}
+                       </span>`
+                    : `<span class="text-muted small">${variantUnitLabel}</span>
+                       <span class="line-weight d-none" data-unit-weight="${variantWeight.toFixed(3)}" data-weight-unit="${variantWeightUnitLabel}"></span>`
+                }
             </td>
             <td class="text-end row-total">${formatNumber(variantPrice)}đ</td>
             <td class="text-end">

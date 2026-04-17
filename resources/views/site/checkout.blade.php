@@ -711,7 +711,7 @@
                                     </div>
                                     <div class="checkout-kpi">
                                         <span class="checkout-kpi-label">Tổng khối lượng</span>
-                                        <span class="checkout-kpi-value" id="summaryWeight">{{ number_format($summaryWeight, 3, ',', '.') }} kg</span>
+                                        <span class="checkout-kpi-value" id="summaryWeight">{{ format_kg($summaryWeight) }}</span>
                                     </div>
                                 </div>
 
@@ -792,11 +792,11 @@
     const formatSignedMoney = value =>
         `${value < 0 ? '+' : '-'}${new Intl.NumberFormat('vi-VN').format(Math.abs(value))}đ`;
 
-    const formatWeight = value =>
-        new Intl.NumberFormat('vi-VN', {
-            minimumFractionDigits: 3,
-            maximumFractionDigits: 3
-        }).format(Math.max(0, value)) + ' kg';
+    const formatWeight = value => {
+        const num = Math.max(0, value);
+        const str = num.toFixed(3).replace(/\.?0+$/, '');
+        return str + 'kg';
+    };
 
     const toNumber = (value, fallback = 0) => {
         const parsed = Number(value);

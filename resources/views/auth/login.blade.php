@@ -10,22 +10,12 @@
         --login-muted:       #64748b;
     }
 
-    @php
-        $loginBgMediaId = \App\Models\Setting::get('login_bg');
-        $loginBgMedia   = $loginBgMediaId ? \App\Models\Media::find($loginBgMediaId) : null;
-        $loginBgUrl     = $loginBgMedia ? asset('storage/' . $loginBgMedia->file_path) : null;
-    @endphp
-
     body {
         min-height: 100vh;
-        @if($loginBgUrl)
-        background: url('{{ $loginBgUrl }}') center center / cover no-repeat fixed;
-        @else
         background:
             radial-gradient(ellipse 120% 60% at 10% -5%, rgba(14,165,233,.18), transparent 50%),
             radial-gradient(ellipse 100% 55% at 90% 105%, rgba(56,189,248,.2), transparent 52%),
             linear-gradient(135deg, #0b1220, #113a5d);
-        @endif
     }
 
     /* ── Outer shell ── */
@@ -259,7 +249,7 @@
             </div>
 
             <button class="btn btn-primary btn-login w-100">{{ __('common.actions.login') }}</button>
-        </form>
+        </form> 
 
         <div class="login-copyright">
             © {{ date('Y') }} {{ $loginBrandName }}

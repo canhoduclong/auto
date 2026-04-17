@@ -90,8 +90,7 @@
         padding: 42px 0 72px;
     }
 
-    .order-shell {
-        max-width: 1180px;
+    .order-shell { 
         margin: 0 auto;
     }
 
@@ -797,7 +796,7 @@
                             </div>
                             <div class="order-meta-item">
                                 <span class="order-meta-label">Tổng khối lượng</span>
-                                <div class="order-meta-value">{{ number_format($orderTotalWeight, 3, ',', '.') }} kg</div>
+                                <div class="order-meta-value">{{ format_kg($orderTotalWeight) }}</div>
                             </div>
                             <div class="order-meta-item">
                                 <span class="order-meta-label">Tổng thanh toán</span>

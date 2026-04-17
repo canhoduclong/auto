@@ -84,21 +84,15 @@ class AuthController extends Controller
 
     public function showRegistrationForm()
     {
-        $logoMediaId = \App\Models\Setting::get('logo');
-        $logoMedia   = $logoMediaId ? \App\Models\Media::find($logoMediaId) : null;
-        $brandName   = \App\Models\Setting::get('brand_name', __('auth.company'));
-        $slogan      = \App\Models\Setting::get('slogan', '');
-        return view('auth.register', compact('logoMedia', 'brandName', 'slogan'));
+        return view('auth.register');
     }
 
     public function register(Request $request)
     {
         $request->validate([
-            'name'     => 'required|string|max:255',
-            'email'    => 'required|string|email|max:255|unique:users,email',
+            'name' => 'required|string|max:255',
+            'email' => 'required|string|email|max:255|unique:users',
             'password' => 'required|string|confirmed|min:8',
-        ], [
-            'email.unique' => 'Email này đã được sử dụng, vui lòng dùng email khác.',
         ]);
 
         $user = User::create([

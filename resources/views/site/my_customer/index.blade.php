@@ -198,55 +198,44 @@
     .mc-area-title {
         font-size: 0.95rem;
         font-weight: 700;
-        margin-bottom: 16px;
+        margin-bottom: 12px;
         color: #0f172a;
     }
-    .area-city {
-        margin-bottom: 20px;
+    /* accordion region tree */
+    .mc-rt-city {
+        border: 1px solid #dbe4ef;
+        border-radius: 10px;
+        margin-bottom: .35rem;
+        overflow: hidden;
     }
-    .area-city-title {
-        font-size: 0.95rem;
-        font-weight: 700;
-        color: #1e293b;
-        margin-bottom: 8px;
+    .mc-rt-city-btn {
+        width: 100%; text-align: left; border: none; background: #fff;
+        padding: .42rem .65rem; font-size: .83rem; color: #334155;
+        cursor: pointer; display: flex; justify-content: space-between; align-items: center;
+        transition: background .12s;
     }
-    .area-ward-group {
-        margin-left: 12px;
-        margin-bottom: 10px;
+    .mc-rt-city-btn:hover { background: #f1f5f9; }
+    .mc-rt-city-btn.active { background: #eff6ff; color: #1d4ed8; font-weight: 700; }
+    .mc-rt-city-btn .mc-rt-arrow { font-size: .65rem; transition: transform .2s; }
+    .mc-rt-city-btn.open .mc-rt-arrow { transform: rotate(90deg); }
+    .mc-rt-wards {
+        display: none;
+        padding: 4px 6px 6px;
+        background: #f8fafc;
+        border-top: 1px solid #e2e8f0;
     }
-    .area-ward-title {
-        font-size: 0.85rem;
-        font-weight: 700;
-        color: #334155;
-        margin-bottom: 6px;
+    .mc-rt-wards.open { display: block; }
+    .mc-rt-ward-btn {
+        display: block; width: 100%; text-align: left; border: none;
+        background: transparent; padding: .28rem .55rem;
+        font-size: .78rem; color: #475569; cursor: pointer; border-radius: 6px;
+        transition: background .1s;
     }
-    .area-streets {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 6px;
-    }
-    .area-ward {
-        display: inline-flex;
-        align-items: center;
-        padding: 6px 10px;
-        border-radius: 999px;
-        background: #eff6ff;
-        color: #1d4ed8;
-        font-size: 0.78rem;
-        text-decoration: none;
-        transition: background-color .2s ease, color .2s ease;
-    }
-    .area-ward:hover,
-    .area-ward.active {
-        background: #1d4ed8;
-        color: #ffffff;
-    }
-    .area-ward-title a {
-        color: inherit;
-        text-decoration: none;
-    }
-    .area-ward-title a:hover {
-        text-decoration: underline;
+    .mc-rt-ward-btn:hover { background: #dbeafe; color: #1d4ed8; }
+    .mc-rt-ward-btn.active { background: #bfdbfe; color: #1e40af; font-weight: 600; }
+    .mc-rt-badge {
+        display: inline-block; padding: 1px 6px; border-radius: 99px;
+        background: #e2e8f0; color: #64748b; font-size: .68rem; margin-left: 4px;
     }
     .area-filter-summary {
         display: flex;
@@ -414,57 +403,37 @@
                 </div>
                 <div class="mc-panel mb-4">
                     <div class="mc-area-panel">
-                        <div class="mc-area-title">Khu vực</div>
-
-                        @if(request('city') || request('ward') || request('street'))
-                            <div class="area-filter-summary mb-3">
-                                <span class="fw-semibold">Đang lọc:</span>
-                                @if(request('city'))
-                                    <span>{{ request('city') }}</span>
-                                @else
-                                    <span>Tất cả tỉnh/thành</span>
-                                @endif
-                                @if(request('ward'))
-                                    <span>» {{ request('ward') }}</span>
-                                @endif
-                                @if(request('street'))
-                                    <span>» {{ request('street') }}</span>
-                                @endif
-                                <span class="ms-2 text-secondary">Khách hàng: {{ number_format($selectedAreaCustomerCount) }}</span>
-                                <a href="{{ route('pages.my_customer', request()->except(['page', 'city', 'ward', 'street'])) }}" class="ms-2 small text-decoration-none">Xóa bộ lọc</a>
-                            </div>
-                        @endif
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div class="mc-area-title mb-0">Khu vực</div>
+                            <button class="btn btn-link btn-sm p-0 text-secondary" id="mc-clear-region" style="font-size:.8rem;">Tất cả</button>
+                        </div>
 
                         @if(!empty($locationTree) && $locationTree->isNotEmpty())
+                            <div id="mc-region-tree">
                             @foreach($locationTree as $city => $cityData)
-                                <div class="area-city">
-                                    <div class="area-city-title">
-                                        <a href="{{ route('pages.my_customer', array_filter(array_merge(request()->except(['page', 'city', 'ward', 'street']), ['city' => $city]), function ($value) { return $value !== null && $value !== ''; })) }}" class="text-reset text-decoration-none">
-                                            {{ $city }} <span class="text-muted">({{ number_format($cityData['customer_count']) }})</span>
-                                        </a>
+                                @php $wardCount = count($cityData['wards']); @endphp
+                                <div class="mc-rt-city">
+                                    <button class="mc-rt-city-btn{{ request('city') === $city ? ' active open' : '' }}"
+                                            data-city="{{ $city }}">
+                                        <span>{{ $city }}<span class="mc-rt-badge">{{ $cityData['customer_count'] }}</span></span>
+                                        @if($wardCount)<i class="bi bi-chevron-right mc-rt-arrow"></i>@endif
+                                    </button>
+                                    @if($wardCount)
+                                    <div class="mc-rt-wards{{ request('city') === $city ? ' open' : '' }}">
+                                        @foreach($cityData['wards'] as $ward => $wardData)
+                                        <button class="mc-rt-ward-btn{{ (request('city') === $city && request('ward') === ($ward ?: '')) ? ' active' : '' }}"
+                                                data-city="{{ $city }}" data-ward="{{ $ward }}">
+                                            {{ $ward ?: 'Chưa rõ phường/xã' }}
+                                            <span class="mc-rt-badge">{{ $wardData['customer_count'] }}</span>
+                                        </button>
+                                        @endforeach
                                     </div>
-                                    @foreach($cityData['wards'] as $ward => $wardData)
-                                        <div class="area-ward-group">
-                                            <div class="area-ward-title">
-                                                <a href="{{ route('pages.my_customer', array_filter(array_merge(request()->except(['page', 'city', 'ward', 'street']), ['city' => $city, 'ward' => $ward ?: null]), function ($value) { return $value !== null && $value !== ''; })) }}" class="text-reset text-decoration-none">
-                                                    {{ $ward ?: 'Chưa rõ phường/xã' }} <span class="text-muted">({{ number_format($wardData['customer_count']) }})</span>
-                                                </a>
-                                            </div>
-                                            <div class="area-streets">
-                                                @forelse($wardData['streets'] as $streetData)
-                                                    <a href="{{ route('pages.my_customer', array_filter(array_merge(request()->except(['page', 'city', 'ward', 'street']), ['city' => $city, 'ward' => $ward ?: null, 'street' => $streetData['street']]), function ($value) { return $value !== null && $value !== ''; })) }}" class="area-ward{{ request('street') === $streetData['street'] ? ' active' : '' }}">
-                                                        {{ $streetData['street'] ?: 'Chưa rõ đường' }} <span class="text-muted">({{ number_format($streetData['customer_count']) }})</span>
-                                                    </a>
-                                                @empty
-                                                    <span class="area-ward">Chưa rõ đường</span>
-                                                @endforelse
-                                            </div>
-                                        </div>
-                                    @endforeach
+                                    @endif
                                 </div>
                             @endforeach
+                            </div>
                         @else
-                            <div class="text-muted">Chưa có dữ liệu khu vực khách hàng.</div>
+                            <div class="text-muted small">Chưa có dữ liệu khu vực khách hàng.</div>
                         @endif
                     </div>
                 </div>
@@ -687,6 +656,15 @@
             .catch(error => console.error('Error loading customers:', error));
     }
 
+    const _mcUrls = {
+        show:    "{{ route('my_customer.show', ':id') }}",
+        edit:    "{{ route('my_customer.edit', ':id') }}",
+        order:   "{{ route('my_customer.order.create', ':id') }}",
+        payment: "{{ route('my_customer.show', ['customer' => ':id', 'tab' => 'payments']) }}",
+        destroy: "{{ route('my_customer.destroy', ':id') }}",
+    };
+    function mcUrl(key, id) { return _mcUrls[key].replace(':id', id); }
+
     function updateCustomerList(customers) {
         const container = document.getElementById('customer-list');
         if (customers.length === 0) {
@@ -741,11 +719,11 @@
                                     <div class="text-muted me-3">Công nợ: <strong>${Number(customer.total_debt || 0).toLocaleString('vi-VN')} đ</strong></div>
                                     <input type="checkbox" name="ids[]" value="${customer.id}" class="form-check-input customer-checkbox">
                                     <div class="mc-actions justify-content-end">
-                                        <a href="{{ route('my_customer.show', ':id') }}".replace(':id', customer.id) class="btn btn-outline-info btn-sm" title="Xem chi tiết"><i class="bi bi-eye"></i></a>
-                                        <a href="{{ route('my_customer.order.create', ':id') }}".replace(':id', customer.id) class="btn btn-outline-success btn-sm" title="Lên đơn hàng"><i class="bi bi-file-text"></i></a>
-                                        <a href="{{ route('my_customer.show', ['customer' => ':id', 'tab' => 'payments']) }}".replace(':id', customer.id) class="btn btn-outline-secondary btn-sm" title="Thanh toán"><i class="bi bi-cash"></i></a>
-                                        <a href="{{ route('my_customer.edit', ':id') }}".replace(':id', customer.id) class="btn btn-outline-warning btn-sm" title="Chỉnh sửa"><i class="bi bi-pencil"></i></a>
-                                        <form action="{{ route('my_customer.destroy', ':id') }}".replace(':id', customer.id) method="POST" class="d-inline" onsubmit="return confirm('Bạn có chắc chắn muốn xóa khách hàng này không?');">
+                                        <a href="${mcUrl('show', customer.id)}" class="btn btn-outline-info btn-sm" title="Xem chi tiết"><i class="bi bi-eye"></i></a>
+                                        <a href="${mcUrl('order', customer.id)}" class="btn btn-outline-success btn-sm" title="Lên đơn hàng"><i class="bi bi-file-text"></i></a>
+                                        <a href="${mcUrl('payment', customer.id)}" class="btn btn-outline-secondary btn-sm" title="Thanh toán"><i class="bi bi-cash"></i></a>
+                                        <a href="${mcUrl('edit', customer.id)}" class="btn btn-outline-warning btn-sm" title="Chỉnh sửa"><i class="bi bi-pencil"></i></a>
+                                        <form action="${mcUrl('destroy', customer.id)}" method="POST" class="d-inline" onsubmit="return confirm('Bạn có chắc chắn muốn xóa khách hàng này không?');">
                                             @csrf
                                             @method('DELETE')
                                             <button type="submit" class="btn btn-outline-danger btn-sm" title="Xóa"><i class="bi bi-trash"></i></button>
@@ -835,5 +813,71 @@
 
     // Initial attach for existing checkboxes
     attachCheckboxEvents();
+
+    /* ── Region tree accordion ──────────────────────────── */
+    (function () {
+        const tree = document.getElementById('mc-region-tree');
+        if (!tree) return;
+
+        tree.querySelectorAll('.mc-rt-city-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const city   = btn.dataset.city;
+                const wardsEl = btn.nextElementSibling;
+                const isOpen  = btn.classList.contains('open');
+
+                // collapse all
+                tree.querySelectorAll('.mc-rt-city-btn').forEach(b => b.classList.remove('open','active'));
+                tree.querySelectorAll('.mc-rt-wards').forEach(w => w.classList.remove('open'));
+                tree.querySelectorAll('.mc-rt-ward-btn').forEach(b => b.classList.remove('active'));
+
+                if (!isOpen) {
+                    btn.classList.add('open', 'active');
+                    if (wardsEl && wardsEl.classList.contains('mc-rt-wards')) wardsEl.classList.add('open');
+                    currentParams.city  = city;
+                    currentParams.ward  = '';
+                } else {
+                    currentParams.city  = '';
+                    currentParams.ward  = '';
+                }
+                loadCustomers({ page: 1 });
+            });
+        });
+
+        tree.querySelectorAll('.mc-rt-ward-btn').forEach(btn => {
+            btn.addEventListener('click', e => {
+                e.stopPropagation();
+                const city   = btn.dataset.city;
+                const ward   = btn.dataset.ward;
+                const isActive = btn.classList.contains('active');
+
+                tree.querySelectorAll('.mc-rt-ward-btn').forEach(b => b.classList.remove('active'));
+                tree.querySelectorAll('.mc-rt-city-btn').forEach(b => b.classList.remove('active'));
+
+                if (!isActive) {
+                    btn.classList.add('active');
+                    const pb = tree.querySelector(`.mc-rt-city-btn[data-city="${CSS.escape(city)}"]`);
+                    if (pb) pb.classList.add('active');
+                    currentParams.city  = city;
+                    currentParams.ward  = ward;
+                } else {
+                    // deselect ward, keep city
+                    const pb = tree.querySelector(`.mc-rt-city-btn[data-city="${CSS.escape(city)}"]`);
+                    if (pb) pb.classList.add('active');
+                    currentParams.city  = city;
+                    currentParams.ward  = '';
+                }
+                loadCustomers({ page: 1 });
+            });
+        });
+
+        document.getElementById('mc-clear-region')?.addEventListener('click', () => {
+            tree.querySelectorAll('.mc-rt-city-btn').forEach(b => b.classList.remove('open','active'));
+            tree.querySelectorAll('.mc-rt-wards').forEach(w => w.classList.remove('open'));
+            tree.querySelectorAll('.mc-rt-ward-btn').forEach(b => b.classList.remove('active'));
+            currentParams.city = '';
+            currentParams.ward = '';
+            loadCustomers({ page: 1 });
+        });
+    })();
 </script>
 @endpush

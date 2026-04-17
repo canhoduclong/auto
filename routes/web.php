@@ -382,6 +382,13 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/my-customer/{customer}/order', [PageController::class, 'myCustomerOrderStore'])->name('my_customer.order.store');
     Route::get('/my-customer/{customer}/orders-quick-view', [PageController::class, 'myCustomerOrdersQuickView'])->name('my_customer.orders_quick_view');
 
+    // My Truck Stations
+    Route::get('/my-truck-stations', [PageController::class, 'myTruckStations'])->name('pages.my_truck_stations');
+    Route::get('/my-truck-stations/list', [PageController::class, 'myTruckStationsAjax'])->name('pages.my_truck_stations.ajax');
+    Route::get('/my-truck-stations/regions', [PageController::class, 'myTruckStationsRegions'])->name('pages.my_truck_stations.regions');
+    Route::post('/my-truck-stations', [PageController::class, 'myTruckStationsStore'])->name('pages.my_truck_stations.store');
+    Route::put('/my-truck-stations/{truckStation}', [PageController::class, 'myTruckStationsUpdate'])->name('pages.my_truck_stations.update');
+
     // Address data AJAX endpoints
     Route::get('/api/provinces', [PageController::class, 'getProvinces'])->name('api.provinces');
     Route::get('/api/districts', [PageController::class, 'getDistricts'])->name('api.districts');

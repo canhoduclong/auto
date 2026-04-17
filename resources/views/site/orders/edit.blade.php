@@ -373,7 +373,7 @@
                                                         data-weight-unit="{{ $unitLabel }}"
                                                         data-display-mode="{{ $isPricedByKg ? 'kg' : 'unit' }}">
                                                         @if($isPricedByKg)
-                                                            {{ number_format((float) ($unitWeight * $qty), 3, ',', '.') }} kg
+                                                            {{ format_kg((float) ($unitWeight * $qty)) }}
                                                         @else
                                                             {{ number_format((float) $qty, 0, ',', '.') }} {{ $unitLabel }}
                                                         @endif
@@ -548,6 +548,12 @@ document.addEventListener('DOMContentLoaded', function () {
         return Number.isFinite(parsed) ? parsed : fallback;
     }
 
+    function formatKg(value) {
+        const num = typeof value === 'number' ? value : parseFloat(String(value).replace(/\s/g, '').replace(/kg/gi, '').replace(/\./g, '').replace(',', '.'));
+        if (!isFinite(num)) return value;
+        return num.toFixed(3).replace(/\.?0+$/, '') + 'kg';
+    }
+
     function validateRowSellingPrice(row) {
         const priceEl = row.querySelector('.price');
         const discountInput = row.querySelector('.discount-input');
@@ -603,7 +609,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 const weightUnit = lineWeightEl.getAttribute('data-weight-unit') || 'Kg';
                 const lineWeight = Math.max(0, unitWeight * Math.max(quantity, 0));
                 if (isPricedByKg) {
-                    lineWeightEl.textContent = `${lineWeight.toLocaleString('vi-VN', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg`;
+                    lineWeightEl.textContent = formatKg(lineWeight);
                 } else {
                     lineWeightEl.textContent = `${Math.max(quantity, 0).toLocaleString('vi-VN')} ${weightUnit}`;
                 }
@@ -733,6 +739,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const variantName = addBtn.dataset.variantName || 'N/A';
         const variantSku = addBtn.dataset.variantSku || 'N/A';
+        const variantSize = addBtn.dataset.variantSize || '';
         const variantPrice = parseFloat(addBtn.dataset.variantPrice || '0');
         const variantStock = parseInt(addBtn.dataset.variantStock || '0', 10);
         const variantImage = addBtn.dataset.variantImage || 'https://via.placeholder.com/48';
@@ -756,7 +763,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 </div>
                 <input type="hidden" name="items[${itemIndex}][variant_id]" value="${variantId}">
             </td>
-            <td>${variantSku}</td>
+            <td>${variantSize || variantSku}</td>
             <td class="price" data-price="${variantPrice}" data-min-price="${variantMinPrice}">${formatNumber(variantPrice)}đ</td>
             <td>
                 <div class="btn-group discount-switch mb-1" role="group" aria-label="Loai chiet khau">
@@ -781,7 +788,7 @@ document.addEventListener('DOMContentLoaded', function () {
             <td class="text-end">
                 <span class="line-weight" data-unit-weight="${variantWeight.toFixed(3)}" data-weight-unit="${variantUnitLabel}" data-display-mode="${variantIsPricedByKg ? 'kg' : 'unit'}">
                     ${variantIsPricedByKg
-                        ? `${variantWeight.toLocaleString('vi-VN', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg`
+                        ? formatKg(variantWeight)
                         : `1 ${variantUnitLabel}`}
                 </span>
             </td>

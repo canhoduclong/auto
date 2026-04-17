@@ -19,6 +19,7 @@ class TruckStation extends Model
         'phone',
         'note',
         'is_active',
+        'created_by',
     ];
 
     protected $casts = [

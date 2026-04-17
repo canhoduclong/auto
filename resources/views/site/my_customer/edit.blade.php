@@ -108,6 +108,56 @@
             align-items: flex-start;
         }
     }
+
+    /* ── grid-dropdown widget ────────────────────── */
+    .mc-gd-wrap { position: relative; }
+    .mc-gd-trigger {
+        display: flex; align-items: center; justify-content: space-between;
+        border: 1px solid #dbe3ef; border-radius: 10px;
+        padding: .65rem .85rem; cursor: pointer; background: #fff;
+        font-size: .95rem; color: #374151; user-select: none;
+        transition: border-color .15s, box-shadow .15s;
+    }
+    .mc-gd-trigger:hover { border-color: #2563eb; }
+    .mc-gd-trigger.open {
+        border-color: #2563eb;
+        box-shadow: 0 0 0 .2rem rgba(37,99,235,.15);
+    }
+    .mc-gd-trigger .mc-gd-val { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .mc-gd-trigger .mc-gd-clear { display:none; line-height:1; color:#9ca3af; padding:0 2px 0 4px; font-size:1.1rem; }
+    .mc-gd-trigger.has-value .mc-gd-clear { display:inline; }
+    .mc-gd-panel {
+        position: absolute; z-index: 1060; left: 0; top: calc(100% + 4px);
+        min-width: 100%; width: max-content; max-width: 720px;
+        background: #fff; border: 1px solid #dbe3ef;
+        border-radius: 12px; box-shadow: 0 12px 40px rgba(15,23,42,.14);
+        padding: 10px; display: none;
+    }
+    .mc-gd-panel.open { display: block; }
+    .mc-gd-search {
+        width: 100%; border: 1px solid #dbe3ef; border-radius: 8px;
+        padding: .3rem .6rem; font-size: .82rem; margin-bottom: 8px; outline: none;
+    }
+    .mc-gd-search:focus { border-color: #2563eb; }
+    .mc-gd-grid {
+        display: grid; gap: 4px;
+        max-height: 280px; overflow-y: auto;
+    }
+    .mc-gd-grid.cols-3 { grid-template-columns: repeat(3,1fr); }
+    .mc-gd-grid.cols-4 { grid-template-columns: repeat(4,1fr); }
+    .mc-gd-item {
+        padding: 5px 8px; border-radius: 6px; font-size: .78rem;
+        cursor: pointer; transition: background .1s; white-space: nowrap;
+        overflow: hidden; text-overflow: ellipsis;
+        border: 1px solid transparent;
+    }
+    .mc-gd-item:hover { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
+    .mc-gd-item.selected { background: #dbeafe; border-color: #93c5fd; color: #1e40af; font-weight: 600; }
+    .mc-gd-empty { font-size:.82rem; color:#94a3b8; text-align:center; padding:12px; grid-column:1/-1; }
+    @media (max-width:576px) {
+        .mc-gd-panel { max-width: calc(100vw - 32px); }
+        .mc-gd-grid.cols-3, .mc-gd-grid.cols-4 { grid-template-columns: repeat(2,1fr); }
+    }
 </style>
 
 <div class="mc-edit-shell">
@@ -178,19 +228,39 @@
 
                             <div class="row mb-3">
                                 <div class="col-md-6">
-                                    <label for="province_id" class="form-label mc-form-label">Tỉnh / Thành phố</label>
-                                    <select class="form-select mc-form-control" id="province_id" name="province_id">
-                                        <option value="">-- Chọn tỉnh/thành phố --</option>
-                                        @foreach(($provinces ?? []) as $province)
-                                            <option value="{{ $province->id }}" {{ (string) $selectedProvinceId === (string) $province->id ? 'selected' : '' }}>{{ $province->name }}</option>
-                                        @endforeach
-                                    </select>
+                                    <label class="form-label mc-form-label">Tỉnh / Thành phố</label>
+                                    <div class="mc-gd-wrap" id="province-gd-wrap">
+                                        <div class="mc-gd-trigger" id="province-gd-trigger" tabindex="0">
+                                            <span class="mc-gd-val text-muted">-- Chọn tỉnh/thành phố --</span>
+                                            <span class="mc-gd-clear" title="Xoá">×</span>
+                                            <i class="bi bi-chevron-down ms-1" style="font-size:.75rem;"></i>
+                                        </div>
+                                        <div class="mc-gd-panel" id="province-gd-panel">
+                                            <input type="text" class="mc-gd-search" placeholder="Tìm tỉnh/thành...">
+                                            <div class="mc-gd-grid cols-4" id="province-gd-grid">
+                                                @foreach(($provinces ?? []) as $province)
+                                                    <div class="mc-gd-item{{ (string)$selectedProvinceId === (string)$province->id ? ' selected' : '' }}"
+                                                         data-value="{{ $province->id }}" data-label="{{ $province->name }}">{{ $province->name }}</div>
+                                                @endforeach
+                                            </div>
+                                        </div>
+                                        <input type="hidden" id="province_id" name="province_id" value="{{ $selectedProvinceId }}">
+                                    </div>
                                 </div>
                                 <div class="col-md-6">
-                                    <label for="ward_id" class="form-label mc-form-label">Phường / Xã</label>
-                                    <select class="form-select mc-form-control" id="ward_id" name="ward_id" data-selected-ward="{{ $selectedWardId }}" disabled>
-                                        <option value="">-- Chọn phường/xã --</option>
-                                    </select>
+                                    <label class="form-label mc-form-label">Phường / Xã</label>
+                                    <div class="mc-gd-wrap" id="ward-gd-wrap">
+                                        <div class="mc-gd-trigger mc-gd-disabled" id="ward-gd-trigger" tabindex="0">
+                                            <span class="mc-gd-val text-muted">-- Chọn phường/xã --</span>
+                                            <span class="mc-gd-clear" title="Xoá">×</span>
+                                            <i class="bi bi-chevron-down ms-1" style="font-size:.75rem;"></i>
+                                        </div>
+                                        <div class="mc-gd-panel" id="ward-gd-panel">
+                                            <input type="text" class="mc-gd-search" placeholder="Tìm phường/xã...">
+                                            <div class="mc-gd-grid cols-3" id="ward-gd-grid"></div>
+                                        </div>
+                                        <input type="hidden" id="ward_id" name="ward_id" value="{{ $selectedWardId }}">
+                                    </div>
                                 </div>
                             </div>
 
@@ -317,49 +387,142 @@
 @push('scripts')
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        const provinceSelect = document.getElementById('province_id');
-        const wardSelect = document.getElementById('ward_id');
+        const wardsApiUrl   = '{{ route("api.wards") }}';
         const useTruckSelect = document.getElementById('use_truck_station');
-        const truckSection = document.getElementById('truck_section');
+        const truckSection   = document.getElementById('truck_section');
 
-        function loadWardsByProvince(provinceId, selectedWardId = '') {
-            if (!provinceId) {
-                wardSelect.disabled = true;
-                wardSelect.innerHTML = '<option value="">-- Chọn phường/xã --</option>';
-                return;
+        /* ── makeGridDropdown ─────────────────────────── */
+        function makeGridDropdown(wrap) {
+            const trigger = wrap.querySelector('.mc-gd-trigger');
+            const panel   = wrap.querySelector('.mc-gd-panel');
+            const valSpan = trigger.querySelector('.mc-gd-val');
+            const clearBtn= trigger.querySelector('.mc-gd-clear');
+            const search  = panel?.querySelector('.mc-gd-search');
+            const grid    = panel?.querySelector('.mc-gd-grid');
+            const hidden  = wrap.querySelector('input[type="hidden"]');
+            let disabled  = trigger.classList.contains('mc-gd-disabled');
+
+            valSpan.dataset.placeholder = valSpan.textContent.trim();
+
+            // if hidden already has a value on page load, show label
+            if (hidden?.value) {
+                const pre = grid?.querySelector(`.mc-gd-item[data-value="${hidden.value}"]`);
+                if (pre) { valSpan.textContent = pre.dataset.label; valSpan.classList.remove('text-muted'); trigger.classList.add('has-value'); pre.classList.add('selected'); }
             }
 
-            fetch(`{{ route('api.wards') }}?province_id=${provinceId}`)
-                .then(response => response.json())
-                .then(data => {
-                    let html = '<option value="">-- Chọn phường/xã --</option>';
-                    data.forEach(ward => {
-                        const selected = String(selectedWardId || '') === String(ward.id) ? 'selected' : '';
-                        html += `<option value="${ward.id}" ${selected}>${ward.name}</option>`;
-                    });
-                    wardSelect.innerHTML = html;
-                    wardSelect.disabled = false;
-                })
-                .catch(() => {
-                    wardSelect.disabled = true;
-                    wardSelect.innerHTML = '<option value="">-- Chọn phường/xã --</option>';
+            function close() {
+                trigger.classList.remove('open');
+                panel?.classList.remove('open');
+                if (search) search.value = '';
+                filterItems('');
+            }
+            function open() {
+                if (disabled) return;
+                document.querySelectorAll('.mc-gd-panel.open').forEach(p => {
+                    if (p !== panel) { p.classList.remove('open'); p.closest('.mc-gd-wrap')?.querySelector('.mc-gd-trigger')?.classList.remove('open'); }
                 });
+                trigger.classList.add('open');
+                panel?.classList.add('open');
+                if (search) setTimeout(() => search.focus(), 60);
+            }
+            function filterItems(q) {
+                if (!grid) return;
+                const lq = q.toLowerCase();
+                grid.querySelectorAll('.mc-gd-item').forEach(el => { el.style.display = el.dataset.label.toLowerCase().includes(lq) ? '' : 'none'; });
+                const any = [...grid.querySelectorAll('.mc-gd-item')].some(e => e.style.display !== 'none');
+                let empty = grid.querySelector('.mc-gd-empty');
+                if (!any) {
+                    if (!empty) { empty = document.createElement('div'); empty.className = 'mc-gd-empty'; empty.textContent = 'Không tìm thấy'; grid.appendChild(empty); }
+                    empty.style.display = '';
+                } else if (empty) { empty.style.display = 'none'; }
+            }
+            function selectItem(value, label) {
+                grid?.querySelectorAll('.mc-gd-item').forEach(el => el.classList.toggle('selected', el.dataset.value === String(value)));
+                if (hidden) hidden.value = value || '';
+                if (value) { valSpan.textContent = label; valSpan.classList.remove('text-muted'); trigger.classList.add('has-value'); }
+                else { valSpan.textContent = valSpan.dataset.placeholder; valSpan.classList.add('text-muted'); trigger.classList.remove('has-value'); }
+                close();
+                wrap.dispatchEvent(new CustomEvent('gd:change', { detail: { value, label }, bubbles: true }));
+            }
+
+            trigger.addEventListener('click', e => {
+                if (e.target.closest('.mc-gd-clear')) { e.stopPropagation(); selectItem('', ''); return; }
+                trigger.classList.contains('open') ? close() : open();
+            });
+            trigger.addEventListener('keydown', e => {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); trigger.classList.contains('open') ? close() : open(); }
+                if (e.key === 'Escape') close();
+            });
+            if (search) {
+                search.addEventListener('input', () => filterItems(search.value));
+                search.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+            }
+            if (grid) {
+                grid.addEventListener('click', e => { const item = e.target.closest('.mc-gd-item'); if (item) selectItem(item.dataset.value, item.dataset.label); });
+            }
+            document.addEventListener('click', e => { if (!wrap.contains(e.target)) close(); });
+
+            return {
+                getValue()         { return hidden?.value || ''; },
+                setValue(v, l)     { selectItem(v, l); },
+                clearValue()       { selectItem('', ''); },
+                setItems(items) {
+                    if (!grid) return;
+                    grid.querySelectorAll('.mc-gd-item,.mc-gd-empty').forEach(el => el.remove());
+                    items.forEach(item => {
+                        const el = document.createElement('div');
+                        el.className = 'mc-gd-item'; el.dataset.value = item.id; el.dataset.label = item.name; el.textContent = item.name;
+                        grid.appendChild(el);
+                    });
+                },
+                disable() { disabled=true; trigger.classList.add('mc-gd-disabled'); trigger.style.opacity='.5'; trigger.style.pointerEvents='none'; close(); },
+                enable()  { disabled=false; trigger.classList.remove('mc-gd-disabled'); trigger.style.opacity=''; trigger.style.pointerEvents=''; },
+            };
         }
 
+        /* ── init province & ward grid dropdowns ──────────── */
+        const provGd = makeGridDropdown(document.getElementById('province-gd-wrap'));
+        const wardGd = makeGridDropdown(document.getElementById('ward-gd-wrap'));
+        wardGd.disable();
+
+        const selectedProvince = '{{ $selectedProvinceId }}';
+        const selectedWard     = '{{ $selectedWardId }}';
+
+        document.getElementById('province-gd-wrap').addEventListener('gd:change', e => {
+            wardGd.clearValue();
+            wardGd.setItems([]);
+            if (e.detail.value) {
+                wardGd.disable();
+                fetch(wardsApiUrl + '?province_id=' + e.detail.value)
+                    .then(r => r.json())
+                    .then(wards => { wardGd.setItems(wards); wardGd.enable(); })
+                    .catch(() => {});
+            } else {
+                wardGd.disable();
+            }
+        });
+
+        // load wards for pre-selected province on page load
+        if (selectedProvince) {
+            wardGd.disable();
+            fetch(wardsApiUrl + '?province_id=' + selectedProvince)
+                .then(r => r.json())
+                .then(wards => {
+                    wardGd.setItems(wards);
+                    wardGd.enable();
+                    if (selectedWard) {
+                        const item = document.querySelector(`#ward-gd-grid .mc-gd-item[data-value="${selectedWard}"]`);
+                        if (item) wardGd.setValue(item.dataset.value, item.dataset.label);
+                    }
+                })
+                .catch(() => {});
+        }
+
+        /* ── truck section toggle ────────────────────────── */
         function toggleTruckSection() {
             truckSection.style.display = useTruckSelect.value === '1' ? '' : 'none';
         }
-
-        provinceSelect.addEventListener('change', function() {
-            loadWardsByProvince(this.value, '');
-        });
-
         useTruckSelect.addEventListener('change', toggleTruckSection);
-
-        if (provinceSelect.value) {
-            loadWardsByProvince(provinceSelect.value, wardSelect.dataset.selectedWard || '');
-        }
-
         toggleTruckSection();
     });
 </script>

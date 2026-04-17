@@ -418,7 +418,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                                         <input type="number" value="{{ $quantity }}" class="form-control cart-qty update-cart" min="1">
                                                     </td>
                                                     <td>
-                                                        <div class="cart-item-weight text-muted small">{{ number_format($unitWeight, 3, ',', '.') }} {{ $details['unit_label'] ?? 'Cái' }} | {{ $isPricedByKg ? 'Theo kg' : 'Theo đơn vị' }}</div>
+                                                        <div class="cart-item-weight text-muted small">{{ $isPricedByKg ? format_kg($unitWeight) : number_format($unitWeight, 3, ',', '.') . ' ' . ($details['unit_label'] ?? 'Cái') }} | {{ $isPricedByKg ? 'Theo kg' : 'Theo đơn vị' }}</div>
                                                     </td>
                                                     <td class="fw-semibold cart-line-subtotal"> 
                                                         <span class="cart-line-total-money">{{ number_format($lineTotal) }}d</span>
@@ -456,7 +456,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                                 <div class="flex-grow-1">
                                                     <div class="cart-item-name">{{ $details['name'] }}</div>
                                                     <div class="cart-item-sku">SKU: {{ $details['sku'] }}</div>
-                                                    <div class="cart-item-weight text-muted small" data-weight="{{ $unitWeight }}">{{ number_format((float) $unitWeight, 3, ',', '.') }} {{ $details['unit_label'] ?? 'Cái' }} | {{ $isPricedByKg ? 'Theo kg' : 'Theo đơn vị' }}</div>
+                                                    <div class="cart-item-weight text-muted small" data-weight="{{ $unitWeight }}">{{ $isPricedByKg ? format_kg($unitWeight) : number_format((float) $unitWeight, 3, ',', '.') . ' ' . ($details['unit_label'] ?? 'Cái') }} | {{ $isPricedByKg ? 'Theo kg' : 'Theo đơn vị' }}</div>
                                                 </div>
                                                 <button class="btn btn-outline-danger btn-sm remove-from-cart">
                                                     <i class="bi bi-trash"></i>

@@ -82,32 +82,7 @@
                     @enderror
                 </div>
 
-                <div class="mb-3">
-                    <label for="kg" class="form-label">Kg quy đổi <span class="text-danger">*</span></label>
-                    <input
-                        type="number"
-                        name="kg"
-                        id="kg"
-                        class="form-control @error('kg') is-invalid @enderror"
-                        value="{{ old('kg', $product->kg ?? 1) }}"
-                        min="0.01"
-                        step="0.01"
-                        required>
-                    @error('kg')
-                        <div class="invalid-feedback">{{ $message }}</div>
-                    @enderror
-                </div>
 
-                <div class="mb-3 form-check">
-                    <input
-                        type="checkbox"
-                        class="form-check-input"
-                        id="is_priced_by_kg"
-                        name="is_priced_by_kg"
-                        value="1"
-                        {{ old('is_priced_by_kg', $product->is_priced_by_kg ?? true) ? 'checked' : '' }}>
-                    <label class="form-check-label" for="is_priced_by_kg">Tính tiền theo kg</label>
-                </div>
 
                 {{-- Ảnh đại diện --}}
                 <div class="form-group">

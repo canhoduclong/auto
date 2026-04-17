@@ -2811,6 +2811,11 @@ class PageController extends Controller
             ->with('success', 'Da cap nhat don hang thanh cong.');
     }
     
+    public function confirmCopyOrder(Order $order)
+    {
+        return $this->copyOrder($order->id);
+    }
+
     public function copyOrder($id)
     {
        $user = auth()->user();
@@ -3071,5 +3076,198 @@ class PageController extends Controller
         $wards = $query->orderBy('name')->get(['id', 'code', 'name', 'type', 'old_name']);
         
         return response()->json($wards);
+    }
+
+    public function myTruckStations(Request $request)
+    {
+        $provinces = Province::orderBy('name')->get(['id', 'name']);
+        $settings =  $this->settings; 
+
+        return view('site.my_truck_stations', compact('provinces', 'settings'));
+    }
+
+    public function myTruckStationsRegions(Request $request)
+    {
+        $rows = TruckStation::selectRaw('province_id, ward_id')
+            ->whereNotNull('province_id')
+            ->with(['province:id,name', 'ward:id,name'])
+            ->get();
+
+        $provinces = [];
+        foreach ($rows as $row) {
+            $pid = $row->province_id;
+            if (!isset($provinces[$pid])) {
+                $provinces[$pid] = [
+                    'id'    => $pid,
+                    'name'  => $row->province ? $row->province->name : '',
+                    'wards' => [],
+                ];
+            }
+            if ($row->ward_id && $row->ward) {
+                $wid = $row->ward_id;
+                $provinces[$pid]['wards'][$wid] = ['id' => $wid, 'name' => $row->ward->name];
+            }
+        }
+
+        // sort and re-index
+        usort($provinces, fn($a, $b) => strcmp($a['name'], $b['name']));
+        foreach ($provinces as &$prov) {
+            usort($prov['wards'], fn($a, $b) => strcmp($a['name'], $b['name']));
+            $prov['wards'] = array_values($prov['wards']);
+        }
+
+        return response()->json(array_values($provinces));
+    }
+
+    public function myTruckStationsAjax(Request $request)
+    {
+        $userId = auth()->id();
+        $query = TruckStation::with(['province', 'ward']);
+
+        $keyword = trim((string) $request->input('q', ''));
+        if ($keyword !== '') {
+            $query->where(function ($sub) use ($keyword) {
+                $sub->where('name', 'like', "%{$keyword}%")
+                    ->orWhere('address', 'like', "%{$keyword}%")
+                    ->orWhere('phone', 'like', "%{$keyword}%");
+            });
+        }
+
+        $provinceId = $request->input('province_id');
+        if ($provinceId) {
+            $query->where('province_id', $provinceId);
+        }
+
+        $wardId = $request->input('ward_id');
+        if ($wardId) {
+            $query->where('ward_id', $wardId);
+        }
+
+        $isActive = $request->input('is_active');
+        if ($isActive !== null && $isActive !== '') {
+            $query->where('is_active', (bool) $isActive);
+        }
+
+        $truckStations = $query->orderBy('name')->paginate(20);
+
+        return response()->json([
+            'data' => $truckStations->map(function ($ts) use ($userId) {
+                return [
+                    'id' => $ts->id,
+                    'name' => $ts->name,
+                    'address' => $ts->address,
+                    'phone' => $ts->phone,
+                    'note' => $ts->note,
+                    'is_active' => $ts->is_active,
+                    'province_id' => $ts->province_id,
+                    'ward_id' => $ts->ward_id,
+                    'province' => $ts->province ? $ts->province->name : null,
+                    'ward' => $ts->ward ? $ts->ward->name : null,
+                    'can_edit' => (int) $ts->created_by === (int) $userId,
+                ];
+            }),
+            'links' => [
+                'current_page' => $truckStations->currentPage(),
+                'last_page' => $truckStations->lastPage(),
+                'total' => $truckStations->total(),
+            ],
+        ]);
+    }
+
+    public function myTruckStationsStore(Request $request)
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'province_id' => ['nullable', 'exists:provinces,id'],
+            'ward_id' => ['nullable', 'exists:wards,id'],
+            'address' => ['nullable', 'string', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:30'],
+            'note' => ['nullable', 'string', 'max:2000'],
+            'is_active' => ['nullable', 'boolean'],
+        ]);
+
+        if (!empty($data['ward_id']) && !empty($data['province_id'])) {
+            $wardBelongsToProvince = Ward::whereKey($data['ward_id'])
+                ->where('province_id', $data['province_id'])
+                ->exists();
+
+            if (!$wardBelongsToProvince) {
+                return response()->json(['errors' => ['ward_id' => ['Phường/Xã không thuộc Tỉnh/Thành đã chọn.']]], 422);
+            }
+        }
+
+        $data['is_active'] = (bool) ($data['is_active'] ?? true);
+        $data['created_by'] = auth()->id();
+
+        $station = TruckStation::create($data);
+        $station->load(['province', 'ward']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã tạo nhà xe mới.',
+            'data' => [
+                'id' => $station->id,
+                'name' => $station->name,
+                'address' => $station->address,
+                'phone' => $station->phone,
+                'note' => $station->note,
+                'is_active' => $station->is_active,
+                'province_id' => $station->province_id,
+                'ward_id' => $station->ward_id,
+                'province' => $station->province ? $station->province->name : null,
+                'ward' => $station->ward ? $station->ward->name : null,
+                'can_edit' => true,
+            ],
+        ]);
+    }
+
+    public function myTruckStationsUpdate(Request $request, TruckStation $truckStation)
+    {
+        if ((int) $truckStation->created_by !== (int) auth()->id()) {
+            return response()->json(['message' => 'Bạn không có quyền sửa nhà xe này.'], 403);
+        }
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'province_id' => ['nullable', 'exists:provinces,id'],
+            'ward_id' => ['nullable', 'exists:wards,id'],
+            'address' => ['nullable', 'string', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:30'],
+            'note' => ['nullable', 'string', 'max:2000'],
+            'is_active' => ['nullable', 'boolean'],
+        ]);
+
+        if (!empty($data['ward_id']) && !empty($data['province_id'])) {
+            $wardBelongsToProvince = Ward::whereKey($data['ward_id'])
+                ->where('province_id', $data['province_id'])
+                ->exists();
+
+            if (!$wardBelongsToProvince) {
+                return response()->json(['errors' => ['ward_id' => ['Phường/Xã không thuộc Tỉnh/Thành đã chọn.']]], 422);
+            }
+        }
+
+        $data['is_active'] = (bool) ($data['is_active'] ?? false);
+
+        $truckStation->update($data);
+        $truckStation->load(['province', 'ward']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã cập nhật nhà xe.',
+            'data' => [
+                'id' => $truckStation->id,
+                'name' => $truckStation->name,
+                'address' => $truckStation->address,
+                'phone' => $truckStation->phone,
+                'note' => $truckStation->note,
+                'is_active' => $truckStation->is_active,
+                'province_id' => $truckStation->province_id,
+                'ward_id' => $truckStation->ward_id,
+                'province' => $truckStation->province ? $truckStation->province->name : null,
+                'ward' => $truckStation->ward ? $truckStation->ward->name : null,
+                'can_edit' => true,
+            ],
+        ]);
     }
 }

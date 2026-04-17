@@ -178,6 +178,9 @@
                         <li><a href="{{ route('pages.all_team_orders') }}" class="d-block py-1"><i class="bi bi-check2-all me-1"></i> Duyệt đơn PKD</a></li>
                     @endif
                     <li><a href="{{ route('pages.my_customer') }}" class="d-block py-1"><i class="bi bi-people me-1"></i> {{ __('site.my_customers') }}</a></li>
+                    @if(Auth::user()->isSalesFlowRole())
+                        <li><a href="{{ route('pages.my_truck_stations') }}" class="d-block py-1"><i class="bi bi-truck me-1"></i> Danh sách nhà xe</a></li>
+                    @endif
                     @if($offcanvasCanManageAppointments)
                         <li><a href="{{ route('pages.my_customer_appointments') }}" class="d-block py-1"><i class="bi bi-camera me-1"></i> Cuộc hẹn khách hàng</a></li>
                     @endif
@@ -332,6 +335,11 @@
                                         <a class="dropdown-item" href="{{ route('pages.my_customer') }}">
                                             <i class="bi bi-people"></i> {{ __('site.my_customers') }}
                                         </a>
+                                        @if(Auth::user()->isSalesFlowRole())
+                                            <a class="dropdown-item" href="{{ route('pages.my_truck_stations') }}">
+                                                <i class="bi bi-truck"></i> Danh sách nhà xe
+                                            </a>
+                                        @endif
                                         <a class="dropdown-item" href="{{ route('work-reports.index') }}">
                                             <i class="bi bi-clipboard-data"></i> Báo cáo công việc
                                         </a>

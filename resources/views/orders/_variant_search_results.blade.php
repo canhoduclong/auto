@@ -37,6 +37,10 @@
                 $isPricedByKg = $variant->is_priced_by_kg !== null
                     ? (bool) $variant->is_priced_by_kg
                     : (bool) ($variant->product->is_priced_by_kg ?? true);
+                // Nếu tính tiền theo kg, nhãn đơn vị KL luôn là "Kg"
+                if ($isPricedByKg) {
+                    $weightUnitLabel = 'Kg';
+                }
             @endphp
             <li class="list-group-item d-flex justify-content-between align-items-center">
                 <div class="d-flex align-items-center">
@@ -60,6 +64,7 @@
                     data-variant-id="{{ $variant->id }}"
                     data-variant-name="{{ $variant->product->name }}"
                     data-variant-sku="{{ $variant->sku }}"
+                    data-variant-size="{{ $variant->size ?: $variant->name ?? '' }}"
                     data-variant-price="{{ $variant->latestPriceRule?->price ?? 0 }}"
                     data-variant-min-price="{{ $variant->latestPriceRule?->min_price ?? 0 }}"
                     data-variant-stock="{{ $variant->available_stock }}"
