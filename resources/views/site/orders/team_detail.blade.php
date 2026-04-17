@@ -625,14 +625,14 @@
                     <div class="my-3 px-3">
                         <div class="d-flex flex-wrap gap-2 justify-content-end">
                             @if($canProcessToday)
-                                <form method="POST" action="{{ route('orders.approve', $order) }}">
+                                <form method="POST" action="{{ route('site.orders.approve', $order) }}">
                                     @csrf
                                     <input type="hidden" name="note" value="Duyệt từ trang chi tiết đơn team">
                                     <button type="submit" class="btn btn-success">
                                         <i class="bi bi-check2-circle me-1"></i>Duyệt đơn
                                     </button>
                                 </form>
-                                <form method="POST" action="{{ route('orders.reject', $order) }}">
+                                <form method="POST" action="{{ route('site.orders.reject', $order) }}">
                                     @csrf
                                     <input type="hidden" name="note" value="Từ chối từ trang chi tiết đơn team">
                                     <button type="submit" class="btn btn-danger" onclick="return confirm('Xác nhận từ chối đơn này?')">

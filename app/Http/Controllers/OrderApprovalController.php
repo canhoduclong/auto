@@ -52,15 +52,20 @@ class OrderApprovalController extends Controller
         ]);
     }
 
-    public function approve(Request $request, Order $order, ApprovalService $approvalService): RedirectResponse
+    public function approve(Request $request, Order $order, ApprovalService $approvalService): \Illuminate\Http\Response|RedirectResponse
     {
         $request->validate([
             'note' => 'nullable|string|max:1000',
         ]);
 
+        $isAjax = $request->ajax() || $request->wantsJson();
+
         $user = $request->user();
         if (!$this->userCanApprove($user)) {
-            return back()->with('error', __('orders.approval.no_permission'));
+            $msg = __('orders.approval.no_permission');
+            return $isAjax
+                ? response()->json(['success' => false, 'message' => $msg], 403)
+                : back()->with('error', $msg);
         }
 
         try {
@@ -68,21 +73,31 @@ class OrderApprovalController extends Controller
             $approvalService->approve($order, $request->user(), $request->input('note'));
             $order->refresh();
             $this->logOrderHistory($order, 'approve_order', $statusBefore, (string) $order->status, $request->input('note'));
-            return back()->with('success', __('orders.messages.confirmed'));
+            $msg = __('orders.messages.confirmed');
+            return $isAjax
+                ? response()->json(['success' => true, 'message' => $msg])
+                : back()->with('success', $msg);
         } catch (\Throwable $e) {
-            return back()->with('error', $e->getMessage());
+            return $isAjax
+                ? response()->json(['success' => false, 'message' => $e->getMessage()], 422)
+                : back()->with('error', $e->getMessage());
         }
     }
 
-    public function reject(Request $request, Order $order, ApprovalService $approvalService): RedirectResponse
+    public function reject(Request $request, Order $order, ApprovalService $approvalService): \Illuminate\Http\Response|RedirectResponse
     {
         $request->validate([
             'note' => 'nullable|string|max:1000',
         ]);
 
+        $isAjax = $request->ajax() || $request->wantsJson();
+
         $user = $request->user();
         if (!$this->userCanApprove($user)) {
-            return back()->with('error', __('orders.approval.no_permission'));
+            $msg = __('orders.approval.no_permission');
+            return $isAjax
+                ? response()->json(['success' => false, 'message' => $msg], 403)
+                : back()->with('error', $msg);
         }
 
         try {
@@ -90,9 +105,14 @@ class OrderApprovalController extends Controller
             $approvalService->reject($order, $request->user(), $request->input('note'));
             $order->refresh();
             $this->logOrderHistory($order, 'reject_order', $statusBefore, (string) $order->status, $request->input('note'));
-            return back()->with('success', __('orders.statuses.rejected'));
+            $msg = __('orders.statuses.rejected');
+            return $isAjax
+                ? response()->json(['success' => true, 'message' => $msg])
+                : back()->with('success', $msg);
         } catch (\Throwable $e) {
-            return back()->with('error', $e->getMessage());
+            return $isAjax
+                ? response()->json(['success' => false, 'message' => $e->getMessage()], 422)
+                : back()->with('error', $e->getMessage());
         }
     }
 }

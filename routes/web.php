@@ -399,6 +399,10 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/my-team-orders', [PageController::class, 'myTearmOrders'])->name('pages.my_team_orders');
     Route::post('/my-tearm-orders/auto-approve', [PageController::class, 'myTearmOrdersAutoApprove'])->name('pages.my_tearm_orders.auto_approve');
 
+    // Site approve/reject (dùng cho my-team-orders, không qua permission middleware)
+    Route::post('/site/orders/{order}/approve', [\App\Http\Controllers\OrderApprovalController::class, 'approve'])->name('site.orders.approve');
+    Route::post('/site/orders/{order}/reject', [\App\Http\Controllers\OrderApprovalController::class, 'reject'])->name('site.orders.reject');
+
     // Manager - duyệt đơn của tất cả sale/leader
     Route::get('/all-tearm-orders', [PageController::class, 'allTearmOrders'])->name('pages.all_tearm_orders');
     Route::get('/all-team-orders', [PageController::class, 'allTearmOrders'])->name('pages.all_team_orders');

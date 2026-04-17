@@ -448,12 +448,12 @@
                             <div class="d-flex gap-1 flex-wrap justify-content-end">
                                 <a href="{{ route('pages.team_order_detail', $order) }}" class="btn btn-sm btn-outline-primary">Chi tiet</a>
                                 @if($canProcess)
-                                    <form method="POST" action="{{ route('orders.approve', $order) }}">
+                                    <form method="POST" action="{{ route('site.orders.approve', $order) }}">
                                         @csrf
                                         <input type="hidden" name="note" value="Manager duyet tu trang all team orders">
                                         <button type="submit" class="btn btn-sm btn-success">Duyet</button>
                                     </form>
-                                    <form method="POST" action="{{ route('orders.reject', $order) }}">
+                                    <form method="POST" action="{{ route('site.orders.reject', $order) }}">
                                         @csrf
                                         <input type="hidden" name="note" value="Manager tu choi tu trang all team orders">
                                         <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Xac nhan tu choi don nay?')">Tu choi</button>

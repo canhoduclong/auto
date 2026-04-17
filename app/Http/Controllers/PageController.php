@@ -2800,11 +2800,17 @@ class PageController extends Controller
                 ARRAY_FILTER_USE_KEY
             ));
 
-            if ($isCopiedOrder && $this->hasOrderColumn('created_at')) {
-                DB::table('orders')
-                    ->where('id', $order->id)
-                    ->update(['created_at' => now()]);
-
+            if ($isCopiedOrder) {
+                $copyUpdates = [];
+                if ($this->hasOrderColumn('created_at')) {
+                    $copyUpdates['created_at'] = now();
+                }
+                if ($this->hasOrderColumn('copied_from_order_id')) {
+                    $copyUpdates['copied_from_order_id'] = null;
+                }
+                if (!empty($copyUpdates)) {
+                    DB::table('orders')->where('id', $order->id)->update($copyUpdates);
+                }
                 $order->refresh();
             }
 
@@ -2819,7 +2825,45 @@ class PageController extends Controller
     
     public function confirmCopyOrder(Order $order)
     {
-        return $this->copyOrder($order->id);
+        $user = auth()->user();
+
+        // Bảo mật: chỉ owner mới xác nhận được
+        if ((int) $order->user_id !== (int) $user->id) {
+            return redirect()->route('pages.my_orders')->with('error', 'Bạn không có quyền xác nhận đơn này.');
+        }
+
+        if (empty($order->copied_from_order_id)) {
+            return redirect()->route('pages.my_orders')->with('error', 'Đơn hàng này không phải đơn copy.');
+        }
+
+        DB::transaction(function () use ($order) {
+            // Cập nhật giá hiện tại từng item theo variant price rule
+            foreach ($order->items as $item) {
+                if ($item->variant) {
+                    $currentPrice = $item->variant->final_price ?? $item->price;
+                    if ($currentPrice > 0) {
+                        $item->update(['price' => $currentPrice, 'base_price' => $currentPrice]);
+                    }
+                }
+            }
+
+            // Xoá label "Đơn copy mới"
+            if ($this->hasOrderColumn('copied_from_order_id')) {
+                DB::table('orders')->where('id', $order->id)->update(['copied_from_order_id' => null]);
+            }
+
+            // Cập nhật created_at về hiện tại
+            if ($this->hasOrderColumn('created_at')) {
+                DB::table('orders')->where('id', $order->id)->update(['created_at' => now()]);
+            }
+
+            // Xoá approval cũ (nếu có) rồi khởi tạo lại
+            $order->approvals()->delete();
+            app(ApprovalService::class)->initOrderApproval($order->fresh());
+        });
+
+        return redirect()->route('pages.my_orders')
+            ->with('success', 'Đã xác nhận đơn #' . $order->code . ' và gửi lên leader duyệt.');
     }
 
     public function copyOrder($id)
@@ -2883,7 +2927,7 @@ class PageController extends Controller
                 $newCode = 'OD' . time() . rand(10, 99);
             } while (Order::where('code', $newCode)->exists());
             $newOrder->code = $newCode;
-            $newOrder->status = Order::STATUS_PENDING_LEADER_APPROVAL;
+            $newOrder->status = Order::STATUS_ORDER_PLACED; // draft – chờ sale xác nhận
             $newOrder->payment_status = 'unpaid';
             $newOrder->delivery_status = 'not_shipped';
             $newOrder->delivered_at = null;
@@ -2897,19 +2941,17 @@ class PageController extends Controller
             }
             $newOrder->save();
 
-            // clone items
+            // clone items (giữ nguyên giá cũ, confirmCopyOrder sẽ refresh giá)
             foreach ($oldOrder->items as $item) {
                 $newItem = $item->replicate();
                 $newItem->order_id = $newOrder->id;
                 $newItem->save();
             }
-
-            // Khởi tạo lại workflow duyệt để đơn copy có bước pending rõ ràng.
-            app(ApprovalService::class)->initOrderApproval($newOrder);
+            // Không init approval ở đây – sale cần bấm "Xác Nhận" để gửi duyệt.
         });
 
         return redirect()->route('pages.my_orders')
-            ->with('success', 'Đã copy đơn #' . $oldOrder->code);
+            ->with('success', 'Đã copy đơn #' . $oldOrder->code . '. Vui lòng xem lại và bấm "Xác Nhận" để gửi duyệt.');
     }
 
     private function resolveMyCustomerDateRange(string $period, ?string $fromDateInput, ?string $toDateInput): array

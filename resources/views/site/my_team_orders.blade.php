@@ -518,7 +518,7 @@
                     @php
                         $step = $currentStepByOrder[$order->id] ?? null;
                         $canApprove = $canApproveByOrder[$order->id] ?? false;
-                        $canProcess = $canApprove && optional($order->created_at)?->isToday();
+                        $canProcess = $canApprove;
                         $hasPassedViewerStep = $order->approvals->contains(function ($approval) use ($viewerRoleSlugs) {
                             $roleSlug = strtolower((string) optional($approval->step)->role_slug);
                             return $approval->status === 'approved' && in_array($roleSlug, $viewerRoleSlugs, true);
@@ -630,7 +630,7 @@
                                 <a href="{{ route('pages.team_order_detail', $order) }}" class="btn btn-sm btn-outline-primary">Chi tiết</a>
                                 <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#quickOrder{{ $order->id }}" aria-expanded="false" aria-controls="quickOrder{{ $order->id }}">Xem nhanh</button>
                                 @if($canProcess)
-                                    <form method="POST" action="{{ route('orders.approve', $order) }}" class="js-approval-form" data-action="approve">
+                                    <form method="POST" action="{{ route('site.orders.approve', $order) }}" class="js-approval-form" data-action="approve">
                                         @csrf
                                         <input type="hidden" name="note" value="Leader duyệt từ trang team orders">
                                         <button type="submit" class="btn btn-sm btn-success js-approve-btn"
@@ -642,7 +642,7 @@
                                             <div class="text-danger" style="font-size:.72rem;margin-top:2px;">Size/KL = 0</div>
                                         @endif
                                     </form>
-                                    <form method="POST" action="{{ route('orders.reject', $order) }}" class="js-approval-form" data-action="reject">
+                                    <form method="POST" action="{{ route('site.orders.reject', $order) }}" class="js-approval-form" data-action="reject">
                                         @csrf
                                         <input type="hidden" name="note" value="Leader từ chối từ trang team orders">
                                         <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Xác nhận từ chối đơn này?')">Từ chối</button>
@@ -1000,17 +1000,24 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        const response = await fetch(form.action, {
-            method: 'POST',
-            body: new FormData(form),
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest',
-                'Accept': 'text/html,application/xhtml+xml',
-            },
-        });
+        let data;
+        try {
+            const response = await fetch(form.action, {
+                method: 'POST',
+                body: new FormData(form),
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json',
+                },
+            });
+            data = await response.json();
+        } catch (e) {
+            showToast('Không thể kết nối máy chủ.', 'error');
+            return;
+        }
 
-        if (!response.ok) {
-            showToast('Không thể cập nhật trạng thái đơn.', 'error');
+        if (!data.success) {
+            showToast(data.message || 'Không thể cập nhật trạng thái đơn.', 'error');
             return;
         }
 
@@ -1040,7 +1047,7 @@ document.addEventListener('DOMContentLoaded', function () {
             row.classList.remove('flash');
         }, 600);
 
-        showToast(action === 'approve' ? 'Đơn đã được duyệt.' : 'Đơn đã bị từ chối.', action === 'approve' ? 'success' : 'warning');
+        showToast(data.message || (action === 'approve' ? 'Đơn đã được duyệt.' : 'Đơn đã bị từ chối.'), action === 'approve' ? 'success' : 'warning');
         recalcSummary();
     }
 
