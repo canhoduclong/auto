@@ -326,7 +326,7 @@ class WarehouseDashboardController extends Controller
             return [];
         }
 
-        // Load ALL pending-packing orders globally (including older dates) for correct FIFO simulation.
+        // Load ALL pending-packing orders globally for FIFO simulation (oldest first)
         $allQueueOrders = Order::with(['items.product', 'items.variant.product'])
             ->whereIn('status', $queueStatuses)
             ->orderBy('created_at', 'asc')
@@ -344,7 +344,7 @@ class WarehouseDashboardController extends Controller
             ->unique()
             ->values();
 
-        // Only compute reservations for the displayed orders
+        // Only compute reservations for displayed orders' items
         $displayedItemIds = $orders
             ->filter(fn (Order $order) => in_array($order->status, $queueStatuses, true))
             ->flatMap(fn (Order $order) => $order->items->pluck('id'))
@@ -353,15 +353,18 @@ class WarehouseDashboardController extends Controller
             ->unique()
             ->values();
 
-        // Running available pool — updated only when an order can be fully packed
-        $availableByVariant = $this->getAvailableByVariant($variantIds, $warehouseId);
+        // Total available stock per variant (fixed snapshot)
+        $stockByVariant      = $this->getAvailableByVariant($variantIds, $warehouseId);
         $reservedByOrderItem = $this->getReservedByOrderItem($displayedItemIds, $warehouseId);
+
+        // Cumulative demand per variant as we walk FIFO queue
+        // Once cumulative > stock for a variant, that variant is "exhausted" for this order and all later ones.
+        $cumulativeByVariant = [];  // variantId => total qty claimed by orders processed so far
 
         $guards = [];
 
         foreach ($allQueueOrders as $order) {
-            $shortages       = [];
-            $pendingDeductions = [];  // staged deductions, applied only if order has NO shortage
+            $shortages = [];
 
             foreach ($order->items as $item) {
                 $variantId   = (int) $item->product_variant_id;
@@ -371,11 +374,24 @@ class WarehouseDashboardController extends Controller
                     continue;
                 }
 
+                // For displayed orders, reserved qty offsets demand (already earmarked in inventory)
                 $reservedForItem = max(0, (int) ($reservedByOrderItem[$item->id] ?? 0));
-                $availableQty   = max(0, (int) ($availableByVariant[$variantId] ?? 0));
-                $effectiveQty   = $availableQty + $reservedForItem;
+                $netDemand       = max(0, $requiredQty - $reservedForItem);
 
-                if ($effectiveQty < $requiredQty) {
+                $totalStock = (int) ($stockByVariant[$variantId] ?? 0);
+                $cumBefore  = (int) ($cumulativeByVariant[$variantId] ?? 0);
+                $cumAfter   = $cumBefore + $netDemand;
+
+                // Always advance cumulative regardless of shortage (strict FIFO: later orders
+                // cannot "skip over" a shortage order to claim the same variant)
+                $cumulativeByVariant[$variantId] = $cumAfter;
+
+                if ($cumAfter > $totalStock) {
+                    // How much stock was already consumed by prior orders
+                    $alreadyClaimed  = $cumBefore;
+                    $remainingForUs  = max(0, $totalStock - $alreadyClaimed);
+                    $shortQty        = $requiredQty - $remainingForUs;
+
                     $shortages[] = [
                         'order_id'      => (int) $order->id,
                         'order_code'    => (string) $order->code,
@@ -383,28 +399,15 @@ class WarehouseDashboardController extends Controller
                         'variant_id'    => $variantId,
                         'variant_name'  => (string) ($item->variant?->name ?? $item->product?->name ?? ('SP #' . $variantId)),
                         'required_qty'  => $requiredQty,
-                        'available_qty' => $effectiveQty,
-                        'short_qty'     => $requiredQty - $effectiveQty,
-                        'reason'        => 'insufficient_stock',
+                        'available_qty' => $remainingForUs,
+                        'short_qty'     => max(0, $shortQty),
+                        'reason'        => $cumBefore >= $totalStock ? 'blocked_by_prior_order' : 'insufficient_stock',
                     ];
-                } else {
-                    // Sufficient — stage the deduction
-                    $consume = max(0, $requiredQty - $reservedForItem);
-                    $pendingDeductions[$variantId] = ($pendingDeductions[$variantId] ?? 0) + $consume;
                 }
             }
-
-            $hasShortage = !empty($shortages);
-
-            if (!$hasShortage) {
-                // Order can be fully packed: consume stock from the pool for subsequent orders
-                foreach ($pendingDeductions as $variantId => $consume) {
-                    $availableByVariant[$variantId] = max(0, ($availableByVariant[$variantId] ?? 0) - $consume);
-                }
-            }
-            // If order has shortage: deduct NOTHING — stock remains for later orders in FIFO queue
 
             if (isset($displayedOrderIds[$order->id])) {
+                $hasShortage = !empty($shortages);
                 $guards[$order->id] = [
                     'has_shortage'      => $hasShortage,
                     'can_start_packing' => !$hasShortage,
