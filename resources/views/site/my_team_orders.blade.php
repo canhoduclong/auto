@@ -150,9 +150,9 @@
     }
     .tmo-page .tmo-order-top {
         display: grid;
-        grid-template-columns: 1.3fr 1fr 1fr 1fr 1fr auto;
+        grid-template-columns: 1.6fr 1.3fr 1fr auto;
         gap: .5rem;
-        align-items: center;
+        align-items: start;
     }
     .tmo-page .tmo-code {
         font-weight: 700;
@@ -237,7 +237,7 @@
 
     @media (max-width: 1199.98px) {
         .tmo-page .tmo-order-top {
-            grid-template-columns: 1fr 1fr 1fr;
+            grid-template-columns: 1.4fr 1.2fr 1fr auto;
         }
     }
     @media (max-width: 991.98px) {
@@ -674,42 +674,36 @@
                         data-is-old="{{ $isOldOrder ? 1 : 0 }}">
 
                         <div class="tmo-order-top">
+                            {{-- Cột 1: Tên KH + Mã đơn + Ngày tạo --}}
                             <div>
-                                <div class="tmo-code">{{ $order->code }}</div>
-                                <div class="tmo-mini">Tạo: {{ optional($order->created_at)->format('d/m/Y H:i') }}</div>
+                                <div class="tmo-code">{{ $order->customer?->name ?? '—' }}</div>
+                                <div class="tmo-mini">Mã: {{ $order->code }}</div>
+                                <div class="tmo-mini">{{ optional($order->created_at)->format('d/m/Y H:i') }}</div>
                             </div>
-                            <div>
-                                <div class="fw-semibold">{{ $order->user->name ?? '-' }}</div>
-                                <div class="tmo-mini">Team: {{ $order->user?->team?->name ?? '-' }}</div>
-                            </div>
+                            {{-- Cột 2: Số tiền + Sale/Team + Giờ giao --}}
                             <div>
                                 <div class="fw-semibold">{{ number_format((float) $order->total, 0, ',', '.') }} đ</div>
-                                <div class="tmo-mini">Điều chỉnh: {{ $formatSignedMoney($discountTotal) }}</div>
-                            </div>
-                            <div>
-                                <div class="fw-semibold">{{ $order->delivery_time ? (function($timeStr) {
+                                <div class="tmo-mini">{{ $order->user->name ?? '-' }} / {{ $order->user?->team?->name ?? '-' }}</div>
+                                <div class="tmo-mini">🕐 {{ $order->delivery_time ? (function($timeStr) {
                                     try {
                                         if (preg_match('/^(\d{1,2})h(\d{0,2})$/', $timeStr, $matches)) {
-                                            $hour = str_pad($matches[1], 2, '0', STR_PAD_LEFT);
-                                            $min = str_pad($matches[2] ?: 0, 2, '0', STR_PAD_LEFT);
-                                            return $hour . ':' . $min . ' ' . now()->format('d/m');
+                                            return str_pad($matches[1], 2, '0', STR_PAD_LEFT) . ':' . str_pad($matches[2] ?: 0, 2, '0', STR_PAD_LEFT);
                                         } elseif (preg_match('/^(\d{1,2}):(\d{2})$/', $timeStr, $matches)) {
-                                            $hour = str_pad($matches[1], 2, '0', STR_PAD_LEFT);
-                                            $min = str_pad($matches[2], 2, '0', STR_PAD_LEFT);
-                                            return $hour . ':' . $min . ' ' . now()->format('d/m');
+                                            return str_pad($matches[1], 2, '0', STR_PAD_LEFT) . ':' . str_pad($matches[2], 2, '0', STR_PAD_LEFT);
                                         } else {
-                                            return \Carbon\Carbon::parse($timeStr)->format('H:i d/m');
+                                            return \Carbon\Carbon::parse($timeStr)->format('H:i');
                                         }
                                     } catch (\Throwable $e) {
                                         return $timeStr;
                                     }
                                 })($order->delivery_time) : '-' }}</div>
-                                <div class="tmo-mini">Giờ giao</div>
                             </div>
+                            {{-- Cột 3: Status + Bước duyệt --}}
                             <div>
                                 <span class="tmo-status js-order-status {{ $statusClass }}" data-status="{{ $visualStatus }}">{{ $statusLabel }}</span>
                                 <div class="tmo-mini mt-1">Bước: {{ $step?->step?->role_slug ?? 'Không có' }}</div>
                             </div>
+                            {{-- Cột 4: Các nút --}}
                             <div class="d-flex gap-1 flex-wrap justify-content-end">
                                 <a href="{{ route('pages.team_order_detail', $order) }}" class="btn btn-sm btn-outline-primary">Chi tiết</a>
                                 <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#quickOrder{{ $order->id }}" aria-expanded="false" aria-controls="quickOrder{{ $order->id }}">Xem nhanh</button>
