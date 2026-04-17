@@ -52,7 +52,7 @@ class OrderApprovalController extends Controller
         ]);
     }
 
-    public function approve(Request $request, Order $order, ApprovalService $approvalService): \Illuminate\Http\Response|RedirectResponse
+    public function approve(Request $request, Order $order, ApprovalService $approvalService): \Illuminate\Http\Response|\Illuminate\Http\JsonResponse|RedirectResponse
     {
         $request->validate([
             'note' => 'nullable|string|max:1000',
@@ -84,7 +84,7 @@ class OrderApprovalController extends Controller
         }
     }
 
-    public function reject(Request $request, Order $order, ApprovalService $approvalService): \Illuminate\Http\Response|RedirectResponse
+    public function reject(Request $request, Order $order, ApprovalService $approvalService): \Illuminate\Http\Response|\Illuminate\Http\JsonResponse|RedirectResponse
     {
         $request->validate([
             'note' => 'nullable|string|max:1000',
