@@ -8,7 +8,9 @@ use App\Models\InventoryMovement;
 use App\Models\InventoryReservation;
 use App\Models\Order;
 use App\Models\OrderHistory;
+use App\Models\OrderReturn;
 use App\Models\ProductVariant;
+use App\Models\ReturnItem;
 use App\Models\Warehouse;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -202,8 +204,9 @@ class ShipperDashboardController extends Controller
         abort_if($order->status !== Order::STATUS_DELIVERING, 403, 'Đơn không đang giao.');
 
         $order->load(['customer.addresses', 'items.variant.product']);
+        $warehouses = Warehouse::query()->orderBy('name')->get();
 
-        return view('shipper.deliver-form', compact('order'));
+        return view('shipper.deliver-form', compact('order', 'warehouses'));
     }
 
     /**
@@ -215,18 +218,145 @@ class ShipperDashboardController extends Controller
         abort_if($order->status !== Order::STATUS_DELIVERING, 422, 'Đơn không đang giao.');
 
         $request->validate([
-            'collected_amount' => 'required|numeric|min:0',
-            'payment_method'   => 'required|in:cash,transfer',
-            'proof_image'      => 'required|image|max:5120',
+            'collected_amount'      => 'required|numeric|min:0',
+            'payment_method'        => 'required|in:cash,transfer',
+            'proof_image'           => 'required|image|max:5120',
+            'weight_image'          => 'nullable|image|max:5120',
+            'actual_weight'         => 'nullable|array',
+            'actual_weight.*'       => 'nullable|numeric|min:0',
+            'delivered_qty'         => 'nullable|array',
+            'delivered_qty.*'       => 'nullable|integer|min:0',
+            'partial_weight'        => 'nullable|array',
+            'partial_weight.*'      => 'nullable|numeric|min:0',
+            'return_warehouse_id'   => 'required_if:has_partial_return,1|nullable|exists:warehouses,id',
+            'partial_return_reason' => 'required_if:has_partial_return,1|nullable|string',
         ]);
 
+        // Validate partial_weight against each item's max weight (qty × unit_weight)
+        if ($request->filled('has_partial_return') && $request->input('has_partial_return') == '1') {
+            $order->loadMissing('items');
+            $partialWeightInput = $request->input('partial_weight', []);
+            $weightErrors = [];
+            foreach ($order->items as $item) {
+                if (!array_key_exists($item->id, $partialWeightInput)) continue;
+                $entered  = $partialWeightInput[$item->id];
+                if ($entered === null || $entered === '') continue;
+                $maxWeight = (float) $item->effective_unit_weight * (int) $item->quantity;
+                if ((float) $entered > $maxWeight) {
+                    $weightErrors["partial_weight.{$item->id}"] = "Khối lượng giao của '{$item->variant?->name}' tối đa {$maxWeight} kg (đã nhập " . (float)$entered . ' kg)';
+                }
+            }
+            if (!empty($weightErrors)) {
+                throw \Illuminate\Validation\ValidationException::withMessages($weightErrors);
+            }
+        }
+
         $imagePath = $request->file('proof_image')->store('order-proofs', 'public');
+        $proofImages = [$imagePath];
+
+        if ($request->hasFile('weight_image')) {
+            $proofImages[] = $request->file('weight_image')->store('order-proofs', 'public');
+        }
+
+        $order->loadMissing('items');
+
+        $actualWeights = $request->input('actual_weight', []);
+        $deliveredQtys = $request->input('delivered_qty', []);
+        $partialWeights = $request->input('partial_weight', []);
+        $hasPartialReturn = (bool) $request->input('has_partial_return', false);
+        $returnWarehouseId = $hasPartialReturn ? (int) $request->input('return_warehouse_id') : null;
+        $partialReturnReason = $hasPartialReturn ? (string) $request->input('partial_return_reason', 'other') : null;
+
+        $partialReturnNotes = [];
+        $returnedItems = []; // [order_item_id => ['variant_id' => int, 'returned_qty' => int]]
+
+        DB::transaction(function () use ($order, $actualWeights, $deliveredQtys, $partialWeights, $hasPartialReturn, $returnWarehouseId, $partialReturnReason, &$partialReturnNotes, &$returnedItems) {
+            foreach ($order->items as $item) {
+                $updates = [];
+
+                // Cập nhật cân thực tế nếu shipper nhập
+                if (array_key_exists($item->id, $actualWeights) && $actualWeights[$item->id] !== null && $actualWeights[$item->id] !== '') {
+                    $updates['actual_weight'] = max(0, (float) $actualWeights[$item->id]);
+                }
+
+                // Xử lý giao 1 phần
+                if ($hasPartialReturn && array_key_exists($item->id, $deliveredQtys)) {
+                    $originalQty  = (int) $item->quantity;
+                    $deliveredQty = max(0, min((int) $deliveredQtys[$item->id], $originalQty));
+                    $returnedQty  = $originalQty - $deliveredQty;
+
+                    if ($returnedQty > 0) {
+                        $updates['quantity'] = $deliveredQty;
+
+                        // Lưu cân thực tế phần thực giao (ghi đè nếu shipper nhập partial_weight)
+                        if (array_key_exists($item->id, $partialWeights) && $partialWeights[$item->id] !== null && $partialWeights[$item->id] !== '') {
+                            $updates['actual_weight'] = max(0, (float) $partialWeights[$item->id]);
+                        }
+
+                        $partialReturnNotes[] = ($item->variant?->name ?? 'SP') . ': giao ' . $deliveredQty . '/' . $originalQty . ' (trả ' . $returnedQty . ')';
+                        $returnedItems[$item->id] = [
+                            'variant_id'   => (int) $item->product_variant_id,
+                            'returned_qty' => $returnedQty,
+                        ];
+                    }
+                }
+
+                if (!empty($updates)) {
+                    $item->update($updates);
+                }
+            }
+
+            // Tạo phiếu OrderReturn cho hàng chưa giao – kho sẽ xác nhận nhập sau
+            if (!empty($returnedItems) && $returnWarehouseId) {
+                $orderReturn = OrderReturn::create([
+                    'order_id'     => $order->id,
+                    'customer_id'  => $order->customer_id,
+                    'warehouse_id' => $returnWarehouseId,
+                    'created_by'   => Auth::id(),
+                    'status'       => 'pending_warehouse',
+                    'reason'       => $partialReturnReason,
+                    'return_scope' => 'partial',
+                    'note'         => 'Giao 1 phần: ' . implode('; ', $partialReturnNotes),
+                ]);
+
+                foreach ($returnedItems as $info) {
+                    ReturnItem::create([
+                        'order_return_id'    => $orderReturn->id,
+                        'product_variant_id' => $info['variant_id'],
+                        'quantity'           => $info['returned_qty'],
+                        'condition'          => 'good',
+                    ]);
+                }
+            }
+        });
+
+        $noteText = 'Giao hàng thành công. Đã thu: ' . number_format($request->collected_amount) . 'đ – '
+            . ($request->payment_method === 'cash' ? 'Tiền mặt' : 'Chuyển khoản');
+
+        if (!empty($partialReturnNotes)) {
+            $noteText .= ' | Giao 1 phần: ' . implode('; ', $partialReturnNotes) . ' – Phiếu hoàn trả đã tạo';
+        }
+
+        // Tính lại bill từ items sau khi đã cập nhật cân/SL
+        $order->loadMissing('items');
+        $newSubtotal = (float) $order->items->sum(function ($item) {
+            if ((bool) $item->effective_priced_by_kg) {
+                $weight = (float) ($item->actual_weight ?? ($item->effective_unit_weight * (int) $item->quantity));
+                return $weight * (float) ($item->price ?? 0);
+            }
+            return (int) $item->quantity * (float) ($item->price ?? 0);
+        });
+        $shippingFee = (float) ($order->shipping_fee ?? 0);
+        $foamBoxFee  = (float) (($order->charge_foam_box_fee ?? false) ? ($order->foam_box_price ?? 0) : 0);
+        $newTotal    = $newSubtotal + $shippingFee + $foamBoxFee;
 
         $order->update([
             'status'           => 'delivered',
             'collected_amount' => $request->collected_amount,
             'delivered_at'     => now(),
-            'proof_images'     => [$imagePath],
+            'proof_images'     => $proofImages,
+            'subtotal_amount'  => $newSubtotal,
+            'total'            => $newTotal,
         ]);
 
         OrderHistory::create([
@@ -236,10 +366,15 @@ class ShipperDashboardController extends Controller
             'role'          => 'shipper',
             'status_before' => Order::STATUS_DELIVERING,
             'status_after'  => 'delivered',
-            'note'          => 'Giao hàng thành công. Đã thu: ' . number_format($request->collected_amount) . 'đ – ' . ($request->payment_method === 'cash' ? 'Tiền mặt' : 'Chuyển khoản'),
+            'note'          => $noteText,
         ]);
 
-        return redirect()->route('shipper.my-orders')->with('success', 'Xác nhận giao hàng thành công!');
+        $successMsg = 'Xác nhận giao hàng thành công!';
+        if (!empty($partialReturnNotes)) {
+            $successMsg .= ' Đã tạo phiếu hoàn trả ' . count($returnedItems) . ' sản phẩm – chờ kho xác nhận nhập.';
+        }
+
+        return redirect()->route('shipper.my-orders')->with('success', $successMsg);
     }
 
     /**

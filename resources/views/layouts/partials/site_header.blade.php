@@ -158,12 +158,8 @@
                 <ul class="list-unstyled mb-2">
                     @php
                         $offcanvasCanViewMonitoring = Auth::user()->isAdmin() || Auth::user()->hasPermission('orders.monitoring');
-                        $offcanvasCanApproveTeamOrders = Auth::user()->hasRole('leader')
-                            || Auth::user()->hasRole('leader_sale')
-                            || Auth::user()->hasRole('manager')
-                            || Auth::user()->hasRole('manager_sale');
-                        $offcanvasCanApproveDepartmentOrders = Auth::user()->hasRole('manager')
-                            || Auth::user()->hasRole('manager_sale');
+                        $offcanvasCanApproveTeamOrders = Auth::user()->hasRole('leader');
+                        $offcanvasCanApproveDepartmentOrders = Auth::user()->hasRole('manager');
                         $offcanvasCanManageAppointments = Auth::user()->isAdmin() || Auth::user()->isSalesFlowRole();
                     @endphp
                     <li><a href="{{ route('pages.my_dashboard') }}" class="d-block py-1"><i class="bi bi-person-circle me-1"></i> {{ __('site.profile') }}</a></li>
@@ -185,6 +181,9 @@
                         <li><a href="{{ route('pages.my_customer_appointments') }}" class="d-block py-1"><i class="bi bi-camera me-1"></i> Cuộc hẹn khách hàng</a></li>
                     @endif
                     <li><a href="{{ route('work-reports.index') }}" class="d-block py-1"><i class="bi bi-clipboard-data me-1"></i> Báo cáo công việc</a></li>
+                    @if(Auth::user()->isSalesFlowRole())
+                        <li><a href="{{ route('customer-tracking.index') }}" class="d-block py-1"><i class="bi bi-graph-up-arrow me-1"></i> Theo dõi khách hàng</a></li>
+                    @endif
                     <li><a href="{{ url('/dashboard') }}" class="d-block py-1"><i class="bi bi-speedometer2 me-1"></i> {{ __('site.dashboard') }}</a></li>
                 </ul>
                 <form id="offcanvas-logout-form" action="{{ route('logout') }}" method="POST" class="d-inline">
@@ -343,16 +342,17 @@
                                         <a class="dropdown-item" href="{{ route('work-reports.index') }}">
                                             <i class="bi bi-clipboard-data"></i> Báo cáo công việc
                                         </a>
+                                        @if(Auth::user()->isSalesFlowRole())
+                                            <a class="dropdown-item" href="{{ route('customer-tracking.index') }}">
+                                                <i class="bi bi-graph-up-arrow"></i> Theo dõi khách hàng
+                                            </a>
+                                        @endif
                                         @php
                                             $isSalesFlowRole = Auth::user()->isSalesFlowRole();
                                             $canManageCustomerAppointments = $isSalesFlowRole || Auth::user()->isAdmin();
                                             $canAccessSalesDailyPages = Auth::user()->canAccessSalesDailyFeatures();
-                                            $canApproveTeamOrders = Auth::user()->hasRole('leader')
-                                                || Auth::user()->hasRole('leader_sale')
-                                                || Auth::user()->hasRole('manager')
-                                                || Auth::user()->hasRole('manager_sale');
-                                            $canApproveDepartmentOrders = Auth::user()->hasRole('manager')
-                                                || Auth::user()->hasRole('manager_sale');
+                                            $canApproveTeamOrders = Auth::user()->hasRole('leader');
+                                            $canApproveDepartmentOrders = Auth::user()->hasRole('manager');
                                         @endphp
                                         @if($canAccessSalesDailyPages)
                                             <a class="dropdown-item" href="{{ route('pages.my_orders.daily_prices') }}">

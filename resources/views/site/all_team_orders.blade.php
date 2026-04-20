@@ -149,7 +149,32 @@
     .tmo-page .tmo-row-pending { border-left: 4px solid #111827; }
     .tmo-page .tmo-row-approved { border-left: 4px solid #15803d; background: #f0fdf4; }
     .tmo-page .tmo-row-rejected { border-left: 4px solid #dc2626; background: #fef2f2; }
-    .tmo-page .tmo-empty {
+    .tmo-page .tmo-detail {
+        margin-top: .55rem;
+        border-top: 1px dashed var(--tmo-border);
+        padding-top: .55rem;
+    }
+    .tmo-page .tmo-products {
+        display: grid;
+        gap: .35rem;
+    }
+    .tmo-page .tmo-product-line {
+        display: grid;
+        grid-template-columns: 1.2fr repeat(5, minmax(80px, auto));
+        gap: .35rem;
+        align-items: center;
+        font-size: .82rem;
+        border: 1px solid #e7edf5;
+        border-radius: 8px;
+        background: var(--tmo-soft);
+        padding: .32rem .45rem;
+    }
+    .tmo-page .tmo-product-head {
+        font-size: .73rem;
+        color: var(--tmo-muted);
+        text-transform: uppercase;
+        letter-spacing: .03em;
+    }
         border: 1px dashed var(--tmo-border);
         border-radius: 12px;
         background: #fff;
@@ -409,9 +434,9 @@
                             default => 'tmo-status-default',
                         };
                         $statusLabel = match ($order->status) {
-                            'pending_manager_approval' => 'Cho Duyet',
-                            'approved' => 'Da Duyet',
-                            'rejected' => 'Tu Choi',
+                            'pending_manager_approval' => 'Chờ Duyệt',
+                            'approved' => 'Đã Duyệt',
+                            'rejected' => 'Từ Chối',
                             default => $order->status,
                         };
                         $rowStateClass = match ($order->status) {
@@ -443,31 +468,79 @@
                             </div>
                             <div>
                                 <div class="fw-semibold">{{ number_format((float) $order->total, 0, ',', '.') }} đ</div>
-                                <div class="tmo-mini">Tong gia tri don</div>
+                                <div class="tmo-mini">Tổng giá trị đơn</div>
                             </div>
                             <div>
                                 <span class="tmo-status js-order-status {{ $statusClass }}" data-status="{{ $order->status }}">{{ $statusLabel }}</span>
-                                <div class="tmo-mini mt-1">Buoc: {{ $step?->step?->role_slug ?? 'Khong co' }}</div>
+                                <div class="tmo-mini mt-1">Bước: {{ $step?->step?->role_slug ?? 'Không có' }}</div>
                             </div>
                             <div class="d-flex gap-1 flex-wrap justify-content-end">
-                                <a href="{{ route('pages.team_order_detail', $order) }}" class="btn btn-sm btn-outline-primary">Chi tiet</a>
+                                <a href="{{ route('pages.team_order_detail', $order) }}" class="btn btn-sm btn-outline-primary">Chi tiết</a>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#quickOrder{{ $order->id }}" aria-expanded="false" aria-controls="quickOrder{{ $order->id }}">Xem nhanh</button>
                                 @if($canProcess)
                                     <form method="POST" action="{{ route('site.orders.approve', $order) }}" class="js-approval-form" data-action="approve">
                                         @csrf
-                                        <input type="hidden" name="note" value="Manager duyet tu trang all team orders">
-                                        <button type="submit" class="btn btn-sm btn-success">Duyet</button>
+                                        <input type="hidden" name="note" value="Manager duyệt từ trang all team orders">
+                                        <button type="submit" class="btn btn-sm btn-success">Duyệt</button>
                                     </form>
                                     <form method="POST" action="{{ route('site.orders.reject', $order) }}" class="js-approval-form" data-action="reject">
                                         @csrf
-                                        <input type="hidden" name="note" value="Manager tu choi tu trang all team orders">
-                                        <button type="submit" class="btn btn-sm btn-danger">Tu choi</button>
+                                        <input type="hidden" name="note" value="Manager từ chối từ trang all team orders">
+                                        <button type="submit" class="btn btn-sm btn-danger">Từ chối</button>
                                     </form>
                                 @endif
                             </div>
                         </div>
+
+                        <div class="collapse tmo-detail" id="quickOrder{{ $order->id }}">
+                            @if(($order->items ?? collect())->isNotEmpty())
+                                <div class="tmo-products">
+                                    <div class="tmo-product-line tmo-product-head">
+                                        <div>Sản phẩm</div>
+                                        <div>Size</div>
+                                        <div>Số lượng</div>
+                                        <div>Tổng</div>
+                                        <div>Đơn giá</div>
+                                        <div>Tạm tính</div>
+                                    </div>
+                                    @foreach($order->items as $item)
+                                        @php
+                                            $productName = $item->product->name ?? $item->variant->name ?? 'Sản phẩm';
+                                            $unitLabel = strtoupper((string) ($item->product?->unit_label ?? $item->variant?->product?->unit_label ?? 'cai'));
+                                            $sizeLabel = $item->variant->size ?? $item->variant->name ?? '-';
+                                            $qty = (float) ($item->quantity ?? 0);
+                                            $displayTotalValue = (float) ($item->display_total_value ?? 0);
+                                            $displayTotalUnit = (string) ($item->display_total_unit ?? $unitLabel);
+                                            $displayTotalLabel = (string) ($item->display_total_label ?? ($qty . ' ' . $displayTotalUnit));
+                                            $price = (float) ($item->price ?? 0);
+                                            $effectiveUnitWeight = (float) ($item->effective_unit_weight ?? 0);
+                                            $estimatedWeight = round($qty * $effectiveUnitWeight, 3);
+                                            $lineSubtotal = (float) ($item->total ?? 0);
+                                            if ($lineSubtotal <= 0) {
+                                                $lineSubtotal = $qty * $price;
+                                            }
+                                        @endphp
+                                        <div class="tmo-product-line">
+                                            <div class="fw-semibold">{{ $productName }}</div>
+                                            <div>{{ $sizeLabel }}</div>
+                                            <div>{{ rtrim(rtrim(number_format($qty, 3, '.', ''), '0'), '.') }}</div>
+                                            <div>{{ $displayTotalLabel }}</div>
+                                            <div>{{ number_format($price, 0, ',', '.') }} đ</div>
+                                            <div>{{ number_format($lineSubtotal, 0, ',', '.') }} đ</div>
+                                        </div>
+                                    @endforeach
+                                </div>
+                            @else
+                                <div class="tmo-mini">Không có dữ liệu sản phẩm.</div>
+                            @endif
+
+                            @if(!empty($order->note))
+                                <div class="mt-2 tmo-mini"><strong>Ghi chú:</strong> {{ $order->note }}</div>
+                            @endif
+                        </div>
                     </article>
                 @empty
-                    <div class="tmo-empty">Khong co don hang phu hop.</div>
+                    <div class="tmo-empty">Không có đơn hàng phù hợp.</div>
                 @endforelse
             </div>
 
@@ -542,12 +615,24 @@ document.addEventListener('DOMContentLoaded', function () {
             statusBadge.classList.remove('tmo-status-pending', 'tmo-status-approved', 'tmo-status-rejected', 'tmo-status-default');
             statusBadge.classList.add(statusBadgeClass(newStatus));
             statusBadge.dataset.status = newStatus;
-            statusBadge.textContent = newStatus === 'approved' ? 'Da Duyet' : newStatus === 'rejected' ? 'Tu Choi' : 'Cho Duyet';
+            statusBadge.textContent = newStatus === 'approved' ? 'Đã Duyệt' : newStatus === 'rejected' ? 'Từ Chối' : 'Chờ Duyệt';
         }
 
-        row.querySelectorAll('.js-approval-form button[type="submit"]').forEach(function (btn) {
-            btn.disabled = true;
-        });
+        // Ẩn toàn bộ nút duyệt/từ chối, thay bằng thông báo
+        const approvalForms = row.querySelectorAll('.js-approval-form');
+        if (approvalForms.length > 0) {
+            const actionWrap = approvalForms[0].parentElement;
+            approvalForms.forEach(function (f) { f.remove(); });
+            const notiBadge = document.createElement('span');
+            if (newStatus === 'approved') {
+                notiBadge.className = 'badge bg-success-subtle text-success border border-success-subtle px-2 py-1';
+                notiBadge.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i>Đã duyệt';
+            } else {
+                notiBadge.className = 'badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1';
+                notiBadge.innerHTML = '<i class="bi bi-x-circle-fill me-1"></i>Đã từ chối';
+            }
+            actionWrap.appendChild(notiBadge);
+        }
 
         setTimeout(function () { row.classList.remove('flash'); }, 600);
         showToast(data.message || (action === 'approve' ? 'Đơn đã được duyệt.' : 'Đơn đã bị từ chối.'), action === 'approve' ? 'success' : 'warning');
@@ -601,7 +686,7 @@ document.addEventListener('DOMContentLoaded', function () {
             return chip.dataset.saleId === String(activeSaleId);
         });
         const saleName = active ? (active.querySelector('.fw-semibold')?.textContent || '') : '';
-        saleState.textContent = 'Dang xem nhanh don cua sale: ' + saleName;
+        saleState.textContent = 'Đang xem nhanh đơn của sale: ' + saleName;
         recalcSummary();
     }
 

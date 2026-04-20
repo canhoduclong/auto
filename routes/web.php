@@ -91,6 +91,19 @@ Route::middleware(['auth'])->group(function () {
     // Báo cáo công việc cho user frontend
     Route::get('work-reports', [\App\Http\Controllers\WorkReportController::class, 'index'])
         ->name('work-reports.index');
+    // Theo dõi khách hàng (sale / leader / manager)
+    Route::get('customer-tracking', [\App\Http\Controllers\CustomerTrackingController::class, 'index'])
+        ->name('customer-tracking.index')
+        ->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
+    Route::get('customer-tracking/data', [\App\Http\Controllers\CustomerTrackingController::class, 'data'])
+        ->name('customer-tracking.data')
+        ->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
+    Route::get('customer-tracking/{customer}', [\App\Http\Controllers\CustomerTrackingController::class, 'show'])
+        ->name('customer-tracking.show')
+        ->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
+    Route::get('customer-tracking/{customer}/data', [\App\Http\Controllers\CustomerTrackingController::class, 'customerData'])
+        ->name('customer-tracking.customer-data')
+        ->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
     // AJAX lấy tổng tiền đơn hàng
     Route::get('orders/ajax/total', [OrderAjaxController::class, 'total'])->name('orders.ajax.total');
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');

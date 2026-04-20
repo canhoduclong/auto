@@ -71,30 +71,9 @@
                         <span>{{ __('admin.product.image') }}</span>
                     </span>
                 </th> 
-                        <th>
-                            <a href="{{ route('products.index', array_merge(request()->query(), ['sort_by' => 'name', 'sort_direction' => request('sort_direction') === 'asc' ? 'desc' : 'asc'])) }}">
-                                Name
-                            </a>
-                        </th>
-                        <th>Brand</th>
-                        <th>Category</th>
+                        <th>Sản phẩm</th>
                         <th>Đơn vị tính</th>
                         <th>Trạng thái</th>
-                        <th>Giá hiện tại</th>
-                <th>
-                    <span class="d-flex align-items-center padding-cell pl-0">
-                        <span>{{ __('admin.product.stock') }}</span>
-                        <span class="column-controls ms-auto">
-                            <span
-                                list-action="sort"
-                                sort-by="price"
-                                sort-direction="{{ $sort_by == 'price' ? $sort_direction : 'asc' }}"
-                                class="list_column_action ms-2 {{ $sort_by == 'price' ? 'active' : '' }}">
-                                <i class="ph ph-funnel-simple"></i>
-                            </span>
-                        </span>
-                    </span>
-                </th>
                 
                 <th class="text-center" >
                     <div class="padding-cell">
@@ -119,9 +98,8 @@
                         <a href="{{ route('products.edit', ['product' => $product->id, 'page' => $page, 'perPage' => $perPage]) }}" class="product-name" data-product-id="{{ $product->id }}">
                             {{ $product->name }}
                         </a>
+                        <div class="text-muted small">{{ $product->brand->name ?? '' }}{{ ($product->brand->name ?? '') && ($product->category->name ?? '') ? ' / ' : '' }}{{ $product->category->name ?? '' }}</div>
                     </td>
-                    <td>{{ $product->brand->name ?? '' }}</td>
-                    <td>{{ $product->category->name ?? '' }}</td>
                     <td>{{ $product->unit_label }}</td>
                 <td>
                     @if($product->status)
@@ -131,28 +109,6 @@
                     @endif
                 </td>
                 <td>
-                    @php
-                        $variantPrices = $product->variants->map(function ($variant) {
-                            return $variant->latestPriceRule?->price ?? $variant->final_price;
-                        })->filter(function ($price) {
-                            return $price !== null;
-                        })->map(function ($price) {
-                            return (float) $price;
-                        });
-                        $minPrice = $variantPrices->min();
-                        $maxPrice = $variantPrices->max();
-                    @endphp
-
-                    @if($variantPrices->isEmpty())
-                        -
-                    @elseif($minPrice === $maxPrice)
-                        {{ number_format((float) $minPrice, 0, ',', '.') }} đ
-                    @else
-                        {{ number_format((float) $minPrice, 0, ',', '.') }} đ - {{ number_format((float) $maxPrice, 0, ',', '.') }} đ
-                    @endif
-                </td>
-                <td id="product-stock-{{ $product->id }}">{{ ($product->stock ?? '') !== '' ? number_format((float) $product->stock, 0, ',', '.') : '' }}</td>
-                <td>
                     <div class="d-flex justify-content-end list-actions"> 
                         
                         @if(auth()->user()->hasPermission('edit'))
@@ -161,14 +117,6 @@
                             </a>
                         @endif
     
-                        @can('update', $product)
-                            <button type="button" class="btn btn-info btn-sm me-1 quick-edit-btn" 
-                                    data-id="{{ $product->id }}" 
-                                    data-url="{{ route('products.getQuickEditForm', $product->id) }}">
-                                Sửa nhanh
-                            </button>
-                        @endcan
-                    
                          @can('update', $product)
                             <a href="{{ route('products.edit', ['product' => $product->id, 'page' =>  request()->page, 'perPage' => $perPage ]) }}" class="btn btn-primary btn-sm">Sửa</a>
                         @endcan
@@ -257,74 +205,6 @@
 @push('scripts')
 <script>
     $(function() {
-        // Quick Edit for Products
-        $(document).on('click', '.quick-edit-btn', function() {
-            let btn = this;
-            let tr = btn.closest('tr');
-            if (!tr) return;
-
-            if (tr.nextSibling && tr.nextSibling.classList && tr.nextSibling.classList.contains('quick-edit-row')) {
-                tr.nextSibling.remove();
-                return;
-            }
-
-            let url = btn.getAttribute('data-url');
-
-            $.get(url, function(data) {
-                let newRow = document.createElement('tr');
-                newRow.classList.add('quick-edit-row');
-                let td = document.createElement('td');
-                td.colSpan = tr.children.length;
-                td.innerHTML = data;
-                newRow.appendChild(td);
-                tr.parentNode.insertBefore(newRow, tr.nextSibling);
-            });
-        });
-
-        $(document).on('submit', '.quick-edit-form-instance', function(e) {
-            e.preventDefault();
-            let form = this;
-            let formData = new FormData(form);
-            let id = $(form).closest('.quick-edit-row').prev().find('.quick-edit-btn').data('id');
-
-            $.ajax({
-                url: form.action,
-                type: 'POST',
-                data: formData,
-                processData: false,
-                contentType: false,
-                success: function(response) {
-                    $('#product-name-' + id).text(response.product.name);
-                    var stockText = new Intl.NumberFormat('vi-VN').format(Number(response.product.stock || 0));
-                    $('#product-stock-' + id).text(stockText.trim());
-                    if(response.product.image_url) {
-                        var image_element = $("<img />", { 
-                            id: 'product-image-'+id, 
-                            src: response.product.image_url, 
-                            width: 80 
-                        });
-                        $('#product-image-' + id).replaceWith(image_element);
-                    } else {
-                        $('#product-image-' + id).replaceWith('<span id="product-image-' + id + '">No image</span>');
-                    }
-                    $(form).closest('.quick-edit-row').remove();
-                    showToast(response.message, 'success');
-                },
-                error: function(response) {
-                    var errors = response.responseJSON.errors;
-                    var error_html = '';
-                    $.each(errors, function(key, value) {
-                        error_html += '<li>' + value + '</li>';
-                    });
-                    alert('Có lỗi xảy ra:\n' + error_html);
-                }
-            });
-        });
-
-        $(document).on('click', '.cancel-quick-edit', function() {
-            $(this).closest('.quick-edit-row').remove();
-        });
-
         $(document).on('click', '.choose-image-btn', function() {
             let productId = $(this).data('product-id');
             var url = "{{ route('media.library.popup') }}?callback=selectProductImage&product_id=" + productId;

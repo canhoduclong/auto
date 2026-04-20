@@ -479,7 +479,12 @@ class WarehouseDashboardController extends Controller
 
             $item = $order->items->firstWhere('id', $itemId);
             if ($item) {
-                $item->actual_weight = round((float) $validated['item_actual_weight'], 3);
+                $newWeight = round((float) $validated['item_actual_weight'], 3);
+                $item->actual_weight = $newWeight;
+                // Giữ lại KL kho cân lần đầu để đối chiếu hao hụt sau này
+                if ($item->packed_weight === null) {
+                    $item->packed_weight = $newWeight;
+                }
                 $item->save();
             }
         }

@@ -487,7 +487,7 @@
                 $canStartPacking = (bool) ($stockGuard['can_start_packing'] ?? true);
                 $stockShortages = collect($stockGuard['shortages'] ?? []);
             @endphp
-            <div class="col-12 col-lg-6 col-xxl-4">
+            <div class="col-12 col-lg-8 col-xxl-4">
                 <div class="card wh-order-card js-order-card" data-order-id="{{ $order->id }}">
                      
                     <span class="wh-order-index">#{{ $loop->iteration }}</span>
@@ -554,9 +554,9 @@
                                 <div class="wh-item-table-head">
                                     <div>Ảnh</div>
                                     <div>Sản phẩm</div>
-                                    <div class="text-center">SL</div>
-                                    <div class="text-center">Tổng</div>
                                     <div class="text-center">Size</div>
+                                    <div class="text-center">SL</div>                                    
+                                    <div class="text-center">Tổng</div>
                                     <div class="text-center">Khối lượng</div>
                                     <div class="text-center">Đơn giá</div>
                                     <div class="text-end">Thành tiền</div>
@@ -565,22 +565,31 @@
                                 <ul class="wh-item-list">
                                     @foreach($order->items as $item)
                                         @php
+
                                             $variant = $item->variant;
                                             $orderedQty = (int) $item->quantity;
                                             $unitPrice = (float) ($item->price ?? 0);
-                                            $unitLabel = $variant?->product?->unit_label ?? 'Cái';
-                                            $weightUnitLabel = in_array((string) ($variant?->product?->unit ?? 'cai'), ['con', 'cai'], true)
-                                                ? 'Kg'
-                                                : $unitLabel;
+                                            $unitLabel = $variant?->product?->unit_label ?? '--'; 
+                                            $pricedByKg = (bool) $item->effective_priced_by_kg;
+                                            $weightUnitLabel = $pricedByKg ? 'Kg' : $unitLabel;
                                             $itemActualWeight = is_null($item->actual_weight) ? null : (float) $item->actual_weight;
-                                            $lineTotal = !is_null($itemActualWeight) ? ($itemActualWeight * $unitPrice) : null;
+                                            $lineTotal = $pricedByKg
+                                                ? (!is_null($itemActualWeight) ? ($itemActualWeight * $unitPrice) : null)
+                                                : ($orderedQty * $unitPrice);
                                             $variantSize = $variant?->size;
                                             $formattedVariantSize = (!is_null($variantSize) && $variantSize !== '')
                                                 ? rtrim(rtrim(number_format((float) $variantSize, 2, '.', ''), '0'), '.')
                                                 : '-';
-                                            $displayActualWeight = (!is_null($itemActualWeight) && (float) $itemActualWeight > 0)
-                                                ? number_format((float) $itemActualWeight, 3) . ' ' . $weightUnitLabel
-                                                : '---';
+                                            if ($pricedByKg) {
+                                                $displayActualWeight = (!is_null($itemActualWeight) && (float) $itemActualWeight > 0)
+                                                    ? format_kg((float) $itemActualWeight)
+                                                    : '---';
+                                            } else {
+                                                $nonKgVal = (!is_null($itemActualWeight) && (float) $itemActualWeight > 0)
+                                                    ? (float) $itemActualWeight
+                                                    : round((float) $item->effective_unit_weight * $orderedQty, 3);
+                                                $displayActualWeight = rtrim(rtrim(number_format($nonKgVal, 3, '.', ''), '0'), '.') . ' ' . $unitLabel;
+                                            }
                                             $imagePath = $variant?->avatar?->media?->file_path
                                                 ?? $item->product?->avatar?->media?->file_path
                                                 ?? null;
@@ -602,30 +611,37 @@
                                                         <span class="text-muted small">({{ $variant->sku }})</span>
                                                     @endif
                                                 </div>
+                                                <div class="wh-item-cell"><strong>{{ $formattedVariantSize }}</strong></div>
                                                 <div class="wh-item-cell"><strong>{{ number_format($orderedQty) }}</strong></div>
                                                 <div class="wh-item-cell"><strong>{{ $item->display_total_label }}</strong></div>
-                                                <div class="wh-item-cell"><strong>{{ $formattedVariantSize }}</strong></div>
+                                                
                                                
                                                 @if(!$isPackedReadonly && $canProcessThisOrder)
                                                     @php
+                                                        $defaultComputedWeight = round((float) $item->effective_unit_weight * $orderedQty, 3);
                                                         $itemWeightDefault = is_null($item->actual_weight)
-                                                            ? ''
+                                                            ? ($defaultComputedWeight > 0 ? number_format($defaultComputedWeight, 3, '.', '') : '')
                                                             : number_format((float) $item->actual_weight, 3, '.', '');
                                                     @endphp
-                                                    <div class="wh-item-action js-packing-only {{ $isPacking ? '' : 'd-none' }}">
-                                                        <form action="{{ route('warehouse.orders.logistics', $order) }}" method="POST" class="js-logistics-item-form wh-compact-form justify-content-end">
-                                                            @csrf
-                                                            <input type="hidden" name="item_id" value="{{ $item->id }}">
-                                                            <input type="number" name="item_actual_weight" class="form-control form-control-sm actual_weight js-weight-input"
-                                                                value="{{ $itemWeightDefault }}"
-                                                                placeholder="{{ $weightUnitLabel }}"
-                                                                min="0" step="0.001" required
-                                                                data-qty="{{ $orderedQty }}"
-                                                                data-size="{{ is_numeric($variantSize) && (float)$variantSize > 0 ? (float)$variantSize : 0 }}">
-                                                            <button class="btn btn-outline-primary btn-sm js-logistics-submit-btn" type="submit">Lưu</button>
-                                                        </form>
-                                                    </div>
-                                                    <div class="wh-readonly-item js-ready-only {{ $isPacking ? 'd-none' : '' }}">{{ $displayActualWeight }}</div>
+                                                    @if($pricedByKg)
+                                                        <div class="wh-item-action js-packing-only {{ $isPacking ? '' : 'd-none' }}">
+                                                            <form action="{{ route('warehouse.orders.logistics', $order) }}" method="POST" class="js-logistics-item-form wh-compact-form justify-content-end">
+                                                                @csrf
+                                                                <input type="hidden" name="item_id" value="{{ $item->id }}">
+                                                                <input type="number" name="item_actual_weight" class="form-control form-control-sm actual_weight js-weight-input"
+                                                                    value="{{ $itemWeightDefault }}"
+                                                                    placeholder="{{ $weightUnitLabel }}"
+                                                                    min="0" step="0.001" required
+                                                                    inputmode="decimal"
+                                                                    data-qty="{{ $orderedQty }}"
+                                                                    data-size="{{ is_numeric($variantSize) && (float)$variantSize > 0 ? (float)$variantSize : 0 }}">
+                                                                <button class="btn btn-outline-primary btn-sm js-logistics-submit-btn" type="submit">Lưu</button>
+                                                            </form>
+                                                        </div>
+                                                        <div class="wh-readonly-item js-ready-only {{ $isPacking ? 'd-none' : '' }}">{{ $displayActualWeight }}</div>
+                                                    @else
+                                                        <div class="wh-readonly-item">{{ $displayActualWeight }}</div>
+                                                    @endif
                                                 @else
                                                     <div class="wh-readonly-item js-item-readonly-kg">
                                                         {{ $displayActualWeight }}
@@ -634,7 +650,7 @@
                                            
                                                 <div class="wh-item-cell">{{ number_format($unitPrice) }}đ</div>
                                                 <div class="wh-item-cell js-item-total-amount">
-                                                    <strong>{{ !is_null($lineTotal) ? number_format($lineTotal) . 'đ' : '---' }}</strong>
+                                                    <strong>{{ !is_null($lineTotal) ? number_format($lineTotal) . 'đ' : ($pricedByKg ? '---' : number_format($orderedQty * $unitPrice) . 'đ') }}</strong>
                                                 </div>
                                              </div>
                                              <div class="js-weight-error text-danger text-center px-1" style="font-size:.72rem;display:none;"></div>
@@ -705,7 +721,7 @@
                                 <div class="row g-2">
                                     <div class="col-6">
                                         <div class="wh-meta-label">Kg thực tế</div>
-                                        <div class="wh-meta-value text-primary">{{ $order->actual_weight !== null ? number_format((float) $order->actual_weight, 3) . ' kg' : '—' }}</div>
+                                        <div class="wh-meta-value text-primary">{{ $order->actual_weight !== null ? format_kg((float) $order->actual_weight) : '—' }}</div>
                                     </div>
                                     <div class="col-6">
                                         <div class="wh-meta-label">Phí ship</div>
@@ -886,7 +902,7 @@
 
                         const readonlyKg = row.querySelector('.js-item-readonly-kg');
                         if (readonlyKg && !Number.isNaN(actualWeight)) {
-                            readonlyKg.textContent = actualWeight > 0 ? (actualWeight.toFixed(3) + ' ' + weightUnit) : '---';
+                            readonlyKg.textContent = actualWeight > 0 ? (actualWeight.toFixed(3).replace(/\.?0+$/, '') + 'kg') : '---';
                         }
                     }
                 }

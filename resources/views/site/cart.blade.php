@@ -1,14 +1,5 @@
 @extends('layouts.site')
 
-@php
-    if (!function_exists('format_kg')) {
-        function format_kg($value): string {
-            $str = rtrim(rtrim(number_format((float) $value, 3, '.', ''), '0'), '.');
-            return $str . 'kg';
-        }
-    }
-@endphp
-
 @section('breadcrumb')
 <x-breadcrumb :items="[
     ['label' => 'Giỏ hàng', 'url' => route('cart.show')], 
@@ -422,12 +413,12 @@ document.addEventListener('DOMContentLoaded', function () {
                                                             </div>
                                                         </div>
                                                     </td>
-                                                    <td>{{ number_format($price) }}d</td>
+                                                    <td>{{ number_format($price) }} đ</td>
                                                     <td>
                                                         <input type="number" value="{{ $quantity }}" class="form-control cart-qty update-cart" min="1">
                                                     </td>
                                                     <td>
-                                                        <div class="cart-item-weight text-muted small">{{ $isPricedByKg ? format_kg($unitWeight) : number_format($unitWeight, 3, ',', '.') . ' ' . ($details['unit_label'] ?? 'Cái') }} | {{ $isPricedByKg ? 'Theo kg' : 'Theo đơn vị' }}</div>
+                                                        <div class="cart-item-weight text-muted small">{{ $isPricedByKg ? format_kg($unitWeight) : number_format($unitWeight, 3, ',', '.') . ' ' . ($details['unit_label'] ?? 'Cái') }}</div>
                                                     </td>
                                                     <td class="fw-semibold cart-line-subtotal"> 
                                                         <span class="cart-line-total-money">{{ number_format($lineTotal) }}d</span>
@@ -478,7 +469,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                                 <input type="number" value="{{ $quantity }}" class="form-control cart-qty update-cart" min="1">
                                                 <span>Thành tiền</span>
                                                 <strong class="cart-line-subtotal"> 
-                                                    <span class="cart-line-total-money">{{ number_format($lineTotal) }}d</span>
+                                                    <span class="cart-line-total-money">{{ number_format($lineTotal) }} đ</span>
                                                 </strong>
                                             </div>
                                         </div>

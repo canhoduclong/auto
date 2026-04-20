@@ -21,11 +21,13 @@ class OrderItem extends Model
         'is_priced_by_kg',
         'total_weight',
         'actual_weight',
+        'packed_weight',
         'total',
     ];
 
     protected $casts = [
-        'actual_weight' => 'decimal:3',
+        'actual_weight'  => 'decimal:3',
+        'packed_weight'  => 'decimal:3',
         'is_priced_by_kg' => 'boolean',
     ];
 
