@@ -47,20 +47,35 @@ class CustomerAppointmentController extends Controller
             ->paginate(12)
             ->appends($request->query());
 
+        return view('site.my_customer.appointments', [
+            'appointments' => $appointments,
+            'settings'     => Setting::all()->keyBy('key'),
+            'search'       => $search,
+        ]);
+    }
+
+    /**
+     * AJAX: search customers belonging to current user.
+     */
+    public function searchCustomers(Request $request)
+    {
+        $userId = (int) auth()->id();
+        $q      = trim((string) $request->input('q', ''));
+
         $customers = Customer::query()
             ->where(function ($query) use ($userId) {
                 $query->where('user_id', $userId)
                     ->orWhere('assigned_to', $userId);
             })
+            ->when($q, fn ($query) => $query->where(function ($sub) use ($q) {
+                $sub->where('name', 'like', "%{$q}%")
+                    ->orWhere('phone', 'like', "%{$q}%");
+            }))
             ->orderBy('name')
+            ->limit(30)
             ->get(['id', 'name', 'phone']);
 
-        return view('site.my_customer.appointments', [
-            'appointments' => $appointments,
-            'customers' => $customers,
-            'settings' => Setting::all()->keyBy('key'),
-            'search' => $search,
-        ]);
+        return response()->json($customers);
     }
 
     public function store(Request $request)
