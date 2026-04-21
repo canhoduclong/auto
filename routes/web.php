@@ -311,6 +311,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('customers/bulk-delete', [CustomerController::class, 'bulkDelete'])->name('customers.bulkDelete')->middleware('permission');
     Route::resource('provinces', ProvinceController::class)->middleware('permission');
     Route::post('provinces/{province}/wards', [ProvinceController::class, 'storeWard'])->name('provinces.wards.store')->middleware('permission');
+    Route::get('provinces/{province}/wards', [ProvinceController::class, 'indexWards'])->name('provinces.wards.index')->middleware('permission');
     Route::put('provinces/{province}/wards/{ward}', [ProvinceController::class, 'updateWard'])->name('provinces.wards.update')->middleware('permission');
     Route::delete('provinces/{province}/wards/{ward}', [ProvinceController::class, 'destroyWard'])->name('provinces.wards.destroy')->middleware('permission');
     Route::resource('companies', \App\Http\Controllers\CompanyController::class)->middleware('permission');
@@ -374,6 +375,16 @@ Route::middleware(['auth'])->group(function () {
         Route::resource('post-categories', PostCategoryController::class);
         Route::resource('pages', PageController::class);
         Route::resource('brands', \App\Http\Controllers\BrandController::class);
+
+        // Truck management
+        Route::get('truck-brands/{truckBrand}/routes', [\App\Http\Controllers\Admin\TruckBrandController::class, 'routes'])->name('truck-brands.routes');
+        Route::resource('truck-brands', \App\Http\Controllers\Admin\TruckBrandController::class);
+        Route::resource('truck-stations', \App\Http\Controllers\Admin\TruckStationAdminController::class);
+        Route::get('truck-routes/stations/search', [\App\Http\Controllers\Admin\TruckRouteController::class, 'searchStations'])->name('truck-routes.stations.search');
+        Route::post('truck-routes/{truckRoute}/stops', [\App\Http\Controllers\Admin\TruckRouteController::class, 'storeStop'])->name('truck-routes.stops.store');
+        Route::put('truck-routes/{truckRoute}/stops/{stop}', [\App\Http\Controllers\Admin\TruckRouteController::class, 'updateStop'])->name('truck-routes.stops.update');
+        Route::delete('truck-routes/{truckRoute}/stops/{stop}', [\App\Http\Controllers\Admin\TruckRouteController::class, 'destroyStop'])->name('truck-routes.stops.destroy');
+        Route::resource('truck-routes', \App\Http\Controllers\Admin\TruckRouteController::class);
     });
 
     Route::get('profile', [ProfileController::class, 'edit'])->name('profile.edit');
@@ -383,6 +394,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/my-customer', [PageController::class, 'myCustomer'])->name('pages.my_customer');
     Route::get('/my-customer/ajax', [PageController::class, 'myCustomerAjax'])->name('pages.my_customer.ajax');
     Route::get('/my-customer/create', [PageController::class, 'myCustomerCreate'])->name('my_customer.create');
+    Route::get('/my-customer/check-duplicate', [PageController::class, 'myCustomerCheckDuplicate'])->name('my_customer.check_duplicate');
     Route::post('/my-customer', [PageController::class, 'myCustomerStore'])->name('my_customer.store');
     Route::get('/my-customer/{customer}/edit', [PageController::class, 'myCustomerEdit'])->name('my_customer.edit');
     Route::put('/my-customer/{customer}', [PageController::class, 'myCustomerUpdate'])->name('my_customer.update');

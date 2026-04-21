@@ -10,11 +10,10 @@ return new class extends Migration
     {
         Schema::create('provinces', function (Blueprint $table) {
             $table->id();
-            $table->string('code')->unique();
+            $table->string('code')->nullable();
             $table->string('name');
             $table->string('type')->nullable(); // Tỉnh, Thành phố, v.v.
-            $table->timestamps();
-            $table->index('code');
+            $table->timestamps(); 
             $table->index('name');
         });
     }

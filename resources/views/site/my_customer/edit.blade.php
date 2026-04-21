@@ -13,103 +13,73 @@
         padding: 2rem 0 2.5rem;
     }
     .mc-edit-head {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 1rem;
-        margin-bottom: 1.25rem;
+        display: flex; justify-content: space-between; align-items: center;
+        gap: 1rem; margin-bottom: 1.5rem;
     }
-    .mc-edit-title {
-        margin: 0;
-        font-size: 1.75rem;
-        font-weight: 700;
-        color: #1f2937;
+    .mc-edit-title { margin: 0; font-size: 1.75rem; font-weight: 700; color: #1f2937; }
+    .mc-edit-subtitle { margin: 0.25rem 0 0; color: #6b7280; font-size: 0.95rem; }
+    .mc-edit-card {
+        border: 0; border-radius: 14px;
+        box-shadow: 0 4px 20px rgba(15,23,42,0.07);
+        background: #ffffff; margin-bottom: 1.25rem;
     }
-    .mc-edit-subtitle {
-        margin: 0.25rem 0 0;
-        color: #6b7280;
-        font-size: 0.95rem;
+    .mc-edit-card .card-header {
+        border-bottom: 1px solid #eef2f7; background: #ffffff;
+        border-radius: 14px 14px 0 0; font-weight: 700; color: #111827;
+        padding: 0.9rem 1.25rem; display: flex; align-items: center; gap: 0.5rem; font-size: 1rem;
     }
-    .mc-edit-card,
+    .mc-edit-card .card-header .card-num {
+        width: 26px; height: 26px; border-radius: 50%; background: #2563eb; color: #fff;
+        font-size: 0.78rem; font-weight: 700; display: inline-flex;
+        align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .mc-edit-card .card-body { padding: 1.25rem; }
     .mc-info-card {
-        border: 0;
-        border-radius: 14px;
-        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
-        background: #ffffff;
+        border: 0; border-radius: 14px;
+        box-shadow: 0 4px 20px rgba(15,23,42,0.07);
+        background: #ffffff; margin-bottom: 1.25rem;
     }
-    .mc-edit-card .card-header,
     .mc-info-card .card-header {
-        border-bottom: 1px solid #eef2f7;
-        background: #ffffff;
-        font-weight: 700;
-        color: #111827;
-        padding: 1rem 1.25rem;
+        border-bottom: 1px solid #eef2f7; background: #ffffff;
+        border-radius: 14px 14px 0 0; font-weight: 700; color: #111827; padding: 0.9rem 1.25rem;
     }
-    .mc-edit-card .card-body,
-    .mc-info-card .card-body {
-        padding: 1.25rem;
-    }
-    .mc-form-label {
-        font-weight: 600;
-        color: #374151;
-    }
-    .mc-form-control {
-        border-radius: 10px;
-        border-color: #dbe3ef;
-        padding: 0.65rem 0.85rem;
-    }
-    .mc-form-control:focus {
-        border-color: #2563eb;
-        box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.15);
-    }
-    .mc-help {
-        color: #6b7280;
-        font-size: 0.82rem;
-    }
+    .mc-info-card .card-body { padding: 1.25rem; }
+    .mc-form-label { font-weight: 600; color: #374151; }
+    .mc-form-control { border-radius: 10px; border-color: #dbe3ef; padding: 0.65rem 0.85rem; }
+    .mc-form-control:focus { border-color: #2563eb; box-shadow: 0 0 0 0.2rem rgba(37,99,235,0.15); }
+    .mc-help { color: #6b7280; font-size: 0.82rem; }
     .mc-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.35rem;
-        padding: 0.35rem 0.75rem;
-        border-radius: 999px;
-        background: #e8f4ff;
-        color: #0f4c81;
-        font-size: 0.8rem;
-        font-weight: 600;
+        display: inline-flex; align-items: center; gap: 0.35rem;
+        padding: 0.35rem 0.75rem; border-radius: 999px;
+        background: #e8f4ff; color: #0f4c81; font-size: 0.8rem; font-weight: 600;
     }
     .mc-meta-item {
-        padding: 0.7rem 0;
-        border-bottom: 1px dashed #e5e7eb;
-        display: flex;
-        justify-content: space-between;
-        gap: 0.75rem;
+        padding: 0.7rem 0; border-bottom: 1px dashed #e5e7eb;
+        display: flex; justify-content: space-between; gap: 0.75rem;
     }
-    .mc-meta-item:last-child {
-        border-bottom: 0;
-        padding-bottom: 0;
+    .mc-meta-item:last-child { border-bottom: 0; padding-bottom: 0; }
+    .mc-meta-label { color: #6b7280; font-size: 0.9rem; }
+    .mc-meta-value { color: #111827; font-weight: 600; text-align: right; }
+    /* Truck station list */
+    .truck-station-table { font-size: 0.875rem; }
+    .truck-station-table thead th { background: #f8fafc; font-weight: 600; color: #374151; border-color: #eef2f7; }
+    .truck-station-table tbody tr { cursor: pointer; transition: background .12s; }
+    .truck-station-table tbody tr:hover { background: #eff6ff; }
+    .truck-station-table tbody tr.selected-station { background: #dbeafe; }
+    .truck-station-table td { vertical-align: middle; border-color: #eef2f7; }
+    .truck-search-bar { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap; }
+    .truck-search-bar input { flex: 1; min-width: 140px; }
+    /* Product rows */
+    .product-row {
+        background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 10px;
+        padding: 0.9rem 1rem; margin-bottom: 0.75rem; position: relative;
     }
-    .mc-meta-label {
-        color: #6b7280;
-        font-size: 0.9rem;
+    .product-row .remove-product-row {
+        position: absolute; top: 0.6rem; right: 0.75rem;
+        background: none; border: none; color: #ef4444; font-size: 1.1rem; cursor: pointer; padding: 0;
     }
-    .mc-meta-value {
-        color: #111827;
-        font-weight: 600;
-        text-align: right;
-    }
-    .mc-actions {
-        display: flex;
-        gap: 0.6rem;
-        flex-wrap: wrap;
-    }
-    @media (max-width: 991.98px) {
-        .mc-edit-head {
-            flex-direction: column;
-            align-items: flex-start;
-        }
-    }
-
-    /* ── grid-dropdown widget ────────────────────── */
+    .product-row .remove-product-row:hover { color: #b91c1c; }
+    /* grid-dropdown widget */
     .mc-gd-wrap { position: relative; }
     .mc-gd-trigger {
         display: flex; align-items: center; justify-content: space-between;
@@ -119,10 +89,7 @@
         transition: border-color .15s, box-shadow .15s;
     }
     .mc-gd-trigger:hover { border-color: #2563eb; }
-    .mc-gd-trigger.open {
-        border-color: #2563eb;
-        box-shadow: 0 0 0 .2rem rgba(37,99,235,.15);
-    }
+    .mc-gd-trigger.open { border-color: #2563eb; box-shadow: 0 0 0 .2rem rgba(37,99,235,.15); }
     .mc-gd-trigger .mc-gd-val { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .mc-gd-trigger .mc-gd-clear { display:none; line-height:1; color:#9ca3af; padding:0 2px 0 4px; font-size:1.1rem; }
     .mc-gd-trigger.has-value .mc-gd-clear { display:inline; }
@@ -139,10 +106,7 @@
         padding: .3rem .6rem; font-size: .82rem; margin-bottom: 8px; outline: none;
     }
     .mc-gd-search:focus { border-color: #2563eb; }
-    .mc-gd-grid {
-        display: grid; gap: 4px;
-        max-height: 280px; overflow-y: auto;
-    }
+    .mc-gd-grid { display: grid; gap: 4px; max-height: 280px; overflow-y: auto; }
     .mc-gd-grid.cols-3 { grid-template-columns: repeat(3,1fr); }
     .mc-gd-grid.cols-4 { grid-template-columns: repeat(4,1fr); }
     .mc-gd-item {
@@ -157,6 +121,9 @@
     @media (max-width:576px) {
         .mc-gd-panel { max-width: calc(100vw - 32px); }
         .mc-gd-grid.cols-3, .mc-gd-grid.cols-4 { grid-template-columns: repeat(2,1fr); }
+    }
+    @media (max-width: 991.98px) {
+        .mc-edit-head { flex-direction: column; align-items: flex-start; }
     }
 </style>
 
@@ -178,65 +145,57 @@
                 <i class="bi bi-exclamation-triangle me-1"></i>{{ session('error') }}
             </div>
         @endif
-
         @if ($errors->any())
             <div class="alert alert-danger mb-3">
                 <div class="fw-semibold mb-1">Không thể lưu thông tin:</div>
-                <ul class="mb-0 ps-3">
-                    @foreach ($errors->all() as $error)
-                        <li>{{ $error }}</li>
-                    @endforeach
-                </ul>
+                <ul class="mb-0 ps-3">@foreach ($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul>
             </div>
         @endif
 
         <div class="row g-3">
+            {{-- ── LEFT COLUMN: 4 cards ── --}}
             <div class="col-12 col-lg-8">
-                <div class="card mc-edit-card">
-                    <div class="card-header">Thông tin khách hàng</div>
-                    <div class="card-body">
-                        <form action="{{ route('my_customer.update', $customer) }}" method="POST">
-                            @csrf
-                            @method('PUT')
 
-                            <div class="mb-3">
-                                <label for="name" class="form-label mc-form-label">Tên khách hàng</label>
-                                <input type="text" class="form-control mc-form-control" id="name" name="name" value="{{ old('name', $customer->name) }}" required>
-                            </div>
+                <form action="{{ route('my_customer.update', $customer) }}" method="POST" autocomplete="off">
+                    @csrf
+                    @method('PUT')
 
-                            <div class="mb-3">
-                                <label for="email" class="form-label mc-form-label">Email</label>
-                                <input type="email" class="form-control mc-form-control" id="email" name="email" value="{{ old('email', $customer->email) }}" required>
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="phone" class="form-label mc-form-label">Điện thoại</label>
-                                <input type="text" class="form-control mc-form-control" id="phone" name="phone" value="{{ old('phone', $customer->phone) }}">
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="address" class="form-label mc-form-label">Địa chỉ khách hàng</label>
-                                <textarea
-                                    class="form-control mc-form-control"
-                                    id="address"
-                                    name="address"
-                                    rows="3"
-                                    placeholder="Nhập địa chỉ đầy đủ của khách hàng"
-                                >{{ old('address', $defaultAddress->note ?? $customer->address) }}</textarea>
-                                <div class="mc-help mt-1">Địa chỉ này dùng làm mặc định khi tạo đơn cho khách nếu chưa nhập địa chỉ giao riêng.</div>
-                            </div>
-
-                            <div class="row mb-3">
-                                <div class="col-md-6">
+                    {{-- CARD 1: Thông tin khách hàng --}}
+                    <div class="card mc-edit-card">
+                        <div class="card-header">
+                            <span class="card-num">1</span>
+                            <i class="bi bi-person-fill text-primary"></i> Thông tin khách hàng
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-12 col-md-6">
+                                    <label for="name" class="form-label mc-form-label">Tên khách hàng <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control mc-form-control" id="name" name="name" value="{{ old('name', $customer->name) }}" required>
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label for="phone" class="form-label mc-form-label">Số điện thoại</label>
+                                    <input type="text" class="form-control mc-form-control" id="phone" name="phone" value="{{ old('phone', $customer->phone) }}">
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label for="email" class="form-label mc-form-label">Email</label>
+                                    <input type="email" class="form-control mc-form-control" id="email" name="email" value="{{ old('email', $customer->email) }}">
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label for="address" class="form-label mc-form-label">Địa chỉ</label>
+                                    <input type="text" class="form-control mc-form-control" id="address" name="address"
+                                        value="{{ old('address', $defaultAddress->note ?? $customer->address) }}"
+                                        placeholder="Số nhà, tên đường...">
+                                </div>
+                                <div class="col-12 col-md-4">
                                     <label class="form-label mc-form-label">Tỉnh / Thành phố</label>
                                     <div class="mc-gd-wrap" id="province-gd-wrap">
                                         <div class="mc-gd-trigger" id="province-gd-trigger" tabindex="0">
-                                            <span class="mc-gd-val text-muted">-- Chọn tỉnh/thành phố --</span>
+                                            <span class="mc-gd-val text-muted">-- Chọn tỉnh/thành --</span>
                                             <span class="mc-gd-clear" title="Xoá">×</span>
                                             <i class="bi bi-chevron-down ms-1" style="font-size:.75rem;"></i>
                                         </div>
                                         <div class="mc-gd-panel" id="province-gd-panel">
-                                            <input type="text" class="mc-gd-search" placeholder="Tìm tỉnh/thành...">
+                                            <input type="text" class="mc-gd-search" placeholder="🔍 Tìm tỉnh/thành...">
                                             <div class="mc-gd-grid cols-4" id="province-gd-grid">
                                                 @foreach(($provinces ?? []) as $province)
                                                     <div class="mc-gd-item{{ (string)$selectedProvinceId === (string)$province->id ? ' selected' : '' }}"
@@ -247,7 +206,7 @@
                                         <input type="hidden" id="province_id" name="province_id" value="{{ $selectedProvinceId }}">
                                     </div>
                                 </div>
-                                <div class="col-md-6">
+                                <div class="col-12 col-md-4">
                                     <label class="form-label mc-form-label">Phường / Xã</label>
                                     <div class="mc-gd-wrap" id="ward-gd-wrap">
                                         <div class="mc-gd-trigger mc-gd-disabled" id="ward-gd-trigger" tabindex="0">
@@ -256,106 +215,194 @@
                                             <i class="bi bi-chevron-down ms-1" style="font-size:.75rem;"></i>
                                         </div>
                                         <div class="mc-gd-panel" id="ward-gd-panel">
-                                            <input type="text" class="mc-gd-search" placeholder="Tìm phường/xã...">
+                                            <input type="text" class="mc-gd-search" placeholder="🔍 Tìm phường/xã...">
                                             <div class="mc-gd-grid cols-3" id="ward-gd-grid"></div>
                                         </div>
                                         <input type="hidden" id="ward_id" name="ward_id" value="{{ $selectedWardId }}">
                                     </div>
                                 </div>
+                                <div class="col-12 col-md-4">
+                                    <label for="delivery_time" class="form-label mc-form-label">Giờ giao hàng</label>
+                                    <input type="text" class="form-control mc-form-control" id="delivery_time" name="delivery_time"
+                                        value="{{ old('delivery_time', $customer->delivery_time) }}" placeholder="VD: 8h-10h, sau 17h">
+                                    <div class="mc-help mt-1">Dùng mặc định khi tạo đơn.</div>
+                                </div>
                             </div>
+                        </div>
+                    </div>
 
-                            <div class="row mb-3">
-                                <div class="col-md-4">
+                    {{-- CARD 2: Thông tin công ty --}}
+                    <div class="card mc-edit-card">
+                        <div class="card-header">
+                            <span class="card-num">2</span>
+                            <i class="bi bi-building text-primary"></i> Thông tin công ty (xuất hóa đơn)
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-12 col-md-6">
                                     <label for="company_name" class="form-label mc-form-label">Tên công ty</label>
                                     <input type="text" class="form-control mc-form-control" id="company_name" name="company_name" value="{{ old('company_name', $customer->company_name) }}">
                                 </div>
-                                <div class="col-md-4">
+                                <div class="col-12 col-md-3">
                                     <label for="tax_code" class="form-label mc-form-label">Mã số thuế</label>
                                     <input type="text" class="form-control mc-form-control" id="tax_code" name="tax_code" value="{{ old('tax_code', $customer->tax_code) }}">
                                 </div>
-                                <div class="col-md-4">
+                                <div class="col-12 col-md-3">
                                     <label for="company_email" class="form-label mc-form-label">Email công ty</label>
                                     <input type="email" class="form-control mc-form-control" id="company_email" name="company_email" value="{{ old('company_email', $customer->company_email) }}">
                                 </div>
-                                <div class="col-12 mt-3">
+                                <div class="col-12 col-md-8">
                                     <label for="company_address" class="form-label mc-form-label">Địa chỉ công ty</label>
                                     <input type="text" class="form-control mc-form-control" id="company_address" name="company_address" value="{{ old('company_address', $customer->company_address) }}">
                                 </div>
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="delivery_time" class="form-label mc-form-label">Giờ giao hàng</label>
-                                <input type="text" class="form-control mc-form-control" id="delivery_time" name="delivery_time" value="{{ old('delivery_time', $customer->delivery_time) }}" placeholder="Ví dụ: 8h-10h, 14h-16h, sau 17h">
-                                <div class="mc-help mt-1">Thông tin này sẽ được dùng làm mặc định khi sale tạo đơn mới cho khách.</div>
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="size" class="form-label mc-form-label">Size</label>
-                                <input type="text" class="form-control mc-form-control" id="size" name="size" value="{{ old('size', $customer->size) }}" placeholder="Nhập size (nếu có)">
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="production" class="form-label mc-form-label">Sản lượng</label>
-                                <input type="number" step="any" class="form-control mc-form-control" id="production" name="production" value="{{ old('production', $customer->production) }}" placeholder="Nhập sản lượng (nếu có)">
-                                <div class="mc-help mt-1">Điền sản lượng trung bình theo đơn vị bạn đang theo dõi (ví dụ: kg/tháng).</div>
-                            </div>
-
-                            <div class="row mb-3">
-                                <div class="col-md-4">
-                                    <label for="use_truck_station" class="form-label mc-form-label">Gửi qua nhà xe</label>
-                                    <select class="form-select mc-form-control" id="use_truck_station" name="use_truck_station">
-                                        <option value="0" {{ old('use_truck_station', (string) ($customer->use_truck_station ? 1 : 0)) === '0' ? 'selected' : '' }}>Không</option>
-                                        <option value="1" {{ old('use_truck_station', (string) ($customer->use_truck_station ? 1 : 0)) === '1' ? 'selected' : '' }}>Có</option>
-                                    </select>
+                                <div class="col-12 col-md-4">
+                                    <label for="company_representative" class="form-label mc-form-label">Người đại diện</label>
+                                    <input type="text" class="form-control mc-form-control" id="company_representative" name="company_representative"
+                                        value="{{ old('company_representative', $customer->company_representative ?? '') }}" placeholder="Họ tên người đại diện">
                                 </div>
                             </div>
-
-                            <div id="truck_section" style="display:none;">
-                                <div class="row mb-3">
-                                    <div class="col-md-6">
-                                        <label for="truck_station_id" class="form-label mc-form-label">Nhà xe</label>
-                                        <select class="form-select mc-form-control" id="truck_station_id" name="truck_station_id">
-                                            <option value="">-- Chọn nhà xe --</option>
-                                            @foreach(($truckStations ?? []) as $station)
-                                                <option value="{{ $station->id }}" {{ (string) old('truck_station_id', $customer->truck_station_id) === (string) $station->id ? 'selected' : '' }}>
-                                                    {{ $station->name }}
-                                                </option>
-                                            @endforeach
-                                        </select>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label for="truck_station_phone" class="form-label mc-form-label">Số điện thoại nhà xe</label>
-                                        <input type="text" class="form-control mc-form-control" id="truck_station_phone" name="truck_station_phone" value="{{ old('truck_station_phone', $customer->truck_station_phone) }}">
-                                    </div>
-                                    <div class="col-md-6 mt-3">
-                                        <label for="truck_station_address" class="form-label mc-form-label">Địa chỉ giao nhà xe</label>
-                                        <input type="text" class="form-control mc-form-control" id="truck_station_address" name="truck_station_address" value="{{ old('truck_station_address', $customer->truck_station_address) }}">
-                                    </div>
-                                    <div class="col-md-3 mt-3">
-                                        <label for="truck_receive_time" class="form-label mc-form-label">Giờ nhận</label>
-                                        <input type="text" class="form-control mc-form-control" id="truck_receive_time" name="truck_receive_time" value="{{ old('truck_receive_time', $customer->truck_receive_time) }}">
-                                    </div>
-                                    <div class="col-md-3 mt-3">
-                                        <label for="truck_return_time" class="form-label mc-form-label">Giờ trả</label>
-                                        <input type="text" class="form-control mc-form-control" id="truck_return_time" name="truck_return_time" value="{{ old('truck_return_time', $customer->truck_return_time) }}">
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="mc-actions pt-2">
-                                <button type="submit" class="btn btn-primary">
-                                    <i class="bi bi-check-circle me-1"></i> Lưu thay đổi
-                                </button>
-                                <a href="{{ route('pages.my_customer') }}" class="btn btn-light border">Hủy</a>
-                            </div>
-                        </form>
+                        </div>
                     </div>
-                </div>
+
+                    {{-- CARD 3: Thông tin nhà xe --}}
+                    <div class="card mc-edit-card">
+                        <div class="card-header">
+                            <span class="card-num">3</span>
+                            <i class="bi bi-truck text-primary"></i> Thông tin nhà xe
+                        </div>
+                        <div class="card-body">
+                            <input type="hidden" name="use_truck_station" id="use_truck_station_hidden"
+                                value="{{ old('use_truck_station', $customer->use_truck_station ? '1' : '0') }}">
+                            <input type="hidden" name="truck_station_id" id="truck_station_id"
+                                value="{{ old('truck_station_id', $customer->truck_station_id) }}">
+
+                            <div class="d-flex align-items-center gap-3 mb-3">
+                                <button type="button" class="btn btn-outline-primary" id="btn-load-trucks">
+                                    <i class="bi bi-arrow-clockwise me-1"></i> Load nhà xe
+                                </button>
+                                <span class="text-muted mc-help" id="truck-load-status">Bấm để tải danh sách nhà xe.</span>
+                            </div>
+
+                            <div id="truck-search-area" style="display:none;">
+                                <div class="truck-search-bar">
+                                    <input type="text" class="form-control mc-form-control" id="truck-search-name" placeholder="🔍 Tìm theo tên nhà xe...">
+                                    <input type="text" class="form-control mc-form-control" id="truck-search-dest" placeholder="🔍 Tìm theo điểm đến (tỉnh/thành)...">
+                                </div>
+                                <div class="table-responsive" style="max-height:280px;overflow-y:auto;">
+                                    <table class="table table-bordered table-hover truck-station-table mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th style="width:36px"></th>
+                                                <th>Tên nhà xe</th>
+                                                <th>Điểm đến</th>
+                                                <th>Địa chỉ</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="truck-station-tbody">
+                                            <tr><td colspan="4" class="text-center text-muted">Đang tải...</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div class="mt-1 mc-help" id="truck-selected-label">Chưa chọn nhà xe.</div>
+                            </div>
+
+                            <div id="truck-detail-section" class="mt-3" style="display:none;">
+                                <div class="row g-3">
+                                    <div class="col-12 col-md-6">
+                                        <label for="truck_station_address" class="form-label mc-form-label">Địa chỉ giao nhà xe</label>
+                                        <input type="text" class="form-control mc-form-control" id="truck_station_address" name="truck_station_address"
+                                            value="{{ old('truck_station_address', $customer->truck_station_address) }}">
+                                    </div>
+                                    <div class="col-12 col-md-6">
+                                        <label for="truck_station_phone" class="form-label mc-form-label">Số điện thoại nhà xe</label>
+                                        <input type="text" class="form-control mc-form-control" id="truck_station_phone" name="truck_station_phone"
+                                            value="{{ old('truck_station_phone', $customer->truck_station_phone) }}">
+                                    </div>
+                                    <div class="col-12 col-md-3">
+                                        <label for="truck_receive_time" class="form-label mc-form-label">Giờ nhận hàng</label>
+                                        <input type="text" class="form-control mc-form-control" id="truck_receive_time" name="truck_receive_time"
+                                            value="{{ old('truck_receive_time', $customer->truck_receive_time) }}" placeholder="VD: 7h-9h">
+                                    </div>
+                                    <div class="col-12 col-md-3">
+                                        <label for="truck_return_time" class="form-label mc-form-label">Giờ trả hàng</label>
+                                        <input type="text" class="form-control mc-form-control" id="truck_return_time" name="truck_return_time"
+                                            value="{{ old('truck_return_time', $customer->truck_return_time) }}" placeholder="VD: 17h-19h">
+                                    </div>
+                                    <div class="col-12 col-md-3">
+                                        <label for="truck_fee" class="form-label mc-form-label">Phí nhà xe (₫)</label>
+                                        <input type="number" class="form-control mc-form-control" id="truck_fee" name="truck_fee"
+                                            value="{{ old('truck_fee', $customer->truck_fee ?? '') }}" placeholder="0">
+                                    </div>
+                                    <div class="col-12 col-md-3 d-flex align-items-end">
+                                        <button type="button" class="btn btn-outline-danger w-100" id="btn-clear-truck">
+                                            <i class="bi bi-x-circle me-1"></i> Bỏ chọn nhà xe
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- CARD 4: Nhu cầu khách hàng --}}
+                    <div class="card mc-edit-card">
+                        <div class="card-header">
+                            <span class="card-num">4</span>
+                            <i class="bi bi-clipboard-check text-primary"></i> Nhu cầu khách hàng
+                        </div>
+                        <div class="card-body">
+                            <p class="mc-help mb-3">Thông tin nhu cầu đặt hàng mặc định khi sale tạo đơn.</p>
+
+                            <div class="product-row" id="product-row-default">
+                                <div class="fw-600 mb-2 text-primary" style="font-size:0.85rem;font-weight:600;">
+                                    <i class="bi bi-box-seam me-1"></i> Sản phẩm chính
+                                </div>
+                                <div class="row g-2">
+                                    <div class="col-12 col-md-4">
+                                        <label class="form-label mc-form-label" style="font-size:0.82rem;">Tên sản phẩm</label>
+                                        <input type="text" class="form-control mc-form-control" name="product_name"
+                                            value="{{ old('product_name', $customer->product_name ?? '') }}" placeholder="VD: Gà Tam Hoàng">
+                                    </div>
+                                    <div class="col-6 col-md-2">
+                                        <label class="form-label mc-form-label" style="font-size:0.82rem;">Size</label>
+                                        <input type="text" class="form-control mc-form-control" name="size"
+                                            value="{{ old('size', $customer->size) }}" placeholder="VD: 1.2kg">
+                                    </div>
+                                    <div class="col-6 col-md-2">
+                                        <label class="form-label mc-form-label" style="font-size:0.82rem;">Sản lượng</label>
+                                        <input type="text" class="form-control mc-form-control" name="production"
+                                            value="{{ old('production', $customer->production) }}" placeholder="VD: 120 con">
+                                    </div>
+                                    <div class="col-12 col-md-2">
+                                        <label class="form-label mc-form-label" style="font-size:0.82rem;">Ghi chú</label>
+                                        <input type="text" class="form-control mc-form-control" name="product_note"
+                                            value="{{ old('product_note', $customer->product_note ?? '') }}" placeholder="Yêu cầu thêm...">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="extra-product-rows"></div>
+
+                            <button type="button" class="btn btn-outline-success btn-sm mt-1" id="btn-add-product">
+                                <i class="bi bi-plus-circle me-1"></i> Sản phẩm khác
+                            </button>
+                        </div>
+                    </div>
+
+                    {{-- Actions --}}
+                    <div class="d-flex gap-2 pb-4">
+                        <button type="submit" class="btn btn-primary px-4">
+                            <i class="bi bi-check-circle me-1"></i> Lưu thay đổi
+                        </button>
+                        <a href="{{ route('pages.my_customer') }}" class="btn btn-light border">Hủy</a>
+                    </div>
+
+                </form>
             </div>
 
+            {{-- ── RIGHT COLUMN: info sidebar ── --}}
             <div class="col-12 col-lg-4">
                 <div class="card mc-info-card">
-                    <div class="card-header">Thông tin nhanh</div>
+                    <div class="card-header"><i class="bi bi-info-circle me-1 text-primary"></i> Thông tin nhanh</div>
                     <div class="card-body">
                         <div class="mc-meta-item">
                             <span class="mc-meta-label">Mã khách hàng</span>
@@ -367,7 +414,11 @@
                         </div>
                         <div class="mc-meta-item">
                             <span class="mc-meta-label">Địa chỉ hiện tại</span>
-                            <span class="mc-meta-value">{{ $defaultAddress->note ?? $customer->address ?: '-' }}</span>
+                            <span class="mc-meta-value" style="font-size:0.875rem;">{{ $defaultAddress->note ?? $customer->address ?: '-' }}</span>
+                        </div>
+                        <div class="mc-meta-item">
+                            <span class="mc-meta-label">Nhà xe</span>
+                            <span class="mc-meta-value">{{ $customer->truckStation->name ?? '-' }}</span>
                         </div>
                         <div class="mc-meta-item">
                             <span class="mc-meta-label">Cập nhật gần nhất</span>
@@ -386,147 +437,269 @@
 
 @push('scripts')
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const wardsApiUrl   = '{{ route("api.wards") }}';
-        const useTruckSelect = document.getElementById('use_truck_station');
-        const truckSection   = document.getElementById('truck_section');
+document.addEventListener('DOMContentLoaded', function () {
+    const wardsApiUrl = '{{ route("api.wards") }}';
 
-        /* ── makeGridDropdown ─────────────────────────── */
-        function makeGridDropdown(wrap) {
-            const trigger = wrap.querySelector('.mc-gd-trigger');
-            const panel   = wrap.querySelector('.mc-gd-panel');
-            const valSpan = trigger.querySelector('.mc-gd-val');
-            const clearBtn= trigger.querySelector('.mc-gd-clear');
-            const search  = panel?.querySelector('.mc-gd-search');
-            const grid    = panel?.querySelector('.mc-gd-grid');
-            const hidden  = wrap.querySelector('input[type="hidden"]');
-            let disabled  = trigger.classList.contains('mc-gd-disabled');
+    /* ── makeGridDropdown ─────────────────────────── */
+    function makeGridDropdown(wrap) {
+        const trigger = wrap.querySelector('.mc-gd-trigger');
+        const panel   = wrap.querySelector('.mc-gd-panel');
+        const valSpan = trigger.querySelector('.mc-gd-val');
+        const clearBtn= trigger.querySelector('.mc-gd-clear');
+        const search  = panel?.querySelector('.mc-gd-search');
+        const grid    = panel?.querySelector('.mc-gd-grid');
+        const hidden  = wrap.querySelector('input[type="hidden"]');
+        let disabled  = trigger.classList.contains('mc-gd-disabled');
 
-            valSpan.dataset.placeholder = valSpan.textContent.trim();
+        valSpan.dataset.placeholder = valSpan.textContent.trim();
 
-            // if hidden already has a value on page load, show label
-            if (hidden?.value) {
-                const pre = grid?.querySelector(`.mc-gd-item[data-value="${hidden.value}"]`);
-                if (pre) { valSpan.textContent = pre.dataset.label; valSpan.classList.remove('text-muted'); trigger.classList.add('has-value'); pre.classList.add('selected'); }
-            }
-
-            function close() {
-                trigger.classList.remove('open');
-                panel?.classList.remove('open');
-                if (search) search.value = '';
-                filterItems('');
-            }
-            function open() {
-                if (disabled) return;
-                document.querySelectorAll('.mc-gd-panel.open').forEach(p => {
-                    if (p !== panel) { p.classList.remove('open'); p.closest('.mc-gd-wrap')?.querySelector('.mc-gd-trigger')?.classList.remove('open'); }
-                });
-                trigger.classList.add('open');
-                panel?.classList.add('open');
-                if (search) setTimeout(() => search.focus(), 60);
-            }
-            function filterItems(q) {
-                if (!grid) return;
-                const lq = q.toLowerCase();
-                grid.querySelectorAll('.mc-gd-item').forEach(el => { el.style.display = el.dataset.label.toLowerCase().includes(lq) ? '' : 'none'; });
-                const any = [...grid.querySelectorAll('.mc-gd-item')].some(e => e.style.display !== 'none');
-                let empty = grid.querySelector('.mc-gd-empty');
-                if (!any) {
-                    if (!empty) { empty = document.createElement('div'); empty.className = 'mc-gd-empty'; empty.textContent = 'Không tìm thấy'; grid.appendChild(empty); }
-                    empty.style.display = '';
-                } else if (empty) { empty.style.display = 'none'; }
-            }
-            function selectItem(value, label) {
-                grid?.querySelectorAll('.mc-gd-item').forEach(el => el.classList.toggle('selected', el.dataset.value === String(value)));
-                if (hidden) hidden.value = value || '';
-                if (value) { valSpan.textContent = label; valSpan.classList.remove('text-muted'); trigger.classList.add('has-value'); }
-                else { valSpan.textContent = valSpan.dataset.placeholder; valSpan.classList.add('text-muted'); trigger.classList.remove('has-value'); }
-                close();
-                wrap.dispatchEvent(new CustomEvent('gd:change', { detail: { value, label }, bubbles: true }));
-            }
-
-            trigger.addEventListener('click', e => {
-                if (e.target.closest('.mc-gd-clear')) { e.stopPropagation(); selectItem('', ''); return; }
-                trigger.classList.contains('open') ? close() : open();
-            });
-            trigger.addEventListener('keydown', e => {
-                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); trigger.classList.contains('open') ? close() : open(); }
-                if (e.key === 'Escape') close();
-            });
-            if (search) {
-                search.addEventListener('input', () => filterItems(search.value));
-                search.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
-            }
-            if (grid) {
-                grid.addEventListener('click', e => { const item = e.target.closest('.mc-gd-item'); if (item) selectItem(item.dataset.value, item.dataset.label); });
-            }
-            document.addEventListener('click', e => { if (!wrap.contains(e.target)) close(); });
-
-            return {
-                getValue()         { return hidden?.value || ''; },
-                setValue(v, l)     { selectItem(v, l); },
-                clearValue()       { selectItem('', ''); },
-                setItems(items) {
-                    if (!grid) return;
-                    grid.querySelectorAll('.mc-gd-item,.mc-gd-empty').forEach(el => el.remove());
-                    items.forEach(item => {
-                        const el = document.createElement('div');
-                        el.className = 'mc-gd-item'; el.dataset.value = item.id; el.dataset.label = item.name; el.textContent = item.name;
-                        grid.appendChild(el);
-                    });
-                },
-                disable() { disabled=true; trigger.classList.add('mc-gd-disabled'); trigger.style.opacity='.5'; trigger.style.pointerEvents='none'; close(); },
-                enable()  { disabled=false; trigger.classList.remove('mc-gd-disabled'); trigger.style.opacity=''; trigger.style.pointerEvents=''; },
-            };
+        if (hidden?.value) {
+            const pre = grid?.querySelector(`.mc-gd-item[data-value="${hidden.value}"]`);
+            if (pre) { valSpan.textContent = pre.dataset.label; valSpan.classList.remove('text-muted'); trigger.classList.add('has-value'); pre.classList.add('selected'); }
         }
 
-        /* ── init province & ward grid dropdowns ──────────── */
-        const provGd = makeGridDropdown(document.getElementById('province-gd-wrap'));
-        const wardGd = makeGridDropdown(document.getElementById('ward-gd-wrap'));
-        wardGd.disable();
+        function close() {
+            trigger.classList.remove('open'); panel?.classList.remove('open');
+            if (search) { search.value = ''; filterItems(''); }
+        }
+        function open() {
+            if (disabled) return;
+            document.querySelectorAll('.mc-gd-panel.open').forEach(p => {
+                if (p !== panel) { p.classList.remove('open'); p.closest('.mc-gd-wrap')?.querySelector('.mc-gd-trigger')?.classList.remove('open'); }
+            });
+            trigger.classList.add('open'); panel?.classList.add('open');
+            if (search) setTimeout(() => search.focus(), 60);
+        }
+        function filterItems(q) {
+            if (!grid) return;
+            const lq = q.toLowerCase();
+            grid.querySelectorAll('.mc-gd-item').forEach(el => { el.style.display = el.dataset.label.toLowerCase().includes(lq) ? '' : 'none'; });
+            const any = [...grid.querySelectorAll('.mc-gd-item')].some(e => e.style.display !== 'none');
+            let empty = grid.querySelector('.mc-gd-empty');
+            if (!any) {
+                if (!empty) { empty = document.createElement('div'); empty.className = 'mc-gd-empty'; empty.textContent = 'Không tìm thấy'; grid.appendChild(empty); }
+                empty.style.display = '';
+            } else if (empty) { empty.style.display = 'none'; }
+        }
+        function selectItem(value, label) {
+            grid?.querySelectorAll('.mc-gd-item').forEach(el => el.classList.toggle('selected', el.dataset.value === String(value)));
+            if (hidden) hidden.value = value || '';
+            if (value) { valSpan.textContent = label; valSpan.classList.remove('text-muted'); trigger.classList.add('has-value'); }
+            else { valSpan.textContent = valSpan.dataset.placeholder; valSpan.classList.add('text-muted'); trigger.classList.remove('has-value'); }
+            close();
+            wrap.dispatchEvent(new CustomEvent('gd:change', { detail: { value, label }, bubbles: true }));
+        }
 
-        const selectedProvince = '{{ $selectedProvinceId }}';
-        const selectedWard     = '{{ $selectedWardId }}';
-
-        document.getElementById('province-gd-wrap').addEventListener('gd:change', e => {
-            wardGd.clearValue();
-            wardGd.setItems([]);
-            if (e.detail.value) {
-                wardGd.disable();
-                fetch(wardsApiUrl + '?province_id=' + e.detail.value)
-                    .then(r => r.json())
-                    .then(wards => { wardGd.setItems(wards); wardGd.enable(); })
-                    .catch(() => {});
-            } else {
-                wardGd.disable();
-            }
+        trigger.addEventListener('click', e => {
+            if (e.target.closest('.mc-gd-clear')) { e.stopPropagation(); selectItem('', ''); return; }
+            trigger.classList.contains('open') ? close() : open();
         });
+        trigger.addEventListener('keydown', e => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); trigger.classList.contains('open') ? close() : open(); }
+            if (e.key === 'Escape') close();
+        });
+        if (search) {
+            search.addEventListener('input', () => filterItems(search.value));
+            search.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+        }
+        if (grid) grid.addEventListener('click', e => { const item = e.target.closest('.mc-gd-item'); if (item) selectItem(item.dataset.value, item.dataset.label); });
+        document.addEventListener('click', e => { if (!wrap.contains(e.target)) close(); });
 
-        // load wards for pre-selected province on page load
-        if (selectedProvince) {
+        return {
+            getValue()      { return hidden?.value || ''; },
+            setValue(v, l)  { selectItem(v, l); },
+            clearValue()    { selectItem('', ''); },
+            setItems(items) {
+                if (!grid) return;
+                grid.querySelectorAll('.mc-gd-item,.mc-gd-empty').forEach(el => el.remove());
+                items.forEach(item => {
+                    const el = document.createElement('div');
+                    el.className = 'mc-gd-item'; el.dataset.value = item.id; el.dataset.label = item.name; el.textContent = item.name;
+                    grid.appendChild(el);
+                });
+            },
+            disable() { disabled=true; trigger.classList.add('mc-gd-disabled'); trigger.style.opacity='.5'; trigger.style.pointerEvents='none'; close(); },
+            enable()  { disabled=false; trigger.classList.remove('mc-gd-disabled'); trigger.style.opacity=''; trigger.style.pointerEvents=''; },
+        };
+    }
+
+    /* ── Province / Ward ── */
+    const provGd = makeGridDropdown(document.getElementById('province-gd-wrap'));
+    const wardGd = makeGridDropdown(document.getElementById('ward-gd-wrap'));
+    wardGd.disable();
+
+    const selectedProvince = '{{ $selectedProvinceId }}';
+    const selectedWard     = '{{ $selectedWardId }}';
+
+    document.getElementById('province-gd-wrap').addEventListener('gd:change', e => {
+        wardGd.clearValue(); wardGd.setItems([]);
+        if (e.detail.value) {
             wardGd.disable();
-            fetch(wardsApiUrl + '?province_id=' + selectedProvince)
+            fetch(wardsApiUrl + '?province_id=' + e.detail.value)
                 .then(r => r.json())
-                .then(wards => {
-                    wardGd.setItems(wards);
-                    wardGd.enable();
-                    if (selectedWard) {
-                        const item = document.querySelector(`#ward-gd-grid .mc-gd-item[data-value="${selectedWard}"]`);
-                        if (item) wardGd.setValue(item.dataset.value, item.dataset.label);
-                    }
-                })
+                .then(wards => { wardGd.setItems(wards); wardGd.enable(); })
                 .catch(() => {});
-        }
-
-        /* ── truck section toggle ────────────────────────── */
-        function toggleTruckSection() {
-            truckSection.style.display = useTruckSelect.value === '1' ? '' : 'none';
-        }
-        useTruckSelect.addEventListener('change', toggleTruckSection);
-        toggleTruckSection();
+        } else { wardGd.disable(); }
     });
+
+    if (selectedProvince) {
+        wardGd.disable();
+        fetch(wardsApiUrl + '?province_id=' + selectedProvince)
+            .then(r => r.json())
+            .then(wards => {
+                wardGd.setItems(wards);
+                wardGd.enable();
+                if (selectedWard) {
+                    const item = document.querySelector(`#ward-gd-grid .mc-gd-item[data-value="${selectedWard}"]`);
+                    if (item) wardGd.setValue(item.dataset.value, item.dataset.label);
+                }
+            })
+            .catch(() => {});
+    }
+
+    /* ── Truck station AJAX ── */
+    const btnLoadTrucks      = document.getElementById('btn-load-trucks');
+    const truckLoadStatus    = document.getElementById('truck-load-status');
+    const truckSearchArea    = document.getElementById('truck-search-area');
+    const truckDetailSection = document.getElementById('truck-detail-section');
+    const truckTbody         = document.getElementById('truck-station-tbody');
+    const truckSearchName    = document.getElementById('truck-search-name');
+    const truckSearchDest    = document.getElementById('truck-search-dest');
+    const truckStationIdInput= document.getElementById('truck_station_id');
+    const useTruckHidden     = document.getElementById('use_truck_station_hidden');
+    const btnClearTruck      = document.getElementById('btn-clear-truck');
+    const truckSelectedLabel = document.getElementById('truck-selected-label');
+
+    let allTruckStations = @json($truckStations ?? []);
+    let trucksLoaded = false;
+
+    function renderTrucks(stations) {
+        if (!stations.length) {
+            truckTbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">Không có nhà xe phù hợp.</td></tr>';
+            return;
+        }
+        const selectedId = truckStationIdInput.value;
+        truckTbody.innerHTML = stations.map(s => {
+            const dest     = s.province ? s.province.name : (s.province_id || '');
+            const selected = String(s.id) === String(selectedId) ? 'selected-station' : '';
+            const icon     = selected ? 'check-circle-fill text-primary' : 'circle text-muted';
+            return `<tr class="${selected}" data-id="${s.id}" data-name="${s.name}" data-dest="${dest}">
+                <td class="text-center"><i class="bi bi-${icon}"></i></td>
+                <td>${s.name}</td>
+                <td>${dest}</td>
+                <td class="text-muted" style="font-size:0.8rem;">${s.ward ? s.ward.name : ''}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    function filterTrucks() {
+        const q1 = truckSearchName.value.toLowerCase();
+        const q2 = truckSearchDest.value.toLowerCase();
+        renderTrucks(allTruckStations.filter(s => {
+            const dest = s.province ? s.province.name.toLowerCase() : '';
+            return s.name.toLowerCase().includes(q1) && dest.includes(q2);
+        }));
+    }
+
+    btnLoadTrucks.addEventListener('click', function () {
+        if (trucksLoaded) { truckSearchArea.style.display = truckSearchArea.style.display === 'none' ? '' : 'none'; return; }
+        truckLoadStatus.textContent = 'Đang tải...';
+        btnLoadTrucks.disabled = true;
+        fetch(`{{ route('pages.my_truck_stations.ajax') }}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(r => r.json())
+            .then(data => {
+                allTruckStations = Array.isArray(data) ? data : (data.data || data.stations || allTruckStations);
+                trucksLoaded = true; btnLoadTrucks.disabled = false;
+                truckLoadStatus.textContent = `Đã tải ${allTruckStations.length} nhà xe.`;
+                renderTrucks(allTruckStations);
+                truckSearchArea.style.display = '';
+            })
+            .catch(() => {
+                trucksLoaded = true; btnLoadTrucks.disabled = false;
+                truckLoadStatus.textContent = `Hiển thị ${allTruckStations.length} nhà xe.`;
+                renderTrucks(allTruckStations);
+                truckSearchArea.style.display = '';
+            });
+    });
+
+    truckSearchName.addEventListener('input', filterTrucks);
+    truckSearchDest.addEventListener('input', filterTrucks);
+
+    truckTbody.addEventListener('click', function (e) {
+        const row = e.target.closest('tr[data-id]');
+        if (!row) return;
+        truckTbody.querySelectorAll('tr').forEach(r => {
+            r.classList.remove('selected-station');
+            const ico = r.querySelector('i'); if (ico) ico.className = 'bi bi-circle text-muted';
+        });
+        row.classList.add('selected-station');
+        const ico = row.querySelector('i'); if (ico) ico.className = 'bi bi-check-circle-fill text-primary';
+        truckStationIdInput.value = row.dataset.id;
+        useTruckHidden.value = '1';
+        truckSelectedLabel.innerHTML = `<i class="bi bi-check-circle-fill text-primary me-1"></i>Đã chọn: <strong>${row.dataset.name}</strong>`;
+        truckDetailSection.style.display = '';
+    });
+
+    btnClearTruck.addEventListener('click', function () {
+        truckStationIdInput.value = '';
+        useTruckHidden.value = '0';
+        truckSelectedLabel.textContent = 'Chưa chọn nhà xe.';
+        truckDetailSection.style.display = 'none';
+        truckTbody.querySelectorAll('tr').forEach(r => {
+            r.classList.remove('selected-station');
+            const ico = r.querySelector('i'); if (ico) ico.className = 'bi bi-circle text-muted';
+        });
+    });
+
+    // Pre-select truck if customer already has one
+    if (truckStationIdInput.value) {
+        useTruckHidden.value = '1';
+        truckDetailSection.style.display = '';
+        const found = allTruckStations.find(s => String(s.id) === String(truckStationIdInput.value));
+        if (found) truckSelectedLabel.innerHTML = `<i class="bi bi-check-circle-fill text-primary me-1"></i>Đã chọn: <strong>${found.name}</strong>`;
+    }
+
+    /* ── Dynamic product rows ── */
+    const extraRows  = document.getElementById('extra-product-rows');
+    const btnAddProd = document.getElementById('btn-add-product');
+    let productIndex = 0;
+
+    btnAddProd.addEventListener('click', function () {
+        const idx = productIndex++;
+        const row = document.createElement('div');
+        row.className = 'product-row';
+        row.innerHTML = `
+            <button type="button" class="remove-product-row" title="Xóa dòng"><i class="bi bi-x-lg"></i></button>
+            <div class="mb-2 text-secondary" style="font-size:0.85rem;font-weight:600;">
+                <i class="bi bi-box-seam me-1"></i> Sản phẩm ${idx + 2}
+            </div>
+            <div class="row g-2">
+                <div class="col-12 col-md-4">
+                    <label class="form-label mc-form-label" style="font-size:0.82rem;">Tên sản phẩm</label>
+                    <input type="text" class="form-control mc-form-control" name="products[${idx}][name]" placeholder="VD: Gà Tam Hoàng">
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label mc-form-label" style="font-size:0.82rem;">Size</label>
+                    <input type="text" class="form-control mc-form-control" name="products[${idx}][size]" placeholder="VD: 1.2kg">
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label mc-form-label" style="font-size:0.82rem;">Sản lượng</label>
+                    <input type="text" class="form-control mc-form-control" name="products[${idx}][production]" placeholder="VD: 120 con">
+                </div>
+                <div class="col-12 col-md-2">
+                    <label class="form-label mc-form-label" style="font-size:0.82rem;">Giờ giao</label>
+                    <input type="text" class="form-control mc-form-control" name="products[${idx}][delivery_time]" placeholder="VD: 8h-10h">
+                </div>
+                <div class="col-12 col-md-2">
+                    <label class="form-label mc-form-label" style="font-size:0.82rem;">Ghi chú</label>
+                    <input type="text" class="form-control mc-form-control" name="products[${idx}][note]" placeholder="Yêu cầu thêm...">
+                </div>
+            </div>`;
+        row.querySelector('.remove-product-row').addEventListener('click', () => row.remove());
+        extraRows.appendChild(row);
+    });
+});
 </script>
 @endpush
 
 @endsection
-

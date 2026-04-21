@@ -201,6 +201,30 @@
 								<span>Quản lý tỉnh/thành và phường/xã</span>
 							</a>
 						</li>
+
+						{{-- Truck Management --}}
+						<li class="nav-item-header">
+							<div class="text-uppercase fs-sm lh-sm opacity-50 sidebar-resize-hide">Nhà xe</div>
+							<i class="ph-dots-three sidebar-resize-show"></i>
+						</li>
+						<li class="nav-item">
+							<a href="{{ route('admin.truck-brands.index') }}" class="nav-link{{ request()->routeIs('admin.truck-brands.*') ? ' active' : '' }}">
+								<i class="ph-buildings"></i>
+								<span>Nhà xe (Brands)</span>
+							</a>
+						</li>
+						<li class="nav-item">
+							<a href="{{ route('admin.truck-stations.index') }}" class="nav-link{{ request()->routeIs('admin.truck-stations.*') ? ' active' : '' }}">
+								<i class="ph-map-pin"></i>
+								<span>Quản lý Trạm xe</span>
+							</a>
+						</li>
+						<li class="nav-item">
+							<a href="{{ route('admin.truck-routes.index') }}" class="nav-link{{ request()->routeIs('admin.truck-routes.*') ? ' active' : '' }}">
+								<i class="ph-path"></i>
+								<span>Quản lý Tuyến đi</span>
+							</a>
+						</li>
 						<li class="nav-item ">
 							<a href="{{ route('teams.index') }}" class="nav-link{{ request()->routeIs('teams.*') ? ' active' : '' }}">
 								<i class="ph-users-three"></i>

@@ -80,7 +80,7 @@ class ProvinceController extends Controller
     public function storeWard(Request $request, Province $province)
     {
         $validated = $request->validateWithBag('storeWard', [
-            'name' => 'nullable|string|max:255',
+            'name'  => 'nullable|string|max:255',
             'wards' => 'nullable|string',
         ]);
 
@@ -96,6 +96,9 @@ class ProvinceController extends Controller
             ->unique();
 
         if ($names->isEmpty()) {
+            if ($request->expectsJson()) {
+                return response()->json(['error' => 'Vui lòng nhập ít nhất 1 phường/xã.'], 422);
+            }
             return back()
                 ->withErrors(['wards' => 'Vui lòng nhập ít nhất 1 phường/xã.'], 'storeWard')
                 ->withInput();
@@ -107,21 +110,32 @@ class ProvinceController extends Controller
             ->map(fn ($name) => mb_strtolower(trim((string) $name)))
             ->all();
 
-        $added = 0;
+        $added   = 0;
+        $created = [];
 
         foreach ($names as $name) {
             if (in_array(mb_strtolower($name), $existingNames, true)) {
                 continue;
             }
 
-            $province->wards()->create([
+            $ward = $province->wards()->create([
                 'name' => $name,
                 'code' => $this->generateUniqueCode($name, Ward::class),
                 'type' => 'Phường/Xã',
             ]);
 
             $existingNames[] = mb_strtolower($name);
+            $created[]       = ['id' => $ward->id, 'name' => $ward->name];
             $added++;
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'added'   => $added,
+                'wards'   => $created,
+                'message' => $added > 0 ? "Đã thêm {$added} phường/xã." : 'Không có phường/xã mới (trùng tên).',
+            ]);
         }
 
         if ($added === 0) {
@@ -133,12 +147,27 @@ class ProvinceController extends Controller
             ->with('success', "Đã thêm {$added} phường/xã mới.");
     }
 
+    public function indexWards(Request $request, Province $province)
+    {
+        $q     = $request->input('q', '');
+        $wards = $province->wards()
+            ->when($q, fn ($query) => $query->where('name', 'like', "%{$q}%"))
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        return response()->json([
+            'province' => ['id' => $province->id, 'name' => $province->name],
+            'wards'    => $wards,
+            'total'    => $wards->count(),
+        ]);
+    }
+
     public function updateWard(Request $request, Province $province, Ward $ward)
     {
         abort_unless($ward->province_id === $province->id, 404);
 
         $validated = $request->validateWithBag('updateWard', [
-            'name' => 'required|string|max:255',
+            'name'    => 'required|string|max:255',
             'ward_id' => 'required|integer',
         ]);
 
@@ -146,14 +175,22 @@ class ProvinceController extends Controller
 
         $ward->update(['name' => $validated['name']]);
 
+        if ($request->expectsJson()) {
+            return response()->json(['success' => true, 'ward' => ['id' => $ward->id, 'name' => $ward->name]]);
+        }
+
         return redirect()->route('provinces.show', $province)->with('success', 'Đã cập nhật phường/xã.');
     }
 
-    public function destroyWard(Province $province, Ward $ward)
+    public function destroyWard(Request $request, Province $province, Ward $ward)
     {
         abort_unless($ward->province_id === $province->id, 404);
 
         $ward->delete();
+
+        if ($request->expectsJson()) {
+            return response()->json(['success' => true]);
+        }
 
         return redirect()->route('provinces.show', $province)->with('success', 'Đã xóa phường/xã.');
     }

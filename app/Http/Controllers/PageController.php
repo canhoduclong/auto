@@ -1887,6 +1887,75 @@ class PageController extends Controller
         ]);
     }
 
+    public function myCustomerCheckDuplicate(Request $request)
+    {
+        $name  = trim($request->input('name', ''));
+        $email = trim($request->input('email', ''));
+        $phone = trim($request->input('phone', ''));
+
+        $hasNamePhone = $name !== '' && $phone !== '';
+        $hasEmail     = $email !== '';
+
+        if (!$hasNamePhone && !$hasEmail) {
+            return response()->json(['duplicate' => false]);
+        }
+
+        $duplicate    = null;
+        $matchReason  = null;
+
+        // Check name + phone first
+        if ($hasNamePhone) {
+            $duplicate = \App\Models\Customer::query()
+                ->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])
+                ->where('phone', $phone)
+                ->with('user:id,name')
+                ->first(['id', 'name', 'phone', 'email', 'user_id', 'created_at']);
+
+            if ($duplicate) {
+                $matchReason = 'name_phone';
+            }
+        }
+
+        // Check email (independently)
+        if ($hasEmail) {
+            $byEmail = \App\Models\Customer::query()
+                ->whereRaw('LOWER(email) = ?', [mb_strtolower($email)])
+                ->with('user:id,name')
+                ->first(['id', 'name', 'phone', 'email', 'user_id', 'created_at']);
+
+            if ($byEmail) {
+                if ($duplicate && $duplicate->id === $byEmail->id) {
+                    $matchReason = 'both';
+                } elseif (!$duplicate) {
+                    $duplicate   = $byEmail;
+                    $matchReason = 'email';
+                }
+                // if different customers match by different criteria, email takes precedence for display
+                // but keep name_phone match – show first found
+            }
+        }
+
+        if (!$duplicate) {
+            return response()->json(['duplicate' => false]);
+        }
+
+        $saleName  = $duplicate->user?->name ?? 'Không rõ';
+        $createdAt = $duplicate->created_at
+            ? $duplicate->created_at->format('d/m/Y H:i')
+            : '';
+
+        return response()->json([
+            'duplicate'    => true,
+            'match_reason' => $matchReason,
+            'id'           => $duplicate->id,
+            'name'         => $duplicate->name,
+            'phone'        => $duplicate->phone,
+            'email'        => $duplicate->email,
+            'sale'         => $saleName,
+            'created_at'   => $createdAt,
+        ]);
+    }
+
     private function ensureManagedCustomer(Customer $customer): void
     {
         $user = auth()->user();
