@@ -5,6 +5,8 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Setting;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
  
 
 class SettingController extends Controller
@@ -27,8 +29,190 @@ class SettingController extends Controller
 
         $pushHistory = $this->readPushHistory();
         $showPushFeature = !$this->isRestrictedPushDomain(request()->getHost());
+        $resetGroups = $this->dataResetGroups();
+        $resettableTables = $this->getResettableTables();
 
-        return view('admin.settings.index', compact('settings', 'pushHistory', 'showPushFeature'));
+        return view('admin.settings.index', compact('settings', 'pushHistory', 'showPushFeature', 'resetGroups', 'resettableTables'));
+    }
+
+    public function resetData(Request $request)
+    {
+        $user = $request->user();
+        if (!$user || !$user->hasRole('admin')) {
+            abort(403, 'Bạn không có quyền reset dữ liệu.');
+        }
+
+        $validated = $request->validate([
+            'key' => ['required', 'string'],
+            'mode' => ['required', 'in:groups,tables'],
+            'groups' => ['nullable', 'array'],
+            'groups.*' => ['string'],
+            'tables' => ['nullable', 'array'],
+            'tables.*' => ['string'],
+            'confirm_text' => ['required', 'string'],
+        ]);
+
+        if ((string) $validated['key'] !== 'huy2024') {
+            return back()->with('error', 'Sai key xác nhận reset dữ liệu.');
+        }
+
+        if (strtoupper(trim((string) $validated['confirm_text'])) !== 'RESET') {
+            return back()->with('error', 'Bạn phải nhập đúng từ khóa RESET để xác nhận.');
+        }
+
+        $allowedTables = $this->getResettableTables();
+        $groupMap = $this->dataResetGroups();
+
+        $targetTables = [];
+        if ($validated['mode'] === 'groups') {
+            $selectedGroups = array_values(array_unique($validated['groups'] ?? []));
+            foreach ($selectedGroups as $groupKey) {
+                if (!array_key_exists($groupKey, $groupMap)) {
+                    continue;
+                }
+                $targetTables = array_merge($targetTables, $groupMap[$groupKey]['tables']);
+            }
+        } else {
+            $targetTables = array_values(array_unique($validated['tables'] ?? []));
+        }
+
+        $targetTables = array_values(array_intersect(array_unique($targetTables), $allowedTables));
+
+        if (empty($targetTables)) {
+            return back()->with('error', 'Không có bảng hợp lệ để làm mới dữ liệu.');
+        }
+
+        $stats = [];
+
+        DB::beginTransaction();
+        try {
+            $driver = DB::getDriverName();
+            if ($driver === 'mysql') {
+                DB::statement('SET FOREIGN_KEY_CHECKS=0');
+            }
+            if ($driver === 'sqlite') {
+                DB::statement('PRAGMA foreign_keys = OFF');
+            }
+
+            foreach ($targetTables as $table) {
+                $rows = (int) DB::table($table)->count();
+                DB::table($table)->delete();
+
+                if ($driver === 'mysql') {
+                    DB::statement('ALTER TABLE `' . str_replace('`', '``', $table) . '` AUTO_INCREMENT = 1');
+                }
+                if ($driver === 'sqlite') {
+                    DB::statement("DELETE FROM sqlite_sequence WHERE name = '" . str_replace("'", "''", $table) . "'");
+                }
+
+                $stats[] = [
+                    'table' => $table,
+                    'rows' => $rows,
+                ];
+            }
+
+            if ($driver === 'mysql') {
+                DB::statement('SET FOREIGN_KEY_CHECKS=1');
+            }
+            if ($driver === 'sqlite') {
+                DB::statement('PRAGMA foreign_keys = ON');
+            }
+
+            DB::commit();
+        } catch (\Throwable $e) {
+            DB::rollBack();
+
+            $driver = DB::getDriverName();
+            if ($driver === 'mysql') {
+                @DB::statement('SET FOREIGN_KEY_CHECKS=1');
+            }
+            if ($driver === 'sqlite') {
+                @DB::statement('PRAGMA foreign_keys = ON');
+            }
+
+            return back()->with('error', 'Reset dữ liệu thất bại: ' . $e->getMessage());
+        }
+
+        $totalRows = array_sum(array_map(fn ($row) => (int) ($row['rows'] ?? 0), $stats));
+
+        return back()->with('success', 'Đã làm mới ' . count($stats) . ' bảng, tổng ' . number_format($totalRows) . ' bản ghi.')
+            ->with('reset_result', $stats);
+    }
+
+    private function dataResetGroups(): array
+    {
+        return [
+            'orders' => [
+                'label' => 'Đơn hàng',
+                'tables' => ['orders', 'order_items', 'order_histories', 'order_approvals', 'approval_orders'],
+            ],
+            'inventory' => [
+                'label' => 'Tồn kho',
+                'tables' => [
+                    'inventories',
+                    'inventory_adjustments',
+                    'inventory_documents',
+                    'inventory_document_items',
+                    'inventory_document_edits',
+                    'inventory_movements',
+                    'inventory_reservations',
+                    'goods_receipts',
+                    'purchase_orders',
+                ],
+            ],
+            'transactions' => [
+                'label' => 'Giao dịch',
+                'tables' => [
+                    'transactions',
+                    'accounting_customer_commissions',
+                    'accounting_customer_discounts',
+                    'accounting_supplier_payables',
+                ],
+            ],
+            'returns' => [
+                'label' => 'Trả hàng',
+                'tables' => ['order_returns', 'return_items'],
+            ],
+            'appointments' => [
+                'label' => 'Cuộc hẹn',
+                'tables' => ['customer_reminders'],
+            ],
+            'tasks' => [
+                'label' => 'Giao việc',
+                'tables' => ['tasks'],
+            ],
+            'reports' => [
+                'label' => 'Báo cáo',
+                'tables' => ['admin_events', 'customer_care_logs'],
+            ],
+        ];
+    }
+
+    private function getResettableTables(): array
+    {
+        $existing = Schema::getTableListing();
+        $protectedTables = [
+            'users',
+            'roles',
+            'permissions',
+            'role_user',
+            'role_permission',
+            'permission_role',
+            'settings',
+            'sessions',
+            'cache',
+            'cache_locks',
+            'jobs',
+            'job_batches',
+            'failed_jobs',
+            'password_reset_tokens',
+            'teams',
+        ];
+
+        $tables = array_values(array_diff($existing, $protectedTables));
+        sort($tables);
+
+        return $tables;
     }
 
     public function update(Request $request)
