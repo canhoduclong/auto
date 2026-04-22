@@ -95,7 +95,18 @@
                 <label class="form-label small fw-600 mb-1">Đến ngày</label>
                 <input type="date" name="to_date"   class="form-control form-control-sm" value="{{ $to }}">
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
+                <label class="form-label small fw-600 mb-1">Nhà cung cấp</label>
+                <select name="supplier_id" class="form-select form-select-sm">
+                    <option value="">-- Tất cả --</option>
+                    @foreach($suppliers as $sup)
+                        <option value="{{ $sup->id }}" {{ (string) $supplierId === (string) $sup->id ? 'selected' : '' }}>
+                            {{ $sup->name }}
+                        </option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="col-md-3">
                 <button type="submit" class="btn btn-primary btn-sm me-1"><i class="bi bi-search me-1"></i>Lọc</button>
                 <a href="{{ route('warehouse.stock-in') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-clockwise"></i></a>
             </div>
@@ -112,6 +123,7 @@
                 <th>Mã Phiếu</th>
                 <th>Ngày Nhập</th>
                 <th>Kho</th>
+                <th>Nhà cung cấp</th>
                 <th>Người Tạo Phiếu</th>
                 <th class="text-center">Số Dòng</th>
                 <th class="text-end">Tổng SL</th>
@@ -127,6 +139,7 @@
                 <td><span class="doc-code">{{ $doc->document_number ?? '#'.$doc->id }}</span></td>
                 <td>{{ $doc->document_date->format('d/m/Y') }}</td>
                 <td>{{ $doc->warehouse->name ?? '—' }}</td>
+                <td>{{ $doc->supplier?->name ?? '—' }}</td>
                 <td>
                     <div class="doc-user">
                         <div class="doc-avatar">{{ strtoupper(substr($doc->user?->name ?? 'U', 0, 1)) }}</div>
@@ -157,7 +170,11 @@
                             <i class="bi bi-eye"></i>
                         </a>
                         @php $editsLeft = $maxEdits - (int)$doc->edit_count; @endphp
-                        @if($editsLeft > 0)
+                        @if(!\Carbon\Carbon::parse($doc->document_date)->isToday())
+                            <button class="btn btn-sm btn-outline-secondary" disabled title="Chỉ được điều chỉnh phiếu trong ngày hôm nay">
+                                <i class="bi bi-calendar-x"></i>
+                            </button>
+                        @elseif($editsLeft > 0)
                             <button type="button" class="btn btn-sm btn-outline-warning btn-edit-doc"
                                     data-doc-id="{{ $doc->id }}"
                                     data-edit-url="{{ route('warehouse.stock-in.edit', $doc) }}"
@@ -217,6 +234,17 @@
                                 @foreach($warehouses as $wh)
                                     <option value="{{ $wh->id }}" {{ old('warehouse_id', $warehouses->count() === 1 ? $wh->id : '') == $wh->id ? 'selected' : '' }}>
                                         {{ $wh->name }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-600 small">Nhà cung cấp <span class="text-danger">*</span></label>
+                            <select name="supplier_id" class="form-select" required>
+                                <option value="">-- Chọn nhà cung cấp --</option>
+                                @foreach($suppliers as $sup)
+                                    <option value="{{ $sup->id }}" {{ old('supplier_id') == $sup->id ? 'selected' : '' }}>
+                                        {{ $sup->name }}
                                     </option>
                                 @endforeach
                             </select>

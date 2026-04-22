@@ -380,6 +380,7 @@ Route::middleware(['auth'])->group(function () {
         Route::resource('post-categories', PostCategoryController::class);
         Route::resource('pages', PageController::class);
         Route::resource('brands', \App\Http\Controllers\BrandController::class);
+        Route::resource('suppliers', \App\Http\Controllers\Admin\SupplierController::class)->only(['index', 'store', 'update', 'destroy']);
 
         // Truck management
         Route::get('truck-brands/{truckBrand}/routes', [\App\Http\Controllers\Admin\TruckBrandController::class, 'routes'])->name('truck-brands.routes');

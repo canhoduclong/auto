@@ -96,67 +96,6 @@ class WarehouseDashboardController extends Controller
     }
 
     /**
-     * Ráp Đơn Hàng: compute FIFO stock guards for a given date and persist
-     * daily_sequence, stock_sufficient, stock_shortage_detail on each order.
-     */
-    public function rapDonHang(Request $request)
-    {
-        $forDate = $request->filled('date')
-            ? Carbon::parse($request->input('date'))->toDateString()
-            : Carbon::today()->toDateString();
-
-        $managedWarehouseId = Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
-
-        $queueStatuses = array_merge(self::READY_TO_PACK_STATUSES, [Order::STATUS_PACKING]);
-
-        // Load all queued orders for that date (FIFO: oldest first)
-        $allQueueOrders = Order::with(['items.variant'])
-            ->whereIn('status', $queueStatuses)
-            ->whereDate('created_at', $forDate)
-            ->orderBy('created_at', 'asc')
-            ->orderBy('id', 'asc')
-            ->get();
-
-        if ($allQueueOrders->isEmpty()) {
-            if ($request->expectsJson()) {
-                return response()->json(['ok' => true, 'message' => 'Không có đơn nào trong hàng đợi để ráp.', 'updated' => 0]);
-            }
-            return back()->with('info', 'Không có đơn nào trong hàng đợi để ráp.');
-        }
-
-        $result = $this->buildPackingQueueStockGuards($allQueueOrders, $managedWarehouseId, $forDate);
-        $guards = $result['guards'];
-
-        $sequence = 0;
-        foreach ($allQueueOrders as $order) {
-            $sequence++;
-            $guard = $guards[$order->id] ?? ['has_shortage' => false, 'can_start_packing' => true, 'shortages' => []];
-            $hasShortage = (bool) ($guard['has_shortage'] ?? false);
-            $shortages   = $guard['shortages'] ?? [];
-
-            $order->update([
-                'daily_sequence'       => $sequence,
-                'stock_sufficient'     => $hasShortage ? 0 : 1,
-                'stock_shortage_detail'=> $hasShortage ? $shortages : null,
-            ]);
-        }
-
-        $totalUpdated = $allQueueOrders->count();
-        $shortCount   = collect($guards)->where('has_shortage', true)->count();
-
-        if ($request->expectsJson()) {
-            return response()->json([
-                'ok'      => true,
-                'message' => "Đã ráp {$totalUpdated} đơn. Thiếu hàng: {$shortCount} đơn.",
-                'updated' => $totalUpdated,
-                'short'   => $shortCount,
-            ]);
-        }
-
-        return back()->with('success', "Đã ráp {$totalUpdated} đơn. Thiếu hàng: {$shortCount} đơn.");
-    }
-
-    /**
      * List orders awaiting packing or currently being packed.
      */
     public function orders(Request $request)
@@ -564,6 +503,51 @@ class WarehouseDashboardController extends Controller
         }
 
         return $result;
+    }
+
+    /**
+     * Re-run Ráp đơn hàng for ALL dates that still have queued orders.
+     * Persists stock_sufficient and stock_shortage_detail on every queued order.
+     * Called automatically after any stock-in creation or adjustment.
+     */
+    private function syncAllQueuedOrdersStockSufficiency(?int $warehouseId): void
+    {
+        $queueStatuses = array_merge(self::READY_TO_PACK_STATUSES, [Order::STATUS_PACKING]);
+
+        // Find all distinct dates that have queued orders.
+        $dates = Order::whereIn('status', $queueStatuses)
+            ->selectRaw('DATE(created_at) as order_date')
+            ->groupBy('order_date')
+            ->pluck('order_date');
+
+        foreach ($dates as $forDate) {
+            $allQueueOrders = Order::with(['items.variant'])
+                ->whereIn('status', $queueStatuses)
+                ->whereDate('created_at', $forDate)
+                ->orderBy('created_at', 'asc')
+                ->orderBy('id', 'asc')
+                ->get();
+
+            if ($allQueueOrders->isEmpty()) {
+                continue;
+            }
+
+            $result = $this->buildPackingQueueStockGuards($allQueueOrders, $warehouseId, $forDate);
+            $guards = $result['guards'];
+
+            $sequence = 0;
+            foreach ($allQueueOrders as $order) {
+                $sequence++;
+                $guard      = $guards[$order->id] ?? ['has_shortage' => false, 'shortages' => []];
+                $hasShortage = (bool) ($guard['has_shortage'] ?? false);
+
+                $order->update([
+                    'daily_sequence'        => $sequence,
+                    'stock_sufficient'      => $hasShortage ? 0 : 1,
+                    'stock_shortage_detail' => $hasShortage ? ($guard['shortages'] ?? []) : null,
+                ]);
+            }
+        }
     }
 
     private function getTotalQuantityByVariant(Collection $variantIds, ?int $warehouseId): array
@@ -1123,11 +1107,16 @@ class WarehouseDashboardController extends Controller
     public function stockIn(Request $request)
     {
         $query = InventoryDocument::where('type', 'import')
-            ->with('warehouse', 'user', 'items.productVariant.product');
+            ->with('warehouse', 'user', 'supplier', 'items.productVariant.product');
 
         $warehouseId = Auth::user()->warehouse_id;
         if ($warehouseId) {
             $query->where('warehouse_id', $warehouseId);
+        }
+
+        $supplierId = $request->input('supplier_id');
+        if ($supplierId) {
+            $query->where('supplier_id', $supplierId);
         }
 
         $from = $request->input('from_date', Carbon::now()->subDays(30)->toDateString());
@@ -1140,8 +1129,9 @@ class WarehouseDashboardController extends Controller
             : Warehouse::all();
         $productVariants  = ProductVariant::with('product')->orderBy('name')->get();
         $maxEdits         = (int) (\App\Models\Setting::get('stock_in_max_edits', 3));
+        $suppliers        = \App\Models\Supplier::active()->orderBy('name')->get();
 
-        return view('warehouse.stock-in.index', compact('stockInDocuments', 'from', 'to', 'warehouses', 'productVariants', 'maxEdits'));
+        return view('warehouse.stock-in.index', compact('stockInDocuments', 'from', 'to', 'warehouses', 'productVariants', 'maxEdits', 'suppliers', 'supplierId'));
     }
 
     /**
@@ -1212,6 +1202,13 @@ class WarehouseDashboardController extends Controller
             abort(400, 'Chỉ hỗ trợ điều chỉnh phiếu nhập kho.');
         }
 
+        if (!$document->document_date->isToday()) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Chỉ được điều chỉnh phiếu nhập kho trong ngày hôm nay.',
+            ], 422);
+        }
+
         $maxEdits = (int) (\App\Models\Setting::get('stock_in_max_edits', 3));
         if ($document->edit_count >= $maxEdits) {
             return response()->json([
@@ -1257,6 +1254,10 @@ class WarehouseDashboardController extends Controller
         }
         if ($document->type !== 'import') {
             return back()->with('error', 'Chỉ hỗ trợ điều chỉnh phiếu nhập kho.');
+        }
+
+        if (!$document->document_date->isToday()) {
+            return back()->with('error', 'Chỉ được điều chỉnh phiếu nhập kho trong ngày hôm nay.');
         }
 
         $maxEdits = (int) (\App\Models\Setting::get('stock_in_max_edits', 3));
@@ -1315,11 +1316,33 @@ class WarehouseDashboardController extends Controller
                         }
 
                         if ($delta < 0) {
-                            // Reducing import quantity — ensure we don't go below reserved.
+                            // Reducing import quantity — ensure we don't go below quantity
+                            // already consumed by "Hoàn tất đóng hàng" orders (packed_waiting_pickup
+                            // and downstream statuses). These are "hard" deductions that cannot
+                            // be undone by re-running Ráp đơn hàng.
+                            $completedPackingStatuses = [
+                                Order::STATUS_READY_TO_SHIP, // packed_waiting_pickup
+                                Order::STATUS_DELIVERING,
+                                Order::STATUS_RETURNED_COMPLETED,
+                                'delivering',
+                                'delivered',
+                                'completed',
+                                'shipping',
+                            ];
+
+                            $completedQty = (int) \App\Models\OrderItem::query()
+                                ->join('orders', 'orders.id', '=', 'order_items.order_id')
+                                ->join('inventory_reservations', 'inventory_reservations.order_item_id', '=', 'order_items.id')
+                                ->join('inventories', 'inventories.id', '=', 'inventory_reservations.inventory_id')
+                                ->where('order_items.product_variant_id', $item->product_variant_id)
+                                ->where('inventories.warehouse_id', $document->warehouse_id)
+                                ->whereIn('orders.status', $completedPackingStatuses)
+                                ->sum('inventory_reservations.quantity');
+
                             $newTotal = (int) $inventory->quantity + $delta;
-                            if ($newTotal < (int) $inventory->reserved_quantity) {
+                            if ($newTotal < $completedQty) {
                                 throw new \RuntimeException(
-                                    'Không thể giảm số lượng: tồn kho sẽ thấp hơn số lượng đang book.'
+                                    'Không thể giảm tồn kho thấp hơn số lượng đã hoàn tất đóng hàng.'
                                 );
                             }
                         }
@@ -1373,6 +1396,11 @@ class WarehouseDashboardController extends Controller
             return back()->with('error', $e->getMessage());
         }
 
+        // After stock adjustment, re-run Ráp đơn hàng to refresh stock_sufficient on all queued orders.
+        $this->syncAllQueuedOrdersStockSufficiency(
+            Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null
+        );
+
         return redirect()->route('warehouse.stock-in')->with('success',
             'Đã điều chỉnh phiếu ' . ($document->document_number ?? '#' . $document->id) . ' thành công.'
         );
@@ -1383,9 +1411,12 @@ class WarehouseDashboardController extends Controller
      */
     private function storeDocument(Request $request, string $type)
     {
+        $isImport = $type === 'import';
+
         $validated = $request->validate([
             'document_date' => 'required|date',
             'warehouse_id'  => 'required|exists:warehouses,id',
+            'supplier_id'   => $isImport ? 'required|exists:suppliers,id' : 'nullable|exists:suppliers,id',
             'shipping_fee'  => 'nullable|numeric|min:0',
             'notes'         => 'nullable|string|max:1000',
             'items'         => 'required|array|min:1',
@@ -1406,6 +1437,7 @@ class WarehouseDashboardController extends Controller
                     'type'          => $type,
                     'document_date' => $validated['document_date'],
                     'warehouse_id'  => $validated['warehouse_id'],
+                    'supplier_id'   => $validated['supplier_id'] ?? null,
                     'shipping_fee'  => $validated['shipping_fee'] ?? 0,
                     'notes'         => $validated['notes'] ?? null,
                     'user_id'       => Auth::id(),
@@ -1456,6 +1488,13 @@ class WarehouseDashboardController extends Controller
 
         $label = $type === 'import' ? 'nhập' : 'xuất';
         $route = $type === 'import' ? 'warehouse.stock-in' : 'warehouse.stock-out';
+
+        // After a new stock-in, re-run Ráp đơn hàng to refresh stock_sufficient on all queued orders.
+        if ($type === 'import') {
+            $this->syncAllQueuedOrdersStockSufficiency(
+                Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null
+            );
+        }
 
         return redirect()->route($route)->with('success', 'Đã tạo phiếu ' . $label . ' kho thành công.');
     }

@@ -13,6 +13,7 @@ class InventoryDocument extends Model
         'type',
         'document_number',
         'warehouse_id',
+        'supplier_id',
         'document_date',
         'notes',
         'shipping_fee',
@@ -61,5 +62,10 @@ class InventoryDocument extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function supplier()
+    {
+        return $this->belongsTo(Supplier::class);
     }
 }

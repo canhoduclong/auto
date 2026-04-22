@@ -164,6 +164,12 @@
 							</a>
 						</li>
 						<li class="nav-item ">
+							<a href="{{ route('admin.suppliers.index') }}" class="nav-link{{ request()->routeIs('admin.suppliers.*') ? ' active' : '' }}">
+								<i class="ph-note-blank"></i>
+								<span>Nhà cung cấp</span>
+							</a>
+						</li>
+						<li class="nav-item ">
 							<a href="{{ route('products.index') }}" class="nav-link{{ request()->routeIs('products.*') ? ' active' : '' }}">
 								<i class="ph-note-blank"></i>
 								<span>{{ __('menu.products') }}</span>
