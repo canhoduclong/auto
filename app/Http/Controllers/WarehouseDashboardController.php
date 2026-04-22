@@ -1129,7 +1129,10 @@ class WarehouseDashboardController extends Controller
             : Warehouse::all();
         $productVariants  = ProductVariant::with('product')->orderBy('name')->get();
         $maxEdits         = (int) (\App\Models\Setting::get('stock_in_max_edits', 3));
-        $suppliers        = \App\Models\Supplier::active()->orderBy('name')->get();
+        $suppliers        = \App\Models\Supplier::query()
+            ->orderByDesc('is_active')
+            ->orderBy('name')
+            ->get();
 
         return view('warehouse.stock-in.index', compact('stockInDocuments', 'from', 'to', 'warehouses', 'productVariants', 'maxEdits', 'suppliers', 'supplierId'));
     }

@@ -15,6 +15,18 @@ class CustomerAppointmentController extends Controller
     {
         $userId = (int) auth()->id();
         $search = trim((string) $request->input('q', ''));
+        $selectedCustomer = null;
+
+        $oldCustomerId = (int) old('customer_id', 0);
+        if ($oldCustomerId > 0) {
+            $selectedCustomer = Customer::query()
+                ->where('id', $oldCustomerId)
+                ->where(function ($query) use ($userId) {
+                    $query->where('user_id', $userId)
+                        ->orWhere('assigned_to', $userId);
+                })
+                ->first(['id', 'name', 'phone']);
+        }
 
         $appointmentsQuery = CustomerReminder::query()
             ->with(['customer:id,name,phone'])
@@ -51,6 +63,7 @@ class CustomerAppointmentController extends Controller
             'appointments' => $appointments,
             'settings'     => Setting::all()->keyBy('key'),
             'search'       => $search,
+            'selectedCustomer' => $selectedCustomer,
         ]);
     }
 
@@ -61,6 +74,8 @@ class CustomerAppointmentController extends Controller
     {
         $userId = (int) auth()->id();
         $q      = trim((string) $request->input('q', ''));
+        $perPage = (int) $request->input('per_page', 10);
+        $perPage = in_array($perPage, [10, 20, 50], true) ? $perPage : 10;
 
         $customers = Customer::query()
             ->where(function ($query) use ($userId) {
@@ -72,10 +87,24 @@ class CustomerAppointmentController extends Controller
                     ->orWhere('phone', 'like', "%{$q}%");
             }))
             ->orderBy('name')
-            ->limit(30)
-            ->get(['id', 'name', 'phone']);
+            ->paginate($perPage, ['id', 'name', 'phone'])
+            ->withQueryString();
 
-        return response()->json($customers);
+        return response()->json([
+            'data' => $customers->items(),
+            'meta' => [
+                'current_page' => $customers->currentPage(),
+                'last_page' => $customers->lastPage(),
+                'per_page' => $customers->perPage(),
+                'total' => $customers->total(),
+                'from' => $customers->firstItem(),
+                'to' => $customers->lastItem(),
+            ],
+            'links' => [
+                'prev' => $customers->previousPageUrl(),
+                'next' => $customers->nextPageUrl(),
+            ],
+        ]);
     }
 
     public function store(Request $request)

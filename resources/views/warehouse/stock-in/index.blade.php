@@ -240,14 +240,20 @@
                         </div>
                         <div class="col-md-4">
                             <label class="form-label fw-600 small">Nhà cung cấp <span class="text-danger">*</span></label>
-                            <select name="supplier_id" class="form-select" required>
+                            <select name="supplier_id" class="form-select" {{ $suppliers->isEmpty() ? 'disabled' : 'required' }}>
                                 <option value="">-- Chọn nhà cung cấp --</option>
                                 @foreach($suppliers as $sup)
                                     <option value="{{ $sup->id }}" {{ old('supplier_id') == $sup->id ? 'selected' : '' }}>
-                                        {{ $sup->name }}
+                                        {{ $sup->name }}{{ $sup->is_active ? '' : ' (ngưng hoạt động)' }}
                                     </option>
                                 @endforeach
                             </select>
+                            @if($suppliers->isEmpty())
+                                <div class="small text-danger mt-1">
+                                    Chưa có nhà cung cấp. Vui lòng thêm tại
+                                    <a href="{{ route('admin.suppliers.index') }}" class="text-decoration-underline">quản lý nhà cung cấp</a>.
+                                </div>
+                            @endif
                         </div>
                         <div class="col-md-4">
                             <label class="form-label fw-600 small">Phí vận chuyển (đ)</label>
@@ -334,7 +340,7 @@
 
                 <div class="modal-footer bg-white">
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Huỷ</button>
-                    <button type="submit" class="btn btn-primary fw-700">
+                    <button type="submit" class="btn btn-primary fw-700" {{ $suppliers->isEmpty() ? 'disabled' : '' }}>
                         <i class="bi bi-check-circle me-1"></i>Lưu phiếu nhập
                     </button>
                 </div>
