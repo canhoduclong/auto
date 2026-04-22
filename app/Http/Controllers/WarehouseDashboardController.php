@@ -96,10 +96,74 @@ class WarehouseDashboardController extends Controller
     }
 
     /**
+     * Ráp Đơn Hàng: compute FIFO stock guards for a given date and persist
+     * daily_sequence, stock_sufficient, stock_shortage_detail on each order.
+     */
+    public function rapDonHang(Request $request)
+    {
+        $forDate = $request->filled('date')
+            ? Carbon::parse($request->input('date'))->toDateString()
+            : Carbon::today()->toDateString();
+
+        $managedWarehouseId = Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
+
+        $queueStatuses = array_merge(self::READY_TO_PACK_STATUSES, [Order::STATUS_PACKING]);
+
+        // Load all queued orders for that date (FIFO: oldest first)
+        $allQueueOrders = Order::with(['items.variant'])
+            ->whereIn('status', $queueStatuses)
+            ->whereDate('created_at', $forDate)
+            ->orderBy('created_at', 'asc')
+            ->orderBy('id', 'asc')
+            ->get();
+
+        if ($allQueueOrders->isEmpty()) {
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => true, 'message' => 'Không có đơn nào trong hàng đợi để ráp.', 'updated' => 0]);
+            }
+            return back()->with('info', 'Không có đơn nào trong hàng đợi để ráp.');
+        }
+
+        $result = $this->buildPackingQueueStockGuards($allQueueOrders, $managedWarehouseId, $forDate);
+        $guards = $result['guards'];
+
+        $sequence = 0;
+        foreach ($allQueueOrders as $order) {
+            $sequence++;
+            $guard = $guards[$order->id] ?? ['has_shortage' => false, 'can_start_packing' => true, 'shortages' => []];
+            $hasShortage = (bool) ($guard['has_shortage'] ?? false);
+            $shortages   = $guard['shortages'] ?? [];
+
+            $order->update([
+                'daily_sequence'       => $sequence,
+                'stock_sufficient'     => $hasShortage ? 0 : 1,
+                'stock_shortage_detail'=> $hasShortage ? $shortages : null,
+            ]);
+        }
+
+        $totalUpdated = $allQueueOrders->count();
+        $shortCount   = collect($guards)->where('has_shortage', true)->count();
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok'      => true,
+                'message' => "Đã ráp {$totalUpdated} đơn. Thiếu hàng: {$shortCount} đơn.",
+                'updated' => $totalUpdated,
+                'short'   => $shortCount,
+            ]);
+        }
+
+        return back()->with('success', "Đã ráp {$totalUpdated} đơn. Thiếu hàng: {$shortCount} đơn.");
+    }
+
+    /**
      * List orders awaiting packing or currently being packed.
      */
     public function orders(Request $request)
     {
+        // Auto-cancel overdue orders before loading the page
+        \Artisan::call('orders:auto-cancel-overdue');
+
         $selectedDate = $request->filled('date')
             ? Carbon::parse($request->input('date'))->toDateString()
             : Carbon::today()->toDateString();
@@ -156,9 +220,50 @@ class WarehouseDashboardController extends Controller
             ->get();
 
         $managedWarehouseId = Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
-        $stockGuardResult = $this->buildPackingQueueStockGuards($orders, $managedWarehouseId);
+        $stockGuardResult = $this->buildPackingQueueStockGuards($orders, $managedWarehouseId, $selectedDate);
         $stockGuardMap = $stockGuardResult['guards'];
         $fifoRemainingStock = $stockGuardResult['remaining_by_variant']; // variantId => float remaining after FIFO
+
+        $warehouseVariantIds = Inventory::query()
+            ->when($managedWarehouseId, fn ($query) => $query->where('warehouse_id', $managedWarehouseId))
+            ->pluck('product_variant_id')
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        // Stock at the selected date (reconstructed from movements) per variant
+        $displayedVariantIds = $orders
+            ->flatMap(fn(Order $order) => $order->items->pluck('product_variant_id'))
+            ->filter()
+            ->map(fn($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        $stockPanelVariantIds = $warehouseVariantIds
+            ->merge($displayedVariantIds)
+            ->unique()
+            ->values();
+
+        // "Tồn kho khả dụng" per variant for the stock panel.
+        // For today: use available_stock (quantity - reserved_quantity) — consistent with
+        // the FIFO pool computation and the inventory page display.
+        // For past dates: reconstruct from movements to show historical snapshot.
+        $variantStock = $selectedDate === Carbon::today()->toDateString()
+            ? $this->getAvailableByVariant(collect($stockPanelVariantIds), $managedWarehouseId)
+            : $this->getStockAtDate(collect($stockPanelVariantIds), $managedWarehouseId, $selectedDate);
+
+        $stockPanelVariants = ProductVariant::query()
+            ->with('product')
+            ->whereIn('id', $stockPanelVariantIds->all())
+            ->get()
+            ->sortBy(function (ProductVariant $variant) {
+                return [
+                    strtolower((string) ($variant->name ?: $variant->product?->name ?: '')),
+                    strtolower((string) ($variant->sku ?: '')),
+                ];
+            })
+            ->values();
 
         $orders->each(function (Order $order) use ($stockGuardMap) {
             $order->setAttribute('stock_guard', $stockGuardMap[$order->id] ?? [
@@ -169,7 +274,7 @@ class WarehouseDashboardController extends Controller
             ]);
         });
 
-        return view('warehouse.orders.index', compact('orders', 'selectedDate', 'status', 'quickDates', 'fifoRemainingStock'));
+        return view('warehouse.orders.index', compact('orders', 'selectedDate', 'status', 'quickDates', 'fifoRemainingStock', 'variantStock', 'stockPanelVariants'));
     }
 
     /**
@@ -256,9 +361,10 @@ class WarehouseDashboardController extends Controller
 
     private function evaluateSingleOrderStock(Order $order, ?int $warehouseId): array
     {
-        // Run full FIFO simulation so that prior queue orders consume stock before this one
+        // Always scope to TODAY: consistent with what the orders-list page shows,
+        // and ensures we check against current physical stock and today's queue only.
         $singleCollection = collect([$order]);
-        $result = $this->buildPackingQueueStockGuards($singleCollection, $warehouseId);
+        $result = $this->buildPackingQueueStockGuards($singleCollection, $warehouseId, now()->toDateString());
 
         return $result['guards'][$order->id] ?? [
             'has_shortage' => false,
@@ -268,9 +374,10 @@ class WarehouseDashboardController extends Controller
         ];
     }
 
-    private function buildPackingQueueStockGuards(Collection $orders, ?int $warehouseId): array
+    private function buildPackingQueueStockGuards(Collection $orders, ?int $warehouseId, string $forDate = null): array
     {
         $queueStatuses = array_merge(self::READY_TO_PACK_STATUSES, [Order::STATUS_PACKING]);
+        $forDate = $forDate ?? now()->toDateString();
 
         // IDs of the orders currently displayed on the page
         $displayedOrderIds = $orders
@@ -283,9 +390,11 @@ class WarehouseDashboardController extends Controller
             return ['guards' => [], 'remaining_by_variant' => []];
         }
 
-        // Load ALL pending-packing orders globally for FIFO simulation (oldest first)
+        // Load ALL queued orders from the SAME date for FIFO simulation (oldest first).
+        // Cross-date FIFO is wrong: old orders from other dates should have been auto-cancelled.
         $allQueueOrders = Order::with(['items.product', 'items.variant.product'])
             ->whereIn('status', $queueStatuses)
+            ->whereDate('created_at', $forDate)
             ->orderBy('created_at', 'asc')
             ->orderBy('id', 'asc')
             ->get();
@@ -301,8 +410,52 @@ class WarehouseDashboardController extends Controller
             ->unique()
             ->values();
 
-        // Available stock snapshot (free stock = quantity - reserved_quantity)
-        $stockByVariant = $this->getAvailableByVariant($variantIds, $warehouseId);
+        // All order-item IDs in this FIFO set (used for the reservation add-back below).
+        $fifoOrderItemIds = $allQueueOrders
+            ->flatMap(fn (Order $o) => $o->items->pluck('id'))
+            ->filter()
+            ->unique()
+            ->values();
+
+        // ── FIFO pool: available stock + today's own reservations ──────────────────────
+        //
+        // "Tồn kho khả dụng" = quantity - reserved_quantity.
+        // reserved_quantity already includes the reservations committed to today's queued
+        // orders, so starting from available_stock gives a near-zero pool (all stock is
+        // already logically claimed). We add back those reservations so the FIFO can
+        // re-simulate from scratch who gets priority.
+        //
+        // Pool = available_stock + today_fifo_reservations
+        //      = (quantity - reserved_quantity) + today_fifo_reservations
+        //      = quantity - external_reservations   (mathematically equivalent)
+        //
+        // This keeps the pool consistent with the "Khả dụng" number shown on the
+        // inventory page and the warehouse/orders stock panel.
+        // ──────────────────────────────────────────────────────────────────────────────
+        $availableByVariant = $this->getAvailableByVariant($variantIds, $warehouseId);
+
+        // Reservations belonging to today's FIFO orders, grouped by variant.
+        $todayResvByVariant = [];
+        if ($fifoOrderItemIds->isNotEmpty()) {
+            $todayResvByVariant = InventoryReservation::query()
+                ->join('inventories', 'inventories.id', '=', 'inventory_reservations.inventory_id')
+                ->whereIn('inventory_reservations.order_item_id', $fifoOrderItemIds->all())
+                ->when($warehouseId, fn ($q) => $q->where('inventories.warehouse_id', $warehouseId))
+                ->selectRaw('inventories.product_variant_id, COALESCE(SUM(inventory_reservations.quantity), 0) as qty')
+                ->groupBy('inventories.product_variant_id')
+                ->pluck('qty', 'product_variant_id')
+                ->map(fn ($v) => (int) $v)
+                ->all();
+        }
+
+        $stockByVariant = [];
+        foreach ($variantIds as $vid) {
+            $vid = (int) $vid;
+            $stockByVariant[$vid] = max(
+                0,
+                ((int) ($availableByVariant[$vid] ?? 0)) + ((int) ($todayResvByVariant[$vid] ?? 0))
+            );
+        }
 
         // Running pool — decremented only when a complete order can be packed (FIFO)
         $remainingByVariant = array_map(fn ($v) => (float) $v, $stockByVariant);
@@ -365,6 +518,75 @@ class WarehouseDashboardController extends Controller
         ];
     }
 
+    /**
+     * Reconstruct stock quantity for each variant at the END of a given date.
+     * Formula: qty_at_date = current_quantity - SUM(movements after date)
+     * Movements after the selected date are reversed to get the historical snapshot.
+     */
+    private function getStockAtDate(Collection $variantIds, ?int $warehouseId, string $date): array
+    {
+        if ($variantIds->isEmpty()) {
+            return [];
+        }
+
+        $inventoryQuery = Inventory::query()
+            ->select('id', 'product_variant_id', 'quantity', 'reserved_quantity')
+            ->whereIn('product_variant_id', $variantIds->all());
+
+        if ($warehouseId) {
+            $inventoryQuery->where('warehouse_id', $warehouseId);
+        }
+
+        $inventories = $inventoryQuery->get();
+
+        if ($inventories->isEmpty()) {
+            return [];
+        }
+
+        // Net movements that happened AFTER the selected date — reverse these to get historical qty
+        $movementsAfter = InventoryMovement::query()
+            ->selectRaw('inventory_id, COALESCE(SUM(quantity), 0) as qty_delta')
+            ->whereIn('inventory_id', $inventories->pluck('id')->all())
+            ->whereDate('created_at', '>', $date)
+            ->groupBy('inventory_id')
+            ->pluck('qty_delta', 'inventory_id')
+            ->map(fn ($v) => (int) $v)
+            ->all();
+
+        $result = [];
+        foreach ($inventories as $inv) {
+            $vid          = (int) $inv->product_variant_id;
+            $currentQty   = (int) $inv->quantity;
+            $afterDelta   = (int) ($movementsAfter[$inv->id] ?? 0);
+            $qtyAtDate    = $currentQty - $afterDelta;
+
+            $result[$vid] = ($result[$vid] ?? 0) + max(0, $qtyAtDate);
+        }
+
+        return $result;
+    }
+
+    private function getTotalQuantityByVariant(Collection $variantIds, ?int $warehouseId): array
+    {
+        if ($variantIds->isEmpty()) {
+            return [];
+        }
+
+        $query = Inventory::query()
+            ->selectRaw('product_variant_id, COALESCE(SUM(quantity), 0) as total_qty')
+            ->whereIn('product_variant_id', $variantIds->all());
+
+        if ($warehouseId) {
+            $query->where('warehouse_id', $warehouseId);
+        }
+
+        return $query
+            ->groupBy('product_variant_id')
+            ->pluck('total_qty', 'product_variant_id')
+            ->map(fn ($value) => (int) $value)
+            ->all();
+    }
+
     private function getAvailableByVariant(Collection $variantIds, ?int $warehouseId): array
     {
         if ($variantIds->isEmpty()) {
@@ -384,6 +606,130 @@ class WarehouseDashboardController extends Controller
             ->pluck('available_qty', 'product_variant_id')
             ->map(fn ($value) => (int) $value)
             ->all();
+    }
+
+    private function getInventorySnapshotByVariant(Collection $variantIds, ?int $warehouseId, string $date): array
+    {
+        if ($variantIds->isEmpty()) {
+            return [];
+        }
+
+        $selectedDate = Carbon::parse($date)->toDateString();
+
+        if ($selectedDate === Carbon::today()->toDateString()) {
+            return Inventory::query()
+                ->selectRaw('product_variant_id, COALESCE(SUM(quantity), 0) as total_qty, COALESCE(SUM(reserved_quantity), 0) as total_reserved')
+                ->whereIn('product_variant_id', $variantIds->all())
+                ->when($warehouseId, fn ($query) => $query->where('warehouse_id', $warehouseId))
+                ->groupBy('product_variant_id')
+                ->get()
+                ->mapWithKeys(function ($row) {
+                    $quantity = (int) ($row->total_qty ?? 0);
+                    $reserved = (int) ($row->total_reserved ?? 0);
+
+                    return [
+                        (int) $row->product_variant_id => [
+                            'quantity' => $quantity,
+                            'reserved' => $reserved,
+                            'available' => max(0, $quantity - $reserved),
+                        ],
+                    ];
+                })
+                ->all();
+        }
+
+        $historicalQuantity = $this->getStockAtDate($variantIds, $warehouseId, $selectedDate);
+
+        return collect($variantIds)
+            ->mapWithKeys(function ($variantId) use ($historicalQuantity) {
+                $quantity = (int) ($historicalQuantity[(int) $variantId] ?? 0);
+
+                return [
+                    (int) $variantId => [
+                        'quantity' => $quantity,
+                        'reserved' => 0,
+                        'available' => $quantity,
+                    ],
+                ];
+            })
+            ->all();
+    }
+
+    private function getInventorySnapshotStats(?int $warehouseId, string $date): array
+    {
+        $selectedDate = Carbon::parse($date)->toDateString();
+
+        if ($selectedDate === Carbon::today()->toDateString()) {
+            $inventoryBase = Inventory::query()
+                ->when($warehouseId, fn ($query) => $query->where('warehouse_id', $warehouseId));
+
+            $stockAgg = (clone $inventoryBase)
+                ->selectRaw('COALESCE(SUM(quantity), 0) as total_qty, COALESCE(SUM(reserved_quantity), 0) as total_reserved')
+                ->first();
+
+            return [
+                'total_quantity' => (int) ($stockAgg->total_qty ?? 0),
+                'total_reserved' => (int) ($stockAgg->total_reserved ?? 0),
+                'total_available' => max(0, (int) ($stockAgg->total_qty ?? 0) - (int) ($stockAgg->total_reserved ?? 0)),
+                'low_stock' => (clone $inventoryBase)
+                    ->whereColumn('quantity', '<=', 'low_stock_threshold')
+                    ->where('quantity', '>', 0)
+                    ->count(),
+                'out_of_stock' => (clone $inventoryBase)
+                    ->where('quantity', 0)
+                    ->count(),
+            ];
+        }
+
+        $inventories = Inventory::query()
+            ->select('id', 'quantity', 'low_stock_threshold')
+            ->when($warehouseId, fn ($query) => $query->where('warehouse_id', $warehouseId))
+            ->get();
+
+        if ($inventories->isEmpty()) {
+            return [
+                'total_quantity' => 0,
+                'total_reserved' => 0,
+                'total_available' => 0,
+                'low_stock' => 0,
+                'out_of_stock' => 0,
+            ];
+        }
+
+        $movementsAfter = InventoryMovement::query()
+            ->selectRaw('inventory_id, COALESCE(SUM(quantity), 0) as qty_delta')
+            ->whereIn('inventory_id', $inventories->pluck('id')->all())
+            ->whereDate('created_at', '>', $selectedDate)
+            ->groupBy('inventory_id')
+            ->pluck('qty_delta', 'inventory_id');
+
+        $totalQuantity = 0;
+        $lowStock = 0;
+        $outOfStock = 0;
+
+        foreach ($inventories as $inventory) {
+            $quantity = max(0, (int) $inventory->quantity - (int) ($movementsAfter[$inventory->id] ?? 0));
+            $threshold = (int) ($inventory->low_stock_threshold ?: 0);
+
+            $totalQuantity += $quantity;
+
+            if ($quantity <= 0) {
+                $outOfStock++;
+                continue;
+            }
+
+            if ($threshold > 0 && $quantity <= $threshold) {
+                $lowStock++;
+            }
+        }
+
+        return [
+            'total_quantity' => $totalQuantity,
+            'total_reserved' => 0,
+            'total_available' => $totalQuantity,
+            'low_stock' => $lowStock,
+            'out_of_stock' => $outOfStock,
+        ];
     }
 
     private function getReservedByOrderItem(Collection $orderItemIds, ?int $warehouseId): array
@@ -793,8 +1139,9 @@ class WarehouseDashboardController extends Controller
             ? Warehouse::where('id', $warehouseId)->get()
             : Warehouse::all();
         $productVariants  = ProductVariant::with('product')->orderBy('name')->get();
+        $maxEdits         = (int) (\App\Models\Setting::get('stock_in_max_edits', 3));
 
-        return view('warehouse.stock-in.index', compact('stockInDocuments', 'from', 'to', 'warehouses', 'productVariants'));
+        return view('warehouse.stock-in.index', compact('stockInDocuments', 'from', 'to', 'warehouses', 'productVariants', 'maxEdits'));
     }
 
     /**
@@ -848,8 +1195,187 @@ class WarehouseDashboardController extends Controller
         if ($warehouseId && (int) $document->warehouse_id !== (int) $warehouseId) {
             abort(403, 'Bạn không có quyền xem phiếu kho này.');
         }
-        $document->load('items.productVariant.product', 'warehouse', 'user');
+        $document->load('items.productVariant.product', 'warehouse', 'user', 'edits.user');
         return view('warehouse.document-show', compact('document'));
+    }
+
+    /**
+     * Return JSON data for populating the edit-stock-in modal.
+     */
+    public function editStockIn(Request $request, InventoryDocument $document)
+    {
+        $warehouseId = Auth::user()->warehouse_id;
+        if ($warehouseId && (int) $document->warehouse_id !== (int) $warehouseId) {
+            abort(403, 'Bạn không có quyền sửa phiếu này.');
+        }
+        if ($document->type !== 'import') {
+            abort(400, 'Chỉ hỗ trợ điều chỉnh phiếu nhập kho.');
+        }
+
+        $maxEdits = (int) (\App\Models\Setting::get('stock_in_max_edits', 3));
+        if ($document->edit_count >= $maxEdits) {
+            return response()->json([
+                'ok' => false,
+                'message' => "Phiếu này đã đạt giới hạn {$maxEdits} lần điều chỉnh.",
+            ], 422);
+        }
+
+        $document->load('items.productVariant.product');
+
+        return response()->json([
+            'ok'         => true,
+            'document'   => [
+                'id'            => $document->id,
+                'document_number' => $document->document_number ?? '#' . $document->id,
+                'document_date' => $document->document_date->format('Y-m-d'),
+                'notes'         => $document->notes,
+                'shipping_fee'  => (float) $document->shipping_fee,
+                'edit_count'    => $document->edit_count,
+                'max_edits'     => $maxEdits,
+            ],
+            'items' => $document->items->map(fn ($item) => [
+                'id'                 => $item->id,
+                'product_variant_id' => $item->product_variant_id,
+                'variant_name'       => $item->productVariant?->name
+                                        ?? $item->productVariant?->product?->name
+                                        ?? 'SP #' . $item->product_variant_id,
+                'sku'                => $item->productVariant?->sku ?? '',
+                'quantity'           => (int) $item->quantity,
+                'unit_cost'          => (float) $item->unit_cost,
+            ])->values(),
+        ]);
+    }
+
+    /**
+     * Apply an edit to a stock-in document (adjust quantities/costs).
+     */
+    public function updateStockIn(Request $request, InventoryDocument $document)
+    {
+        $warehouseId = Auth::user()->warehouse_id;
+        if ($warehouseId && (int) $document->warehouse_id !== (int) $warehouseId) {
+            abort(403, 'Bạn không có quyền sửa phiếu này.');
+        }
+        if ($document->type !== 'import') {
+            return back()->with('error', 'Chỉ hỗ trợ điều chỉnh phiếu nhập kho.');
+        }
+
+        $maxEdits = (int) (\App\Models\Setting::get('stock_in_max_edits', 3));
+        if ($document->edit_count >= $maxEdits) {
+            return back()->with('error', "Phiếu này đã đạt giới hạn {$maxEdits} lần điều chỉnh.");
+        }
+
+        $validated = $request->validate([
+            'notes'                      => 'nullable|string|max:1000',
+            'edit_notes'                 => 'nullable|string|max:500',
+            'shipping_fee'               => 'nullable|numeric|min:0',
+            'items'                      => 'required|array|min:1',
+            'items.*.id'                 => 'required|integer|exists:inventory_document_items,id',
+            'items.*.quantity'           => 'required|integer|min:0',
+            'items.*.unit_cost'          => 'required|numeric|min:0',
+        ]);
+
+        try {
+            DB::transaction(function () use ($validated, $document, $maxEdits) {
+                $document->load('items');
+
+                $itemMap = $document->items->keyBy('id');
+
+                // Ensure all submitted item IDs belong to this document.
+                foreach ($validated['items'] as $row) {
+                    if (!$itemMap->has((int) $row['id'])) {
+                        throw new \RuntimeException('Dòng sản phẩm không thuộc phiếu này.');
+                    }
+                }
+
+                $changes = [];
+
+                foreach ($validated['items'] as $row) {
+                    $item      = $itemMap[(int) $row['id']];
+                    $oldQty    = (int) $item->quantity;
+                    $newQty    = (int) $row['quantity'];
+                    $oldCost   = (float) $item->unit_cost;
+                    $newCost   = (float) $row['unit_cost'];
+                    $delta     = $newQty - $oldQty;
+
+                    if ($delta === 0 && $newCost === $oldCost) {
+                        continue; // Nothing changed for this item
+                    }
+
+                    // Adjust inventory quantity by delta.
+                    if ($delta !== 0) {
+                        $inventory = Inventory::lockForUpdate()
+                            ->where('product_variant_id', $item->product_variant_id)
+                            ->where('warehouse_id', $document->warehouse_id)
+                            ->first();
+
+                        if (!$inventory) {
+                            throw new \RuntimeException(
+                                'Không tìm thấy bản ghi tồn kho cho sản phẩm #' . $item->product_variant_id
+                            );
+                        }
+
+                        if ($delta < 0) {
+                            // Reducing import quantity — ensure we don't go below reserved.
+                            $newTotal = (int) $inventory->quantity + $delta;
+                            if ($newTotal < (int) $inventory->reserved_quantity) {
+                                throw new \RuntimeException(
+                                    'Không thể giảm số lượng: tồn kho sẽ thấp hơn số lượng đang book.'
+                                );
+                            }
+                        }
+
+                        // Record adjustment movement.
+                        InventoryMovement::create([
+                            'inventory_id'   => $inventory->id,
+                            'quantity'       => $delta,
+                            'type'           => 'adjustment',
+                            'reference_id'   => $document->id,
+                            'reference_type' => InventoryDocument::class,
+                            'user_id'        => Auth::id(),
+                        ]);
+
+                        $inventory->increment('quantity', $delta);
+
+                        // Sync variant stock.
+                        $totalStock = (int) Inventory::where('product_variant_id', $item->product_variant_id)->sum('quantity');
+                        ProductVariant::where('id', $item->product_variant_id)->update(['stock' => $totalStock]);
+                    }
+
+                    $changes[] = [
+                        'item_id'    => $item->id,
+                        'variant_id' => $item->product_variant_id,
+                        'old_qty'    => $oldQty,
+                        'new_qty'    => $newQty,
+                        'old_cost'   => $oldCost,
+                        'new_cost'   => $newCost,
+                    ];
+
+                    $item->update(['quantity' => $newQty, 'unit_cost' => $newCost]);
+                }
+
+                // Update document header.
+                $document->update([
+                    'notes'        => $validated['notes'] ?? $document->notes,
+                    'shipping_fee' => $validated['shipping_fee'] ?? $document->shipping_fee,
+                    'edit_count'   => $document->edit_count + 1,
+                ]);
+
+                // Record edit history.
+                \App\Models\InventoryDocumentEdit::create([
+                    'inventory_document_id' => $document->id,
+                    'user_id'               => Auth::id(),
+                    'edit_number'           => $document->edit_count, // already incremented above
+                    'notes'                 => $validated['edit_notes'] ?? null,
+                    'changes'               => $changes ?: null,
+                ]);
+            });
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return redirect()->route('warehouse.stock-in')->with('success',
+            'Đã điều chỉnh phiếu ' . ($document->document_number ?? '#' . $document->id) . ' thành công.'
+        );
     }
 
     /**
@@ -948,9 +1474,15 @@ class WarehouseDashboardController extends Controller
         $dayStart = Carbon::parse($selectedDate)->startOfDay();
         $dayEnd = Carbon::parse($selectedDate)->endOfDay();
 
-        $inventoryScope = function ($query) use ($warehouseId, $status) {
+        $isTodaySnapshot = $selectedDate === Carbon::today()->toDateString();
+
+        $inventoryScope = function ($query) use ($warehouseId, $status, $isTodaySnapshot) {
             if ($warehouseId) {
                 $query->where('warehouse_id', $warehouseId);
+            }
+
+            if (!$isTodaySnapshot) {
+                return;
             }
 
             if ($status === 'low_stock') {
@@ -1021,26 +1553,100 @@ class WarehouseDashboardController extends Controller
                 });
             });
 
+        $variantIds = $products->getCollection()
+            ->flatMap(fn (Product $product) => $product->variants->pluck('id'))
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        $snapshotByVariant = $this->getInventorySnapshotByVariant($variantIds, $warehouseId, $selectedDate);
+
+        $products->getCollection()->transform(function (Product $product) use ($snapshotByVariant) {
+            $product->setRelation('variants', $product->variants->map(function (ProductVariant $variant) use ($snapshotByVariant) {
+                $snapshot = $snapshotByVariant[(int) $variant->id] ?? [
+                    'quantity' => 0,
+                    'reserved' => 0,
+                    'available' => 0,
+                ];
+
+                $variant->setAttribute('snapshot_quantity', (int) $snapshot['quantity']);
+                $variant->setAttribute('snapshot_reserved', (int) $snapshot['reserved']);
+                $variant->setAttribute('snapshot_available', (int) $snapshot['available']);
+
+                return $variant;
+            }));
+
+            return $product;
+        });
+
+        if (!$isTodaySnapshot && in_array($status, ['low_stock', 'out_of_stock'], true)) {
+            $products->setCollection(
+                $products->getCollection()
+                    ->map(function (Product $product) use ($status) {
+                        $filteredVariants = $product->variants->filter(function (ProductVariant $variant) use ($status) {
+                            $quantity = (int) ($variant->snapshot_quantity ?? 0);
+                            $threshold = max(5, (int) $variant->inventories->sum(fn ($inventory) => (int) ($inventory->low_stock_threshold ?: 5)));
+
+                            if ($status === 'out_of_stock') {
+                                return $quantity <= 0;
+                            }
+
+                            return $quantity > 0 && $quantity <= $threshold;
+                        })->values();
+
+                        $product->setRelation('variants', $filteredVariants);
+
+                        return $product;
+                    })
+                    ->filter(fn (Product $product) => $product->variants->isNotEmpty())
+                    ->values()
+            );
+        }
+
+        $snapshotStats = $this->getInventorySnapshotStats($warehouseId, $selectedDate);
+        $inventoryBase = Inventory::query()
+            ->when($warehouseId, fn ($query) => $query->where('warehouse_id', $warehouseId));
+
         $stats = [
-            'total_items' => Inventory::when($warehouseId, fn($q) => $q->where('warehouse_id', $warehouseId))->count(),
-            'total_products' => Product::whereHas('variants', function ($variantQuery) use ($warehouseId) {
+            'total_items'            => (clone $inventoryBase)->count(),
+            'total_products'         => Product::whereHas('variants', function ($variantQuery) use ($warehouseId) {
                 $variantQuery->whereHas('inventories', function ($inventoryQuery) use ($warehouseId) {
                     if ($warehouseId) {
                         $inventoryQuery->where('warehouse_id', $warehouseId);
                     }
                 });
             })->count(),
-            'low_stock' => Inventory::when($warehouseId, fn($q) => $q->where('warehouse_id', $warehouseId))
-                ->whereColumn('quantity', '<=', 'low_stock_threshold')->count(),
-            'out_of_stock' => Inventory::when($warehouseId, fn($q) => $q->where('warehouse_id', $warehouseId))
-                ->where('quantity', 0)->count(),
-            'daily_import' => (clone $movementQuery)->where('quantity', '>', 0)->sum('quantity'),
-            'daily_export' => abs((int) ((clone $movementQuery)->where('quantity', '<', 0)->sum('quantity'))),
-            'daily_reserved' => (clone $reservationQuery)->sum('quantity'),
+            'total_quantity'         => $snapshotStats['total_quantity'],
+            'total_reserved'         => $snapshotStats['total_reserved'],
+            'total_available'        => $snapshotStats['total_available'],
+            'low_stock'              => $snapshotStats['low_stock'],
+            'out_of_stock'           => $snapshotStats['out_of_stock'],
+            'daily_import'           => (clone $movementQuery)->where('quantity', '>', 0)->sum('quantity'),
+            'daily_export'           => abs((int) ((clone $movementQuery)->where('quantity', '<', 0)->sum('quantity'))),
+            'daily_reserved'         => (clone $reservationQuery)->sum('quantity'),
             'daily_reservation_rows' => (clone $reservationQuery)->count(),
         ];
 
         return view('warehouse.inventory.index', compact('products', 'stats', 'selectedDate'));
+    }
+
+    /**
+     * Manually trigger auto-cancel of overdue orders to restore accurate stock.
+     */
+    public function cancelOverdueOrders(Request $request)
+    {
+        \Artisan::call('orders:auto-cancel-overdue');
+        $output = trim(\Artisan::output());
+
+        // Parse how many orders were cancelled from command output
+        preg_match('/đã hủy (\d+) đơn/u', $output, $matches);
+        $count = (int) ($matches[1] ?? 0);
+
+        if ($count > 0) {
+            return back()->with('success', "Đã hủy {$count} đơn quá hạn và trả lại tồn kho.");
+        }
+
+        return back()->with('info', 'Không có đơn nào quá hạn cần xử lý.');
     }
 
     /**

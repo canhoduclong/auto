@@ -14,8 +14,10 @@ class Kernel extends ConsoleKernel
      */
     protected $commands = [
         \App\Console\Commands\SyncPermissionsFromRoutes::class,
-    \App\Console\Commands\ExportProductsToSeederArray::class,
-    \App\Console\Commands\ExportCategoriesToSeederArray::class,
+        \App\Console\Commands\ExportProductsToSeederArray::class,
+        \App\Console\Commands\ExportCategoriesToSeederArray::class,
+        \App\Console\Commands\AutoCancelOverdueOrders::class,
+        \App\Console\Commands\ReconcileInventoryReservations::class,
     ];
 
     /**
@@ -23,7 +25,10 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
-        // $schedule->command('inspire')->hourly();
+        // Auto-cancel overdue orders every day at 00:05
+        $schedule->command('orders:auto-cancel-overdue')->dailyAt('00:05');
+        // Reconcile reserved_quantity drift every day at 00:10 (after auto-cancel)
+        $schedule->command('inventory:reconcile-reservations')->dailyAt('00:10');
     }
 
     /**

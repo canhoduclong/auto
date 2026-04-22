@@ -84,8 +84,15 @@
             <div class="row g-3">
                 @foreach($orders as $order)
                     @php
-                        $statusLabel = $statusLabels[$order->status] ?? ucfirst(str_replace('_', ' ', $order->status));
+                        $isWaitingWarehouseAssemble = (int) ($order->stock_sufficient ?? 1) === 0
+                            && $order->created_at?->isToday();
+                        $statusLabel = $isWaitingWarehouseAssemble
+                            ? 'Chờ Kho Ráp Hàng'
+                            : ($statusLabels[$order->status] ?? ucfirst(str_replace('_', ' ', $order->status)));
                         $statusClass = $statusClasses[$order->status] ?? 'status-muted';
+                        if ($isWaitingWarehouseAssemble) {
+                            $statusClass = 'status-danger';
+                        }
                         $canReturn = in_array($order->status, ['picked_up', 'shipping', 'completed'], true);
                         $isCopiedOrder = !empty($order->copied_from_order_id);
                         $canEdit = $isCopiedOrder
@@ -114,6 +121,9 @@
                                     <small class="text-muted">
                                         <i class="bi bi-clock"></i>
                                         {{ $order->created_at->format('d/m/Y H:i') }},
+                                        @if(!is_null($order->daily_sequence))
+                                            STT ngày: {{ $order->daily_sequence }},
+                                        @endif
                                         Mã KH: {{ $order->customer->customer_code ?? ('#' . ($order->customer->id ?? '')) }}, 
                                        @if($order->customer?->phone)
                                            <i class="bi bi-telephone me-1"></i>{{ $order->customer->phone }}

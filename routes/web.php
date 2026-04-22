@@ -132,6 +132,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/orders/{order}/start-packing',    [WarehouseDashboardController::class, 'startPacking'])->name('orders.start-packing');
         Route::post('/orders/{order}/complete-packing', [WarehouseDashboardController::class, 'completePacking'])->name('orders.complete-packing');
         Route::post('/orders/{order}/reopen-packing',   [WarehouseDashboardController::class, 'reopenPacking'])->name('orders.reopen-packing');
+        Route::post('/orders/rap-don-hang',              [WarehouseDashboardController::class, 'rapDonHang'])->name('orders.rap-don-hang');
         Route::get('/returns',     [WarehouseDashboardController::class, 'returns'])->name('returns');
         Route::post('/returns/{order}/confirm', [WarehouseDashboardController::class, 'confirmReturn'])->name('returns.confirm');
         
@@ -139,10 +140,13 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/stock-in',          [WarehouseDashboardController::class, 'stockIn'])->name('stock-in');
         Route::post('/stock-in',         [WarehouseDashboardController::class, 'storeStockIn'])->name('stock-in.store');
         Route::get('/stock-in/{document}', [WarehouseDashboardController::class, 'showDocument'])->name('stock-in.show');
+        Route::get('/stock-in/{document}/edit', [WarehouseDashboardController::class, 'editStockIn'])->name('stock-in.edit');
+        Route::put('/stock-in/{document}', [WarehouseDashboardController::class, 'updateStockIn'])->name('stock-in.update');
         Route::get('/stock-out',         [WarehouseDashboardController::class, 'stockOut'])->name('stock-out');
         Route::post('/stock-out',        [WarehouseDashboardController::class, 'storeStockOut'])->name('stock-out.store');
         Route::get('/stock-out/{document}', [WarehouseDashboardController::class, 'showDocument'])->name('stock-out.show');
         Route::get('/inventory',   [WarehouseDashboardController::class, 'inventory'])->name('inventory');
+        Route::post('/inventory/cancel-overdue', [WarehouseDashboardController::class, 'cancelOverdueOrders'])->name('inventory.cancel-overdue');
         Route::get('/products',    [WarehouseDashboardController::class, 'products'])->name('products');
         Route::get('/reports',     [WarehouseDashboardController::class, 'reports'])->name('reports');
     });

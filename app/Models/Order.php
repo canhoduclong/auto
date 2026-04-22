@@ -20,6 +20,7 @@ class Order extends Model
         'amount_paid', 'amount_due', 'payment_method', 'payment_status',
         'qr_code', 'packed_image_path', 'delivered_image_path', 'has_return_order',
         'collected_amount', 'delivered_at', 'return_reason', 'proof_images', 'shipper_note', 'delivery_time',
+        'daily_sequence', 'stock_sufficient', 'stock_shortage_detail',
     ];
 
     protected $casts = [
@@ -31,6 +32,7 @@ class Order extends Model
         'shipping_fee' => 'decimal:2',
         'charge_foam_box_fee' => 'boolean',
         'foam_box_price' => 'decimal:2',
+        'stock_shortage_detail' => 'array',
     ];
     
     public function approvals()

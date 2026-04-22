@@ -116,8 +116,9 @@
                 <th class="text-center">Số Dòng</th>
                 <th class="text-end">Tổng SL</th>
                 <th class="text-end">Giá Trị</th>
+                <th class="text-center">Lần sửa</th>
                 <th>Ghi Chú</th>
-                <th class="text-center">Chi Tiết</th>
+                <th class="text-center">Thao tác</th>
             </tr>
         </thead>
         <tbody>
@@ -140,11 +141,37 @@
                 </td>
                 <td class="text-end fw-700 text-success">{{ number_format($doc->items->sum('quantity')) }}</td>
                 <td class="text-end">{{ number_format($doc->items->sum(fn($i)=>$i->quantity*$i->unit_cost)) }}đ</td>
+                <td class="text-center">
+                    @if((int) $doc->edit_count > 0)
+                        <a href="{{ route('warehouse.stock-in.show', $doc) }}#edit-history" class="badge bg-warning text-dark text-decoration-none" title="Xem lịch sử chỉnh sửa">
+                            {{ (int) $doc->edit_count }} lần
+                        </a>
+                    @else
+                        <span class="badge bg-light text-secondary border">0</span>
+                    @endif
+                </td>
                 <td><small class="text-muted">{{ Str::limit($doc->notes, 28) }}</small></td>
                 <td class="text-center">
-                    <a href="{{ route('warehouse.stock-in.show', $doc) }}" class="btn btn-sm btn-outline-primary">
-                        <i class="bi bi-eye"></i>
-                    </a>
+                    <div class="d-flex gap-1 justify-content-center">
+                        <a href="{{ route('warehouse.stock-in.show', $doc) }}" class="btn btn-sm btn-outline-primary" title="Xem chi tiết">
+                            <i class="bi bi-eye"></i>
+                        </a>
+                        @php $editsLeft = $maxEdits - (int)$doc->edit_count; @endphp
+                        @if($editsLeft > 0)
+                            <button type="button" class="btn btn-sm btn-outline-warning btn-edit-doc"
+                                    data-doc-id="{{ $doc->id }}"
+                                    data-edit-url="{{ route('warehouse.stock-in.edit', $doc) }}"
+                                    data-update-url="{{ route('warehouse.stock-in.update', $doc) }}"
+                                    title="Điều chỉnh phiếu (còn {{ $editsLeft }} lần)">
+                                <i class="bi bi-pencil-square"></i>
+                                <span class="badge bg-secondary ms-1" style="font-size:.65rem;">{{ $editsLeft }}</span>
+                            </button>
+                        @else
+                            <button class="btn btn-sm btn-outline-secondary" disabled title="Đã dùng hết lượt chỉnh sửa">
+                                <i class="bi bi-lock"></i>
+                            </button>
+                        @endif
+                    </div>
                 </td>
             </tr>
             @endforeach
@@ -288,9 +315,97 @@
     </div>
 </div>
 
+{{-- ─── Modal Điều Chỉnh Phiếu Nhập ──────────────────────────────────────── --}}
+<div class="modal fade" id="modalEditStockIn" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header" style="background:linear-gradient(135deg,#f59e0b,#b45309);color:#fff;">
+                <h5 class="modal-title fw-800">
+                    <i class="bi bi-pencil-square me-2"></i>Điều Chỉnh Phiếu Nhập Kho
+                    <small id="editDocCode" class="ms-2 fw-400 opacity-75"></small>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+
+            {{-- Loading spinner --}}
+            <div id="editModalSpinner" class="modal-body text-center py-5">
+                <div class="spinner-border text-warning" role="status"></div>
+                <div class="mt-2 text-muted small">Đang tải dữ liệu phiếu…</div>
+            </div>
+
+            {{-- Edit form (hidden until loaded) --}}
+            <div id="editModalBody" style="display:none;">
+                <form id="formEditStockIn" method="POST">
+                    @csrf
+                    @method('PUT')
+
+                    <div class="modal-body" style="background:#fffbeb;">
+                        {{-- Lượt còn lại --}}
+                        <div id="editLimitBadge" class="alert alert-warning py-2 px-3 mb-3 small fw-600">
+                            <i class="bi bi-info-circle me-1"></i>
+                            <span id="editLimitText"></span>
+                        </div>
+
+                        {{-- Header --}}
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-4">
+                                <label class="form-label fw-600 small">Phí vận chuyển (đ)</label>
+                                <input type="number" name="shipping_fee" id="editShippingFee" class="form-control" min="0" step="1000" value="0">
+                            </div>
+                            <div class="col-md-8">
+                                <label class="form-label fw-600 small">Ghi chú phiếu</label>
+                                <input type="text" name="notes" id="editNotes" class="form-control" placeholder="Ghi chú về phiếu nhập…">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label fw-600 small text-warning">
+                                    <i class="bi bi-chat-left-text me-1"></i>Lý do điều chỉnh <span class="text-danger">*</span>
+                                </label>
+                                <input type="text" name="edit_notes" id="editReasonNotes" class="form-control" required
+                                       placeholder="Ví dụ: Nhập nhầm số lượng, điều chỉnh đơn giá theo hoá đơn thực tế…">
+                            </div>
+                        </div>
+
+                        {{-- Items table --}}
+                        <div class="fw-700 mb-2" style="color:#0f172a;">
+                            <i class="bi bi-list-ul me-1"></i>Danh sách hàng hoá
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle" style="font-size:.85rem;">
+                                <thead style="background:#fef3c7;">
+                                    <tr>
+                                        <th>Sản phẩm / Biến thể</th>
+                                        <th class="text-center" style="width:130px;">Số lượng mới</th>
+                                        <th class="text-center" style="width:150px;">Đơn giá mới (đ)</th>
+                                        <th class="text-end" style="width:120px;">Thành tiền</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="editItemsBody"></tbody>
+                                <tfoot>
+                                    <tr>
+                                        <td colspan="3" class="text-end fw-700">Tổng cộng</td>
+                                        <td class="text-end fw-800 text-warning" id="editGrandTotal">0đ</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer bg-white">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Huỷ</button>
+                        <button type="submit" class="btn btn-warning fw-700 text-dark">
+                            <i class="bi bi-check-circle me-1"></i>Lưu điều chỉnh
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
 @push('scripts')
 <script>
 (function () {
+    // ── Create-modal logic ──────────────────────────────────────────────────
     let idx = 1;
 
     function calcRow(row) {
@@ -369,6 +484,106 @@
     };
 
     document.querySelectorAll('#itemsContainerIn [data-item-row]').forEach(syncUnitLabel);
+})();
+
+// ── Edit-modal logic ───────────────────────────────────────────────────────
+(function () {
+    function calcEditTotal() {
+        let total = 0;
+        document.querySelectorAll('#editItemsBody tr[data-item-row]').forEach(function (row) {
+            const qty  = parseFloat(row.querySelector('.eq-qty').value)  || 0;
+            const cost = parseFloat(row.querySelector('.eq-cost').value) || 0;
+            const line = qty * cost;
+            row.querySelector('.eq-line').textContent = line.toLocaleString('vi-VN') + 'đ';
+            total += line;
+        });
+        document.getElementById('editGrandTotal').textContent = total.toLocaleString('vi-VN') + 'đ';
+    }
+
+    document.getElementById('editItemsBody').addEventListener('input', calcEditTotal);
+
+    // Delegate click on each edit button in table
+    document.addEventListener('click', function (e) {
+        const btn = e.target.closest('.btn-edit-doc');
+        if (!btn) return;
+
+        const editUrl   = btn.dataset.editUrl;
+        const updateUrl = btn.dataset.updateUrl;
+
+        // Reset modal state
+        document.getElementById('editModalSpinner').style.display = '';
+        document.getElementById('editModalBody').style.display    = 'none';
+        document.getElementById('editDocCode').textContent        = '';
+        document.getElementById('editItemsBody').innerHTML        = '';
+        document.getElementById('editReasonNotes').value          = '';
+
+        const modal = new bootstrap.Modal(document.getElementById('modalEditStockIn'));
+        modal.show();
+
+        fetch(editUrl, {
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+        })
+        .then(function (r) {
+            if (!r.ok) {
+                return r.json().then(function (d) { throw new Error(d.message || 'Lỗi tải dữ liệu.'); });
+            }
+            return r.json();
+        })
+        .then(function (data) {
+            if (!data.ok) { throw new Error(data.message || 'Không thể mở phiếu.'); }
+
+            const doc   = data.document;
+            const items = data.items;
+
+            document.getElementById('editDocCode').textContent      = doc.document_number;
+            document.getElementById('editShippingFee').value        = doc.shipping_fee;
+            document.getElementById('editNotes').value              = doc.notes || '';
+            document.getElementById('editLimitText').textContent    =
+                'Đã điều chỉnh ' + doc.edit_count + '/' + doc.max_edits + ' lần. ' +
+                'Còn ' + (doc.max_edits - doc.edit_count) + ' lần điều chỉnh.';
+
+            // Set form action
+            document.getElementById('formEditStockIn').action = updateUrl;
+
+            // Build items table
+            const tbody = document.getElementById('editItemsBody');
+            tbody.innerHTML = '';
+            items.forEach(function (item) {
+                const tr = document.createElement('tr');
+                tr.dataset.itemRow = '1';
+                tr.innerHTML =
+                    '<td>' +
+                        '<div class="fw-600" style="font-size:.85rem;">' + escHtml(item.variant_name) + '</div>' +
+                        (item.sku ? '<small class="text-muted">' + escHtml(item.sku) + '</small>' : '') +
+                        '<input type="hidden" name="items[' + item.id + '][id]" value="' + item.id + '">' +
+                    '</td>' +
+                    '<td class="text-center">' +
+                        '<input type="number" name="items[' + item.id + '][quantity]" class="form-control form-control-sm eq-qty text-center" ' +
+                               'min="0" value="' + item.quantity + '" required>' +
+                    '</td>' +
+                    '<td class="text-center">' +
+                        '<input type="number" name="items[' + item.id + '][unit_cost]" class="form-control form-control-sm eq-cost text-center" ' +
+                               'min="0" step="1000" value="' + item.unit_cost + '" required>' +
+                    '</td>' +
+                    '<td class="text-end fw-700 eq-line" style="color:#b45309;">0đ</td>';
+                tbody.appendChild(tr);
+            });
+
+            calcEditTotal();
+            document.getElementById('editModalSpinner').style.display = 'none';
+            document.getElementById('editModalBody').style.display    = '';
+        })
+        .catch(function (err) {
+            modal.hide();
+            alert(err.message);
+        });
+    });
+
+    function escHtml(str) {
+        return String(str)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
 })();
 </script>
 @endpush

@@ -17,6 +17,7 @@ use App\Models\Transaction;
 use App\Models\User;
 use App\Models\Setting;
 use App\Services\ApprovalService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Cache;
@@ -1336,8 +1337,140 @@ class OrderController extends Controller
             $order->refresh();
             $this->logOrderHistory($order, 'create_order', null, (string) $order->status, 'Sale tao don hang');
 
+            // Cập nhật thứ tự ưu tiên trong ngày + trạng thái đủ/thiếu hàng cho toàn bộ đơn cùng ngày.
+            $this->syncDailySequenceAndStockSufficiency($order->created_at ?: now());
+
             return $order;
         });
+    }
+
+    /**
+     * Recompute FIFO queue by day to persist:
+     * - orders.daily_sequence
+     * - orders.stock_sufficient (1/0)
+     * - orders.stock_shortage_detail (nullable json)
+     */
+    public function syncDailySequenceAndStockSufficiency(Carbon|string $date): void
+    {
+        $dateString = $date instanceof Carbon ? $date->toDateString() : Carbon::parse($date)->toDateString();
+
+        $queueStatuses = [
+            'pending',
+            'draft',
+            'pending_leader_approval',
+            'pending_manager_approval',
+            'pending_warehouse_approval',
+            'approved',
+            Order::STATUS_READY_TO_PACK,
+            Order::STATUS_PACKING,
+            'packed',
+            Order::STATUS_READY_TO_SHIP,
+        ];
+
+        $orders = Order::query()
+            ->with(['items.variant.product', 'items.product'])
+            ->whereDate('created_at', $dateString)
+            ->whereIn('status', $queueStatuses)
+            ->orderBy('created_at', 'asc')
+            ->orderBy('id', 'asc')
+            ->get();
+
+        if ($orders->isEmpty()) {
+            return;
+        }
+
+        $variantIds = $orders
+            ->flatMap(fn (Order $order) => $order->items->pluck('product_variant_id'))
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($variantIds->isEmpty()) {
+            return;
+        }
+
+        $orderItemIds = $orders
+            ->flatMap(fn (Order $order) => $order->items->pluck('id'))
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        $availableByVariant = Inventory::query()
+            ->selectRaw('product_variant_id, COALESCE(SUM(quantity - reserved_quantity), 0) as available_qty')
+            ->whereIn('product_variant_id', $variantIds->all())
+            ->groupBy('product_variant_id')
+            ->pluck('available_qty', 'product_variant_id')
+            ->map(fn ($v) => (float) $v)
+            ->all();
+
+        $todayReservedByVariant = [];
+        if ($orderItemIds->isNotEmpty()) {
+            $todayReservedByVariant = InventoryReservation::query()
+                ->join('inventories', 'inventories.id', '=', 'inventory_reservations.inventory_id')
+                ->whereIn('inventory_reservations.order_item_id', $orderItemIds->all())
+                ->selectRaw('inventories.product_variant_id, COALESCE(SUM(inventory_reservations.quantity), 0) as qty')
+                ->groupBy('inventories.product_variant_id')
+                ->pluck('qty', 'inventories.product_variant_id')
+                ->map(fn ($v) => (float) $v)
+                ->all();
+        }
+
+        $remainingByVariant = [];
+        foreach ($variantIds as $variantId) {
+            $variantId = (int) $variantId;
+            $remainingByVariant[$variantId] = max(
+                0,
+                (float) ($availableByVariant[$variantId] ?? 0) + (float) ($todayReservedByVariant[$variantId] ?? 0)
+            );
+        }
+
+        $sequence = 0;
+        foreach ($orders as $order) {
+            $sequence++;
+            $shortages = [];
+            $pendingDeductions = [];
+
+            foreach ($order->items as $item) {
+                $variantId = (int) $item->product_variant_id;
+                $requiredQty = (float) ($item->quantity ?? 0);
+
+                if ($variantId <= 0 || $requiredQty <= 0) {
+                    continue;
+                }
+
+                $availableQty = (float) ($remainingByVariant[$variantId] ?? 0);
+
+                if ($availableQty < $requiredQty) {
+                    $shortages[] = [
+                        'order_id' => (int) $order->id,
+                        'order_code' => (string) ($order->code ?? ('#' . $order->id)),
+                        'order_item_id' => (int) $item->id,
+                        'variant_id' => $variantId,
+                        'variant_name' => (string) ($item->variant?->name ?? $item->product?->name ?? ('SP #' . $variantId)),
+                        'required_qty' => $requiredQty,
+                        'available_qty' => $availableQty,
+                        'short_qty' => round($requiredQty - $availableQty, 3),
+                    ];
+                } else {
+                    $pendingDeductions[$variantId] = ($pendingDeductions[$variantId] ?? 0) + $requiredQty;
+                }
+            }
+
+            $isSufficient = empty($shortages);
+            if ($isSufficient) {
+                foreach ($pendingDeductions as $variantId => $consumeQty) {
+                    $remainingByVariant[$variantId] = max(0, (float) ($remainingByVariant[$variantId] ?? 0) - (float) $consumeQty);
+                }
+            }
+
+            $order->update($this->filterExistingColumns('orders', [
+                'daily_sequence' => $sequence,
+                'stock_sufficient' => $isSufficient ? 1 : 0,
+                'stock_shortage_detail' => $isSufficient ? null : $shortages,
+            ]));
+        }
     }
 
     private function parseWeightToKg(?string $value): float

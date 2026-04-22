@@ -17,11 +17,13 @@ class InventoryDocument extends Model
         'notes',
         'shipping_fee',
         'user_id',
+        'edit_count',
     ];
 
     protected $casts = [
         'document_date' => 'date',
         'shipping_fee' => 'decimal:2',
+        'edit_count' => 'integer',
     ];
 
     protected static function booted(): void
@@ -44,6 +46,11 @@ class InventoryDocument extends Model
     public function items()
     {
         return $this->hasMany(InventoryDocumentItem::class);
+    }
+
+    public function edits()
+    {
+        return $this->hasMany(InventoryDocumentEdit::class)->orderBy('edit_number');
     }
 
     public function warehouse()

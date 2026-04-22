@@ -901,6 +901,15 @@ class PageController extends Controller
 
         $user = auth()->user();
         $search = trim((string) $request->input('q', ''));
+        $mode = $request->input('mode', 'multi'); // 'single' or 'multi'
+        $perPage = min((int) $request->input('per_page', 15), 50);
+        $perPage = max($perPage, 5);
+        $allowedSortBy = ['name', 'phone', 'email'];
+        $sortBy = in_array($request->input('sort_by', 'name'), $allowedSortBy, true)
+            ? $request->input('sort_by', 'name')
+            : 'name';
+        $sortDir = $request->input('sort_dir', 'asc') === 'desc' ? 'desc' : 'asc';
+
         $selectedCustomerIds = collect(explode(',', (string) $request->input('selected_ids', '')))
             ->map(fn ($id) => (int) trim($id))
             ->filter(fn ($id) => $id > 0)
@@ -916,12 +925,19 @@ class PageController extends Controller
                         ->orWhere('email', 'like', "%{$search}%");
                 });
             })
-            ->orderBy('name')
-            ->paginate(15, ['*'], 'page');
+            ->orderBy($sortBy, $sortDir)
+            ->paginate($perPage, ['*'], 'page');
 
-        $html = view('site.orders.partials.customer_listing', [
+        $partial = $mode === 'single'
+            ? 'site.orders.partials.customer_picker_single'
+            : 'site.orders.partials.customer_listing';
+
+        $html = view($partial, [
             'customers' => $customers,
             'selectedCustomerIds' => $selectedCustomerIds,
+            'sortBy' => $sortBy,
+            'sortDir' => $sortDir,
+            'perPage' => $perPage,
         ])->render();
 
         return response()->json([
@@ -2131,7 +2147,130 @@ class PageController extends Controller
 
     public function myCustomerImportForm()
     {
-        return view('site.my_customer.import', ['settings' => $this->settings]);
+        $result = session('my_customer_import_result', []);
+
+        $importedCustomerIds = collect($result['imported_customer_ids'] ?? [])
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        $userId = auth()->id();
+        $importedCustomers = collect();
+
+        if ($importedCustomerIds->isNotEmpty()) {
+            $importedCustomers = Customer::query()
+                ->withCount('orders')
+                ->withSum('orders as total_debt', 'amount_due')
+                ->with(['type', 'addresses' => function ($q) {
+                    $q->where('is_default', true)->orWhere('is_default', null)->limit(1);
+                }])
+                ->whereIn('id', $importedCustomerIds->all())
+                ->where(function ($q) use ($userId) {
+                    $q->where('user_id', $userId)
+                        ->orWhere('assigned_to', $userId);
+                })
+                ->orderByDesc('id')
+                ->get();
+        }
+
+        return view('site.my_customer.import', [
+            'settings' => $this->settings,
+            'importResult' => [
+                'imported_count' => (int) ($result['imported_count'] ?? 0),
+                'duplicate_count' => (int) ($result['duplicate_count'] ?? 0),
+                'failed_count' => (int) ($result['failed_count'] ?? 0),
+                'duplicate_rows' => $result['duplicate_rows'] ?? [],
+                'failed_rows' => $result['failed_rows'] ?? [],
+            ],
+            'importedCustomers' => $importedCustomers,
+        ]);
+    }
+
+    public function myCustomerImport(Request $request)
+    {
+        $request->validate([
+            'file' => 'required|file|mimes:xlsx,xls,csv',
+        ]);
+
+        $import = new \App\Imports\CustomerImportWithErrorReport();
+
+        try {
+            Excel::import($import, $request->file('file'));
+
+            $validationFailures = collect($import->failures())->map(function ($failure) {
+                return [
+                    'row' => (int) $failure->row(),
+                    'attribute' => (string) $failure->attribute(),
+                    'errors' => (array) $failure->errors(),
+                    'values' => (array) $failure->values(),
+                ];
+            });
+
+            $runtimeFailures = collect($import->getImported())
+                ->where('status', 'fail')
+                ->values()
+                ->map(function ($entry, $index) {
+                    return [
+                        'row' => null,
+                        'attribute' => null,
+                        'errors' => [(string) ($entry['error'] ?? 'Dữ liệu không hợp lệ.')],
+                        'values' => (array) ($entry['row'] ?? []),
+                        'runtime_index' => $index + 1,
+                    ];
+                });
+
+            $allFailures = $validationFailures->concat($runtimeFailures)->values();
+
+            $isDuplicateFailure = function (array $failure): bool {
+                $messages = collect($failure['errors'] ?? [])->map(fn ($msg) => mb_strtolower((string) $msg));
+                $joined = $messages->implode(' | ');
+
+                return str_contains($joined, 'unique')
+                    || str_contains($joined, 'already been taken')
+                    || str_contains($joined, 'da ton tai')
+                    || str_contains($joined, 'đã tồn tại')
+                    || str_contains($joined, 'trùng');
+            };
+
+            $duplicateRows = $allFailures->filter($isDuplicateFailure)->values();
+            $failedRows = $allFailures->reject($isDuplicateFailure)->values();
+
+            $importedCustomerIds = collect($import->getImported())
+                ->where('status', 'success')
+                ->pluck('customer_id')
+                ->filter()
+                ->map(fn ($id) => (int) $id)
+                ->unique()
+                ->values()
+                ->all();
+
+            $result = [
+                'imported_count' => count($importedCustomerIds),
+                'duplicate_count' => $duplicateRows->count(),
+                'failed_count' => $failedRows->count(),
+                'imported_customer_ids' => $importedCustomerIds,
+                'duplicate_rows' => $duplicateRows->all(),
+                'failed_rows' => $failedRows->all(),
+            ];
+
+            $statusMessage = 'Import hoàn tất: ' . $result['imported_count'] . ' khách hàng mới';
+            if ($result['duplicate_count'] > 0) {
+                $statusMessage .= ', ' . $result['duplicate_count'] . ' dòng trùng';
+            }
+            if ($result['failed_count'] > 0) {
+                $statusMessage .= ', ' . $result['failed_count'] . ' dòng lỗi';
+            }
+
+            return redirect()
+                ->route('my_customer.import_form')
+                ->with('success', $statusMessage)
+                ->with('my_customer_import_result', $result);
+        } catch (\Throwable $e) {
+            return redirect()
+                ->route('my_customer.import_form')
+                ->with('error', 'Import thất bại: ' . $e->getMessage());
+        }
     }
 
     public function myCustomerShow(Customer $customer, Request $request)
@@ -2586,24 +2725,11 @@ class PageController extends Controller
                 ->with('error', 'Chi duoc sua don cho duyet leader duoc tao trong ngay.');
         }
 
-        $customerIds = Order::query()
-            ->where('user_id', $user->id)
-            ->whereNotNull('customer_id')
-            ->pluck('customer_id')
-            ->unique()
-            ->values();
-
-        $customers = Customer::query()
-            ->whereIn('id', $customerIds)
-            ->orderBy('name')
-            ->get();
-
         $order->load('items.variant.product', 'customer');
 
         return view('site.orders.edit', [
             'settings' => $this->settings,
             'order' => $order,
-            'customers' => $customers,
         ]);
     }
 
@@ -2893,6 +3019,8 @@ class PageController extends Controller
             app(ApprovalService::class)->initOrderApproval($order->fresh());
         });
 
+        app(OrderController::class)->syncDailySequenceAndStockSufficiency($order->fresh()->created_at ?: now());
+
         return redirect()->route('site.orders.show', $order)
             ->with('success', 'Da cap nhat don hang thanh cong.');
     }
@@ -2936,6 +3064,8 @@ class PageController extends Controller
             app(ApprovalService::class)->initOrderApproval($order->fresh());
         });
 
+        app(OrderController::class)->syncDailySequenceAndStockSufficiency($order->fresh()->created_at ?: now());
+
         return redirect()->route('pages.my_orders')
             ->with('success', 'Đã xác nhận đơn #' . $order->code . ' và gửi lên leader duyệt.');
     }
@@ -2948,7 +3078,9 @@ class PageController extends Controller
             ->where('user_id', $user->id) // bảo mật
             ->findOrFail($id);
 
-        DB::transaction(function () use ($oldOrder, $user) {
+        $copiedOrderDate = now();
+
+        DB::transaction(function () use ($oldOrder, $user, &$copiedOrderDate) {
             $resolvedCustomerId = (int) ($oldOrder->customer_id ?? 0);
 
             if ($resolvedCustomerId <= 0 || !Customer::query()->whereKey($resolvedCustomerId)->exists()) {
@@ -3013,7 +3145,18 @@ class PageController extends Controller
             if ($this->hasOrderColumn('copied_from_order_id')) {
                 $newOrder->copied_from_order_id = $oldOrder->id;
             }
+            if ($this->hasOrderColumn('daily_sequence')) {
+                $newOrder->daily_sequence = null;
+            }
+            if ($this->hasOrderColumn('stock_sufficient')) {
+                $newOrder->stock_sufficient = null;
+            }
+            if ($this->hasOrderColumn('stock_shortage_detail')) {
+                $newOrder->stock_shortage_detail = null;
+            }
             $newOrder->save();
+
+            $copiedOrderDate = $newOrder->created_at ?: now();
 
             // clone items (giữ nguyên giá cũ, confirmCopyOrder sẽ refresh giá)
             foreach ($oldOrder->items as $item) {
@@ -3023,6 +3166,8 @@ class PageController extends Controller
             }
             // Không init approval ở đây – sale cần bấm "Xác Nhận" để gửi duyệt.
         });
+
+        app(OrderController::class)->syncDailySequenceAndStockSufficiency($copiedOrderDate);
 
         return redirect()->route('pages.my_orders')
             ->with('success', 'Đã copy đơn #' . $oldOrder->code . '. Vui lòng xem lại và bấm "Xác Nhận" để gửi duyệt.');

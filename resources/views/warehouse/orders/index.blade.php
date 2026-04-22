@@ -275,6 +275,87 @@
             gap: 6px;
         }
     }
+
+    /* ── Stock Drawer (offcanvas) ───────────────────────── */
+    :root { --stock-drawer-width: 380px; }
+    #stockDrawer {
+        width: var(--stock-drawer-width);
+    }
+    body.stock-drawer-pinned .wh-orders-shell {
+        padding-right: calc(var(--stock-drawer-width) + 16px);
+        transition: padding-right .25s ease;
+    }
+    body.stock-drawer-pinned #stockDrawer {
+        visibility: visible !important;
+        transform: none !important;
+        box-shadow: -4px 0 24px rgba(15,23,42,0.10);
+    }
+    #stockDrawer .offcanvas-header {
+        background: #f8fafc;
+        border-bottom: 1px solid #e2e8f0;
+    }
+    #stockDrawer .offcanvas-body {
+        padding: 16px;
+        overflow-y: auto;
+    }
+    #stockDrawerPinBtn.pinned {
+        background: #dbeafe;
+        border-color: #2563eb;
+        color: #1d4ed8;
+    }
+    .wh-stock-trigger-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .wh-stock-item.is-short {
+        border-color: #fca5a5;
+        background: #fff8f8;
+    }
+    .wh-stock-item.is-short .wh-stock-name {
+        color: #991b1b;
+    }
+    .wh-stock-shortage-badge {
+        display: inline-block;
+        font-size: .7rem;
+        font-weight: 700;
+        padding: 1px 6px;
+        border-radius: 999px;
+        background: #fef2f2;
+        color: #dc2626;
+        border: 1px solid #fca5a5;
+        margin-left: 4px;
+    }
+    .wh-stock-summary {
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        background: #f8fafc;
+        padding: 10px 12px;
+        margin-bottom: 14px;
+        font-size: .82rem;
+    }
+    .wh-stock-summary-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 3px 0;
+        border-bottom: 1px solid #f1f5f9;
+    }
+    .wh-stock-summary-row:last-child { border-bottom: 0; }
+    .wh-stock-summary-row .label { color: #64748b; }
+    .wh-stock-summary-row .value { font-weight: 700; color: #0f172a; }
+    .wh-stock-summary-row .value.danger { color: #dc2626; }
+    .wh-drawer-date-badge {
+        display: inline-block;
+        font-size: .75rem;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: #eff6ff;
+        color: #1d4ed8;
+        border: 1px solid #bfdbfe;
+        margin-top: 2px;
+    }
 </style>
 @endpush
 
@@ -299,40 +380,97 @@
 
     $packedLikeStatuses = ['packed', 'packed_waiting_pickup', 'delivering', 'delivered', 'completed'];
 
-    $inventoryStats = $orders
-        ->flatMap(function ($order) use ($packedLikeStatuses) {
-            return $order->items->map(function ($item) use ($order, $packedLikeStatuses) {
+    $variantStock = $variantStock ?? [];
+    $stockPanelVariants = $stockPanelVariants ?? collect();
+    $orderStatsByVariant = $orders
+        ->flatMap(function ($order) use ($packedLikeStatuses, $variantStock) {
+            return $order->items->map(function ($item) use ($order, $packedLikeStatuses, $variantStock) {
                 $variant = $item->variant;
                 $productName = $variant?->name ?? $item->product?->name ?? 'Sản phẩm';
                 $orderedQty = (float) ($item->quantity ?? 0);
                 $packedQty = in_array((string) $order->status, $packedLikeStatuses, true) ? $orderedQty : 0;
+                $vid = (int) ($item->product_variant_id ?? 0);
+                // Warehouse-specific stock (not cross-warehouse available_stock)
+                $warehouseStock = isset($variantStock[$vid]) ? (float) $variantStock[$vid] : (float) ($variant?->available_stock ?? 0);
 
                 return [
-                    'variant_id' => (int) ($item->product_variant_id ?? 0),
-                    'name' => $productName,
-                    'raw_available_stock' => max(0, (float) ($variant?->available_stock ?? 0)),
+                    'variant_id'  => $vid,
+                    'name'        => $productName,
+                    'raw_stock'   => max(0, $warehouseStock),
                     'ordered_qty' => $orderedQty,
-                    'packed_qty' => $packedQty,
+                    'packed_qty'  => $packedQty,
                 ];
             });
         })
         ->filter(fn($row) => (int) ($row['variant_id'] ?? 0) > 0)
         ->groupBy('variant_id')
         ->map(function ($rows) use ($fifoRemainingStock) {
-            $first = $rows->first();
+            $first     = $rows->first();
             $variantId = (int) ($first['variant_id'] ?? 0);
-            $fifoStock = isset($fifoRemainingStock[$variantId])
+            $rawStock  = (float) ($first['raw_stock'] ?? 0);
+            // fifo_remaining = stock left after ALL globally-queued prior orders consume their share
+            // This matches exactly what the FIFO packing guard uses to allow/block packing
+            $fifoRemaining = isset($fifoRemainingStock[$variantId])
                 ? max(0, (float) $fifoRemainingStock[$variantId])
-                : (float) ($first['raw_available_stock'] ?? 0);
+                : $rawStock;
             return [
-                'name' => $first['name'] ?? 'Sản phẩm',
-                'available_stock' => $fifoStock,
-                'ordered_qty' => (float) $rows->sum('ordered_qty'),
-                'packed_qty' => (float) $rows->sum('packed_qty'),
+                'name'          => $first['name'] ?? 'Sản phẩm',
+                'raw_stock'     => $rawStock,
+                'fifo_remaining'=> $fifoRemaining,
+                'ordered_qty'   => (float) $rows->sum('ordered_qty'),
+                'packed_qty'    => (float) $rows->sum('packed_qty'),
             ];
         })
-        ->sortByDesc('ordered_qty')
+        ->map(function ($item) {
+            $fifoRemaining = (float) $item['fifo_remaining'];
+            $ordered       = (float) $item['ordered_qty'];
+            // Shortage = gap between what this date needs vs what FIFO left for it
+            // (consistent with packing guard logic)
+            $shortage = max(0, $ordered - $fifoRemaining);
+            return array_merge($item, [
+                'shortage' => $shortage,
+                'is_short' => $shortage > 0,
+            ]);
+        })
+        ->keyBy('variant_id');
+
+    $inventoryStats = collect($stockPanelVariants)
+        ->map(function ($variant) use ($orderStatsByVariant, $fifoRemainingStock, $variantStock) {
+            $variantId = (int) $variant->id;
+            $rawStock = max(0, (float) ($variantStock[$variantId] ?? $variant->available_stock ?? 0));
+            $orderStat = $orderStatsByVariant->get($variantId, []);
+            $orderedQty = (float) ($orderStat['ordered_qty'] ?? 0);
+            $packedQty = (float) ($orderStat['packed_qty'] ?? 0);
+            $fifoRemaining = isset($fifoRemainingStock[$variantId])
+                ? max(0, (float) $fifoRemainingStock[$variantId])
+                : $rawStock;
+            $name = $variant->name ?: $variant->product?->name ?: 'Sản phẩm';
+            $shortage = max(0, $orderedQty - $fifoRemaining);
+
+            return [
+                'variant_id' => $variantId,
+                'name' => $name,
+                'sku' => $variant->sku,
+                'raw_stock' => $rawStock,
+                'fifo_remaining' => $fifoRemaining,
+                'ordered_qty' => $orderedQty,
+                'packed_qty' => $packedQty,
+                'shortage' => $shortage,
+                'is_short' => $shortage > 0,
+            ];
+        })
+        ->filter(fn ($item) => (float) $item['raw_stock'] > 0 || (float) $item['ordered_qty'] > 0 || (float) $item['packed_qty'] > 0)
+        ->sortByDesc(fn($i) => [(int)$i['is_short'], $i['ordered_qty'], $i['raw_stock']])
         ->values();
+
+    // Summary totals
+    $stockSummary = [
+        'total_products' => $inventoryStats->count(),
+        'short_products' => $inventoryStats->where('is_short', true)->count(),
+        'total_ordered'  => $inventoryStats->sum('ordered_qty'),
+        'total_packed'   => $inventoryStats->sum('packed_qty'),
+        'total_shortage' => $inventoryStats->sum('shortage'),
+    ];
 @endphp
 <div class="wh-orders-shell">
     <div class="card border-0 shadow-sm mb-3">
@@ -392,72 +530,28 @@
             <span class="badge bg-primary wh-summary-pill">Chờ đóng gói: {{ $orders->whereIn('status', ['approved', 'ready_to_pack'])->count() }}</span>
             <span class="badge bg-warning text-dark wh-summary-pill">Đang đóng: {{ $orders->where('status', 'packing')->count() }}</span>
         </div>
-        <a href="{{ route('warehouse.dashboard') }}" class="btn btn-outline-secondary btn-sm">
-            <i class="bi bi-arrow-left me-1"></i>Dashboard
-        </a>
-    </div>
-
-    <div class="card wh-stock-panel mb-3">
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <div class="fw-semibold">
-                <i class="bi bi-bar-chart-steps me-1"></i>Show tồn kho theo sản phẩm
-            </div>
-            <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#warehouseStockCollapse" aria-expanded="false" aria-controls="warehouseStockCollapse">
-                Mở / Thu gọn
-            </button>
-        </div>
-        <div class="collapse" id="warehouseStockCollapse">
-            <div class="card-body">
-                @if($inventoryStats->isEmpty())
-                    <div class="text-muted small">Không có dữ liệu tồn kho theo danh sách đơn hiện tại.</div>
-                @else
-                    <div class="wh-stock-grid">
-                        @foreach($inventoryStats as $stockItem)
-                            @php
-                                $maxBar = max(1, (float) $stockItem['available_stock'], (float) $stockItem['ordered_qty'], (float) $stockItem['packed_qty']);
-                                $availableWidth = min(100, ((float) $stockItem['available_stock'] / $maxBar) * 100);
-                                $orderedWidth = min(100, ((float) $stockItem['ordered_qty'] / $maxBar) * 100);
-                                $packedWidth = min(100, ((float) $stockItem['packed_qty'] / $maxBar) * 100);
-                            @endphp
-                            <div class="wh-stock-item">
-                                <div class="wh-stock-name">{{ $stockItem['name'] }}</div>
-
-                                <div class="stock-bar-wrap">
-                                    <div class="stock-bar-meta">
-                                        <span>1. Số lượng tồn kho</span>
-                                        <strong>{{ number_format($stockItem['available_stock'], 0, ',', '.') }}</strong>
-                                    </div>
-                                    <div class="stock-bar-track">
-                                        <div class="stock-bar-fill stock-available" style="width: {{ $availableWidth }}%"></div>
-                                    </div>
-                                </div>
-
-                                <div class="stock-bar-wrap">
-                                    <div class="stock-bar-meta">
-                                        <span>2. Số lượng đặt theo đơn</span>
-                                        <strong>{{ number_format($stockItem['ordered_qty'], 0, ',', '.') }}</strong>
-                                    </div>
-                                    <div class="stock-bar-track">
-                                        <div class="stock-bar-fill stock-ordered" style="width: {{ $orderedWidth }}%"></div>
-                                    </div>
-                                </div>
-
-                                <div class="stock-bar-wrap mb-0">
-                                    <div class="stock-bar-meta">
-                                        <span>3. Số lượng đã đóng hàng</span>
-                                        <strong>{{ number_format($stockItem['packed_qty'], 0, ',', '.') }}</strong>
-                                    </div>
-                                    <div class="stock-bar-track">
-                                        <div class="stock-bar-fill stock-packed" style="width: {{ $packedWidth }}%"></div>
-                                    </div>
-                                </div>
-                            </div>
-                        @endforeach
-                    </div>
+        <div class="d-flex gap-2">
+            <button type="button"
+                class="btn btn-outline-info btn-sm wh-stock-trigger-btn"
+                id="stockDrawerToggleBtn"
+                data-bs-toggle="offcanvas"
+                data-bs-target="#stockDrawer"
+                aria-controls="stockDrawer">
+                <i class="bi bi-bar-chart-steps"></i>Tồn kho
+                @if($inventoryStats->isNotEmpty())
+                    <span class="badge bg-info text-dark ms-1">{{ $inventoryStats->count() }}</span>
                 @endif
-            </div>
+            </button>
+            <button type="button" class="btn btn-warning btn-sm" id="rapDonHangBtn" title="Kiểm tra tồn kho và đánh số thứ tự ưu tiên cho toàn bộ đơn trong ngày">
+                <i class="bi bi-boxes me-1"></i>Ráp Đơn Hàng
+            </button>
+            <a href="{{ route('warehouse.dashboard') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-arrow-left me-1"></i>Dashboard
+            </a>
         </div>
     </div>
+
+
 
     @if($orders->isEmpty())
         <div class="card border-0 shadow-sm text-center py-5">
@@ -486,15 +580,28 @@
                 $hasStockShortage = (bool) ($stockGuard['has_shortage'] ?? false);
                 $canStartPacking = (bool) ($stockGuard['can_start_packing'] ?? true);
                 $stockShortages = collect($stockGuard['shortages'] ?? []);
+                // Persisted fields
+                $dailySeq = $order->daily_sequence;
+                $stockSufficient = $order->stock_sufficient; // null=未检查, 1=ok, 0=shortage
+                $savedShortageDetail = collect($order->stock_shortage_detail ?? []);
+                // Lock 'Đóng hàng' if persisted shortage detected AND live guard also blocks
+                $savedStockBlocked = $stockSufficient === 0;
             @endphp
             <div class="col-12 col-lg-8 col-xxl-4">
                 <div class="card wh-order-card js-order-card" data-order-id="{{ $order->id }}">
                      
-                    <span class="wh-order-index">#{{ $loop->iteration }}</span>
+                    <span class="wh-order-index">#{{ $dailySeq ?? $loop->iteration }}</span>
                     <div class="card-header bg-white d-flex justify-content-between align-items-center">
                         <div>
                             <div class="fw-semibold">{{ $order->code }}</div>
                             <small class="text-muted">{{ $order->created_at->format('d/m/Y H:i') }}</small>
+                            @if(!is_null($stockSufficient))
+                                @if($stockSufficient)
+                                    <span class="badge bg-success ms-1" style="font-size:.65rem;"><i class="bi bi-check-circle me-1"></i>Đủ hàng</span>
+                                @else
+                                    <span class="badge bg-danger ms-1" style="font-size:.65rem;"><i class="bi bi-exclamation-triangle me-1"></i>Thiếu hàng</span>
+                                @endif
+                            @endif
                         </div>
                         <span class="badge {{ $meta['class'] }} js-order-status">{{ $meta['label'] }}</span>
                     </div>
@@ -528,12 +635,13 @@
 
                         <div class="wh-section pb-0">
                             <div class="wh-logistics-title">Danh sách sản phẩm cần đóng & cập nhật kho</div>
-                            @if($hasStockShortage && $isReadyToPack)
+                            @if(($savedStockBlocked || $hasStockShortage) && $isReadyToPack)
+                                @php $shortageList = $stockShortages->isNotEmpty() ? $stockShortages : $savedShortageDetail; @endphp
                                 <div class="wh-stock-alert" title="Không thể bắt đầu đóng hàng khi tồn kho chưa đáp ứng.">
                                     <details>
                                         <summary>Không đủ tồn kho để đóng hàng</summary>
                                         <ul>
-                                            @foreach($stockShortages as $shortage)
+                                            @foreach($shortageList as $shortage)
                                                 <li>
                                                     {{ $shortage['variant_name'] ?? 'Sản phẩm' }}:
                                                     cần {{ number_format((int) ($shortage['required_qty'] ?? 0)) }},
@@ -775,7 +883,8 @@
 
                         @if($canProcessThisOrder && ($isReadyToPack || $isPacking))
                             @if($isReadyToPack)
-                                @if($canStartPacking)
+                                @php $packingBlocked = $savedStockBlocked || !$canStartPacking; @endphp
+                                @if(!$packingBlocked)
                                     <form action="{{ route('warehouse.orders.start-packing', $order) }}" method="POST" class="d-grid js-start-packing-form">
                                         @csrf
                                         <button class="btn btn-primary btn-sm js-start-packing-btn" type="submit">
@@ -787,12 +896,13 @@
                                         <button class="btn btn-danger btn-sm" type="button" disabled>
                                             <i class="bi bi-exclamation-triangle-fill me-1"></i>Không đủ hàng – Chờ nhập kho
                                         </button>
-                                        @if($stockShortages->isNotEmpty())
+                                        @if($stockShortages->isNotEmpty() || $savedShortageDetail->isNotEmpty())
+                                            @php $detailList = $stockShortages->isNotEmpty() ? $stockShortages : $savedShortageDetail; @endphp
                                             <div class="wh-stock-alert mt-1">
                                                 <details>
-                                                    <summary>Chi tiết thiếu hàng ({{ $stockShortages->count() }} sản phẩm)</summary>
+                                                    <summary>Chi tiết thiếu hàng ({{ $detailList->count() }} sản phẩm)</summary>
                                                     <ul>
-                                                        @foreach($stockShortages as $shortage)
+                                                        @foreach($detailList as $shortage)
                                                             <li>
                                                                 <strong>{{ $shortage['variant_name'] ?? 'Sản phẩm' }}</strong>:
                                                                 cần {{ number_format((float)($shortage['required_qty'] ?? 0), 0) }},
@@ -845,11 +955,242 @@
     </div>
     @endif
 </div>
+
+{{-- Stock Offcanvas Drawer --}}
+<div class="offcanvas offcanvas-end" tabindex="-1" id="stockDrawer" aria-labelledby="stockDrawerLabel" data-bs-scroll="true" data-bs-backdrop="false">
+    <div class="offcanvas-header">
+        <div id="stockDrawerLabel">
+            <div class="fw-bold" style="font-size:1rem;">
+                <i class="bi bi-bar-chart-steps me-1 text-primary"></i>Tồn kho theo sản phẩm
+            </div>
+            <div class="wh-drawer-date-badge">
+                <i class="bi bi-calendar3 me-1"></i>
+                @php
+                    $displayDate = \Illuminate\Support\Carbon::parse($selectedDate);
+                    $isToday = $displayDate->isToday();
+                @endphp
+                {{ $isToday ? 'Hôm nay – ' : '' }}{{ $displayDate->format('d/m/Y') }}
+                @if($status)
+                    &middot; {{ $statusMeta[$status]['label'] ?? $status }}
+                @endif
+            </div>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <button type="button" id="stockDrawerPinBtn" class="btn btn-sm btn-outline-secondary" title="Neo cố định bên phải">
+                <i class="bi bi-pin-angle me-1"></i>Neo
+            </button>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Đóng"></button>
+        </div>
+    </div>
+    <div class="offcanvas-body">
+        @if($inventoryStats->isEmpty())
+            <div class="text-center text-muted py-5">
+                <i class="bi bi-inbox fs-1"></i>
+                <p class="mt-2">Không có đơn hàng nào trong ngày này.</p>
+            </div>
+        @else
+            {{-- Summary --}}
+            <div class="wh-stock-summary">
+                <div class="wh-stock-summary-row">
+                    <span class="label">Số loại hàng</span>
+                    <span class="value">{{ $stockSummary['total_products'] }}</span>
+                </div>
+                @if($stockSummary['short_products'] > 0)
+                <div class="wh-stock-summary-row">
+                    <span class="label">⚠ Loại thiếu hàng</span>
+                    <span class="value danger">{{ $stockSummary['short_products'] }}</span>
+                </div>
+                @endif
+                <div class="wh-stock-summary-row">
+                    <span class="label">Tổng SL đặt trong ngày</span>
+                    <span class="value">{{ number_format($stockSummary['total_ordered'], 0, ',', '.') }}</span>
+                </div>
+                <div class="wh-stock-summary-row">
+                    <span class="label">Đã đóng gói</span>
+                    <span class="value">{{ number_format($stockSummary['total_packed'], 0, ',', '.') }}</span>
+                </div>
+                @if($stockSummary['total_shortage'] > 0)
+                <div class="wh-stock-summary-row">
+                    <span class="label">Tổng SL thiếu kho</span>
+                    <span class="value danger">{{ number_format($stockSummary['total_shortage'], 0, ',', '.') }}</span>
+                </div>
+                @endif
+            </div>
+
+            {{-- Per-product --}}
+            @foreach($inventoryStats as $stockItem)
+                @php
+                    $isShort      = (bool) $stockItem['is_short'];
+                    $fifoRemaining = (float) $stockItem['fifo_remaining'];
+                    $maxBar       = max(1, (float) $stockItem['raw_stock'], (float) $stockItem['ordered_qty']);
+                    $orderedWidth  = min(100, ((float) $stockItem['ordered_qty'] / $maxBar) * 100);
+                    $packedWidth   = min(100, ((float) $stockItem['packed_qty']  / $maxBar) * 100);
+                    $fifoBarW      = min(100, $maxBar > 0 ? ($fifoRemaining / $maxBar) * 100 : 0);
+                    $rawBarW       = min(100, $maxBar > 0 ? ((float) $stockItem['raw_stock'] / $maxBar) * 100 : 0);
+                @endphp
+                <div class="wh-stock-item mb-2 {{ $isShort ? 'is-short' : '' }}">
+                    <div class="wh-stock-name">
+                        {{ $stockItem['name'] }}
+                        @if(!empty($stockItem['sku']))
+                            <span class="text-muted small d-block mt-1">SKU: {{ $stockItem['sku'] }}</span>
+                        @endif
+                        @if($isShort)
+                            <span class="wh-stock-shortage-badge">Thiếu {{ number_format($stockItem['shortage'], 0, ',', '.') }}</span>
+                        @endif
+                    </div>
+
+                    {{-- Tồn kho khả dụng (quantity - reserved_quantity) --}}
+                    <div class="stock-bar-wrap">
+                        <div class="stock-bar-meta">
+                            <span>Tồn kho khả dụng</span>
+                            <strong>{{ number_format($stockItem['raw_stock'], 0, ',', '.') }}</strong>
+                        </div>
+                        <div class="stock-bar-track">
+                            <div class="stock-bar-fill stock-available" style="width: {{ $rawBarW }}%"></div>
+                        </div>
+                    </div>
+
+                    {{-- Khả dụng cho đơn ngày này (sau khi FIFO trừ đơn toàn cục đứng trước) --}}
+                    <div class="stock-bar-wrap">
+                        <div class="stock-bar-meta">
+                            <span>Khả dụng cho đơn ngày này</span>
+                            <strong class="{{ $isShort ? 'text-danger' : 'text-success' }}">{{ number_format($fifoRemaining, 0, ',', '.') }}</strong>
+                        </div>
+                        <div class="stock-bar-track">
+                            <div class="stock-bar-fill" style="width: {{ $fifoBarW }}%; background: {{ $isShort ? '#ef4444' : 'linear-gradient(90deg,#16a34a,#22c55e)' }};"></div>
+                        </div>
+                    </div>
+
+                    {{-- Đặt theo đơn --}}
+                    <div class="stock-bar-wrap">
+                        <div class="stock-bar-meta">
+                            <span>Đặt theo đơn ngày {{ \Illuminate\Support\Carbon::parse($selectedDate)->format('d/m') }}</span>
+                            <strong>{{ number_format($stockItem['ordered_qty'], 0, ',', '.') }}</strong>
+                        </div>
+                        <div class="stock-bar-track">
+                            <div class="stock-bar-fill stock-ordered" style="width: {{ $orderedWidth }}%"></div>
+                        </div>
+                    </div>
+
+                    {{-- Đã đóng gói --}}
+                    <div class="stock-bar-wrap">
+                        <div class="stock-bar-meta">
+                            <span>Đã đóng gói</span>
+                            <strong>{{ number_format($stockItem['packed_qty'], 0, ',', '.') }}</strong>
+                        </div>
+                        <div class="stock-bar-track">
+                            <div class="stock-bar-fill stock-packed" style="width: {{ $packedWidth }}%"></div>
+                        </div>
+                    </div>
+
+                </div>
+            @endforeach
+        @endif
+    </div>
+</div>
 @endsection
 
 @push('scripts')
 <script>
-    document.addEventListener('DOMContentLoaded', function () {
+        // ── Ráp Đơn Hàng Button ───────────────────────────────────────
+        const rapBtn = document.getElementById('rapDonHangBtn');
+        if (rapBtn) {
+            rapBtn.addEventListener('click', async function () {
+                rapBtn.disabled = true;
+                rapBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Đang ráp...';
+
+                // Get current date from URL or form
+                const urlParams = new URLSearchParams(window.location.search);
+                const dateParam = urlParams.get('date') || '';
+
+                const formData = new FormData();
+                formData.append('_token', document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '');
+                if (dateParam) formData.append('date', dateParam);
+
+                try {
+                    const response = await fetch('{{ route('warehouse.orders.rap-don-hang') }}', {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                        body: formData,
+                    });
+
+                    let payload = {};
+                    try { payload = await response.json(); } catch (e) {}
+
+                    if (!response.ok || payload.ok === false) {
+                        throw new Error(payload.message || 'Ráp đơn hàng thất bại.');
+                    }
+
+                    if (typeof showToast === 'function') {
+                        showToast(payload.message || 'Đã ráp đơn hàng xong.', 'success');
+                    }
+
+                    // Reload after short delay to reflect updated badges
+                    setTimeout(() => window.location.reload(), 1200);
+                } catch (error) {
+                    if (typeof showToast === 'function') {
+                        showToast(error.message || 'Có lỗi xảy ra khi ráp đơn.', 'error');
+                    }
+                    rapBtn.disabled = false;
+                    rapBtn.innerHTML = '<i class="bi bi-boxes me-1"></i>Ráp Đơn Hàng';
+                }
+            });
+        }
+        // ─────────────────────────────────────────────────────────────
+    });
+        const stockDrawerEl  = document.getElementById('stockDrawer');
+        const stockPinBtn    = document.getElementById('stockDrawerPinBtn');
+        const PINNED_KEY     = 'wh_stock_drawer_pinned';
+        let isPinned         = localStorage.getItem(PINNED_KEY) === '1';
+
+        if (stockDrawerEl && typeof bootstrap !== 'undefined') {
+            const bsOffcanvas = bootstrap.Offcanvas.getOrCreateInstance(stockDrawerEl, {
+                backdrop: false,
+                scroll: true,
+            });
+
+            function applyPinnedState(open) {
+                if (isPinned) {
+                    document.body.classList.add('stock-drawer-pinned');
+                    if (open !== false) bsOffcanvas.show();
+                    if (stockPinBtn) {
+                        stockPinBtn.innerHTML = '<i class="bi bi-pin-fill me-1"></i>Bỏ neo';
+                        stockPinBtn.classList.add('pinned');
+                    }
+                } else {
+                    document.body.classList.remove('stock-drawer-pinned');
+                    if (stockPinBtn) {
+                        stockPinBtn.innerHTML = '<i class="bi bi-pin-angle me-1"></i>Neo';
+                        stockPinBtn.classList.remove('pinned');
+                    }
+                }
+            }
+
+            // Prevent closing via Esc when pinned
+            stockDrawerEl.addEventListener('hide.bs.offcanvas', function (e) {
+                if (isPinned) e.preventDefault();
+            });
+
+            stockPinBtn?.addEventListener('click', function () {
+                isPinned = !isPinned;
+                localStorage.setItem(PINNED_KEY, isPinned ? '1' : '0');
+                if (!isPinned) {
+                    applyPinnedState();
+                    bsOffcanvas.hide();
+                } else {
+                    applyPinnedState();
+                }
+            });
+
+            // Auto-open if was pinned
+            if (isPinned) applyPinnedState(true);
+        }
+        // ─────────────────────────────────────────────────────────
+
         async function submitLogisticsForm(form) {
             const submitBtn = form.querySelector('.js-logistics-submit-btn');
             if (submitBtn) {

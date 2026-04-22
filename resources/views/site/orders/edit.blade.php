@@ -228,14 +228,23 @@
 
                             <div class="row">
                                 <div class="col-md-6 mb-3">
-                                    <label for="customer_id" class="form-label fw-bold">Khách hàng</label>
-                                    <select name="customer_id" id="customer_id" class="form-select" required>
-                                        @foreach($customers as $customer)
-                                            <option value="{{ $customer->id }}" {{ (int) old('customer_id', $order->customer_id) === (int) $customer->id ? 'selected' : '' }}>
-                                                {{ $customer->name }}
-                                            </option>
-                                        @endforeach
-                                    </select>
+                                    <label class="form-label fw-bold">Khách hàng</label>
+                                    <input type="hidden" name="customer_id" id="customer_id" value="{{ old('customer_id', $order->customer_id) }}" required>
+                                    <div class="d-flex align-items-stretch gap-2">
+                                        <div id="selected-customer-display" class="form-control d-flex align-items-center justify-content-between flex-grow-1" style="min-height:38px; cursor:default;">
+                                            <span id="selected-customer-name" class="{{ $order->customer ? '' : 'd-none' }}">
+                                                {{ $order->customer?->name }}
+                                                @if($order->customer?->phone)
+                                                    <small class="text-muted ms-1">{{ $order->customer->phone }}</small>
+                                                @endif
+                                            </span>
+                                            <span id="no-customer-placeholder" class="text-muted {{ $order->customer ? 'd-none' : '' }}">Chưa chọn khách hàng</span>
+                                            <button type="button" id="clear-customer-btn" class="btn-close ms-2 {{ $order->customer ? '' : 'd-none' }}" style="font-size:.6rem;" aria-label="Xóa"></button>
+                                        </div>
+                                        <button type="button" class="btn btn-outline-primary btn-sm px-3" id="open-customer-picker-btn" title="Chọn khách hàng">
+                                            &#128269; Chọn
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <div class="col-md-6 mb-3">
@@ -487,11 +496,201 @@
         </form>
     </div>
 </section>
+
+{{-- Customer Picker Modal --}}
+<div class="modal fade" id="customerPickerModal" tabindex="-1" aria-labelledby="customerPickerModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold" id="customerPickerModalLabel">Chọn khách hàng</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-2 mb-3">
+                    <div class="col-md-5">
+                        <input type="text" id="customer-search-input" class="form-control form-control-sm"
+                            placeholder="Tìm theo tên, SĐT, email...">
+                    </div>
+                    <div class="col-md-4">
+                        <div class="input-group input-group-sm">
+                            <label class="input-group-text" for="customer-sort-select">Sắp xếp</label>
+                            <select id="customer-sort-select" class="form-select form-select-sm">
+                                <option value="name|asc" selected>Tên A → Z</option>
+                                <option value="name|desc">Tên Z → A</option>
+                                <option value="phone|asc">SĐT tăng dần</option>
+                                <option value="phone|desc">SĐT giảm dần</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="input-group input-group-sm">
+                            <label class="input-group-text" for="customer-per-page-select">Hiển thị</label>
+                            <select id="customer-per-page-select" class="form-select form-select-sm">
+                                <option value="10">10</option>
+                                <option value="15" selected>15</option>
+                                <option value="25">25</option>
+                                <option value="50">50</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div id="customer-picker-results">
+                    <div class="text-center text-muted py-4">Đang tải danh sách khách hàng...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 @endsection
 
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    // ── Customer Picker ──────────────────────────────────────────────
+    const customerPickerModal   = document.getElementById('customerPickerModal');
+    const customerPickerResults = document.getElementById('customer-picker-results');
+    const customerSearchInput   = document.getElementById('customer-search-input');
+    const customerSortSelect    = document.getElementById('customer-sort-select');
+    const customerPerPageSelect = document.getElementById('customer-per-page-select');
+    const openPickerBtn         = document.getElementById('open-customer-picker-btn');
+    const clearCustomerBtn      = document.getElementById('clear-customer-btn');
+    const customerIdInput       = document.getElementById('customer_id');
+    const selectedCustomerName  = document.getElementById('selected-customer-name');
+    const noCustomerPlaceholder = document.getElementById('no-customer-placeholder');
+
+    let cpSearchTimeout   = null;
+    let cpCurrentPage     = 1;
+    const cpAjaxUrl       = '{{ route('site.orders.customers.ajax') }}';
+
+    function loadCustomers(page) {
+        cpCurrentPage = page || 1;
+        const sortParts = (customerSortSelect?.value || 'name|asc').split('|');
+        const sortBy    = sortParts[0] || 'name';
+        const sortDir   = sortParts[1] || 'asc';
+
+        customerPickerResults.innerHTML = '<div class="text-center text-muted py-4">Đang tải...</div>';
+
+        const params = new URLSearchParams({
+            q:        customerSearchInput?.value?.trim() || '',
+            per_page: customerPerPageSelect?.value || '15',
+            sort_by:  sortBy,
+            sort_dir: sortDir,
+            page:     String(cpCurrentPage),
+            mode:     'single',
+        });
+
+        fetch(`${cpAjaxUrl}?${params.toString()}`, {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+            .then(res => res.json())
+            .then(data => {
+                customerPickerResults.innerHTML = data.html || '<div class="text-center text-muted py-4">Không có dữ liệu.</div>';
+            })
+            .catch(() => {
+                customerPickerResults.innerHTML = '<div class="text-danger text-center py-4">Không tải được danh sách khách hàng.</div>';
+            });
+    }
+
+    // Open modal → load customers
+    if (openPickerBtn) {
+        openPickerBtn.addEventListener('click', function () {
+            const modal = bootstrap.Modal.getOrCreateInstance(customerPickerModal);
+            modal.show();
+            loadCustomers(1);
+        });
+    }
+
+    // Auto-load when modal is shown (also covers programmatic open)
+    if (customerPickerModal) {
+        customerPickerModal.addEventListener('shown.bs.modal', function () {
+            customerSearchInput?.focus();
+        });
+    }
+
+    // Search with debounce
+    if (customerSearchInput) {
+        customerSearchInput.addEventListener('input', function () {
+            clearTimeout(cpSearchTimeout);
+            cpSearchTimeout = setTimeout(() => loadCustomers(1), 300);
+        });
+    }
+
+    // Sort / per-page changes
+    [customerSortSelect, customerPerPageSelect].forEach(el => {
+        el?.addEventListener('change', () => loadCustomers(1));
+    });
+
+    // Delegation: pagination buttons and sort links inside the results
+    if (customerPickerResults) {
+        customerPickerResults.addEventListener('click', function (e) {
+            const pageBtn = e.target.closest('.customer-page-btn');
+            if (pageBtn) {
+                e.preventDefault();
+                loadCustomers(parseInt(pageBtn.dataset.page, 10) || 1);
+                return;
+            }
+
+            const sortLink = e.target.closest('.customer-sort-link');
+            if (sortLink) {
+                e.preventDefault();
+                const sortBy  = sortLink.dataset.sortBy;
+                const sortDir = sortLink.dataset.sortDir;
+                if (customerSortSelect) {
+                    customerSortSelect.value = `${sortBy}|${sortDir}`;
+                }
+                loadCustomers(1);
+                return;
+            }
+
+            const selectBtn = e.target.closest('.select-customer-btn');
+            if (selectBtn) {
+                e.preventDefault();
+                const id      = selectBtn.dataset.customerId;
+                const name    = selectBtn.dataset.customerName    || '';
+                const phone   = selectBtn.dataset.customerPhone   || '';
+                const email   = selectBtn.dataset.customerEmail   || '';
+                const address = selectBtn.dataset.customerAddress || '';
+
+                // Set hidden input
+                if (customerIdInput) customerIdInput.value = id;
+
+                // Update display
+                if (selectedCustomerName) {
+                    selectedCustomerName.innerHTML = `<strong>${name}</strong>`
+                        + (phone ? ` <small class="text-muted ms-1">${phone}</small>` : '');
+                    selectedCustomerName.classList.remove('d-none');
+                }
+                if (noCustomerPlaceholder) noCustomerPlaceholder.classList.add('d-none');
+                if (clearCustomerBtn)      clearCustomerBtn.classList.remove('d-none');
+
+                // Auto-fill recipient fields if empty
+                const recipientName    = document.getElementById('recipient_name');
+                const recipientPhone   = document.getElementById('recipient_phone');
+                const recipientEmail   = document.getElementById('recipient_email');
+                const recipientAddress = document.getElementById('recipient_address');
+                if (recipientName    && !recipientName.value.trim()    && name)    recipientName.value    = name;
+                if (recipientPhone   && !recipientPhone.value.trim()   && phone)   recipientPhone.value   = phone;
+                if (recipientEmail   && !recipientEmail.value.trim()   && email)   recipientEmail.value   = email;
+                if (recipientAddress && !recipientAddress.value.trim() && address) recipientAddress.value = address;
+
+                // Close modal
+                bootstrap.Modal.getInstance(customerPickerModal)?.hide();
+                return;
+            }
+        });
+    }
+
+    // Clear selected customer
+    if (clearCustomerBtn) {
+        clearCustomerBtn.addEventListener('click', function () {
+            if (customerIdInput)       customerIdInput.value = '';
+            if (selectedCustomerName)  selectedCustomerName.classList.add('d-none');
+            if (noCustomerPlaceholder) noCustomerPlaceholder.classList.remove('d-none');
+            clearCustomerBtn.classList.add('d-none');
+        });
+    }
+
+    // ── Cart & Variants ──────────────────────────────────────────────
     const cartContainer = document.getElementById('cart-items-container');
     const variantSearchInput = document.getElementById('variant-search');
     const variantSearchButton = document.getElementById('variant-search-button');

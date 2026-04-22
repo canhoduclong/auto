@@ -25,6 +25,14 @@
 .user-avatar.export { background: #fee2e2; color: #b91c1c; }
 .summary-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: .88rem; color: #475569; }
 .summary-row.total { border-top: 2px solid #e2e8f0; margin-top: 8px; padding-top: 12px; font-weight: 800; color: #0f172a; font-size: 1rem; }
+.edit-history-card { background: #fff; border-radius: 12px; box-shadow: 0 4px 14px rgba(15,23,42,.07); overflow: hidden; }
+.edit-history-head { padding: 14px 18px 10px; font-weight: 700; font-size: .9rem; color: #0f172a; border-bottom: 1px solid #f1f5f9; }
+.edit-history-item { border-bottom: 1px solid #f1f5f9; }
+.edit-history-item:last-child { border-bottom: 0; }
+.edit-history-summary { padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.edit-history-meta { font-size: .8rem; color: #64748b; }
+.edit-history-title { font-weight: 700; color: #0f172a; font-size: .88rem; }
+.edit-history-table th, .edit-history-table td { font-size: .8rem; }
 </style>
 @endpush
 
@@ -37,6 +45,17 @@
     $itemsSubtotal = $document->items->sum(fn($i) => $i->quantity * $i->unit_cost);
     $shippingFee   = (float) ($document->shipping_fee ?? 0);
     $grandTotal    = $itemsSubtotal + $shippingFee;
+    $editVariantIds = collect($document->edits)
+        ->flatMap(fn($edit) => collect($edit->changes ?? [])->pluck('variant_id'))
+        ->filter()
+        ->map(fn($id) => (int) $id)
+        ->unique()
+        ->values();
+    $editVariants = \App\Models\ProductVariant::query()
+        ->with('product')
+        ->whereIn('id', $editVariantIds->all())
+        ->get()
+        ->keyBy('id');
 @endphp
 
 {{-- Back --}}
@@ -182,5 +201,101 @@
         </div>
     </div>
 </div>
+
+@if($isImport)
+<div class="row g-3" id="edit-history">
+    <div class="col-12">
+        <div class="edit-history-card">
+            <div class="edit-history-head">
+                <i class="bi bi-clock-history me-1"></i>Lịch sử chỉnh sửa phiếu nhập
+                <span class="text-muted" style="font-weight:600;">({{ $document->edits->count() }} lần)</span>
+            </div>
+
+            @if($document->edits->isEmpty())
+                <div class="p-4 text-muted small">Phiếu này chưa có lần chỉnh sửa nào.</div>
+            @else
+                @foreach($document->edits->sortByDesc('edit_number') as $edit)
+                    @php
+                        $changes = collect($edit->changes ?? []);
+                        $changedRows = $changes->count();
+                    @endphp
+                    <div class="edit-history-item">
+                        <div class="edit-history-summary">
+                            <div>
+                                <div class="edit-history-title">Lần chỉnh sửa #{{ (int) $edit->edit_number }}</div>
+                                <div class="edit-history-meta">
+                                    {{ $edit->created_at?->format('H:i d/m/Y') }}
+                                    · {{ $edit->user?->name ?? 'Hệ thống' }}
+                                    · {{ $changedRows }} sản phẩm thay đổi
+                                </div>
+                                @if($edit->notes)
+                                    <div class="small mt-1" style="color:#334155;">Lý do: {{ $edit->notes }}</div>
+                                @endif
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary"
+                                type="button"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#edit-detail-{{ $edit->id }}"
+                                aria-expanded="false"
+                                aria-controls="edit-detail-{{ $edit->id }}">
+                                Chi tiết chỉnh sửa
+                            </button>
+                        </div>
+
+                        <div id="edit-detail-{{ $edit->id }}" class="collapse px-3 pb-3">
+                            @if($changes->isEmpty())
+                                <div class="alert alert-light border mb-0">Không có thay đổi dòng sản phẩm.</div>
+                            @else
+                                <div class="table-responsive">
+                                    <table class="table table-sm align-middle mb-0 edit-history-table">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Sản phẩm</th>
+                                                <th>SKU</th>
+                                                <th class="text-center">SL cũ</th>
+                                                <th class="text-center">SL mới</th>
+                                                <th class="text-center">Delta SL</th>
+                                                <th class="text-end">Giá cũ</th>
+                                                <th class="text-end">Giá mới</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach($changes as $row)
+                                                @php
+                                                    $variantId = (int) ($row['variant_id'] ?? 0);
+                                                    $variant = $editVariants->get($variantId);
+                                                    $oldQty = (int) ($row['old_qty'] ?? 0);
+                                                    $newQty = (int) ($row['new_qty'] ?? 0);
+                                                    $deltaQty = $newQty - $oldQty;
+                                                    $oldCost = (float) ($row['old_cost'] ?? 0);
+                                                    $newCost = (float) ($row['new_cost'] ?? 0);
+                                                @endphp
+                                                <tr>
+                                                    <td>
+                                                        <div class="fw-600">{{ $variant?->name ?? ('Biến thể #' . $variantId) }}</div>
+                                                        <div class="text-muted small">{{ $variant?->product?->name ?? '—' }}</div>
+                                                    </td>
+                                                    <td><code>{{ $variant?->sku ?? '—' }}</code></td>
+                                                    <td class="text-center">{{ number_format($oldQty) }}</td>
+                                                    <td class="text-center fw-700">{{ number_format($newQty) }}</td>
+                                                    <td class="text-center {{ $deltaQty >= 0 ? 'text-success' : 'text-danger' }}">
+                                                        {{ $deltaQty >= 0 ? '+' : '' }}{{ number_format($deltaQty) }}
+                                                    </td>
+                                                    <td class="text-end">{{ number_format($oldCost) }}đ</td>
+                                                    <td class="text-end fw-700">{{ number_format($newCost) }}đ</td>
+                                                </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
+                            @endif
+                        </div>
+                    </div>
+                @endforeach
+            @endif
+        </div>
+    </div>
+</div>
+@endif
 
 @endsection

@@ -325,6 +325,26 @@
             </div>
         </div>
 
+        {{-- ─── Cài đặt Kho ─────────────────────────────────────────────── --}}
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white border-0 pt-3 pb-0">
+                <h5 class="mb-1"><i class="bi bi-box-seam me-2 text-warning"></i>Cài đặt Kho</h5>
+                <p class="text-muted small mb-0">Các thông số liên quan đến module quản lý kho hàng.</p>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label for="stock_in_max_edits" class="form-label fw-600">
+                            Số lần sửa tối đa mỗi phiếu nhập kho
+                        </label>
+                        <input type="number" class="form-control" id="stock_in_max_edits" name="stock_in_max_edits"
+                               min="0" max="99" value="{{ $settings['stock_in_max_edits']->value ?? 3 }}">
+                        <div class="form-text">Mặc định: 3. Đặt 0 để không cho phép sửa phiếu.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="settings-actions card border-0 shadow-sm">
             <div class="card-body d-flex flex-column flex-md-row gap-2 justify-content-between align-items-md-center">
                 <p class="mb-0 text-muted small">Lưu ý: Thay đổi sẽ áp dụng ngay sau khi bấm lưu.</p>
