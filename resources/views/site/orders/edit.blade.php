@@ -2,6 +2,10 @@
 
 @php
     $orderCode = $order->code ?: ('#' . $order->id);
+    $formatKgLocal = static function (float $value): string {
+        $normalized = max(0, round($value, 3));
+        return number_format($normalized, 3, ',', '.') . ' kg';
+    };
 @endphp
 
 @push('styles')
@@ -382,7 +386,7 @@
                                                         data-weight-unit="{{ $unitLabel }}"
                                                         data-display-mode="{{ $isPricedByKg ? 'kg' : 'unit' }}">
                                                         @if($isPricedByKg)
-                                                            {{ format_kg((float) ($unitWeight * $qty)) }}
+                                                            {{ $formatKgLocal((float) ($unitWeight * $qty)) }}
                                                         @else
                                                             {{ number_format((float) $qty, 0, ',', '.') }} {{ $unitLabel }}
                                                         @endif
