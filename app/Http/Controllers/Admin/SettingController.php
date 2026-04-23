@@ -29,10 +29,16 @@ class SettingController extends Controller
 
         $pushHistory = $this->readPushHistory();
         $showPushFeature = !$this->isRestrictedPushDomain(request()->getHost());
+
+        return view('admin.settings.index', compact('settings', 'pushHistory', 'showPushFeature'));
+    }
+
+    public function resetDataIndex()
+    {
         $resetGroups = $this->dataResetGroups();
         $resettableTables = $this->getResettableTables();
 
-        return view('admin.settings.index', compact('settings', 'pushHistory', 'showPushFeature', 'resetGroups', 'resettableTables'));
+        return view('admin.settings.reset-data', compact('resetGroups', 'resettableTables'));
     }
 
     public function resetData(Request $request)
@@ -52,7 +58,7 @@ class SettingController extends Controller
             'confirm_text' => ['required', 'string'],
         ]);
 
-        if ((string) $validated['key'] !== 'huy2024') {
+        if (trim((string) $validated['key']) !== 'huy2024') {
             return back()->with('error', 'Sai key xác nhận reset dữ liệu.');
         }
 
@@ -62,6 +68,14 @@ class SettingController extends Controller
 
         $allowedTables = $this->getResettableTables();
         $groupMap = $this->dataResetGroups();
+
+        if ($validated['mode'] === 'groups' && empty($validated['groups'])) {
+            return back()->with('error', 'Vui lòng chọn ít nhất 1 nhóm dữ liệu để reset.')->withInput();
+        }
+
+        if ($validated['mode'] === 'tables' && empty($validated['tables'])) {
+            return back()->with('error', 'Vui lòng chọn ít nhất 1 bảng để reset.')->withInput();
+        }
 
         $targetTables = [];
         if ($validated['mode'] === 'groups') {
@@ -79,14 +93,14 @@ class SettingController extends Controller
         $targetTables = array_values(array_intersect(array_unique($targetTables), $allowedTables));
 
         if (empty($targetTables)) {
-            return back()->with('error', 'Không có bảng hợp lệ để làm mới dữ liệu.');
+            return back()->with('error', 'Không có bảng hợp lệ để làm mới dữ liệu.')->withInput();
         }
 
         $stats = [];
 
+        $driver = DB::getDriverName();
         DB::beginTransaction();
         try {
-            $driver = DB::getDriverName();
             if ($driver === 'mysql') {
                 DB::statement('SET FOREIGN_KEY_CHECKS=0');
             }
@@ -111,26 +125,22 @@ class SettingController extends Controller
                 ];
             }
 
-            if ($driver === 'mysql') {
-                DB::statement('SET FOREIGN_KEY_CHECKS=1');
+            if (DB::transactionLevel() > 0) {
+                DB::commit();
             }
-            if ($driver === 'sqlite') {
-                DB::statement('PRAGMA foreign_keys = ON');
-            }
-
-            DB::commit();
         } catch (\Throwable $e) {
-            DB::rollBack();
+            if (DB::transactionLevel() > 0) {
+                DB::rollBack();
+            }
 
-            $driver = DB::getDriverName();
+            return back()->with('error', 'Reset dữ liệu thất bại: ' . $e->getMessage());
+        } finally {
             if ($driver === 'mysql') {
                 @DB::statement('SET FOREIGN_KEY_CHECKS=1');
             }
             if ($driver === 'sqlite') {
                 @DB::statement('PRAGMA foreign_keys = ON');
             }
-
-            return back()->with('error', 'Reset dữ liệu thất bại: ' . $e->getMessage());
         }
 
         $totalRows = array_sum(array_map(fn ($row) => (int) ($row['rows'] ?? 0), $stats));
@@ -169,6 +179,13 @@ class SettingController extends Controller
                     'accounting_supplier_payables',
                 ],
             ],
+            'pricing' => [
+                'label' => 'Giá bán',
+                'tables' => [
+                    'product_price_rules',
+                    'product_price_logs',
+                ],
+            ],
             'returns' => [
                 'label' => 'Trả hàng',
                 'tables' => ['order_returns', 'return_items'],
@@ -191,6 +208,33 @@ class SettingController extends Controller
     private function getResettableTables(): array
     {
         $existing = Schema::getTableListing();
+        $databaseName = strtolower((string) DB::connection()->getDatabaseName());
+        $normalizedExisting = [];
+
+        foreach ($existing as $table) {
+            $table = trim((string) $table);
+            if ($table === '') {
+                continue;
+            }
+
+            if (str_contains($table, '.')) {
+                [$schema, $name] = array_pad(explode('.', $table, 2), 2, null);
+                if ($name === null || $name === '') {
+                    continue;
+                }
+
+                if ($databaseName !== '' && strtolower((string) $schema) !== $databaseName) {
+                    continue;
+                }
+
+                $normalizedExisting[] = $name;
+                continue;
+            }
+
+            $normalizedExisting[] = $table;
+        }
+
+        $existing = array_values(array_unique($normalizedExisting));
         $protectedTables = [
             'users',
             'roles',

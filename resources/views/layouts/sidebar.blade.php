@@ -262,6 +262,12 @@
 								<span>{{ __('menu.settings') }}</span>
 							</a>
 						</li>
+						<li class="nav-item">
+							<a href="{{ route('admin.settings.reset-data.index') }}" class="nav-link{{ request()->routeIs('admin.settings.reset-data.*') ? ' active' : '' }}">
+								<i class="ph-database"></i>
+								<span>Reset Data</span>
+							</a>
+						</li>
 
 
 					</ul>

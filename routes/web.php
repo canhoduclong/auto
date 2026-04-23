@@ -372,6 +372,7 @@ Route::middleware(['auth'])->group(function () {
 
     Route::group(['prefix' => 'admin', 'as' => 'admin.'], function () {
         Route::get('settings', [SettingController::class, 'index'])->name('settings.index');
+        Route::get('settings/reset-data', [SettingController::class, 'resetDataIndex'])->name('settings.reset-data.index')->middleware('role:admin');
         Route::post('settings', [SettingController::class, 'update'])->name('settings.update');
         Route::post('settings/reset-data', [SettingController::class, 'resetData'])->name('settings.reset-data')->middleware('role:admin');
         Route::post('settings/deploy', [SettingController::class, 'deploy'])->name('settings.deploy')->middleware('role:admin');
