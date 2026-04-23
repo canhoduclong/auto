@@ -1,6 +1,11 @@
 @extends('layouts.site')
 
 @php
+    $formatKg = static function (float|int|string $value): string {
+        $num = (float) $value;
+        $str = rtrim(rtrim(number_format($num, 3, '.', ''), '0'), '.');
+        return $str . 'kg';
+    };
     $orderCode = $order->code ?: ('#' . $order->id);
 
     $statusClass = match((string) $order->status) {
@@ -796,7 +801,7 @@
                             </div>
                             <div class="order-meta-item">
                                 <span class="order-meta-label">Tổng khối lượng</span>
-                                <div class="order-meta-value">{{ format_kg($orderTotalWeight) }}</div>
+                                <div class="order-meta-value">{{ $formatKg($orderTotalWeight) }}</div>
                             </div>
                             <div class="order-meta-item">
                                 <span class="order-meta-label">Tổng thanh toán</span>

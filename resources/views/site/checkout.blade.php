@@ -1,6 +1,11 @@
 @extends('layouts.site')
 
 @php
+    $formatKg = static function (float|int|string $value): string {
+        $num = (float) $value;
+        $str = rtrim(rtrim(number_format($num, 3, '.', ''), '0'), '.');
+        return $str . 'kg';
+    };
     $cart = session('cart', []);
     $summarySubtotal = 0;
     $summaryItemDiscount = 0;
@@ -711,7 +716,7 @@
                                     </div>
                                     <div class="checkout-kpi">
                                         <span class="checkout-kpi-label">Tổng khối lượng</span>
-                                        <span class="checkout-kpi-value" id="summaryWeight">{{ format_kg($summaryWeight) }}</span>
+                                        <span class="checkout-kpi-value" id="summaryWeight">{{ $formatKg($summaryWeight) }}</span>
                                     </div>
                                 </div>
 

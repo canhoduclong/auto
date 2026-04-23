@@ -5,6 +5,11 @@
 
 @section('content')
 @php
+    $formatKg = static function (float|int|string $value): string {
+        $num = (float) $value;
+        $str = rtrim(rtrim(number_format($num, 3, '.', ''), '0'), '.');
+        return $str . 'kg';
+    };
     $customerAddress = $order->customer?->address
         ?? $order->customer?->addresses?->first()?->address
         ?? 'Chưa có địa chỉ';
@@ -277,7 +282,7 @@
                                 <div class="sp-my-item-cell">
                                     @if($pricedByKg)
                                         @if($packedWeight !== null)
-                                            <span class="packed-weight-badge" title="KL kho đã cân">{{ format_kg($packedWeight) }}</span>
+                                            <span class="packed-weight-badge" title="KL kho đã cân">{{ $formatKg($packedWeight) }}</span>
                                         @else
                                             <span class="text-muted" style="font-size:.75rem;">Chưa cân</span>
                                         @endif
@@ -392,7 +397,7 @@
                                 <div class="partial-row">
                                     <div class="fw-semibold" style="line-height:1.25;">
                                         {{ $item->variant?->name ?? $item->variant?->sku ?? 'Sản phẩm' }}
-                                        <div class="text-muted" style="font-weight:400;font-size:.75rem;">tổng: {{ $qty }}{{ $pricedByKg ? ' – '.format_kg($defaultTotalWeight) : '' }}</div>
+                                        <div class="text-muted" style="font-weight:400;font-size:.75rem;">tổng: {{ $qty }}{{ $pricedByKg ? ' – '.$formatKg($defaultTotalWeight) : '' }}</div>
                                     </div>
                                     {{-- SL giao --}}
                                     <div class="partial-field">

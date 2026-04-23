@@ -361,6 +361,11 @@
 
 @section('content')
 @php
+    $formatKg = static function (float|int|string $value): string {
+        $num = (float) $value;
+        $str = rtrim(rtrim(number_format($num, 3, '.', ''), '0'), '.');
+        return $str . 'kg';
+    };
     $fifoRemainingStock = $fifoRemainingStock ?? [];
     $statusMeta = [
         'approved' => ['label' => 'Chờ đóng gói', 'class' => 'bg-primary'],
@@ -542,9 +547,6 @@
                     <span class="badge bg-info text-dark ms-1">{{ $inventoryStats->count() }}</span>
                 @endif
             </button>
-            <button type="button" class="btn btn-warning btn-sm" id="rapDonHangBtn" title="Kiểm tra tồn kho và đánh số thứ tự ưu tiên cho toàn bộ đơn trong ngày">
-                <i class="bi bi-boxes me-1"></i>Ráp Đơn Hàng
-            </button>
             <a href="{{ route('warehouse.dashboard') }}" class="btn btn-outline-secondary btn-sm">
                 <i class="bi bi-arrow-left me-1"></i>Dashboard
             </a>
@@ -580,28 +582,15 @@
                 $hasStockShortage = (bool) ($stockGuard['has_shortage'] ?? false);
                 $canStartPacking = (bool) ($stockGuard['can_start_packing'] ?? true);
                 $stockShortages = collect($stockGuard['shortages'] ?? []);
-                // Persisted fields
-                $dailySeq = $order->daily_sequence;
-                $stockSufficient = $order->stock_sufficient; // null=未检查, 1=ok, 0=shortage
-                $savedShortageDetail = collect($order->stock_shortage_detail ?? []);
-                // Lock 'Đóng hàng' if persisted shortage detected AND live guard also blocks
-                $savedStockBlocked = $stockSufficient === 0;
             @endphp
             <div class="col-12 col-lg-8 col-xxl-4">
                 <div class="card wh-order-card js-order-card" data-order-id="{{ $order->id }}">
                      
-                    <span class="wh-order-index">#{{ $dailySeq ?? $loop->iteration }}</span>
+                    <span class="wh-order-index">#{{ $loop->iteration }}</span>
                     <div class="card-header bg-white d-flex justify-content-between align-items-center">
                         <div>
                             <div class="fw-semibold">{{ $order->code }}</div>
                             <small class="text-muted">{{ $order->created_at->format('d/m/Y H:i') }}</small>
-                            @if(!is_null($stockSufficient))
-                                @if($stockSufficient)
-                                    <span class="badge bg-success ms-1" style="font-size:.65rem;"><i class="bi bi-check-circle me-1"></i>Đủ hàng</span>
-                                @else
-                                    <span class="badge bg-danger ms-1" style="font-size:.65rem;"><i class="bi bi-exclamation-triangle me-1"></i>Thiếu hàng</span>
-                                @endif
-                            @endif
                         </div>
                         <span class="badge {{ $meta['class'] }} js-order-status">{{ $meta['label'] }}</span>
                     </div>
@@ -635,13 +624,12 @@
 
                         <div class="wh-section pb-0">
                             <div class="wh-logistics-title">Danh sách sản phẩm cần đóng & cập nhật kho</div>
-                            @if(($savedStockBlocked || $hasStockShortage) && $isReadyToPack)
-                                @php $shortageList = $stockShortages->isNotEmpty() ? $stockShortages : $savedShortageDetail; @endphp
+                            @if($hasStockShortage && $isReadyToPack)
                                 <div class="wh-stock-alert" title="Không thể bắt đầu đóng hàng khi tồn kho chưa đáp ứng.">
                                     <details>
                                         <summary>Không đủ tồn kho để đóng hàng</summary>
                                         <ul>
-                                            @foreach($shortageList as $shortage)
+                                            @foreach($stockShortages as $shortage)
                                                 <li>
                                                     {{ $shortage['variant_name'] ?? 'Sản phẩm' }}:
                                                     cần {{ number_format((int) ($shortage['required_qty'] ?? 0)) }},
@@ -690,7 +678,7 @@
                                                 : '-';
                                             if ($pricedByKg) {
                                                 $displayActualWeight = (!is_null($itemActualWeight) && (float) $itemActualWeight > 0)
-                                                    ? format_kg((float) $itemActualWeight)
+                                                    ? $formatKg((float) $itemActualWeight)
                                                     : '---';
                                             } else {
                                                 $nonKgVal = (!is_null($itemActualWeight) && (float) $itemActualWeight > 0)
@@ -829,7 +817,7 @@
                                 <div class="row g-2">
                                     <div class="col-6">
                                         <div class="wh-meta-label">Kg thực tế</div>
-                                        <div class="wh-meta-value text-primary">{{ $order->actual_weight !== null ? format_kg((float) $order->actual_weight) : '—' }}</div>
+                                        <div class="wh-meta-value text-primary">{{ $order->actual_weight !== null ? $formatKg((float) $order->actual_weight) : '—' }}</div>
                                     </div>
                                     <div class="col-6">
                                         <div class="wh-meta-label">Phí ship</div>
@@ -883,8 +871,7 @@
 
                         @if($canProcessThisOrder && ($isReadyToPack || $isPacking))
                             @if($isReadyToPack)
-                                @php $packingBlocked = $savedStockBlocked || !$canStartPacking; @endphp
-                                @if(!$packingBlocked)
+                                @if($canStartPacking)
                                     <form action="{{ route('warehouse.orders.start-packing', $order) }}" method="POST" class="d-grid js-start-packing-form">
                                         @csrf
                                         <button class="btn btn-primary btn-sm js-start-packing-btn" type="submit">
@@ -896,13 +883,12 @@
                                         <button class="btn btn-danger btn-sm" type="button" disabled>
                                             <i class="bi bi-exclamation-triangle-fill me-1"></i>Không đủ hàng – Chờ nhập kho
                                         </button>
-                                        @if($stockShortages->isNotEmpty() || $savedShortageDetail->isNotEmpty())
-                                            @php $detailList = $stockShortages->isNotEmpty() ? $stockShortages : $savedShortageDetail; @endphp
+                                        @if($stockShortages->isNotEmpty())
                                             <div class="wh-stock-alert mt-1">
                                                 <details>
-                                                    <summary>Chi tiết thiếu hàng ({{ $detailList->count() }} sản phẩm)</summary>
+                                                    <summary>Chi tiết thiếu hàng ({{ $stockShortages->count() }} sản phẩm)</summary>
                                                     <ul>
-                                                        @foreach($detailList as $shortage)
+                                                        @foreach($stockShortages as $shortage)
                                                             <li>
                                                                 <strong>{{ $shortage['variant_name'] ?? 'Sản phẩm' }}</strong>:
                                                                 cần {{ number_format((float)($shortage['required_qty'] ?? 0), 0) }},
@@ -1092,56 +1078,8 @@
 
 @push('scripts')
 <script>
-        // ── Ráp Đơn Hàng Button ───────────────────────────────────────
-        const rapBtn = document.getElementById('rapDonHangBtn');
-        if (rapBtn) {
-            rapBtn.addEventListener('click', async function () {
-                rapBtn.disabled = true;
-                rapBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Đang ráp...';
-
-                // Get current date from URL or form
-                const urlParams = new URLSearchParams(window.location.search);
-                const dateParam = urlParams.get('date') || '';
-
-                const formData = new FormData();
-                formData.append('_token', document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '');
-                if (dateParam) formData.append('date', dateParam);
-
-                try {
-                    const response = await fetch('{{ route('warehouse.orders.rap-don-hang') }}', {
-                        method: 'POST',
-                        headers: {
-                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-                            'Accept': 'application/json',
-                            'X-Requested-With': 'XMLHttpRequest',
-                        },
-                        body: formData,
-                    });
-
-                    let payload = {};
-                    try { payload = await response.json(); } catch (e) {}
-
-                    if (!response.ok || payload.ok === false) {
-                        throw new Error(payload.message || 'Ráp đơn hàng thất bại.');
-                    }
-
-                    if (typeof showToast === 'function') {
-                        showToast(payload.message || 'Đã ráp đơn hàng xong.', 'success');
-                    }
-
-                    // Reload after short delay to reflect updated badges
-                    setTimeout(() => window.location.reload(), 1200);
-                } catch (error) {
-                    if (typeof showToast === 'function') {
-                        showToast(error.message || 'Có lỗi xảy ra khi ráp đơn.', 'error');
-                    }
-                    rapBtn.disabled = false;
-                    rapBtn.innerHTML = '<i class="bi bi-boxes me-1"></i>Ráp Đơn Hàng';
-                }
-            });
-        }
-        // ─────────────────────────────────────────────────────────────
-    });
+    document.addEventListener('DOMContentLoaded', function () {
+        // ── Stock Drawer Pin/Unpin ────────────────────────────────
         const stockDrawerEl  = document.getElementById('stockDrawer');
         const stockPinBtn    = document.getElementById('stockDrawerPinBtn');
         const PINNED_KEY     = 'wh_stock_drawer_pinned';
