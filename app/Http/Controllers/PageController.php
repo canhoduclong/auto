@@ -2847,7 +2847,7 @@ class PageController extends Controller
                 $maxAllowedDecrease = max($basePrice - $minPrice, 0);
                 if ($requestedUnitDiscount > $maxAllowedDecrease) {
                     return back()->withErrors([
-                        'item_discount.' . $variant->id => 'Gia ban SKU ' . ($variant->sku ?: $variant->id) . ' khong duoc nho hon gia Min.',
+                        'item_discount.' . $variant->id => 'Giá bán SKU ' . ($variant->sku ?: $variant->id) . ' không được thấp hơn giá Min (' . number_format($minPrice, 0, ',', '.') . 'đ).',
                     ])->withInput();
                 }
             }

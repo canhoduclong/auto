@@ -372,7 +372,7 @@
                                                         name="item_discount[{{ $variant?->id }}]"
                                                         min="0"
                                                         step="1000"
-                                                        max="{{ $unitPrice }}"
+                                                        max="{{ $unitDiscountType === 'decrease' ? max($unitPrice - $minPrice, 0) : '' }}"
                                                         value="{{ number_format($unitDiscount, 0, '.', '') }}">
                                                     <div class="selling-price-feedback"></div>
                                                 </td>
