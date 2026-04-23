@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request; 
 use Illuminate\Support\Facades\Auth;
 use App\Http\Requests\Auth\LoginRequest;
+use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 
@@ -84,11 +85,19 @@ class AuthController extends Controller
 
     public function showRegistrationForm()
     {
+        if (!Setting::enabled('user_registration_enabled', true)) {
+            abort(404);
+        }
+
         return view('auth.register');
     }
 
     public function register(Request $request)
     {
+        if (!Setting::enabled('user_registration_enabled', true)) {
+            abort(404);
+        }
+
         $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',

@@ -340,6 +340,31 @@
             </div>
         </div>
 
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white border-0 pt-3 pb-0">
+                <h5 class="mb-1"><i class="bi bi-person-plus me-2 text-primary"></i>Đăng ký & tạo User</h5>
+                <p class="text-muted small mb-0">Bật/tắt toàn bộ chức năng tạo user mới từ trang Users và link đăng ký.</p>
+            </div>
+            <div class="card-body">
+                <input type="hidden" name="user_registration_enabled" value="0">
+                <div class="form-check form-switch">
+                    <input
+                        class="form-check-input"
+                        type="checkbox"
+                        role="switch"
+                        id="user_registration_enabled"
+                        name="user_registration_enabled"
+                        value="1"
+                        {{ (($settings['user_registration_enabled']->value ?? '1') === '1') ? 'checked' : '' }}
+                    >
+                    <label class="form-check-label" for="user_registration_enabled">
+                        Cho phép tạo user mới (Users + /register)
+                    </label>
+                </div>
+                <div class="form-text">Khi tắt, hệ thống sẽ chặn truy cập các đường dẫn đăng ký/tạo user mới.</div>
+            </div>
+        </div>
+
         {{-- ─── Cài đặt Kho ─────────────────────────────────────────────── --}}
         <div class="card border-0 shadow-sm mb-3">
             <div class="card-header bg-white border-0 pt-3 pb-0">

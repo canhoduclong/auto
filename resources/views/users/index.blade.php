@@ -7,7 +7,9 @@
         <div class="d-flex gap-2">
             <button type="submit" form="bulk-delete-form" class="btn btn-outline-danger" id="bulk-delete-button">Xóa đã chọn</button>
             <a href="{{ route('users.bulk-assign-team.form') }}" class="btn btn-outline-primary">Gán hàng loạt vào team</a>
-            <a href="{{ route('users.create') }}" class="btn btn-primary">+ Thêm User</a>
+            @if($canCreateUsers ?? true)
+                <a href="{{ route('users.create') }}" class="btn btn-primary">+ Thêm User</a>
+            @endif
         </div>
     </div>
 

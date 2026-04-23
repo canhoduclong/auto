@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Models\Role;
+use App\Models\Setting;
 use App\Models\Team;
 use App\Models\Warehouse;
 use Illuminate\Http\Request;
@@ -39,8 +40,9 @@ class UserController extends Controller
         $users = $query->orderBy('name')->paginate(15)->appends($request->query());
         $teams = Team::orderBy('name')->get(['id', 'name']);
         $roles = Role::orderBy('name')->get(['id', 'name']);
+        $canCreateUsers = Setting::enabled('user_registration_enabled', true);
 
-        return view('users.index', compact('users', 'teams', 'roles'));
+        return view('users.index', compact('users', 'teams', 'roles', 'canCreateUsers'));
     }
 
     public function bulkAssignTeamForm(Request $request)
@@ -121,6 +123,10 @@ class UserController extends Controller
 
     public function create()
     {
+        if (!Setting::enabled('user_registration_enabled', true)) {
+            abort(404);
+        }
+
         $roles = Role::all();
         $teams = Team::orderBy('name')->get();
         $warehouses = Warehouse::orderBy('name')->get();
@@ -129,6 +135,10 @@ class UserController extends Controller
 
     public function store(Request $request)
     {
+        if (!Setting::enabled('user_registration_enabled', true)) {
+            abort(404);
+        }
+
         $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users',
