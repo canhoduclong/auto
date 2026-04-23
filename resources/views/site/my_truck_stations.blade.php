@@ -302,6 +302,15 @@
                         <input type="text" id="cf-name" class="form-control form-control-sm" placeholder="Nhập tên nhà xe">
                     </div>
                     <div class="col-12 col-sm-6">
+                        <label class="form-label form-label-sm mb-1">Nhà xe (Brand)</label>
+                        <select id="cf-brand-id" class="form-select form-select-sm">
+                            <option value="">-- Chọn nhà xe --</option>
+                            @foreach($brands as $brand)
+                                <option value="{{ $brand->id }}">{{ $brand->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="col-12 col-sm-6">
                         <label class="form-label form-label-sm mb-1">Số điện thoại</label>
                         <input type="text" id="cf-phone" class="form-control form-control-sm" placeholder="0xxx xxx xxx">
                     </div>
@@ -342,6 +351,28 @@
                     <div class="col-12">
                         <label class="form-label form-label-sm mb-1">Địa chỉ</label>
                         <input type="text" id="cf-address" class="form-control form-control-sm" placeholder="Số nhà, đường...">
+                    </div>
+                    <div class="col-12 col-sm-6">
+                        <label class="form-label form-label-sm mb-1">Phí vào bãi xe (₫)</label>
+                        <input type="number" id="cf-parking-fee" class="form-control form-control-sm" placeholder="0" min="0">
+                    </div>
+                    <div class="col-12 col-sm-6">
+                        <label class="form-label form-label-sm mb-1">Thông tin phòng / chi nhánh</label>
+                        <input type="text" id="cf-branch-info" class="form-control form-control-sm" placeholder="VD: Phòng hàng hóa tầng 1">
+                    </div>
+                    <div class="col-12">
+                        <div class="card border-0 bg-light rounded-3 p-2">
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" id="cf-has-home-delivery">
+                                <label class="form-check-label" for="cf-has-home-delivery">
+                                    <i class="bi bi-house me-1 text-primary"></i>Có dịch vụ giao hàng tận nhà
+                                </label>
+                            </div>
+                            <div id="cf-home-delivery-fee-wrap" class="d-none">
+                                <label class="form-label form-label-sm mb-1">Phí giao hàng tận nhà mặc định (₫)</label>
+                                <input type="number" id="cf-home-delivery-fee" class="form-control form-control-sm" placeholder="0" min="0">
+                            </div>
+                        </div>
                     </div>
                     <div class="col-12">
                         <label class="form-label form-label-sm mb-1">Ghi chú</label>
@@ -612,6 +643,118 @@
             .then(r => r.json())
             .catch(() => []);
     }
+
+    const createFormEl = document.getElementById('ts-create-form');
+    const createErrorsEl = document.getElementById('ts-create-errors');
+    const createShowBtn = document.getElementById('ts-show-create-btn');
+    const createCancelBtn = document.getElementById('ts-cancel-create-btn');
+    const createSaveBtn = document.getElementById('ts-create-save-btn');
+    const homeDeliveryToggleEl = document.getElementById('cf-has-home-delivery');
+    const homeDeliveryFeeWrapEl = document.getElementById('cf-home-delivery-fee-wrap');
+
+    function toggleHomeDeliveryFee() {
+        if (!homeDeliveryToggleEl || !homeDeliveryFeeWrapEl) {
+            return;
+        }
+
+        homeDeliveryFeeWrapEl.classList.toggle('d-none', !homeDeliveryToggleEl.checked);
+    }
+
+    function resetCreateForm() {
+        document.getElementById('cf-name').value = '';
+        document.getElementById('cf-brand-id').value = '';
+        document.getElementById('cf-phone').value = '';
+        document.getElementById('cf-address').value = '';
+        document.getElementById('cf-parking-fee').value = '';
+        document.getElementById('cf-branch-info').value = '';
+        document.getElementById('cf-note').value = '';
+        document.getElementById('cf-home-delivery-fee').value = '';
+        document.getElementById('cf-is-active').checked = true;
+        document.getElementById('cf-has-home-delivery').checked = false;
+        cfProvinceGd.clearValue();
+        cfWardGd.clearValue();
+        cfWardGd.setItems([]);
+        cfWardGd.disable();
+        toggleHomeDeliveryFee();
+    }
+
+    function showCreateErrors(messages) {
+        if (!createErrorsEl) {
+            return;
+        }
+
+        createErrorsEl.innerHTML = messages.map(msg => `<div>${esc(msg)}</div>`).join('');
+        createErrorsEl.classList.remove('d-none');
+    }
+
+    function clearCreateErrors() {
+        if (!createErrorsEl) {
+            return;
+        }
+
+        createErrorsEl.innerHTML = '';
+        createErrorsEl.classList.add('d-none');
+    }
+
+    createShowBtn?.addEventListener('click', () => {
+        clearCreateErrors();
+        createFormEl.classList.add('open');
+    });
+
+    createCancelBtn?.addEventListener('click', () => {
+        createFormEl.classList.remove('open');
+        clearCreateErrors();
+        resetCreateForm();
+    });
+
+    homeDeliveryToggleEl?.addEventListener('change', toggleHomeDeliveryFee);
+    toggleHomeDeliveryFee();
+
+    createSaveBtn?.addEventListener('click', function () {
+        clearCreateErrors();
+
+        const payload = {
+            name: document.getElementById('cf-name').value.trim(),
+            brand_id: document.getElementById('cf-brand-id').value,
+            phone: document.getElementById('cf-phone').value.trim(),
+            province_id: cfProvinceGd.getValue(),
+            ward_id: cfWardGd.getValue(),
+            address: document.getElementById('cf-address').value.trim(),
+            parking_fee: document.getElementById('cf-parking-fee').value,
+            branch_info: document.getElementById('cf-branch-info').value.trim(),
+            has_home_delivery: document.getElementById('cf-has-home-delivery').checked ? 1 : 0,
+            home_delivery_fee: document.getElementById('cf-home-delivery-fee').value,
+            note: document.getElementById('cf-note').value.trim(),
+            is_active: document.getElementById('cf-is-active').checked ? 1 : 0,
+        };
+
+        this.disabled = true;
+        fetch(storeUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' },
+            body: JSON.stringify(payload),
+        })
+            .then(r => r.json().then(d => ({ ok: r.ok, d })))
+            .then(({ ok, d }) => {
+                if (!ok) {
+                    const messages = Object.values(d.errors || {}).flat();
+                    showCreateErrors(messages.length ? messages : [d.message || 'Không thể tạo nhà xe.']);
+                    return;
+                }
+
+                createFormEl.classList.remove('open');
+                resetCreateForm();
+                currentPage = 1;
+                loadRegionTree();
+                loadList();
+            })
+            .catch(() => {
+                showCreateErrors(['Lỗi kết nối, vui lòng thử lại.']);
+            })
+            .finally(() => {
+                this.disabled = false;
+            });
+    });
 
     let currentProvince = '';
     let currentWard     = '';

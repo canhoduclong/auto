@@ -33,6 +33,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\Database\Eloquent\Builder;
 use App\Models\Province;
 use App\Models\District;
+use App\Models\TruckBrand;
 use App\Models\TruckStation;
 use App\Models\Ward;
 
@@ -3350,10 +3351,11 @@ class PageController extends Controller
 
     public function myTruckStations(Request $request)
     {
+        $brands = TruckBrand::where('is_active', true)->orderBy('name')->get(['id', 'name']);
         $provinces = Province::orderBy('name')->get(['id', 'name']);
         $settings =  $this->settings; 
 
-        return view('site.my_truck_stations', compact('provinces', 'settings'));
+        return view('site.my_truck_stations', compact('brands', 'provinces', 'settings'));
     }
 
     public function myTruckStationsRegions(Request $request)
@@ -3448,11 +3450,16 @@ class PageController extends Controller
     {
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
+            'brand_id' => ['nullable', 'exists:truck_brands,id'],
             'province_id' => ['nullable', 'exists:provinces,id'],
             'ward_id' => ['nullable', 'exists:wards,id'],
-            'address' => ['nullable', 'string', 'max:255'],
+            'address' => ['nullable', 'string', 'max:500'],
             'phone' => ['nullable', 'string', 'max:30'],
-            'note' => ['nullable', 'string', 'max:2000'],
+            'parking_fee' => ['nullable', 'numeric', 'min:0'],
+            'branch_info' => ['nullable', 'string', 'max:500'],
+            'has_home_delivery' => ['nullable', 'boolean'],
+            'home_delivery_fee' => ['nullable', 'numeric', 'min:0'],
+            'note' => ['nullable', 'string'],
             'is_active' => ['nullable', 'boolean'],
         ]);
 
@@ -3466,11 +3473,13 @@ class PageController extends Controller
             }
         }
 
-        $data['is_active'] = (bool) ($data['is_active'] ?? true);
+        $data['is_active'] = $request->boolean('is_active', true);
+        $data['has_home_delivery'] = $request->boolean('has_home_delivery', false);
+        $data['home_delivery_fee'] = $data['home_delivery_fee'] ?? 0;
         $data['created_by'] = auth()->id();
 
         $station = TruckStation::create($data);
-        $station->load(['province', 'ward']);
+        $station->load(['brand', 'province', 'ward']);
 
         return response()->json([
             'success' => true,
@@ -3478,8 +3487,14 @@ class PageController extends Controller
             'data' => [
                 'id' => $station->id,
                 'name' => $station->name,
+                'brand_id' => $station->brand_id,
+                'brand' => $station->brand ? $station->brand->name : null,
                 'address' => $station->address,
                 'phone' => $station->phone,
+                'parking_fee' => $station->parking_fee,
+                'branch_info' => $station->branch_info,
+                'has_home_delivery' => (bool) $station->has_home_delivery,
+                'home_delivery_fee' => $station->home_delivery_fee,
                 'note' => $station->note,
                 'is_active' => $station->is_active,
                 'province_id' => $station->province_id,
