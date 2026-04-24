@@ -30,11 +30,13 @@ class TruckBrandController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'name'        => 'required|string|max:255',
+            'name'        => 'required|string|max:255|unique:truck_brands,name',
             'phone'       => 'nullable|string|max:30',
             'email'       => 'nullable|email|max:255',
             'description' => 'nullable|string',
             'is_active'   => 'nullable|boolean',
+        ], [
+            'name.unique' => 'Tên nhà xe "' . $request->input('name') . '" đã tồn tại trong hệ thống.',
         ]);
 
         $data['slug']       = Str::slug($data['name']);
