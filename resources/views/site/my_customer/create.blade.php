@@ -336,10 +336,59 @@
                 </div></div>{{-- /.mc-card-body-wrap --}}
             </div>
 
-            {{-- ===================== CARD 2: Thông tin công ty ===================== --}}
-            <div class="card mc-edit-card{{ $errors->hasAny(['company_name','tax_code','company_email','company_address','company_representative']) ? ' has-error' : '' }}" id="card-2">
+            {{-- ===================== CARD 2: Nhu cầu khách hàng ===================== --}}
+            <div class="card mc-edit-card{{ $errors->hasAny(['size','production','delivery_time','product_name','product_note']) ? ' has-error' : '' }}" id="card-2">
                 <div class="card-header" onclick="toggleCard('card-2')">
                     <span class="card-num">2</span>
+                    <i class="bi bi-clipboard-check text-primary"></i> Nhu cầu khách hàng
+                    <span class="mc-card-err-badge"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.345 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg> Có lỗi</span>
+                    <span class="mc-card-toggle-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd"/></svg></span>
+                </div>
+                <div class="mc-card-body-wrap"><div class="card-body">
+                    <p class="mc-help mb-3">Thông tin nhu cầu đặt hàng mặc định. Sale sẽ thấy dữ liệu này khi tạo đơn cho khách.</p>
+
+                    {{-- Dòng sản phẩm mặc định --}}
+                    <div class="product-row" id="product-row-default">
+                        <div class="fw-600 mb-2 text-primary" style="font-size:0.85rem;font-weight:600;">
+                            <i class="bi bi-box-seam me-1"></i> Sản phẩm chính
+                        </div>
+                        <div class="row g-2">
+                            <div class="col-12 col-md-4">
+                                <label class="form-label mc-form-label" style="font-size:0.82rem;">Tên sản phẩm</label>
+                                <input type="text" class="form-control mc-form-control" name="product_name" value="{{ old('product_name') }}" placeholder="VD: Gà Tam Hoàng">
+                            </div>
+                            <div class="col-6 col-md-2">
+                                <label class="form-label mc-form-label" style="font-size:0.82rem;">Size</label>
+                                <input type="text" class="form-control mc-form-control" name="size" value="{{ old('size') }}" placeholder="VD: 1.2kg">
+                            </div>
+                            <div class="col-6 col-md-2">
+                                <label class="form-label mc-form-label" style="font-size:0.82rem;">Sản lượng</label>
+                                <input type="text" class="form-control mc-form-control" name="production" value="{{ old('production') }}" placeholder="VD: 120 con">
+                            </div>
+                            <div class="col-12 col-md-2">
+                                <label class="form-label mc-form-label" style="font-size:0.82rem;">Giờ giao hàng</label>
+                                <input type="text" class="form-control mc-form-control" name="delivery_time" id="delivery_time" value="{{ old('delivery_time') }}" placeholder="VD: 8h-10h">
+                            </div>
+                            <div class="col-12 col-md-2">
+                                <label class="form-label mc-form-label" style="font-size:0.82rem;">Ghi chú</label>
+                                <input type="text" class="form-control mc-form-control" name="product_note" value="{{ old('product_note') }}" placeholder="Yêu cầu thêm...">
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- Dynamic product rows --}}
+                    <div id="extra-product-rows"></div>
+
+                    <button type="button" class="btn btn-outline-success btn-sm mt-1" id="btn-add-product">
+                        <i class="bi bi-plus-circle me-1"></i> Sản phẩm khác
+                    </button>
+                </div></div>{{-- /.mc-card-body-wrap --}}
+            </div>
+
+            {{-- ===================== CARD 3: Thông tin công ty ===================== --}}
+            <div class="card mc-edit-card{{ $errors->hasAny(['company_name','tax_code','company_email','company_address','company_representative']) ? ' has-error' : ' collapsed' }}" id="card-3">
+                <div class="card-header" onclick="toggleCard('card-3')">
+                    <span class="card-num">3</span>
                     <i class="bi bi-building text-primary"></i> Thông tin công ty (xuất hóa đơn)
                     <span class="mc-card-err-badge"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.345 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg> Có lỗi</span>
                     <span class="mc-card-toggle-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd"/></svg></span>
@@ -374,10 +423,10 @@
                 </div></div>{{-- /.mc-card-body-wrap --}}
             </div>
 
-            {{-- ===================== CARD 3: Thông tin nhà xe ===================== --}}
-            <div class="card mc-edit-card{{ $errors->hasAny(['truck_station_id','truck_station_address','truck_station_phone','truck_receive_time','truck_return_time','truck_fee']) ? ' has-error' : '' }}" id="card-3">
-                <div class="card-header" onclick="toggleCard('card-3')">
-                    <span class="card-num">3</span>
+            {{-- ===================== CARD 4: Thông tin nhà xe ===================== --}}
+            <div class="card mc-edit-card{{ $errors->hasAny(['truck_station_id','truck_station_address','truck_station_phone','truck_receive_time','truck_return_time','truck_fee']) ? ' has-error' : ' collapsed' }}" id="card-4">
+                <div class="card-header" onclick="toggleCard('card-4')">
+                    <span class="card-num">4</span>
                     <i class="bi bi-truck text-primary"></i> Thông tin nhà xe
                     <span class="mc-card-err-badge"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.345 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg> Có lỗi</span>
                     <span class="mc-card-toggle-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd"/></svg></span>
@@ -450,55 +499,6 @@
                             </div>
                         </div>
                     </div>
-                </div></div>{{-- /.mc-card-body-wrap --}}
-            </div>
-
-            {{-- ===================== CARD 4: Nhu cầu khách hàng ===================== --}}
-            <div class="card mc-edit-card{{ $errors->hasAny(['size','production','delivery_time','product_name','product_note']) ? ' has-error' : '' }}" id="card-4">
-                <div class="card-header" onclick="toggleCard('card-4')">
-                    <span class="card-num">4</span>
-                    <i class="bi bi-clipboard-check text-primary"></i> Nhu cầu khách hàng
-                    <span class="mc-card-err-badge"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.345 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg> Có lỗi</span>
-                    <span class="mc-card-toggle-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd"/></svg></span>
-                </div>
-                <div class="mc-card-body-wrap"><div class="card-body">
-                    <p class="mc-help mb-3">Thông tin nhu cầu đặt hàng mặc định. Sale sẽ thấy dữ liệu này khi tạo đơn cho khách.</p>
-
-                    {{-- Dòng sản phẩm mặc định --}}
-                    <div class="product-row" id="product-row-default">
-                        <div class="fw-600 mb-2 text-primary" style="font-size:0.85rem;font-weight:600;">
-                            <i class="bi bi-box-seam me-1"></i> Sản phẩm chính
-                        </div>
-                        <div class="row g-2">
-                            <div class="col-12 col-md-4">
-                                <label class="form-label mc-form-label" style="font-size:0.82rem;">Tên sản phẩm</label>
-                                <input type="text" class="form-control mc-form-control" name="product_name" value="{{ old('product_name') }}" placeholder="VD: Gà Tam Hoàng">
-                            </div>
-                            <div class="col-6 col-md-2">
-                                <label class="form-label mc-form-label" style="font-size:0.82rem;">Size</label>
-                                <input type="text" class="form-control mc-form-control" name="size" value="{{ old('size') }}" placeholder="VD: 1.2kg">
-                            </div>
-                            <div class="col-6 col-md-2">
-                                <label class="form-label mc-form-label" style="font-size:0.82rem;">Sản lượng</label>
-                                <input type="text" class="form-control mc-form-control" name="production" value="{{ old('production') }}" placeholder="VD: 120 con">
-                            </div>
-                            <div class="col-12 col-md-2">
-                                <label class="form-label mc-form-label" style="font-size:0.82rem;">Giờ giao hàng</label>
-                                <input type="text" class="form-control mc-form-control" name="delivery_time" id="delivery_time" value="{{ old('delivery_time') }}" placeholder="VD: 8h-10h">
-                            </div>
-                            <div class="col-12 col-md-2">
-                                <label class="form-label mc-form-label" style="font-size:0.82rem;">Ghi chú</label>
-                                <input type="text" class="form-control mc-form-control" name="product_note" value="{{ old('product_note') }}" placeholder="Yêu cầu thêm...">
-                            </div>
-                        </div>
-                    </div>
-
-                    {{-- Dynamic product rows --}}
-                    <div id="extra-product-rows"></div>
-
-                    <button type="button" class="btn btn-outline-success btn-sm mt-1" id="btn-add-product">
-                        <i class="bi bi-plus-circle me-1"></i> Sản phẩm khác
-                    </button>
                 </div></div>{{-- /.mc-card-body-wrap --}}
             </div>
 
@@ -845,13 +845,19 @@ document.addEventListener('DOMContentLoaded', function () {
     // Restore collapse state from localStorage
     ['card-1','card-2','card-3','card-4'].forEach(function (id) {
         try {
-            if (localStorage.getItem('mc_card_' + id) === '1') {
-                const card = document.getElementById(id);
+            const stored = localStorage.getItem('mc_card_' + id);
+            const card = document.getElementById(id);
+            if (!card) return;
+            if (stored === '1') {
                 // Don't collapse cards that have errors on page reload
-                if (card && !card.classList.contains('has-error')) {
+                if (!card.classList.contains('has-error')) {
                     card.classList.add('collapsed');
                 }
+            } else if (stored === '0') {
+                // User previously expanded this card — keep it open
+                card.classList.remove('collapsed');
             }
+            // stored === null: no preference saved, keep HTML default
         } catch(e) {}
     });
 

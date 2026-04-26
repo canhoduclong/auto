@@ -27,6 +27,7 @@
         border-bottom: 1px solid #eef2f7; background: #ffffff;
         border-radius: 14px 14px 0 0; font-weight: 700; color: #111827;
         padding: 0.9rem 1.25rem; display: flex; align-items: center; gap: 0.5rem; font-size: 1rem;
+        cursor: pointer; user-select: none;
     }
     .mc-edit-card .card-header .card-num {
         width: 26px; height: 26px; border-radius: 50%; background: #2563eb; color: #fff;
@@ -34,6 +35,22 @@
         align-items: center; justify-content: center; flex-shrink: 0;
     }
     .mc-edit-card .card-body { padding: 1.25rem; }
+    .mc-edit-card .card-header:hover { background: #f7fafc; }
+    .mc-card-toggle-icon {
+        margin-left: auto; display: inline-flex; align-items: center; justify-content: center;
+        width: 28px; height: 28px; border-radius: 50%; background: #f1f5f9;
+        color: #6b7280; font-size: 1rem; flex-shrink: 0;
+        transition: transform .25s, background .2s;
+    }
+    .mc-edit-card .card-header:hover .mc-card-toggle-icon { background: #e2e8f0; color: #374151; }
+    .mc-edit-card.collapsed .mc-card-toggle-icon { transform: rotate(-90deg); }
+    .mc-card-body-wrap { overflow: hidden; transition: max-height .3s ease; max-height: 2000px; }
+    .mc-edit-card.collapsed .mc-card-body-wrap { max-height: 0; }
+    .mc-card-err-badge { display:none; align-items:center; gap:0.3rem; font-size:0.78rem; font-weight:600; color:#dc2626; margin-left:0.5rem; }
+    .mc-edit-card.has-error .mc-card-err-badge { display:inline-flex; }
+    .mc-edit-card.has-error .card-header { border-left: 3px solid #dc2626; }
+    .field-error-msg { color:#dc2626; font-size:0.78rem; margin-top:0.25rem; display:flex; align-items:center; gap:0.25rem; }
+    .field-error-msg svg { width:14px; height:14px; flex-shrink:0; }
     .mc-info-card {
         border: 0; border-radius: 14px;
         box-shadow: 0 4px 20px rgba(15,23,42,0.07);
@@ -161,12 +178,13 @@
                     @method('PUT')
 
                     {{-- CARD 1: Thông tin khách hàng --}}
-                    <div class="card mc-edit-card">
-                        <div class="card-header">
+                    <div class="card mc-edit-card" id="card-1">
+                        <div class="card-header" onclick="toggleCard('card-1')">
                             <span class="card-num">1</span>
                             <i class="bi bi-person-fill text-primary"></i> Thông tin khách hàng
+                            <span class="mc-card-toggle-icon"><i class="bi bi-chevron-down"></i></span>
                         </div>
-                        <div class="card-body">
+                        <div class="mc-card-body-wrap"><div class="card-body">
                             <div class="row g-3">
                                 <div class="col-12 col-md-6">
                                     <label for="name" class="form-label mc-form-label">Tên khách hàng <span class="text-danger">*</span></label>
@@ -228,16 +246,63 @@
                                     <div class="mc-help mt-1">Dùng mặc định khi tạo đơn.</div>
                                 </div>
                             </div>
-                        </div>
+                        </div></div>{{-- /.mc-card-body-wrap --}}
                     </div>
 
-                    {{-- CARD 2: Thông tin công ty --}}
-                    <div class="card mc-edit-card">
-                        <div class="card-header">
+                    {{-- CARD 2: Nhu cầu khách hàng --}}
+                    <div class="card mc-edit-card" id="card-2">
+                        <div class="card-header" onclick="toggleCard('card-2')">
                             <span class="card-num">2</span>
-                            <i class="bi bi-building text-primary"></i> Thông tin công ty (xuất hóa đơn)
+                            <i class="bi bi-clipboard-check text-primary"></i> Nhu cầu khách hàng
+                            <span class="mc-card-toggle-icon"><i class="bi bi-chevron-down"></i></span>
                         </div>
-                        <div class="card-body">
+                        <div class="mc-card-body-wrap"><div class="card-body">
+                            <p class="mc-help mb-3">Thông tin nhu cầu đặt hàng mặc định khi sale tạo đơn.</p>
+
+                            <div class="product-row" id="product-row-default">
+                                <div class="fw-600 mb-2 text-primary" style="font-size:0.85rem;font-weight:600;">
+                                    <i class="bi bi-box-seam me-1"></i> Sản phẩm chính
+                                </div>
+                                <div class="row g-2">
+                                    <div class="col-12 col-md-4">
+                                        <label class="form-label mc-form-label" style="font-size:0.82rem;">Tên sản phẩm</label>
+                                        <input type="text" class="form-control mc-form-control" name="product_name"
+                                            value="{{ old('product_name', $customer->product_name ?? '') }}" placeholder="VD: Gà Tam Hoàng">
+                                    </div>
+                                    <div class="col-6 col-md-2">
+                                        <label class="form-label mc-form-label" style="font-size:0.82rem;">Size</label>
+                                        <input type="text" class="form-control mc-form-control" name="size"
+                                            value="{{ old('size', $customer->size) }}" placeholder="VD: 1.2kg">
+                                    </div>
+                                    <div class="col-6 col-md-2">
+                                        <label class="form-label mc-form-label" style="font-size:0.82rem;">Sản lượng</label>
+                                        <input type="text" class="form-control mc-form-control" name="production"
+                                            value="{{ old('production', $customer->production) }}" placeholder="VD: 120 con">
+                                    </div>
+                                    <div class="col-12 col-md-2">
+                                        <label class="form-label mc-form-label" style="font-size:0.82rem;">Ghi chú</label>
+                                        <input type="text" class="form-control mc-form-control" name="product_note"
+                                            value="{{ old('product_note', $customer->product_note ?? '') }}" placeholder="Yêu cầu thêm...">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="extra-product-rows"></div>
+
+                            <button type="button" class="btn btn-outline-success btn-sm mt-1" id="btn-add-product">
+                                <i class="bi bi-plus-circle me-1"></i> Sản phẩm khác
+                            </button>
+                        </div></div>{{-- /.mc-card-body-wrap --}}
+                    </div>
+
+                    {{-- CARD 3: Thông tin công ty --}}
+                    <div class="card mc-edit-card collapsed" id="card-3">
+                        <div class="card-header" onclick="toggleCard('card-3')">
+                            <span class="card-num">3</span>
+                            <i class="bi bi-building text-primary"></i> Thông tin công ty (xuất hóa đơn)
+                            <span class="mc-card-toggle-icon"><i class="bi bi-chevron-down"></i></span>
+                        </div>
+                        <div class="mc-card-body-wrap"><div class="card-body">
                             <div class="row g-3">
                                 <div class="col-12 col-md-6">
                                     <label for="company_name" class="form-label mc-form-label">Tên công ty</label>
@@ -261,16 +326,17 @@
                                         value="{{ old('company_representative', $customer->company_representative ?? '') }}" placeholder="Họ tên người đại diện">
                                 </div>
                             </div>
-                        </div>
+                        </div></div>{{-- /.mc-card-body-wrap --}}
                     </div>
 
-                    {{-- CARD 3: Thông tin nhà xe --}}
-                    <div class="card mc-edit-card">
-                        <div class="card-header">
-                            <span class="card-num">3</span>
+                    {{-- CARD 4: Thông tin nhà xe --}}
+                    <div class="card mc-edit-card collapsed" id="card-4">
+                        <div class="card-header" onclick="toggleCard('card-4')">
+                            <span class="card-num">4</span>
                             <i class="bi bi-truck text-primary"></i> Thông tin nhà xe
+                            <span class="mc-card-toggle-icon"><i class="bi bi-chevron-down"></i></span>
                         </div>
-                        <div class="card-body">
+                        <div class="mc-card-body-wrap"><div class="card-body">
                             <input type="hidden" name="use_truck_station" id="use_truck_station_hidden"
                                 value="{{ old('use_truck_station', $customer->use_truck_station ? '1' : '0') }}">
                             <input type="hidden" name="truck_station_id" id="truck_station_id"
@@ -340,52 +406,7 @@
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    </div>
-
-                    {{-- CARD 4: Nhu cầu khách hàng --}}
-                    <div class="card mc-edit-card">
-                        <div class="card-header">
-                            <span class="card-num">4</span>
-                            <i class="bi bi-clipboard-check text-primary"></i> Nhu cầu khách hàng
-                        </div>
-                        <div class="card-body">
-                            <p class="mc-help mb-3">Thông tin nhu cầu đặt hàng mặc định khi sale tạo đơn.</p>
-
-                            <div class="product-row" id="product-row-default">
-                                <div class="fw-600 mb-2 text-primary" style="font-size:0.85rem;font-weight:600;">
-                                    <i class="bi bi-box-seam me-1"></i> Sản phẩm chính
-                                </div>
-                                <div class="row g-2">
-                                    <div class="col-12 col-md-4">
-                                        <label class="form-label mc-form-label" style="font-size:0.82rem;">Tên sản phẩm</label>
-                                        <input type="text" class="form-control mc-form-control" name="product_name"
-                                            value="{{ old('product_name', $customer->product_name ?? '') }}" placeholder="VD: Gà Tam Hoàng">
-                                    </div>
-                                    <div class="col-6 col-md-2">
-                                        <label class="form-label mc-form-label" style="font-size:0.82rem;">Size</label>
-                                        <input type="text" class="form-control mc-form-control" name="size"
-                                            value="{{ old('size', $customer->size) }}" placeholder="VD: 1.2kg">
-                                    </div>
-                                    <div class="col-6 col-md-2">
-                                        <label class="form-label mc-form-label" style="font-size:0.82rem;">Sản lượng</label>
-                                        <input type="text" class="form-control mc-form-control" name="production"
-                                            value="{{ old('production', $customer->production) }}" placeholder="VD: 120 con">
-                                    </div>
-                                    <div class="col-12 col-md-2">
-                                        <label class="form-label mc-form-label" style="font-size:0.82rem;">Ghi chú</label>
-                                        <input type="text" class="form-control mc-form-control" name="product_note"
-                                            value="{{ old('product_note', $customer->product_note ?? '') }}" placeholder="Yêu cầu thêm...">
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div id="extra-product-rows"></div>
-
-                            <button type="button" class="btn btn-outline-success btn-sm mt-1" id="btn-add-product">
-                                <i class="bi bi-plus-circle me-1"></i> Sản phẩm khác
-                            </button>
-                        </div>
+                        </div></div>{{-- /.mc-card-body-wrap --}}
                     </div>
 
                     {{-- Actions --}}
@@ -697,6 +718,30 @@ document.addEventListener('DOMContentLoaded', function () {
             </div>`;
         row.querySelector('.remove-product-row').addEventListener('click', () => row.remove());
         extraRows.appendChild(row);
+    });
+
+    // ===================== CARD TOGGLE =====================
+    window.toggleCard = function (cardId) {
+        const card = document.getElementById(cardId);
+        if (!card) return;
+        card.classList.toggle('collapsed');
+        const key = 'mc_edit_card_' + cardId;
+        try { localStorage.setItem(key, card.classList.contains('collapsed') ? '1' : '0'); } catch(e) {}
+    };
+
+    // Restore collapse state from localStorage
+    ['card-1','card-2','card-3','card-4'].forEach(function (id) {
+        try {
+            const stored = localStorage.getItem('mc_edit_card_' + id);
+            const card = document.getElementById(id);
+            if (!card) return;
+            if (stored === '1') {
+                card.classList.add('collapsed');
+            } else if (stored === '0') {
+                card.classList.remove('collapsed');
+            }
+            // stored === null: keep HTML default
+        } catch(e) {}
     });
 });
 </script>
