@@ -168,8 +168,7 @@
     .mc-edit-card.collapsed .mc-card-toggle-icon svg {
         transform: rotate(-90deg);
     }
-    .mc-card-body-wrap {
-        overflow: hidden;
+    .mc-card-body-wrap { 
         transition: max-height .3s ease, opacity .3s ease;
         max-height: 2000px;
         opacity: 1;

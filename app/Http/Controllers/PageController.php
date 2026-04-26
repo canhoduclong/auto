@@ -2146,6 +2146,49 @@ class PageController extends Controller
         return redirect()->route('pages.my_customer')->with('success', 'Đã cập nhật thông tin khách hàng thành công.');
     }
 
+    public function myCustomerDestroy(Customer $customer)
+    {
+        $this->ensureManagedCustomer($customer);
+
+        $customer->delete(); // soft delete — đặt deleted_at, không xóa khỏi DB
+
+        if (request()->expectsJson()) {
+            return response()->json(['success' => true, 'message' => 'Đã xóa khách hàng.']);
+        }
+
+        return redirect()->route('pages.my_customer')
+            ->with('success', 'Đã xóa khách hàng "' . $customer->name . '".');
+    }
+
+    public function myCustomerBulkDelete(Request $request)
+    {
+        $ids = array_filter(
+            array_map('intval', explode(',', (string) $request->input('_ids', '')))
+        );
+
+        if (empty($ids)) {
+            return back()->withErrors(['ids' => 'Vui lòng chọn ít nhất một khách hàng.']);
+        }
+
+        $userId = auth()->id();
+
+        // Chỉ cho phép xóa khách hàng thuộc user hiện tại
+        $deleted = Customer::query()
+            ->whereIn('id', $ids)
+            ->where(function ($q) use ($userId) {
+                $q->where('user_id', $userId)
+                    ->orWhere('assigned_to', $userId);
+            })
+            ->delete();
+
+        if (request()->expectsJson()) {
+            return response()->json(['success' => true, 'deleted' => $deleted]);
+        }
+
+        return redirect()->route('pages.my_customer')
+            ->with('success', "Đã xóa {$deleted} khách hàng.");
+    }
+
     public function myCustomerImportForm()
     {
         $result = session('my_customer_import_result', []);
