@@ -23,6 +23,7 @@ return Application::configure(basePath: dirname(__DIR__))
         'setLocale' => \App\Http\Middleware\SetLocale::class,
         'role' => \App\Http\Middleware\RoleMiddleware::class,
         'mobile.role.redirect' => \App\Http\Middleware\CheckMobileRoleRedirect::class,
+        'assigned' => \App\Http\Middleware\EnsureUserAssigned::class,
     ]);
 })
     //->withMiddleware(function (Middleware $middleware): void {

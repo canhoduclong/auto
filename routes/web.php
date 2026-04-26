@@ -65,12 +65,16 @@ Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
     Route::post('/login', [AuthController::class, 'login'])
         ->middleware('throttle:5,1'); // 5 lần/phút chống brute-force
+    Route::get('/auth/google', [AuthController::class, 'redirectToGoogle'])->name('auth.google.redirect');
+    Route::get('/auth/google/callback', [AuthController::class, 'handleGoogleCallback'])->name('auth.google.callback');
     Route::get('/register', [AuthController::class, 'showRegistrationForm'])->name('register');
     Route::post('/register', [AuthController::class, 'register']);
 });
 
 
-Route::middleware(['auth'])->group(function () {
+Route::middleware(['auth', 'assigned'])->group(function () {
+
+        Route::get('/thankyou', fn () => view('auth.thankyou'))->name('thankyou');
 
         // Public-facing pages (require login)
         Route::get('/', [HomeController::class, 'index'])->name('home');

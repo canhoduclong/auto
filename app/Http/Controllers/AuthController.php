@@ -8,6 +8,9 @@ use App\Http\Requests\Auth\LoginRequest;
 use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
+use Laravel\Socialite\Facades\Socialite;
+use Throwable;
 
 
 class AuthController extends Controller
@@ -24,55 +27,74 @@ class AuthController extends Controller
         if (Auth::attempt($credentials, $remember)) {
             $request->session()->regenerate();
 
-            $user = Auth::user();
-
-            if ($this->isMobileRequest($request)) {
-                $mobileRoute = $this->resolveMobileRoute($user);
-                if ($mobileRoute !== null) {
-                    return redirect()->route($mobileRoute);
-                }
-            }
-
-            if ($user->hasRole('admin')) {
-                return redirect()->route('dashboard');
-            }
-
-            if ($user->hasRole('ceo')) {
-                return redirect()->route('ceo.dashboard');
-            }
-
-            if ($user->hasRole('warehouse')) {
-                return redirect()->route('warehouse.dashboard');
-            }
-
-            if ($user->hasRole('shipper')) {
-                return redirect()->route('shipper.dashboard');
-            }
-
-            if ($user->hasRole('accountant') || $user->hasRole('accounting')) {
-                return redirect()->route('accounting.dashboard');
-            }
-
-            $isSalesLikeUser = $user->isSalesFlowRole()
-                || $user->hasPermission('pages.my_orders')
-                || $user->hasPermission('orders.monitoring')
-                || $user->hasPermission('work-reports.index')
-                || $user->canAccessSalesDailyFeatures();
-
-            if ($isSalesLikeUser) {
-                if ($user->hasPermission('orders.monitoring')) {
-                    return redirect()->route('pages.my_orders.monitoring');
-                }
-
-                return redirect()->route('pages.my_orders');
-            }
-
-            return redirect()->route('pages.my_dashboard');
+            return $this->redirectAfterLogin($request, Auth::user());
         }
 
         return back()
             ->withErrors(['email' => 'Email hoặc mật khẩu không đúng'])
             ->withInput($request->only('email', 'remember'));
+    }
+
+    public function redirectToGoogle()
+    {
+        return Socialite::driver('google')
+            ->scopes(['openid', 'profile', 'email'])
+            ->redirect();
+    }
+
+    public function handleGoogleCallback(Request $request)
+    {
+        try {
+            $googleUser = Socialite::driver('google')->user();
+        } catch (Throwable $e) {
+            return redirect()->route('login')
+                ->withErrors(['google' => 'Không thể đăng nhập bằng Google. Vui lòng thử lại.']);
+        }
+
+        $email = $googleUser->getEmail();
+
+        if (empty($email)) {
+            return redirect()->route('login')
+                ->withErrors(['google' => 'Tài khoản Google chưa cung cấp email hợp lệ.']);
+        }
+
+        $googleId = $googleUser->getId();
+        $avatar = $googleUser->getAvatar();
+
+        $user = User::where('google_id', $googleId)->first();
+
+        if ($user === null) {
+            $user = User::where('email', $email)->first();
+
+            if ($user !== null) {
+                $user->google_id = $googleId;
+                if (empty($user->avatar) && !empty($avatar)) {
+                    $user->avatar = $avatar;
+                }
+                $user->google_avatar = $avatar;
+                if ($user->email_verified_at === null) {
+                    $user->email_verified_at = now();
+                }
+                $user->save();
+            }
+        }
+
+        if ($user === null) {
+            $user = User::create([
+                'name' => $googleUser->getName() ?: $googleUser->getNickname() ?: 'Google User',
+                'email' => $email,
+                'password' => Hash::make(Str::random(40)),
+                'google_id' => $googleId,
+                'google_avatar' => $avatar,
+                'avatar' => $avatar,
+                'email_verified_at' => now(),
+            ]);
+        }
+
+        Auth::login($user, true);
+        $request->session()->regenerate();
+
+        return $this->redirectAfterLogin($request, $user);
     }
 
     public function logout(Request $request)
@@ -111,6 +133,57 @@ class AuthController extends Controller
         ]);
 
         Auth::login($user);
+
+        return redirect()->route('pages.my_dashboard');
+    }
+
+    private function redirectAfterLogin(Request $request, User $user)
+    {
+        if ($this->isMobileRequest($request)) {
+            $mobileRoute = $this->resolveMobileRoute($user);
+            if ($mobileRoute !== null) {
+                return redirect()->route($mobileRoute);
+            }
+        }
+
+        if ($user->hasRole('admin')) {
+            return redirect()->route('dashboard');
+        }
+
+        if ($user->hasRole('ceo')) {
+            return redirect()->route('ceo.dashboard');
+        }
+
+        if ($user->hasRole('warehouse')) {
+            return redirect()->route('warehouse.dashboard');
+        }
+
+        if ($user->hasRole('shipper')) {
+            return redirect()->route('shipper.dashboard');
+        }
+
+        if ($user->hasRole('accountant') || $user->hasRole('accounting')) {
+            return redirect()->route('accounting.dashboard');
+        }
+
+        $isSalesLikeUser = $user->isSalesFlowRole()
+            || $user->hasPermission('pages.my_orders')
+            || $user->hasPermission('orders.monitoring')
+            || $user->hasPermission('work-reports.index')
+            || $user->canAccessSalesDailyFeatures();
+
+        if ($isSalesLikeUser) {
+            if ($user->hasPermission('orders.monitoring')) {
+                return redirect()->route('pages.my_orders.monitoring');
+            }
+
+            return redirect()->route('pages.my_orders');
+        }
+
+        // Người dùng chưa được gán team hoặc kho → trang chờ phân công
+        if (empty($user->team_id) && empty($user->warehouse_id)) {
+            return redirect()->route('thankyou');
+        }
 
         return redirect()->route('pages.my_dashboard');
     }

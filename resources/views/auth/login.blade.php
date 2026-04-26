@@ -139,6 +139,46 @@
         box-shadow: 0 12px 28px rgba(14,165,233,.36);
     }
 
+    .btn-google {
+        height: 46px;
+        border-radius: 11px;
+        border: 1px solid #dbe3ef;
+        background: #fff;
+        color: #0f172a;
+        font-weight: 700;
+        font-size: 14px;
+        letter-spacing: .2px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        text-decoration: none;
+        transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+    }
+
+    .btn-google:hover {
+        border-color: #cbd5e1;
+        box-shadow: 0 8px 20px rgba(15,23,42,.09);
+        transform: translateY(-1px);
+        color: #0f172a;
+        text-decoration: none;
+    }
+
+    .btn-google svg {
+        width: 18px;
+        height: 18px;
+        display: block;
+    }
+
+    .login-or {
+        margin: 16px 0;
+        text-align: center;
+        color: #94a3b8;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: .08em;
+    }
+
     /* ── Bottom links ── */
     .login-links {
         margin-top: 16px;
@@ -204,6 +244,18 @@
                 </ul>
             </div>
         @endif
+
+        <a class="btn btn-google w-100" href="{{ route('auth.google.redirect') }}">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path fill="#EA4335" d="M12 10.2v3.9h5.5c-.2 1.3-1.5 3.9-5.5 3.9-3.3 0-6-2.7-6-6s2.7-6 6-6c1.9 0 3.1.8 3.8 1.5l2.6-2.5C16.8 3.5 14.6 2.6 12 2.6 6.9 2.6 2.8 6.7 2.8 11.8S6.9 21 12 21c6.9 0 9.2-4.8 9.2-7.3 0-.5 0-.9-.1-1.3H12z"/>
+                <path fill="#34A853" d="M3.8 7.9l3.2 2.3c.9-2.4 2.8-4.1 5-4.1 1.9 0 3.1.8 3.8 1.5l2.6-2.5C16.8 3.5 14.6 2.6 12 2.6 8.4 2.6 5.3 4.7 3.8 7.9z" opacity=".0"/>
+                <path fill="#FBBC05" d="M12 21c2.5 0 4.7-.8 6.2-2.2l-2.9-2.3c-.8.6-1.9 1-3.3 1-2.5 0-4.6-1.7-5.4-4l-3.3 2.6C4.9 18.7 8.2 21 12 21z"/>
+                <path fill="#4285F4" d="M21.2 13.7c0-.5 0-.9-.1-1.3H12v3.9h5.5c-.3 1.5-1.2 2.8-2.6 3.7l2.9 2.3c1.7-1.6 3.4-4.3 3.4-8.6z"/>
+            </svg>
+            Đăng nhập với Google
+        </a>
+
+        <div class="login-or">HOẶC</div>
 
         <form method="POST" action="{{ url('/login') }}" novalidate>
             @csrf
