@@ -2051,7 +2051,7 @@ class PageController extends Controller
             $rules['size'] = ['nullable', 'string', 'max:255'];
         }
         if ($request->has('production')) {
-            $rules['production'] = ['nullable', 'numeric'];
+            $rules['production'] = ['nullable', 'string', 'max:255'];
         }
         if ($request->has('brand')) {
             $rules['brand'] = ['nullable', 'string', 'max:255'];
@@ -3216,7 +3216,7 @@ class PageController extends Controller
             'address' => 'nullable|string|max:1000',
             'delivery_time' => 'nullable|string|max:255',
             'size' => 'nullable|string|max:255',
-            'production' => 'nullable|numeric',
+            'production' => 'nullable|string|max:255',
             'company_name' => 'nullable|string|max:255',
             'tax_code' => 'nullable|string|max:50',
             'company_address' => 'nullable|string|max:255',
