@@ -137,6 +137,84 @@
     @media (max-width: 991.98px) {
         .mc-edit-head { flex-direction: column; align-items: flex-start; }
     }
+
+    /* ── Card collapsible ── */
+    .mc-edit-card .card-header {
+        cursor: pointer;
+        user-select: none;
+    }
+    .mc-edit-card .card-header:hover {
+        background: #f8fafc;
+    }
+    .mc-card-toggle-icon {
+        margin-left: auto;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        background: #eef2f7;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: background .15s;
+        flex-shrink: 0;
+    }
+    .mc-edit-card .card-header:hover .mc-card-toggle-icon {
+        background: #dce5f5;
+    }
+    .mc-card-toggle-icon svg {
+        width: 13px; height: 13px; color: #374151;
+        transition: transform .25s ease;
+    }
+    .mc-edit-card.collapsed .mc-card-toggle-icon svg {
+        transform: rotate(-90deg);
+    }
+    .mc-card-body-wrap {
+        overflow: hidden;
+        transition: max-height .3s ease, opacity .3s ease;
+        max-height: 2000px;
+        opacity: 1;
+    }
+    .mc-edit-card.collapsed .mc-card-body-wrap {
+        max-height: 0;
+        opacity: 0;
+    }
+    /* Badge lỗi trên header khi card thu gọn */
+    .mc-card-err-badge {
+        display: none;
+        font-size: 0.72rem;
+        font-weight: 700;
+        background: #fee2e2;
+        color: #b91c1c;
+        border-radius: 999px;
+        padding: 1px 9px;
+        margin-left: 6px;
+        white-space: nowrap;
+    }
+    .mc-edit-card.has-error .mc-card-err-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+    }
+    .mc-edit-card.has-error .card-header {
+        border-left: 3px solid #ef4444;
+    }
+
+    /* ── Inline field errors ── */
+    .field-error-msg {
+        font-size: 0.8rem;
+        color: #dc2626;
+        margin-top: 4px;
+        display: flex;
+        align-items: flex-start;
+        gap: 4px;
+    }
+    .field-error-msg svg {
+        width: 13px; height: 13px; flex-shrink: 0; margin-top: 1px;
+    }
+    .mc-form-control.is-invalid {
+        border-color: #ef4444;
+        box-shadow: 0 0 0 0.2rem rgba(239,68,68,.14);
+    }
 </style>
 
 <div class="mc-edit-shell">
@@ -173,31 +251,37 @@
             @csrf
 
             {{-- ===================== CARD 1: Thông tin khách hàng ===================== --}}
-            <div class="card mc-edit-card">
-                <div class="card-header">
+            <div class="card mc-edit-card{{ $errors->hasAny(['name','phone','email','address','province_id','ward_id']) ? ' has-error' : '' }}" id="card-1">
+                <div class="card-header" onclick="toggleCard('card-1')">
                     <span class="card-num">1</span>
                     <i class="bi bi-person-fill text-primary"></i> Thông tin khách hàng
+                    <span class="mc-card-err-badge"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.345 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg> Có lỗi</span>
+                    <span class="mc-card-toggle-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd"/></svg></span>
                 </div>
-                <div class="card-body">
+                <div class="mc-card-body-wrap"><div class="card-body">
                     <div class="row g-3">
                         <div class="col-12 col-md-6">
                             <label for="name" class="form-label mc-form-label">Tên khách hàng <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control mc-form-control" id="name" name="name" value="{{ old('name') }}" required>
+                            <input type="text" class="form-control mc-form-control @error('name') is-invalid @enderror" id="name" name="name" value="{{ old('name') }}" required>
+                            @error('name')<div class="field-error-msg"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0zm-8-5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 10 5zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2z" clip-rule="evenodd"/></svg>{{ $message }}</div>@enderror
                             <div id="name-duplicate-alert" class="alert alert-danger py-2 px-3 mt-2 d-none" role="alert"></div>
                         </div>
                         <div class="col-12 col-md-6">
                             <label for="phone" class="form-label mc-form-label">Số điện thoại</label>
-                            <input type="text" class="form-control mc-form-control" id="phone" name="phone" value="{{ old('phone') }}">
+                            <input type="text" class="form-control mc-form-control @error('phone') is-invalid @enderror" id="phone" name="phone" value="{{ old('phone') }}">
+                            @error('phone')<div class="field-error-msg"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0zm-8-5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 10 5zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2z" clip-rule="evenodd"/></svg>{{ $message }}</div>@enderror
                             <div id="phone-duplicate-alert" class="alert alert-danger py-2 px-3 mt-2 d-none" role="alert"></div>
                         </div>
                         <div class="col-12 col-md-6">
                             <label for="email" class="form-label mc-form-label">Email</label>
-                            <input type="email" class="form-control mc-form-control" id="email" name="email" value="{{ old('email') }}">
+                            <input type="email" class="form-control mc-form-control @error('email') is-invalid @enderror" id="email" name="email" value="{{ old('email') }}">
+                            @error('email')<div class="field-error-msg"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0zm-8-5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 10 5zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2z" clip-rule="evenodd"/></svg>{{ $message }}</div>@enderror
                             <div id="email-duplicate-alert" class="alert alert-danger py-2 px-3 mt-2 d-none" role="alert"></div>
                         </div>
                         <div class="col-12 col-md-6">
                             <label for="address" class="form-label mc-form-label">Địa chỉ</label>
-                            <input type="text" class="form-control mc-form-control" id="address" name="address" value="{{ old('address') }}" placeholder="Số nhà, tên đường...">
+                            <input type="text" class="form-control mc-form-control @error('address') is-invalid @enderror" id="address" name="address" value="{{ old('address') }}" placeholder="Số nhà, tên đường...">
+                            @error('address')<div class="field-error-msg"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0zm-8-5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 10 5zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2z" clip-rule="evenodd"/></svg>{{ $message }}</div>@enderror
                         </div>
                         <div class="col-12 col-md-4">
                             <label class="form-label mc-form-label">Tỉnh / Thành phố</label>
@@ -250,48 +334,56 @@
                             </div>
                         </div>
                     </div>
-                </div>
+                </div></div>{{-- /.mc-card-body-wrap --}}
             </div>
 
             {{-- ===================== CARD 2: Thông tin công ty ===================== --}}
-            <div class="card mc-edit-card">
-                <div class="card-header">
+            <div class="card mc-edit-card{{ $errors->hasAny(['company_name','tax_code','company_email','company_address','company_representative']) ? ' has-error' : '' }}" id="card-2">
+                <div class="card-header" onclick="toggleCard('card-2')">
                     <span class="card-num">2</span>
                     <i class="bi bi-building text-primary"></i> Thông tin công ty (xuất hóa đơn)
+                    <span class="mc-card-err-badge"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.345 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg> Có lỗi</span>
+                    <span class="mc-card-toggle-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd"/></svg></span>
                 </div>
-                <div class="card-body">
+                <div class="mc-card-body-wrap"><div class="card-body">
                     <div class="row g-3">
                         <div class="col-12 col-md-6">
                             <label for="company_name" class="form-label mc-form-label">Tên công ty</label>
-                            <input type="text" class="form-control mc-form-control" id="company_name" name="company_name" value="{{ old('company_name') }}">
+                            <input type="text" class="form-control mc-form-control @error('company_name') is-invalid @enderror" id="company_name" name="company_name" value="{{ old('company_name') }}">
+                            @error('company_name')<div class="field-error-msg"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0zm-8-5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 10 5zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2z" clip-rule="evenodd"/></svg>{{ $message }}</div>@enderror
                         </div>
                         <div class="col-12 col-md-3">
                             <label for="tax_code" class="form-label mc-form-label">Mã số thuế</label>
-                            <input type="text" class="form-control mc-form-control" id="tax_code" name="tax_code" value="{{ old('tax_code') }}">
+                            <input type="text" class="form-control mc-form-control @error('tax_code') is-invalid @enderror" id="tax_code" name="tax_code" value="{{ old('tax_code') }}">
+                            @error('tax_code')<div class="field-error-msg"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0zm-8-5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 10 5zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2z" clip-rule="evenodd"/></svg>{{ $message }}</div>@enderror
                         </div>
                         <div class="col-12 col-md-3">
                             <label for="company_email" class="form-label mc-form-label">Email công ty</label>
-                            <input type="email" class="form-control mc-form-control" id="company_email" name="company_email" value="{{ old('company_email') }}">
+                            <input type="email" class="form-control mc-form-control @error('company_email') is-invalid @enderror" id="company_email" name="company_email" value="{{ old('company_email') }}">
+                            @error('company_email')<div class="field-error-msg"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0zm-8-5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 10 5zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2z" clip-rule="evenodd"/></svg>{{ $message }}</div>@enderror
                         </div>
                         <div class="col-12 col-md-8">
                             <label for="company_address" class="form-label mc-form-label">Địa chỉ công ty</label>
-                            <input type="text" class="form-control mc-form-control" id="company_address" name="company_address" value="{{ old('company_address') }}">
+                            <input type="text" class="form-control mc-form-control @error('company_address') is-invalid @enderror" id="company_address" name="company_address" value="{{ old('company_address') }}">
+                            @error('company_address')<div class="field-error-msg"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0zm-8-5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 10 5zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2z" clip-rule="evenodd"/></svg>{{ $message }}</div>@enderror
                         </div>
                         <div class="col-12 col-md-4">
                             <label for="company_representative" class="form-label mc-form-label">Người đại diện</label>
                             <input type="text" class="form-control mc-form-control" id="company_representative" name="company_representative" value="{{ old('company_representative') }}" placeholder="Họ tên người đại diện">
                         </div>
                     </div>
-                </div>
+                </div></div>{{-- /.mc-card-body-wrap --}}
             </div>
 
             {{-- ===================== CARD 3: Thông tin nhà xe ===================== --}}
-            <div class="card mc-edit-card">
-                <div class="card-header">
+            <div class="card mc-edit-card{{ $errors->hasAny(['truck_station_id','truck_station_address','truck_station_phone','truck_receive_time','truck_return_time','truck_fee']) ? ' has-error' : '' }}" id="card-3">
+                <div class="card-header" onclick="toggleCard('card-3')">
                     <span class="card-num">3</span>
                     <i class="bi bi-truck text-primary"></i> Thông tin nhà xe
+                    <span class="mc-card-err-badge"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.345 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg> Có lỗi</span>
+                    <span class="mc-card-toggle-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd"/></svg></span>
                 </div>
-                <div class="card-body">
+                <div class="mc-card-body-wrap"><div class="card-body">
                     <input type="hidden" name="use_truck_station" id="use_truck_station_hidden" value="{{ old('use_truck_station', '0') }}">
                     <input type="hidden" name="truck_station_id" id="truck_station_id" value="{{ old('truck_station_id') }}">
 
@@ -347,6 +439,11 @@
                                 <label for="truck_fee" class="form-label mc-form-label">Phí nhà xe (₫)</label>
                                 <input type="number" class="form-control mc-form-control" id="truck_fee" name="truck_fee" value="{{ old('truck_fee') }}" placeholder="0">
                             </div>
+                            <div class="col-12 col-md-3">
+                                <label for="truck_fee" class="form-label mc-form-label">Phí nhà xe (₫)</label>
+                                <input type="number" class="form-control mc-form-control @error('truck_fee') is-invalid @enderror" id="truck_fee" name="truck_fee" value="{{ old('truck_fee') }}" placeholder="0">
+                                @error('truck_fee')<div class="field-error-msg"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0zm-8-5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 10 5zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2z" clip-rule="evenodd"/></svg>{{ $message }}</div>@enderror
+                            </div>
                             <div class="col-12 col-md-3 d-flex align-items-end">
                                 <button type="button" class="btn btn-outline-danger w-100" id="btn-clear-truck">
                                     <i class="bi bi-x-circle me-1"></i> Bỏ chọn nhà xe
@@ -354,16 +451,18 @@
                             </div>
                         </div>
                     </div>
-                </div>
+                </div></div>{{-- /.mc-card-body-wrap --}}
             </div>
 
             {{-- ===================== CARD 4: Nhu cầu khách hàng ===================== --}}
-            <div class="card mc-edit-card">
-                <div class="card-header">
+            <div class="card mc-edit-card{{ $errors->hasAny(['size','production','delivery_time','product_name','product_note']) ? ' has-error' : '' }}" id="card-4">
+                <div class="card-header" onclick="toggleCard('card-4')">
                     <span class="card-num">4</span>
                     <i class="bi bi-clipboard-check text-primary"></i> Nhu cầu khách hàng
+                    <span class="mc-card-err-badge"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.345 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg> Có lỗi</span>
+                    <span class="mc-card-toggle-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd"/></svg></span>
                 </div>
-                <div class="card-body">
+                <div class="mc-card-body-wrap"><div class="card-body">
                     <p class="mc-help mb-3">Thông tin nhu cầu đặt hàng mặc định. Sale sẽ thấy dữ liệu này khi tạo đơn cho khách.</p>
 
                     {{-- Dòng sản phẩm mặc định --}}
@@ -401,7 +500,7 @@
                     <button type="button" class="btn btn-outline-success btn-sm mt-1" id="btn-add-product">
                         <i class="bi bi-plus-circle me-1"></i> Sản phẩm khác
                     </button>
-                </div>
+                </div></div>{{-- /.mc-card-body-wrap --}}
             </div>
 
             {{-- Actions --}}
@@ -733,6 +832,28 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('avatar').addEventListener('change', function (e) {
         const [file] = e.target.files;
         if (file) document.getElementById('avatarPreview').src = URL.createObjectURL(file);
+    });
+
+    // ===================== CARD TOGGLE =====================
+    window.toggleCard = function (cardId) {
+        const card = document.getElementById(cardId);
+        if (!card) return;
+        card.classList.toggle('collapsed');
+        const key = 'mc_card_' + cardId;
+        try { localStorage.setItem(key, card.classList.contains('collapsed') ? '1' : '0'); } catch(e) {}
+    };
+
+    // Restore collapse state from localStorage
+    ['card-1','card-2','card-3','card-4'].forEach(function (id) {
+        try {
+            if (localStorage.getItem('mc_card_' + id) === '1') {
+                const card = document.getElementById(id);
+                // Don't collapse cards that have errors on page reload
+                if (card && !card.classList.contains('has-error')) {
+                    card.classList.add('collapsed');
+                }
+            }
+        } catch(e) {}
     });
 
 });
