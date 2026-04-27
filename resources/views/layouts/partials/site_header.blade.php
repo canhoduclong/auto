@@ -174,6 +174,7 @@
                         <li><a href="{{ route('pages.all_team_orders') }}" class="d-block py-1"><i class="bi bi-check2-all me-1"></i> Duyệt đơn PKD</a></li>
                     @endif
                     <li><a href="{{ route('pages.my_customer') }}" class="d-block py-1"><i class="bi bi-people me-1"></i> {{ __('site.my_customers') }}</a></li>
+                    <li><a href="{{ route('my_customer.schedules.index') }}" class="d-block py-1"><i class="bi bi-calendar2-check me-1"></i> Lịch lên đơn</a></li>
                     @if(Auth::user()->isSalesFlowRole())
                         <li><a href="{{ route('pages.my_truck_stations') }}" class="d-block py-1"><i class="bi bi-truck me-1"></i> Danh sách nhà xe</a></li>
                     @endif
@@ -333,6 +334,9 @@
                                         @endif
                                         <a class="dropdown-item" href="{{ route('pages.my_customer') }}">
                                             <i class="bi bi-people"></i> {{ __('site.my_customers') }}
+                                        </a>
+                                        <a class="dropdown-item" href="{{ route('my_customer.schedules.index') }}">
+                                            <i class="bi bi-calendar2-check"></i> Lịch lên đơn
                                         </a>
                                         @if(Auth::user()->isSalesFlowRole())
                                             <a class="dropdown-item" href="{{ route('pages.my_truck_stations') }}">

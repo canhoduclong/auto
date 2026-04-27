@@ -1178,6 +1178,11 @@ class OrderController extends Controller
         ProductVariant::where('id', $variantId)->update(['stock' => $totalStock]);
     }
 
+    public function createOrderFromSchedule(array $items, array $orderData, ApprovalService $approvalService): Order
+    {
+        return $this->createOrderWithUnifiedStockFlow($items, $orderData, $approvalService);
+    }
+
     private function createOrderWithUnifiedStockFlow(array $items, array $orderData, ApprovalService $approvalService): Order
     {
         if (auth()->check() && auth()->user()->hasRole('warehouse') && !auth()->user()->warehouse_id) {

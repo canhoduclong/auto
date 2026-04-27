@@ -39,6 +39,7 @@ use App\Http\Controllers\OrderApprovalController;
 use App\Http\Controllers\ApprovalWorkflowController;
 use App\Http\Controllers\AdminNotificationController;
 use App\Http\Controllers\AdminEventController;
+use App\Http\Controllers\Admin\OrderScheduleRunController;
 use App\Http\Controllers\TeamController;
 use App\Http\Controllers\RevenueReportController;
 use App\Http\Controllers\OrderMonitoringController;
@@ -49,6 +50,7 @@ use App\Http\Controllers\TaskManagementController;
 use App\Http\Controllers\AccountingDashboardController;
 use App\Http\Controllers\TruckStationController;
 use App\Http\Controllers\CustomerAppointmentController;
+use App\Http\Controllers\OrderScheduleController;
 
 
 
@@ -249,6 +251,10 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::post('admin/notifications/{notificationId}/read', [AdminNotificationController::class, 'markAsRead'])->name('admin.notifications.read');
     Route::get('admin/events', [AdminEventController::class, 'index'])->name('admin.events.index');
 
+    // Đơn tự động — kiểm soát & lịch sử chạy lệnh
+    Route::get('admin/order-schedule-runs', [OrderScheduleRunController::class, 'index'])->name('admin.order-schedule-runs.index')->middleware('role:admin');
+    Route::post('admin/order-schedule-runs/run-now', [OrderScheduleRunController::class, 'runNow'])->name('admin.order-schedule-runs.run-now')->middleware('role:admin');
+
 
     // Quản lý đơn hàng
     Route::get('orders/list-ajax', [OrderController::class, 'listAjax'])->name('orders.list-ajax');
@@ -416,6 +422,17 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::post('/my-customer/bulk-delete', [PageController::class, 'myCustomerBulkDelete'])->name('my_customer.bulk_delete');
     Route::get('/my-customer/import', [PageController::class, 'myCustomerImportForm'])->name('my_customer.import_form');
     Route::post('/my-customer/import', [PageController::class, 'myCustomerImport'])->name('my_customer.import');
+    Route::get('/my-customer/schedules', [OrderScheduleController::class, 'index'])->name('my_customer.schedules.index');
+    Route::get('/my-customer/schedules/create', [OrderScheduleController::class, 'create'])->name('my_customer.schedules.create');
+    Route::post('/my-customer/schedules', [OrderScheduleController::class, 'store'])->name('my_customer.schedules.store');
+    Route::get('/my-customer/{customer}/schedules/create', [OrderScheduleController::class, 'createForCustomer'])->name('my_customer.schedules.create_for_customer');
+    Route::get('/my-customer/schedules/{schedule}', [OrderScheduleController::class, 'show'])->name('my_customer.schedules.show');
+    Route::get('/my-customer/schedules/{schedule}/edit', [OrderScheduleController::class, 'edit'])->name('my_customer.schedules.edit');
+    Route::put('/my-customer/schedules/{schedule}', [OrderScheduleController::class, 'update'])->name('my_customer.schedules.update');
+    Route::delete('/my-customer/schedules/{schedule}', [OrderScheduleController::class, 'destroy'])->name('my_customer.schedules.destroy');
+    Route::post('/my-customer/schedules/{schedule}/generate', [OrderScheduleController::class, 'generateFromReview'])->name('my_customer.schedules.generate');
+    Route::post('/my-customer/schedules/{schedule}/toggle-active', [OrderScheduleController::class, 'toggleActive'])->name('my_customer.schedules.toggle_active');
+    Route::post('/my-customer/schedules/evaluate-today', [OrderScheduleController::class, 'evaluateToday'])->name('my_customer.schedules.evaluate_today');
     Route::get('/my-customer/{customer}', [PageController::class, 'myCustomerShow'])->name('my_customer.show');
     Route::post('/my-customer/{customer}/payments', [PageController::class, 'myCustomerStorePayment'])->name('my_customer.payments.store');
     Route::get('/my-customer/{customer}/order', [PageController::class, 'myCustomerOrderCreate'])->name('my_customer.order.create');

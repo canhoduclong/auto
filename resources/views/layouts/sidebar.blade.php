@@ -257,6 +257,12 @@
 						</li>
 
 						<li class="nav-item">
+							<a href="{{ route('admin.order-schedule-runs.index') }}" class="nav-link{{ request()->routeIs('admin.order-schedule-runs.*') ? ' active' : '' }}">
+								<i class="ph-calendar-check"></i>
+								<span>Đơn tự động</span>
+							</a>
+						</li>
+						<li class="nav-item">
 							<a href="{{ route('admin.settings.index') }}" class="nav-link{{ request()->routeIs('admin.settings.index') ? ' active' : '' }}">
 								<i class="ph-gear"></i>
 								<span>{{ __('menu.settings') }}</span>

@@ -710,6 +710,9 @@
                     <a href="{{ route('my_customer.order.create', $customer) }}" class="customer-btn customer-btn-primary">
                         <i class="bi bi-file-text me-2"></i>Lên đơn hàng
                     </a>
+                    <a href="{{ route('my_customer.schedules.create_for_customer', $customer) }}" class="customer-btn" style="background:#0f766e;color:#fff;">
+                        <i class="bi bi-calendar2-plus me-2"></i>Tạo lịch
+                    </a>
                     <a href="{{ route('my_customer.edit', $customer) }}" class="customer-btn customer-btn-outline">
                         <i class="bi bi-pencil me-2"></i>Chỉnh sửa
                     </a>

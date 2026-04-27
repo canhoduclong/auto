@@ -7,13 +7,12 @@
         return $str . 'kg';
     };
 @endphp
+
+@section('content')
 <x-breadcrumb :items="[
     ['label' => 'Giỏ hàng', 'url' => route('cart.show')], 
     ['label' => 'Giỏ hàng', 'url' => '']
 ]"/>
-@endsection
-
-@section('content')
 <style>
     .cart-page {
         background: radial-gradient(circle at 20% -20%, #e6f0ff 0%, #f8fbff 45%, #f4f7fb 100%);

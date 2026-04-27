@@ -52,6 +52,8 @@
                                 data-customer-name="{{ $customer->name }}"
                                 data-customer-phone="{{ $customer->phone }}"
                                 data-customer-email="{{ $customer->email }}"
+                                data-customer-company="{{ $customer->company_name ?? '' }}"
+                                data-customer-code="{{ $customer->customer_code ?? '' }}"
                                 data-customer-address="{{ $customer->address ?? '' }}">
                                 Chọn
                             </button>

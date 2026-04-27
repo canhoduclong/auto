@@ -580,6 +580,9 @@
                     </div>
                 </div>
                 <div class="mc-action-group">
+                    <a href="{{ route('my_customer.schedules.index') }}" class="btn btn-outline-primary">
+                        <i class="bi bi-calendar2-check"></i> Lịch lên đơn
+                    </a>
                     <a href="{{ route('my_customer.create') }}" class="btn btn-primary">
                         <i class="bi bi-plus-circle"></i> Thêm mới
                     </a>
