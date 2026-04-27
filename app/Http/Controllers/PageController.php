@@ -1690,15 +1690,35 @@ class PageController extends Controller
     {
         $userId = auth()->id();
 
-        $customerQuery = Customer::query()
+        $tab = (string) $request->input('tab', 'all');
+        if (!in_array($tab, ['all', 'processing', 'trash'], true)) {
+            $tab = 'all';
+        }
+
+        $baseQuery = Customer::query()
             ->where(function ($q) use ($userId) {
                 $q->where('user_id', $userId)
                     ->orWhere('assigned_to', $userId);
             });
 
+        $customerQuery = clone $baseQuery;
+        if ($tab === 'trash') {
+            $customerQuery->onlyTrashed();
+        } else {
+            $customerQuery->whereNull('deleted_at');
+            if ($tab === 'processing') {
+                $customerQuery->whereIn('status', ['active', 'processing']);
+            }
+        }
+
         $cityFilter = $request->input('city');
         $wardFilter = $request->input('ward');
         $streetFilter = $request->input('street');
+        $allowedSorts = ['production', 'size', 'delivery_time'];
+        $sortByInput = (string) $request->input('sort_by', '');
+        $sortBy = in_array($sortByInput, $allowedSorts, true) ? $sortByInput : null;
+        $sortDirInput = strtolower((string) $request->input('sort_dir', 'asc'));
+        $sortDir = in_array($sortDirInput, ['asc', 'desc'], true) ? $sortDirInput : 'asc';
 
         $customers = (clone $customerQuery)
             ->withCount('orders')
@@ -1726,11 +1746,8 @@ class PageController extends Controller
                     }
                 });
             })
-            ->when($request->sort_by, function ($q, $sortBy) {
-                $allowedSorts = ['production', 'size', 'delivery_time'];
-                if (in_array($sortBy, $allowedSorts)) {
-                    $q->orderBy($sortBy, $request->sort_dir === 'desc' ? 'desc' : 'asc');
-                }
+            ->when($sortBy, function ($q) use ($sortBy, $sortDir) {
+                $q->orderBy($sortBy, $sortDir);
             })
             ->orderByDesc('id')
             ->paginate($request->input('per_page', 10));
@@ -1801,9 +1818,19 @@ class PageController extends Controller
             })
             ->count();
 
+        $tabCounts = [
+            'all' => (clone $baseQuery)->whereNull('deleted_at')->count(),
+            'processing' => (clone $baseQuery)->whereNull('deleted_at')->whereIn('status', ['active', 'processing'])->count(),
+            'trash' => (clone $baseQuery)->onlyTrashed()->count(),
+        ];
+
         return view('site.my_customer.index', [
             'customers' => $customers,
             'search' => $request->search,
+            'activeTab' => $tab,
+            'tabCounts' => $tabCounts,
+            'sortBy' => $sortBy,
+            'sortDir' => $sortDir,
             'settings' => $this->settings,
             'locationTree' => $locationTree,
             'upcomingReminders' => $upcomingReminders,
@@ -1816,15 +1843,35 @@ class PageController extends Controller
     {
         $userId = auth()->id();
 
-        $customerQuery = Customer::query()
+        $tab = (string) $request->input('tab', 'all');
+        if (!in_array($tab, ['all', 'processing', 'trash'], true)) {
+            $tab = 'all';
+        }
+
+        $baseQuery = Customer::query()
             ->where(function ($q) use ($userId) {
                 $q->where('user_id', $userId)
                     ->orWhere('assigned_to', $userId);
             });
 
+        $customerQuery = clone $baseQuery;
+        if ($tab === 'trash') {
+            $customerQuery->onlyTrashed();
+        } else {
+            $customerQuery->whereNull('deleted_at');
+            if ($tab === 'processing') {
+                $customerQuery->whereIn('status', ['active', 'processing']);
+            }
+        }
+
         $cityFilter = $request->input('city');
         $wardFilter = $request->input('ward');
         $streetFilter = $request->input('street');
+        $allowedSorts = ['production', 'size', 'delivery_time'];
+        $sortByInput = (string) $request->input('sort_by', '');
+        $sortBy = in_array($sortByInput, $allowedSorts, true) ? $sortByInput : null;
+        $sortDirInput = strtolower((string) $request->input('sort_dir', 'asc'));
+        $sortDir = in_array($sortDirInput, ['asc', 'desc'], true) ? $sortDirInput : 'asc';
 
         $customers = (clone $customerQuery)
             ->withCount('orders')
@@ -1852,11 +1899,8 @@ class PageController extends Controller
                     }
                 });
             })
-            ->when($request->sort_by, function ($q, $sortBy) {
-                $allowedSorts = ['production', 'size', 'delivery_time'];
-                if (in_array($sortBy, $allowedSorts)) {
-                    $q->orderBy($sortBy, $request->sort_dir === 'desc' ? 'desc' : 'asc');
-                }
+            ->when($sortBy, function ($q) use ($sortBy, $sortDir) {
+                $q->orderBy($sortBy, $sortDir);
             })
             ->orderByDesc('id')
             ->paginate($request->input('per_page', 10));
@@ -1870,11 +1914,22 @@ class PageController extends Controller
             }
             $customer->address_text = $addressText;
             $customer->updated_at_formatted = $customer->updated_at ? $customer->updated_at->format('d/m/Y') : null;
+            $customer->deleted_at_formatted = $customer->deleted_at ? $customer->deleted_at->format('d/m/Y H:i') : null;
             $customer->total_debt = $customer->total_debt ?: 0;
             return $customer;
         });
 
+        $tabCounts = [
+            'all' => (clone $baseQuery)->whereNull('deleted_at')->count(),
+            'processing' => (clone $baseQuery)->whereNull('deleted_at')->whereIn('status', ['active', 'processing'])->count(),
+            'trash' => (clone $baseQuery)->onlyTrashed()->count(),
+        ];
+
         return response()->json([
+            'active_tab' => $tab,
+            'tab_counts' => $tabCounts,
+            'sort_by' => $sortBy,
+            'sort_dir' => $sortDir,
             'customers' => $customers->items(),
             'pagination' => [
                 'current_page' => $customers->currentPage(),
@@ -2150,7 +2205,10 @@ class PageController extends Controller
     {
         $this->ensureManagedCustomer($customer);
 
-        $customer->delete(); // soft delete — đặt deleted_at, không xóa khỏi DB
+        $customer->status = 'archived';
+        $customer->deleted_by = auth()->id();
+        $customer->save();
+        $customer->delete();
 
         if (request()->expectsJson()) {
             return response()->json(['success' => true, 'message' => 'Đã xóa khách hàng.']);
@@ -2173,13 +2231,23 @@ class PageController extends Controller
         $userId = auth()->id();
 
         // Chỉ cho phép xóa khách hàng thuộc user hiện tại
-        $deleted = Customer::query()
+        $customers = Customer::query()
+            ->whereNull('deleted_at')
             ->whereIn('id', $ids)
             ->where(function ($q) use ($userId) {
                 $q->where('user_id', $userId)
                     ->orWhere('assigned_to', $userId);
             })
-            ->delete();
+            ->get();
+
+        $deleted = 0;
+        foreach ($customers as $customer) {
+            $customer->status = 'archived';
+            $customer->deleted_by = $userId;
+            $customer->save();
+            $customer->delete();
+            $deleted++;
+        }
 
         if (request()->expectsJson()) {
             return response()->json(['success' => true, 'deleted' => $deleted]);
@@ -2187,6 +2255,51 @@ class PageController extends Controller
 
         return redirect()->route('pages.my_customer')
             ->with('success', "Đã xóa {$deleted} khách hàng.");
+    }
+
+    public function myCustomerRestore(int $customerId)
+    {
+        $customer = Customer::withTrashed()->findOrFail($customerId);
+        $this->ensureManagedCustomer($customer);
+
+        if ($customer->trashed()) {
+            $customer->restore();
+            $customer->status = 'active';
+            $customer->deleted_by = null;
+            $customer->save();
+        }
+
+        if (request()->expectsJson()) {
+            return response()->json(['success' => true, 'message' => 'Đã khôi phục khách hàng.']);
+        }
+
+        return redirect()->route('pages.my_customer', ['tab' => 'trash'])
+            ->with('success', 'Đã khôi phục khách hàng "' . $customer->name . '".');
+    }
+
+    public function myCustomerForceDelete(int $customerId)
+    {
+        $customer = Customer::withTrashed()->findOrFail($customerId);
+        $this->ensureManagedCustomer($customer);
+
+        if (!$customer->trashed()) {
+            if (request()->expectsJson()) {
+                return response()->json(['success' => false, 'message' => 'Chỉ xóa vĩnh viễn khách hàng trong thùng rác.'], 422);
+            }
+
+            return redirect()->route('pages.my_customer')
+                ->with('error', 'Chỉ xóa vĩnh viễn khách hàng trong thùng rác.');
+        }
+
+        $name = (string) $customer->name;
+        $customer->forceDelete();
+
+        if (request()->expectsJson()) {
+            return response()->json(['success' => true, 'message' => 'Đã xóa vĩnh viễn khách hàng.']);
+        }
+
+        return redirect()->route('pages.my_customer', ['tab' => 'trash'])
+            ->with('success', 'Đã xóa vĩnh viễn khách hàng "' . $name . '".');
     }
 
     public function myCustomerImportForm()

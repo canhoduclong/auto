@@ -258,79 +258,86 @@
                     <span class="mc-card-toggle-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd"/></svg></span>
                 </div>
                 <div class="mc-card-body-wrap"><div class="card-body">
+                    
                     <div class="row g-3">
                         <div class="col-12 col-md-6">
-                            <label for="name" class="form-label mc-form-label">Tên khách hàng <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control mc-form-control @error('name') is-invalid @enderror" id="name" name="name" value="{{ old('name') }}" required>
-                            @error('name')<div class="field-error-msg"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0zm-8-5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 10 5zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2z" clip-rule="evenodd"/></svg>{{ $message }}</div>@enderror
-                            <div id="name-duplicate-alert" class="alert alert-danger py-2 px-3 mt-2 d-none" role="alert"></div>
-                        </div>
-                        <div class="col-12 col-md-6">
-                            <label for="phone" class="form-label mc-form-label">Số điện thoại</label>
-                            <input type="text" class="form-control mc-form-control @error('phone') is-invalid @enderror" id="phone" name="phone" value="{{ old('phone') }}">
-                            @error('phone')<div class="field-error-msg"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0zm-8-5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 10 5zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2z" clip-rule="evenodd"/></svg>{{ $message }}</div>@enderror
-                            <div id="phone-duplicate-alert" class="alert alert-danger py-2 px-3 mt-2 d-none" role="alert"></div>
-                        </div>
-                        <div class="col-12 col-md-6">
-                            <label for="email" class="form-label mc-form-label">Email</label>
-                            <input type="email" class="form-control mc-form-control @error('email') is-invalid @enderror" id="email" name="email" value="{{ old('email') }}">
-                            @error('email')<div class="field-error-msg"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0zm-8-5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 10 5zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2z" clip-rule="evenodd"/></svg>{{ $message }}</div>@enderror
-                            <div id="email-duplicate-alert" class="alert alert-danger py-2 px-3 mt-2 d-none" role="alert"></div>
-                        </div>
-                        <div class="col-12 col-md-6">
-                            <label for="address" class="form-label mc-form-label">Địa chỉ</label>
-                            <input type="text" class="form-control mc-form-control @error('address') is-invalid @enderror" id="address" name="address" value="{{ old('address') }}" placeholder="Số nhà, tên đường...">
-                            @error('address')<div class="field-error-msg"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0zm-8-5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 10 5zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2z" clip-rule="evenodd"/></svg>{{ $message }}</div>@enderror
-                        </div>
-                        <div class="col-12 col-md-4">
-                            <label class="form-label mc-form-label">Tỉnh / Thành phố</label>
-                            <input type="hidden" name="province_id" id="province_id" value="{{ old('province_id') }}">
-                            <div class="mc-dropdown">
-                                @php
-                                    $_selProv = ($provinces ?? collect())->firstWhere('id', old('province_id'));
-                                    $_selProvLabel = $_selProv ? $_selProv->name : '-- Chọn tỉnh/thành --';
-                                @endphp
-                                <button type="button" class="mc-dropdown-btn" id="province-btn">
-                                    <span class="mc-dropdown-label">{{ $_selProvLabel }}</span>
-                                    <span class="mc-chevron"></span>
-                                </button>
-                                <div class="mc-dropdown-panel" id="province-panel">
-                                    <div class="mc-dropdown-search">
-                                        <input type="text" id="province-search" placeholder="🔍 Tìm tỉnh/thành..." autocomplete="off">
-                                    </div>
-                                    <div class="mc-dropdown-grid" id="province-grid">
-                                        @foreach(($provinces ?? []) as $province)
-                                            <button type="button"
-                                                class="mc-dropdown-item{{ (string) old('province_id') === (string) $province->id ? ' selected' : '' }}"
-                                                data-value="{{ $province->id }}"
-                                                data-label="{{ $province->name }}">{{ $province->name }}</button>
-                                        @endforeach
+                            <div class="row g-3">
+
+                                <div class="col-12 col-md-12">
+                                    <label for="name" class="form-label mc-form-label">Tên khách hàng <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control mc-form-control @error('name') is-invalid @enderror" id="name" name="name" value="{{ old('name') }}" required>
+                                    @error('name')<div class="field-error-msg"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0zm-8-5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 10 5zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2z" clip-rule="evenodd"/></svg>{{ $message }}</div>@enderror
+                                    <div id="name-duplicate-alert" class="alert alert-danger py-2 px-3 mt-2 d-none" role="alert"></div>
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label for="phone" class="form-label mc-form-label">Số điện thoại</label>
+                                    <input type="text" class="form-control mc-form-control @error('phone') is-invalid @enderror" id="phone" name="phone" value="{{ old('phone') }}">
+                                    @error('phone')<div class="field-error-msg"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0zm-8-5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 10 5zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2z" clip-rule="evenodd"/></svg>{{ $message }}</div>@enderror
+                                    <div id="phone-duplicate-alert" class="alert alert-danger py-2 px-3 mt-2 d-none" role="alert"></div>
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label for="email" class="form-label mc-form-label">Email</label>
+                                    <input type="email" class="form-control mc-form-control @error('email') is-invalid @enderror" id="email" name="email" value="{{ old('email') }}">
+                                    @error('email')<div class="field-error-msg"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0zm-8-5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 10 5zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2z" clip-rule="evenodd"/></svg>{{ $message }}</div>@enderror
+                                    <div id="email-duplicate-alert" class="alert alert-danger py-2 px-3 mt-2 d-none" role="alert"></div>
+                                </div>
+                                <div class="col-12 col-md-12">
+                                    <label for="address" class="form-label mc-form-label">Địa chỉ</label>
+                                    <input type="text" class="form-control mc-form-control @error('address') is-invalid @enderror" id="address" name="address" value="{{ old('address') }}" placeholder="Số nhà, tên đường...">
+                                    @error('address')<div class="field-error-msg"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0zm-8-5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 10 5zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2z" clip-rule="evenodd"/></svg>{{ $message }}</div>@enderror
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label mc-form-label">Tỉnh / Thành phố</label>
+                                    <input type="hidden" name="province_id" id="province_id" value="{{ old('province_id') }}">
+                                    <div class="mc-dropdown">
+                                        @php
+                                            $_selProv = ($provinces ?? collect())->firstWhere('id', old('province_id'));
+                                            $_selProvLabel = $_selProv ? $_selProv->name : '-- Chọn tỉnh/thành --';
+                                        @endphp
+                                        <button type="button" class="mc-dropdown-btn" id="province-btn">
+                                            <span class="mc-dropdown-label">{{ $_selProvLabel }}</span>
+                                            <span class="mc-chevron"></span>
+                                        </button>
+                                        <div class="mc-dropdown-panel" id="province-panel">
+                                            <div class="mc-dropdown-search">
+                                                <input type="text" id="province-search" placeholder="🔍 Tìm tỉnh/thành..." autocomplete="off">
+                                            </div>
+                                            <div class="mc-dropdown-grid" id="province-grid">
+                                                @foreach(($provinces ?? []) as $province)
+                                                    <button type="button"
+                                                        class="mc-dropdown-item{{ (string) old('province_id') === (string) $province->id ? ' selected' : '' }}"
+                                                        data-value="{{ $province->id }}"
+                                                        data-label="{{ $province->name }}">{{ $province->name }}</button>
+                                                @endforeach
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        </div>
-                        <div class="col-12 col-md-4">
-                            <label class="form-label mc-form-label">Phường / Xã</label>
-                            <input type="hidden" name="ward_id" id="ward_id" value="{{ old('ward_id', '') }}">
-                            <div class="mc-dropdown">
-                                <button type="button" class="mc-dropdown-btn" id="ward-btn" disabled>
-                                    <span class="mc-dropdown-label">-- Chọn phường/xã --</span>
-                                    <span class="mc-chevron"></span>
-                                </button>
-                                <div class="mc-dropdown-panel" id="ward-panel">
-                                    <div class="mc-dropdown-search">
-                                        <input type="text" id="ward-search" placeholder="🔍 Tìm phường/xã..." autocomplete="off">
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label mc-form-label">Phường / Xã</label>
+                                    <input type="hidden" name="ward_id" id="ward_id" value="{{ old('ward_id', '') }}">
+                                    <div class="mc-dropdown">
+                                        <button type="button" class="mc-dropdown-btn" id="ward-btn" disabled>
+                                            <span class="mc-dropdown-label">-- Chọn phường/xã --</span>
+                                            <span class="mc-chevron"></span>
+                                        </button>
+                                        <div class="mc-dropdown-panel" id="ward-panel">
+                                            <div class="mc-dropdown-search">
+                                                <input type="text" id="ward-search" placeholder="🔍 Tìm phường/xã..." autocomplete="off">
+                                            </div>
+                                            <div class="mc-dropdown-grid cols-4" id="ward-grid"></div>
+                                        </div>
                                     </div>
-                                    <div class="mc-dropdown-grid cols-4" id="ward-grid"></div>
-                                </div>
+                                </div>                                
+
                             </div>
                         </div>
-                        <div class="col-12 col-md-4">
+                        <div class="col-12 col-md-6">
                             <label for="avatar" class="form-label mc-form-label">Ảnh đại diện</label>
                             <input class="form-control mc-form-control" type="file" id="avatar" name="avatar" accept="image/*">
                             <div class="mt-2">
-                                <img id="avatarPreview" src="https://ui-avatars.com/api/?name=Khach+Hang" alt="Avatar" class="rounded-circle border border-2" style="width:60px;height:60px;object-fit:cover;border-color:#0f766e!important;">
-                            </div>
+                                <img id="avatarPreview" src="https://ui-avatars.com/api/?name=Khach+Hang" alt="Avatar" class="" style="width:210px;height:210px;object-fit:cover;border-color:#0f766e!important;">
+                            </div>                                
                         </div>
                     </div>
                 </div></div>{{-- /.mc-card-body-wrap --}}

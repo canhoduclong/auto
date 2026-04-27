@@ -27,8 +27,6 @@ class Customer extends Model
     {
         return $this->hasOne(\App\Models\CustomerCareLog::class)->latestOfMany();
     }
-    use HasFactory;
-
     protected $fillable = [
         'user_id',
         'name',
@@ -63,6 +61,8 @@ class Customer extends Model
         'truck_station_phone',
         'truck_fee',
         'assigned_to',
+        'status',
+        'deleted_by',
     ];
 
     protected $dates = ['dob'];

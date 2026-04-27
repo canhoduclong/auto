@@ -411,6 +411,8 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::get('/my-customer/{customer}/edit', [PageController::class, 'myCustomerEdit'])->name('my_customer.edit');
     Route::put('/my-customer/{customer}', [PageController::class, 'myCustomerUpdate'])->name('my_customer.update');
     Route::delete('/my-customer/{customer}', [PageController::class, 'myCustomerDestroy'])->name('my_customer.destroy');
+    Route::post('/my-customer/{customerId}/restore', [PageController::class, 'myCustomerRestore'])->name('my_customer.restore');
+    Route::delete('/my-customer/{customerId}/force-delete', [PageController::class, 'myCustomerForceDelete'])->name('my_customer.force_delete');
     Route::post('/my-customer/bulk-delete', [PageController::class, 'myCustomerBulkDelete'])->name('my_customer.bulk_delete');
     Route::get('/my-customer/import', [PageController::class, 'myCustomerImportForm'])->name('my_customer.import_form');
     Route::post('/my-customer/import', [PageController::class, 'myCustomerImport'])->name('my_customer.import');

@@ -90,6 +90,70 @@
         font-weight: 700;
         padding: 9px 14px;
     }
+    .mc-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 14px;
+    }
+    .mc-tab-btn {
+        border: 1px solid #dbe4ef;
+        background: #fff;
+        color: #334155;
+        border-radius: 999px;
+        padding: 8px 14px;
+        font-size: .85rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: .2s ease;
+    }
+    .mc-tab-btn:hover {
+        border-color: #93c5fd;
+        color: #1d4ed8;
+    }
+    .mc-tab-btn.active {
+        border-color: #1d4ed8;
+        background: #eff6ff;
+        color: #1d4ed8;
+    }
+    .mc-tab-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 22px;
+        height: 22px;
+        border-radius: 999px;
+        background: rgba(29, 78, 216, 0.1);
+        margin-left: 6px;
+        padding: 0 7px;
+        font-size: .74rem;
+    }
+    .mc-sort-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .mc-sort-btn {
+        border: 1px solid #dbe4ef;
+        background: #fff;
+        color: #334155;
+        border-radius: 10px;
+        padding: 8px 12px;
+        font-size: .82rem;
+        font-weight: 700;
+        cursor: pointer;
+    }
+    .mc-sort-btn.active {
+        border-color: #2563eb;
+        background: #eff6ff;
+        color: #1d4ed8;
+    }
+    .mc-sort-arrow {
+        margin-left: 6px;
+        font-size: .85rem;
+        color: #64748b;
+        vertical-align: middle;
+    }
     .mc-table-wrap {
         padding: 0 18px 18px;
     }
@@ -310,6 +374,17 @@
 @section('content')
 @php
     $currentPerPage = (int) request('per_page', 10);
+    $activeTab = $activeTab ?? request('tab', 'all');
+    if (!in_array($activeTab, ['all', 'processing', 'trash'], true)) {
+        $activeTab = 'all';
+    }
+    $tabCounts = $tabCounts ?? [
+        'all' => 0,
+        'processing' => 0,
+        'trash' => 0,
+    ];
+    $sortBy = $sortBy ?? request('sort_by');
+    $sortDir = $sortDir ?? request('sort_dir', 'asc');
     $pageCustomers = $customers->getCollection();
     $pageOrdersCount = (int) $pageCustomers->sum('orders_count');
     $withPhoneCount = (int) $pageCustomers->filter(fn($customer) => !empty($customer->phone))->count();
@@ -442,47 +517,51 @@
             <div class="col-xl-8">
                 <div class="mc-panel mb-4">
                     <div class="mc-filter">
-                        <form action="{{ route('pages.my_customer') }}" method="GET" class="row g-2 align-items-end mb-3">
+                        <form id="mc-search-form" action="{{ route('pages.my_customer') }}" method="GET" class="row g-2 align-items-end mb-3">
                             <div class="col-lg-6">
                                 <label class="form-label small text-uppercase fw-bold text-muted mb-1">Tìm kiếm</label>
-                                <input type="text" name="search" class="form-control" placeholder="Tên, email, số điện thoại..." value="{{ $search ?? '' }}">
+                                <input type="text" id="mc-search-input" name="search" class="form-control" placeholder="Tên, email, số điện thoại..." value="{{ $search ?? '' }}">
                             </div>
                             <input type="hidden" name="city" value="{{ request('city') }}">
                             <input type="hidden" name="ward" value="{{ request('ward') }}">
                             <input type="hidden" name="street" value="{{ request('street') }}">
+                            <input type="hidden" name="tab" value="{{ $activeTab }}">
                             <div class="col-lg-3 col-md-6 d-flex gap-2">
                                 <button type="submit" class="btn btn-primary flex-fill">
                                     <i class="bi bi-search"></i> Lọc
                                 </button>
                                 @if(!empty($search))
-                                    <a href="{{ route('pages.my_customer') }}" class="btn btn-outline-secondary">
+                                    <a href="{{ route('pages.my_customer', ['tab' => $activeTab]) }}" class="btn btn-outline-secondary">
                                         <i class="bi bi-arrow-clockwise"></i>
                                     </a>
                                 @endif
                             </div>
                         </form>
+                        <div class="mc-tabs" id="mc-tabs">
+                            <button type="button" class="mc-tab-btn{{ $activeTab === 'all' ? ' active' : '' }}" data-tab="all">
+                                Tất cả <span class="mc-tab-count" data-count-key="all">{{ (int) ($tabCounts['all'] ?? 0) }}</span>
+                            </button>
+                            <button type="button" class="mc-tab-btn{{ $activeTab === 'processing' ? ' active' : '' }}" data-tab="processing">
+                                Đang lấy <span class="mc-tab-count" data-count-key="processing">{{ (int) ($tabCounts['processing'] ?? 0) }}</span>
+                            </button>
+                            <button type="button" class="mc-tab-btn{{ $activeTab === 'trash' ? ' active' : '' }}" data-tab="trash">
+                                Thùng rác <span class="mc-tab-count" data-count-key="trash">{{ (int) ($tabCounts['trash'] ?? 0) }}</span>
+                            </button>
+                        </div>
                         <div class="row g-2 align-items-end">
-                            <div class="col-lg-3">
-                                <label class="form-label small text-uppercase fw-bold text-muted mb-1">Sắp xếp theo</label>
-                                <select id="sortBy" class="form-select">
-                                    <option value="">Mặc định</option>
-                                    <option value="production" {{ request('sort_by') === 'production' ? 'selected' : '' }}>Sản lượng</option>
-                                    <option value="size" {{ request('sort_by') === 'size' ? 'selected' : '' }}>Size</option>
-                                    <option value="delivery_time" {{ request('sort_by') === 'delivery_time' ? 'selected' : '' }}>Giờ giao</option>
-                                </select>
-                            </div>
-                            <div class="col-lg-3">
-                                <label class="form-label small text-uppercase fw-bold text-muted mb-1">Thứ tự</label>
-                                <select id="sortDir" class="form-select">
-                                    <option value="asc" {{ request('sort_dir') === 'asc' ? 'selected' : '' }}>Tăng dần</option>
-                                    <option value="desc" {{ request('sort_dir') !== 'asc' ? 'selected' : '' }}>Giảm dần</option>
-                                </select>
+                            <div class="col-lg-9">
+                                <label class="form-label small text-uppercase fw-bold text-muted mb-1">Sắp xếp nhanh</label>
+                                <div class="mc-sort-row" id="mc-sort-row">
+                                    <button type="button" class="mc-sort-btn" data-sort="size">Size <i class="bi bi-arrow-down-up mc-sort-arrow"></i></button>
+                                    <button type="button" class="mc-sort-btn" data-sort="production">Sản lượng <i class="bi bi-arrow-down-up mc-sort-arrow"></i></button>
+                                    <button type="button" class="mc-sort-btn" data-sort="delivery_time">Giờ giao <i class="bi bi-arrow-down-up mc-sort-arrow"></i></button>
+                                </div>
                             </div>
                             <div class="col-lg-3">
                                 <label class="form-label small text-uppercase fw-bold text-muted mb-1">Hiển thị</label>
                                 <select id="perPage" class="form-select">
                                     <option value="10" {{ $currentPerPage === 10 ? 'selected' : '' }}>10 khách hàng</option>
-                                    <option value="25" {{ $currentPerPage === 25 ? 'selected' : '' }}>25 khách hàng</option>
+                                    <option value="20" {{ $currentPerPage === 20 ? 'selected' : '' }}>20 khách hàng</option>
                                     <option value="50" {{ $currentPerPage === 50 ? 'selected' : '' }}>50 khách hàng</option>
                                     <option value="100" {{ $currentPerPage === 100 ? 'selected' : '' }}>100 khách hàng</option>
                                 </select>
@@ -497,7 +576,7 @@
                 <div>
                     <h4 class="mb-0">Danh sách khách hàng</h4>
                     <div id="pagination-info" class="text-muted small">
-                        Hiển thị {{ $customers->firstItem() ?? 0 }} - {{ $customers->lastItem() ?? 0 }} của {{ $customers->total() }} khách hàng
+                        Hiển thị {{ $customers->firstItem() ?? 0 }} - {{ $customers->lastItem() ?? 0 }} của {{ $customers->total() }} khách hàng | Trang {{ $customers->currentPage() }}/{{ $customers->lastPage() }}
                     </div>
                 </div>
                 <div class="mc-action-group">
@@ -508,7 +587,7 @@
                         <i class="bi bi-upload"></i> Nhập danh sách
                     </a>
                     <button type="button" class="btn btn-danger" id="bulkDeleteBtn" style="display:none;">
-                        <i class="bi bi-trash"></i> <span id="bulkDeleteLabel">Xóa đã chọn</span>
+                        <i class="bi bi-trash"></i> <span id="bulkDeleteLabel">Đưa vào thùng rác</span>
                     </button>
                 </div>
             </div>
@@ -597,15 +676,16 @@
                                              <input type="checkbox" name="ids[]" value="{{ $customer->id }}" class=" customer-checkbox">
                                             </div>
                                              <div class="mc-actions justify-content-end gap-2">
-                                                <a href="{{ route('my_customer.show', $customer) }}" class="btn btn-outline-info btn-sm" title="Xem chi tiết"><i class="bi bi-eye"></i></a>
-                                                <a href="{{ route('my_customer.order.create', $customer) }}" class="btn btn-outline-success btn-sm" title="Lên đơn hàng"><i class="bi bi-file-text"></i></a>
-                                                <a href="{{ route('my_customer.show', ['customer' => $customer, 'tab' => 'payments']) }}" class="btn btn-outline-secondary btn-sm" title="Thanh toán"><i class="bi bi-cash"></i></a>
-                                                <a href="{{ route('my_customer.edit', $customer) }}" class="btn btn-outline-warning btn-sm" title="Chỉnh sửa"><i class="bi bi-pencil"></i></a>
-                                                <form action="{{ route('my_customer.destroy', $customer) }}" method="POST" class="d-inline" onsubmit="return confirm('Bạn có chắc chắn muốn xóa khách hàng này không?');">
-                                                    @csrf
-                                                    @method('DELETE')
-                                                    <button type="submit" class="btn btn-outline-danger btn-sm" title="Xóa"><i class="bi bi-trash"></i></button>
-                                                </form>
+                                                @if($activeTab === 'trash')
+                                                    <button type="button" class="btn btn-outline-success btn-sm js-restore-customer" data-id="{{ $customer->id }}" title="Khôi phục"><i class="bi bi-arrow-counterclockwise"></i></button>
+                                                    <button type="button" class="btn btn-outline-danger btn-sm js-force-delete-customer" data-id="{{ $customer->id }}" title="Xóa vĩnh viễn"><i class="bi bi-trash-fill"></i></button>
+                                                @else
+                                                    <a href="{{ route('my_customer.show', $customer) }}" class="btn btn-outline-info btn-sm" title="Xem chi tiết"><i class="bi bi-eye"></i></a>
+                                                    <a href="{{ route('my_customer.order.create', $customer) }}" class="btn btn-outline-success btn-sm" title="Lên đơn hàng"><i class="bi bi-file-text"></i></a>
+                                                    <a href="{{ route('my_customer.show', ['customer' => $customer, 'tab' => 'payments']) }}" class="btn btn-outline-secondary btn-sm" title="Thanh toán"><i class="bi bi-cash"></i></a>
+                                                    <a href="{{ route('my_customer.edit', $customer) }}" class="btn btn-outline-warning btn-sm" title="Chỉnh sửa"><i class="bi bi-pencil"></i></a>
+                                                    <button type="button" class="btn btn-outline-danger btn-sm js-delete-customer" data-id="{{ $customer->id }}" title="Đưa vào thùng rác"><i class="bi bi-trash"></i></button>
+                                                @endif
                                             </div>
                                            
                                         </div>
@@ -631,39 +711,173 @@
 
 @push('scripts')
 <script>
+    const csrfToken = '{{ csrf_token() }}';
     let currentParams = {
         search: '{{ $search ?? '' }}',
         city: '{{ request('city') }}',
         ward: '{{ request('ward') }}',
         street: '{{ request('street') }}',
-        sort_by: '{{ request('sort_by') }}',
-        sort_dir: '{{ request('sort_dir') }}',
+        tab: '{{ $activeTab }}',
+        sort_by: '{{ $sortBy ?? '' }}',
+        sort_dir: '{{ $sortDir ?? 'asc' }}',
         per_page: {{ $currentPerPage }},
-        page: 1
+        page: {{ (int) request('page', 1) }}
     };
-
-    function loadCustomers(params = {}) {
-        Object.assign(currentParams, params);
-        const queryString = new URLSearchParams(currentParams).toString();
-
-        fetch('{{ route('pages.my_customer.ajax') }}?' + queryString)
-            .then(response => response.json())
-            .then(data => {
-                updateCustomerList(data.customers);
-                updatePagination(data.pagination);
-                updatePaginationInfo(data.pagination);
-            })
-            .catch(error => console.error('Error loading customers:', error));
-    }
 
     const _mcUrls = {
-        show:    "{{ route('my_customer.show', ':id') }}",
-        edit:    "{{ route('my_customer.edit', ':id') }}",
-        order:   "{{ route('my_customer.order.create', ':id') }}",
-        payment: "{{ route('my_customer.show', ['customer' => ':id', 'tab' => 'payments']) }}",
-        destroy: "{{ route('my_customer.destroy', ':id') }}",
+        show:        "{{ route('my_customer.show', ':id') }}",
+        edit:        "{{ route('my_customer.edit', ':id') }}",
+        order:       "{{ route('my_customer.order.create', ':id') }}",
+        payment:     "{{ route('my_customer.show', ['customer' => ':id', 'tab' => 'payments']) }}",
+        destroy:     "{{ route('my_customer.destroy', ':id') }}",
+        restore:     "{{ route('my_customer.restore', ':id') }}",
+        forceDelete: "{{ route('my_customer.force_delete', ':id') }}",
     };
     function mcUrl(key, id) { return _mcUrls[key].replace(':id', id); }
+
+    function escapeHtml(value) {
+        const div = document.createElement('div');
+        div.textContent = value ?? '';
+        return div.innerHTML;
+    }
+
+    function updateTabButtons(activeTab, tabCounts) {
+        document.querySelectorAll('#mc-tabs .mc-tab-btn').forEach(btn => {
+            const isActive = btn.dataset.tab === activeTab;
+            btn.classList.toggle('active', isActive);
+        });
+
+        if (!tabCounts) return;
+        document.querySelectorAll('[data-count-key]').forEach(el => {
+            const key = el.dataset.countKey;
+            if (Object.prototype.hasOwnProperty.call(tabCounts, key)) {
+                el.textContent = String(tabCounts[key] ?? 0);
+            }
+        });
+    }
+
+    function updateSortButtons() {
+        document.querySelectorAll('#mc-sort-row .mc-sort-btn').forEach(btn => {
+            const field = btn.dataset.sort;
+            const isActive = currentParams.sort_by === field;
+            btn.classList.toggle('active', isActive);
+            const arrowEl = btn.querySelector('.mc-sort-arrow');
+            if (!arrowEl) return;
+            if (!isActive) {
+                arrowEl.className = 'bi bi-arrow-down-up mc-sort-arrow';
+            } else {
+                arrowEl.className = currentParams.sort_dir === 'desc'
+                    ? 'bi bi-sort-down mc-sort-arrow'
+                    : 'bi bi-sort-up mc-sort-arrow';
+            }
+        });
+    }
+
+    function updatePaginationInfo(pagination) {
+        const info = document.getElementById('pagination-info');
+        info.textContent = `Hiển thị ${pagination.from || 0} - ${pagination.to || 0} của ${pagination.total} khách hàng | Trang ${pagination.current_page}/${pagination.last_page}`;
+    }
+
+    function updatePagination(pagination) {
+        const container = document.getElementById('pagination-links');
+        container.innerHTML = pagination.links;
+        container.querySelectorAll('a').forEach(link => {
+            link.addEventListener('click', function (e) {
+                e.preventDefault();
+                const url = new URL(this.href);
+                const page = url.searchParams.get('page') || 1;
+                loadCustomers({ page });
+            });
+        });
+    }
+
+    function actionButtonsHtml(customer) {
+        const trashTab = currentParams.tab === 'trash';
+        if (trashTab) {
+            return `
+                <button type="button" class="btn btn-outline-success btn-sm js-restore-customer" data-id="${customer.id}" title="Khôi phục"><i class="bi bi-arrow-counterclockwise"></i></button>
+                <button type="button" class="btn btn-outline-danger btn-sm js-force-delete-customer" data-id="${customer.id}" title="Xóa vĩnh viễn"><i class="bi bi-trash-fill"></i></button>
+            `;
+        }
+
+        return `
+            <a href="${mcUrl('show', customer.id)}" class="btn btn-outline-info btn-sm" title="Xem chi tiết"><i class="bi bi-eye"></i></a>
+            <a href="${mcUrl('order', customer.id)}" class="btn btn-outline-success btn-sm" title="Lên đơn hàng"><i class="bi bi-file-text"></i></a>
+            <a href="${mcUrl('payment', customer.id)}" class="btn btn-outline-secondary btn-sm" title="Thanh toán"><i class="bi bi-cash"></i></a>
+            <a href="${mcUrl('edit', customer.id)}" class="btn btn-outline-warning btn-sm" title="Chỉnh sửa"><i class="bi bi-pencil"></i></a>
+            <button type="button" class="btn btn-outline-danger btn-sm js-delete-customer" data-id="${customer.id}" title="Đưa vào thùng rác"><i class="bi bi-trash"></i></button>
+        `;
+    }
+
+    function updateBulkDeleteButton() {
+        const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
+        const bulkDeleteLabel = document.getElementById('bulkDeleteLabel');
+        const hiddenInput = document.getElementById('bulkDeleteIds');
+        const checkboxes = document.querySelectorAll('.customer-checkbox');
+        const selectedIds = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.value);
+        hiddenInput.value = selectedIds.join(',');
+
+        if (currentParams.tab === 'trash') {
+            bulkDeleteBtn.style.display = 'none';
+            return;
+        }
+
+        bulkDeleteBtn.style.display = selectedIds.length > 0 ? 'inline-block' : 'none';
+        bulkDeleteLabel.textContent = selectedIds.length > 0
+            ? `Đưa vào thùng rác (${selectedIds.length})`
+            : 'Đưa vào thùng rác';
+    }
+
+    function bindRowActions() {
+        document.querySelectorAll('.customer-checkbox').forEach(cb => {
+            cb.addEventListener('change', updateBulkDeleteButton);
+        });
+
+        document.querySelectorAll('.js-delete-customer').forEach(btn => {
+            btn.addEventListener('click', async function () {
+                if (!confirm('Bạn có chắc chắn muốn đưa khách hàng này vào thùng rác không?')) return;
+                const id = this.dataset.id;
+                await fetch(mcUrl('destroy', id), {
+                    method: 'DELETE',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                    },
+                });
+                loadCustomers({ page: 1 });
+            });
+        });
+
+        document.querySelectorAll('.js-restore-customer').forEach(btn => {
+            btn.addEventListener('click', async function () {
+                const id = this.dataset.id;
+                await fetch(mcUrl('restore', id), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                    },
+                });
+                loadCustomers({ page: 1 });
+            });
+        });
+
+        document.querySelectorAll('.js-force-delete-customer').forEach(btn => {
+            btn.addEventListener('click', async function () {
+                if (!confirm('Xóa vĩnh viễn khách hàng này? Thao tác không thể hoàn tác.')) return;
+                const id = this.dataset.id;
+                await fetch(mcUrl('forceDelete', id), {
+                    method: 'DELETE',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                    },
+                });
+                loadCustomers({ page: 1 });
+            });
+        });
+    }
 
     function updateCustomerList(customers) {
         const container = document.getElementById('customer-list');
@@ -672,147 +886,162 @@
                 <div class="col-12">
                     <div class="mc-empty">
                         <i class="bi bi-inbox" style="font-size:2.6rem;"></i>
-                        <h5 class="mt-3 mb-2">Chưa có khách hàng</h5>
-                        <p class="mb-3">Hãy thêm mới hoặc nhập danh sách để bắt đầu quản lý tệp khách hàng.</p>
-                        <div class="mc-action-group justify-content-center">
-                            <a href="{{ route('my_customer.create') }}" class="btn btn-primary">
-                                <i class="bi bi-plus-circle"></i> Thêm khách hàng đầu tiên
-                            </a>
-                            <a href="{{ route('my_customer.import_form') }}" class="btn btn-info text-white">
-                                <i class="bi bi-upload"></i> Nhập danh sách
-                            </a>
-                        </div>
+                        <h5 class="mt-3 mb-2">${currentParams.tab === 'trash' ? 'Thùng rác trống' : 'Chưa có khách hàng'}</h5>
+                        <p class="mb-3">${currentParams.tab === 'trash' ? 'Chưa có khách hàng bị xóa mềm.' : 'Hãy thêm mới hoặc nhập danh sách để bắt đầu quản lý tệp khách hàng.'}</p>
                     </div>
                 </div>
             `;
+            updateBulkDeleteButton();
             return;
         }
 
-        container.innerHTML = customers.map(customer => `
+        container.innerHTML = customers.map(customer => {
+            const addressText = escapeHtml(customer.address_text || '');
+            const name = escapeHtml(customer.name || '');
+            const email = escapeHtml(customer.email || '');
+            const phone = escapeHtml(customer.phone || '');
+            const production = escapeHtml(customer.production || '');
+            const size = escapeHtml(customer.size || '');
+            const deliveryTime = escapeHtml(customer.delivery_time || '');
+            const status = escapeHtml(customer.status || 'active');
+            const code = escapeHtml(customer.customer_code || ('#' + customer.id));
+            const updatedAt = escapeHtml(customer.updated_at_formatted || '');
+            const deletedAt = escapeHtml(customer.deleted_at_formatted || '');
+            const typeName = customer.type ? escapeHtml(customer.type.name || '') : '';
+            const brand = escapeHtml(customer.brand || '');
+
+            return `
             <div class="col-12">
                 <div class="mc-customer-card border rounded p-3 bg-white">
                     <div class="row justify-content-between">
                         <div class="col-md-6">
                             <div class="d-flex align-items-start gap-3">
-                                <input type="checkbox" name="ids[]" value="${customer.id}" class="form-check-input customer-checkbox mt-1">
                                 <div>
-                                    <h6 class="mb-1 fw-bold fs-5">${customer.name}</h6>
-                                    ${customer.updated_at_formatted ? `<small class="text-muted fst-italic"><i class="bi bi-clock me-1"></i>Cập nhật: ${customer.updated_at_formatted}</small><br>` : ''}
-                                    ${customer.type ? `<small class="text-muted">Phân loại: ${customer.type.name}</small><br>` : ''}
-                                    ${customer.brand ? `<small class="text-muted">Brand: ${customer.brand}</small><br>` : ''}
-                                    <small class="text-muted">Mã KH: ${customer.customer_code || '#' + customer.id}</small><br>
-                                    ${customer.phone ? `<small class="fw-bold fs-6"><i class="bi bi-telephone me-1"></i>${customer.phone}</small><br>` : ''}
-                                    ${customer.address_text ? `<small class="text-muted"><i class="bi bi-geo-alt me-1"></i>${customer.address_text}</small><br>` : ''}
-                                    ${customer.email ? `<small class="text-muted"><i class="bi bi-envelope me-1"></i>${customer.email}</small>` : ''}
+                                    <h6 class="mb-1 fw-bold fs-5">${name}</h6>
+                                    ${updatedAt ? `<small class="text-muted fst-italic"><i class="bi bi-clock me-1"></i>Cập nhật: ${updatedAt}</small><br>` : ''}
+                                    ${deletedAt ? `<small class="text-danger fst-italic"><i class="bi bi-trash me-1"></i>Đã xóa: ${deletedAt}</small><br>` : ''}
+                                    ${typeName ? `<small class="text-muted">Phân loại: ${typeName}</small><br>` : ''}
+                                    ${brand ? `<small class="text-muted">Brand: ${brand}</small><br>` : ''}
+                                    <small class="text-muted">Mã KH: <strong>${code}</strong></small><br>
+                                    <small class="text-muted">Trạng thái: <strong>${status}</strong></small><br>
+                                    ${phone ? `<small class="fw-bold fs-6"><i class="bi bi-telephone me-1"></i>${phone}</small><br>` : ''}
+                                    ${addressText ? `<small class="text-muted"><i class="bi bi-geo-alt me-1"></i>${addressText}</small><br>` : ''}
+                                    ${email ? `<small class="text-muted"><i class="bi bi-envelope me-1"></i>${email}</small>` : ''}
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-5">
+                        <div class="col-md-5 d-flex flex-column justify-content-between">
+                            <div class="row">
+                                <div class="col-12 text-end">
+                                    ${production ? `<small class="text-muted">Sản lượng: <strong>${production}</strong></small>` : ''}
+                                    ${size ? `<small class="text-muted ms-2">Size: <strong>${size}</strong></small>` : ''}
+                                </div>
+                            </div>
                             <div class="row g-2">
-                                ${customer.production ? `<div class="col-6"><small class="text-muted">Sản lượng: ${customer.production}</small></div>` : ''}
-                                ${customer.size ? `<div class="col-6"><small class="text-muted">Size: ${customer.size}</small></div>` : ''}
-                                ${customer.delivery_time ? `<div class="col-6"><small class="text-muted">Giờ giao: ${customer.delivery_time}</small></div>` : ''}
-                                <div class="col-6"><small class="text-muted">Đơn: ${customer.orders_count}</small></div>
+                                ${deliveryTime ? `<div class="col-12 text-end"><small class="text-muted">Giờ giao: ${deliveryTime}</small></div>` : ''}
+                                <div class="text-end">
+                                    <div class="text-muted">Công nợ: <strong>${Number(customer.total_debt || 0).toLocaleString('vi-VN')} đ</strong></div>
+                                </div>
                             </div>
                             <div class="mt-2">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div class="text-muted me-3">Công nợ: <strong>${Number(customer.total_debt || 0).toLocaleString('vi-VN')} đ</strong></div>
-                                    <input type="checkbox" name="ids[]" value="${customer.id}" class="form-check-input customer-checkbox">
-                                    <div class="mc-actions justify-content-end">
-                                        <a href="${mcUrl('show', customer.id)}" class="btn btn-outline-info btn-sm" title="Xem chi tiết"><i class="bi bi-eye"></i></a>
-                                        <a href="${mcUrl('order', customer.id)}" class="btn btn-outline-success btn-sm" title="Lên đơn hàng"><i class="bi bi-file-text"></i></a>
-                                        <a href="${mcUrl('payment', customer.id)}" class="btn btn-outline-secondary btn-sm" title="Thanh toán"><i class="bi bi-cash"></i></a>
-                                        <a href="${mcUrl('edit', customer.id)}" class="btn btn-outline-warning btn-sm" title="Chỉnh sửa"><i class="bi bi-pencil"></i></a>
-                                        <form action="${mcUrl('destroy', customer.id)}" method="POST" class="d-inline" onsubmit="return confirm('Bạn có chắc chắn muốn xóa khách hàng này không?');">
-                                            @csrf
-                                            @method('DELETE')
-                                            <button type="submit" class="btn btn-outline-danger btn-sm" title="Xóa"><i class="bi bi-trash"></i></button>
-                                        </form>
+                                <div class="d-flex justify-content-end align-items-center">
+                                    <div class="text-end me-3">
+                                        <small class="text-muted">Đơn: ${Number(customer.orders_count || 0).toLocaleString('vi-VN')}</small>
                                     </div>
+                                    ${currentParams.tab === 'trash' ? '' : `<div class="text-end me-3 mt-1"><input type="checkbox" name="ids[]" value="${customer.id}" class="customer-checkbox"></div>`}
+                                    <div class="mc-actions justify-content-end gap-2">${actionButtonsHtml(customer)}</div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
-        `).join('');
+            </div>`;
+        }).join('');
 
-        // Re-attach event listeners for checkboxes
-        attachCheckboxEvents();
+        bindRowActions();
+        updateBulkDeleteButton();
     }
 
-    function updatePagination(pagination) {
-        const container = document.getElementById('pagination-links');
-        container.innerHTML = pagination.links;
-        // Attach click events to pagination links
-        container.querySelectorAll('a').forEach(link => {
-            link.addEventListener('click', function(e) {
-                e.preventDefault();
-                const url = new URL(this.href);
-                const page = url.searchParams.get('page');
-                loadCustomers({ page: page });
+    async function loadCustomers(params = {}) {
+        Object.assign(currentParams, params);
+        const queryString = new URLSearchParams(currentParams).toString();
+
+        try {
+            const response = await fetch('{{ route('pages.my_customer.ajax') }}?' + queryString, {
+                headers: { 'Accept': 'application/json' }
             });
+            const data = await response.json();
+
+            currentParams.sort_by = data.sort_by || '';
+            currentParams.sort_dir = data.sort_dir || 'asc';
+
+            updateCustomerList(data.customers || []);
+            updatePagination(data.pagination || { current_page: 1, last_page: 1, from: 0, to: 0, total: 0, links: '' });
+            updatePaginationInfo(data.pagination || { current_page: 1, last_page: 1, from: 0, to: 0, total: 0 });
+            updateTabButtons(data.active_tab || currentParams.tab, data.tab_counts || null);
+            updateSortButtons();
+        } catch (error) {
+            console.error('Error loading customers:', error);
+        }
+    }
+
+    document.querySelectorAll('#mc-tabs .mc-tab-btn').forEach(btn => {
+        btn.addEventListener('click', function () {
+            const tab = this.dataset.tab;
+            loadCustomers({ tab, page: 1 });
         });
-    }
+    });
 
-    function updatePaginationInfo(pagination) {
-        const info = document.getElementById('pagination-info');
-        info.textContent = `Hiển thị ${pagination.from || 0} - ${pagination.to || 0} của ${pagination.total} khách hàng`;
-    }
-
-    function attachCheckboxEvents() {
-        const checkboxes = document.querySelectorAll('.customer-checkbox');
-        const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
-        const bulkDeleteLabel = document.getElementById('bulkDeleteLabel');
-        const hiddenInput = document.getElementById('bulkDeleteIds');
-
-        function updateBulkDeleteButton() {
-            const selectedIds = Array.from(checkboxes)
-                .filter(cb => cb.checked)
-                .map(cb => cb.value);
-            hiddenInput.value = selectedIds.join(',');
-            const selectedCount = selectedIds.length;
-            bulkDeleteBtn.style.display = selectedCount > 0 ? 'inline-block' : 'none';
-            if (bulkDeleteLabel) {
-                bulkDeleteLabel.textContent = selectedCount > 0
-                    ? `Xóa đã chọn (${selectedCount})`
-                    : 'Xóa đã chọn';
+    document.querySelectorAll('#mc-sort-row .mc-sort-btn').forEach(btn => {
+        btn.addEventListener('click', function () {
+            const field = this.dataset.sort;
+            if (currentParams.sort_by !== field) {
+                loadCustomers({ sort_by: field, sort_dir: 'asc', page: 1 });
+                return;
             }
-        }
 
-        checkboxes.forEach(cb => {
-            cb.addEventListener('change', updateBulkDeleteButton);
+            const nextDir = currentParams.sort_dir === 'asc' ? 'desc' : 'asc';
+            loadCustomers({ sort_dir: nextDir, page: 1 });
         });
-
-        if (bulkDeleteBtn) {
-            bulkDeleteBtn.addEventListener('click', function (e) {
-                e.preventDefault();
-                if (hiddenInput.value === '') {
-                    alert('Vui lòng chọn ít nhất một khách hàng để xóa.');
-                    return;
-                }
-                if (confirm('Bạn có chắc chắn muốn xóa các khách hàng đã chọn không?')) {
-                    document.getElementById('bulkDeleteForm').submit();
-                }
-            });
-        }
-    }
-
-    // Event listeners
-    document.getElementById('sortBy').addEventListener('change', function() {
-        loadCustomers({ sort_by: this.value, page: 1 });
     });
 
-    document.getElementById('sortDir').addEventListener('change', function() {
-        loadCustomers({ sort_dir: this.value, page: 1 });
-    });
-
-    document.getElementById('perPage').addEventListener('change', function() {
+    document.getElementById('perPage').addEventListener('change', function () {
         loadCustomers({ per_page: this.value, page: 1 });
     });
 
-    // Initial attach for existing checkboxes
-    attachCheckboxEvents();
+    document.getElementById('bulkDeleteBtn').addEventListener('click', async function (e) {
+        e.preventDefault();
+        const ids = document.getElementById('bulkDeleteIds').value;
+        if (!ids) {
+            alert('Vui lòng chọn ít nhất một khách hàng để đưa vào thùng rác.');
+            return;
+        }
+        if (!confirm('Bạn có chắc chắn muốn đưa các khách hàng đã chọn vào thùng rác không?')) {
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('_token', csrfToken);
+        formData.append('_ids', ids);
+
+        await fetch('{{ route('my_customer.bulk_delete') }}', {
+            method: 'POST',
+            headers: { 'Accept': 'application/json' },
+            body: formData,
+        });
+
+        loadCustomers({ page: 1 });
+    });
+
+    document.getElementById('mc-search-form')?.addEventListener('submit', function (e) {
+        e.preventDefault();
+        const searchValue = document.getElementById('mc-search-input')?.value || '';
+        loadCustomers({ search: searchValue, page: 1 });
+    });
+
+    bindRowActions();
+    updateBulkDeleteButton();
+    updateSortButtons();
 
     /* ── Region tree accordion ──────────────────────────── */
     (function () {
@@ -879,5 +1108,7 @@
             loadCustomers({ page: 1 });
         });
     })();
+
+    loadCustomers();
 </script>
 @endpush
