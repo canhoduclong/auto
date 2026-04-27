@@ -918,7 +918,16 @@ class PageController extends Controller
             ->values()
             ->all();
 
-        $customers = $this->myOrderCustomersBaseQuery($user->id)
+        $scope = $request->input('scope', 'orders'); // 'orders' or 'my_customers'
+        if ($scope === 'my_customers') {
+            $baseQuery = Customer::query()->where(function ($q) use ($user) {
+                $q->where('user_id', $user->id)->orWhere('assigned_to', $user->id);
+            })->whereNull('deleted_at');
+        } else {
+            $baseQuery = $this->myOrderCustomersBaseQuery($user->id);
+        }
+
+        $customers = $baseQuery
             ->when($search !== '', function ($q) use ($search) {
                 $q->where(function ($sub) use ($search) {
                     $sub->where('name', 'like', "%{$search}%")

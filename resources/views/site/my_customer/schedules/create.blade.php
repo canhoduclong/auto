@@ -315,7 +315,7 @@
 
                             <div class="schedule-date-toolbar">
                                 <button type="button" id="add-date-row-button" class="btn btn-primary">
-                                    <i class="bi bi-plus-circle me-1"></i>Thêm Ngày mới
+                                    <i class="bi bi-plus-circle me-1"></i>Thêm ngày
                                 </button>
                                 <div class="small text-muted d-flex align-items-center">Tối thiểu 1 dòng ngày, không trùng lặp.</div>
                             </div>
@@ -569,6 +569,7 @@ document.addEventListener('DOMContentLoaded', function () {
             sort_dir: sortDir,
             page: String(cpCurrentPage),
             mode: 'single',
+            scope: 'my_customers',
         });
 
         fetch(`${cpAjaxUrl}?${params.toString()}`, {
