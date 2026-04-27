@@ -294,7 +294,33 @@
                             </div>
                         </div>
                     </div>
+                     {{-- Date Selection Panel --}}
+                    <div class="schedule-create-panel">
+                        <div class="schedule-create-panel-body">
+                            <h2 class="h6 fw-bold mb-3">Chọn các ngày lên đơn</h2>
+                            <p class="text-muted small mb-3">Mỗi dòng ngày hợp lệ sẽ tạo một lịch lên đơn.</p>
 
+                            <div id="date-rows-container">
+                                <div class="schedule-date-row" data-row="1">
+                                    <div class="schedule-date-index">#1</div>
+                                    <div>
+                                        <input type="date" class="form-control schedule-date-input" min="{{ date('Y-m-d') }}">
+                                        <div class="schedule-date-hint">Chọn ngày lên đơn chính thức</div>
+                                    </div>
+                                    <button type="button" class="btn btn-outline-danger remove-date-row" disabled>
+                                        <i class="bi bi-trash me-1"></i>Xóa
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="schedule-date-toolbar">
+                                <button type="button" id="add-date-row-button" class="btn btn-primary">
+                                    <i class="bi bi-plus-circle me-1"></i>Thêm Ngày mới
+                                </button>
+                                <div class="small text-muted d-flex align-items-center">Tối thiểu 1 dòng ngày, không trùng lặp.</div>
+                            </div>
+                        </div>
+                    </div>
                     {{-- Products Panel --}}
                     <div class="schedule-create-panel mb-3">
                         <div class="schedule-create-panel-body">
@@ -337,33 +363,7 @@
                         </div>
                     </div>
 
-                    {{-- Date Selection Panel --}}
-                    <div class="schedule-create-panel">
-                        <div class="schedule-create-panel-body">
-                            <h2 class="h6 fw-bold mb-3">Chọn các ngày lên đơn</h2>
-                            <p class="text-muted small mb-3">Mỗi dòng ngày hợp lệ sẽ tạo một lịch lên đơn.</p>
-
-                            <div id="date-rows-container">
-                                <div class="schedule-date-row" data-row="1">
-                                    <div class="schedule-date-index">#1</div>
-                                    <div>
-                                        <input type="date" class="form-control schedule-date-input" min="{{ date('Y-m-d') }}">
-                                        <div class="schedule-date-hint">Chọn ngày lên đơn chính thức</div>
-                                    </div>
-                                    <button type="button" class="btn btn-outline-danger remove-date-row" disabled>
-                                        <i class="bi bi-trash me-1"></i>Xóa
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div class="schedule-date-toolbar">
-                                <button type="button" id="add-date-row-button" class="btn btn-primary">
-                                    <i class="bi bi-plus-circle me-1"></i>Thêm Ngày mới
-                                </button>
-                                <div class="small text-muted d-flex align-items-center">Tối thiểu 1 dòng ngày, không trùng lặp.</div>
-                            </div>
-                        </div>
-                    </div>
+                   
                 </div>
 
                 {{-- Summary Sidebar --}}
