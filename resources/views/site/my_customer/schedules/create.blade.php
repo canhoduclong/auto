@@ -295,7 +295,7 @@
                         </div>
                     </div>
                      {{-- Date Selection Panel --}}
-                    <div class="schedule-create-panel">
+                    <div class="schedule-create-panel mb-3">
                         <div class="schedule-create-panel-body">
                             <h2 class="h6 fw-bold mb-3">Chọn các ngày lên đơn</h2>
                             <p class="text-muted small mb-3">Mỗi dòng ngày hợp lệ sẽ tạo một lịch lên đơn.</p>
