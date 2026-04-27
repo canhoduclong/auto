@@ -254,6 +254,88 @@
         padding: .75rem;
         margin-bottom: .75rem;
     }
+    .schidx-daily-box {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: #fff;
+        box-shadow: 0 6px 18px rgba(17,24,39,.05);
+        padding: .75rem;
+        margin-bottom: .75rem;
+    }
+    .schidx-daily-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: .6rem;
+        margin-bottom: .65rem;
+    }
+    .schidx-daily-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: .55rem;
+        margin-bottom: .65rem;
+    }
+    .schidx-daily-kpi {
+        border: 1px solid #e5edf7;
+        border-radius: 10px;
+        padding: .5rem .6rem;
+        background: #f8fafc;
+    }
+    .schidx-daily-kpi-label {
+        font-size: .72rem;
+        text-transform: uppercase;
+        color: #64748b;
+        letter-spacing: .03em;
+        margin-bottom: .2rem;
+    }
+    .schidx-daily-kpi-value {
+        font-size: .98rem;
+        font-weight: 700;
+        color: #0f172a;
+    }
+    .schidx-daily-list {
+        display: grid;
+        gap: .5rem;
+    }
+    .schidx-daily-row {
+        border: 1px solid #e5edf7;
+        border-radius: 10px;
+        background: #f8fafc;
+        padding: .55rem .65rem;
+    }
+    .schidx-daily-row-top {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: .4rem;
+        margin-bottom: .35rem;
+    }
+    .schidx-daily-row-name {
+        font-size: .9rem;
+        font-weight: 700;
+        color: #0f172a;
+    }
+    .schidx-daily-row-sub {
+        font-size: .78rem;
+        color: #64748b;
+    }
+    .schidx-daily-row-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .35rem;
+    }
+    .schidx-daily-chip {
+        display: inline-block;
+        font-size: .72rem;
+        font-weight: 700;
+        border-radius: 999px;
+        padding: .18rem .5rem;
+    }
+    .schidx-daily-chip.active { background: #dcfce7; color: #166534; }
+    .schidx-daily-chip.stopped { background: #fee2e2; color: #991b1b; }
+    .schidx-daily-chip.approval { background: #fef3c7; color: #92400e; }
+    .schidx-daily-chip.auto { background: #dbeafe; color: #1d4ed8; }
     .schidx-summary-grid {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -299,6 +381,7 @@
         font-weight: 700;
     }
     @media (max-width: 767.98px) {
+        .schidx-daily-grid { grid-template-columns: repeat(2, 1fr); }
         .schidx-summary-grid { grid-template-columns: repeat(2, 1fr); }
         .schidx-product-row  { grid-template-columns: 36px 1.2fr 1fr 1fr; }
         .schidx-product-row > div:nth-child(n+5) { display: none; }
@@ -493,6 +576,70 @@
 
             {{-- Main content --}}
             <div class="col-12 col-lg-9">
+                {{-- Daily auto-order section --}}
+                <div class="schidx-daily-box">
+                    <div class="schidx-daily-head">
+                        <div>
+                            <div class="fw-semibold">Đơn lên tự động hàng ngày</div>
+                            <div class="schidx-mini">Danh sách cấu hình chạy mỗi ngày bạn đã tạo</div>
+                        </div>
+                        <a href="{{ route('my_customer.schedules.create') }}" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-plus-circle me-1"></i>Tạo cấu hình mới
+                        </a>
+                    </div>
+
+                    <div class="schidx-daily-grid">
+                        <div class="schidx-daily-kpi">
+                            <div class="schidx-daily-kpi-label">Tổng cấu hình</div>
+                            <div class="schidx-daily-kpi-value">{{ $dailyStats['total'] }}</div>
+                        </div>
+                        <div class="schidx-daily-kpi">
+                            <div class="schidx-daily-kpi-label">Đang hoạt động</div>
+                            <div class="schidx-daily-kpi-value">{{ $dailyStats['active'] }}</div>
+                        </div>
+                        <div class="schidx-daily-kpi">
+                            <div class="schidx-daily-kpi-label">Cần sale duyệt</div>
+                            <div class="schidx-daily-kpi-value">{{ $dailyStats['approval_required'] }}</div>
+                        </div>
+                    </div>
+
+                    @if($dailySchedules->isEmpty())
+                        <div class="schidx-empty py-4">
+                            <i class="bi bi-repeat d-block mb-2" style="font-size:1.4rem;"></i>
+                            Chưa có cấu hình lên đơn hàng ngày.
+                        </div>
+                    @else
+                        <div class="schidx-daily-list">
+                            @foreach($dailySchedules as $daily)
+                                <div class="schidx-daily-row">
+                                    <div class="schidx-daily-row-top">
+                                        <div>
+                                            <div class="schidx-daily-row-name">{{ $daily->customer->name ?? 'N/A' }}</div>
+                                            <div class="schidx-daily-row-sub">
+                                                {{ $daily->customer->phone ?? 'Không có SĐT' }} • Bắt đầu từ {{ optional($daily->start_date)->format('d/m/Y') }}
+                                            </div>
+                                        </div>
+                                        <div class="schidx-mini">#RULE-{{ $daily->id }}</div>
+                                    </div>
+                                    <div class="schidx-daily-row-meta">
+                                        <span class="schidx-daily-chip {{ $daily->is_active ? 'active' : 'stopped' }}">
+                                            {{ $daily->is_active ? 'Đang bật' : 'Đang tắt' }}
+                                        </span>
+                                        <span class="schidx-daily-chip {{ $daily->approval_required ? 'approval' : 'auto' }}">
+                                            {{ $daily->approval_required ? 'Sale duyệt trước tạo đơn' : 'Tự động tạo đơn' }}
+                                        </span>
+                                        <span class="schidx-daily-chip auto">{{ (int) $daily->items_count }} mặt hàng</span>
+                                        <span class="schidx-daily-chip auto">SL: {{ number_format((int) ($daily->total_qty ?? 0)) }}</span>
+                                        <span class="schidx-daily-chip auto">Hôm nay: {{ (int) $daily->schedules_today_count }} lịch</span>
+                                        <span class="schidx-daily-chip auto">Đã tạo: {{ (int) $daily->generated_today_count }}</span>
+                                        <span class="schidx-daily-chip auto">Review: {{ (int) $daily->need_review_today_count }}</span>
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    @endif
+                </div>
+
                 {{-- Status tab toolbar --}}
                 <div class="schidx-toolbar" id="schedTabToolbar">
                     <div class="d-flex flex-wrap gap-2 align-items-center">

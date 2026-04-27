@@ -83,10 +83,37 @@ class OrderScheduleController extends Controller
             ->get(['id', 'name', 'phone'])
             ->each(fn ($c) => $c->schedule_count = (int) ($schedCounts[$c->id] ?? 0));
 
+        $today = now()->toDateString();
+
+        $dailySchedules = DailyOrderSchedule::query()
+            ->with(['customer:id,name,phone'])
+            ->withCount('items')
+            ->withSum('items as total_qty', 'quantity')
+            ->withCount([
+                'materializedSchedules as schedules_today_count' => fn ($q) => $q->whereDate('schedule_date', $today),
+                'materializedSchedules as generated_today_count' => fn ($q) => $q
+                    ->whereDate('schedule_date', $today)
+                    ->where('status', 'generated'),
+                'materializedSchedules as need_review_today_count' => fn ($q) => $q
+                    ->whereDate('schedule_date', $today)
+                    ->where('status', 'need_review'),
+            ])
+            ->where('created_by', $userId)
+            ->orderByDesc('id')
+            ->get();
+
+        $dailyStats = [
+            'total' => $dailySchedules->count(),
+            'active' => $dailySchedules->where('is_active', true)->count(),
+            'approval_required' => $dailySchedules->where('approval_required', true)->count(),
+        ];
+
         $viewData = [
             'schedules'        => $schedules,
             'activeStatus'     => $status,
             'counts'           => $counts,
+            'dailySchedules'   => $dailySchedules,
+            'dailyStats'       => $dailyStats,
             'myCustomers'      => $myCustomers,
             'activeCustomerId' => $customerId,
             'fromDate'         => $fromDate,
