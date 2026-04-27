@@ -574,6 +574,7 @@ document.addEventListener('DOMContentLoaded', function () {
     let cpSearchTimeout = null;
     let cpCurrentPage = 1;
     let dateRowSeq = dateRowsContainer?.querySelectorAll('.schedule-date-row').length || 0;
+    let variantPerPage = 5;
     const cpAjaxUrl = '{{ route('site.orders.customers.ajax') }}';
 
     function formatNumber(num) {
@@ -798,7 +799,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
         variantSearchResults.innerHTML = '<div class="text-center text-muted py-3">Đang tải...</div>';
 
-        fetch(`{{ route('orders.ajax_variant_search') }}?search=${encodeURIComponent(term)}&page=${page}&exclude_ids=${getCartVariantIds().join(',')}`, {
+        const params = new URLSearchParams({
+            search: term,
+            page: String(page),
+            per_page: String(variantPerPage),
+        });
+
+        getCartVariantIds().forEach(id => params.append('exclude_ids[]', id));
+
+        fetch(`{{ route('orders.ajax_variant_search') }}?${params.toString()}`, {
             headers: { 'X-Requested-With': 'XMLHttpRequest' }
         })
             .then(response => response.json())
@@ -820,6 +829,15 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     variantSearchResults.addEventListener('click', function (event) {
+        const pageLink = event.target.closest('.pagination a, a.page-link');
+        if (pageLink) {
+            event.preventDefault();
+            const url = new URL(pageLink.href, window.location.origin);
+            const page = parseInt(url.searchParams.get('page') || '1', 10);
+            performVariantSearch(Number.isNaN(page) ? 1 : page);
+            return;
+        }
+
         const addBtn = event.target.closest('.add-variant-to-cart');
         if (!addBtn) return;
         event.preventDefault();
@@ -866,6 +884,15 @@ document.addEventListener('DOMContentLoaded', function () {
         updateNameIndexes();
         updateCartTotal();
         updateCartVisibility();
+        performVariantSearch(1);
+    });
+
+    variantSearchResults.addEventListener('change', function (event) {
+        const perPageSelect = event.target.closest('#per-page-select');
+        if (!perPageSelect) return;
+
+        const nextPerPage = parseInt(perPageSelect.value || '5', 10);
+        variantPerPage = Number.isNaN(nextPerPage) ? 5 : Math.min(50, Math.max(5, nextPerPage));
         performVariantSearch(1);
     });
 
