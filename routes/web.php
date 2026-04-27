@@ -434,6 +434,9 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::post('/my-customer/schedules/{schedule}/generate', [OrderScheduleController::class, 'generateFromReview'])->name('my_customer.schedules.generate');
     Route::post('/my-customer/schedules/{schedule}/toggle-active', [OrderScheduleController::class, 'toggleActive'])->name('my_customer.schedules.toggle_active');
     Route::post('/my-customer/schedules/evaluate-today', [OrderScheduleController::class, 'evaluateToday'])->name('my_customer.schedules.evaluate_today');
+    Route::get('/my-customer/daily-schedules/{dailySchedule}/edit', [OrderScheduleController::class, 'editDaily'])->name('my_customer.daily_schedules.edit');
+    Route::put('/my-customer/daily-schedules/{dailySchedule}', [OrderScheduleController::class, 'updateDaily'])->name('my_customer.daily_schedules.update');
+    Route::delete('/my-customer/daily-schedules/{dailySchedule}', [OrderScheduleController::class, 'destroyDaily'])->name('my_customer.daily_schedules.destroy');
     Route::get('/my-customer/{customer}', [PageController::class, 'myCustomerShow'])->name('my_customer.show');
     Route::post('/my-customer/{customer}/payments', [PageController::class, 'myCustomerStorePayment'])->name('my_customer.payments.store');
     Route::get('/my-customer/{customer}/order', [PageController::class, 'myCustomerOrderCreate'])->name('my_customer.order.create');

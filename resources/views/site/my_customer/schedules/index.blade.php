@@ -619,7 +619,20 @@
                                                 {{ $daily->customer->phone ?? 'Không có SĐT' }} • Bắt đầu từ {{ optional($daily->start_date)->format('d/m/Y') }}
                                             </div>
                                         </div>
-                                        <div class="schidx-mini">#RULE-{{ $daily->id }}</div>
+                                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                                            <div class="schidx-mini">#RULE-{{ $daily->id }}</div>
+                                            <a href="{{ route('my_customer.daily_schedules.edit', $daily) }}" class="btn btn-sm btn-outline-primary">
+                                                <i class="bi bi-pencil-square me-1"></i>Sửa
+                                            </a>
+                                            <form method="POST" action="{{ route('my_customer.daily_schedules.destroy', $daily) }}" class="m-0"
+                                                onsubmit="return confirm('Xóa cấu hình đơn tự động #{{ $daily->id }}?\n\nHành động này không thể hoàn tác.')">
+                                                @csrf
+                                                @method('DELETE')
+                                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                                    <i class="bi bi-trash me-1"></i>Xóa
+                                                </button>
+                                            </form>
+                                        </div>
                                     </div>
                                     <div class="schidx-daily-row-meta">
                                         <span class="schidx-daily-chip {{ $daily->is_active ? 'active' : 'stopped' }}">

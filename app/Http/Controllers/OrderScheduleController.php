@@ -392,6 +392,89 @@ class OrderScheduleController extends Controller
             ->with('success', 'Đã cập nhật lịch lên đơn #' . $schedule->id . '.');
     }
 
+    public function editDaily(DailyOrderSchedule $dailySchedule)
+    {
+        abort_unless((int) $dailySchedule->created_by === (int) auth()->id() || auth()->user()?->hasRole('admin'), 403);
+
+        $dailySchedule->load(['customer:id,name,phone', 'items.variant.product']);
+
+        return view('site.my_customer.schedules.daily_edit', [
+            'dailySchedule' => $dailySchedule,
+            'settings' => $this->settings,
+        ]);
+    }
+
+    public function updateDaily(Request $request, DailyOrderSchedule $dailySchedule)
+    {
+        abort_unless((int) $dailySchedule->created_by === (int) auth()->id() || auth()->user()?->hasRole('admin'), 403);
+
+        $validated = $request->validate([
+            'approval_required' => ['nullable', 'boolean'],
+            'is_active' => ['nullable', 'boolean'],
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.variant_id' => ['required', 'exists:product_variants,id'],
+            'items.*.quantity' => ['required', 'integer', 'min:1'],
+        ]);
+
+        $variantIds = collect($validated['items'])
+            ->pluck('variant_id')
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        $variants = ProductVariant::query()
+            ->with(['latestPriceRule'])
+            ->whereIn('id', $variantIds->all())
+            ->get()
+            ->keyBy('id');
+
+        $dailySchedule->update([
+            'approval_required' => $request->boolean('approval_required'),
+            'is_active' => $request->boolean('is_active', true),
+        ]);
+
+        $dailySchedule->items()->delete();
+
+        foreach ($validated['items'] as $item) {
+            $variantId = (int) $item['variant_id'];
+            $qty = (int) $item['quantity'];
+            if ($qty <= 0) {
+                continue;
+            }
+
+            $variant = $variants->get($variantId);
+            if (!$variant) {
+                continue;
+            }
+
+            $scheduledPrice = (float) ($variant->latestPriceRule?->price ?? $variant->final_price ?? 0);
+
+            $dailySchedule->items()->create([
+                'product_id' => (int) $variant->product_id,
+                'product_variant_id' => $variantId,
+                'quantity' => $qty,
+                'scheduled_price' => $scheduledPrice,
+            ]);
+        }
+
+        if ($dailySchedule->items()->count() === 0) {
+            return back()->withInput()->with('error', 'Không có sản phẩm hợp lệ, cấu hình chưa được cập nhật.');
+        }
+
+        return redirect()->route('my_customer.schedules.index')
+            ->with('success', 'Đã cập nhật cấu hình đơn tự động #' . $dailySchedule->id . '.');
+    }
+
+    public function destroyDaily(DailyOrderSchedule $dailySchedule)
+    {
+        abort_unless((int) $dailySchedule->created_by === (int) auth()->id() || auth()->user()?->hasRole('admin'), 403);
+
+        $dailySchedule->delete();
+
+        return redirect()->route('my_customer.schedules.index')
+            ->with('success', 'Đã xóa cấu hình đơn tự động #' . $dailySchedule->id . '.');
+    }
+
     public function destroy(OrderSchedule $schedule)
     {
         abort_unless((int) $schedule->created_by === (int) auth()->id() || auth()->user()?->hasRole('admin'), 403);
