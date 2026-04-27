@@ -11,6 +11,7 @@ class OrderSchedule extends Model
 
     protected $fillable = [
         'customer_id',
+        'daily_order_schedule_id',
         'schedule_date',
         'status',
         'price_status',
@@ -30,6 +31,11 @@ class OrderSchedule extends Model
     public function customer()
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    public function dailySchedule()
+    {
+        return $this->belongsTo(DailyOrderSchedule::class, 'daily_order_schedule_id');
     }
 
     public function creator()

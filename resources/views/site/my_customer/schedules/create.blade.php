@@ -182,6 +182,58 @@
         gap: 10px;
         margin-top: 10px;
     }
+    .schedule-mode-tabs {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 14px;
+        flex-wrap: wrap;
+    }
+    .schedule-mode-tab {
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        border-radius: 14px;
+        background: #fff;
+        padding: 12px 14px;
+        min-width: 220px;
+        cursor: pointer;
+        transition: all .18s ease;
+    }
+    .schedule-mode-tab.active {
+        border-color: rgba(15, 118, 110, 0.45);
+        background: rgba(15, 118, 110, 0.08);
+        box-shadow: inset 0 0 0 1px rgba(15, 118, 110, 0.16);
+    }
+    .schedule-mode-tab-title {
+        font-size: .92rem;
+        font-weight: 800;
+        color: #0f172a;
+    }
+    .schedule-mode-tab-sub {
+        margin-top: 4px;
+        font-size: .8rem;
+        color: #64748b;
+        line-height: 1.4;
+    }
+    .schedule-mode-pane {
+        display: none;
+    }
+    .schedule-mode-pane.active {
+        display: block;
+    }
+    .schedule-daily-box {
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        border-radius: 14px;
+        background: #f8fafc;
+        padding: 16px;
+    }
+    .schedule-daily-note {
+        margin-top: 12px;
+        padding: 12px 14px;
+        border-radius: 12px;
+        background: #eff6ff;
+        border: 1px solid rgba(96, 165, 250, 0.28);
+        color: #1e3a8a;
+        font-size: .86rem;
+    }
     @media (max-width: 768px) {
         .schedule-customer-grid {
             grid-template-columns: 1fr;
@@ -234,6 +286,7 @@
         <form action="{{ route('my_customer.schedules.store') }}" method="POST" id="schedule-create-form">
             @csrf
             <input type="hidden" name="customer_id" id="customer-id-input" value="{{ $selectedCustomer?->id ?? '' }}">
+            <input type="hidden" name="schedule_mode" id="schedule-mode-input" value="{{ old('schedule_mode', 'specific_dates') }}">
 
             <div class="row g-3">
                 <div class="col-lg-8">
@@ -297,27 +350,57 @@
                      {{-- Date Selection Panel --}}
                     <div class="schedule-create-panel mb-3">
                         <div class="schedule-create-panel-body">
-                            <h2 class="h6 fw-bold mb-3">Chọn các ngày lên đơn</h2>
-                            <p class="text-muted small mb-3">Mỗi dòng ngày hợp lệ sẽ tạo một lịch lên đơn.</p>
+                            <h2 class="h6 fw-bold mb-2">Chọn cách lên đơn</h2>
+                            <p class="text-muted small mb-3">Chỉ chọn 1 trong 2 chế độ: lên đơn mỗi ngày hoặc tạo lịch theo các ngày cụ thể.</p>
 
-                            <div id="date-rows-container">
-                                <div class="schedule-date-row" data-row="1">
-                                    <div class="schedule-date-index">#1</div>
-                                    <div>
-                                        <input type="date" class="form-control schedule-date-input" min="{{ date('Y-m-d') }}">
-                                        <div class="schedule-date-hint">Chọn ngày lên đơn chính thức</div>
+                            <div class="schedule-mode-tabs" role="tablist" aria-label="Chế độ lên đơn">
+                                <button type="button" class="schedule-mode-tab" data-mode="daily_auto" aria-pressed="false">
+                                    <div class="schedule-mode-tab-title">Tab 1: Lên đơn mỗi ngày</div>
+                                    <div class="schedule-mode-tab-sub">Tự chạy hằng ngày từ hôm nay. Có thể bật yêu cầu sale duyệt trước khi tạo đơn.</div>
+                                </button>
+                                <button type="button" class="schedule-mode-tab" data-mode="specific_dates" aria-pressed="false">
+                                    <div class="schedule-mode-tab-title">Tab 2: Chọn ngày tự động lên đơn</div>
+                                    <div class="schedule-mode-tab-sub">Giữ nguyên cách hiện tại: mỗi ngày hợp lệ sẽ tạo một lịch riêng.</div>
+                                </button>
+                            </div>
+
+                            <div class="schedule-mode-pane" data-mode-pane="daily_auto">
+                                <div class="schedule-daily-box">
+                                    <div class="fw-bold mb-2">Lên đơn tự động mỗi ngày</div>
+                                    <div class="text-muted small mb-3">Hệ thống sẽ dùng danh sách sản phẩm bên dưới để chạy lệnh mỗi ngày, bắt đầu từ hôm nay.</div>
+
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" role="switch" id="approval-required-input" name="approval_required" value="1" {{ old('approval_required') ? 'checked' : '' }}>
+                                        <label class="form-check-label fw-semibold" for="approval-required-input">Sale duyệt trước khi xác nhận</label>
                                     </div>
-                                    <button type="button" class="btn btn-outline-danger remove-date-row" disabled>
-                                        <i class="bi bi-trash me-1"></i>Xóa
-                                    </button>
+
+                                    <div class="schedule-daily-note">
+                                        Nếu bật <strong>Sale duyệt</strong>: mỗi ngày hệ thống sẽ tạo lịch hôm nay và đưa vào trạng thái cần review để sale xác nhận.<br>
+                                        Nếu không bật: hệ thống sẽ tự kiểm tra giá, tồn kho và tạo đơn ngay khi hợp lệ.
+                                    </div>
                                 </div>
                             </div>
 
-                            <div class="schedule-date-toolbar">
-                                <button type="button" id="add-date-row-button" class="btn btn-primary">
-                                    <i class="bi bi-plus-circle me-1"></i>Thêm ngày
-                                </button>
-                                <div class="small text-muted d-flex align-items-center">Tối thiểu 1 dòng ngày, không trùng lặp.</div>
+                            <div class="schedule-mode-pane" data-mode-pane="specific_dates">
+                                <div id="date-rows-container">
+                                    <div class="schedule-date-row" data-row="1">
+                                        <div class="schedule-date-index">#1</div>
+                                        <div>
+                                            <input type="date" class="form-control schedule-date-input" min="{{ date('Y-m-d') }}">
+                                            <div class="schedule-date-hint">Chọn ngày lên đơn chính thức</div>
+                                        </div>
+                                        <button type="button" class="btn btn-outline-danger remove-date-row" disabled>
+                                            <i class="bi bi-trash me-1"></i>Xóa
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="schedule-date-toolbar">
+                                    <button type="button" id="add-date-row-button" class="btn btn-primary">
+                                        <i class="bi bi-plus-circle me-1"></i>Thêm ngày
+                                    </button>
+                                    <div class="small text-muted d-flex align-items-center">Tối thiểu 1 dòng ngày, không trùng lặp.</div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -382,7 +465,7 @@
                                     <span class="schedule-kpi-value" id="summaryLineCount">0</span>
                                 </div>
                                 <div class="schedule-kpi">
-                                    <span class="schedule-kpi-label">Số ngày lên đơn</span>
+                                    <span class="schedule-kpi-label" id="summaryDateLabel">Số ngày lên đơn</span>
                                     <span class="schedule-kpi-value" id="summaryDateCount">0</span>
                                 </div>
                             </div>
@@ -478,9 +561,13 @@ document.addEventListener('DOMContentLoaded', function () {
     const addDateRowButton = document.getElementById('add-date-row-button');
     const summarySubtotal = document.getElementById('summarySubtotal');
     const summaryLineCount = document.getElementById('summaryLineCount');
+    const summaryDateLabel = document.getElementById('summaryDateLabel');
     const summaryDateCount = document.getElementById('summaryDateCount');
     const summaryTotalFooter = document.getElementById('summaryTotalFooter');
     const form = document.getElementById('schedule-create-form');
+    const scheduleModeInput = document.getElementById('schedule-mode-input');
+    const scheduleModeTabs = Array.from(document.querySelectorAll('.schedule-mode-tab'));
+    const scheduleModePanes = Array.from(document.querySelectorAll('[data-mode-pane]'));
 
     let itemIndex = 0;
     let searchTimeout = null;
@@ -824,6 +911,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function syncScheduleDateInputs() {
         form.querySelectorAll('input[name="schedule_dates[]"]').forEach(el => el.remove());
+        if ((scheduleModeInput?.value || 'specific_dates') !== 'specific_dates') {
+            return [];
+        }
         const dates = getUniqueSelectedDates();
         dates.forEach(date => {
             const hidden = document.createElement('input');
@@ -836,9 +926,37 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function updateDateSummary() {
+        const currentMode = scheduleModeInput?.value || 'specific_dates';
+        if (currentMode !== 'specific_dates') {
+            if (summaryDateLabel) summaryDateLabel.textContent = 'Chu kỳ lên đơn';
+            summaryDateCount.textContent = 'Mỗi ngày';
+            syncScheduleDateInputs();
+            return [];
+        }
+
         const dates = syncScheduleDateInputs();
+        if (summaryDateLabel) summaryDateLabel.textContent = 'Số ngày lên đơn';
         summaryDateCount.textContent = dates.length;
         return dates;
+    }
+
+    function setScheduleMode(mode) {
+        const currentMode = mode === 'daily_auto' ? 'daily_auto' : 'specific_dates';
+        if (scheduleModeInput) {
+            scheduleModeInput.value = currentMode;
+        }
+
+        scheduleModeTabs.forEach(tab => {
+            const active = tab.dataset.mode === currentMode;
+            tab.classList.toggle('active', active);
+            tab.setAttribute('aria-pressed', active ? 'true' : 'false');
+        });
+
+        scheduleModePanes.forEach(pane => {
+            pane.classList.toggle('active', pane.dataset.modePane === currentMode);
+        });
+
+        updateDateSummary();
     }
 
     function addDateRow(initialValue = '') {
@@ -863,6 +981,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
     addDateRowButton?.addEventListener('click', function () {
         addDateRow('');
+    });
+
+    scheduleModeTabs.forEach(tab => {
+        tab.addEventListener('click', function () {
+            setScheduleMode(tab.dataset.mode || 'specific_dates');
+        });
     });
 
     dateRowsContainer?.addEventListener('click', function (event) {
@@ -896,6 +1020,12 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
+        const currentMode = scheduleModeInput?.value || 'specific_dates';
+        if (currentMode !== 'specific_dates') {
+            syncScheduleDateInputs();
+            return;
+        }
+
         const allDateValues = Array.from(dateRowsContainer.querySelectorAll('.schedule-date-input'))
             .map(input => (input.value || '').trim())
             .filter(Boolean);
@@ -917,6 +1047,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     renumberDateRows();
+    setScheduleMode(scheduleModeInput?.value || 'specific_dates');
     updateDateSummary();
     updateCartVisibility();
     updateCartTotal();

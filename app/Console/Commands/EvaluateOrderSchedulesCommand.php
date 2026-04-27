@@ -21,6 +21,7 @@ class EvaluateOrderSchedulesCommand extends Command
         $schedules = OrderSchedule::query()
             ->whereDate('schedule_date', now()->toDateString())
             ->where('status', 'pending')
+            ->where('is_active', true)
             ->whereNull('generated_order_id')
             ->get();
 
@@ -53,6 +54,7 @@ class EvaluateOrderSchedulesCommand extends Command
         OrderScheduleRun::create([
             'triggered_by' => $this->option('triggered-by') ?: null,
             'trigger_type' => $this->option('trigger-type') ?: 'cron',
+            'command_name' => 'order-schedules:evaluate-today',
             'status'       => $errorMsg ? 'failed' : 'success',
             'evaluated'    => $evaluated,
             'generated'    => $generated,

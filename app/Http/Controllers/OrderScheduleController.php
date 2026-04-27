@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Customer;
+use App\Models\DailyOrderSchedule;
 use App\Models\OrderSchedule;
 use App\Models\ProductVariant;
 use App\Services\OrderScheduleService;
@@ -151,12 +152,21 @@ class OrderScheduleController extends Controller
     {
         $validated = $request->validate([
             'customer_id' => ['required', 'exists:customers,id'],
-            'schedule_dates' => ['required', 'array', 'min:1'],
-            'schedule_dates.*' => ['required', 'date', 'after_or_equal:today'],
+            'schedule_mode' => ['required', 'in:specific_dates,daily_auto'],
+            'approval_required' => ['nullable', 'boolean'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.variant_id' => ['required', 'exists:product_variants,id'],
             'items.*.quantity' => ['required', 'integer', 'min:1'],
         ]);
+
+        $scheduleMode = (string) $validated['schedule_mode'];
+
+        if ($scheduleMode === 'specific_dates') {
+            $request->validate([
+                'schedule_dates' => ['required', 'array', 'min:1'],
+                'schedule_dates.*' => ['required', 'date', 'after_or_equal:today'],
+            ]);
+        }
 
         $customer = Customer::query()
             ->where('id', (int) $validated['customer_id'])
@@ -178,6 +188,52 @@ class OrderScheduleController extends Controller
             ->whereIn('id', $variantIds->all())
             ->get()
             ->keyBy('id');
+
+        if ($scheduleMode === 'daily_auto') {
+            $dailySchedule = DailyOrderSchedule::create([
+                'customer_id' => $customer->id,
+                'created_by' => auth()->id(),
+                'approval_required' => $request->boolean('approval_required'),
+                'is_active' => true,
+                'start_date' => now()->toDateString(),
+                'meta' => [
+                    'created_from' => 'my_customer.schedules.create',
+                ],
+            ]);
+
+            foreach ($validated['items'] as $item) {
+                $variantId = (int) $item['variant_id'];
+                $qty = (int) $item['quantity'];
+                if ($qty <= 0) {
+                    continue;
+                }
+
+                $variant = $variants->get($variantId);
+                if (!$variant) {
+                    continue;
+                }
+
+                $scheduledPrice = (float) ($variant->latestPriceRule?->price ?? $variant->final_price ?? 0);
+
+                $dailySchedule->items()->create([
+                    'product_id' => (int) $variant->product_id,
+                    'product_variant_id' => $variantId,
+                    'quantity' => $qty,
+                    'scheduled_price' => $scheduledPrice,
+                ]);
+            }
+
+            if ($dailySchedule->items()->count() === 0) {
+                $dailySchedule->delete();
+
+                return back()->withInput()->with('error', 'Không có sản phẩm hợp lệ để tạo lên đơn mỗi ngày.');
+            }
+
+            return redirect()->route('my_customer.schedules.index')
+                ->with('success', $request->boolean('approval_required')
+                    ? 'Đã tạo cấu hình lên đơn mỗi ngày. Mỗi ngày hệ thống sẽ tạo lịch và chờ sale duyệt.'
+                    : 'Đã tạo cấu hình lên đơn mỗi ngày. Hệ thống sẽ tự tạo đơn hằng ngày từ hôm nay.');
+        }
 
         $createdCount = 0;
 

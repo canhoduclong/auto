@@ -18,6 +18,7 @@ class Kernel extends ConsoleKernel
         \App\Console\Commands\ExportCategoriesToSeederArray::class,
         \App\Console\Commands\AutoCancelOverdueOrders::class,
         \App\Console\Commands\ReconcileInventoryReservations::class,
+        \App\Console\Commands\ProcessDailyOrderSchedulesCommand::class,
         \App\Console\Commands\EvaluateOrderSchedulesCommand::class,
     ];
 
@@ -30,6 +31,8 @@ class Kernel extends ConsoleKernel
         $schedule->command('orders:auto-cancel-overdue')->dailyAt('00:05');
         // Reconcile reserved_quantity drift every day at 00:10 (after auto-cancel)
         $schedule->command('inventory:reconcile-reservations')->dailyAt('00:10');
+        // Materialize daily auto-order rules and create/review orders for today
+        $schedule->command('order-schedules:process-daily-rules')->dailyAt('00:14');
         // Evaluate scheduled orders (price/stock) and auto-generate valid ones
         $schedule->command('order-schedules:evaluate-today')->dailyAt('00:15');
     }

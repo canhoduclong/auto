@@ -10,6 +10,7 @@ class OrderScheduleRun extends Model
     protected $fillable = [
         'triggered_by',
         'trigger_type',
+        'command_name',
         'status',
         'evaluated',
         'generated',

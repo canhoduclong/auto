@@ -104,9 +104,57 @@
         white-space: nowrap;
         cursor: default;
     }
+    .osr-filter-bar {
+        display: flex;
+        gap: .6rem;
+        flex-wrap: wrap;
+        margin: 0 0 1rem;
+    }
+    .osr-filter-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: .4rem;
+        padding: .5rem .8rem;
+        border-radius: 999px;
+        border: 1px solid var(--osr-border);
+        background: #fff;
+        color: var(--osr-ink);
+        text-decoration: none;
+        font-size: .82rem;
+        font-weight: 600;
+    }
+    .osr-filter-chip.active {
+        background: #dbeafe;
+        border-color: #93c5fd;
+        color: #1d4ed8;
+    }
+    .osr-command-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: .85rem;
+        margin-top: 1rem;
+    }
+    .osr-command-box {
+        background: rgba(255,255,255,.08);
+        border: 1px solid rgba(255,255,255,.1);
+        border-radius: 12px;
+        padding: 1rem;
+    }
+    .osr-command-box-title {
+        font-size: .95rem;
+        font-weight: 800;
+        margin-bottom: .35rem;
+    }
+    .osr-command-box-sub {
+        font-size: .8rem;
+        opacity: .8;
+        margin-bottom: .8rem;
+        line-height: 1.45;
+    }
     @media (max-width: 767.98px) {
         .osr-kpi-grid { grid-template-columns: repeat(2, 1fr); }
         .osr-table td:nth-child(6), .osr-table th:nth-child(6) { display: none; }
+        .osr-command-grid { grid-template-columns: 1fr; }
     }
 </style>
 @endpush
@@ -114,26 +162,55 @@
 @section('content')
 <div class="osr-page">
     <div class="container-fluid">
+        @php
+            $commandLabels = [
+                'order-schedules:process-daily-rules' => 'Lên đơn mỗi ngày',
+                'order-schedules:evaluate-today' => 'Lịch theo ngày cụ thể',
+            ];
+        @endphp
 
         {{-- Hero --}}
         <div class="osr-hero">
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
                 <div>
                     <h4 class="mb-1 fw-bold"><i class="bi bi-calendar-check me-2"></i>Đơn tự động — Lịch sử chạy lệnh</h4>
-                    <div class="opacity-70 small">Giám sát và kiểm soát lệnh <code class="text-warning">order-schedules:evaluate-today</code></div>
+                    <div class="opacity-70 small">Giám sát 2 luồng: rule <code class="text-warning">mỗi ngày</code> và lịch <code class="text-warning">theo ngày cụ thể</code></div>
                 </div>
-                <div class="d-flex gap-2 flex-wrap align-items-center">
-                    <div class="osr-cron-box">
-                        <i class="bi bi-clock me-1"></i>
-                        Cron tự động: <strong>00:15 mỗi ngày</strong>
+            </div>
+            <div class="osr-command-grid">
+                <div class="osr-command-box">
+                    <div class="osr-command-box-title"><i class="bi bi-repeat me-1"></i>Lên đơn mỗi ngày</div>
+                    <div class="osr-command-box-sub">Cron: <strong>00:14 mỗi ngày</strong>. Lệnh sẽ tạo lịch hôm nay từ các rule hằng ngày, rồi tự tạo đơn hoặc đưa vào cần review nếu có bật sale duyệt.</div>
+                    <div class="d-flex gap-2 flex-wrap align-items-center">
+                        <div class="osr-cron-box">
+                            <i class="bi bi-clock me-1"></i>
+                            <code>order-schedules:process-daily-rules</code>
+                        </div>
+                        <form method="POST" action="{{ route('admin.order-schedule-runs.run-daily-rules-now') }}" class="m-0"
+                              onsubmit="return confirm('Chạy lệnh lên đơn mỗi ngày ngay bây giờ?\n\nLệnh sẽ xử lý toàn bộ rule hằng ngày đang bật.')">
+                            @csrf
+                            <button type="submit" class="btn btn-light fw-bold">
+                                <i class="bi bi-play-fill me-1"></i>Chạy rule mỗi ngày
+                            </button>
+                        </form>
                     </div>
-                    <form method="POST" action="{{ route('admin.order-schedule-runs.run-now') }}" class="m-0"
-                          onsubmit="return confirm('Chạy lệnh ngay bây giờ?\n\nLệnh sẽ kiểm tra giá/tồn kho và tạo đơn cho tất cả lịch hôm nay có status = pending.')">
-                        @csrf
-                        <button type="submit" class="btn btn-warning fw-bold">
-                            <i class="bi bi-play-fill me-1"></i>Chạy ngay bây giờ
-                        </button>
-                    </form>
+                </div>
+                <div class="osr-command-box">
+                    <div class="osr-command-box-title"><i class="bi bi-calendar-event me-1"></i>Lịch theo ngày cụ thể</div>
+                    <div class="osr-command-box-sub">Cron: <strong>00:15 mỗi ngày</strong>. Lệnh kiểm tra lịch có `schedule_date = hôm nay`, rồi so sánh giá/tồn để tạo đơn hoặc chuyển sang cần review.</div>
+                    <div class="d-flex gap-2 flex-wrap align-items-center">
+                        <div class="osr-cron-box">
+                            <i class="bi bi-clock me-1"></i>
+                            <code>order-schedules:evaluate-today</code>
+                        </div>
+                        <form method="POST" action="{{ route('admin.order-schedule-runs.run-now') }}" class="m-0"
+                              onsubmit="return confirm('Chạy lệnh lịch theo ngày ngay bây giờ?\n\nLệnh sẽ kiểm tra giá/tồn kho và tạo đơn cho tất cả lịch hôm nay có status = pending.')">
+                            @csrf
+                            <button type="submit" class="btn btn-warning fw-bold">
+                                <i class="bi bi-play-fill me-1"></i>Chạy lịch theo ngày
+                            </button>
+                        </form>
+                    </div>
                 </div>
             </div>
             <div class="osr-kpi-grid">
@@ -177,16 +254,27 @@
         <div class="alert alert-info border-0 rounded-3 mb-3 d-flex gap-3 align-items-start">
             <i class="bi bi-info-circle-fill fs-5 mt-1 flex-shrink-0"></i>
             <div>
-                <div class="fw-bold mb-1">Lệnh này hoạt động thế nào?</div>
+                <div class="fw-bold mb-1">Hai lệnh này hoạt động thế nào?</div>
                 <ul class="mb-0 small ps-3">
-                    <li>Mỗi ngày lúc <strong>00:15</strong>, hệ thống tự chạy <code>php artisan order-schedules:evaluate-today</code></li>
-                    <li>Lệnh tìm tất cả lịch có <strong>schedule_date = hôm nay</strong>, <strong>status = pending</strong>, chưa có đơn hàng</li>
-                    <li>Kiểm tra <strong>giá hiện tại</strong> và <strong>tồn kho</strong> của từng mặt hàng trong lịch</li>
-                    <li>Nếu giá &amp; tồn kho OK → tự động <strong>tạo đơn hàng</strong> (status: <span class="badge bg-success">generated</span>)</li>
-                    <li>Nếu có thay đổi giá / thiếu tồn kho → đánh dấu <strong>cần review</strong> (status: <span class="badge bg-warning text-dark">need_review</span>)</li>
-                    <li>Bạn cũng có thể nhấn <strong>"Chạy ngay bây giờ"</strong> để kích hoạt thủ công bất kỳ lúc nào</li>
+                    <li><code>php artisan order-schedules:process-daily-rules</code> chạy lúc <strong>00:14</strong> để xử lý các rule <strong>lên đơn mỗi ngày</strong></li>
+                    <li>Nếu rule bật <strong>Sale duyệt</strong> thì hệ thống tạo lịch hôm nay và đưa vào <span class="badge bg-warning text-dark">need_review</span> để sale xác nhận</li>
+                    <li>Nếu rule không cần duyệt thì hệ thống tự kiểm tra <strong>giá hiện tại</strong>, <strong>tồn kho</strong> và tạo đơn ngay khi hợp lệ</li>
+                    <li><code>php artisan order-schedules:evaluate-today</code> chạy lúc <strong>00:15</strong> để xử lý các lịch <strong>theo ngày cụ thể</strong></li>
+                    <li>Cả 2 lệnh đều được ghi vào lịch sử bên dưới và có thể kích hoạt thủ công từ trang này</li>
                 </ul>
             </div>
+        </div>
+
+        <div class="osr-filter-bar">
+            <a href="{{ route('admin.order-schedule-runs.index') }}" class="osr-filter-chip {{ $activeCommand === 'all' ? 'active' : '' }}">
+                <i class="bi bi-grid"></i>Tất cả lệnh
+            </a>
+            @foreach($commandLabels as $commandName => $commandLabel)
+                <a href="{{ route('admin.order-schedule-runs.index', ['command' => $commandName]) }}" class="osr-filter-chip {{ $activeCommand === $commandName ? 'active' : '' }}">
+                    <i class="bi bi-terminal"></i>{{ $commandLabel }}
+                    <span class="text-muted">{{ number_format($stats['by_command'][$commandName]['total_runs'] ?? 0) }}</span>
+                </a>
+            @endforeach
         </div>
 
         {{-- Run history table --}}
@@ -201,6 +289,7 @@
                         <tr>
                             <th>#</th>
                             <th>Thời điểm</th>
+                            <th>Lệnh</th>
                             <th>Kích hoạt bởi</th>
                             <th>Loại</th>
                             <th>Trạng thái</th>
@@ -218,6 +307,10 @@
                             <td>
                                 <div class="fw-semibold" style="font-size:.84rem;">{{ $run->created_at->format('d/m/Y H:i:s') }}</div>
                                 <div class="text-muted" style="font-size:.75rem;">{{ $run->created_at->diffForHumans() }}</div>
+                            </td>
+                            <td>
+                                <div class="fw-semibold" style="font-size:.83rem;">{{ $commandLabels[$run->command_name] ?? $run->command_name }}</div>
+                                <div class="text-muted" style="font-size:.74rem;">{{ $run->command_name }}</div>
                             </td>
                             <td>
                                 @if($run->triggeredBy)
@@ -266,7 +359,7 @@
                         </tr>
                         @empty
                         <tr>
-                            <td colspan="10" class="text-center text-muted py-4">
+                            <td colspan="11" class="text-center text-muted py-4">
                                 <i class="bi bi-inbox fs-4 d-block mb-2"></i>
                                 Chưa có lần chạy nào được ghi lại.
                             </td>

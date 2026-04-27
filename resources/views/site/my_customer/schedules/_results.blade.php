@@ -72,7 +72,12 @@
                     {{-- Date + ID --}}
                     <div>
                         <div class="fw-bold">{{ optional($schedule->schedule_date)->format('d/m/Y') }}</div>
-                        <div class="schidx-mini">#{{ $schedule->id }}</div>
+                        @php
+                            $dow = optional($schedule->schedule_date)->dayOfWeek; // 0=Sun..6=Sat
+                                $dowLabels = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ bảy'];
+                            $dowLabel  = $dow !== null ? $dowLabels[$dow] : '';
+                        @endphp
+                        <div class="schidx-mini">{{ $dowLabel }} &middot; #{{ $schedule->id }}</div>
                         @if($schedule->status !== 'generated')
                             @if($daysLeft < 0)
                                 <span class="schidx-badge schidx-badge-need-review mt-1" title="Quá hạn {{ abs($daysLeft) }} ngày">
