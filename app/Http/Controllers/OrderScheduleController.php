@@ -176,12 +176,6 @@ class OrderScheduleController extends Controller
             })
             ->firstOrFail();
 
-        $dateStrings = collect($validated['schedule_dates'])
-            ->map(fn ($d) => date('Y-m-d', strtotime((string) $d)))
-            ->unique()
-            ->sort()
-            ->values();
-
         $variantIds = collect($validated['items'])->pluck('variant_id')->map(fn ($id) => (int) $id)->unique()->values();
         $variants = ProductVariant::query()
             ->with(['latestPriceRule'])
@@ -234,6 +228,17 @@ class OrderScheduleController extends Controller
                     ? 'Đã tạo cấu hình lên đơn mỗi ngày. Mỗi ngày hệ thống sẽ tạo lịch và chờ sale duyệt.'
                     : 'Đã tạo cấu hình lên đơn mỗi ngày. Hệ thống sẽ tự tạo đơn hằng ngày từ hôm nay.');
         }
+
+        $dateValidation = $request->validate([
+            'schedule_dates' => ['required', 'array', 'min:1'],
+            'schedule_dates.*' => ['required', 'date', 'after_or_equal:today'],
+        ]);
+
+        $dateStrings = collect($dateValidation['schedule_dates'])
+            ->map(fn ($d) => date('Y-m-d', strtotime((string) $d)))
+            ->unique()
+            ->sort()
+            ->values();
 
         $createdCount = 0;
 
