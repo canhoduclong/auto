@@ -353,14 +353,14 @@
                             <h2 class="h6 fw-bold mb-2">Chọn cách lên đơn</h2>
                             <p class="text-muted small mb-3">Chỉ chọn 1 trong 2 chế độ: lên đơn mỗi ngày hoặc tạo lịch theo các ngày cụ thể.</p>
 
-                            <div class="schedule-mode-tabs" role="tablist" aria-label="Chế độ lên đơn">
+                            <div class="schedule-mode-tabs d-flex" role="tablist" aria-label="Chế độ lên đơn">
                                 <button type="button" class="schedule-mode-tab" data-mode="daily_auto" aria-pressed="false">
-                                    <div class="schedule-mode-tab-title">Tab 1: Lên đơn mỗi ngày</div>
-                                    <div class="schedule-mode-tab-sub">Tự chạy hằng ngày từ hôm nay. Có thể bật yêu cầu sale duyệt trước khi tạo đơn.</div>
+                                    <div class="schedule-mode-tab-title">Lên đơn mỗi ngày</div>
+                                    <div class="schedule-mode-tab-sub">Tự chạy hằng ngày từ hôm nay. .</div>
                                 </button>
                                 <button type="button" class="schedule-mode-tab" data-mode="specific_dates" aria-pressed="false">
-                                    <div class="schedule-mode-tab-title">Tab 2: Chọn ngày tự động lên đơn</div>
-                                    <div class="schedule-mode-tab-sub">Giữ nguyên cách hiện tại: mỗi ngày hợp lệ sẽ tạo một lịch riêng.</div>
+                                    <div class="schedule-mode-tab-title">Chọn ngày tự động lên đơn</div>
+                                    <div class="schedule-mode-tab-sub">Mỗi ngày hợp lệ sẽ tạo một lịch riêng.</div>
                                 </button>
                             </div>
 
