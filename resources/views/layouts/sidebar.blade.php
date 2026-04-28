@@ -77,138 +77,145 @@
 				<div class="sidebar-section">
 					<ul class="nav nav-sidebar" data-nav-type="accordion">
 
-						<!-- Main -->
+						<!-- Tổng quan -->
 						<li class="nav-item-header">
-							<div class="text-uppercase fs-sm lh-sm opacity-50 sidebar-resize-hide">Main</div>
+							<div class="text-uppercase fs-sm lh-sm opacity-50 sidebar-resize-hide">Tổng quan</div>
 							<i class="ph-dots-three sidebar-resize-show"></i>
 						</li>
 						<li class="nav-item">
-							<a href="{{ route('dashboard') }}" class="nav-link active">
+							<a href="{{ route('dashboard') }}" class="nav-link{{ request()->routeIs('dashboard') ? ' active' : '' }}">
 								<i class="ph-house"></i>
-								<span>
-									{{ __('menu.dashboard') }}
-									<span class="d-block fw-normal opacity-50">No pending orders</span>
-								</span>
+								<span>{{ __('menu.dashboard') }}</span>
 							</a>
-						</li>
-						<li class="nav-item nav-item-submenu">
-							<a href="{{ route('admin.posts.index') }}" class="nav-link">
-								<i class="ph-note-blank"></i>
-								<span>{{ __('menu.blog') }}</span>
-							</a> 
 						</li>
 						<li class="nav-item">
-							<a href="{{ route('admin.pages.index') }}" class="nav-link">
-								<i class="ph-file-text"></i>
-								<span>{{ __('menu.pages') }}</span>
-							</a>
-						</li>
-						<li class="nav-item ">
-							<a href="{{ route('media.index' ) }}" class="nav-link{{ request()->routeIs('media.*') ? ' active' : '' }}">
-								<i class="ph-note-blank"></i>
+							<a href="{{ route('media.index') }}" class="nav-link{{ request()->routeIs('media.*') ? ' active' : '' }}">
+								<i class="ph-images"></i>
 								<span>{{ __('menu.media') }}</span>
 							</a>
 						</li>
-						<li class="nav-item nav-item-submenu">
-							<a href="{{ route('admin.post-categories.index') }}" class="nav-link"><span>{{ __('menu.categories') }}</span></a>
+
+						<!-- Đơn hàng -->
+						<li class="nav-item-header">
+							<div class="text-uppercase fs-sm lh-sm opacity-50 sidebar-resize-hide">Đơn hàng</div>
+							<i class="ph-dots-three sidebar-resize-show"></i>
 						</li>
-						
-						<li class="nav-item ">
-							<a href="{{ route('permissions.index') }}" class="nav-link">
-								<i class="ph-note-blank"></i>
-								<span>{{ __('menu.permissions') }}</span>
+						<li class="nav-item">
+							<a href="{{ route('orders.index') }}" class="nav-link{{ request()->routeIs('orders.*') ? ' active' : '' }}">
+								<i class="ph-shopping-cart"></i>
+								<span>Đơn hàng</span>
 							</a>
 						</li>
-						
-						<li class="nav-item ">
-							<a href="{{ route('roles.index') }}" class="nav-link">
-								<i class="ph-note-blank"></i>
-								<span>{{ __('menu.roles') }}</span>
+						<li class="nav-item">
+							<a href="{{ route('order-returns.index') }}" class="nav-link{{ request()->routeIs('order-returns.*') ? ' active' : '' }}">
+								<i class="ph-arrow-fat-lines-left"></i>
+								<span>{{ __('menu.order_returns') }}</span>
 							</a>
 						</li>
-						
-						<li class="nav-item ">
-							<a href="{{ route('users.index') }}" class="nav-link{{ request()->routeIs('users.*') ? ' active' : '' }}">
-								<i class="ph-user-gear"></i>
-								<span>Quan tri user & gan kho</span>
+						<li class="nav-item">
+							<a href="{{ route('admin.order-schedule-runs.index') }}" class="nav-link{{ request()->routeIs('admin.order-schedule-runs.*') ? ' active' : '' }}">
+								<i class="ph-calendar-check"></i>
+								<span>Đơn tự động</span>
 							</a>
 						</li>
-						<li class="nav-item ">
-							<a href="{{ route('warehouses.index') }}" class="nav-link{{ request()->routeIs('warehouses.*') ? ' active' : '' }}">
-								<i class="ph-storefront"></i>
-								<span>Quan tri kho hang</span>
+						<li class="nav-item">
+							<a href="{{ route('transactions.index') }}" class="nav-link{{ request()->routeIs('transactions.*') ? ' active' : '' }}">
+								<i class="ph-currency-circle-dollar"></i>
+								<span>{{ __('menu.transactions') }}</span>
 							</a>
 						</li>
-						<li class="nav-item ">
-							<a href="{{ route('inventory-documents.index') }}" class="nav-link{{ request()->routeIs('inventory-documents.*') ? ' active' : '' }}">
-								<i class="ph-files"></i>
-								<span>Nhap xuat kho hang</span>
-							</a>
-						</li>
-						<li class="nav-item ">
-							<a href="{{ route('inventories.index') }}" class="nav-link{{ request()->routeIs('inventories.*') ? ' active' : '' }}">
-								<i class="ph-chart-bar"></i>
-								<span>Bao cao ton kho</span>
-							</a>
-						</li>
-						<li class="nav-item ">
-							<a href="{{ route('categories.index') }}" class="nav-link{{ request()->routeIs('categories.*') ? ' active' : '' }}">
-								<i class="ph-note-blank"></i>
-								<span>{{ __('menu.categories') }}</span>
-							</a>
-						</li>
-						<li class="nav-item ">
-							<a href="{{ route('admin.brands.index') }}" class="nav-link{{ request()->routeIs('admin.brands.*') ? ' active' : '' }}">
-								<i class="ph-note-blank"></i>
-								<span>{{ __('menu.brands') }}</span>
-							</a>
-						</li>
-						<li class="nav-item ">
-							<a href="{{ route('admin.suppliers.index') }}" class="nav-link{{ request()->routeIs('admin.suppliers.*') ? ' active' : '' }}">
-								<i class="ph-note-blank"></i>
-								<span>Nhà cung cấp</span>
-							</a>
-						</li>
-						<li class="nav-item ">
-							<a href="{{ route('products.index') }}" class="nav-link{{ request()->routeIs('products.*') ? ' active' : '' }}">
-								<i class="ph-note-blank"></i>
-								<span>{{ __('menu.products') }}</span>
-							</a>
-						</li>
-						<li class="nav-item ">
-							<a href="{{ route('product-variants.index') }}" class="nav-link{{ request()->routeIs('product-variants.*') ? ' active' : '' }}">
-								<i class="ph-note-blank"></i>
-								<span>{{ __('menu.product_variants') }}</span>
-							</a>
-						</li>
-						
-						
-						<li class="nav-item ">
-							<a href="{{ route('customertype.index') }}" class="nav-link{{ request()->routeIs('customertype.*') ? ' active' : '' }}">
-								<i class="ph-note-blank"></i>
-								<span>{{ __('menu.customer_type') }}</span>
-							</a>
-						</li>
-						<li class="nav-item ">
-							<a href="{{ route('customers.index') }}" class="nav-link{{ request()->routeIs('customers.*') ? ' active' : '' }}">
-								<i class="ph-note-blank"></i>
-								<span>{{ __('menu.customers') }}</span>
-							</a>
-						</li>						
-						<li class="nav-item ">
-							<a href="{{ route('customers.addresses.list' ) }}" class="nav-link">
-								<i class="ph-note-blank"></i>
-								<span>{{ __('menu.customer_address') }}</span>
-							</a>
-						</li>
-						<li class="nav-item ">
-							<a href="{{ route('provinces.index') }}" class="nav-link{{ request()->routeIs('provinces.*') ? ' active' : '' }}">
-								<i class="ph-map-pin"></i>
-								<span>Quản lý tỉnh/thành và phường/xã</span>
+						<li class="nav-item">
+							<a href="{{ route('approval-workflows.index') }}" class="nav-link{{ request()->routeIs('approval-workflows.*') ? ' active' : '' }}">
+								<i class="ph-flow-arrow"></i>
+								<span>Quy trình duyệt</span>
 							</a>
 						</li>
 
-						{{-- Truck Management --}}
+						<!-- Khách hàng -->
+						<li class="nav-item-header">
+							<div class="text-uppercase fs-sm lh-sm opacity-50 sidebar-resize-hide">Khách hàng</div>
+							<i class="ph-dots-three sidebar-resize-show"></i>
+						</li>
+						<li class="nav-item">
+							<a href="{{ route('customers.index') }}" class="nav-link{{ request()->routeIs('customers.*') ? ' active' : '' }}">
+								<i class="ph-users"></i>
+								<span>{{ __('menu.customers') }}</span>
+							</a>
+						</li>
+						<li class="nav-item">
+							<a href="{{ route('customertype.index') }}" class="nav-link{{ request()->routeIs('customertype.*') ? ' active' : '' }}">
+								<i class="ph-tag"></i>
+								<span>{{ __('menu.customer_type') }}</span>
+							</a>
+						</li>
+						<li class="nav-item">
+							<a href="{{ route('customers.addresses.list') }}" class="nav-link">
+								<i class="ph-map-pin-simple-area"></i>
+								<span>{{ __('menu.customer_address') }}</span>
+							</a>
+						</li>
+
+						<!-- Sản phẩm & Danh mục -->
+						<li class="nav-item-header">
+							<div class="text-uppercase fs-sm lh-sm opacity-50 sidebar-resize-hide">Sản phẩm</div>
+							<i class="ph-dots-three sidebar-resize-show"></i>
+						</li>
+						<li class="nav-item">
+							<a href="{{ route('products.index') }}" class="nav-link{{ request()->routeIs('products.*') ? ' active' : '' }}">
+								<i class="ph-package"></i>
+								<span>{{ __('menu.products') }}</span>
+							</a>
+						</li>
+						<li class="nav-item">
+							<a href="{{ route('product-variants.index') }}" class="nav-link{{ request()->routeIs('product-variants.*') ? ' active' : '' }}">
+								<i class="ph-circles-four"></i>
+								<span>{{ __('menu.product_variants') }}</span>
+							</a>
+						</li>
+						<li class="nav-item">
+							<a href="{{ route('categories.index') }}" class="nav-link{{ request()->routeIs('categories.*') ? ' active' : '' }}">
+								<i class="ph-folder-open"></i>
+								<span>{{ __('menu.categories') }}</span>
+							</a>
+						</li>
+						<li class="nav-item">
+							<a href="{{ route('admin.brands.index') }}" class="nav-link{{ request()->routeIs('admin.brands.*') ? ' active' : '' }}">
+								<i class="ph-seal-check"></i>
+								<span>{{ __('menu.brands') }}</span>
+							</a>
+						</li>
+						<li class="nav-item">
+							<a href="{{ route('admin.suppliers.index') }}" class="nav-link{{ request()->routeIs('admin.suppliers.*') ? ' active' : '' }}">
+								<i class="ph-factory"></i>
+								<span>Nhà cung cấp</span>
+							</a>
+						</li>
+
+						<!-- Kho hàng -->
+						<li class="nav-item-header">
+							<div class="text-uppercase fs-sm lh-sm opacity-50 sidebar-resize-hide">Kho hàng</div>
+							<i class="ph-dots-three sidebar-resize-show"></i>
+						</li>
+						<li class="nav-item">
+							<a href="{{ route('warehouses.index') }}" class="nav-link{{ request()->routeIs('warehouses.*') ? ' active' : '' }}">
+								<i class="ph-storefront"></i>
+								<span>Quản trị kho</span>
+							</a>
+						</li>
+						<li class="nav-item">
+							<a href="{{ route('inventory-documents.index') }}" class="nav-link{{ request()->routeIs('inventory-documents.*') ? ' active' : '' }}">
+								<i class="ph-files"></i>
+								<span>Nhập xuất kho</span>
+							</a>
+						</li>
+						<li class="nav-item">
+							<a href="{{ route('inventories.index') }}" class="nav-link{{ request()->routeIs('inventories.*') ? ' active' : '' }}">
+								<i class="ph-chart-bar"></i>
+								<span>Báo cáo tồn kho</span>
+							</a>
+						</li>
+
+						<!-- Nhà xe -->
 						<li class="nav-item-header">
 							<div class="text-uppercase fs-sm lh-sm opacity-50 sidebar-resize-hide">Nhà xe</div>
 							<i class="ph-dots-three sidebar-resize-show"></i>
@@ -231,35 +238,64 @@
 								<span>Quản lý Tuyến đi</span>
 							</a>
 						</li>
-						<li class="nav-item ">
+
+						<!-- Nội dung & CMS -->
+						<li class="nav-item-header">
+							<div class="text-uppercase fs-sm lh-sm opacity-50 sidebar-resize-hide">Nội dung</div>
+							<i class="ph-dots-three sidebar-resize-show"></i>
+						</li>
+						<li class="nav-item">
+							<a href="{{ route('admin.posts.index') }}" class="nav-link{{ request()->routeIs('admin.posts.*') ? ' active' : '' }}">
+								<i class="ph-article"></i>
+								<span>{{ __('menu.blog') }}</span>
+							</a>
+						</li>
+						<li class="nav-item">
+							<a href="{{ route('admin.pages.index') }}" class="nav-link{{ request()->routeIs('admin.pages.*') ? ' active' : '' }}">
+								<i class="ph-file-text"></i>
+								<span>{{ __('menu.pages') }}</span>
+							</a>
+						</li>
+						<li class="nav-item">
+							<a href="{{ route('admin.post-categories.index') }}" class="nav-link{{ request()->routeIs('admin.post-categories.*') ? ' active' : '' }}">
+								<i class="ph-folder-notch-open"></i>
+								<span>Danh mục bài viết</span>
+							</a>
+						</li>
+
+						<!-- Hệ thống -->
+						<li class="nav-item-header">
+							<div class="text-uppercase fs-sm lh-sm opacity-50 sidebar-resize-hide">Hệ thống</div>
+							<i class="ph-dots-three sidebar-resize-show"></i>
+						</li>
+						<li class="nav-item">
+							<a href="{{ route('users.index') }}" class="nav-link{{ request()->routeIs('users.*') ? ' active' : '' }}">
+								<i class="ph-user-gear"></i>
+								<span>Quản trị users</span>
+							</a>
+						</li>
+						<li class="nav-item">
+							<a href="{{ route('roles.index') }}" class="nav-link{{ request()->routeIs('roles.*') ? ' active' : '' }}">
+								<i class="ph-shield-star"></i>
+								<span>{{ __('menu.roles') }}</span>
+							</a>
+						</li>
+						<li class="nav-item">
+							<a href="{{ route('permissions.index') }}" class="nav-link{{ request()->routeIs('permissions.*') ? ' active' : '' }}">
+								<i class="ph-lock-key"></i>
+								<span>{{ __('menu.permissions') }}</span>
+							</a>
+						</li>
+						<li class="nav-item">
 							<a href="{{ route('teams.index') }}" class="nav-link{{ request()->routeIs('teams.*') ? ' active' : '' }}">
 								<i class="ph-users-three"></i>
 								<span>Teams</span>
 							</a>
 						</li>
-						<li class="nav-item ">
-							<a href="{{ route('approval-workflows.index') }}" class="nav-link{{ request()->routeIs('approval-workflows.*') ? ' active' : '' }}">
-								<i class="ph-flow-arrow"></i>
-								<span>Tạo quy trình</span>
-							</a>
-						</li>
-						<li class="nav-item ">
-							<a href="{{ route('order-returns.index') }}" class="nav-link{{ request()->routeIs('order-returns.*') ? ' active' : '' }}">
-								<i class="ph-arrow-fat-lines-right"></i>
-								<span>{{ __('menu.order_returns') }}</span>
-							</a>
-						</li>
-						<li class="nav-item ">
-							<a href="{{ route('transactions.index') }}" class="nav-link{{ request()->routeIs('transactions.*') ? ' active' : '' }}">
-								<i class="ph-note-blank"></i>
-								<span>{{ __('menu.transactions') }}</span>
-							</a>
-						</li>
-
 						<li class="nav-item">
-							<a href="{{ route('admin.order-schedule-runs.index') }}" class="nav-link{{ request()->routeIs('admin.order-schedule-runs.*') ? ' active' : '' }}">
-								<i class="ph-calendar-check"></i>
-								<span>Đơn tự động</span>
+							<a href="{{ route('provinces.index') }}" class="nav-link{{ request()->routeIs('provinces.*') ? ' active' : '' }}">
+								<i class="ph-map-trifold"></i>
+								<span>Tỉnh/Thành & Phường/Xã</span>
 							</a>
 						</li>
 						<li class="nav-item">
@@ -274,7 +310,6 @@
 								<span>Reset Data</span>
 							</a>
 						</li>
-
 
 					</ul>
 					 <!-- Logout -->

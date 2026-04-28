@@ -89,7 +89,7 @@ class CustomerController extends Controller
     public function index(Request $request)
     { 
         $this->authorize('viewAny', Customer::class);
-        $query = Customer::with(['type', 'addresses', 'assignedTo']);
+        $query = Customer::with(['type', 'addresses', 'assignedTo', 'user']);
 
         // Lọc theo loại
         if ($request->filled('type_id')) {
@@ -100,6 +100,11 @@ class CustomerController extends Controller
         if (Gate::allows('filter_customer_by_user') && $request->filled('assigned_to')) {
             $query->where('assigned_to', $request->assigned_to);
         }
+
+            // Sale chỉ xem khách hàng của mình
+            if (!Gate::allows('filter_customer_by_user')) {
+                $query->where('assigned_to', Auth::id());
+            }
 
         // Tìm theo tên / phone / email
         if ($search = $request->input('q')) {
@@ -581,6 +586,12 @@ class CustomerController extends Controller
         $selectedProvinceId = $data['province_id'] ?? null;
         $selectedWardId = $data['ward_id'] ?? null;
         unset($data['province_id'], $data['ward_id']);
+
+        // Gắn người tạo và sale phụ trách là chính user đang đăng nhập
+        $data['user_id'] = Auth::id();
+        if (empty($data['assigned_to'])) {
+            $data['assigned_to'] = Auth::id();
+        }
 
         $duplicateCustomer = Customer::query()
             ->where(function ($query) use ($data) {

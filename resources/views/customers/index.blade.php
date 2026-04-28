@@ -76,7 +76,8 @@
                 <th>{{ __('customers.index.phone') }}</th>
                 <th>{{ __('customers.index.email') }}</th>
                 <th>{{ __('customers.index.type') }}</th>
-                <th>{{ __('customers.index.staff') }}</th>
+                <th>Sale phụ trách</th>
+                <th>Người tạo</th>
                 <th>{{ __('customers.index.default_address') }}</th>
                 <th>{{ __('customers.index.actions') }}</th>
             </tr>
@@ -101,7 +102,7 @@
                     <td>{{ $customer->email }}</td>
                     <td>{{ optional($customer->type)->name ?? '-' }}</td>
                     <td>{{ optional($customer->assignedTo)->name ?? '-' }}</td>
-                     
+                    <td>{{ optional($customer->user)->name ?? '-' }}</td>
                     <td>
                          @if($customer->addresses->isNotEmpty()) 
                             @php
@@ -128,7 +129,7 @@
                 </tr>
             @empty
                 <tr>
-                    <td colspan="9" class="text-center">{{ __('customers.index.empty') }}</td>
+                    <td colspan="10" class="text-center">{{ __('customers.index.empty') }}</td>
                 </tr>
             @endforelse
         </tbody>

@@ -6,12 +6,17 @@
     <title>@yield('title', __('auth.login_title'))</title>
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
+
+
+ 
+
+
     
 	<!-- Global stylesheets -->
 	<link href="{{ asset('assets/fonts/inter/inter.css') }}" rel="stylesheet" type="text/css">
 	<link href="{{ asset('assets/icons/phosphor/styles.min.css') }}" rel="stylesheet" type="text/css">
 	<link href="{{ asset('assets/css/ltr/all.min.css') }}" id="stylesheet" rel="stylesheet" type="text/css">
-    <link href="{{ asset('css/mobile-responsive.css') }}" rel="stylesheet" type="text/css">
+    <link href="{{ asset('assets/css/mobile-responsive.css') }}" rel="stylesheet" type="text/css">
 	<!-- /global stylesheets -->
 
 	<!-- Core JS files -->
@@ -21,8 +26,7 @@
 	<!-- /core JS files -->
 
 	<!-- Theme JS files -->
-	<script src="{{ asset('assets/js/vendor/visualization/d3/d3.min.js') }}"></script>
-	<script src="{{ asset('assets/js/vendor/visualization/d3/d3_tooltip.js') }}"></script>
+    <script src="{{ asset('assets/js/app.js') }}"></script>
 
    
     <script src="{{ asset('ckeditor/ckeditor.js') }}"></script>
