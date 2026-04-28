@@ -154,14 +154,18 @@ document.addEventListener('DOMContentLoaded', function () {
  
     function removeItem(id) {
         return fetch(`/cart/remove/${id}`, {
-            method: 'DELETE',
+            method: 'POST',
             credentials: 'same-origin',
             headers: {
                 'Accept': 'application/json',
                 'Content-Type': 'application/json',
                 'X-CSRF-TOKEN': csrfToken,
                 'X-Requested-With': 'XMLHttpRequest'
-            }
+            },
+            body: JSON.stringify({
+                _method: 'DELETE',
+                id: id
+            })
         })
         .then(async response => {
             const data = await response.json().catch(() => ({}));
@@ -315,6 +319,7 @@ document.addEventListener('DOMContentLoaded', function () {
     document.addEventListener('click', function (e) {
         const removeBtn = e.target.closest('.remove-from-cart');
         if (removeBtn) {
+            e.preventDefault();
             const container = getContainer(removeBtn);
             if (container) {
                 removeItem(container.dataset.id);
