@@ -14,7 +14,7 @@
     }
     .orders-hero {
         border: 1px solid rgba(41, 52, 98, 0.08);
-        border-radius: 28px;
+        border-radius: 9px;
         background: linear-gradient(135deg, #152238 0%, #23385f 55%, #39598a 100%);
         color: #fff;
         padding: 28px;
@@ -35,7 +35,7 @@
     .orders-kpi {
         background: rgba(255, 255, 255, 0.08);
         border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 20px;
+        border-radius: 9px;
         padding: 18px;
         min-height: 100%;
         backdrop-filter: blur(6px);
@@ -54,7 +54,7 @@
     }
     .orders-panel {
         border: 1px solid rgba(15, 23, 42, 0.08);
-        border-radius: 24px;
+        border-radius: 9px;
         background: #fff;
         box-shadow: 0 12px 34px rgba(15, 23, 42, 0.06);
     }
@@ -64,12 +64,12 @@
     .orders-filter .form-control,
     .orders-filter .form-select {
         height: 48px;
-        border-radius: 14px;
+        border-radius: 9px;
         border-color: #d8deea;
     }
     .orders-filter .btn {
         height: 48px;
-        border-radius: 14px;
+        border-radius: 9px;
         font-weight: 700;
     }
     .orders-side-panel {
@@ -85,13 +85,13 @@
     }
     .customer-picker {
         border: 1px solid #e5eaf3;
-        border-radius: 16px;
+        border-radius: 9px;
         background: #f8fafc;
         padding: 14px;
     }
     .customer-collapse-toggle {
         height: 40px !important;
-        border-radius: 12px !important;
+        border-radius: 9px !important;
         font-weight: 700;
     }
     .customer-collapse-action {
@@ -105,14 +105,14 @@
         max-height: 280px;
         overflow-y: auto;
         border: 1px solid #e5eaf3;
-        border-radius: 12px;
+        border-radius: 9px;
         background: #fff;
         padding: 8px;
     }
     .customer-list-item {
         border: 1px solid #d8deea;
         background: #fff;
-        border-radius: 10px;
+        border-radius: 9px;
         padding: 8px 10px;
         white-space: normal;
         transition: all .2s ease;

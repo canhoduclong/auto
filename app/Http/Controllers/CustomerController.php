@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\Rule;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Imports\CustomerImport;
 use App\Exports\CustomerExport;
@@ -24,6 +25,15 @@ use App\Exports\CustomerExport;
 class CustomerController extends Controller
 {
     private static ?array $orderColumnsCache = null;
+
+    private function salesUsersQuery()
+    {
+        return User::query()
+            ->whereHas('roles', function ($query) {
+                $query->whereIn(DB::raw('LOWER(name)'), ['sale', 'leader', 'leader_sale', 'sale_manager']);
+            })
+            ->orderBy('name');
+    }
 
     private function orderColumns(): array
     {
@@ -90,6 +100,7 @@ class CustomerController extends Controller
     { 
         $this->authorize('viewAny', Customer::class);
         $query = Customer::with(['type', 'addresses', 'assignedTo', 'user']);
+        $isAdmin = (bool) Auth::user()?->isAdmin();
 
         // Lọc theo loại
         if ($request->filled('type_id')) {
@@ -97,13 +108,23 @@ class CustomerController extends Controller
         }
 
         // Lọc theo user (chỉ admin)
-        if (Gate::allows('filter_customer_by_user') && $request->filled('assigned_to')) {
+        if ($isAdmin && $request->filled('assigned_to')) {
             $query->where('assigned_to', $request->assigned_to);
         }
 
-            // Sale chỉ xem khách hàng của mình
-            if (!Gate::allows('filter_customer_by_user')) {
-                $query->where('assigned_to', Auth::id());
+        if ($isAdmin && $request->filled('ownership_status')) {
+            if ($request->ownership_status === 'free') {
+                $query->free();
+            }
+
+            if ($request->ownership_status === 'managed') {
+                $query->managed();
+            }
+        }
+
+        // Sale chỉ xem khách hàng còn thuộc quyền quản lý của mình
+        if (!$isAdmin) {
+            $query->visibleTo(Auth::user());
             }
 
         // Tìm theo tên / phone / email
@@ -126,11 +147,13 @@ class CustomerController extends Controller
                              ->get(['id', 'name']);
 
         $users = null;
-        if (Gate::allows('filter_customer_by_user')) {
-            $users = User::orderBy('name')->get(['id', 'name']);
+        if ($isAdmin) {
+            $users = $this->salesUsersQuery()->get(['id', 'name']);
         }
 
-        return view('customers.index', compact('customers', 'types', 'users'));
+        $customerFreeDays = Customer::freeCustomerDays();
+
+        return view('customers.index', compact('customers', 'types', 'users', 'customerFreeDays'));
     }
 
     public function report(Request $request, Customer $customer)
@@ -522,6 +545,7 @@ class CustomerController extends Controller
     // Form create
     public function create()
     {
+        $this->authorize('create', Customer::class);
         $types = CustomerType::orderBy('name')->get(['id', 'name']);
         $provinces = Province::query()->orderBy('name')->get(['id', 'name']);
         $truckStations = TruckStation::query()
@@ -535,6 +559,8 @@ class CustomerController extends Controller
     // Store
     public function store(Request $request)
     {
+        $this->authorize('create', Customer::class);
+
         $data = $request->validate([
             'name' => 'required|string|max:255',
             'phone' => 'nullable|string|max:30',
@@ -587,11 +613,14 @@ class CustomerController extends Controller
         $selectedWardId = $data['ward_id'] ?? null;
         unset($data['province_id'], $data['ward_id']);
 
-        // Gắn người tạo và sale phụ trách là chính user đang đăng nhập
+        // Sale tạo khách thì mặc định giữ khách. Admin tạo khách thì để trạng thái tự do.
         $data['user_id'] = Auth::id();
-        if (empty($data['assigned_to'])) {
+        if (Auth::user()?->isAdmin()) {
+            $data['assigned_to'] = null;
+        } elseif (empty($data['assigned_to'])) {
             $data['assigned_to'] = Auth::id();
         }
+        $data['assigned_at'] = $data['assigned_to'] ? now() : null;
 
         $duplicateCustomer = Customer::query()
             ->where(function ($query) use ($data) {
@@ -640,6 +669,7 @@ class CustomerController extends Controller
     // Form edit
     public function edit(Customer $customer)
     {
+        $this->authorize('update', $customer);
         $types = CustomerType::orderBy('name')->get(['id', 'name']);
         $provinces = Province::query()->orderBy('name')->get(['id', 'name']);
         $truckStations = TruckStation::query()
@@ -654,6 +684,8 @@ class CustomerController extends Controller
     // Update
     public function update(Request $request, Customer $customer)
     {
+        $this->authorize('update', $customer);
+
         $data = $request->validate([
             'name' => 'required|string|max:255',
             'phone' => 'nullable|string|max:30|unique:customers,phone,' . $customer->id,
@@ -730,8 +762,44 @@ class CustomerController extends Controller
     // Delete
     public function destroy(Customer $customer)
     {
+        $this->authorize('delete', $customer);
         $customer->delete();
         return redirect()->route('customers.index')->with('success', __('customers.messages.deleted'));
+    }
+
+    public function assignSale(Request $request, Customer $customer)
+    {
+        abort_unless($request->user()?->isAdmin(), 403);
+
+        $validated = $request->validate([
+            'assigned_to' => ['nullable', 'integer', Rule::exists('users', 'id')],
+        ]);
+
+        $assignedTo = $validated['assigned_to'] ?? null;
+
+        if ($assignedTo !== null) {
+            $allowedSaleIds = $this->salesUsersQuery()->pluck('id')->all();
+            if (!in_array((int) $assignedTo, array_map('intval', $allowedSaleIds), true)) {
+                return back()->withErrors([
+                    'assigned_to' => 'User được chọn không thuộc nhóm sale có thể nhận khách.',
+                ]);
+            }
+        }
+
+        $customer->update([
+            'assigned_to' => $assignedTo,
+            'assigned_at' => $assignedTo ? now() : null,
+        ]);
+
+        return redirect()->route('customers.index', [
+            'q' => $request->input('q'),
+            'type_id' => $request->input('type_id'),
+            'assigned_to' => $request->input('assigned_to_filter'),
+            'per_page' => $request->input('per_page'),
+            'ownership_status' => $request->input('ownership_status'),
+            'page' => $request->input('page'),
+        ])
+            ->with('success', $assignedTo ? 'Đã gán khách hàng cho sale.' : 'Đã chuyển khách hàng về trạng thái tự do.');
     }
 
     // Bulk Delete
@@ -743,7 +811,12 @@ class CustomerController extends Controller
 
         $ids = explode(',', $request->input('ids'));
 
-        Customer::whereIn('id', $ids)->delete();
+        $query = Customer::query()->whereIn('id', $ids);
+        if (!$request->user()?->isAdmin()) {
+            $query->visibleTo($request->user());
+        }
+
+        $query->delete();
 
         return redirect()->route('customers.index')->with('success', __('customers.messages.bulk_deleted'));
     }

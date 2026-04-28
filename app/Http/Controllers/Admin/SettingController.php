@@ -263,6 +263,10 @@ class SettingController extends Controller
     {
         $data = $request->except('_token');
 
+        if (array_key_exists('customer_free_days', $data)) {
+            $data['customer_free_days'] = max((int) $data['customer_free_days'], 0);
+        }
+
         foreach ($data as $key => $value) {
             Setting::set($key, $value);
         }

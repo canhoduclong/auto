@@ -316,6 +316,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::get('customers/export', [CustomerController::class, 'export'])->name('customers.export')->middleware('permission');
     Route::get('customers/import', [CustomerController::class, 'importForm'])->name('customers.import.form')->middleware('permission');
     Route::post('customers/import', [CustomerController::class, 'import'])->name('customers.import')->middleware('permission');
+    Route::post('customers/{customer}/assign-sale', [CustomerController::class, 'assignSale'])->name('customers.assign-sale')->middleware('permission');
     Route::post('customers/{customer}/payments', [CustomerController::class, 'storePayment'])->name('customers.payments.store')->middleware('permission');
     Route::get('customers/{customer}/report', [CustomerController::class, 'report'])->name('customers.report')->middleware('permission');
     Route::resource('customers', CustomerController::class)->middleware('permission');

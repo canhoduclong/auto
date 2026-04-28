@@ -3,9 +3,9 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Support\Str;
 
 class Customer extends Model
 {
@@ -61,6 +61,7 @@ class Customer extends Model
         'truck_station_phone',
         'truck_fee',
         'assigned_to',
+        'assigned_at',
         'status',
         'deleted_by',
     ];
@@ -70,7 +71,88 @@ class Customer extends Model
     protected $casts = [
         'dob' => 'date',
         'next_appointment' => 'datetime',
+        'assigned_at' => 'datetime',
     ];
+
+    public static function freeCustomerDays(): int
+    {
+        return max((int) Setting::get('customer_free_days', 0), 0);
+    }
+
+    public function assignmentExpiresAt()
+    {
+        $days = static::freeCustomerDays();
+
+        if ($days <= 0 || !$this->assigned_at) {
+            return null;
+        }
+
+        return $this->assigned_at->copy()->addDays($days);
+    }
+
+    public function isFree(): bool
+    {
+        if (!$this->assigned_to) {
+            return true;
+        }
+
+        $days = static::freeCustomerDays();
+        if ($days <= 0) {
+            return false;
+        }
+
+        if (!$this->assigned_at) {
+            return true;
+        }
+
+        return $this->assigned_at->lte(now()->subDays($days));
+    }
+
+    public function isManagedBy(User $user): bool
+    {
+        if ($user->isAdmin()) {
+            return true;
+        }
+
+        return (int) $this->assigned_to === (int) $user->id && !$this->isFree();
+    }
+
+    public function scopeFree(Builder $query): Builder
+    {
+        $days = static::freeCustomerDays();
+
+        return $query->where(function (Builder $builder) use ($days) {
+            $builder->whereNull('assigned_to');
+
+            if ($days > 0) {
+                $builder->orWhereNull('assigned_at')
+                    ->orWhere('assigned_at', '<=', now()->subDays($days));
+            }
+        });
+    }
+
+    public function scopeManaged(Builder $query): Builder
+    {
+        $days = static::freeCustomerDays();
+
+        $query->whereNotNull('assigned_to');
+
+        if ($days > 0) {
+            $query->whereNotNull('assigned_at')
+                ->where('assigned_at', '>', now()->subDays($days));
+        }
+
+        return $query;
+    }
+
+    public function scopeVisibleTo(Builder $query, User $user): Builder
+    {
+        if ($user->isAdmin()) {
+            return $query;
+        }
+
+        return $query->where('assigned_to', $user->id)->managed();
+    }
 
     public function transactions() {
         return $this->hasMany(Transaction::class);

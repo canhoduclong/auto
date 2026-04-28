@@ -309,6 +309,34 @@
             </div>
         </div>
 
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white border-0 pt-3 pb-0">
+                <h5 class="mb-1">Quản lý khách hàng tự do</h5>
+                <p class="text-muted small mb-0">Khách chưa gắn sale luôn là khách tự do. Nếu nhập số ngày lớn hơn 0, khách đã gán sale sẽ tự trở lại trạng thái tự do khi quá thời hạn này.</p>
+            </div>
+            <div class="card-body">
+                <div class="row g-3 align-items-end">
+                    <div class="col-lg-4">
+                        <label for="customer_free_days" class="form-label">Số ngày giữ khách cho sale</label>
+                        <input
+                            type="number"
+                            min="0"
+                            class="form-control"
+                            id="customer_free_days"
+                            name="customer_free_days"
+                            value="{{ $settings['customer_free_days']->value ?? 0 }}"
+                            placeholder="0"
+                        >
+                    </div>
+                    <div class="col-lg-8">
+                        <div class="small text-muted pt-lg-4">
+                            `0` nghĩa là chỉ khách chưa gắn sale mới là khách tự do. Giá trị lớn hơn `0` sẽ dùng `assigned_at` để tính thời hạn giữ khách.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="card border-0 shadow-sm mb-4">
             <div class="card-header bg-white border-0 pt-3 pb-0">
                 <h5 class="mb-1">Slider trang chủ</h5>
