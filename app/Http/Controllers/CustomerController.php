@@ -112,6 +112,19 @@ class CustomerController extends Controller
             $query->where('assigned_to', $request->assigned_to);
         }
 
+        // Lọc theo người tạo (chỉ admin)
+        if ($isAdmin && $request->filled('user_id')) {
+            $query->where('user_id', $request->user_id);
+        }
+
+        // Mặc định không hiển thị khách hàng là nhân viên.
+        // Chỉ khi bật bộ lọc is_employee=1 mới hiển thị nhóm nhân viên.
+        if ($request->boolean('is_employee')) {
+            $query->where('is_employee', true);
+        } else {
+            $query->where('is_employee', false);
+        }
+
         if ($isAdmin && $request->filled('ownership_status')) {
             if ($request->ownership_status === 'free') {
                 $query->free();
@@ -147,13 +160,19 @@ class CustomerController extends Controller
                              ->get(['id', 'name']);
 
         $users = null;
+        $creatorUsers = null;
         if ($isAdmin) {
             $users = $this->salesUsersQuery()->get(['id', 'name']);
+
+            $creatorUsers = User::query()
+                ->whereIn('id', Customer::query()->select('user_id')->whereNotNull('user_id')->distinct())
+                ->orderBy('name')
+                ->get(['id', 'name']);
         }
 
         $customerFreeDays = Customer::freeCustomerDays();
 
-        return view('customers.index', compact('customers', 'types', 'users', 'customerFreeDays'));
+        return view('customers.index', compact('customers', 'types', 'users', 'creatorUsers', 'customerFreeDays'));
     }
 
     public function report(Request $request, Customer $customer)
@@ -794,12 +813,46 @@ class CustomerController extends Controller
         return redirect()->route('customers.index', [
             'q' => $request->input('q'),
             'type_id' => $request->input('type_id'),
-            'assigned_to' => $request->input('assigned_to_filter'),
+            'assigned_to' => $request->input('assigned_to'),
+            'user_id' => $request->input('user_id'),
             'per_page' => $request->input('per_page'),
             'ownership_status' => $request->input('ownership_status'),
+            'is_employee' => $request->input('is_employee'),
             'page' => $request->input('page'),
         ])
             ->with('success', $assignedTo ? 'Đã gán khách hàng cho sale.' : 'Đã chuyển khách hàng về trạng thái tự do.');
+    }
+
+    public function bulkMarkEmployee(Request $request)
+    {
+        abort_unless($request->user()?->isAdmin(), 403);
+
+        $request->validate([
+            'ids' => 'required|string',
+        ]);
+
+        $ids = array_values(array_filter(array_map('intval', explode(',', $request->input('ids')))));
+
+        if (empty($ids)) {
+            return redirect()->route('customers.index')->withErrors([
+                'ids' => __('customers.index.choose_one_for_bulk_mark_employee'),
+            ]);
+        }
+
+        Customer::query()
+            ->whereIn('id', $ids)
+            ->update(['is_employee' => true]);
+
+        return redirect()->route('customers.index', $request->only([
+            'q',
+            'type_id',
+            'assigned_to',
+            'user_id',
+            'ownership_status',
+            'per_page',
+            'is_employee',
+            'page',
+        ]))->with('success', __('customers.messages.bulk_marked_employee'));
     }
 
     // Bulk Delete

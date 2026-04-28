@@ -63,6 +63,7 @@ class Customer extends Model
         'assigned_to',
         'assigned_at',
         'status',
+        'is_employee',
         'deleted_by',
     ];
 
@@ -72,6 +73,7 @@ class Customer extends Model
         'dob' => 'date',
         'next_appointment' => 'datetime',
         'assigned_at' => 'datetime',
+        'is_employee' => 'boolean',
     ];
 
     public static function freeCustomerDays(): int

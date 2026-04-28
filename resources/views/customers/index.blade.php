@@ -67,6 +67,7 @@
 .cust-email { color: #475569; font-size: .8rem; }
 .badge-free { background: #fff3cd; color: #92400e; border: 1px solid #fcd34d; font-size: .72rem; font-weight: 700; padding: 3px 8px; border-radius: 5px; }
 .badge-managed { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; font-size: .72rem; font-weight: 700; padding: 3px 8px; border-radius: 5px; }
+.badge-employee { background: #e0f2fe; color: #0c4a6e; border: 1px solid #7dd3fc; font-size: .72rem; font-weight: 700; padding: 3px 8px; border-radius: 5px; }
 .sale-name { font-weight: 600; color: #1e40af; }
 .sale-prev { font-size: .72rem; color: #94a3b8; }
 .expires-date { font-size: .8rem; color: #374151; }
@@ -131,6 +132,24 @@
                 </button>
             </form>
 
+            @if($isAdmin)
+            <form id="bulkMarkEmployeeForm" action="{{ route('customers.bulkMarkEmployee') }}" method="POST" class="d-inline-flex">
+                @csrf
+                <input type="hidden" name="ids" id="bulkMarkEmployeeIds">
+                <input type="hidden" name="q" value="{{ request('q') }}">
+                <input type="hidden" name="type_id" value="{{ request('type_id') }}">
+                <input type="hidden" name="assigned_to" value="{{ request('assigned_to') }}">
+                <input type="hidden" name="user_id" value="{{ request('user_id') }}">
+                <input type="hidden" name="ownership_status" value="{{ request('ownership_status') }}">
+                <input type="hidden" name="per_page" value="{{ request('per_page', 15) }}">
+                <input type="hidden" name="is_employee" value="{{ request('is_employee') }}">
+                <input type="hidden" name="page" value="{{ request('page', 1) }}">
+                <button type="submit" class="btn btn-sm btn-outline-primary" onclick="return confirm('{{ __('customers.index.bulk_mark_employee_confirm') }}')">
+                    <i class="ph ph-identification-card me-1"></i>{{ __('customers.index.bulk_mark_employee') }}
+                </button>
+            </form>
+            @endif
+
             <div class="vr d-none d-sm-block" style="height:24px;"></div>
 
             <form action="{{ route('customers.import') }}" method="POST" enctype="multipart/form-data" class="d-inline-flex align-items-center gap-2">
@@ -179,6 +198,18 @@
                     </select>
                 </div>
                 @endif
+                @if($isAdmin && $creatorUsers)
+                <div class="col-auto">
+                    <select name="user_id" class="form-select" onchange="this.form.submit()">
+                        <option value="">Người tạo (tất cả)</option>
+                        @foreach($creatorUsers as $creator)
+                            <option value="{{ $creator->id }}" {{ (string)$creator->id === request('user_id') ? 'selected' : '' }}>
+                                {{ $creator->name }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+                @endif
                 @if($isAdmin)
                 <div class="col-auto">
                     <select name="ownership_status" class="form-select" onchange="this.form.submit()">
@@ -204,6 +235,10 @@
                     <a href="{{ route('customers.index') }}" class="btn btn-outline-secondary">
                         <i class="ph ph-arrow-counter-clockwise me-1"></i>{{ __('common.actions.reset') }}
                     </a>
+                    <a href="{{ route('customers.index', array_merge(request()->except(['page', 'is_employee']), ['is_employee' => 1])) }}"
+                        class="btn {{ request()->boolean('is_employee') ? 'btn-info' : 'btn-outline-info' }}">
+                        <i class="ph ph-identification-card me-1"></i>{{ __('customers.index.employee_button') }}
+                    </a>
                 </div>
             </form>
         </div>
@@ -221,12 +256,10 @@
                         <th>Loại khách</th>
                         <th>Sale phụ trách</th>
                         <th>Người tạo</th>
-                        <th>Trạng thái</th>
                         <th>Hạn giữ khách</th>
                         @if($isAdmin)
                         <th style="min-width:230px;">Gán sale</th>
                         @endif
-                        <th>Địa chỉ mặc định</th>
                         <th style="width:200px;">Thao tác</th>
                     </tr>
                 </thead>
@@ -238,11 +271,21 @@
 
                         <td>
                             <div class="cust-name">{{ $customer->name }}</div>
+                            @if($customer->is_employee)
+                                <div class="mt-1"><span class="badge-employee">{{ __('customers.index.employee_badge') }}</span></div>
+                            @endif
                             @if($customer->dob)
                                 <div class="cust-dob">
                                     {{ $customer->dob->format('d/m/Y') }} &bull; {{ $customer->dob->age }} tuổi
                                 </div>
                             @endif
+                            @php
+                                $defaultAddr = $customer->addresses->firstWhere('is_default', 1)
+                                    ?? $customer->addresses->first();
+                            @endphp
+                            <div class="cust-dob mt-1" style="font-size:.78rem;color:#64748b;">
+                                {{ $defaultAddr?->note ?: 'Chưa có địa chỉ mặc định' }}
+                            </div>
                         </td>
 
                         <td class="cust-phone text-nowrap">{{ $customer->phone ?: '—' }}</td>
@@ -274,14 +317,6 @@
 
                         <td>
                             @if($customer->isFree())
-                                <span class="badge-free">Tự do</span>
-                            @else
-                                <span class="badge-managed">Thuộc sale</span>
-                            @endif
-                        </td>
-
-                        <td>
-                            @if($customer->isFree())
                                 <span class="badge-free" style="font-size:.7rem;">Có thể gán</span>
                             @elseif(($expiresAt = $customer->assignmentExpiresAt()))
                                 <div class="expires-date">{{ $expiresAt->format('d/m/Y') }}</div>
@@ -293,39 +328,30 @@
 
                         @if($isAdmin)
                         <td>
-                            <form action="{{ route('customers.assign-sale', $customer) }}" method="POST" class="assign-form d-flex gap-2 align-items-center">
-                                @csrf
-                                <input type="hidden" name="q"               value="{{ request('q') }}">
-                                <input type="hidden" name="type_id"         value="{{ request('type_id') }}">
-                                <input type="hidden" name="assigned_to_filter" value="{{ request('assigned_to') }}">
-                                <input type="hidden" name="ownership_status" value="{{ request('ownership_status') }}">
-                                <input type="hidden" name="per_page"        value="{{ request('per_page', 15) }}">
-                                <input type="hidden" name="page"            value="{{ request('page', 1) }}">
-                                <select name="assigned_to" class="form-select form-select-sm">
-                                    <option value="">— Tự do —</option>
-                                    @foreach($users as $u)
-                                        <option value="{{ $u->id }}"
-                                            {{ (int)$customer->assigned_to === (int)$u->id && !$customer->isFree() ? 'selected' : '' }}>
-                                            {{ $u->name }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                                <button type="submit" class="btn btn-sm btn-primary btn-assign">Lưu</button>
-                            </form>
-                        </td>
-                        @endif
-
-                        <td style="font-size:.8rem;max-width:180px;word-break:break-word;">
-                            @php
-                                $defaultAddr = $customer->addresses->firstWhere('is_default', 1)
-                                    ?? $customer->addresses->first();
-                            @endphp
-                            @if($defaultAddr && $defaultAddr->note)
-                                {{ $defaultAddr->note }}
+                            @if($customer->isFree())
+                                <form action="{{ route('customers.assign-sale', $customer) }}" method="POST" class="assign-form d-flex gap-2 align-items-center">
+                                    @csrf
+                                    <input type="hidden" name="q"               value="{{ request('q') }}">
+                                    <input type="hidden" name="type_id"         value="{{ request('type_id') }}">
+                                    <input type="hidden" name="assigned_to"     value="{{ request('assigned_to') }}">
+                                    <input type="hidden" name="user_id"         value="{{ request('user_id') }}">
+                                    <input type="hidden" name="ownership_status" value="{{ request('ownership_status') }}">
+                                    <input type="hidden" name="per_page"        value="{{ request('per_page', 15) }}">
+                                    <input type="hidden" name="is_employee"     value="{{ request('is_employee') }}">
+                                    <input type="hidden" name="page"            value="{{ request('page', 1) }}">
+                                    <select name="assigned_to" class="form-select form-select-sm">
+                                        <option value="">— Tự do —</option>
+                                        @foreach($users as $u)
+                                            <option value="{{ $u->id }}">{{ $u->name }}</option>
+                                        @endforeach
+                                    </select>
+                                    <button type="submit" class="btn btn-sm btn-primary btn-assign">Lưu</button>
+                                </form>
                             @else
-                                <span class="text-muted">—</span>
+                                <span class="text-muted" style="font-size:.78rem;">Chưa tới hạn tự do</span>
                             @endif
                         </td>
+                        @endif
 
                         <td class="cust-actions text-nowrap">
                             <a href="{{ route('customers.edit', $customer) }}" class="btn btn-sm btn-outline-warning" title="Sửa">
@@ -348,7 +374,7 @@
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="{{ $isAdmin ? 13 : 12 }}">
+                        <td colspan="{{ $isAdmin ? 11 : 10 }}">
                             <div class="cust-empty">
                                 <div><i class="ph ph-users"></i></div>
                                 <div style="font-weight:600;">{{ __('customers.index.empty') }}</div>
@@ -393,6 +419,19 @@ document.addEventListener('DOMContentLoaded', function () {
                 return false;
             }
             document.getElementById('bulkDeleteIds').value = ids.join(',');
+        });
+    }
+
+    const bulkMarkEmployeeForm = document.getElementById('bulkMarkEmployeeForm');
+    if (bulkMarkEmployeeForm) {
+        bulkMarkEmployeeForm.addEventListener('submit', function (e) {
+            const ids = Array.from(document.querySelectorAll('.row-check:not(#checkAll):checked')).map(cb => cb.value);
+            if (ids.length === 0) {
+                alert(@json(__('customers.index.choose_one_for_bulk_mark_employee')));
+                e.preventDefault();
+                return false;
+            }
+            document.getElementById('bulkMarkEmployeeIds').value = ids.join(',');
         });
     }
 });
