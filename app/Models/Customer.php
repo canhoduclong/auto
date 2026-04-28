@@ -88,12 +88,17 @@ class Customer extends Model
         }
 
         $days = static::freeCustomerDays();
-
-        if ($days <= 0 || !$this->assigned_at) {
+        if ($days <= 0) {
             return null;
         }
 
-        return $this->assigned_at->copy()->addDays($days);
+        // Expiry is based on last order date; no orders = no expiry
+        $lastOrderAt = $this->_lastOrderDate();
+        if (!$lastOrderAt) {
+            return null;
+        }
+
+        return $lastOrderAt->copy()->addDays($days);
     }
 
     public function isFree(): bool
@@ -111,11 +116,25 @@ class Customer extends Model
             return false;
         }
 
-        if (!$this->assigned_at) {
-            return true;
+        // Customers with no orders are never considered free by time alone
+        $lastOrderAt = $this->_lastOrderDate();
+        if (!$lastOrderAt) {
+            return false;
         }
 
-        return $this->assigned_at->lte(now()->subDays($days));
+        return $lastOrderAt->lte(now()->subDays($days));
+    }
+
+    /**
+     * Get last order created_at from eager-loaded relation or DB query.
+     */
+    private function _lastOrderDate(): ?\Carbon\Carbon
+    {
+        if ($this->relationLoaded('lastOrder')) {
+            return $this->lastOrder?->created_at;
+        }
+        $raw = $this->orders()->max('created_at');
+        return $raw ? \Carbon\Carbon::parse($raw) : null;
     }
 
     public function isManagedBy(User $user): bool
@@ -140,8 +159,12 @@ class Customer extends Model
                 $builder->whereNull('assigned_to');
 
                 if ($days > 0) {
-                    $builder->orWhereNull('assigned_at')
-                        ->orWhere('assigned_at', '<=', now()->subDays($days));
+                    $threshold = now()->subDays($days);
+                    // Free if has orders AND last order is older than threshold
+                    $builder->orWhereRaw(
+                        '(SELECT MAX(created_at) FROM orders WHERE orders.customer_id = customers.id) <= ?',
+                        [$threshold]
+                    );
                 }
             });
     }
@@ -154,8 +177,16 @@ class Customer extends Model
             ->whereNotNull('assigned_to');
 
         if ($days > 0) {
-            $query->whereNotNull('assigned_at')
-                ->where('assigned_at', '>', now()->subDays($days));
+            $threshold = now()->subDays($days);
+            // Managed if: no orders yet, OR last order is within threshold
+            $query->where(function (Builder $q) use ($threshold) {
+                $q->whereRaw(
+                    '(SELECT MAX(created_at) FROM orders WHERE orders.customer_id = customers.id) IS NULL'
+                )->orWhereRaw(
+                    '(SELECT MAX(created_at) FROM orders WHERE orders.customer_id = customers.id) > ?',
+                    [$threshold]
+                );
+            });
         }
 
         return $query;
@@ -206,6 +237,11 @@ class Customer extends Model
     public function orders()
     {
         return $this->hasMany(Order::class);
+    }
+
+    public function lastOrder()
+    {
+        return $this->hasOne(Order::class)->latestOfMany('created_at');
     }
 
     public function truckStation()

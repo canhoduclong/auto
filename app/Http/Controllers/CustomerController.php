@@ -99,7 +99,7 @@ class CustomerController extends Controller
     public function index(Request $request)
     { 
         $this->authorize('viewAny', Customer::class);
-        $query = Customer::with(['type', 'addresses', 'assignedTo', 'user']);
+        $query = Customer::with(['type', 'addresses', 'assignedTo', 'user', 'lastOrder']);
         $isAdmin = (bool) Auth::user()?->isAdmin();
 
         // Lọc theo loại
