@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Customer;
 use App\Models\CustomerReminder;
 use App\Models\Setting;
+use App\Services\CustomerPriorityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
@@ -107,7 +108,7 @@ class CustomerAppointmentController extends Controller
         ]);
     }
 
-    public function store(Request $request)
+    public function store(Request $request, CustomerPriorityService $priorityService)
     {
         $validated = $request->validate([
             'customer_id' => 'required|exists:customers,id',
@@ -124,7 +125,7 @@ class CustomerAppointmentController extends Controller
             ? $request->file('image')->store('customer-appointments', 'public')
             : null;
 
-        CustomerReminder::create([
+        $reminder = CustomerReminder::create([
             'customer_id' => $customer->id,
             'user_id' => Auth::id(),
             'title' => $validated['title'],
@@ -133,12 +134,26 @@ class CustomerAppointmentController extends Controller
             'image_path' => $imagePath,
         ]);
 
+        if (!$reminder->appointment_score_counted_at) {
+            $priorityService->addCareAction(
+                customer: $customer,
+                saleId: (int) Auth::id(),
+                actionType: 'appointment_set',
+                note: 'Đặt lịch hẹn: ' . $validated['title'],
+                score: 10,
+                meta: ['reminder_id' => $reminder->id]
+            );
+            $reminder->update(['appointment_score_counted_at' => now()]);
+        }
+
         return back()->with('success', 'Đã thêm cuộc hẹn khách hàng.');
     }
 
-    public function update(Request $request, CustomerReminder $reminder)
+    public function update(Request $request, CustomerReminder $reminder, CustomerPriorityService $priorityService)
     {
         $this->ensureManagedCustomer($reminder->customer);
+
+        $wasDone = (bool) $reminder->is_done;
 
         $validated = $request->validate([
             'title' => 'required|string|max:255',
@@ -146,6 +161,7 @@ class CustomerAppointmentController extends Controller
             'note' => 'nullable|string',
             'image' => 'nullable|image|max:5120',
             'remove_image' => 'nullable|boolean',
+            'is_done' => 'nullable|boolean',
         ]);
 
         $imagePath = $reminder->image_path;
@@ -166,7 +182,20 @@ class CustomerAppointmentController extends Controller
             'remind_at' => $validated['remind_at'],
             'note' => $validated['note'] ?? null,
             'image_path' => $imagePath,
+            'is_done' => (bool) ($validated['is_done'] ?? $reminder->is_done),
         ]);
+
+        if (!$wasDone && $reminder->is_done && !$reminder->meeting_score_counted_at) {
+            $priorityService->addCareAction(
+                customer: $reminder->customer,
+                saleId: (int) Auth::id(),
+                actionType: 'meeting_done',
+                note: 'Đã gặp khách từ lịch hẹn: ' . $reminder->title,
+                score: 10,
+                meta: ['reminder_id' => $reminder->id]
+            );
+            $reminder->update(['meeting_score_counted_at' => now()]);
+        }
 
         return back()->with('success', 'Đã cập nhật cuộc hẹn.');
     }

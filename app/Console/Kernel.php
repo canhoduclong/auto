@@ -20,6 +20,7 @@ class Kernel extends ConsoleKernel
         \App\Console\Commands\ReconcileInventoryReservations::class,
         \App\Console\Commands\ProcessDailyOrderSchedulesCommand::class,
         \App\Console\Commands\EvaluateOrderSchedulesCommand::class,
+        \App\Console\Commands\CustomersApplyFreeResetCommand::class,
     ];
 
     /**
@@ -35,6 +36,8 @@ class Kernel extends ConsoleKernel
         $schedule->command('order-schedules:process-daily-rules')->dailyAt('00:14');
         // Evaluate scheduled orders (price/stock) and auto-generate valid ones
         $schedule->command('order-schedules:evaluate-today')->dailyAt('00:15');
+        // Evaluate CRM free-customer lifecycle after orders are materialized
+        $schedule->command('customers:apply-free-reset')->dailyAt('00:20');
     }
 
     /**

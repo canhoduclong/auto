@@ -10,6 +10,7 @@ use App\Models\TruckStation;
 use App\Models\User;
 use App\Models\Ward;
 use App\Services\AdminActivityService;
+use App\Services\CustomerPriorityService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -576,7 +577,7 @@ class CustomerController extends Controller
     }
 
     // Store
-    public function store(Request $request)
+    public function store(Request $request, CustomerPriorityService $priorityService)
     {
         $this->authorize('create', Customer::class);
 
@@ -609,6 +610,8 @@ class CustomerController extends Controller
             'truck_fee' => 'nullable|integer',
             'province_id' => 'nullable|exists:provinces,id',
             'ward_id' => 'nullable|exists:wards,id',
+            'duplicate_priority_level' => 'nullable|in:2,3',
+            'duplicate_takeover' => 'nullable|boolean',
         ]);
 
         if (!(bool) ($data['use_truck_station'] ?? false)) {
@@ -640,6 +643,10 @@ class CustomerController extends Controller
             $data['assigned_to'] = Auth::id();
         }
         $data['assigned_at'] = $data['assigned_to'] ? now() : null;
+        $data['current_owner_sale_id'] = $data['assigned_to'] ?? null;
+        $data['customer_status'] = $data['assigned_to'] ? 'active' : 'free';
+        $data['free_from_date'] = $data['assigned_to'] ? null : now();
+        $data['current_cycle_no'] = 1;
 
         $duplicateCustomer = Customer::query()
             ->where(function ($query) use ($data) {
@@ -658,6 +665,23 @@ class CustomerController extends Controller
             ->first();
 
         if ($duplicateCustomer) {
+            $preferredPriority = isset($data['duplicate_priority_level'])
+                ? (int) $data['duplicate_priority_level']
+                : null;
+            $takeover = (bool) ($data['duplicate_takeover'] ?? false);
+
+            if (!Auth::user()?->isAdmin()) {
+                if ($takeover || $duplicateCustomer->isFree()) {
+                    $priorityService->takeover($duplicateCustomer, (int) Auth::id(), $takeover ? 'takeover' : 'free_customer');
+                } else {
+                    $priorityService->attachSale($duplicateCustomer, (int) Auth::id(), $preferredPriority, 'duplicate_join');
+                }
+
+                return redirect()
+                    ->route('customers.index')
+                    ->with('success', 'Khách đã tồn tại, đã ghi nhận tham gia chăm sóc vào danh sách priority.');
+            }
+
             return back()
                 ->withInput()
                 ->with('error', __('customers.messages.duplicate', [
@@ -666,7 +690,16 @@ class CustomerController extends Controller
                 ]));
         }
 
+
         $customer = Customer::create($data);
+
+        // Luôn gán priority = 1 cho user hiện tại nếu có assigned_to (khách mới hoặc khách tự do)
+        $userId = $customer->assigned_to ?: (auth()->id() ?: null);
+        if ($userId) {
+            $priorityService->attachSale($customer, (int) $userId, 1, 'created');
+        } else {
+            $priorityService->ensureLifecycle($customer);
+        }
 
         if ($request->filled('address') || $selectedProvinceId || $selectedWardId) {
             $province = $selectedProvinceId ? Province::find($selectedProvinceId) : null;
@@ -786,7 +819,7 @@ class CustomerController extends Controller
         return redirect()->route('customers.index')->with('success', __('customers.messages.deleted'));
     }
 
-    public function assignSale(Request $request, Customer $customer)
+    public function assignSale(Request $request, Customer $customer, CustomerPriorityService $priorityService)
     {
         abort_unless($request->user()?->isAdmin(), 403);
 
@@ -811,10 +844,17 @@ class CustomerController extends Controller
             }
         }
 
-        $customer->update([
-            'assigned_to' => $assignedTo,
-            'assigned_at' => $assignedTo ? now() : null,
-        ]);
+        if ($assignedTo === null) {
+            $customer->update([
+                'assigned_to' => null,
+                'assigned_at' => null,
+                'current_owner_sale_id' => null,
+                'customer_status' => 'free',
+                'free_from_date' => now(),
+            ]);
+        } else {
+            $priorityService->takeover($customer, (int) $assignedTo, 'manager_override');
+        }
 
         return redirect()->route('customers.index', [
             'q' => $request->input('q'),

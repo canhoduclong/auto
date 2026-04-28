@@ -21,6 +21,7 @@ use App\Models\Order;
 use App\Models\Inventory;
 use App\Models\Transaction;
 use App\Services\AdminActivityService;
+use App\Services\CustomerPriorityService;
 use Carbon\Carbon;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Enums\DeliveryStatus;
@@ -570,7 +571,7 @@ class PageController extends Controller
             $query->where('status', $request->input('status'));
         }
 
-        $allowedPerPage = [10, 20, 50, 100];
+        $allowedPerPage = [5, 10, 20, 50, 100];
         $perPage = (int) $request->input('per_page', 10);
         if (!in_array($perPage, $allowedPerPage, true)) {
             $perPage = 10;
@@ -1707,7 +1708,12 @@ class PageController extends Controller
         $baseQuery = Customer::query()
             ->where(function ($q) use ($userId) {
                 $q->where('user_id', $userId)
-                    ->orWhere('assigned_to', $userId);
+                    ->orWhere('assigned_to', $userId)
+                    ->orWhere('current_owner_sale_id', $userId)
+                    ->orWhereHas('priorities', function ($priorityQuery) use ($userId) {
+                        $priorityQuery->where('sale_id', $userId)
+                            ->where('is_active', true);
+                    });
             });
 
         $customerQuery = clone $baseQuery;
@@ -1732,7 +1738,12 @@ class PageController extends Controller
         $customers = (clone $customerQuery)
             ->withCount('orders')
             ->withSum('orders as total_debt', 'amount_due')
-            ->with(['type', 'addresses' => function ($q) {
+            ->with(['type', 'currentOwner:id,name', 'assignedTo:id,name', 'user:id,name', 'priorities' => function ($priorityQuery) use ($userId) {
+                $priorityQuery->where('sale_id', $userId)
+                    ->where('is_active', true)
+                    ->orderBy('priority_level')
+                    ->orderByDesc('updated_at');
+            }, 'addresses' => function ($q) {
                 $q->where('is_default', true)->orWhere('is_default', null)->limit(1);
             }])
             ->when($request->search, function ($q, $s) {
@@ -1848,28 +1859,64 @@ class PageController extends Controller
         ]);
     }
 
+
     public function myCustomerAjax(Request $request)
     {
         $userId = auth()->id();
+
+        // DEBUG: Kiểm tra khách hàng 46 có trong bảng customers không
+        \Log::info('DEBUG_CUSTOMER_46', [
+            'customer' => Customer::withTrashed()->find(46)
+        ]);
+
+        // DEBUG: Kiểm tra có bản ghi customer_priorities đúng không
+        \Log::info('DEBUG_PRIORITY_46', [
+            'priority' => \App\Models\CustomerPriority::where('customer_id', 46)
+                ->where('sale_id', $userId)
+                ->where('is_active', 1)
+                ->first()
+        ]);
+
+        // DEBUG: Kiểm tra có lọt qua whereHas không
+        \Log::info('DEBUG_WHEREHAS_46', [
+            'whereHas' => Customer::whereHas('priorities', function ($q) use ($userId) {
+                $q->where('sale_id', $userId)
+                  ->where('is_active', 1);
+            })
+            ->where('id', 46)
+            ->first()
+        ]);
+
+        // DEBUG: Kiểm tra có lọt qua các filter khác không
+        \Log::info('DEBUG_FINAL_46', [
+            'final' => Customer::whereHas('priorities', function ($q) use ($userId) {
+                $q->where('sale_id', $userId)
+                  ->where('is_active', 1);
+            })
+            ->where('id', 46)
+            ->whereNull('deleted_at')
+            ->first()
+        ]);
+
 
         $tab = (string) $request->input('tab', 'all');
         if (!in_array($tab, ['all', 'processing', 'trash'], true)) {
             $tab = 'all';
         }
 
+        // Đồng nhất: baseQuery là query gốc cho cả danh sách và thống kê
         $baseQuery = Customer::query()
-            ->where(function ($q) use ($userId) {
-                $q->where('user_id', $userId)
-                    ->orWhere('assigned_to', $userId);
+            ->whereHas('priorities', function ($q) use ($userId) {
+                $q->where('sale_id', $userId)
+                  ->where('is_active', 1);
             });
 
-        $customerQuery = clone $baseQuery;
         if ($tab === 'trash') {
-            $customerQuery->onlyTrashed();
+            $baseQuery->onlyTrashed();
         } else {
-            $customerQuery->whereNull('deleted_at');
+            $baseQuery->whereNull('deleted_at');
             if ($tab === 'processing') {
-                $customerQuery->whereIn('status', ['active', 'processing']);
+                $baseQuery->whereIn('status', ['active', 'processing']);
             }
         }
 
@@ -1882,12 +1929,25 @@ class PageController extends Controller
         $sortDirInput = strtolower((string) $request->input('sort_dir', 'asc'));
         $sortDir = in_array($sortDirInput, ['asc', 'desc'], true) ? $sortDirInput : 'asc';
 
-        $customers = (clone $customerQuery)
+        // Dùng baseQuery cho danh sách
+        $customers = (clone $baseQuery)
             ->withCount('orders')
             ->withSum('orders as total_debt', 'amount_due')
-            ->with(['type', 'addresses' => function ($q) {
-                $q->where('is_default', true)->orWhere('is_default', null)->limit(1);
-            }])
+            ->with([
+                'type',
+                'currentOwner:id,name',
+                'assignedTo:id,name',
+                'user:id,name',
+                'priorities' => function ($priorityQuery) use ($userId) {
+                    $priorityQuery->where('sale_id', $userId)
+                        ->where('is_active', 1)
+                        ->orderBy('priority_level')
+                        ->orderByDesc('updated_at');
+                },
+                'addresses' => function ($q) {
+                    $q->where('is_default', true)->orWhere('is_default', null)->limit(1);
+                }
+            ])
             ->when($request->search, function ($q, $s) {
                 $q->where(function ($searchQuery) use ($s) {
                     $searchQuery->where('name', 'like', "%{$s}%")
@@ -1908,10 +1968,19 @@ class PageController extends Controller
                     }
                 });
             })
-            ->when($sortBy, function ($q) use ($sortBy, $sortDir) {
-                $q->orderBy($sortBy, $sortDir);
-            })
-            ->orderByDesc('id')
+            // Sắp xếp theo priority_level (ưu tiên) tăng dần, sau đó theo updated_at của priority giảm dần, ưu tiên ID 46
+            ->orderByRaw('CASE WHEN customers.id = 46 THEN 0 ELSE 1 END')
+            ->orderByRaw('(
+                SELECT priority_level FROM customer_priorities
+                WHERE customer_id = customers.id AND sale_id = ? AND is_active = 1
+                ORDER BY priority_level ASC, updated_at DESC LIMIT 1
+            ) ASC', [$userId])
+            ->orderByRaw('(
+                SELECT updated_at FROM customer_priorities
+                WHERE customer_id = customers.id AND sale_id = ? AND is_active = 1
+                ORDER BY priority_level ASC, updated_at DESC LIMIT 1
+            ) DESC', [$userId])
+            ->orderByDesc('customers.id')
             ->paginate($request->input('per_page', 10));
 
         $customers->getCollection()->transform(function ($customer) {
@@ -1921,10 +1990,19 @@ class PageController extends Controller
                 $parts = array_filter([$address->house_number, $address->street, $address->ward, $address->city]);
                 $addressText = implode(', ', $parts);
             }
+            $myPriority = $customer->priorities->first();
+
             $customer->address_text = $addressText;
             $customer->updated_at_formatted = $customer->updated_at ? $customer->updated_at->format('d/m/Y') : null;
             $customer->deleted_at_formatted = $customer->deleted_at ? $customer->deleted_at->format('d/m/Y H:i') : null;
             $customer->total_debt = $customer->total_debt ?: 0;
+            $customer->my_priority_level = $myPriority?->priority_level;
+            $customer->my_priority_score = $myPriority?->care_score;
+            $customer->my_priority_expire_at = $myPriority?->expire_date?->format('d/m/Y');
+            $customer->current_owner_name = $customer->currentOwner?->name
+                ?? $customer->assignedTo?->name
+                ?? $customer->user?->name;
+            $customer->is_free_customer = (string) $customer->customer_status === 'free' || $customer->isFree();
             return $customer;
         });
 
@@ -1971,69 +2049,103 @@ class PageController extends Controller
     public function myCustomerCheckDuplicate(Request $request)
     {
         $name  = trim($request->input('name', ''));
-        $email = trim($request->input('email', ''));
         $phone = trim($request->input('phone', ''));
 
         $hasNamePhone = $name !== '' && $phone !== '';
-        $hasEmail     = $email !== '';
 
-        if (!$hasNamePhone && !$hasEmail) {
+        if (!$hasNamePhone) {
             return response()->json(['duplicate' => false]);
         }
 
-        $duplicate    = null;
-        $matchReason  = null;
-
-        // Check name + phone first
-        if ($hasNamePhone) {
-            $duplicate = \App\Models\Customer::query()
-                ->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])
-                ->where('phone', $phone)
-                ->with('user:id,name')
-                ->first(['id', 'name', 'phone', 'email', 'user_id', 'created_at']);
-
-            if ($duplicate) {
-                $matchReason = 'name_phone';
-            }
-        }
-
-        // Check email (independently)
-        if ($hasEmail) {
-            $byEmail = \App\Models\Customer::query()
-                ->whereRaw('LOWER(email) = ?', [mb_strtolower($email)])
-                ->with('user:id,name')
-                ->first(['id', 'name', 'phone', 'email', 'user_id', 'created_at']);
-
-            if ($byEmail) {
-                if ($duplicate && $duplicate->id === $byEmail->id) {
-                    $matchReason = 'both';
-                } elseif (!$duplicate) {
-                    $duplicate   = $byEmail;
-                    $matchReason = 'email';
-                }
-                // if different customers match by different criteria, email takes precedence for display
-                // but keep name_phone match – show first found
-            }
-        }
+        $duplicate = \App\Models\Customer::query()
+            ->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])
+            ->where('phone', $phone)
+            ->with([
+                'user:id,name',
+                'assignedTo:id,name',
+                'currentOwner:id,name',
+                'addresses' => function ($query) {
+                    $query->orderByDesc('is_default')->orderByDesc('id');
+                },
+            ])
+            ->first([
+                'id',
+                'name',
+                'phone',
+                'email',
+                'address',
+                'delivery_time',
+                'size',
+                'production',
+                'company_name',
+                'tax_code',
+                'company_address',
+                'company_email',
+                'use_truck_station',
+                'truck_station_id',
+                'truck_station_address',
+                'truck_station_phone',
+                'truck_receive_time',
+                'truck_return_time',
+                'truck_fee',
+                'user_id',
+                'assigned_to',
+                'current_owner_sale_id',
+                'customer_status',
+                'free_from_date',
+                'created_at',
+            ]);
 
         if (!$duplicate) {
             return response()->json(['duplicate' => false]);
         }
 
-        $saleName  = $duplicate->user?->name ?? 'Không rõ';
+        $saleName  = $duplicate->currentOwner?->name
+            ?? $duplicate->assignedTo?->name
+            ?? $duplicate->user?->name
+            ?? 'Không rõ';
         $createdAt = $duplicate->created_at
             ? $duplicate->created_at->format('d/m/Y H:i')
             : '';
+        $freeFromDate = $duplicate->free_from_date
+            ? $duplicate->free_from_date->format('d/m/Y H:i')
+            : '';
+        $defaultAddress = $duplicate->addresses->firstWhere('is_default', 1) ?: $duplicate->addresses->first();
+        $isFree = (string) $duplicate->customer_status === 'free' || $duplicate->isFree();
 
         return response()->json([
             'duplicate'    => true,
-            'match_reason' => $matchReason,
             'id'           => $duplicate->id,
             'name'         => $duplicate->name,
             'phone'        => $duplicate->phone,
             'email'        => $duplicate->email,
             'sale'         => $saleName,
             'created_at'   => $createdAt,
+            'is_free'      => $isFree,
+            'free_from_date' => $freeFromDate,
+            'customer_status' => (string) $duplicate->customer_status,
+            'prefill'      => [
+                'name' => $duplicate->name,
+                'phone' => $duplicate->phone,
+                'email' => $duplicate->email,
+                'address' => $defaultAddress?->note ?: $duplicate->address,
+                'province_id' => $defaultAddress?->province_id,
+                'ward_id' => $defaultAddress?->ward_id,
+                'delivery_time' => $duplicate->delivery_time,
+                'size' => $duplicate->size,
+                'production' => $duplicate->production,
+                'company_name' => $duplicate->company_name,
+                'tax_code' => $duplicate->tax_code,
+                'company_address' => $duplicate->company_address,
+                'company_email' => $duplicate->company_email,
+                'use_truck_station' => (bool) $duplicate->use_truck_station,
+                'truck_station_id' => $duplicate->truck_station_id,
+                'truck_station_address' => $duplicate->truck_station_address,
+                'truck_station_phone' => $duplicate->truck_station_phone,
+                'truck_receive_time' => $duplicate->truck_receive_time,
+                'truck_return_time' => $duplicate->truck_return_time,
+                'truck_fee' => $duplicate->truck_fee,
+            ],
         ]);
     }
 
@@ -2084,10 +2196,12 @@ class PageController extends Controller
             $request->validate([
                 'care_note' => ['required', 'string', 'max:2000'],
             ]);
-            $customer->careLogs()->create([
-                'user_id' => auth()->id(),
-                'note' => $request->input('care_note'),
-            ]);
+            app(CustomerPriorityService::class)->addCareAction(
+                customer: $customer,
+                saleId: (int) auth()->id(),
+                actionType: 'note',
+                note: $request->input('care_note')
+            );
             if ($request->expectsJson()) {
                 return response()->json(['success' => true, 'message' => 'Đã thêm tình trạng/nhật ký chăm sóc!']);
             }
@@ -2309,6 +2423,20 @@ class PageController extends Controller
 
         return redirect()->route('pages.my_customer', ['tab' => 'trash'])
             ->with('success', 'Đã xóa vĩnh viễn khách hàng "' . $name . '".');
+    }
+
+    public function myCustomerTakeover(Request $request, Customer $customer)
+    {
+        $user = auth()->user();
+
+        if (!$customer->isFree() && (string) $customer->customer_status !== 'free') {
+            return response()->json(['success' => false, 'message' => 'Khách hàng này chưa tự do, không thể nhận.'], 422);
+        }
+
+        $priorityService = app(\App\Services\CustomerPriorityService::class);
+        $priorityService->takeover($customer, $user->id, 'free_takeover');
+
+        return response()->json(['success' => true, 'message' => 'Đã nhận khách hàng "' . $customer->name . '" về danh sách của bạn.']);
     }
 
     public function myCustomerImportForm()
@@ -3374,7 +3502,7 @@ class PageController extends Controller
       /**
      * Lưu khách hàng mới từ form /my-customer/create
      */
-    public function myCustomerStore(Request $request)
+    public function myCustomerStore(Request $request, CustomerPriorityService $priorityService)
     {
         $user = auth()->user();
         if (!$user) {
@@ -3383,7 +3511,7 @@ class PageController extends Controller
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'nullable|email|max:255|unique:customers,email',
+            'email' => 'nullable|email|max:255',
             'phone' => 'nullable|string|max:50',
             'address' => 'nullable|string|max:1000',
             'delivery_time' => 'nullable|string|max:255',
@@ -3402,7 +3530,74 @@ class PageController extends Controller
             'truck_fee' => 'nullable|integer',
             'province_id' => 'nullable|exists:provinces,id',
             'ward_id' => 'nullable|exists:wards,id',
+            'duplicate_customer_id' => 'nullable|integer',
+            'duplicate_priority_level' => 'nullable|in:1,2,3',
+            'duplicate_takeover' => 'nullable|boolean',
         ]);
+
+        $duplicate = null;
+        $name = trim((string) ($validated['name'] ?? ''));
+        $phone = trim((string) ($validated['phone'] ?? ''));
+
+        if ($name !== '' && $phone !== '') {
+            $duplicateQuery = Customer::query()
+                ->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])
+                ->where('phone', $phone);
+
+            if (!empty($validated['duplicate_customer_id'])) {
+                $duplicateQuery->where('id', (int) $validated['duplicate_customer_id']);
+            }
+
+            $duplicate = $duplicateQuery->first();
+        }
+
+        if (!$duplicate && !empty($validated['email'])) {
+            $duplicate = Customer::query()
+                ->whereRaw('LOWER(email) = ?', [mb_strtolower((string) $validated['email'])])
+                ->first();
+        }
+
+        if ($duplicate) {
+            $priority = isset($validated['duplicate_priority_level'])
+                ? (int) $validated['duplicate_priority_level']
+                : null;
+
+            if ($priority === 1) {
+                if (!$duplicate->isFree()) {
+                    return back()->withErrors([
+                        'name' => 'Khách này chưa ở trạng thái tự do, không thể nhận Priority 1 ngay.',
+                    ])->withInput();
+                }
+
+                $priorityService->takeover($duplicate, (int) $user->id, 'free_customer');
+
+                return redirect()->route('pages.my_customer')
+                    ->with('success', 'Đã nhận khách trùng ở Priority 1 (khách tự do).');
+            }
+
+            if (in_array($priority, [2, 3], true)) {
+                $priorityService->attachSale($duplicate, (int) $user->id, $priority, 'duplicate_join');
+
+                return redirect()->route('pages.my_customer')
+                    ->with('success', 'Khách đã tồn tại, bạn đã được thêm vào danh sách chăm sóc với Priority ' . $priority . '.');
+            }
+
+            return back()->withErrors([
+                'name' => 'Khách hàng đã tồn tại. Vui lòng chọn Priority 2/3, hoặc chọn Priority 1 nếu khách đang tự do.',
+            ])->withInput();
+        }
+
+        if (!empty($validated['email'])) {
+            $existingEmail = Customer::query()
+                ->whereRaw('LOWER(email) = ?', [mb_strtolower((string) $validated['email'])])
+                ->exists();
+
+            if ($existingEmail) {
+                return back()->withErrors([
+                    'email' => 'Email đã tồn tại trong hệ thống.',
+                ])->withInput();
+            }
+        }
 
         if (!(bool) ($validated['use_truck_station'] ?? false)) {
             $validated['truck_station_id'] = null;
@@ -3441,7 +3636,14 @@ class PageController extends Controller
         $customer->truck_receive_time = $validated['truck_receive_time'] ?? null;
         $customer->truck_return_time = $validated['truck_return_time'] ?? null;
         $customer->truck_fee = $validated['truck_fee'] ?? null;
+        $customer->assigned_to = $user->id;
+        $customer->assigned_at = now();
+        $customer->current_owner_sale_id = $user->id;
+        $customer->customer_status = 'active';
+        $customer->current_cycle_no = 1;
         $customer->save();
+
+        $priorityService->attachSale($customer, (int) $user->id, 1, 'created');
 
         if (!empty($validated['address']) || !empty($validated['province_id']) || !empty($validated['ward_id'])) {
             $province = !empty($validated['province_id']) ? Province::find($validated['province_id']) : null;

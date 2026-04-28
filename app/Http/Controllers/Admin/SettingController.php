@@ -263,6 +263,12 @@ class SettingController extends Controller
     {
         $data = $request->except('_token');
 
+        foreach (['priority_1_days', 'priority_2_days', 'priority_3_days', 'free_customer_days', 'customer_free_days'] as $numericKey) {
+            if (array_key_exists($numericKey, $data)) {
+                $data[$numericKey] = max((int) $data[$numericKey], 0);
+            }
+        }
+
         if (array_key_exists('customer_free_days', $data)) {
             $data['customer_free_days'] = max((int) $data['customer_free_days'], 0);
         }

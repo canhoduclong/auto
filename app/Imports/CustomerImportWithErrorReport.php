@@ -2,6 +2,7 @@
 namespace App\Imports;
 
 use App\Models\Customer;
+use App\Services\CustomerPriorityService;
 use Maatwebsite\Excel\Concerns\ToModel;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
 use Maatwebsite\Excel\Concerns\WithValidation;
@@ -46,7 +47,19 @@ class CustomerImportWithErrorReport implements ToModel, WithHeadingRow, WithVali
             if (!empty($data['email'])) {
                 $emailExists = Customer::query()->where('email', $data['email'])->exists();
                 if ($emailExists) {
-                    throw new \Exception('Email đã tồn tại.');
+                    $existing = Customer::query()->where('email', $data['email'])->first();
+                    if ($existing && $this->userId) {
+                        app(CustomerPriorityService::class)->attachSale($existing, (int) $this->userId, 2, 'duplicate_join');
+                    }
+                    throw new \Exception('Email đã tồn tại. Đã thêm sale import vào Priority 2 của khách trùng.');
+                }
+            }
+
+            if (!empty($data['phone'])) {
+                $phoneDuplicate = Customer::query()->where('phone', $data['phone'])->first();
+                if ($phoneDuplicate && $this->userId) {
+                    app(CustomerPriorityService::class)->attachSale($phoneDuplicate, (int) $this->userId, 2, 'duplicate_join');
+                    throw new \Exception('Số điện thoại đã tồn tại. Đã thêm sale import vào Priority 2 của khách trùng.');
                 }
             }
 
@@ -58,8 +71,16 @@ class CustomerImportWithErrorReport implements ToModel, WithHeadingRow, WithVali
                 'size' => $data['size'] ?? null,
                 'production' => $data['production'] ?? null,
                 'assigned_to' => $this->userId,
+                'assigned_at' => $this->userId ? now() : null,
+                'current_owner_sale_id' => $this->userId,
+                'customer_status' => $this->userId ? 'active' : 'free',
+                'free_from_date' => $this->userId ? null : now(),
+                'current_cycle_no' => 1,
             ]);
             $customer->save();
+            if ($this->userId) {
+                app(CustomerPriorityService::class)->attachSale($customer, (int) $this->userId, 1, 'created');
+            }
             \App\Models\CustomerAddress::create([
                 'customer_id' => $customer->id,
                 'note' => $data['address'],

@@ -76,6 +76,9 @@ Route::middleware('guest')->group(function () {
 
 Route::middleware(['auth', 'assigned'])->group(function () {
 
+    // Làm mới priority cho khách đang chăm
+    Route::post('/my-customer/refresh-priority', [\App\Http\Controllers\MyCustomerController::class, 'refreshPriority'])->name('my_customer.refresh_priority');
+
         Route::get('/thankyou', fn () => view('auth.thankyou'))->name('thankyou');
 
         // Public-facing pages (require login)
@@ -424,6 +427,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::post('/my-customer/{customerId}/restore', [PageController::class, 'myCustomerRestore'])->name('my_customer.restore');
     Route::delete('/my-customer/{customerId}/force-delete', [PageController::class, 'myCustomerForceDelete'])->name('my_customer.force_delete');
     Route::post('/my-customer/bulk-delete', [PageController::class, 'myCustomerBulkDelete'])->name('my_customer.bulk_delete');
+    Route::post('/my-customer/{customer}/takeover', [PageController::class, 'myCustomerTakeover'])->name('my_customer.takeover');
     Route::get('/my-customer/import', [PageController::class, 'myCustomerImportForm'])->name('my_customer.import_form');
     Route::post('/my-customer/import', [PageController::class, 'myCustomerImport'])->name('my_customer.import');
     Route::get('/my-customer/schedules', [OrderScheduleController::class, 'index'])->name('my_customer.schedules.index');

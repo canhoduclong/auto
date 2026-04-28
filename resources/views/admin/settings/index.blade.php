@@ -311,26 +311,63 @@
 
         <div class="card border-0 shadow-sm mb-3">
             <div class="card-header bg-white border-0 pt-3 pb-0">
-                <h5 class="mb-1">Quản lý khách hàng tự do</h5>
-                <p class="text-muted small mb-0">Khách chưa gắn sale luôn là khách tự do. Nếu nhập số ngày lớn hơn 0, khách đã gán sale sẽ tự trở lại trạng thái tự do khi quá thời hạn này.</p>
+                <h5 class="mb-1">Quản lý Priority + Khách tự do</h5>
+                <p class="text-muted small mb-0">Cấu hình số ngày hiệu lực theo từng Priority và số ngày chuyển khách về trạng thái tự do.</p>
             </div>
             <div class="card-body">
                 <div class="row g-3 align-items-end">
-                    <div class="col-lg-4">
-                        <label for="customer_free_days" class="form-label">Số ngày giữ khách cho sale</label>
+                    <div class="col-lg-3">
+                        <label for="priority_1_days" class="form-label">Priority 1 (ngày)</label>
                         <input
                             type="number"
                             min="0"
                             class="form-control"
-                            id="customer_free_days"
-                            name="customer_free_days"
-                            value="{{ $settings['customer_free_days']->value ?? 0 }}"
-                            placeholder="0"
+                            id="priority_1_days"
+                            name="priority_1_days"
+                            value="{{ $settings['priority_1_days']->value ?? 30 }}"
+                            placeholder="30"
                         >
                     </div>
-                    <div class="col-lg-8">
+                    <div class="col-lg-3">
+                        <label for="priority_2_days" class="form-label">Priority 2 (ngày)</label>
+                        <input
+                            type="number"
+                            min="0"
+                            class="form-control"
+                            id="priority_2_days"
+                            name="priority_2_days"
+                            value="{{ $settings['priority_2_days']->value ?? 21 }}"
+                            placeholder="21"
+                        >
+                    </div>
+                    <div class="col-lg-3">
+                        <label for="priority_3_days" class="form-label">Priority 3 (ngày)</label>
+                        <input
+                            type="number"
+                            min="0"
+                            class="form-control"
+                            id="priority_3_days"
+                            name="priority_3_days"
+                            value="{{ $settings['priority_3_days']->value ?? 14 }}"
+                            placeholder="14"
+                        >
+                    </div>
+                    <div class="col-lg-3">
+                        <label for="free_customer_days" class="form-label">Không có đơn mới (ngày)</label>
+                        <input
+                            type="number"
+                            min="0"
+                            class="form-control"
+                            id="free_customer_days"
+                            name="free_customer_days"
+                            value="{{ $settings['free_customer_days']->value ?? ($settings['customer_free_days']->value ?? 0) }}"
+                            placeholder="0"
+                        >
+                        <input type="hidden" name="customer_free_days" value="{{ $settings['free_customer_days']->value ?? ($settings['customer_free_days']->value ?? 0) }}">
+                    </div>
+                    <div class="col-lg-12">
                         <div class="small text-muted pt-lg-4">
-                            `0` nghĩa là chỉ khách chưa gắn sale mới là khách tự do. Giá trị lớn hơn `0` sẽ dùng `assigned_at` để tính thời hạn giữ khách.
+                            `0` nghĩa là không tự chuyển trạng thái theo thời gian. Nên cấu hình thêm `customer_free_days` cũ nếu cần tương thích logic hiện hành.
                         </div>
                     </div>
                 </div>

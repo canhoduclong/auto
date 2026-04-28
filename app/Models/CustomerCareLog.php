@@ -13,6 +13,14 @@ class CustomerCareLog extends Model
         'customer_id',
         'user_id',
         'note',
+        'action_type',
+        'score_earned',
+        'cycle_no',
+        'meta',
+    ];
+
+    protected $casts = [
+        'meta' => 'array',
     ];
 
     public function customer()

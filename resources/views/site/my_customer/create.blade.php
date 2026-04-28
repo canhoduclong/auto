@@ -248,6 +248,9 @@
 
         <form action="{{ route('my_customer.store') }}" method="POST" enctype="multipart/form-data" autocomplete="off">
             @csrf
+            <input type="hidden" name="duplicate_customer_id" id="duplicate_customer_id" value="{{ old('duplicate_customer_id') }}">
+            <input type="hidden" name="duplicate_priority_level" id="duplicate_priority_level" value="{{ old('duplicate_priority_level') }}">
+            <input type="hidden" name="duplicate_takeover" id="duplicate_takeover" value="{{ old('duplicate_takeover', 0) }}">
 
             {{-- ===================== CARD 1: Thông tin khách hàng ===================== --}}
             <div class="card mc-edit-card{{ $errors->hasAny(['name','phone','email','address','province_id','ward_id']) ? ' has-error' : '' }}" id="card-1">
@@ -267,19 +270,25 @@
                                     <label for="name" class="form-label mc-form-label">Tên khách hàng <span class="text-danger">*</span></label>
                                     <input type="text" class="form-control mc-form-control @error('name') is-invalid @enderror" id="name" name="name" value="{{ old('name') }}" required>
                                     @error('name')<div class="field-error-msg"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0zm-8-5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 10 5zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2z" clip-rule="evenodd"/></svg>{{ $message }}</div>@enderror
-                                    <div id="name-duplicate-alert" class="alert alert-danger py-2 px-3 mt-2 d-none" role="alert"></div>
+                                    <div id="name-duplicate-alert" class="alert alert-warning py-2 px-3 mt-2 d-none" role="alert"></div>
+                                    <div id="duplicate-resolution-actions" class="mt-2 d-none">
+                                        <div class="d-flex flex-wrap gap-2">
+                                            <button type="button" id="dup-priority-1" class="btn btn-sm btn-danger d-none">Nhận khách này với Ưu tiên 1</button>
+                                            <button type="button" id="dup-priority-2" class="btn btn-sm btn-primary">Lưu với Ưu tiên 2</button>
+                                            <button type="button" id="dup-priority-3" class="btn btn-sm btn-outline-primary">Lưu với Ưu tiên 3</button>
+                                        </div>
+                                        <div id="duplicate-resolution-help" class="mc-help mt-1"></div>
+                                    </div>
                                 </div>
                                 <div class="col-12 col-md-6">
                                     <label for="phone" class="form-label mc-form-label">Số điện thoại</label>
                                     <input type="text" class="form-control mc-form-control @error('phone') is-invalid @enderror" id="phone" name="phone" value="{{ old('phone') }}">
                                     @error('phone')<div class="field-error-msg"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0zm-8-5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 10 5zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2z" clip-rule="evenodd"/></svg>{{ $message }}</div>@enderror
-                                    <div id="phone-duplicate-alert" class="alert alert-danger py-2 px-3 mt-2 d-none" role="alert"></div>
                                 </div>
                                 <div class="col-12 col-md-6">
                                     <label for="email" class="form-label mc-form-label">Email</label>
                                     <input type="email" class="form-control mc-form-control @error('email') is-invalid @enderror" id="email" name="email" value="{{ old('email') }}">
                                     @error('email')<div class="field-error-msg"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0zm-8-5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 10 5zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2z" clip-rule="evenodd"/></svg>{{ $message }}</div>@enderror
-                                    <div id="email-duplicate-alert" class="alert alert-danger py-2 px-3 mt-2 d-none" role="alert"></div>
                                 </div>
                                 <div class="col-12 col-md-12">
                                     <label for="address" class="form-label mc-form-label">Địa chỉ</label>
@@ -630,54 +639,149 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // ===================== DUPLICATE CHECK =====================
+    const formEl = document.querySelector('form[action="{{ route('my_customer.store') }}"]');
     const nameInput  = document.getElementById('name');
-    const emailInput = document.getElementById('email');
     const phoneInput = document.getElementById('phone');
     const nameAlert  = document.getElementById('name-duplicate-alert');
-    const emailAlert = document.getElementById('email-duplicate-alert');
-    const phoneAlert = document.getElementById('phone-duplicate-alert');
+    const actionsBox = document.getElementById('duplicate-resolution-actions');
+    const helpText = document.getElementById('duplicate-resolution-help');
+    const btnPriority1 = document.getElementById('dup-priority-1');
+    const btnPriority2 = document.getElementById('dup-priority-2');
+    const btnPriority3 = document.getElementById('dup-priority-3');
+    const duplicateCustomerIdInput = document.getElementById('duplicate_customer_id');
+    const duplicatePriorityInput = document.getElementById('duplicate_priority_level');
+    const duplicateTakeoverInput = document.getElementById('duplicate_takeover');
     const checkDuplicateUrl = "{{ route('my_customer.check_duplicate') }}";
     let dupTimer = null;
+    let duplicatePayload = null;
 
     function buildAlertHtml(data) {
+        const freeInfo = data.is_free
+            ? `<br><span class="text-danger"><strong>Khách đang ở trạng thái tự do</strong>${data.free_from_date ? ` từ ${data.free_from_date}` : ''}.</span>`
+            : '';
+
         return `<i class="bi bi-exclamation-triangle-fill me-1"></i>
-            <strong>Khách hàng đã tồn tại trong hệ thống!</strong><br>
+            <strong>Khách hàng đã tồn tại trong hệ thống.</strong><br>
             Mã KH: <strong>#${data.id}</strong> – Tên: <strong>${data.name}</strong> – SĐT: <strong>${data.phone}</strong>${data.email ? ` – Email: <strong>${data.email}</strong>` : ''}<br>
-            Thuộc về sale: <strong>${data.sale}</strong>${data.created_at ? ` – Ngày tạo: ${data.created_at}` : ''}`;
+            Người chăm gần nhất: <strong>${data.sale}</strong>${data.created_at ? ` – Ngày tạo: ${data.created_at}` : ''}${freeInfo}`;
     }
     function clearDuplicateAlerts() {
-        [nameAlert, emailAlert, phoneAlert].forEach(el => { el.classList.add('d-none'); el.innerHTML = ''; });
+        nameAlert.classList.add('d-none');
+        nameAlert.innerHTML = '';
+        actionsBox.classList.add('d-none');
+        btnPriority1.classList.add('d-none');
+        duplicateCustomerIdInput.value = '';
+        duplicatePriorityInput.value = '';
+        duplicateTakeoverInput.value = '0';
+        helpText.textContent = '';
+        duplicatePayload = null;
     }
+
+    function applyPrefill(prefill) {
+        if (!prefill || typeof prefill !== 'object') {
+            return;
+        }
+
+        const map = {
+            name: 'name',
+            phone: 'phone',
+            email: 'email',
+            address: 'address',
+            delivery_time: 'delivery_time',
+            size: 'size',
+            production: 'production',
+            company_name: 'company_name',
+            tax_code: 'tax_code',
+            company_address: 'company_address',
+            company_email: 'company_email',
+            truck_station_id: 'truck_station_id',
+            truck_station_address: 'truck_station_address',
+            truck_station_phone: 'truck_station_phone',
+            truck_receive_time: 'truck_receive_time',
+            truck_return_time: 'truck_return_time',
+            truck_fee: 'truck_fee',
+        };
+
+        Object.entries(map).forEach(([key, id]) => {
+            const input = document.getElementById(id);
+            if (!input) return;
+            const value = prefill[key];
+            if (value !== null && value !== undefined) {
+                input.value = value;
+            }
+        });
+
+        const useTruckHidden = document.getElementById('use_truck_station_hidden');
+        if (useTruckHidden && prefill.use_truck_station !== undefined) {
+            useTruckHidden.value = prefill.use_truck_station ? '1' : '0';
+        }
+
+        if (prefill.province_id) {
+            const selectedProvinceItem = provinceGrid.querySelector(`.mc-dropdown-item[data-value="${prefill.province_id}"]`);
+            const provinceLabel = selectedProvinceItem ? selectedProvinceItem.dataset.label : '-- Chọn tỉnh/thành --';
+            selectItem(provinceHidden, provinceBtn, provinceGrid, prefill.province_id, provinceLabel);
+            loadWardsByProvince(prefill.province_id, prefill.ward_id || '');
+        }
+    }
+
+    function submitWithPriority(priorityLevel) {
+        if (!duplicatePayload) {
+            return;
+        }
+
+        applyPrefill(duplicatePayload.prefill || {});
+        duplicateCustomerIdInput.value = duplicatePayload.id || '';
+        duplicatePriorityInput.value = String(priorityLevel);
+        duplicateTakeoverInput.value = priorityLevel === 1 ? '1' : '0';
+
+        formEl.submit();
+    }
+
     function checkDuplicate() {
         const name  = nameInput.value.trim();
-        const email = emailInput.value.trim();
         const phone = phoneInput.value.trim();
-        if (!((name && phone) || email)) { clearDuplicateAlerts(); return; }
+        if (!(name && phone)) { clearDuplicateAlerts(); return; }
         const params = new URLSearchParams();
         if (name)  params.set('name',  name);
-        if (email) params.set('email', email);
         if (phone) params.set('phone', phone);
         fetch(`${checkDuplicateUrl}?${params.toString()}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
             .then(r => r.json())
             .then(data => {
                 if (data.duplicate) {
+                    duplicatePayload = data;
                     const html = buildAlertHtml(data);
-                    clearDuplicateAlerts();
-                    if (data.match_reason === 'email' || data.match_reason === 'both') {
-                        emailAlert.innerHTML = html; emailAlert.classList.remove('d-none');
-                    }
-                    if (data.match_reason === 'name_phone' || data.match_reason === 'both') {
-                        nameAlert.innerHTML = html; phoneAlert.innerHTML = html;
-                        nameAlert.classList.remove('d-none'); phoneAlert.classList.remove('d-none');
+                    nameAlert.innerHTML = html;
+                    nameAlert.classList.remove('d-none');
+
+                    actionsBox.classList.remove('d-none');
+                    if (data.is_free) {
+                        btnPriority1.classList.remove('d-none');
+                        helpText.textContent = 'Khách đang tự do: bạn có thể nhận Priority 1 hoặc tiếp tục với Priority 2/3.';
+                    } else {
+                        btnPriority1.classList.add('d-none');
+                        helpText.textContent = 'Bạn có chấp nhận tham gia chăm sóc khách này với Priority 2 hoặc Priority 3 không?';
                     }
                 } else { clearDuplicateAlerts(); }
             })
             .catch(() => clearDuplicateAlerts());
     }
     function scheduleCheck() { clearTimeout(dupTimer); dupTimer = setTimeout(checkDuplicate, 500); }
+    btnPriority1.addEventListener('click', function () { submitWithPriority(1); });
+    btnPriority2.addEventListener('click', function () { submitWithPriority(2); });
+    btnPriority3.addEventListener('click', function () { submitWithPriority(3); });
     nameInput.addEventListener('input', scheduleCheck);  nameInput.addEventListener('blur', checkDuplicate);
-    emailInput.addEventListener('input', scheduleCheck); emailInput.addEventListener('blur', checkDuplicate);
     phoneInput.addEventListener('input', scheduleCheck); phoneInput.addEventListener('blur', checkDuplicate);
+
+    formEl.addEventListener('submit', function (event) {
+        if (duplicatePayload && !duplicatePriorityInput.value) {
+            event.preventDefault();
+            actionsBox.classList.remove('d-none');
+            nameAlert.classList.remove('d-none');
+            helpText.textContent = duplicatePayload.is_free
+                ? 'Vui lòng chọn Priority 1, 2 hoặc 3 trước khi lưu khách trùng.'
+                : 'Vui lòng chọn Priority 2 hoặc Priority 3 trước khi lưu khách trùng.';
+        }
+    });
 
     // ===================== TRUCK STATION AJAX =====================
     const btnLoadTrucks     = document.getElementById('btn-load-trucks');

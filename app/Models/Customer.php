@@ -61,8 +61,12 @@ class Customer extends Model
         'truck_station_phone',
         'truck_fee',
         'assigned_to',
+        'current_owner_sale_id',
         'assigned_at',
         'status',
+        'customer_status',
+        'free_from_date',
+        'current_cycle_no',
         'is_employee',
         'deleted_by',
     ];
@@ -73,12 +77,13 @@ class Customer extends Model
         'dob' => 'date',
         'next_appointment' => 'datetime',
         'assigned_at' => 'datetime',
+        'free_from_date' => 'datetime',
         'is_employee' => 'boolean',
     ];
 
     public static function freeCustomerDays(): int
     {
-        return max((int) Setting::get('customer_free_days', 0), 0);
+        return max((int) Setting::get('free_customer_days', Setting::get('customer_free_days', 0)), 0);
     }
 
     public function assignmentExpiresAt()
@@ -105,6 +110,10 @@ class Customer extends Model
     {
         if ($this->is_employee) {
             return false;
+        }
+
+        if ((string) $this->customer_status === 'free') {
+            return true;
         }
 
         if (!$this->assigned_to) {
@@ -156,7 +165,8 @@ class Customer extends Model
 
         return $query->where('is_employee', false)
             ->where(function (Builder $builder) use ($days) {
-                $builder->whereNull('assigned_to');
+                $builder->where('customer_status', 'free')
+                    ->orWhereNull('assigned_to');
 
                 if ($days > 0) {
                     $threshold = now()->subDays($days);
@@ -174,6 +184,7 @@ class Customer extends Model
         $days = static::freeCustomerDays();
 
         $query->where('is_employee', false)
+            ->where('customer_status', '!=', 'free')
             ->whereNotNull('assigned_to');
 
         if ($days > 0) {
@@ -198,7 +209,10 @@ class Customer extends Model
             return $query;
         }
 
-        return $query->where('assigned_to', $user->id)->managed();
+        return $query->where(function (Builder $builder) use ($user) {
+            $builder->where('assigned_to', $user->id)
+                ->orWhere('current_owner_sale_id', $user->id);
+        })->managed();
     }
 
     public function transactions() {
@@ -229,6 +243,11 @@ class Customer extends Model
         return $this->belongsTo(User::class, 'assigned_to');
     }
 
+    public function currentOwner()
+    {
+        return $this->belongsTo(User::class, 'current_owner_sale_id');
+    }
+
     public function user()
     {
         return $this->belongsTo(User::class,'user_id');
@@ -242,6 +261,16 @@ class Customer extends Model
     public function lastOrder()
     {
         return $this->hasOne(Order::class)->latestOfMany('created_at');
+    }
+
+    public function priorities()
+    {
+        return $this->hasMany(CustomerPriority::class);
+    }
+
+    public function ownershipHistories()
+    {
+        return $this->hasMany(CustomerOwnershipHistory::class);
     }
 
     public function truckStation()

@@ -17,6 +17,7 @@ use App\Models\Transaction;
 use App\Models\User;
 use App\Models\Setting;
 use App\Services\ApprovalService;
+use App\Services\CustomerPriorityService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Database\Eloquent\Builder;
@@ -1211,6 +1212,15 @@ class OrderController extends Controller
         }
 
         return DB::transaction(function () use ($items, $orderData, $approvalService) {
+            $customer = null;
+            $customerId = (int) ($orderData['customer_id'] ?? 0);
+            if ($customerId > 0) {
+                $customer = Customer::query()->find($customerId);
+                if ($customer && auth()->check()) {
+                    app(CustomerPriorityService::class)->assertCanCreateOrder($customer, (int) auth()->id());
+                }
+            }
+
             $items = collect($items)
                 ->filter(fn ($item) => (int) ($item['quantity'] ?? 0) > 0)
                 ->values();
@@ -1362,6 +1372,10 @@ class OrderController extends Controller
 
             $order->refresh();
             $this->logOrderHistory($order, 'create_order', null, (string) $order->status, 'Sale tao don hang');
+
+            if ($customer && auth()->check()) {
+                app(CustomerPriorityService::class)->onOrderCreated($customer, $order, (int) auth()->id());
+            }
 
             // Cập nhật thứ tự ưu tiên trong ngày + trạng thái đủ/thiếu hàng cho toàn bộ đơn cùng ngày.
             $this->syncDailySequenceAndStockSufficiency($order->created_at ?: now());

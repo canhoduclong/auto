@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Customer;
+use App\Services\CustomerPriorityService;
 
 class CustomerPopupController extends Controller
 {
@@ -25,12 +26,14 @@ class CustomerPopupController extends Controller
         ]);
     }
 
-    public function store(Request $request)
+    public function store(Request $request, CustomerPriorityService $priorityService)
     {
         $data = $request->validate([
             'name' => 'required|string|max:255',
             'phone' => 'nullable|string|max:30',
             'email' => 'nullable|email|max:255',
+            'priority_level' => 'nullable|in:2,3',
+            'takeover' => 'nullable|boolean',
         ]);
 
         $duplicateCustomer = Customer::query()
@@ -50,14 +53,40 @@ class CustomerPopupController extends Controller
             ->first();
 
         if ($duplicateCustomer) {
+            $userId = (int) auth()->id();
+            if ($userId > 0) {
+                if ($request->boolean('takeover') || $duplicateCustomer->isFree()) {
+                    $priorityService->takeover($duplicateCustomer, $userId, $request->boolean('takeover') ? 'takeover' : 'free_customer');
+                } else {
+                    $priorityService->attachSale($duplicateCustomer, $userId, isset($data['priority_level']) ? (int) $data['priority_level'] : 3, 'duplicate_join');
+                }
+            }
+
             return response()->json([
-                'success' => false,
-                'message' => 'Khach hang da ton tai (ID: ' . $duplicateCustomer->id . ', Ten: ' . $duplicateCustomer->name . ').',
+                'success' => true,
+                'message' => 'Khach hang da ton tai, da cap nhat danh sach priority.',
                 'customer' => $duplicateCustomer,
-            ], 422);
+            ]);
         }
 
+        $userId = (int) auth()->id();
+        $data['assigned_to'] = $userId ?: null;
+        $data['assigned_at'] = $userId ? now() : null;
+        $data['current_owner_sale_id'] = $userId ?: null;
+        $data['customer_status'] = $userId ? 'active' : 'free';
+        $data['current_cycle_no'] = 1;
+        $data['free_from_date'] = $userId ? null : now();
+
+
         $customer = Customer::create($data);
+        // Luôn gán priority = 1 cho user hiện tại nếu có assigned_to (khách mới hoặc khách tự do)
+        $targetUserId = $customer->assigned_to ?: ($userId ?: null);
+        if ($targetUserId) {
+            $priorityService->attachSale($customer, (int) $targetUserId, 1, 'created');
+        } else {
+            $priorityService->ensureLifecycle($customer);
+        }
+
         return response()->json([
             'success' => true,
             'customer' => $customer

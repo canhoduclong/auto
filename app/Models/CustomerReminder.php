@@ -17,11 +17,15 @@ class CustomerReminder extends Model
         'image_path',
         'remind_at',
         'is_done',
+        'appointment_score_counted_at',
+        'meeting_score_counted_at',
     ];
 
     protected $casts = [
         'remind_at' => 'datetime',
         'is_done' => 'boolean',
+        'appointment_score_counted_at' => 'datetime',
+        'meeting_score_counted_at' => 'datetime',
     ];
 
     public function customer()

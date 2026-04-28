@@ -196,6 +196,40 @@
         background: #ecfdf5;
         color: #047857;
     }
+    .mc-status-free {
+        background: #f0fdf4;
+        color: #15803d;
+        border: 1px solid #86efac;
+    }
+    .mc-status-ordered {
+        background: #f5f3ff;
+        color: #6d28d9;
+    }
+        .mc-priority-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: .72rem;
+            font-weight: 800;
+            margin-right: 6px;
+            margin-top: 4px;
+        }
+        .mc-priority-p1 { background: #fee2e2; color: #b91c1c; }
+        .mc-priority-p2 { background: #fff7ed; color: #c2410c; }
+        .mc-priority-p3 { background: #ecfeff; color: #0f766e; }
+        .mc-owner-pill {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: .72rem;
+            font-weight: 700;
+            background: #eef2ff;
+            color: #3730a3;
+            margin-top: 4px;
+        }
     .mc-orders-pill {
         display: inline-flex;
         align-items: center;
@@ -522,6 +556,15 @@
                                 <label class="form-label small text-uppercase fw-bold text-muted mb-1">Tìm kiếm</label>
                                 <input type="text" id="mc-search-input" name="search" class="form-control" placeholder="Tên, email, số điện thoại..." value="{{ $search ?? '' }}">
                             </div>
+                            <div class="col-lg-3 col-md-6">
+                                <label class="form-label small text-uppercase fw-bold text-muted mb-1">Trạng thái</label>
+                                <select id="mc-status-filter" name="customer_status_filter" class="form-select">
+                                    <option value="">Tất cả trạng thái</option>
+                                    <option value="free" {{ request('customer_status_filter') === 'free' ? 'selected' : '' }}>Khách tự do</option>
+                                    <option value="active" {{ request('customer_status_filter') === 'active' ? 'selected' : '' }}>Đang được chăm sóc</option>
+                                    <option value="ordered" {{ request('customer_status_filter') === 'ordered' ? 'selected' : '' }}>Đã đặt đơn</option>
+                                </select>
+                            </div>
                             <input type="hidden" name="city" value="{{ request('city') }}">
                             <input type="hidden" name="ward" value="{{ request('ward') }}">
                             <input type="hidden" name="street" value="{{ request('street') }}">
@@ -583,6 +626,9 @@
                     <a href="{{ route('my_customer.schedules.index') }}" class="btn btn-outline-primary">
                         <i class="bi bi-calendar2-check"></i> Lịch lên đơn
                     </a>
+                    <button type="button" class="btn btn-outline-secondary ms-1" id="refreshPriorityBtn" title="Làm mới priority">
+                        <i class="bi bi-arrow-clockwise"></i>
+                    </button>
                     <a href="{{ route('my_customer.create') }}" class="btn btn-primary">
                         <i class="bi bi-plus-circle"></i> Thêm mới
                     </a>
@@ -611,6 +657,18 @@
                             $parts = array_filter([$address->house_number, $address->street, $address->ward, $address->city]);
                             $addressText = implode(', ', $parts);
                         }
+                        $myPriority = $customer->priorities->first();
+                        $myPriorityLevel = (int) ($myPriority?->priority_level ?? 0);
+                        $myPriorityScore = (int) ($myPriority?->care_score ?? 0);
+                        $myPriorityExpire = $myPriority?->expire_date?->format('d/m/Y');
+                        $ownerName = $customer->currentOwner?->name ?? $customer->assignedTo?->name ?? $customer->user?->name;
+                        $isFreeCustomer = (string) $customer->customer_status === 'free' || $customer->isFree();
+                        $statusLabel = match((string) $customer->customer_status) {
+                            'ordered'  => 'Đã đặt đơn',
+                            'free'     => 'Khách tự do',
+                            default    => ($isFreeCustomer ? 'Khách tự do' : 'Đang được chăm sóc'),
+                        };
+                        $statusClass = $isFreeCustomer ? 'mc-status-free' : ((string) $customer->customer_status === 'ordered' ? 'mc-status-ordered' : 'mc-status-active');
                     @endphp
                     <div class="col-12">
                         <div class="mc-customer-card border rounded p-3 bg-white">
@@ -626,6 +684,24 @@
                                             @if($customer->type)
                                                 <small class="text-muted">Phân loại: {{ $customer->type->name }}</small><br>
                                             @endif
+                                            @if($myPriorityLevel > 0)
+                                                <span class="{{ $myPriorityLevel === 1 ? 'mc-priority-p1' : ($myPriorityLevel === 2 ? 'mc-priority-p2' : 'mc-priority-p3') }}">
+                                                    Ưu tiên: P{{ $myPriorityLevel }}
+                                                    @if($myPriorityScore > 0)
+                                                        · {{ $myPriorityScore }}đ
+                                                    @endif
+                                                    @if($myPriorityExpire)
+                                                        · HSD {{ $myPriorityExpire }}
+                                                    @endif
+                                                </span>
+                                            @else
+                                                <span class=" mc-priority-p3">Ưu tiên: Chưa phân hạng</span>
+                                            @endif
+                                            @if($ownerName)
+                                                <span class="mc-owner">Owner : {{ $ownerName }}</span>
+                                            @endif
+                                            <span class="mc-status-badge {{ $statusClass }}">{{ $statusLabel }}</span>
+                                            <br>
                                             @if($customer->brand)
                                                 <small class="text-muted">Brand: {{ $customer->brand }}</small><br>
                                             @endif
@@ -683,6 +759,11 @@
                                                     <button type="button" class="btn btn-outline-success btn-sm js-restore-customer" data-id="{{ $customer->id }}" title="Khôi phục"><i class="bi bi-arrow-counterclockwise"></i></button>
                                                     <button type="button" class="btn btn-outline-danger btn-sm js-force-delete-customer" data-id="{{ $customer->id }}" title="Xóa vĩnh viễn"><i class="bi bi-trash-fill"></i></button>
                                                 @else
+                                                    @if($isFreeCustomer)
+                                                        <button type="button" class="btn btn-success btn-sm js-takeover-customer" data-id="{{ $customer->id }}" data-name="{{ $customer->name }}" title="Nhận khách về danh sách của bạn">
+                                                            <i class="bi bi-person-plus-fill me-1"></i>Nhận khách
+                                                        </button>
+                                                    @endif
                                                     <a href="{{ route('my_customer.show', $customer) }}" class="btn btn-outline-info btn-sm" title="Xem chi tiết"><i class="bi bi-eye"></i></a>
                                                     <a href="{{ route('my_customer.order.create', $customer) }}" class="btn btn-outline-success btn-sm" title="Lên đơn hàng"><i class="bi bi-file-text"></i></a>
                                                     <a href="{{ route('my_customer.show', ['customer' => $customer, 'tab' => 'payments']) }}" class="btn btn-outline-secondary btn-sm" title="Thanh toán"><i class="bi bi-cash"></i></a>
@@ -720,6 +801,7 @@
         city: '{{ request('city') }}',
         ward: '{{ request('ward') }}',
         street: '{{ request('street') }}',
+        customer_status_filter: '{{ request('customer_status_filter', '') }}',
         tab: '{{ $activeTab }}',
         sort_by: '{{ $sortBy ?? '' }}',
         sort_dir: '{{ $sortDir ?? 'asc' }}',
@@ -804,6 +886,7 @@
         }
 
         return `
+            ${customer.is_free_customer ? `<button type="button" class="btn btn-success btn-sm js-takeover-customer" data-id="${customer.id}" data-name="${escapeHtml(customer.name || '')}" title="Nhận khách về danh sách của bạn"><i class="bi bi-person-plus-fill me-1"></i>Nhận khách</button>` : ''}
             <a href="${mcUrl('show', customer.id)}" class="btn btn-outline-info btn-sm" title="Xem chi tiết"><i class="bi bi-eye"></i></a>
             <a href="${mcUrl('order', customer.id)}" class="btn btn-outline-success btn-sm" title="Lên đơn hàng"><i class="bi bi-file-text"></i></a>
             <a href="${mcUrl('payment', customer.id)}" class="btn btn-outline-secondary btn-sm" title="Thanh toán"><i class="bi bi-cash"></i></a>
@@ -880,6 +963,29 @@
                 loadCustomers({ page: 1 });
             });
         });
+
+        document.querySelectorAll('.js-takeover-customer').forEach(btn => {
+            btn.addEventListener('click', async function () {
+                const id = this.dataset.id;
+                const name = this.dataset.name || 'khách hàng này';
+                if (!confirm(`Nhận ${name} về danh sách của bạn với Ưu tiên 1?`)) return;
+                this.disabled = true;
+                const res = await fetch(`/my-customer/${id}/takeover`, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                    },
+                });
+                const data = await res.json();
+                if (data.success) {
+                    loadCustomers({ page: 1 });
+                } else {
+                    alert(data.message || 'Không thể nhận khách hàng này.');
+                    this.disabled = false;
+                }
+            });
+        });
     }
 
     function updateCustomerList(customers) {
@@ -912,6 +1018,19 @@
             const deletedAt = escapeHtml(customer.deleted_at_formatted || '');
             const typeName = customer.type ? escapeHtml(customer.type.name || '') : '';
             const brand = escapeHtml(customer.brand || '');
+            const priorityLevelRaw = customer.my_priority_level;
+            const priorityLevel = priorityLevelRaw !== null && priorityLevelRaw !== undefined ? Number(priorityLevelRaw) : 0;
+            const priorityScore = Number(customer.my_priority_score || 0);
+            const priorityExpire = escapeHtml(customer.my_priority_expire_at || '');
+            const ownerName = escapeHtml(customer.current_owner_name || '');
+            const priorityClass = priorityLevel === 1 ? 'mc-priority-p1' : (priorityLevel === 2 ? 'mc-priority-p2' : 'mc-priority-p3');
+            const priorityLabel = priorityLevel > 0
+                ? `Ưu tiên: P${priorityLevel}${priorityScore > 0 ? ` · ${priorityScore}đ` : ''}${priorityExpire ? ` · HSD ${priorityExpire}` : ''}`
+                : 'Ưu tiên: Chưa phân hạng';
+            const isFreeCustomer = customer.is_free_customer;
+            const customerStatusRaw = customer.customer_status || '';
+            const statusLabel = isFreeCustomer ? 'Khách tự do' : (customerStatusRaw === 'ordered' ? 'Đã đặt đơn' : 'Đang được chăm sóc');
+            const statusClass = isFreeCustomer ? 'mc-status-free' : (customerStatusRaw === 'ordered' ? 'mc-status-ordered' : 'mc-status-active');
 
             return `
             <div class="col-12">
@@ -924,6 +1043,10 @@
                                     ${updatedAt ? `<small class="text-muted fst-italic"><i class="bi bi-clock me-1"></i>Cập nhật: ${updatedAt}</small><br>` : ''}
                                     ${deletedAt ? `<small class="text-danger fst-italic"><i class="bi bi-trash me-1"></i>Đã xóa: ${deletedAt}</small><br>` : ''}
                                     ${typeName ? `<small class="text-muted">Phân loại: ${typeName}</small><br>` : ''}
+                                    <span class="mc-priority-pill ${priorityClass}">${priorityLabel}</span>
+                                    ${ownerName ? `<span class="mc-owner-pill">Owner hiện tại: ${ownerName}</span>` : ''}
+                                    <span class="mc-status-badge ${statusClass}">${statusLabel}</span>
+                                    <br>
                                     ${brand ? `<small class="text-muted">Brand: ${brand}</small><br>` : ''}
                                     <small class="text-muted">Mã KH: <strong>${code}</strong></small><br>
                                     <small class="text-muted">Trạng thái: <strong>${status}</strong></small><br>
@@ -949,7 +1072,7 @@
                             <div class="mt-2">
                                 <div class="d-flex justify-content-end align-items-center">
                                     <div class="text-end me-3">
-                                        <small class="text-muted">Đơn: ${Number(customer.orders_count || 0).toLocaleString('vi-VN')}</small>
+                                        <small class="text-muted">Đơn: {{ $customer->orders_count }}</small>
                                     </div>
                                     ${currentParams.tab === 'trash' ? '' : `<div class="text-end me-3 mt-1"><input type="checkbox" name="ids[]" value="${customer.id}" class="customer-checkbox"></div>`}
                                     <div class="mc-actions justify-content-end gap-2">${actionButtonsHtml(customer)}</div>
@@ -1010,6 +1133,10 @@
 
     document.getElementById('perPage').addEventListener('change', function () {
         loadCustomers({ per_page: this.value, page: 1 });
+    });
+
+    document.getElementById('mc-status-filter').addEventListener('change', function () {
+        loadCustomers({ customer_status_filter: this.value, page: 1 });
     });
 
     document.getElementById('bulkDeleteBtn').addEventListener('click', async function (e) {
@@ -1115,3 +1242,34 @@
     loadCustomers();
 </script>
 @endpush
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const btn = document.getElementById('refreshPriorityBtn');
+    if (btn) {
+        btn.addEventListener('click', function() {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+            fetch("{{ route('my_customer.refresh_priority') }}", {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content,
+                    'Accept': 'application/json',
+                },
+            })
+            .then(res => res.json())
+            .then(data => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i>';
+                alert(data.message || 'Đã làm mới priority!');
+                window.location.reload();
+            })
+            .catch(() => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i>';
+                alert('Có lỗi xảy ra!');
+            });
+        });
+    }
+});
+</script>
