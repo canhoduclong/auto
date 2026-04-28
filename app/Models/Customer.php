@@ -83,6 +83,10 @@ class Customer extends Model
 
     public function assignmentExpiresAt()
     {
+        if ($this->is_employee) {
+            return null;
+        }
+
         $days = static::freeCustomerDays();
 
         if ($days <= 0 || !$this->assigned_at) {
@@ -94,6 +98,10 @@ class Customer extends Model
 
     public function isFree(): bool
     {
+        if ($this->is_employee) {
+            return false;
+        }
+
         if (!$this->assigned_to) {
             return true;
         }
@@ -116,6 +124,10 @@ class Customer extends Model
             return true;
         }
 
+        if ($this->is_employee) {
+            return false;
+        }
+
         return (int) $this->assigned_to === (int) $user->id && !$this->isFree();
     }
 
@@ -123,21 +135,23 @@ class Customer extends Model
     {
         $days = static::freeCustomerDays();
 
-        return $query->where(function (Builder $builder) use ($days) {
-            $builder->whereNull('assigned_to');
+        return $query->where('is_employee', false)
+            ->where(function (Builder $builder) use ($days) {
+                $builder->whereNull('assigned_to');
 
-            if ($days > 0) {
-                $builder->orWhereNull('assigned_at')
-                    ->orWhere('assigned_at', '<=', now()->subDays($days));
-            }
-        });
+                if ($days > 0) {
+                    $builder->orWhereNull('assigned_at')
+                        ->orWhere('assigned_at', '<=', now()->subDays($days));
+                }
+            });
     }
 
     public function scopeManaged(Builder $query): Builder
     {
         $days = static::freeCustomerDays();
 
-        $query->whereNotNull('assigned_to');
+        $query->where('is_employee', false)
+            ->whereNotNull('assigned_to');
 
         if ($days > 0) {
             $query->whereNotNull('assigned_at')

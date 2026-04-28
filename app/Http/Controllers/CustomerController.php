@@ -125,7 +125,7 @@ class CustomerController extends Controller
             $query->where('is_employee', false);
         }
 
-        if ($isAdmin && $request->filled('ownership_status')) {
+        if ($isAdmin && !$request->boolean('is_employee') && $request->filled('ownership_status')) {
             if ($request->ownership_status === 'free') {
                 $query->free();
             }
@@ -790,6 +790,12 @@ class CustomerController extends Controller
     {
         abort_unless($request->user()?->isAdmin(), 403);
 
+        if ($customer->is_employee) {
+            return back()->withErrors([
+                'assigned_to' => __('customers.messages.employee_cannot_assign_sale'),
+            ]);
+        }
+
         $validated = $request->validate([
             'assigned_to' => ['nullable', 'integer', Rule::exists('users', 'id')],
         ]);
@@ -841,7 +847,11 @@ class CustomerController extends Controller
 
         Customer::query()
             ->whereIn('id', $ids)
-            ->update(['is_employee' => true]);
+            ->update([
+                'is_employee' => true,
+                'assigned_to' => null,
+                'assigned_at' => null,
+            ]);
 
         return redirect()->route('customers.index', $request->only([
             'q',

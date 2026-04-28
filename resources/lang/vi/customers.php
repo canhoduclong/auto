@@ -194,6 +194,7 @@ return [
         'deleted' => 'Xóa khách hàng thành công.',
         'bulk_deleted' => 'Đã xóa các khách hàng đã chọn.',
         'bulk_marked_employee' => 'Đã đánh dấu các khách hàng đã chọn là nhân viên.',
+        'employee_cannot_assign_sale' => 'Khách hàng Nhân viên không áp dụng tính năng gán sale.',
         'address_created' => 'Địa chỉ đã được thêm thành công.',
         'address_updated' => 'Địa chỉ đã được cập nhật thành công.',
         'address_deleted' => 'Địa chỉ đã được xóa thành công.',

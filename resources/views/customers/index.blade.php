@@ -303,7 +303,9 @@
                         </td>
 
                         <td>
-                            @if($customer->isFree())
+                            @if($customer->is_employee)
+                                <span class="text-muted" style="font-size:.8rem;">Không áp dụng cho khách Nhân viên</span>
+                            @elseif($customer->isFree())
                                 <span class="text-muted fst-italic" style="font-size:.8rem;">Tự do</span>
                                 @if($customer->assignedTo)
                                     <div class="sale-prev">Gần nhất: {{ $customer->assignedTo->name }}</div>
@@ -316,7 +318,9 @@
                         <td style="font-size:.8rem;color:#64748b;">{{ optional($customer->user)->name ?? '—' }}</td>
 
                         <td>
-                            @if($customer->isFree())
+                            @if($customer->is_employee)
+                                <span class="text-muted" style="font-size:.78rem;">Không áp dụng</span>
+                            @elseif($customer->isFree())
                                 <span class="badge-free" style="font-size:.7rem;">Có thể gán</span>
                             @elseif(($expiresAt = $customer->assignmentExpiresAt()))
                                 <div class="expires-date">{{ $expiresAt->format('d/m/Y') }}</div>
@@ -328,7 +332,9 @@
 
                         @if($isAdmin)
                         <td>
-                            @if($customer->isFree())
+                            @if($customer->is_employee)
+                                <span class="text-muted" style="font-size:.78rem;">Không áp dụng</span>
+                            @elseif($customer->isFree())
                                 <form action="{{ route('customers.assign-sale', $customer) }}" method="POST" class="assign-form d-flex gap-2 align-items-center">
                                     @csrf
                                     <input type="hidden" name="q"               value="{{ request('q') }}">

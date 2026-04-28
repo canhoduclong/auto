@@ -194,6 +194,7 @@ return [
         'deleted' => 'Customer deleted successfully.',
         'bulk_deleted' => 'Selected customers were deleted.',
         'bulk_marked_employee' => 'Selected customers were marked as employee.',
+        'employee_cannot_assign_sale' => 'Employee customers cannot be assigned to sale.',
         'address_created' => 'Address added successfully.',
         'address_updated' => 'Address updated successfully.',
         'address_deleted' => 'Address deleted successfully.',
