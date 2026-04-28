@@ -19,10 +19,24 @@
         </div>
     </div>
 
+    @php
+        $hasActiveFilter = request()->hasAny(['customer_name','phone_number','user_id','team_id','payment_status','status','from_date','to_date','my_pending_approval']);
+    @endphp
     <div class="card mb-3 shadow-sm border-0">
-        <div class="card-header bg-white py-3">
-            <h6 class="mb-0 fw-semibold">{{ __('orders.labels.filter') }}</h6>
+        <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center" style="cursor:pointer;" id="ordersFilterToggle" role="button" aria-expanded="{{ $hasActiveFilter ? 'true' : 'false' }}" aria-controls="ordersFilterBody">
+            <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-funnel-fill text-secondary"></i>
+                <h6 class="mb-0 fw-semibold">{{ __('orders.labels.filter') }}</h6>
+                @if($hasActiveFilter)
+                    <span class="badge bg-primary-subtle text-primary border small">Đang lọc</span>
+                @endif
+            </div>
+            <span class="btn btn-sm btn-outline-secondary py-0 px-2 d-flex align-items-center gap-1">
+                <i class="bi bi-chevron-{{ $hasActiveFilter ? 'up' : 'down' }}" id="ordersFilterChevron"></i>
+                <span id="ordersFilterToggleLabel" class="small">{{ $hasActiveFilter ? 'Thu gọn' : 'Mở rộng' }}</span>
+            </span>
         </div>
+        <div class="{{ $hasActiveFilter ? '' : 'collapse' }}" id="ordersFilterBody">
         <div class="card-body">
             <form method="GET" action="{{ route('orders.index') }}" class="row g-3">
                 <div class="col-md-3">
@@ -89,6 +103,7 @@
                 </div>
             </form>
         </div>
+        </div>
     </div>
 
     <div class="row g-3 mb-3">
@@ -129,6 +144,43 @@
             </div>
         </div>
     </div>
+
+    {{-- Thống kê hàng hóa theo bộ lọc --}}
+    @if($productStats->isNotEmpty())
+    <div class="card border-0 shadow-sm mb-3">
+        <div class="card-body py-3">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <div class="fw-semibold text-muted small text-uppercase" style="letter-spacing:.06em;">
+                    Hàng - Số lượng
+                    <span class="fw-normal">({{ $productStats->count() }} sản phẩm)</span>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="ordersToggleProductStats">
+                    <i class="bi bi-chevron-expand"></i> Chi tiết
+                </button>
+            </div>
+            <div class="d-none" id="ordersProductStatsWrap">
+                <div style="display:grid;gap:.35rem;margin-top:.45rem;" id="ordersProductStatsList">
+                    <div style="display:grid;grid-template-columns:44px 1.8fr 1fr 1fr 80px;gap:.35rem;border:1px solid #e5edf7;border-radius:8px;padding:.36rem .5rem;background:#eef2f7;font-size:.73rem;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.03em;align-items:center;">
+                        <div>STT</div>
+                        <div>Sản phẩm</div>
+                        <div>Số lượng</div>
+                        <div>Tổng tiền</div>
+                        <div>ĐVT</div>
+                    </div>
+                    @foreach($productStats as $i => $ps)
+                    <div style="display:grid;grid-template-columns:44px 1.8fr 1fr 1fr 80px;gap:.35rem;border:1px solid #e5edf7;border-radius:8px;padding:.36rem .5rem;background:#f8fafc;font-size:.8rem;align-items:center;">
+                        <div class="text-muted">{{ $i + 1 }}</div>
+                        <div class="fw-semibold">{{ $ps->product_name }}</div>
+                        <div class="text-primary fw-bold">{{ rtrim(rtrim(number_format((float)$ps->total_qty, 2, '.', ''), '0'), '.') }}</div>
+                        <div>{{ number_format((float)$ps->total_amount, 0, ',', '.') }}đ</div>
+                        <div class="text-muted">{{ $ps->unit_label }}</div>
+                    </div>
+                    @endforeach
+                </div>
+            </div>
+        </div>
+    </div>
+    @endif
 
     <div class="card border-0 shadow-sm">
         <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
@@ -268,6 +320,43 @@
         </div>
     </div>
 </div>
+
+@push('scripts')
+<script>
+(function () {
+    var toggle = document.getElementById('ordersFilterToggle');
+    var body = document.getElementById('ordersFilterBody');
+    var chevron = document.getElementById('ordersFilterChevron');
+    var label = document.getElementById('ordersFilterToggleLabel');
+    if (toggle && body) {
+        toggle.addEventListener('click', function () {
+            var isOpen = !body.classList.contains('collapse');
+            body.classList.toggle('collapse', isOpen);
+            if (chevron) {
+                chevron.className = isOpen ? 'bi bi-chevron-down' : 'bi bi-chevron-up';
+            }
+            if (label) {
+                label.textContent = isOpen ? 'Mở rộng' : 'Thu gọn';
+            }
+        });
+    }
+
+    var btn = document.getElementById('ordersToggleProductStats');
+    var wrap = document.getElementById('ordersProductStatsWrap');
+    var visible = false;
+    if (btn && wrap) {
+        btn.addEventListener('click', function () {
+            visible = !visible;
+            wrap.classList.toggle('d-none', !visible);
+            btn.innerHTML = visible
+                ? '<i class="bi bi-chevron-contract"></i> Ẩn chi tiết'
+                : '<i class="bi bi-chevron-expand"></i> Chi tiết';
+        });
+    }
+})();
+</script>
+@endpush
+
 @endsection
 
 @push('styles')

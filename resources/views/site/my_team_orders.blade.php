@@ -676,6 +676,9 @@
                         <div class="tmo-order-top">
                             {{-- Cột 1: Tên KH + Mã đơn + Ngày tạo --}}
                             <div>
+                                @if($order->daily_sequence)
+                                    <div class="fw-black text-primary" style="font-size:1.4rem;line-height:1.1;">{{ $order->daily_sequence }}</div>
+                                @endif
                                 <div class="tmo-code">{{ $order->customer?->name ?? '—' }}</div>
                                 <div class="tmo-mini">Mã: {{ $order->code }}</div>
                                 <div class="tmo-mini">{{ optional($order->created_at)->format('d/m/Y H:i') }}</div>

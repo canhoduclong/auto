@@ -88,6 +88,7 @@ class Order extends Model
     public function warehouse() { return $this->belongsTo(Warehouse::class); }
     public function returnWarehouse() { return $this->belongsTo(Warehouse::class, 'return_warehouse_id'); }
     public function items() { return $this->hasMany(OrderItem::class); }
+    public function schedule() { return $this->hasOne(OrderSchedule::class, 'generated_order_id'); }
 
     public function getPaymentStatusTextAttribute()
     {

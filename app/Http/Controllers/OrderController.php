@@ -707,6 +707,26 @@ class OrderController extends Controller
         $unpaidOrders = (clone $statsQuery)->where('payment_status', 'unpaid')->count();
         $partiallyPaidOrders = (clone $statsQuery)->where('payment_status', 'partially_paid')->count();
 
+        // Product stats aggregated by filter
+        $productStats = DB::table('order_items as oi')
+            ->join('products as p', 'p.id', '=', 'oi.product_id')
+            ->whereIn('oi.order_id', (clone $statsQuery)->select('id'))
+            ->select(
+                'oi.product_id',
+                'p.name as product_name',
+                'p.unit as product_unit',
+                DB::raw('SUM(oi.quantity) as total_qty'),
+                DB::raw('SUM(oi.total) as total_amount')
+            )
+            ->groupBy('oi.product_id', 'p.name', 'p.unit')
+            ->orderByDesc('total_qty')
+            ->get()
+            ->map(function ($row) {
+                $unit = \App\Enums\ProductUnit::tryFrom((string) $row->product_unit);
+                $row->unit_label = $unit?->label() ?? \App\Enums\ProductUnit::CAI->label();
+                return $row;
+            });
+
         $orders = $query->latest()->paginate(15);
 
         $currentStepByOrder = [];
@@ -751,7 +771,8 @@ class OrderController extends Controller
             'unpaidOrders',
             'partiallyPaidOrders',
             'currentStepByOrder',
-            'canApproveByOrder'
+            'canApproveByOrder',
+            'productStats'
         ));
     }
 

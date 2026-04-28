@@ -3299,7 +3299,7 @@ class PageController extends Controller
                 $newCode = 'OD' . time() . rand(10, 99);
             } while (Order::where('code', $newCode)->exists());
             $newOrder->code = $newCode;
-            $newOrder->status = Order::STATUS_ORDER_PLACED; // draft – chờ sale xác nhận
+            $newOrder->status = Order::STATUS_ORDER_PLACED; // sẽ được override nếu source là order_placed
             $newOrder->payment_status = 'unpaid';
             $newOrder->delivery_status = 'not_shipped';
             $newOrder->delivered_at = null;
@@ -3330,13 +3330,20 @@ class PageController extends Controller
                 $newItem->order_id = $newOrder->id;
                 $newItem->save();
             }
-            // Không init approval ở đây – sale cần bấm "Xác Nhận" để gửi duyệt.
+            // Nếu đơn gốc là order_placed → kích hoạt luồng duyệt ngay, không cần bước "Xác nhận copy"
+            if ($oldOrder->status === Order::STATUS_ORDER_PLACED) {
+                app(\App\Services\ApprovalService::class)->initOrderApproval($newOrder->fresh());
+            }
         });
 
         app(OrderController::class)->syncDailySequenceAndStockSufficiency($copiedOrderDate);
 
+        $successMsg = $oldOrder->status === Order::STATUS_ORDER_PLACED
+            ? 'Đã copy đơn #' . $oldOrder->code . ' và gửi lên leader duyệt.'
+            : 'Đã copy đơn #' . $oldOrder->code . '. Vui lòng xem lại và bấm "Xác Nhận" để gửi duyệt.';
+
         return redirect()->route('pages.my_orders')
-            ->with('success', 'Đã copy đơn #' . $oldOrder->code . '. Vui lòng xem lại và bấm "Xác Nhận" để gửi duyệt.');
+            ->with('success', $successMsg);
     }
 
     private function resolveMyCustomerDateRange(string $period, ?string $fromDateInput, ?string $toDateInput): array

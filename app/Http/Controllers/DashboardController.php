@@ -147,10 +147,55 @@ class DashboardController extends Controller
             ->take(12)
             ->values();
 
-        $latestOrders = Order::with(['customer', 'user'])
+        $latestOrders = Order::with(['customer', 'user', 'schedule.dailySchedule', 'items.variant.product'])
             ->latest()
             ->take(8)
-            ->get();
+            ->get()
+            ->map(function (Order $order) {
+                $schedule = $order->schedule;
+                $isDailyAuto = $schedule && !is_null($schedule->daily_order_schedule_id);
+                $isScheduledAuto = $schedule && is_null($schedule->daily_order_schedule_id);
+
+                $reviewMeta = (array) ($schedule?->review_meta ?? []);
+                $hasReviewDecisions = !empty((array) ($reviewMeta['decisions'] ?? []));
+                $requiresSaleConfirmation = (bool) (
+                    ($reviewMeta['approval_required'] ?? false)
+                    || ($reviewMeta['requires_sale_confirmation'] ?? false)
+                    || ($schedule?->dailySchedule?->approval_required ?? false)
+                    || $hasReviewDecisions
+                );
+
+                if ($isDailyAuto) {
+                    $sourceLabel = 'Lên tự động hàng ngày';
+                } elseif ($isScheduledAuto) {
+                    $sourceLabel = 'Lên tự động theo lịch';
+                } else {
+                    $sourceLabel = 'Sale tự lên đơn';
+                }
+
+                $order->dashboard_order_source_label = $sourceLabel;
+                $order->dashboard_sale_confirmation_label = $requiresSaleConfirmation
+                    ? 'Có xác nhận của sale'
+                    : 'Không xác nhận của sale';
+
+                return $order;
+            });
+
+        // Thống kê hàng hóa tổng hợp từ các đơn mới nhất
+        $latestOrdersProductStats = $latestOrders
+            ->flatMap(fn (Order $o) => $o->items)
+            ->groupBy(fn ($item) => $item->product_id)
+            ->map(function ($items) {
+                $product = $items->first()?->product;
+                return [
+                    'product_name' => $product?->name ?? 'Sản phẩm',
+                    'total_qty' => (float) $items->sum('quantity'),
+                    'total_amount' => (float) $items->sum('total'),
+                    'unit_label' => $product?->unit_label ?? '',
+                ];
+            })
+            ->sortByDesc('total_qty')
+            ->values();
 
         $topProducts = OrderItem::query()
             ->select('product_id', DB::raw('SUM(quantity) as sold_qty'), DB::raw('SUM(total) as sold_amount'))
@@ -205,6 +250,7 @@ class DashboardController extends Controller
             'newCustomers30d' => $newCustomers30d,
             'dailyProductPrices' => $dailyProductPrices,
             'latestOrders' => $latestOrders,
+            'latestOrdersProductStats' => $latestOrdersProductStats,
             'topProducts' => $topProducts,
             'dailyStats' => $dailyStats,
             'ordersByStatus' => $ordersByStatus,
