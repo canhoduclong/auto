@@ -865,6 +865,39 @@ class CustomerController extends Controller
         ]))->with('success', __('customers.messages.bulk_marked_employee'));
     }
 
+    public function bulkUnmarkEmployee(Request $request)
+    {
+        abort_unless($request->user()?->isAdmin(), 403);
+
+        $request->validate([
+            'ids' => 'required|string',
+        ]);
+
+        $ids = array_values(array_filter(array_map('intval', explode(',', $request->input('ids')))));
+
+        if (empty($ids)) {
+            return redirect()->route('customers.index')->withErrors([
+                'ids' => __('customers.index.choose_one_for_bulk_unmark_employee'),
+            ]);
+        }
+
+        Customer::query()
+            ->whereIn('id', $ids)
+            ->where('is_employee', true)
+            ->update(['is_employee' => false]);
+
+        return redirect()->route('customers.index', $request->only([
+            'q',
+            'type_id',
+            'assigned_to',
+            'user_id',
+            'ownership_status',
+            'per_page',
+            'is_employee',
+            'page',
+        ]))->with('success', __('customers.messages.bulk_unmarked_employee'));
+    }
+
     // Bulk Delete
     public function bulkDelete(Request $request)
     {

@@ -148,6 +148,24 @@
                     <i class="ph ph-identification-card me-1"></i>{{ __('customers.index.bulk_mark_employee') }}
                 </button>
             </form>
+
+            @if(request()->boolean('is_employee'))
+            <form id="bulkUnmarkEmployeeForm" action="{{ route('customers.bulkUnmarkEmployee') }}" method="POST" class="d-inline-flex">
+                @csrf
+                <input type="hidden" name="ids" id="bulkUnmarkEmployeeIds">
+                <input type="hidden" name="q" value="{{ request('q') }}">
+                <input type="hidden" name="type_id" value="{{ request('type_id') }}">
+                <input type="hidden" name="assigned_to" value="{{ request('assigned_to') }}">
+                <input type="hidden" name="user_id" value="{{ request('user_id') }}">
+                <input type="hidden" name="ownership_status" value="{{ request('ownership_status') }}">
+                <input type="hidden" name="per_page" value="{{ request('per_page', 15) }}">
+                <input type="hidden" name="is_employee" value="1">
+                <input type="hidden" name="page" value="{{ request('page', 1) }}">
+                <button type="submit" class="btn btn-sm btn-outline-secondary" onclick="return confirm('{{ __('customers.index.bulk_unmark_employee_confirm') }}')">
+                    <i class="ph ph-identification-card-slash me-1"></i>{{ __('customers.index.bulk_unmark_employee') }}
+                </button>
+            </form>
+            @endif
             @endif
 
             <div class="vr d-none d-sm-block" style="height:24px;"></div>
@@ -438,6 +456,19 @@ document.addEventListener('DOMContentLoaded', function () {
                 return false;
             }
             document.getElementById('bulkMarkEmployeeIds').value = ids.join(',');
+        });
+    }
+
+    const bulkUnmarkEmployeeForm = document.getElementById('bulkUnmarkEmployeeForm');
+    if (bulkUnmarkEmployeeForm) {
+        bulkUnmarkEmployeeForm.addEventListener('submit', function (e) {
+            const ids = Array.from(document.querySelectorAll('.row-check:not(#checkAll):checked')).map(cb => cb.value);
+            if (ids.length === 0) {
+                alert(@json(__('customers.index.choose_one_for_bulk_unmark_employee')));
+                e.preventDefault();
+                return false;
+            }
+            document.getElementById('bulkUnmarkEmployeeIds').value = ids.join(',');
         });
     }
 });

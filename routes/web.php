@@ -327,6 +327,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     // Xóa nhiều khách hàng
     Route::post('customers/bulk-delete', [CustomerController::class, 'bulkDelete'])->name('customers.bulkDelete')->middleware('permission');
     Route::post('customers/bulk-mark-employee', [CustomerController::class, 'bulkMarkEmployee'])->name('customers.bulkMarkEmployee')->middleware('permission');
+    Route::post('customers/bulk-unmark-employee', [CustomerController::class, 'bulkUnmarkEmployee'])->name('customers.bulkUnmarkEmployee')->middleware('permission');
     Route::resource('provinces', ProvinceController::class)->middleware('permission');
     Route::post('provinces/{province}/wards', [ProvinceController::class, 'storeWard'])->name('provinces.wards.store')->middleware('permission');
     Route::get('provinces/{province}/wards', [ProvinceController::class, 'indexWards'])->name('provinces.wards.index')->middleware('permission');
