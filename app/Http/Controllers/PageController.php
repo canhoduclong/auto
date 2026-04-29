@@ -1716,7 +1716,7 @@ class PageController extends Controller
                     });
             })
             ->where(function ($q) {
-                $q->where('is_employee', '!=', 1)->orWhereNull('is_employee');
+                $q->where('is_employee', '<>', 1)->orWhereNull('is_employee');
             });
 
         $customerQuery = clone $baseQuery;
