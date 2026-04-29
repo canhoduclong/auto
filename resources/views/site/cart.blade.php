@@ -3,8 +3,9 @@
 @php
     $formatKg = static function (float|int|string $value): string {
         $num = (float) $value;
-        $str = rtrim(rtrim(number_format($num, 3, '.', ''), '0'), '.');
-        return $str . 'kg';
+        // Làm tròn tối đa 2 chữ số thập phân
+        $str = rtrim(rtrim(number_format($num, 2, '.', ''), '0'), '.');
+        return $str . ' kg';
     };
 @endphp
 

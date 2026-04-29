@@ -3,8 +3,8 @@
 @php
     $formatKg = static function (float|int|string $value): string {
         $num = (float) $value;
-        $str = rtrim(rtrim(number_format($num, 3, '.', ''), '0'), '.');
-        return $str . 'kg';
+        $str = rtrim(rtrim(number_format($num, 2, '.', ''), '0'), '.');
+        return $str . ' kg';
     };
     $cart = session('cart', []);
     $summarySubtotal = 0;

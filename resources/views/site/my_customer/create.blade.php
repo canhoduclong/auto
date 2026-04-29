@@ -375,7 +375,7 @@
                             </div>
                             <div class="col-6 col-md-2">
                                 <label class="form-label mc-form-label" style="font-size:0.82rem;">Size</label>
-                                <input type="text" class="form-control mc-form-control" name="size" value="{{ old('size') }}" placeholder="VD: 1.2kg">
+                                <input type="text" class="form-control mc-form-control" name="size" value="{{ old('size') }}" placeholder="VD: 1.2 kg">
                             </div>
                             <div class="col-6 col-md-2">
                                 <label class="form-label mc-form-label" style="font-size:0.82rem;">Sản lượng</label>
@@ -919,7 +919,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 </div>
                 <div class="col-6 col-md-2">
                     <label class="form-label mc-form-label" style="font-size:0.82rem;">Size</label>
-                    <input type="text" class="form-control mc-form-control" name="products[${idx}][size]" placeholder="VD: 1.2kg">
+                    <input type="text" class="form-control mc-form-control" name="products[${idx}][size]" placeholder="VD: 1.2 kg">
                 </div>
                 <div class="col-6 col-md-2">
                     <label class="form-label mc-form-label" style="font-size:0.82rem;">Sản lượng</label>
