@@ -134,6 +134,8 @@
     .customer-list-item:hover {
         border-color: #91a4c7;
     }
+
+
     .customer-list-item.active {
         border-color: #1d4ed8;
         box-shadow: inset 0 0 0 1px rgba(29, 78, 216, 0.18);
@@ -767,15 +769,20 @@
                                     @endforeach
                                 </select>
                             </div>
-                            <div class="col-md-6 d-grid">
+                            <div class="col-md-4 d-grid">
                                 <button type="button" class="btn btn-outline-primary" onclick="setTodayOrders()" style="font-size:0.95rem;">
                                     Đơn hôm nay
                                 </button>
                             </div>
-                            <div class="col-md-6 d-grid">
+                            <div class="col-md-4 d-grid">
                                 <button type="submit" class="btn btn-primary">
                                     <i class="fa fa-search me-1"></i>Lọc đơn
                                 </button>
+                            </div>
+                            <div class="col-md-4 d-grid">
+                                <a href="https://hoanglongtnt.com/my-customer/schedules" class="btn btn-outline-primary ">
+                                    <i class="bi bi-calendar2-check"></i> Lịch lên đơn
+                                </a>
                             </div>
                         </form>
                     </div>

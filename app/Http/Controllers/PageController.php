@@ -1714,6 +1714,9 @@ class PageController extends Controller
                         $priorityQuery->where('sale_id', $userId)
                             ->where('is_active', true);
                     });
+            })
+            ->where(function ($q) {
+                $q->whereNull('is_employee')->orWhere('is_employee', false);
             });
 
         $customerQuery = clone $baseQuery;
