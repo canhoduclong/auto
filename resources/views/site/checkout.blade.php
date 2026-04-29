@@ -476,9 +476,24 @@
 
                             <div id="customerPickerPanel" class="checkout-customer-panel p-3 mb-3" style="display:none;">
                                 <div class="row g-2 align-items-end">
-                                    <div class="col-md-8">
+                                    <div class="col-md-4">
                                         <label for="customer_search" class="form-label mb-1">Tìm khách hàng (tên, email, số điện thoại)</label>
                                         <input type="text" id="customer_search" class="form-control" placeholder="Nhập từ khóa tìm kiếm...">
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label for="customer_sort_field" class="form-label mb-1">Sắp xếp theo</label>
+                                        <select id="customer_sort_field" class="form-select">
+                                            <option value="name">Tên</option>
+                                            <option value="created_at">Ngày tạo</option>
+                                            <option value="priority">Ưu tiên</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label for="customer_sort_order" class="form-label mb-1">Thứ tự</label>
+                                        <select id="customer_sort_order" class="form-select">
+                                            <option value="asc">Tăng dần</option>
+                                            <option value="desc">Giảm dần</option>
+                                        </select>
                                     </div>
                                     <div class="col-md-2">
                                         <label for="customer_per_page" class="form-label mb-1">Số dòng</label>
@@ -1018,6 +1033,8 @@
     const searchInput = document.getElementById('customer_search');
     const searchBtn = document.getElementById('btnSearchCustomer');
     const perPageSelect = document.getElementById('customer_per_page');
+    const sortFieldSelect = document.getElementById('customer_sort_field');
+    const sortOrderSelect = document.getElementById('customer_sort_order');
     const resultsBody = document.getElementById('customerSearchResults');
     const infoText = document.getElementById('customerPaginationInfo');
     const prevBtn = document.getElementById('btnCustomerPrev');
@@ -1131,6 +1148,8 @@
             q: state.q,
             page: String(state.page),
             per_page: String(perPageSelect.value || '15'),
+            sort_field: sortFieldSelect.value,
+            sort_order: sortOrderSelect.value,
         });
 
         try {
@@ -1177,11 +1196,27 @@
         }
     }
 
+    // Luôn ẩn panel khi load
+    pickerPanel.style.display = 'none';
+
+    // Hiện panel khi nhấn nút chọn khách hàng
     togglePickerBtn.addEventListener('click', () => {
-        const opening = pickerPanel.style.display === 'none';
-        pickerPanel.style.display = opening ? 'block' : 'none';
-        if (opening) {
-            fetchCustomers(1);
+        pickerPanel.style.display = 'block';
+        fetchCustomers(1);
+    });
+
+    // Ẩn panel khi nhấn nút Bỏ chọn
+    clearCustomerBtn.addEventListener('click', () => {
+        pickerPanel.style.display = 'none';
+        clearSelectedCustomer();
+    });
+
+    // Ẩn panel khi click ra ngoài panel (chỉ khi đang mở)
+    document.addEventListener('mousedown', function(event) {
+        if (pickerPanel.style.display === 'block') {
+            if (!pickerPanel.contains(event.target) && event.target !== togglePickerBtn) {
+                pickerPanel.style.display = 'none';
+            }
         }
     });
 
@@ -1193,6 +1228,8 @@
         }
     });
     perPageSelect.addEventListener('change', () => fetchCustomers(1));
+    sortFieldSelect.addEventListener('change', () => fetchCustomers(1));
+    sortOrderSelect.addEventListener('change', () => fetchCustomers(1));
 
     prevBtn.addEventListener('click', () => {
         if (state.page > 1) {

@@ -240,6 +240,16 @@ class CartController extends Controller
 
         $query = Customer::query();
 
+        // Xử lý sắp xếp
+        $sortField = $request->input('sort_field', 'name');
+        $sortOrder = strtolower($request->input('sort_order', 'asc')) === 'desc' ? 'desc' : 'asc';
+        $allowedSorts = [
+            'name' => 'name',
+            'created_at' => 'created_at',
+            'priority' => 'priority',
+        ];
+        $sortFieldDb = $allowedSorts[$sortField] ?? 'name';
+
         $query->where(function ($q) use ($user) {
             $q->where('user_id', $user->id);
 
@@ -273,8 +283,20 @@ class CartController extends Controller
         }
 
         $customers = $query
-            ->select(array_unique($selectColumns))
-            ->orderBy('id', 'desc')
+            ->select(array_unique($selectColumns));
+
+        // Nếu sắp xếp theo priority mà không có cột priority thì fallback về name
+        if ($sortFieldDb === 'priority' && !$this->hasCustomerColumn('priority')) {
+            $sortFieldDb = 'name';
+        }
+        // Nếu sắp xếp theo created_at mà không có cột created_at thì fallback về name
+        if ($sortFieldDb === 'created_at' && !$this->hasCustomerColumn('created_at')) {
+            $sortFieldDb = 'name';
+        }
+
+        $customers = $query
+            ->orderBy($sortFieldDb, $sortOrder)
+            ->orderBy('id', 'desc') // phụ để ổn định
             ->paginate($perPage)
             ->appends($request->query());
 
