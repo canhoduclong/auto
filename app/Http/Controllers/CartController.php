@@ -153,6 +153,12 @@ class CartController extends Controller
 
             return $prefix . number_format(abs($amount), 0, ',', '.') . 'đ';
         };
+        $formatKg = function ($value) {
+            $num = floatval($value);
+            $formatted = number_format($num, 3, '.', '');
+            $formatted = rtrim(rtrim($formatted, '0'), '.');
+            return str_replace('.', ',', $formatted) . ' kg';
+        };
 
         return response()->json([
             'success' => true,
@@ -162,7 +168,7 @@ class CartController extends Controller
                 'formatted_order_discount' => $formatSignedMoney($orderAdjustment),
                 'formatted_discount' => $formatSignedMoney($itemAdjustmentTotal + $orderAdjustment),
                 'formatted_total' => number_format($total, 0, ',', '.') . 'đ',
-                'formatted_weight' => number_format($totalWeight, 3, ',', '.') . ' kg',
+                'formatted_weight' => $formatKg($totalWeight),
             ]
         ]);
     } 
@@ -364,6 +370,8 @@ class CartController extends Controller
             session()->put('cart', $cart);
         }
         $summary = $this->buildCartSummary($cart);
+
+        
 
         return response()->json([
             'success' => true,

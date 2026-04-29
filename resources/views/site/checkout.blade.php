@@ -714,7 +714,7 @@
                                     </div>
                                     <div class="checkout-kpi">
                                         <span class="checkout-kpi-label">Tổng khối lượng</span>
-                                        <span class="checkout-kpi-value" id="summaryWeight">{{ $formatKg($summaryWeight) }}</span>
+                                        <span class="checkout-kpi-value" id="summaryWeight">{{ $formatKg($summaryWeight) }} {{ $summaryWeight }}</span>
                                     </div>
                                 </div>
 
