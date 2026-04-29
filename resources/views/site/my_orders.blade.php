@@ -780,7 +780,7 @@
                                 </button>
                             </div>
                             <div class="col-md-4 d-grid">
-                                <a href="https://hoanglongtnt.com/my-customer/schedules" class="btn btn-outline-primary ">
+                                <a href="{{ route('site.customer.schedules') }}" class="btn btn-outline-primary ">
                                     <i class="bi bi-calendar2-check"></i> Lịch lên đơn
                                 </a>
                             </div>
