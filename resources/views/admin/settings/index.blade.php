@@ -58,6 +58,58 @@
             </div>
         </div>
     @endif
+    
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header bg-white border-0 pt-3 pb-0 d-flex justify-content-between align-items-center gap-2 flex-wrap">
+                    <div>
+                        <h5 class="mb-1">Deploy hệ thống</h5>
+                        <p class="text-muted small mb-0">Pull code mới nhất từ branch hoanglong và chạy các bước migrate/cache.</p>
+                    </div>
+                    <form method="POST" action="{{ route('admin.settings.deploy') }}" class="d-inline" onsubmit="return confirm('Xác nhận deploy code mới nhất?');">
+                        @csrf
+                        <input type="hidden" name="key" value="huy2024">
+                        <button type="submit" class="btn btn-warning btn-sm">
+                            <i class="bi bi-cloud-arrow-down me-1"></i>Deploy
+                        </button>
+                    </form>
+                </div>
+                <div class="card-body pt-2">
+                    <small class="text-muted">Kết quả deploy sẽ hiển thị ngay tại khối Deploy Notification phía trên.</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            @if($showPushFeature ?? true)
+                <div class="card border-0 shadow-sm mb-3">
+                    <div class="card-header bg-white border-0 pt-3 pb-0">
+                        <h5 class="mb-1">Push code lên GitHub</h5>
+                        <p class="text-muted small mb-0">Commit message lấy từ ô nhập liệu bên dưới, source local: /var/www/auto.com.</p>
+                    </div>
+                    <div class="card-body">
+                        <form method="POST" action="{{ route('admin.settings.push') }}" onsubmit="return confirm('Xác nhận commit và push code lên GitHub?');">
+                            @csrf
+                            <input type="hidden" name="key" value="huy2024">
+                            <div class="mb-2">
+                                <label for="commit_message" class="form-label">Commit message</label>
+                                <textarea id="commit_message" name="commit_message" class="form-control" rows="3" placeholder="Nhập nội dung commit..." required>{{ old('commit_message') }}</textarea>
+                            </div>
+                            <div class="d-flex gap-2 flex-wrap align-items-center">
+                                <button type="submit" class="btn btn-dark btn-sm">
+                                    <i class="bi bi-git me-1"></i>Commit & Push
+                                </button>
+                                <a href="#push-history-section" class="btn btn-outline-secondary btn-sm">
+                                    <i class="bi bi-clock-history me-1"></i>Xem lịch sử push gần đây
+                                </a>
+                                <small class="text-muted">Kết quả push sẽ hiển thị tại khối Push Notification phía trên.</small>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            @endif
+        </div>
+    </div>
 
     @if(session('artisan_output'))
         <div class="card border-0 shadow-sm mb-3 border-success">
@@ -98,53 +150,6 @@
             @endforeach
         </div>
     </div>
-
-    <div class="card border-0 shadow-sm mb-3">
-        <div class="card-header bg-white border-0 pt-3 pb-0 d-flex justify-content-between align-items-center gap-2 flex-wrap">
-            <div>
-                <h5 class="mb-1">Deploy hệ thống</h5>
-                <p class="text-muted small mb-0">Pull code mới nhất từ branch hoanglong và chạy các bước migrate/cache.</p>
-            </div>
-            <form method="POST" action="{{ route('admin.settings.deploy') }}" class="d-inline" onsubmit="return confirm('Xác nhận deploy code mới nhất?');">
-                @csrf
-                <input type="hidden" name="key" value="huy2024">
-                <button type="submit" class="btn btn-warning btn-sm">
-                    <i class="bi bi-cloud-arrow-down me-1"></i>Deploy
-                </button>
-            </form>
-        </div>
-        <div class="card-body pt-2">
-            <small class="text-muted">Kết quả deploy sẽ hiển thị ngay tại khối Deploy Notification phía trên.</small>
-        </div>
-    </div>
-
-    @if($showPushFeature ?? true)
-        <div class="card border-0 shadow-sm mb-3">
-            <div class="card-header bg-white border-0 pt-3 pb-0">
-                <h5 class="mb-1">Push code lên GitHub</h5>
-                <p class="text-muted small mb-0">Commit message lấy từ ô nhập liệu bên dưới, source local: /var/www/auto.com.</p>
-            </div>
-            <div class="card-body">
-                <form method="POST" action="{{ route('admin.settings.push') }}" onsubmit="return confirm('Xác nhận commit và push code lên GitHub?');">
-                    @csrf
-                    <input type="hidden" name="key" value="huy2024">
-                    <div class="mb-2">
-                        <label for="commit_message" class="form-label">Commit message</label>
-                        <textarea id="commit_message" name="commit_message" class="form-control" rows="3" placeholder="Nhập nội dung commit..." required>{{ old('commit_message') }}</textarea>
-                    </div>
-                    <div class="d-flex gap-2 flex-wrap align-items-center">
-                        <button type="submit" class="btn btn-dark btn-sm">
-                            <i class="bi bi-git me-1"></i>Commit & Push
-                        </button>
-                        <a href="#push-history-section" class="btn btn-outline-secondary btn-sm">
-                            <i class="bi bi-clock-history me-1"></i>Xem lịch sử push gần đây
-                        </a>
-                        <small class="text-muted">Kết quả push sẽ hiển thị tại khối Push Notification phía trên.</small>
-                    </div>
-                </form>
-            </div>
-        </div>
-    @endif
 
     @if($showPushFeature ?? true)
         <div class="card border-0 shadow-sm mb-3" id="push-history-section">
