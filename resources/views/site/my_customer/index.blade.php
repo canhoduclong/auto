@@ -1039,20 +1039,21 @@
                         <div class="col-md-6">
                             <div class="d-flex align-items-start gap-3">
                                 <div>
-                                    <h6 class="mb-1 fw-bold fs-5">${name}</h6>
-                                    ${updatedAt ? `<small class="text-muted fst-italic"><i class="bi bi-clock me-1"></i>Cập nhật: ${updatedAt}</small><br>` : ''}
-                                    ${deletedAt ? `<small class="text-danger fst-italic"><i class="bi bi-trash me-1"></i>Đã xóa: ${deletedAt}</small><br>` : ''}
-                                    ${typeName ? `<small class="text-muted">Phân loại: ${typeName}</small><br>` : ''}
-                                    <span class="mc-priority-pill ${priorityClass}">${priorityLabel}</span>
-                                    ${ownerName ? `<span class="mc-owner-pill">Owner hiện tại: ${ownerName}</span>` : ''}
-                                    <span class="mc-status-badge ${statusClass}">${statusLabel}</span>
-                                    <br>
-                                    ${brand ? `<small class="text-muted">Brand: ${brand}</small><br>` : ''}
-                                    <small class="text-muted">Mã KH: <strong>${code}</strong></small><br>
-                                    <small class="text-muted">Trạng thái: <strong>${status}</strong></small><br>
-                                    ${phone ? `<small class="fw-bold fs-6"><i class="bi bi-telephone me-1"></i>${phone}</small><br>` : ''}
-                                    ${addressText ? `<small class="text-muted"><i class="bi bi-geo-alt me-1"></i>${addressText}</small><br>` : ''}
-                                    ${email ? `<small class="text-muted"><i class="bi bi-envelope me-1"></i>${email}</small>` : ''}
+                                    <div class="mb-1"><span class="fw-bold fs-5">${name}</span></div>
+                                    <div class="mb-2">
+                                        ${updatedAt ? `<small class="text-muted fst-italic"><i class="bi bi-clock me-1"></i>Cập nhật: ${updatedAt}</small>` : ''}
+                                        <span class=" fst-italic">, Mã KH: <strong>${code}</strong> - Trạng thái: <strong>${status}</strong></span> 
+                                        ${deletedAt ? `<small class="text-danger fst-italic"><i class="bi bi-trash me-1"></i>Đã xóa: ${deletedAt}</small>` : ''}
+                                        ${brand ? `<small class="text-muted">Brand: ${brand}</small><br>` : ''} 
+                                        ${phone ? `<small class="fw-bold fs-6"><i class="bi bi-telephone me-1"></i>${phone}</small><br>` : ''}
+                                        ${addressText ? `<small class="text-muted"><i class="bi bi-geo-alt me-1"></i>${addressText}</small><br>` : ''}
+                                        ${email ? `<small class="text-muted"><i class="bi bi-envelope me-1"></i>${email}</small><br>` : ''} 
+                                       
+                                    </div>
+                                    <div class="">
+                                        <span class="mc-priority-pill ${priorityClass}">${priorityLabel}</span> 
+                                        <span class="mc-status-badge ${statusClass}">${statusLabel}</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
