@@ -658,7 +658,7 @@
                                                     </td>
                                                     <td class="checkout-qty">{{ $quantity }}</td>
                                                     <td>
-                                                        <div class="checkout-weight">{{ $unitSize }} {{ $details['unit_label'] ?? 'Cái' }}</div> 
+                                                        <div class="checkout-weight">{{ $unitSize }}</div> 
                                                     </td>
                                                     <td class="checkout-line-total" data-line-total>{{ number_format($lineTotal, 0, ',', '.') }}đ</td>
                                                 </tr>
