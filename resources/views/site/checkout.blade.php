@@ -658,9 +658,7 @@
                                                     </td>
                                                     <td class="checkout-qty">{{ $quantity }}</td>
                                                     <td>
-                                                        <div class="checkout-weight">{{ number_format((float) $unitSize, 3, ',', '.') }} {{ $details['unit_label'] ?? 'Cái' }}</div>
-                                                        <div class="text-muted small">{{ $isPricedByKg ? 'Tính theo kg' : 'Tính theo đơn vị' }}</div>
-                                                         
+                                                        <div class="checkout-weight">{{ number_format((float) $unitSize, 3, ',', '.') }} {{ $details['unit_label'] ?? 'Cái' }}</div> 
                                                     </td>
                                                     <td class="checkout-line-total" data-line-total>{{ number_format($lineTotal, 0, ',', '.') }}đ</td>
                                                 </tr>
