@@ -370,9 +370,14 @@ document.addEventListener('DOMContentLoaded', function () {
                     $total = 0;
                     $itemCount = 0;
                     foreach (session('cart') as $details) {
-                        $size = isset($details['size']) && $details['size'] > 0 ? $details['size'] : 1;
-                        $total += (int)$details['price'] * (int)$details['quantity'] * (int) $size;
-                        $itemCount += (int) $details['quantity'];
+                        $unitWeight = isset($details['unit_weight']) && $details['unit_weight'] > 0 ? (float) $details['unit_weight'] : 1;
+                        $isPricedByKg = (bool) ($details['is_priced_by_kg'] ?? true);
+                        $pricingFactor = $isPricedByKg ? $unitWeight : 1;
+                        $quantity = (int) $details['quantity'];
+                        $price = (float) $details['price'];
+                        $lineTotal = $quantity * $pricingFactor * $price;
+                        $total += $lineTotal;
+                        $itemCount += $quantity;
                     }
                 @endphp
 
