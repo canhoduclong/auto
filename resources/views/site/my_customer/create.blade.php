@@ -402,7 +402,7 @@
             </div>
 
             {{-- ===================== CARD 3: Thông tin công ty ===================== --}}
-            <div class="card mc-edit-card{{ $errors->hasAny(['company_name','tax_code','company_email','company_address','company_representative']) ? ' has-error' : ' collapsed' }}" id="card-3">
+            <div class="overflow-hidden card mc-edit-card{{ $errors->hasAny(['company_name','tax_code','company_email','company_address','company_representative']) ? ' has-error' : ' collapsed' }}" id="card-3">
                 <div class="card-header" onclick="toggleCard('card-3')">
                     <span class="card-num">3</span>
                     <i class="bi bi-building text-primary"></i> Thông tin công ty (xuất hóa đơn)
@@ -440,7 +440,7 @@
             </div>
 
             {{-- ===================== CARD 4: Thông tin nhà xe ===================== --}}
-            <div class="card mc-edit-card{{ $errors->hasAny(['truck_station_id','truck_station_address','truck_station_phone','truck_receive_time','truck_return_time','truck_fee']) ? ' has-error' : ' collapsed' }}" id="card-4">
+            <div class="overflow-hidden card mc-edit-card{{ $errors->hasAny(['truck_station_id','truck_station_address','truck_station_phone','truck_receive_time','truck_return_time','truck_fee']) ? ' has-error' : ' collapsed' }}" id="card-4">
                 <div class="card-header" onclick="toggleCard('card-4')">
                     <span class="card-num">4</span>
                     <i class="bi bi-truck text-primary"></i> Thông tin nhà xe
