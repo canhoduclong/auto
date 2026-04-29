@@ -1039,7 +1039,7 @@
                         <div class="col-md-6">
                             <div class="d-flex align-items-start gap-3">
                                 <div>
-                                    <div class="mb-1"><span class="fw-bold fs-5">${name}</span></div>
+                                    <div class="mb-1"><span class="fw-bold fs-5 text-uppercase">${name}</span></div>
                                     <div class="mb-2">
                                         ${updatedAt ? `<small class="text-muted fst-italic"><i class="bi bi-clock me-1"></i>Cập nhật: ${updatedAt}</small>` : ''}
                                         <span class=" fst-italic">, Mã KH: <strong>${code}</strong> - Trạng thái: <strong>${status}</strong></span> 
