@@ -54,7 +54,7 @@ class ProductVariantController extends Controller
         $data = $request->validate([
             'product_id' => 'sometimes|exists:products,id',
             'sku' => 'required|string|unique:product_variants,sku,' . $variant->id,
-            'size' => 'nullable|string',
+            'size' => 'nullable',
             'kg' => 'required|numeric|gt:0',
             'is_priced_by_kg' => 'nullable|boolean',
             'quality' => 'nullable|string',
@@ -63,6 +63,10 @@ class ProductVariantController extends Controller
             'media_id' => 'nullable|integer|exists:media,id',
             'price' => 'nullable|numeric|min:0',
         ]);
+        // Chuyển size từ 2,5 thành 2.5 nếu là string
+        if (isset($data['size']) && is_string($data['size'])) {
+            $data['size'] = str_replace(',', '.', $data['size']);
+        }
         $data['is_priced_by_kg'] = $request->boolean('is_priced_by_kg');
         $variant->update($data);
         // Cập nhật giá nếu có thay đổi
