@@ -59,27 +59,7 @@
         </div>
     @endif
     
-    <div class="row">
-        <div class="col-md-6">
-            <div class="card border-0 shadow-sm mb-3">
-                <div class="card-header bg-white border-0 pt-3 pb-0 d-flex justify-content-between align-items-center gap-2 flex-wrap">
-                    <div>
-                        <h5 class="mb-1">Deploy hệ thống</h5>
-                        <p class="text-muted small mb-0">Pull code mới nhất từ branch hoanglong và chạy các bước migrate/cache.</p>
-                    </div>
-                    <form method="POST" action="{{ route('admin.settings.deploy') }}" class="d-inline" onsubmit="return confirm('Xác nhận deploy code mới nhất?');">
-                        @csrf
-                        <input type="hidden" name="key" value="huy2024">
-                        <button type="submit" class="btn btn-warning btn-sm">
-                            <i class="bi bi-cloud-arrow-down me-1"></i>Deploy
-                        </button>
-                    </form>
-                </div>
-                <div class="card-body pt-2">
-                    <small class="text-muted">Kết quả deploy sẽ hiển thị ngay tại khối Deploy Notification phía trên.</small>
-                </div>
-            </div>
-        </div>
+    <div class="row"> 
         <div class="col-md-6">
             @if($showPushFeature ?? true)
                 <div class="card border-0 shadow-sm mb-3">
@@ -108,6 +88,26 @@
                     </div>
                 </div>
             @endif
+        </div>
+         <div class="col-md-6">
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header bg-white border-0 pt-3 pb-0 d-flex justify-content-between align-items-center gap-2 flex-wrap">
+                    <div>
+                        <h5 class="mb-1">Deploy hệ thống</h5>
+                        <p class="text-muted small mb-0">Pull code mới nhất từ branch hoanglong và chạy các bước migrate/cache.</p>
+                    </div>
+                    <form method="POST" action="{{ route('admin.settings.deploy') }}" class="d-inline" onsubmit="return confirm('Xác nhận deploy code mới nhất?');">
+                        @csrf
+                        <input type="hidden" name="key" value="huy2024">
+                        <button type="submit" class="btn btn-warning btn-sm">
+                            <i class="bi bi-cloud-arrow-down me-1"></i>Deploy
+                        </button>
+                    </form>
+                </div>
+                <div class="card-body pt-2">
+                    <small class="text-muted">Kết quả deploy sẽ hiển thị ngay tại khối Deploy Notification phía trên.</small>
+                </div>
+            </div>
         </div>
     </div>
 

@@ -797,8 +797,9 @@
 
     const formatWeight = value => {
         const num = Math.max(0, value);
-        const str = num.toFixed(3).replace(/\.?0+$/, '');
-        return str + 'kg';
+        // Làm tròn tối đa 2 chữ số thập phân, loại số 0 dư
+        const str = num.toFixed(2).replace(/\.?0+$/, '');
+        return str + ' kg';
     };
 
     const toNumber = (value, fallback = 0) => {
