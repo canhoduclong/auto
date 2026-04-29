@@ -31,64 +31,68 @@
         </div>
     @endif
 
-    @if(session('deploy_output'))
-        <div class="card border-0 shadow-sm mb-3 border-{{ session('deploy_status') === 'error' ? 'danger' : 'success' }}">
-            <div class="card-header bg-{{ session('deploy_status') === 'error' ? 'danger' : 'success' }} bg-opacity-10 border-0">
-                <strong>
-                    <i class="bi {{ session('deploy_status') === 'error' ? 'bi-exclamation-triangle' : 'bi-terminal' }} me-1"></i>
-                    Deploy Notification
-                </strong>
-            </div>
-            <div class="card-body">
-                <pre class="settings-deploy-log mb-0">{{ session('deploy_output') }}</pre>
-            </div>
-        </div>
-    @endif
-
-    @if(($showPushFeature ?? true) && session('push_output'))
-        <div class="card border-0 shadow-sm mb-3 border-{{ session('push_status') === 'error' ? 'danger' : 'success' }}">
-            <div class="card-header bg-{{ session('push_status') === 'error' ? 'danger' : 'success' }} bg-opacity-10 border-0">
-                <strong>
-                    <i class="bi {{ session('push_status') === 'error' ? 'bi-exclamation-triangle' : 'bi-git' }} me-1"></i>
-                    Push Notification
-                </strong>
-            </div>
-            <div class="card-body">
-                <pre class="settings-deploy-log mb-0">{{ session('push_output') }}</pre>
-            </div>
-        </div>
-    @endif
-    
-    <div class="row"> 
+    <div class="row">
+        @if(session('deploy_output'))
         <div class="col-md-6">
-            @if($showPushFeature ?? true)
-                <div class="card border-0 shadow-sm mb-3">
-                    <div class="card-header bg-white border-0 pt-3 pb-0">
-                        <h5 class="mb-1">Push code lên GitHub</h5>
-                        <p class="text-muted small mb-0">Commit message lấy từ ô nhập liệu bên dưới, source local: /var/www/auto.com.</p>
-                    </div>
-                    <div class="card-body">
-                        <form method="POST" action="{{ route('admin.settings.push') }}" onsubmit="return confirm('Xác nhận commit và push code lên GitHub?');">
-                            @csrf
-                            <input type="hidden" name="key" value="huy2024">
-                            <div class="mb-2">
-                                <label for="commit_message" class="form-label">Commit message</label>
-                                <textarea id="commit_message" name="commit_message" class="form-control" rows="3" placeholder="Nhập nội dung commit..." required>{{ old('commit_message') }}</textarea>
-                            </div>
-                            <div class="d-flex gap-2 flex-wrap align-items-center">
-                                <button type="submit" class="btn btn-dark btn-sm">
-                                    <i class="bi bi-git me-1"></i>Commit & Push
-                                </button>
-                                <a href="#push-history-section" class="btn btn-outline-secondary btn-sm">
-                                    <i class="bi bi-clock-history me-1"></i>Xem lịch sử push gần đây
-                                </a>
-                                <small class="text-muted">Kết quả push sẽ hiển thị tại khối Push Notification phía trên.</small>
-                            </div>
-                        </form>
-                    </div>
+            <div class="card border-0 shadow-sm mb-3 border-{{ session('deploy_status') === 'error' ? 'danger' : 'success' }}">
+                <div class="card-header bg-{{ session('deploy_status') === 'error' ? 'danger' : 'success' }} bg-opacity-10 border-0">
+                    <strong>
+                        <i class="bi {{ session('deploy_status') === 'error' ? 'bi-exclamation-triangle' : 'bi-terminal' }} me-1"></i>
+                        Deploy Notification
+                    </strong>
                 </div>
-            @endif
+                <div class="card-body">
+                    <pre class="settings-deploy-log mb-0">{{ session('deploy_output') }}</pre>
+                </div>
+            </div>
         </div>
+        @endif
+        @if(($showPushFeature ?? true) && session('push_output'))
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm mb-3 border-{{ session('push_status') === 'error' ? 'danger' : 'success' }}">
+                <div class="card-header bg-{{ session('push_status') === 'error' ? 'danger' : 'success' }} bg-opacity-10 border-0">
+                    <strong>
+                        <i class="bi {{ session('push_status') === 'error' ? 'bi-exclamation-triangle' : 'bi-git' }} me-1"></i>
+                        Push Notification
+                    </strong>
+                </div>
+                <div class="card-body">
+                    <pre class="settings-deploy-log mb-0">{{ session('push_output') }}</pre>
+                </div>
+            </div>
+        </div>
+        @endif 
+        
+        @if($showPushFeature ?? true)
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header bg-white border-0 pt-3 pb-0">
+                    <h5 class="mb-1">Push code lên GitHub</h5>
+                    <p class="text-muted small mb-0">Commit message lấy từ ô nhập liệu bên dưới, source local: /var/www/auto.com.</p>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ route('admin.settings.push') }}" onsubmit="return confirm('Xác nhận commit và push code lên GitHub?');">
+                        @csrf
+                        <input type="hidden" name="key" value="huy2024">
+                        <div class="mb-2">
+                            <label for="commit_message" class="form-label">Commit message</label>
+                            <textarea id="commit_message" name="commit_message" class="form-control" rows="3" placeholder="Nhập nội dung commit..." required>{{ old('commit_message') }}</textarea>
+                        </div>
+                        <div class="d-flex gap-2 flex-wrap align-items-center">
+                            <button type="submit" class="btn btn-dark btn-sm">
+                                <i class="bi bi-git me-1"></i>Commit & Push
+                            </button>
+                            <a href="#push-history-section" class="btn btn-outline-secondary btn-sm">
+                                <i class="bi bi-clock-history me-1"></i>Xem lịch sử push gần đây
+                            </a>
+                            <small class="text-muted">Kết quả push sẽ hiển thị tại khối Push Notification phía trên.</small>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        @endif
+       
          <div class="col-md-6">
             <div class="card border-0 shadow-sm mb-3">
                 <div class="card-header bg-white border-0 pt-3 pb-0 d-flex justify-content-between align-items-center gap-2 flex-wrap">
