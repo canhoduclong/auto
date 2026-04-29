@@ -1909,10 +1909,13 @@ class PageController extends Controller
 
         // Đồng nhất: baseQuery là query gốc cho cả danh sách và thống kê
         $baseQuery = Customer::query()
-            ->whereHas('priorities', function ($q) use ($userId) {
-                $q->where('sale_id', $userId)
-                  ->where('is_active', 1);
-            });
+                        ->whereHas('priorities', function ($q) use ($userId) {
+                                $q->where('sale_id', $userId)
+                                    ->where('is_active', 1);
+                        })
+                        ->where(function ($q) {
+                                $q->where('is_employee', '<>', 1)->orWhereNull('is_employee');
+                        });
 
         if ($tab === 'trash') {
             $baseQuery->onlyTrashed();
