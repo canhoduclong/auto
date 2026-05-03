@@ -34,9 +34,20 @@ return new class extends Migration
         }
 
         Schema::table('customers', function (Blueprint $table) {
-            $table->dropForeign(['user_id']);
-            $table->dropUnique('customers_user_id_unique');
-            $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
+            try {
+                $table->dropForeign(['user_id']);
+            } catch (\Exception $e) {}
+
+            // Drop unique an toàn (KHÔNG dùng tên cứng)
+            try {
+                $table->dropUnique(['user_id']);
+            } catch (\Exception $e) {}
+
+            // Add lại FK
+            $table->foreign('user_id')
+                ->references('id')
+                ->on('users')
+                ->onDelete('cascade');
         });
     }
 
