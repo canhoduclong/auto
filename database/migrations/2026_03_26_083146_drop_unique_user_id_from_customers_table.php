@@ -12,71 +12,65 @@ return new class extends Migration
      * Run the migrations.
      */
     public function up(): void
-    {
-        $driver = DB::getDriverName();
+{
+    Schema::table('customers', function (Blueprint $table) {
+        // Drop FK trước
+        try {
+            $table->dropForeign(['user_id']);
+        } catch (\Exception $e) {}
+    });
 
-        if ($driver === 'sqlite') {
-            Schema::table('customers', function (Blueprint $table) {
-                try {
-                    $table->dropForeign(['user_id']);
-                } catch (QueryException $e) {
-                    // Ignore missing foreign key in SQLite test schema.
-                }
-            });
+    // 🔥 Drop index nếu tồn tại (an toàn tuyệt đối)
+    DB::statement("
+        SET @idx := (
+            SELECT INDEX_NAME
+            FROM information_schema.STATISTICS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'customers'
+              AND COLUMN_NAME = 'user_id'
+              AND NON_UNIQUE = 0
+            LIMIT 1
+        );
+    ");
 
-            DB::statement('DROP INDEX IF EXISTS customers_user_id_unique');
+    DB::statement("
+        SET @sql := IF(@idx IS NOT NULL,
+            CONCAT('DROP INDEX ', @idx, ' ON customers'),
+            'SELECT 1'
+        );
+    ");
 
-            Schema::table('customers', function (Blueprint $table) {
-                $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
-            });
+    DB::statement("PREPARE stmt FROM @sql");
+    DB::statement("EXECUTE stmt");
+    DB::statement("DEALLOCATE PREPARE stmt");
 
-            return;
-        }
-
-        Schema::table('customers', function (Blueprint $table) {
-            try {
-                $table->dropForeign(['user_id']);
-            } catch (\Exception $e) {}
-
-            // Drop unique an toàn (KHÔNG dùng tên cứng)
-            try {
-                $table->dropUnique(['user_id']);
-            } catch (\Exception $e) {}
-
-            // Add lại FK
-            $table->foreign('user_id')
-                ->references('id')
-                ->on('users')
-                ->onDelete('cascade');
-        });
-    }
+    // Add lại FK
+    Schema::table('customers', function (Blueprint $table) {
+        $table->foreign('user_id')
+            ->references('id')
+            ->on('users')
+            ->onDelete('cascade');
+    });
+}
 
     /**
      * Reverse the migrations.
      */
-    public function down(): void
-    {
-        $driver = DB::getDriverName();
-
-        if ($driver === 'sqlite') {
-            Schema::table('customers', function (Blueprint $table) {
-                try {
-                    $table->dropForeign(['user_id']);
-                } catch (QueryException $e) {
-                    // Ignore missing foreign key in SQLite test schema.
-                }
-
-                $table->unique('user_id');
-                $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
-            });
-
-            return;
-        }
-
-        Schema::table('customers', function (Blueprint $table) {
+  public function down(): void
+{
+    Schema::table('customers', function (Blueprint $table) {
+        try {
             $table->dropForeign(['user_id']);
-            $table->unique('user_id');
-            $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
-        });
-    }
+        } catch (\Exception $e) {}
+    });
+
+    Schema::table('customers', function (Blueprint $table) {
+        $table->unique('user_id');
+
+        $table->foreign('user_id')
+            ->references('id')
+            ->on('users')
+            ->onDelete('cascade');
+    });
+}
 };
