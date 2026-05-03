@@ -18,9 +18,17 @@ return new class extends Migration {
     public function down(): void
     {
         Schema::table('customer_addresses', function (Blueprint $table) {
+            // Drop foreign key trước
+            $table->dropForeign(['province_id']);
+            $table->dropForeign(['ward_id']);
+
+            // Sau đó mới drop index
+            $table->dropIndex('customer_addresses_province_id_ward_id_index');
+            /*
             $table->dropIndex('customer_addresses_province_id_ward_id_index');
             $table->dropConstrainedForeignId('province_id');
             $table->dropConstrainedForeignId('ward_id');
+            */
         });
     }
 };
