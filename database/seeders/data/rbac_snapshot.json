@@ -3,10 +3,8 @@
         "accountant",
         "admin",
         "factory",
-        "leader",
-        "leader_sale",
-        "manager",
-        "manager_sale",
+        "leader", 
+        "manager", 
         "sale",
         "Shipper",
         "warehouse"
@@ -1598,7 +1596,7 @@
     "users": [
         {
             "name": "Admin User",
-            "email": "admin@hoanglongtnt.vn",
+            "email": "admin@hoanglongtnt.com",
             "team_code": "SALE-TEAM-1",
             "warehouse_name": null,
             "roles": [
@@ -1607,7 +1605,7 @@
         },
         {
             "name": "Sale User",
-            "email": "sale@hoanglongtnt.vn",
+            "email": "sale@hoanglongtnt.com",
             "team_code": "SALE-TEAM-1",
             "warehouse_name": null,
             "roles": [
@@ -1616,7 +1614,7 @@
         },
         {
             "name": "Leader User",
-            "email": "leader@hoanglongtnt.vn",
+            "email": "leader@hoanglongtnt.com",
             "team_code": "SALE-TEAM-1",
             "warehouse_name": null,
             "roles": [
@@ -1625,7 +1623,7 @@
         },
         {
             "name": "Lương - Kế toán",
-            "email": "account@hoanglongtnt.vn",
+            "email": "account@hoanglongtnt.com",
             "team_code": null,
             "warehouse_name": null,
             "roles": [
@@ -1634,7 +1632,7 @@
         },
         {
             "name": "Thành Trung (Bi)",
-            "email": "manager@hoanglongtnt.vn",
+            "email": "trung@hoanglongtnt.com",
             "team_code": "SALE-TEAM-1",
             "warehouse_name": null,
             "roles": [
@@ -1643,7 +1641,7 @@
         },
         {
             "name": "Thanh",
-            "email": "warehouse@hoanglongtnt.vn",
+            "email": "thanh@hoanglongtnt.com",
             "team_code": null,
             "warehouse_name": "Kho Long An",
             "roles": [
@@ -1652,7 +1650,7 @@
         },
         {
             "name": "Tiền",
-            "email": "tien@hoanglongtnt.vn",
+            "email": "tien@hoanglongtnt.com",
             "team_code": null,
             "warehouse_name": null,
             "roles": [
@@ -1661,7 +1659,7 @@
         },
         {
             "name": "Ship - Dương",
-            "email": "duong@hoanglongtnt.vn",
+            "email": "duong@hoanglongtnt.com",
             "team_code": "SALE-TEAM-1",
             "warehouse_name": null,
             "roles": [
@@ -1670,7 +1668,7 @@
         },
         {
             "name": "Linh - Kho chiến lược",
-            "email": "linh@hoanglongtnt.vn",
+            "email": "linh@hoanglongtnt.com",
             "team_code": null,
             "warehouse_name": "Kho Chiến Lược",
             "roles": [
@@ -1679,7 +1677,7 @@
         },
         {
             "name": "Giang",
-            "email": "giang@hoanglongtnt.vn",
+            "email": "giang@hoanglongtnt.com",
             "team_code": "SALE-TEAM-1",
             "warehouse_name": null,
             "roles": [
@@ -1694,46 +1692,10 @@
             "roles": [
                 "sale"
             ]
-        },
+        },  
         {
-            "name": "Leader User",
-            "email": "leader@example.com",
-            "team_code": "SALE-TEAM-1",
-            "warehouse_name": null,
-            "roles": [
-                "leader_sale"
-            ]
-        },
-        {
-            "name": "Manager User",
-            "email": "manager@example.com",
-            "team_code": "SALE-TEAM-1",
-            "warehouse_name": null,
-            "roles": [
-                "manager_sale"
-            ]
-        },
-        {
-            "name": "Thanh",
-            "email": "warehouse@example.com",
-            "team_code": "OPS-TEAM-1",
-            "warehouse_name": null,
-            "roles": [
-                "warehouse"
-            ]
-        },
-        {
-            "name": "Ship - Dương",
-            "email": "duong@example.com",
-            "team_code": "OPS-TEAM-1",
-            "warehouse_name": null,
-            "roles": [
-                "Shipper"
-            ]
-        },
-        {
-            "name": "Linh - Kho chiến lược",
-            "email": "linh@example.com",
+            "name": "Bet - Kho chiến lược",
+            "email": "bet@hoanglongtnt.com",
             "team_code": "SALE-TEAM-1",
             "warehouse_name": null,
             "roles": [
