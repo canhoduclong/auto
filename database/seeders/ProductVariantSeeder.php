@@ -62,7 +62,7 @@ class ProductVariantSeeder extends Seeder
                 ['name' => '2.8 kg', 'size' => '2.8'],
                 ['name' => '2.9 kg', 'size' => '2.9'],
                 ['name' => '3.0 kg', 'size' => '3.0'],
-                ['name' => 'Lớn hơn 3.0 kg', 'size' => '> 3.0'],
+                ['name' => 'Lớn hơn 3.0 kg', 'size' => '3.1'], // Đổi '> 3.0' thành số hợp lệ
             ],
             'Vịt loại bầm' => [
                 ['name' => 'Vịt loại bầm', 'size' => null],
@@ -99,9 +99,9 @@ class ProductVariantSeeder extends Seeder
                 ['name' => 'Phao câu vịt', 'size' => null],
             ],
             'Lòng vịt' => [
-                ['name' => 'Size lớn', 'size' => 'Size lớn'],
-                ['name' => 'Size vừa', 'size' => 'Size vừa'],
-                ['name' => 'Size nhỏ', 'size' => 'Size nhỏ'],
+                ['name' => 'Size lớn', 'size' => null],
+                ['name' => 'Size vừa', 'size' => null],
+                ['name' => 'Size nhỏ', 'size' => null],
             ],
             'Mề vịt' => [
                 ['name' => 'Mề vịt', 'size' => null],
