@@ -21,9 +21,16 @@ return new class extends Migration
 
     public function down(): void
     {
+        
         Schema::table('order_schedules', function (Blueprint $table) {
+            // 1. Drop foreign key trước
+            $table->dropForeign(['daily_order_schedule_id']); 
+
+            // 2. Sau đó mới drop index
             $table->dropIndex('os_daily_schedule_date_idx');
-            $table->dropConstrainedForeignId('daily_order_schedule_id');
+
+            //$table->dropIndex('os_daily_schedule_date_idx');
+            //$table->dropConstrainedForeignId('daily_order_schedule_id');
         });
     }
 };
