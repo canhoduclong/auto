@@ -42,9 +42,14 @@ class OrderAjaxController extends Controller
         }
 
         // Render partial Blade view for AJAX (reuse product_variants._variants_table if available, else return JSON)
-        if ($request->ajax() && view()->exists('product_variants._variants_table')) {
-            $html = view('product_variants._variants_table', ['variants' => $variants])->render();
-            return response()->json(['success' => true, 'html' => $html]);
+        if ($request->ajax()) {
+            $viewFile = $keyword
+                ? 'product_variants._variants_table'
+                : 'product_variants._variants_table_select';
+            if (view()->exists($viewFile)) {
+                $html = view($viewFile, ['variants' => $variants])->render();
+                return response()->json(['success' => true, 'html' => $html]);
+            }
         }
         // Fallback: return JSON data
         return response()->json([
