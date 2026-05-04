@@ -324,11 +324,13 @@ class SettingController extends Controller
         }
         $logs[] = '';
 
+        $php = '/opt/cpanel/ea-php83/root/usr/bin/php';
+
         $steps = [
-            ['title' => 'Running migrate...', 'command' => "cd {$deployPath} && php artisan migrate --force", 'fail' => 'migrate'],
-            ['title' => 'Clearing cache...', 'command' => "cd {$deployPath} && php artisan optimize:clear", 'fail' => 'optimize:clear'],
-            ['title' => 'Caching config...', 'command' => "cd {$deployPath} && php artisan config:cache", 'fail' => 'config:cache'],
-            ['title' => 'Caching routes...', 'command' => "cd {$deployPath} && php artisan route:cache", 'fail' => 'route:cache'],
+            ['title' => 'Running migrate...', 'command' => "cd {$deployPath} && {$php} artisan migrate --force", 'fail' => 'migrate'],
+            ['title' => 'Clearing cache...', 'command' => "cd {$deployPath} && {$php} artisan optimize:clear", 'fail' => 'optimize:clear'],
+            ['title' => 'Caching config...', 'command' => "cd {$deployPath} && {$php} artisan config:cache", 'fail' => 'config:cache'],
+            ['title' => 'Caching routes...', 'command' => "cd {$deployPath} && {$php} artisan route:cache", 'fail' => 'route:cache'],
         ];
 
         foreach ($steps as $step) {
