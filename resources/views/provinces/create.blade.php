@@ -24,9 +24,9 @@
             <input type="text" name="name" class="form-control" value="{{ old('name') }}" required>
         </div>
         <div class="mb-3">
-            <label class="form-label">Danh sách Phường / Xã</label>
-            <textarea name="wards" class="form-control" rows="6" placeholder="Nhập mỗi phường/xã trên một dòng">{{ old('wards') }}</textarea>
-            <div class="form-text">Mỗi dòng sẽ tạo một phường/xã riêng.</div>
+            <label class="form-label">Danh sách Phường/Xã/Thị trấn</label>
+            <textarea name="wards" class="form-control" rows="6" placeholder="Ví dụ:\nXã - Tân Châu\nphường - chiếu than\nthị trấn - cần đước">{{ old('wards') }}</textarea>
+            <div class="form-text">Nhập mỗi phường/xã/thị trấn trên một dòng, theo định dạng: <b>Loại - Tên</b> (ví dụ: <i>Xã - Tân Châu</i>).</div>
         </div>
         <button type="submit" class="btn btn-primary">Lưu</button>
     </form>

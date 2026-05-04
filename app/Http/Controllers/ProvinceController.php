@@ -201,12 +201,24 @@ class ProvinceController extends Controller
             ->map(fn ($line) => trim($line))
             ->filter()
             ->unique()
-            ->each(function ($name) use ($province) {
-                $province->wards()->create([
-                    'name' => $name,
-                    'code' => $this->generateUniqueCode($name, Ward::class),
-                    'type' => 'Phường/Xã',
-                ]);
+            ->each(function ($line) use ($province) {
+                // Tách theo định dạng: type - name
+                $type = null;
+                $name = null;
+                if (preg_match('/^([^\-]+)\s*-\s*(.+)$/u', $line, $matches)) {
+                    $type = trim($matches[1]);
+                    $name = trim($matches[2]);
+                } else {
+                    // Nếu không đúng định dạng, coi toàn bộ là name, type để null
+                    $name = $line;
+                }
+                if ($name) {
+                    $province->wards()->create([
+                        'name' => $name,
+                        'code' => $this->generateUniqueCode($name, Ward::class),
+                        'type' => $type,
+                    ]);
+                }
             });
     }
 

@@ -60,7 +60,7 @@ class UsersSeeder extends Seeder
                 ['email' => $userData['email']],
                 [
                     'name' => (string) ($userData['name'] ?? $userData['email']),
-                    'password' => Hash::make('123456'),
+                    'password' => Hash::make('h123456@'),
                     'team_id' => $teamId,
                     'warehouse_id' => $warehouseId,
                 ]
