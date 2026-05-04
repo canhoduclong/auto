@@ -21,7 +21,8 @@ class OrderAjaxController extends Controller
         $q = $request->input('q');
         $perPage = $request->input('per_page', 20);
         $query = \App\Models\ProductVariant::with(['product', 'mediaLink.media']);
-        if ($q) {
+        // Luôn áp dụng logic search, nếu không có từ khóa thì lấy toàn bộ (giống search rỗng)
+        if ($q !== null) {
             $query->where(function($sub) use ($q) {
                 $sub->where('sku', 'like', "%$q%")
                      ->orWhere('size', 'like', "%$q%")
