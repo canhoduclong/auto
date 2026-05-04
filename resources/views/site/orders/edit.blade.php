@@ -407,6 +407,11 @@
                     <div class="checkout-panel">
                         <div class="checkout-panel-body">
                             <h2 class="h6 fw-bold mb-3">Thêm biến thể sản phẩm</h2>
+                            <div class="input-group mb-2">
+                                <button class="btn btn-success" type="button" id="variant-show-all-button">
+                                    <i class="bi bi-plus-circle me-1"></i> Thêm sản phẩm
+                                </button>
+                            </div>
                             <div class="input-group">
                                 <input type="text" id="variant-search" class="form-control" placeholder="Nhập SKU hoặc tên sản phẩm">
                                 <button class="btn btn-outline-secondary" type="button" id="variant-search-button">Tìm</button>
@@ -550,6 +555,18 @@
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    // Nút Thêm sản phẩm: load toàn bộ biến thể
+    const variantShowAllButton = document.getElementById('variant-show-all-button');
+    if (variantShowAllButton) {
+        variantShowAllButton.addEventListener('click', function () {
+            fetchVariantData(variantSearchButton.dataset.url, {
+                q: '',
+                page: 1,
+                per_page: currentVariantSearchPerPage
+            });
+            if (variantSearchInput) variantSearchInput.value = '';
+        });
+    }
     // ── Customer Picker ──────────────────────────────────────────────
     const customerPickerModal   = document.getElementById('customerPickerModal');
     const customerPickerResults = document.getElementById('customer-picker-results');
@@ -698,6 +715,10 @@ document.addEventListener('DOMContentLoaded', function () {
     const cartContainer = document.getElementById('cart-items-container');
     const variantSearchInput = document.getElementById('variant-search');
     const variantSearchButton = document.getElementById('variant-search-button');
+    // Lưu URL ajax từ thuộc tính data-url nếu có, fallback route cũ nếu không
+    if (variantSearchButton && !variantSearchButton.dataset.url) {
+        variantSearchButton.dataset.url = variantSearchButton.getAttribute('data-url') || '{{ route('site.orders.variants.ajax') }}';
+    }
     const variantSearchResults = document.getElementById('variant-search-results');
     const subtotalEl = document.getElementById('summarySubtotal');
     const itemDiscountEl = document.getElementById('summaryItemDiscount');
