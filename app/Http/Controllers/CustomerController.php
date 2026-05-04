@@ -1,5 +1,5 @@
 <?php
-namespace App\Http\Controllers;
+namespace App\Http\Controllers; 
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use App\Models\Customer;
 use App\Models\CustomerType;
@@ -27,6 +27,7 @@ class CustomerController extends Controller
 {
     private static ?array $orderColumnsCache = null;
 
+     
     private function salesUsersQuery()
     {
         return User::query()
@@ -45,9 +46,44 @@ class CustomerController extends Controller
         return self::$orderColumnsCache;
     }
 
-    private function hasOrderColumn(string $column): bool
+
+    /**
+     * Gán nhiều khách hàng cho 1 sale
+     */
+    public function bulkAssignSale(Request $request, CustomerPriorityService $priorityService)
     {
-        return in_array($column, $this->orderColumns(), true);
+        abort_unless($request->user()?->isAdmin(), 403);
+
+        $request->validate([
+            'ids' => 'required|string',
+            'assigned_to' => ['required', 'integer', 'exists:users,id'],
+        ]);
+
+        $ids = array_values(array_filter(array_map('intval', explode(',', $request->input('ids')))));
+        $assignedTo = (int) $request->input('assigned_to');
+
+        if (empty($ids)) {
+            return redirect()->route('customers.index')->withErrors([
+                'ids' => 'Vui lòng chọn ít nhất 1 khách hàng để gán sale!',
+            ]);
+        }
+
+        $allowedSaleIds = $this->salesUsersQuery()->pluck('id')->all();
+        if (!in_array($assignedTo, array_map('intval', $allowedSaleIds), true)) {
+            return redirect()->route('customers.index')->withErrors([
+                'assigned_to' => 'User được chọn không thuộc nhóm sale có thể nhận khách.',
+            ]);
+        }
+
+        $customers = Customer::query()->whereIn('id', $ids)->get();
+        $count = 0;
+        foreach ($customers as $customer) {
+            if ($customer->is_employee) continue;
+            $priorityService->takeover($customer, $assignedTo, 'bulk_assign');
+            $count++;
+        }
+
+        return redirect()->route('customers.index')->with('success', "Đã gán $count khách hàng cho sale.");
     }
 
     // Export excel

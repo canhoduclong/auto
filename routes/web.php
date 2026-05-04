@@ -328,6 +328,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         ->middleware('role:admin,sale,leader,leader_sale,sale_manager');
 
     // Xóa nhiều khách hàng
+    Route::post('customers/bulk-assign-sale', [CustomerController::class, 'bulkAssignSale'])->name('customers.bulkAssignSale')->middleware('permission');
     Route::post('customers/bulk-delete', [CustomerController::class, 'bulkDelete'])->name('customers.bulkDelete')->middleware('permission');
     Route::post('customers/bulk-mark-employee', [CustomerController::class, 'bulkMarkEmployee'])->name('customers.bulkMarkEmployee')->middleware('permission');
     Route::post('customers/bulk-unmark-employee', [CustomerController::class, 'bulkUnmarkEmployee'])->name('customers.bulkUnmarkEmployee')->middleware('permission');

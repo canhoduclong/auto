@@ -262,6 +262,20 @@
         </div>
 
         {{-- Table --}}
+        @if($isAdmin)
+        <form id="bulkAssignSaleForm" action="{{ route('customers.bulkAssignSale') }}" method="POST" class="mb-3 d-flex align-items-center gap-2">
+            @csrf
+            <input type="hidden" name="ids" id="bulkAssignSaleIds">
+            <select name="assigned_to" class="form-select form-select-sm" style="max-width:220px;" required>
+                <option value="">-- Chọn sale để gán --</option>
+                @foreach($users as $u)
+                    <option value="{{ $u->id }}">{{ $u->name }}</option>
+                @endforeach
+            </select>
+            <button type="submit" class="btn btn-sm btn-primary">Gán sale cho khách đã chọn</button>
+        </form>
+        @endif
+
         <div class="table-responsive">
             <table class="table cust-table mb-0">
                 <thead>
@@ -285,6 +299,34 @@
                     @forelse($customers as $customer)
                     <tr>
                         <td><input type="checkbox" class="row-check" value="{{ $customer->id }}"></td>
+                        @push('scripts')
+                        <script>
+                        document.addEventListener('DOMContentLoaded', function () {
+                            // Bulk checkboxes
+                            const checkAll = document.getElementById('checkAll');
+                            const rowChecks = document.querySelectorAll('.row-check');
+                            checkAll && checkAll.addEventListener('change', function () {
+                                rowChecks.forEach(cb => { if (cb !== checkAll) cb.checked = checkAll.checked; });
+                            });
+
+                            // Bulk assign sale
+                            const bulkForm = document.getElementById('bulkAssignSaleForm');
+                            if (bulkForm) {
+                                bulkForm.addEventListener('submit', function (e) {
+                                    const checked = Array.from(document.querySelectorAll('.row-check:checked'))
+                                        .filter(cb => cb.value && cb.id !== 'checkAll')
+                                        .map(cb => cb.value);
+                                    if (checked.length === 0) {
+                                        alert('Vui lòng chọn ít nhất 1 khách hàng!');
+                                        e.preventDefault();
+                                        return false;
+                                    }
+                                    document.getElementById('bulkAssignSaleIds').value = checked.join(',');
+                                });
+                            }
+                        });
+                        </script>
+                        @endpush
                         <td class="text-muted" style="font-size:.78rem;">{{ $customer->id }}</td>
 
                         <td>
