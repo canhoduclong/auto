@@ -18,21 +18,28 @@ class OrderAjaxController extends Controller
     // AJAX: Trả về danh sách biến thể cho popup thêm sản phẩm vào đơn
     public function variantsAjax(Request $request)
     {
-        $q = $request->input('q');
-        $perPage = $request->input('per_page', 20);
+        $keyword = $request->input('keyword', $request->input('q'));
+        $perPage = (int) $request->input('per_page', 20);
+        $perPage = max(1, min($perPage, 50)); // giới hạn tối đa 50
         $query = \App\Models\ProductVariant::with(['product', 'mediaLink.media']);
-        // Luôn áp dụng logic search, nếu không có từ khóa thì lấy toàn bộ (giống search rỗng)
-        if ($q !== null) {
-            $query->where(function($sub) use ($q) {
-                $sub->where('sku', 'like', "%$q%")
-                     ->orWhere('size', 'like', "%$q%")
-                     ->orWhere('quality', 'like', "%$q%")
-                     ->orWhereHas('product', function($p) use ($q) {
-                         $p->where('name', 'like', "%$q%") ;
+
+        if ($keyword) {
+            $query->where(function($sub) use ($keyword) {
+                $sub->where('sku', 'like', "%$keyword%")
+                     ->orWhere('size', 'like', "%$keyword%")
+                     ->orWhere('quality', 'like', "%$keyword%")
+                     ->orWhereHas('product', function($p) use ($keyword) {
+                         $p->where('name', 'like', "%$keyword%") ;
                      });
             });
         }
-        $variants = $query->orderByDesc('id')->paginate($perPage);
+
+        // Nếu không có từ khóa, chỉ lấy tối đa 50 bản ghi (hoặc phân trang nếu cần)
+        if (!$keyword) {
+            $variants = $query->orderByDesc('id')->paginate($perPage);
+        } else {
+            $variants = $query->orderByDesc('id')->paginate($perPage);
+        }
 
         // Render partial Blade view for AJAX (reuse product_variants._variants_table if available, else return JSON)
         if ($request->ajax() && view()->exists('product_variants._variants_table')) {
