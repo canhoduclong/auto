@@ -325,10 +325,10 @@ class SettingController extends Controller
         $logs[] = '';
 
         $steps = [
-            ['title' => 'Running migrate...', 'command' => "cd {$deployPath} && php8.3 artisan migrate --force", 'fail' => 'migrate'],
-            ['title' => 'Clearing cache...', 'command' => "cd {$deployPath} && php8.3 artisan optimize:clear", 'fail' => 'optimize:clear'],
-            ['title' => 'Caching config...', 'command' => "cd {$deployPath} && php8.3 artisan config:cache", 'fail' => 'config:cache'],
-            ['title' => 'Caching routes...', 'command' => "cd {$deployPath} && php8.3 artisan route:cache", 'fail' => 'route:cache'],
+            ['title' => 'Running migrate...', 'command' => "cd {$deployPath} && php artisan migrate --force", 'fail' => 'migrate'],
+            ['title' => 'Clearing cache...', 'command' => "cd {$deployPath} && php artisan optimize:clear", 'fail' => 'optimize:clear'],
+            ['title' => 'Caching config...', 'command' => "cd {$deployPath} && php artisan config:cache", 'fail' => 'config:cache'],
+            ['title' => 'Caching routes...', 'command' => "cd {$deployPath} && php artisan route:cache", 'fail' => 'route:cache'],
         ];
 
         foreach ($steps as $step) {
