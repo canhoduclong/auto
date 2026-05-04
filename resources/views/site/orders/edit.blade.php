@@ -555,12 +555,12 @@
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    // Nút Thêm sản phẩm: load toàn bộ biến thể
+    // Nút Thêm sản phẩm: load toàn bộ biến thể (không truyền keyword, phân trang)
     const variantShowAllButton = document.getElementById('variant-show-all-button');
     if (variantShowAllButton) {
         variantShowAllButton.addEventListener('click', function () {
+            // Gọi API /my-orders/variants/ajax, không truyền keyword, phân trang như search
             fetchVariantData(variantSearchButton.dataset.url, {
-                q: '',
                 page: 1,
                 per_page: currentVariantSearchPerPage
             });
