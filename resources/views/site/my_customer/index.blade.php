@@ -678,6 +678,30 @@
                                         
                                         <div>
                                             <h6 class="mb-1 fw-bold fs-5">{{ $customer->name }}</h6>
+                                            @if($customer->truckRoute)
+                                                <div class="mt-2 mb-2">
+                                                    <table class="table table-sm table-bordered mb-0" style="font-size:0.92em;">
+                                                        <thead class="table-light">
+                                                            <tr>
+                                                                <th>Nhà xe</th>
+                                                                <th>Điện thoại</th>
+                                                                <th>Điểm đi</th>
+                                                                <th>Giờ đi</th>
+                                                                <th>Điểm đến</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            <tr>
+                                                                <td>{{ $customer->truckRoute->brand->name ?? '' }}</td>
+                                                                <td>{{ $customer->truckRoute->brand->phone ?? '' }}</td>
+                                                                <td>{{ $customer->truckRoute->stops[0]->station->name ?? '' }}</td>
+                                                                <td>{{ $customer->truckRoute->departure_time ?? '' }}</td>
+                                                                <td>{{ $customer->truckRoute->stops[count($customer->truckRoute->stops)-1]->station->name ?? '' }}</td>
+                                                            </tr>
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            @endif
                                             @if($customer->updated_at)
                                                 <small class="text-muted fst-italic"><i class="bi bi-clock me-1"></i>Cập nhật: {{ $customer->updated_at->format('d/m/Y') }}</small><br>
                                             @endif
