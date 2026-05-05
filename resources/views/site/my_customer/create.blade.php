@@ -455,34 +455,33 @@
 
                     <div class="d-flex align-items-center gap-3 mb-3">
                         <button type="button" class="btn btn-outline-primary" id="btn-load-trucks">
-                            <i class="bi bi-arrow-clockwise me-1"></i> Load Tuyến vận chuyển
+                            <i class="bi bi-arrow-clockwise me-1"></i> Load tuyến vận chuyển
                         </button>
-                        <span class="text-muted mc-help" id="truck-load-status">Bấm để tải danh sách nhà xe.</span>
-                                            <span class="text-muted mc-help" id="truck-load-status">Bấm để tải danh sách tuyến vận chuyển (nhà xe).</span>
+                        <span class="text-muted mc-help" id="truck-load-status">Bấm để tải danh sách tuyến vận chuyển.</span>
                     </div>
 
                     <div id="truck-search-area" style="display:none;">
                         <div class="truck-search-bar">
-                            <input type="text" class="form-control mc-form-control" id="truck-search-name" placeholder="🔍 Tìm theo tuyến vận chuyển...">
-                            <input type="text" class="form-control mc-form-control" id="truck-search-dest" placeholder="🔍 Tìm theo điểm đến (tỉnh/thành)...">
+                            <input type="text" class="form-control mc-form-control" id="truck-search-name" placeholder="🔍 Tìm theo tên tuyến...">
+                            <input type="text" class="form-control mc-form-control" id="truck-search-dest" placeholder="🔍 Tìm theo điểm đi/điểm đến...">
                         </div>
                         <div class="table-responsive" style="max-height:280px;overflow-y:auto;">
                             <table class="table table-bordered table-hover truck-station-table mb-0">
                                 <thead>
                                     <tr>
                                         <th style="width:36px"></th>
-                                        <th>Tuyến vận chuyển (nhà xe)</th>
+                                        <th>Tên tuyến</th>
+                                        <th>Nhà xe</th>
+                                        <th>Điểm đi</th>
                                         <th>Điểm đến</th>
-                                        <th>Địa chỉ</th>
                                     </tr>
                                 </thead>
                                 <tbody id="truck-station-tbody">
-                                    <tr><td colspan="4" class="text-center text-muted">Đang tải...</td></tr>
+                                    <tr><td colspan="5" class="text-center text-muted">Đang tải...</td></tr>
                                 </tbody>
                             </table>
                         </div>
-                        <div class="mt-1 mc-help" id="truck-selected-label">Chưa chọn nhà xe.</div>
-                                            <div class="mt-1 mc-help" id="truck-selected-label">Chưa chọn tuyến vận chuyển.</div>
+                        <div class="mt-1 mc-help" id="truck-selected-label">Chưa chọn tuyến vận chuyển.</div>
                     </div>
 
                     <div id="truck-detail-section" class="mt-3" style="display:none;">
@@ -514,7 +513,7 @@
                             </div>
                             <div class="col-12 col-md-3 d-flex align-items-end">
                                 <button type="button" class="btn btn-outline-danger w-100" id="btn-clear-truck">
-                                    <i class="bi bi-x-circle me-1"></i> Bỏ chọn tuyến vận chuyển
+                                    <i class="bi bi-x-circle me-1"></i> Bỏ chọn tuyến
                                 </button>
                             </div>
                         </div>
@@ -787,7 +786,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-    // ===================== TRUCK STATION AJAX =====================
+    // ===================== TRUCK ROUTE AJAX =====================
     const btnLoadTrucks     = document.getElementById('btn-load-trucks');
     const truckLoadStatus   = document.getElementById('truck-load-status');
     const truckSearchArea   = document.getElementById('truck-search-area');
@@ -800,68 +799,120 @@ document.addEventListener('DOMContentLoaded', function () {
     const btnClearTruck     = document.getElementById('btn-clear-truck');
     const truckSelectedLabel= document.getElementById('truck-selected-label');
 
-    let allTruckStations = @json($truckStations ?? []);
-    let trucksLoaded = false;
 
-    function renderTrucks(stations) {
-        if (!stations.length) {
-            truckTbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">Không có nhà xe phù hợp.</td></tr>';
+    let allTruckRoutes = [];
+    let routesLoaded = false;
+    let selectedRoute = null;
+
+    // Add a hidden input for truck_route_id
+    let truckRouteIdInput = document.getElementById('truck_route_id');
+    if (!truckRouteIdInput) {
+        truckRouteIdInput = document.createElement('input');
+        truckRouteIdInput.type = 'hidden';
+        truckRouteIdInput.name = 'truck_route_id';
+        truckRouteIdInput.id = 'truck_route_id';
+        document.querySelector('form').appendChild(truckRouteIdInput);
+    }
+
+    function renderRouteDetail(route) {
+        if (!route) {
+            truckDetailSection.style.display = 'none';
+            return;
+        }
+        // Build detail HTML
+        let stopsHtml = '';
+        if (route.stops && route.stops.length) {
+            stopsHtml = '<ol class="ps-3 mb-2">' + route.stops.map((stop, idx) => {
+                const s = stop.station;
+                return `<li><strong>${s?.name || ''}</strong>${s?.address ? ' - ' + s.address : ''}${s?.province ? ', ' + s.province.name : ''}</li>`;
+            }).join('') + '</ol>';
+        }
+        truckDetailSection.innerHTML = `
+            <div class="mb-2"><strong>Tuyến:</strong> ${route.name} ${route.brand ? '(' + route.brand.name + ')' : ''}</div>
+            <div class="mb-2"><strong>Chặng:</strong> ${stopsHtml}</div>
+            <div class="mb-2"><strong>Giá hiện tại:</strong> ${route.current_price ? (route.current_price + ' ₫') : '---'}</div>
+            <div class="mb-2"><strong>Mô tả:</strong> ${route.description || ''}</div>
+            <button type="button" class="btn btn-outline-danger w-100 mt-2" id="btn-clear-truck">
+                <i class="bi bi-x-circle me-1"></i> Bỏ chọn tuyến
+            </button>
+        `;
+        truckDetailSection.style.display = '';
+        // Re-bind clear button
+        document.getElementById('btn-clear-truck').onclick = function () {
+            truckStationIdInput.value = '';
+            truckRouteIdInput.value = '';
+            selectedRoute = null;
+            truckSelectedLabel.textContent = 'Chưa chọn tuyến vận chuyển.';
+            truckDetailSection.style.display = 'none';
+            truckTbody.querySelectorAll('tr').forEach(r => {
+                r.classList.remove('selected-station');
+                const ico = r.querySelector('i');
+                if (ico) ico.className = 'bi bi-circle text-muted';
+            });
+        };
+    }
+
+    function renderRoutes(routes) {
+        if (!routes.length) {
+            truckTbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">Không có tuyến vận chuyển phù hợp.</td></tr>';
             return;
         }
         const selectedId = truckStationIdInput.value;
-        truckTbody.innerHTML = stations.map(s => {
-            const dest = s.province ? s.province.name : (s.province_id || '');
-            const selected = String(s.id) === String(selectedId) ? 'selected-station' : '';
-            return `<tr class="${selected}" data-id="${s.id}" data-name="${s.name}" data-dest="${dest}">
+        truckTbody.innerHTML = routes.map(route => {
+            const stops = route.stops || [];
+            const origin = stops[0]?.station?.name || '';
+            const destination = stops.length > 1 ? stops[stops.length-1]?.station?.name : '';
+            const selected = String(route.id) === String(selectedId) ? 'selected-station' : '';
+            return `<tr class="${selected}" data-id="${route.id}" data-name="${route.name}" data-origin="${origin}" data-destination="${destination}">
                 <td class="text-center"><i class="bi bi-${selected ? 'check-circle-fill text-primary' : 'circle text-muted'}"></i></td>
-                <td>${s.name}</td>
-                <td>${dest}</td>
-                <td class="text-muted" style="font-size:0.8rem;">${s.ward ? s.ward.name : ''}</td>
+                <td>${route.name}</td>
+                <td>${route.brand ? route.brand.name : ''}</td>
+                <td>${origin}</td>
+                <td>${destination}</td>
             </tr>`;
         }).join('');
     }
 
-    function filterTrucks() {
+    function filterRoutes() {
         const q1 = truckSearchName.value.toLowerCase();
         const q2 = truckSearchDest.value.toLowerCase();
-        const filtered = allTruckStations.filter(s => {
-            const dest = s.province ? s.province.name.toLowerCase() : '';
-            return s.name.toLowerCase().includes(q1) && dest.includes(q2);
+        const filtered = allTruckRoutes.filter(route => {
+            const stops = route.stops || [];
+            const origin = stops[0]?.station?.name?.toLowerCase() || '';
+            const destination = stops.length > 1 ? stops[stops.length-1]?.station?.name?.toLowerCase() : '';
+            return route.name.toLowerCase().includes(q1) && (origin.includes(q2) || destination.includes(q2));
         });
-        renderTrucks(filtered);
+        renderRoutes(filtered);
     }
 
     btnLoadTrucks.addEventListener('click', function () {
-        if (trucksLoaded) {
+        if (routesLoaded) {
             truckSearchArea.style.display = truckSearchArea.style.display === 'none' ? '' : 'none';
             return;
         }
         truckLoadStatus.textContent = 'Đang tải...';
         btnLoadTrucks.disabled = true;
-        // Use pre-loaded data (already in allTruckStations), or re-fetch via AJAX
-        fetch(`{{ route('pages.my_truck_stations.ajax') }}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        fetch(`{{ route('api.truck_routes') }}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
             .then(r => r.json())
             .then(data => {
-                // Support both array response and {data: [...]} response
-                allTruckStations = Array.isArray(data) ? data : (data.data || data.stations || allTruckStations);
-                trucksLoaded = true;
+                allTruckRoutes = Array.isArray(data) ? data : [];
+                routesLoaded = true;
                 btnLoadTrucks.disabled = false;
-                truckLoadStatus.textContent = `Đã tải ${allTruckStations.length} nhà xe.`;
-                renderTrucks(allTruckStations);
+                truckLoadStatus.textContent = `Đã tải ${allTruckRoutes.length} tuyến vận chuyển.`;
+                renderRoutes(allTruckRoutes);
                 truckSearchArea.style.display = '';
             })
             .catch(() => {
-                // Fallback to pre-loaded data
-                trucksLoaded = true;
+                routesLoaded = true;
                 btnLoadTrucks.disabled = false;
-                truckLoadStatus.textContent = `Hiển thị ${allTruckStations.length} nhà xe.`;
-                renderTrucks(allTruckStations);
+                truckLoadStatus.textContent = `Không thể tải tuyến vận chuyển.`;
+                renderRoutes([]);
                 truckSearchArea.style.display = '';
             });
     });
 
-    truckSearchName.addEventListener('input', filterTrucks);
-    truckSearchDest.addEventListener('input', filterTrucks);
+    truckSearchName.addEventListener('input', filterRoutes);
+    truckSearchDest.addEventListener('input', filterRoutes);
 
     truckTbody.addEventListener('click', function (e) {
         const row = e.target.closest('tr[data-id]');
@@ -877,29 +928,22 @@ document.addEventListener('DOMContentLoaded', function () {
         const ico = row.querySelector('i');
         if (ico) ico.className = 'bi bi-check-circle-fill text-primary';
         truckStationIdInput.value = id;
+        truckRouteIdInput.value = id;
         useTruckHidden.value = '1';
-        truckSelectedLabel.innerHTML = `<i class="bi bi-check-circle-fill text-primary me-1"></i>Đã chọn: <strong>${name}</strong>`;
-        truckDetailSection.style.display = '';
+        truckSelectedLabel.innerHTML = `<i class=\"bi bi-check-circle-fill text-primary me-1\"></i>Đã chọn: <strong>${name}</strong>`;
+        selectedRoute = allTruckRoutes.find(r => String(r.id) === String(id));
+        renderRouteDetail(selectedRoute);
     });
 
-    btnClearTruck.addEventListener('click', function () {
-        truckStationIdInput.value = '';
-        useTruckHidden.value = '0';
-        truckSelectedLabel.textContent = 'Chưa chọn nhà xe.';
-        truckDetailSection.style.display = 'none';
-        truckTbody.querySelectorAll('tr').forEach(r => {
-            r.classList.remove('selected-station');
-            const ico = r.querySelector('i');
-            if (ico) ico.className = 'bi bi-circle text-muted';
-        });
-    });
+    // Remove old clear handler, now handled in renderRouteDetail
 
     // Pre-select if old value exists
     if (truckStationIdInput.value) {
         useTruckHidden.value = '1';
         truckDetailSection.style.display = '';
-        const found = allTruckStations.find(s => String(s.id) === String(truckStationIdInput.value));
-        if (found) truckSelectedLabel.innerHTML = `<i class="bi bi-check-circle-fill text-primary me-1"></i>Đã chọn: <strong>${found.name}</strong>`;
+        // Try to find the selected route and show its name
+        const found = allTruckRoutes.find(r => String(r.id) === String(truckStationIdInput.value));
+        if (found) truckSelectedLabel.innerHTML = `<i class=\"bi bi-check-circle-fill text-primary me-1\"></i>Đã chọn: <strong>${found.name}</strong>`;
     }
 
     // ===================== DYNAMIC PRODUCT ROWS =====================

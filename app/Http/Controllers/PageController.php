@@ -1557,7 +1557,65 @@ class PageController extends Controller
 
         return back()->with('success', $message);
     }
+    /**
+ * API: Get all active truck routes with brand and stops for customer create page
+ */
+public function apiTruckRoutes(Request $request)
+{
+    $routes = \App\Models\TruckRoute::with([
+        'brand',
+        'stops.station.province',
+        'stops.station.ward',
+    ])
+    ->where('is_active', true)
+    ->get();
 
+    $result = $routes->map(function ($route) {
+        return [
+            'id' => $route->id,
+            'name' => $route->name,
+
+            'brand' => $route->brand ? [
+                'id' => $route->brand->id,
+                'name' => $route->brand->name,
+            ] : null,
+
+            'stops' => $route->stops->map(function ($stop) {
+                return [
+                    'id' => $stop->id,
+                    'sort_order' => $stop->sort_order,
+                    'arrival_time' => $stop->arrival_time,
+
+                    'station' => $stop->station ? [
+                        'id' => $stop->station->id,
+                        'name' => $stop->station->name,
+                        'address' => $stop->station->address,
+                        'phone' => $stop->station->phone,
+
+                        'province' => $stop->station->province ? [
+                            'id' => $stop->station->province->id,
+                            'name' => $stop->station->province->name,
+                        ] : null,
+
+                        'ward' => $stop->station->ward ? [
+                            'id' => $stop->station->ward->id,
+                            'name' => $stop->station->ward->name,
+                        ] : null,
+
+                    ] : null,
+
+                    'note' => $stop->note,
+                ];
+            })->values(),
+
+            'current_price' => $route->current_price,
+            'description' => $route->description,
+            'note' => $route->note,
+        ];
+    });
+
+    return response()->json($result);
+}
     public function teamOrderDetail(Order $order)
     {
         if (!auth()->check()) {
