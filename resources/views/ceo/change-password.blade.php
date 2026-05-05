@@ -28,6 +28,8 @@
     <div class="change-password-title">Đổi mật khẩu tài khoản</div>
     <form method="POST" action="{{ route('ceo.password.update') }}">
         @csrf
+        @php $hasPassword = !empty($user->password); @endphp
+        @if($hasPassword)
         <div class="mb-3">
             <label for="current_password" class="form-label">Mật khẩu hiện tại</label>
             <input type="password" class="form-control" id="current_password" name="current_password" required>
@@ -35,6 +37,7 @@
                 <span class="profile-error">{{ $message }}</span>
             @enderror
         </div>
+        @endif
         <div class="mb-3">
             <label for="password" class="form-label">Mật khẩu mới</label>
             <input type="password" class="form-control" id="password" name="password" required>

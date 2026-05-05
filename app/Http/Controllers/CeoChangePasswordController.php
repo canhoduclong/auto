@@ -22,12 +22,17 @@ class CeoChangePasswordController extends Controller
         if (!$user) {
             return redirect()->route('login');
         }
-        $request->validate([
-            'current_password' => 'required',
+        $rules = [
             'password' => 'required|string|min:8|confirmed',
-        ]);
-        if (!Hash::check($request->input('current_password'), $user->password)) {
-            return back()->withErrors(['current_password' => 'Mật khẩu hiện tại không đúng.']);
+        ];
+        if (!empty($user->password)) {
+            $rules['current_password'] = 'required';
+        }
+        $request->validate($rules);
+        if (!empty($user->password)) {
+            if (!Hash::check($request->input('current_password'), $user->password)) {
+                return back()->withErrors(['current_password' => 'Mật khẩu hiện tại không đúng.']);
+            }
         }
         $user->password = Hash::make($request->input('password'));
         $user->save();
