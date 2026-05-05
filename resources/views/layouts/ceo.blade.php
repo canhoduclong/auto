@@ -160,6 +160,9 @@
             <a href="{{ route('ceo.dashboard') }}" class="ceo-nav-link {{ request()->routeIs('ceo.dashboard') ? 'active' : '' }}">
                 <i class="bi bi-speedometer2"></i> Dashboard
             </a>
+            <a href="{{ route('ceo.profile') }}" class="ceo-nav-link {{ request()->routeIs('ceo.profile') ? 'active' : '' }}">
+                <i class="bi bi-person-circle"></i> Hồ sơ CEO
+            </a>
             <a href="{{ route('ceo.revenue') }}" class="ceo-nav-link {{ request()->routeIs('ceo.revenue') ? 'active' : '' }}">
                 <i class="bi bi-currency-dollar"></i> Doanh thu
             </a>

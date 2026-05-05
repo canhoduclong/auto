@@ -195,6 +195,12 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::delete('/task-management/{task}', [TaskManagementController::class, 'destroy'])->name('task-management.destroy');
         Route::patch('/task-management/{task}/status', [TaskManagementController::class, 'updateStatus'])->name('task-management.update-status');
         Route::get('/task-management/customers', [TaskManagementController::class, 'getCustomers'])->name('task-management.customers');
+        // task updte prpffile
+        Route::get('/profile', [\App\Http\Controllers\CeoPageController::class, 'show'])->name('profile');
+        Route::post('/profile', [\App\Http\Controllers\CeoPageController::class, 'update'])->name('profile.update');
+        // Đổi mật khẩu CEO
+        Route::get('/change-password', [\App\Http\Controllers\CeoChangePasswordController::class, 'show'])->name('password.change');
+        Route::post('/change-password', [\App\Http\Controllers\CeoChangePasswordController::class, 'update'])->name('password.update');
     });
     Route::get('reports/revenue', [RevenueReportController::class, 'index'])
         ->name('reports.revenue')
