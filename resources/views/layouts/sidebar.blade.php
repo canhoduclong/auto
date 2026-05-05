@@ -51,37 +51,27 @@
 								@if(auth()->user()->roles->isNotEmpty())
 									{{ auth()->user()->roles->pluck('name')->join(', ') }}
 								@else
-									<div>
-										<div class="font-semibold">{{ auth()->user()->name }}</div>
-										<div class="text-sm text-gray-400">{{ auth()->user()->email }}</div>
-										<div class="text-xs text-gray-500">
-											@if(auth()->user()->roles->isNotEmpty())
-												{{ auth()->user()->roles->pluck('name')->join(', ') }}
-											@else
-												No Role
-											@endif
-										</div>
-									</div>
+									No Role
+								@endif
+							</div>
+						</div>
 
-									@if(auth()->user()->hasPermission('profile.edit'))
-									<a href="{{ route('profile.edit') }}" class="btn btn-primary btn-sm mt-2">Profile</a>
-									@endif
+                        <a href="{{ route('profile.edit') }}" class="btn btn-primary btn-sm mt-2">Profile</a>
 
-									{{-- Thêm các tính năng khác, ví dụ: --}}
-									@if(auth()->user()->hasPermission('admin.settings.index'))
-									<a href="{{ route('admin.settings.index') }}" class="btn btn-outline-primary btn-sm mt-2">Cài đặt hệ thống</a>
-									@endif
-									@if(auth()->user()->hasPermission('admin.notifications.index'))
-									<a href="{{ route('admin.notifications.index') }}" class="btn btn-outline-primary btn-sm mt-2">Thông báo</a>
-									@endif
+						<form method="POST" action="{{ route('logout') }}" class="mt-2">
+							@csrf
+							<button class="w-full bg-red-600 px-4 py-2 rounded hover:bg-red-700">
+								{{ __('menu.logout') }}
+							</button>
+						</form>
 
-									<form method="POST" action="{{ route('logout') }}" class="mt-2">
-										@csrf
-										<button class="w-full bg-red-600 px-4 py-2 rounded hover:bg-red-700">
-											{{ __('menu.logout') }}
-										</button>
-									</form>
-								</div>
+					</div>
+
+
+						 
+					</div>
+				</div>
+				<!-- /customers --> 
 
 				<!-- Main navigation -->
 				<div class="sidebar-section">
