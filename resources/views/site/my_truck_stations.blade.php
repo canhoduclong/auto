@@ -110,6 +110,71 @@
         text-align: center;
         color: #64748b;
     }
+    .ts-route-card {
+        border: 1px solid #dbe4ef;
+        border-radius: 16px;
+        padding: 16px;
+        background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+    }
+    .ts-route-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 10px;
+    }
+    .ts-route-name {
+        font-size: 1rem;
+        font-weight: 800;
+        color: #0f172a;
+        margin: 0;
+    }
+    .ts-route-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 10px;
+    }
+    .ts-route-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: .76rem;
+        font-weight: 700;
+        background: #eef2ff;
+        color: #3730a3;
+    }
+    .ts-route-line {
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        background: #ffffff;
+        padding: 10px 12px;
+    }
+    .ts-route-path {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 6px;
+        color: #334155;
+        font-weight: 700;
+    }
+    .ts-route-arrow {
+        color: #0f766e;
+        font-size: .8rem;
+    }
+    .ts-route-time {
+        color: #475569;
+        font-size: .85rem;
+    }
+    .ts-route-code {
+        color: #64748b;
+        font-size: .78rem;
+        font-weight: 700;
+    }
 
     /* ── grid-dropdown ─────────────────────────────── */
     .ts-gd-wrap { position: relative; }
@@ -212,16 +277,16 @@
         <div class="row g-4 align-items-end position-relative">
             <div class="col-lg-5">
                 <div class="text-uppercase small fw-bold mb-2" style="letter-spacing:.12em;color:rgba(255,255,255,.6);">Logistics</div>
-                <h1 class="mb-3" style="font-size:2rem;font-weight:900;line-height:1.15;">Danh sách nhà xe</h1>
+                <h1 class="mb-3" style="font-size:2rem;font-weight:900;line-height:1.15;">Danh sách trạm xe</h1>
                 <p class="mb-0" style="color:rgba(255,255,255,.8);max-width:520px;">
-                    Quản lý thông tin nhà xe vận chuyển hàng hoá. Tra cứu nhanh và tạo mới nhà xe chỉ trong một màn hình.
+                    Quản lý thông tin trạm xe và các tuyến vận chuyển. Tra cứu nhanh, lọc theo tuyến và cập nhật ngay trên một màn hình.
                 </p>
             </div>
             <div class="col-lg-7">
                 <div class="row g-3">
                     <div class="col-6 col-md-4">
                         <div class="ts-kpi">
-                            <div class="ts-kpi-label">Tổng nhà xe</div>
+                            <div class="ts-kpi-label" id="kpi-total-label">Tổng trạm xe</div>
                             <div class="ts-kpi-value" id="kpi-total">—</div>
                         </div>
                     </div>
@@ -252,6 +317,20 @@
                     <div class="fw-bold mb-3" style="font-size:.95rem;color:#0f172a;"><i class="bi bi-search me-1"></i>Tìm kiếm</div>
                     <input type="text" id="ts-search" class="form-control mb-3" placeholder="Tên, địa chỉ, số điện thoại...">
 
+                    <div class="fw-bold mb-2" style="font-size:.95rem;color:#0f172a;"><i class="bi bi-signpost-2 me-1"></i>Tuyến xe</div>
+                    <input type="text" id="ts-route-filter" class="form-control mb-3" placeholder="Lọc theo tên tuyến...">
+
+                    <div class="fw-bold mb-2" style="font-size:.95rem;color:#0f172a;"><i class="bi bi-geo me-1"></i>Điểm đến</div>
+                    <input type="text" id="ts-destination-filter" class="form-control mb-3" placeholder="Lọc theo điểm đến...">
+
+                    <div class="fw-bold mb-2" style="font-size:.95rem;color:#0f172a;"><i class="bi bi-truck me-1"></i>Brand</div>
+                    <select id="ts-brand-filter" class="form-select mb-3">
+                        <option value="">Tất cả brand</option>
+                        @foreach($brands as $brand)
+                            <option value="{{ $brand->id }}">{{ $brand->name }}</option>
+                        @endforeach
+                    </select>
+
                     <div class="fw-bold mb-2" style="font-size:.95rem;color:#0f172a;"><i class="bi bi-toggles me-1"></i>Trạng thái</div>
                     <select id="ts-status-filter" class="form-select mb-3">
                         <option value="">Tất cả</option>
@@ -261,7 +340,7 @@
                 </div>
             </div>
 
-            <div class="ts-panel">
+            <div class="ts-panel" id="ts-region-panel">
                 <div class="ts-filter pt-3 pb-2">
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <span class="fw-bold" style="font-size:.95rem;color:#0f172a;"><i class="bi bi-geo-alt me-1"></i>Khu vực</span>
@@ -279,14 +358,35 @@
         <div class="col-xl-8">
 
             <div class="ts-panel mb-3">
+                <div class="ts-section-head d-flex flex-wrap gap-2 align-items-center" id="ts-view-tabs">
+                    <button type="button" class="btn btn-sm btn-primary" data-view-mode="routes">
+                        <i class="bi bi-signpost-2 me-1"></i>Danh sách chuyến
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-primary" data-view-mode="stations">
+                        <i class="bi bi-geo-alt me-1"></i>Danh sách trạm
+                    </button>
+                </div>
+            </div>
+
+            <div class="ts-panel mb-3">
                 <div class="ts-section-head d-flex flex-wrap gap-2 justify-content-between align-items-center">
                     <div>
-                        <h4 class="mb-0">Nhà xe vận chuyển</h4>
+                        <h4 class="mb-0" id="ts-list-title">Danh sách chuyến vận chuyển</h4>
                         <div class="text-muted small" id="ts-count-label">Đang tải...</div>
                     </div>
-                    <div>
+                    <div class="d-flex flex-wrap gap-2 align-items-center">
+                        <select id="ts-per-page" class="form-select form-select-sm" style="width:auto;">
+                            <option value="10">10 / trang</option>
+                            <option value="20" selected>20 / trang</option>
+                            <option value="50">50 / trang</option>
+                            <option value="100">100 / trang</option>
+                        </select>
+                        <select id="ts-sort-route" class="form-select form-select-sm" style="width:auto;">
+                            <option value="asc" selected>Tuyến đi A-Z</option>
+                            <option value="desc">Tuyến đi Z-A</option>
+                        </select>
                         <button class="btn btn-primary" id="ts-show-create-btn">
-                            <i class="bi bi-plus-circle me-1"></i>Thêm nhà xe mới
+                            <i class="bi bi-plus-circle me-1"></i>Thêm trạm xe
                         </button>
                     </div>
                 </div>
@@ -294,12 +394,12 @@
 
             {{-- Create form --}}
             <div class="ts-inline-form mb-3" id="ts-create-form">
-                <div class="fw-semibold mb-2 text-primary"><i class="bi bi-plus-circle me-1"></i>Thêm nhà xe mới</div>
+                <div class="fw-semibold mb-2 text-primary"><i class="bi bi-plus-circle me-1"></i>Thêm trạm xe</div>
                 <div id="ts-create-errors" class="alert alert-danger py-2 small d-none"></div>
                 <div class="row g-2">
                     <div class="col-12 col-sm-6">
-                        <label class="form-label form-label-sm mb-1">Tên nhà xe <span class="text-danger">*</span></label>
-                        <input type="text" id="cf-name" class="form-control form-control-sm" placeholder="Nhập tên nhà xe">
+                        <label class="form-label form-label-sm mb-1">Tên trạm xe <span class="text-danger">*</span></label>
+                        <input type="text" id="cf-name" class="form-control form-control-sm" placeholder="Nhập tên trạm xe">
                     </div>
                     <div class="col-12 col-sm-6">
                         <label class="form-label form-label-sm mb-1">Nhà xe (Brand)</label>
@@ -410,7 +510,7 @@
         <div class="text-danger small mb-2 d-none" data-edit-errors></div>
         <div class="row g-2">
             <div class="col-12 col-sm-6">
-                <label class="form-label form-label-sm mb-1">Tên nhà xe <span class="text-danger">*</span></label>
+                <label class="form-label form-label-sm mb-1">Tên trạm xe <span class="text-danger">*</span></label>
                 <input type="text" class="form-control form-control-sm" data-field="name">
             </div>
             <div class="col-12 col-sm-6">
@@ -738,7 +838,7 @@
             .then(({ ok, d }) => {
                 if (!ok) {
                     const messages = Object.values(d.errors || {}).flat();
-                    showCreateErrors(messages.length ? messages : [d.message || 'Không thể tạo nhà xe.']);
+                    showCreateErrors(messages.length ? messages : [d.message || 'Không thể tạo trạm xe.']);
                     return;
                 }
 
@@ -759,6 +859,9 @@
     let currentProvince = '';
     let currentWard     = '';
     let currentPage     = 1;
+    let currentPerPage  = 20;
+    let currentSortRoute = 'asc';
+    let currentViewMode = 'routes';
     let searchTimer     = null;
 
     function esc(s) {
@@ -775,12 +878,53 @@
 
     function getFilters() {
         return {
+            mode:        currentViewMode,
             q:           document.getElementById('ts-search').value.trim(),
+            route:       document.getElementById('ts-route-filter').value.trim(),
+            destination: document.getElementById('ts-destination-filter').value.trim(),
+            brand_id:    document.getElementById('ts-brand-filter').value,
             province_id: currentWard ? '' : currentProvince,
             ward_id:     currentWard,
             is_active:   document.getElementById('ts-status-filter').value,
+            per_page:    currentPerPage,
+            sort_route:  currentSortRoute,
             page:        currentPage,
         };
+    }
+
+    function applyViewModeUI() {
+        const isRouteMode = currentViewMode === 'routes';
+        const regionPanel = document.getElementById('ts-region-panel');
+        const createBtn = document.getElementById('ts-show-create-btn');
+        const createForm = document.getElementById('ts-create-form');
+        const listTitle = document.getElementById('ts-list-title');
+        const totalLabel = document.getElementById('kpi-total-label');
+
+        if (regionPanel) {
+            regionPanel.style.display = isRouteMode ? 'none' : '';
+        }
+
+        if (createBtn) {
+            createBtn.style.display = isRouteMode ? 'none' : '';
+        }
+
+        if (isRouteMode && createForm) {
+            createForm.classList.remove('open');
+        }
+
+        if (listTitle) {
+            listTitle.textContent = isRouteMode ? 'Danh sách chuyến vận chuyển' : 'Trạm xe vận chuyển';
+        }
+
+        if (totalLabel) {
+            totalLabel.textContent = isRouteMode ? 'Tổng chuyến' : 'Tổng trạm xe';
+        }
+
+        document.querySelectorAll('#ts-view-tabs [data-view-mode]').forEach(btn => {
+            const active = btn.dataset.viewMode === currentViewMode;
+            btn.classList.toggle('btn-primary', active);
+            btn.classList.toggle('btn-outline-primary', !active);
+        });
     }
 
     /* ── region tree ──────────────────────────────────────── */
@@ -890,6 +1034,22 @@
         currentPage = 1; loadList();
     });
 
+    document.querySelectorAll('#ts-view-tabs [data-view-mode]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const nextMode = btn.dataset.viewMode;
+            if (!nextMode || nextMode === currentViewMode) {
+                return;
+            }
+
+            currentViewMode = nextMode;
+            currentPage = 1;
+            currentProvince = '';
+            currentWard = '';
+            applyViewModeUI();
+            loadList();
+        });
+    });
+
     function loadList() {
         const wrap = document.getElementById('ts-list-wrap');
         wrap.innerHTML = '<div class="ts-empty"><i class="bi bi-hourglass-split" style="font-size:2rem;"></i><h5 class="mt-3">Đang tải...</h5></div>';
@@ -905,31 +1065,65 @@
         const links = res.links || {};
         const total = links.total || 0;
         const active = (res.data || []).filter(d => d.is_active).length;
+        const isRouteMode = currentViewMode === 'routes';
 
         document.getElementById('ts-count-label').textContent =
-            'Hiển thị ' + (res.data ? res.data.length : 0) + ' trong tổng số ' + total + ' nhà xe';
+            'Hiển thị ' + (res.data ? res.data.length : 0) + ' trong tổng số ' + total + (isRouteMode ? ' chuyến' : ' trạm xe');
         document.getElementById('kpi-total').textContent  = total;
         document.getElementById('kpi-active').textContent = active;
         document.getElementById('kpi-page').textContent   = res.data ? res.data.length : 0;
 
         if (!res.data || !res.data.length) {
-            wrap.innerHTML = '<div class="ts-empty"><i class="bi bi-truck" style="font-size:2.4rem;"></i><h5 class="mt-3 mb-2">Không có nhà xe nào</h5><p>Hãy thêm nhà xe mới để bắt đầu quản lý.</p></div>';
+            wrap.innerHTML = isRouteMode
+                ? '<div class="ts-empty"><i class="bi bi-signpost-2" style="font-size:2.4rem;"></i><h5 class="mt-3 mb-2">Không có chuyến nào</h5><p>Hãy thêm/chỉnh sửa tuyến để bắt đầu quản lý danh sách chuyến.</p></div>'
+                : '<div class="ts-empty"><i class="bi bi-truck" style="font-size:2.4rem;"></i><h5 class="mt-3 mb-2">Không có trạm xe nào</h5><p>Hãy thêm trạm xe mới để bắt đầu quản lý.</p></div>';
             return;
         }
 
         wrap.innerHTML = '<div class="row g-3" id="ts-card-grid"></div>';
         const grid = document.getElementById('ts-card-grid');
-        res.data.forEach(ts => {
+        res.data.forEach(item => {
             const col = document.createElement('div');
             col.className = 'col-12';
-            col.innerHTML = buildCard(ts);
+            col.innerHTML = isRouteMode ? buildRouteCard(item) : buildCard(item);
             const card = col.querySelector('.ts-station-card');
-            card._tsData = ts;
-            attachEditHandlers(card, ts);
+            if (!isRouteMode) {
+                card._tsData = item;
+                attachEditHandlers(card, item);
+            }
             grid.appendChild(col);
         });
 
         renderPagination(links.current_page, links.last_page);
+    }
+
+    function buildRouteCard(route) {
+        const badge = route.is_active
+            ? '<span class="ts-badge-on"><i class="bi bi-check-circle-fill"></i> Đang HĐ</span>'
+            : '<span class="ts-badge-off"><i class="bi bi-x-circle-fill"></i> Ngừng HĐ</span>';
+
+        return `<div class="ts-station-card ts-route-card">
+            <div class="ts-route-head">
+                <h6 class="ts-route-name">${esc(route.name || '')}</h6>
+                ${badge}
+            </div>
+
+            <div class="ts-route-meta">
+                ${route.brand ? `<span class="ts-route-chip"><i class="bi bi-truck"></i>${esc(route.brand)}</span>` : ''}
+                <span class="ts-route-code">Mã tuyến: #${esc(route.id || '')}</span>
+            </div>
+
+            <div class="ts-route-line">
+                <div class="ts-route-path">
+                    <span><i class="bi bi-geo-alt me-1"></i>${esc(route.origin || '-')}</span>
+                    <i class="bi bi-arrow-right ts-route-arrow"></i>
+                    <span><i class="bi bi-pin-map me-1"></i>${esc(route.destination || '-')}</span>
+                </div>
+                <div class="ts-route-time">
+                    <i class="bi bi-clock me-1"></i>Giờ đi: <strong>${esc(route.departure_time || '-')}</strong>
+                </div>
+            </div>
+        </div>`;
     }
 
     function buildCard(ts) {
@@ -937,6 +1131,13 @@
             ? '<span class="ts-badge-on"><i class="bi bi-check-circle-fill"></i> Đang HĐ</span>'
             : '<span class="ts-badge-off"><i class="bi bi-x-circle-fill"></i> Ngừng HĐ</span>';
         const location = [ts.ward, ts.province].filter(Boolean).join(', ');
+        const brandText = ts.brand ? `<small class="text-muted d-block ts-brand"><i class="bi bi-truck me-1"></i>Brand: ${esc(ts.brand)}</small>` : '';
+        const routes = Array.isArray(ts.routes) ? ts.routes : [];
+        const routesHtml = routes.length
+            ? `<div class="mt-2 pt-2 border-top"><small class="text-uppercase fw-bold text-muted">Tuyến xe (${routes.length})</small>
+                <div class="mt-1">${routes.map(route => `<div class="small text-secondary"><i class="bi bi-signpost-2 me-1"></i><strong>${esc(route.name || '')}</strong>${route.brand ? ` <span class="text-muted">(${esc(route.brand)})</span>` : ''}<div class="text-muted ms-4">Điểm đi: <span class="text-dark">${esc(route.origin || '-')}</span> | Điểm đến: <span class="text-dark">${esc(route.destination || '-')}</span> | Giờ đi: <span class="text-dark">${esc(route.departure_time || '-')}</span></div></div>`).join('')}</div>
+               </div>`
+            : `<div class="mt-2 pt-2 border-top"><small class="text-muted">Chưa có tuyến xe gắn với trạm này.</small></div>`;
         const editBtn  = ts.can_edit
             ? `<button class="btn btn-outline-warning btn-sm" data-action="open-edit" title="Chỉnh sửa"><i class="bi bi-pencil"></i></button>`
             : '';
@@ -950,9 +1151,11 @@
                     </div>
                     ${ts.phone ? `<div class="fw-bold"><i class="bi bi-telephone me-1"></i><a href="tel:${esc(ts.phone)}" class="text-decoration-none ts-phone">${esc(ts.phone)}</a></div>` : `<span class="ts-phone d-none"></span>`}
                     <div class="ts-meta">
+                        ${brandText}
                         ${location ? `<small class="text-muted d-block mt-1 ts-location"><i class="bi bi-geo-alt me-1"></i>${esc(location)}</small>` : ''}
                         ${ts.address ? `<small class="text-muted d-block ts-address"><i class="bi bi-house me-1"></i>${esc(ts.address)}</small>` : ''}
                         ${ts.note ? `<small class="text-secondary d-block mt-1 ts-note"><i class="bi bi-sticky me-1"></i>${esc(ts.note)}</small>` : ''}
+                        ${routesHtml}
                     </div>
                 </div>
                 <div class="col-md-5 d-flex flex-column justify-content-between align-items-end mt-2 mt-md-0">
@@ -1107,10 +1310,19 @@
         const meta = card.querySelector('.ts-meta');
         if (meta) {
             const location = [ts.ward, ts.province].filter(Boolean).join(', ');
+            const brandText = ts.brand ? `<small class="text-muted d-block ts-brand"><i class="bi bi-truck me-1"></i>Brand: ${esc(ts.brand)}</small>` : '';
+            const routes = Array.isArray(ts.routes) ? ts.routes : [];
+            const routesHtml = routes.length
+                ? `<div class="mt-2 pt-2 border-top"><small class="text-uppercase fw-bold text-muted">Tuyến xe (${routes.length})</small>
+                    <div class="mt-1">${routes.map(route => `<div class="small text-secondary"><i class="bi bi-signpost-2 me-1"></i><strong>${esc(route.name || '')}</strong>${route.brand ? ` <span class="text-muted">(${esc(route.brand)})</span>` : ''}<div class="text-muted ms-4">Điểm đi: <span class="text-dark">${esc(route.origin || '-')}</span> | Điểm đến: <span class="text-dark">${esc(route.destination || '-')}</span> | Giờ đi: <span class="text-dark">${esc(route.departure_time || '-')}</span></div></div>`).join('')}</div>
+                   </div>`
+                : `<div class="mt-2 pt-2 border-top"><small class="text-muted">Chưa có tuyến xe gắn với trạm này.</small></div>`;
             meta.innerHTML =
+                brandText +
                 (location ? `<small class="text-muted d-block mt-1 ts-location"><i class="bi bi-geo-alt me-1"></i>${esc(location)}</small>` : '') +
                 (ts.address ? `<small class="text-muted d-block ts-address"><i class="bi bi-house me-1"></i>${esc(ts.address)}</small>` : '') +
-                (ts.note ? `<small class="text-secondary d-block mt-1 ts-note"><i class="bi bi-sticky me-1"></i>${esc(ts.note)}</small>` : '');
+                (ts.note ? `<small class="text-secondary d-block mt-1 ts-note"><i class="bi bi-sticky me-1"></i>${esc(ts.note)}</small>` : '') +
+                routesHtml;
         }
     }
 
@@ -1132,10 +1344,38 @@
         searchTimer = setTimeout(() => { currentPage = 1; loadList(); }, 400);
     });
 
+    document.getElementById('ts-route-filter').addEventListener('input', () => {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => { currentPage = 1; loadList(); }, 400);
+    });
+
+    document.getElementById('ts-destination-filter').addEventListener('input', () => {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => { currentPage = 1; loadList(); }, 400);
+    });
+
+    document.getElementById('ts-brand-filter').addEventListener('change', () => {
+        currentPage = 1;
+        loadList();
+    });
+
     document.getElementById('ts-status-filter').addEventListener('change', () => { currentPage = 1; loadList(); });
+
+    document.getElementById('ts-per-page').addEventListener('change', (e) => {
+        currentPerPage = parseInt(e.target.value, 10) || 20;
+        currentPage = 1;
+        loadList();
+    });
+
+    document.getElementById('ts-sort-route').addEventListener('change', (e) => {
+        currentSortRoute = e.target.value === 'desc' ? 'desc' : 'asc';
+        currentPage = 1;
+        loadList();
+    });
 
 
     loadRegionTree();
+    applyViewModeUI();
     loadList();
 })();
 </script>

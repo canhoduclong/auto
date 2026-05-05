@@ -3849,7 +3849,90 @@ public function apiTruckRoutes(Request $request)
     public function myTruckStationsAjax(Request $request)
     {
         $userId = auth()->id();
-        $query = TruckStation::with(['province', 'ward']);
+        $mode = (string) $request->input('mode', 'stations');
+
+        if ($mode === 'routes') {
+            $routeQuery = \App\Models\TruckRoute::query()->with([
+                'brand',
+                'stops.station',
+            ]);
+
+            $keyword = trim((string) $request->input('q', ''));
+            if ($keyword !== '') {
+                $routeQuery->where(function ($sub) use ($keyword) {
+                    $sub->where('name', 'like', "%{$keyword}%")
+                        ->orWhereHas('brand', function ($brandQuery) use ($keyword) {
+                            $brandQuery->where('name', 'like', "%{$keyword}%");
+                        });
+                });
+            }
+
+            $brandId = $request->input('brand_id');
+            if ($brandId) {
+                $routeQuery->where('truck_brand_id', $brandId);
+            }
+
+            $routeKeyword = trim((string) $request->input('route', ''));
+            if ($routeKeyword !== '') {
+                $routeQuery->where('name', 'like', "%{$routeKeyword}%");
+            }
+
+            $destinationKeyword = trim((string) $request->input('destination', ''));
+            if ($destinationKeyword !== '') {
+                $routeQuery->whereHas('stops', function ($stopQuery) use ($destinationKeyword) {
+                    $stopQuery->whereRaw('sort_order = (SELECT MAX(s2.sort_order) FROM truck_route_stops s2 WHERE s2.truck_route_id = truck_route_stops.truck_route_id)')
+                        ->whereHas('station', function ($stationQuery) use ($destinationKeyword) {
+                            $stationQuery->where('name', 'like', "%{$destinationKeyword}%");
+                        });
+                });
+            }
+
+            $isActive = $request->input('is_active');
+            if ($isActive !== null && $isActive !== '') {
+                $routeQuery->where('is_active', (bool) $isActive);
+            }
+
+            $perPage = (int) $request->input('per_page', 20);
+            $perPage = in_array($perPage, [10, 20, 50, 100], true) ? $perPage : 20;
+
+            $sortRoute = strtolower((string) $request->input('sort_route', 'asc'));
+            $sortRoute = in_array($sortRoute, ['asc', 'desc'], true) ? $sortRoute : 'asc';
+
+            $routes = $routeQuery->orderBy('name', $sortRoute)->paginate($perPage);
+
+            return response()->json([
+                'data' => $routes->map(function ($route) use ($userId) {
+                    $stops = $route->stops ?? collect();
+                    $originStop = $stops->sortBy('sort_order')->first();
+                    $destinationStop = $stops->sortByDesc('sort_order')->first();
+
+                    return [
+                        'id' => $route->id,
+                        'name' => $route->name,
+                        'brand' => $route->brand?->name,
+                        'origin' => $originStop?->station?->name,
+                        'destination' => $destinationStop?->station?->name,
+                        'departure_time' => $originStop?->arrival_time,
+                        'is_active' => (bool) $route->is_active,
+                        'can_edit' => (int) $route->created_by === (int) $userId,
+                    ];
+                }),
+                'links' => [
+                    'current_page' => $routes->currentPage(),
+                    'last_page' => $routes->lastPage(),
+                    'per_page' => $routes->perPage(),
+                    'total' => $routes->total(),
+                ],
+            ]);
+        }
+
+        $query = TruckStation::with([
+            'brand',
+            'province',
+            'ward',
+            'routeStops.route.brand',
+            'routeStops.route.stops.station',
+        ]);
 
         $keyword = trim((string) $request->input('q', ''));
         if ($keyword !== '') {
@@ -3875,13 +3958,76 @@ public function apiTruckRoutes(Request $request)
             $query->where('is_active', (bool) $isActive);
         }
 
-        $truckStations = $query->orderBy('name')->paginate(20);
+        $brandId = $request->input('brand_id');
+        if ($brandId) {
+            $query->where(function ($sub) use ($brandId) {
+                $sub->where('brand_id', $brandId)
+                    ->orWhereHas('routeStops.route', function ($routeQuery) use ($brandId) {
+                        $routeQuery->where('truck_brand_id', $brandId);
+                    });
+            });
+        }
+
+        $routeKeyword = trim((string) $request->input('route', ''));
+        if ($routeKeyword !== '') {
+            $query->whereHas('routeStops.route', function ($routeQuery) use ($routeKeyword) {
+                $routeQuery->where('name', 'like', "%{$routeKeyword}%");
+            });
+        }
+
+        $destinationKeyword = trim((string) $request->input('destination', ''));
+        if ($destinationKeyword !== '') {
+            $query->whereHas('routeStops.route', function ($routeQuery) use ($destinationKeyword) {
+                $routeQuery->whereHas('stops', function ($stopQuery) use ($destinationKeyword) {
+                    $stopQuery->whereRaw('sort_order = (SELECT MAX(s2.sort_order) FROM truck_route_stops s2 WHERE s2.truck_route_id = truck_route_stops.truck_route_id)')
+                        ->whereHas('station', function ($stationQuery) use ($destinationKeyword) {
+                            $stationQuery->where('name', 'like', "%{$destinationKeyword}%");
+                        });
+                });
+            });
+        }
+
+        $perPage = (int) $request->input('per_page', 20);
+        $perPage = in_array($perPage, [10, 20, 50, 100], true) ? $perPage : 20;
+
+        $sortRoute = strtolower((string) $request->input('sort_route', 'asc'));
+        $sortRoute = in_array($sortRoute, ['asc', 'desc'], true) ? $sortRoute : 'asc';
+
+        $query->orderByRaw(
+            "COALESCE((SELECT MIN(tr.name) FROM truck_route_stops trs INNER JOIN truck_routes tr ON tr.id = trs.truck_route_id WHERE trs.truck_station_id = truck_stations.id), truck_stations.name) {$sortRoute}"
+        );
+
+        $truckStations = $query->paginate($perPage);
 
         return response()->json([
             'data' => $truckStations->map(function ($ts) use ($userId) {
+                $routes = $ts->routeStops
+                    ->map(fn ($routeStop) => $routeStop->route)
+                    ->filter()
+                    ->unique('id')
+                    ->sortBy('name')
+                    ->values()
+                    ->map(function ($route) {
+                        $stops = $route->stops ?? collect();
+                        $originStop = $stops->sortBy('sort_order')->first();
+                        $destinationStop = $stops->sortByDesc('sort_order')->first();
+
+                        return [
+                            'id' => $route->id,
+                            'name' => $route->name,
+                            'brand' => $route->brand?->name,
+                            'origin' => $originStop?->station?->name,
+                            'destination' => $destinationStop?->station?->name,
+                            'departure_time' => $originStop?->arrival_time,
+                        ];
+                    })
+                    ->values();
+
                 return [
                     'id' => $ts->id,
                     'name' => $ts->name,
+                    'brand_id' => $ts->brand_id,
+                    'brand' => $ts->brand?->name,
                     'address' => $ts->address,
                     'phone' => $ts->phone,
                     'note' => $ts->note,
@@ -3890,12 +4036,15 @@ public function apiTruckRoutes(Request $request)
                     'ward_id' => $ts->ward_id,
                     'province' => $ts->province ? $ts->province->name : null,
                     'ward' => $ts->ward ? $ts->ward->name : null,
+                    'routes' => $routes,
+                    'route_count' => $routes->count(),
                     'can_edit' => (int) $ts->created_by === (int) $userId,
                 ];
             }),
             'links' => [
                 'current_page' => $truckStations->currentPage(),
                 'last_page' => $truckStations->lastPage(),
+                'per_page' => $truckStations->perPage(),
                 'total' => $truckStations->total(),
             ],
         ]);
@@ -3938,7 +4087,7 @@ public function apiTruckRoutes(Request $request)
 
         return response()->json([
             'success' => true,
-            'message' => 'Đã tạo nhà xe mới.',
+            'message' => 'Đã tạo trạm xe mới.',
             'data' => [
                 'id' => $station->id,
                 'name' => $station->name,
@@ -3956,6 +4105,8 @@ public function apiTruckRoutes(Request $request)
                 'ward_id' => $station->ward_id,
                 'province' => $station->province ? $station->province->name : null,
                 'ward' => $station->ward ? $station->ward->name : null,
+                'routes' => [],
+                'route_count' => 0,
                 'can_edit' => true,
             ],
         ]);
@@ -3964,7 +4115,7 @@ public function apiTruckRoutes(Request $request)
     public function myTruckStationsUpdate(Request $request, TruckStation $truckStation)
     {
         if ((int) $truckStation->created_by !== (int) auth()->id()) {
-            return response()->json(['message' => 'Bạn không có quyền sửa nhà xe này.'], 403);
+            return response()->json(['message' => 'Bạn không có quyền sửa trạm xe này.'], 403);
         }
 
         $data = $request->validate([
@@ -3990,14 +4141,44 @@ public function apiTruckRoutes(Request $request)
         $data['is_active'] = (bool) ($data['is_active'] ?? false);
 
         $truckStation->update($data);
-        $truckStation->load(['province', 'ward']);
+        $truckStation->load([
+            'brand',
+            'province',
+            'ward',
+            'routeStops.route.brand',
+            'routeStops.route.stops.station',
+        ]);
+
+        $routes = $truckStation->routeStops
+            ->map(fn ($routeStop) => $routeStop->route)
+            ->filter()
+            ->unique('id')
+            ->sortBy('name')
+            ->values()
+            ->map(function ($route) {
+                $stops = $route->stops ?? collect();
+                $originStop = $stops->sortBy('sort_order')->first();
+                $destinationStop = $stops->sortByDesc('sort_order')->first();
+
+                return [
+                    'id' => $route->id,
+                    'name' => $route->name,
+                    'brand' => $route->brand?->name,
+                    'origin' => $originStop?->station?->name,
+                    'destination' => $destinationStop?->station?->name,
+                    'departure_time' => $originStop?->arrival_time,
+                ];
+            })
+            ->values();
 
         return response()->json([
             'success' => true,
-            'message' => 'Đã cập nhật nhà xe.',
+            'message' => 'Đã cập nhật trạm xe.',
             'data' => [
                 'id' => $truckStation->id,
                 'name' => $truckStation->name,
+                'brand_id' => $truckStation->brand_id,
+                'brand' => $truckStation->brand ? $truckStation->brand->name : null,
                 'address' => $truckStation->address,
                 'phone' => $truckStation->phone,
                 'note' => $truckStation->note,
@@ -4006,6 +4187,8 @@ public function apiTruckRoutes(Request $request)
                 'ward_id' => $truckStation->ward_id,
                 'province' => $truckStation->province ? $truckStation->province->name : null,
                 'ward' => $truckStation->ward ? $truckStation->ward->name : null,
+                'routes' => $routes,
+                'route_count' => $routes->count(),
                 'can_edit' => true,
             ],
         ]);
