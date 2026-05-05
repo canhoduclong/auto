@@ -263,10 +263,10 @@
                 <div class="mc-card-body-wrap"><div class="card-body">
                     
                     <div class="row g-3">
-                        <div class="col-12 col-md-6">
+                        <div class="col-12 col-md-8">
                             <div class="row g-3">
 
-                                <div class="col-12 col-md-12">
+                                <div class="col-12 col-md-9">
                                     <label for="name" class="form-label mc-form-label">Tên khách hàng <span class="text-danger">*</span></label>
                                     <input type="text" class="form-control mc-form-control @error('name') is-invalid @enderror" id="name" name="name" value="{{ old('name') }}" required>
                                     @error('name')<div class="field-error-msg"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0zm-8-5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 10 5zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2z" clip-rule="evenodd"/></svg>{{ $message }}</div>@enderror
@@ -280,6 +280,11 @@
                                         <div id="duplicate-resolution-help" class="mc-help mt-1"></div>
                                     </div>
                                 </div>
+                                <div class="col-12 col-md-3">
+                                    <label class="form-label mc-form-label" style="font-size:0.82rem;">Giờ giao hàng</label>
+                                    <input type="text" class="form-control mc-form-control" name="delivery_time" id="delivery_time" value="{{ old('delivery_time') }}" placeholder="VD: 8h-10h">
+                                </div>
+                                
                                 <div class="col-12 col-md-6">
                                     <label for="phone" class="form-label mc-form-label">Số điện thoại</label>
                                     <input type="text" class="form-control mc-form-control @error('phone') is-invalid @enderror" id="phone" name="phone" value="{{ old('phone') }}">
@@ -341,13 +346,14 @@
 
                             </div>
                         </div>
-                        <div class="col-12 col-md-6">
+                        <div class="col-12 col-md-4">
                             <label for="avatar" class="form-label mc-form-label">Ảnh đại diện</label>
                             <input class="form-control mc-form-control" type="file" id="avatar" name="avatar" accept="image/*">
                             <div class="mt-2">
                                 <img id="avatarPreview" src="https://ui-avatars.com/api/?name=Khach+Hang" alt="Avatar" class="" style="width:210px;height:210px;object-fit:cover;border-color:#0f766e!important;">
                             </div>                                
                         </div>
+
                     </div>
                 </div></div>{{-- /.mc-card-body-wrap --}}
             </div>
@@ -380,12 +386,8 @@
                             <div class="col-6 col-md-2">
                                 <label class="form-label mc-form-label" style="font-size:0.82rem;">Sản lượng</label>
                                 <input type="text" class="form-control mc-form-control" name="production" value="{{ old('production') }}" placeholder="VD: 120 con">
-                            </div>
-                            <div class="col-12 col-md-2">
-                                <label class="form-label mc-form-label" style="font-size:0.82rem;">Giờ giao hàng</label>
-                                <input type="text" class="form-control mc-form-control" name="delivery_time" id="delivery_time" value="{{ old('delivery_time') }}" placeholder="VD: 8h-10h">
-                            </div>
-                            <div class="col-12 col-md-2">
+                            </div> 
+                            <div class="col-12 col-md-4">
                                 <label class="form-label mc-form-label" style="font-size:0.82rem;">Ghi chú</label>
                                 <input type="text" class="form-control mc-form-control" name="product_note" value="{{ old('product_note') }}" placeholder="Yêu cầu thêm...">
                             </div>
@@ -924,12 +926,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 <div class="col-6 col-md-2">
                     <label class="form-label mc-form-label" style="font-size:0.82rem;">Sản lượng</label>
                     <input type="text" class="form-control mc-form-control" name="products[${idx}][production]" placeholder="VD: 120 con">
-                </div>
-                <div class="col-12 col-md-2">
-                    <label class="form-label mc-form-label" style="font-size:0.82rem;">Giờ giao</label>
-                    <input type="text" class="form-control mc-form-control" name="products[${idx}][delivery_time]" placeholder="VD: 8h-10h">
-                </div>
-                <div class="col-12 col-md-2">
+                </div> 
+                <div class="col-12 col-md-4">
                     <label class="form-label mc-form-label" style="font-size:0.82rem;">Ghi chú</label>
                     <input type="text" class="form-control mc-form-control" name="products[${idx}][note]" placeholder="Yêu cầu thêm...">
                 </div>

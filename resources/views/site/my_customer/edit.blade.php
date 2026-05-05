@@ -171,7 +171,7 @@
 
         <div class="row g-3">
             {{-- ── LEFT COLUMN: 4 cards ── --}}
-            <div class="col-12 col-lg-8">
+            <div class="col-12 col-lg-12">
 
                 <form action="{{ route('my_customer.update', $customer) }}" method="POST" autocomplete="off">
                     @csrf
@@ -184,68 +184,83 @@
                             <i class="bi bi-person-fill text-primary"></i> Thông tin khách hàng
                             <span class="mc-card-toggle-icon"><i class="bi bi-chevron-down"></i></span>
                         </div>
-                        <div class="mc-card-body-wrap"><div class="card-body">
-                            <div class="row g-3">
-                                <div class="col-12 col-md-6">
-                                    <label for="name" class="form-label mc-form-label">Tên khách hàng <span class="text-danger">*</span></label>
-                                    <input type="text" class="form-control mc-form-control" id="name" name="name" value="{{ old('name', $customer->name) }}" required>
-                                </div>
-                                <div class="col-12 col-md-6">
-                                    <label for="phone" class="form-label mc-form-label">Số điện thoại</label>
-                                    <input type="text" class="form-control mc-form-control" id="phone" name="phone" value="{{ old('phone', $customer->phone) }}">
-                                </div>
-                                <div class="col-12 col-md-6">
-                                    <label for="email" class="form-label mc-form-label">Email</label>
-                                    <input type="email" class="form-control mc-form-control" id="email" name="email" value="{{ old('email', $customer->email) }}">
-                                </div>
-                                <div class="col-12 col-md-6">
-                                    <label for="address" class="form-label mc-form-label">Địa chỉ</label>
-                                    <input type="text" class="form-control mc-form-control" id="address" name="address"
-                                        value="{{ old('address', $defaultAddress->note ?? $customer->address) }}"
-                                        placeholder="Số nhà, tên đường...">
-                                </div>
-                                <div class="col-12 col-md-4">
-                                    <label class="form-label mc-form-label">Tỉnh / Thành phố</label>
-                                    <div class="mc-gd-wrap" id="province-gd-wrap">
-                                        <div class="mc-gd-trigger" id="province-gd-trigger" tabindex="0">
-                                            <span class="mc-gd-val text-muted">-- Chọn tỉnh/thành --</span>
-                                            <span class="mc-gd-clear" title="Xoá">×</span>
-                                            <i class="bi bi-chevron-down ms-1" style="font-size:.75rem;"></i>
-                                        </div>
-                                        <div class="mc-gd-panel" id="province-gd-panel">
-                                            <input type="text" class="mc-gd-search" placeholder="🔍 Tìm tỉnh/thành...">
-                                            <div class="mc-gd-grid cols-4" id="province-gd-grid">
-                                                @foreach(($provinces ?? []) as $province)
-                                                    <div class="mc-gd-item{{ (string)$selectedProvinceId === (string)$province->id ? ' selected' : '' }}"
-                                                         data-value="{{ $province->id }}" data-label="{{ $province->name }}">{{ $province->name }}</div>
-                                                @endforeach
+                        <div class="mc-card-body-wrap">
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-8">
+                                        <div class="row g-3">
+                                            <div class="col-12 col-md-9">
+                                                <label for="name" class="form-label mc-form-label">Tên khách hàng <span class="text-danger">*</span></label>
+                                                <input type="text" class="form-control mc-form-control" id="name" name="name" value="{{ old('name', $customer->name) }}" required>
                                             </div>
+                                            <div class="col-12 col-md-3">
+                                                <label for="delivery_time" class="form-label mc-form-label">Giờ giao hàng</label>
+                                                <input type="text" class="form-control mc-form-control" id="delivery_time" name="delivery_time"
+                                                    value="{{ old('delivery_time', $customer->delivery_time) }}" placeholder="VD: 8h-10h, sau 17h">
+                                                <div class="mc-help mt-1">Dùng mặc định khi tạo đơn.</div>
+                                            </div>
+
+                                            <div class="col-12 col-md-6">
+                                                <label for="phone" class="form-label mc-form-label">Số điện thoại</label>
+                                                <input type="text" class="form-control mc-form-control" id="phone" name="phone" value="{{ old('phone', $customer->phone) }}">
+                                            </div>
+                                            <div class="col-12 col-md-6">
+                                                <label for="email" class="form-label mc-form-label">Email</label>
+                                                <input type="email" class="form-control mc-form-control" id="email" name="email" value="{{ old('email', $customer->email) }}">
+                                            </div>
+                                            <div class="col-12 col-md-12">
+                                                <label for="address" class="form-label mc-form-label">Địa chỉ</label>
+                                                <input type="text" class="form-control mc-form-control" id="address" name="address"
+                                                    value="{{ old('address', $defaultAddress->note ?? $customer->address) }}"
+                                                    placeholder="Số nhà, tên đường...">
+                                            </div>
+                                            <div class="col-12 col-md-6">
+                                                <label class="form-label mc-form-label">Tỉnh / Thành phố</label>
+                                                <div class="mc-gd-wrap" id="province-gd-wrap">
+                                                    <div class="mc-gd-trigger" id="province-gd-trigger" tabindex="0">
+                                                        <span class="mc-gd-val text-muted">-- Chọn tỉnh/thành --</span>
+                                                        <span class="mc-gd-clear" title="Xoá">×</span>
+                                                        <i class="bi bi-chevron-down ms-1" style="font-size:.75rem;"></i>
+                                                    </div>
+                                                    <div class="mc-gd-panel" id="province-gd-panel">
+                                                        <input type="text" class="mc-gd-search" placeholder="🔍 Tìm tỉnh/thành...">
+                                                        <div class="mc-gd-grid cols-4" id="province-gd-grid">
+                                                            @foreach(($provinces ?? []) as $province)
+                                                                <div class="mc-gd-item{{ (string)$selectedProvinceId === (string)$province->id ? ' selected' : '' }}"
+                                                                    data-value="{{ $province->id }}" data-label="{{ $province->name }}">{{ $province->name }}</div>
+                                                            @endforeach
+                                                        </div>
+                                                    </div>
+                                                    <input type="hidden" id="province_id" name="province_id" value="{{ $selectedProvinceId }}">
+                                                </div>
+                                            </div>
+                                            <div class="col-12 col-md-6">
+                                                <label class="form-label mc-form-label">Phường / Xã</label>
+                                                <div class="mc-gd-wrap" id="ward-gd-wrap">
+                                                    <div class="mc-gd-trigger mc-gd-disabled" id="ward-gd-trigger" tabindex="0">
+                                                        <span class="mc-gd-val text-muted">-- Chọn phường/xã --</span>
+                                                        <span class="mc-gd-clear" title="Xoá">×</span>
+                                                        <i class="bi bi-chevron-down ms-1" style="font-size:.75rem;"></i>
+                                                    </div>
+                                                    <div class="mc-gd-panel" id="ward-gd-panel">
+                                                        <input type="text" class="mc-gd-search" placeholder="🔍 Tìm phường/xã...">
+                                                        <div class="mc-gd-grid cols-3" id="ward-gd-grid"></div>
+                                                    </div>
+                                                    <input type="hidden" id="ward_id" name="ward_id" value="{{ $selectedWardId }}">
+                                                </div>
+                                            </div>
+                                            
                                         </div>
-                                        <input type="hidden" id="province_id" name="province_id" value="{{ $selectedProvinceId }}">
+                                    </div>
+                                     <div class="col-12 col-md-4">
+                                        <label for="avatar" class="form-label mc-form-label">Ảnh đại diện</label>
+                                        <input class="form-control mc-form-control" type="file" id="avatar" name="avatar" accept="image/*">
+                                        <div class="mt-2">
+                                            <img id="avatarPreview" src="https://ui-avatars.com/api/?name=Khach+Hang" alt="Avatar" class="" style="width:210px;height:210px;object-fit:cover;border-color:#0f766e!important;">
+                                        </div>                                
                                     </div>
                                 </div>
-                                <div class="col-12 col-md-4">
-                                    <label class="form-label mc-form-label">Phường / Xã</label>
-                                    <div class="mc-gd-wrap" id="ward-gd-wrap">
-                                        <div class="mc-gd-trigger mc-gd-disabled" id="ward-gd-trigger" tabindex="0">
-                                            <span class="mc-gd-val text-muted">-- Chọn phường/xã --</span>
-                                            <span class="mc-gd-clear" title="Xoá">×</span>
-                                            <i class="bi bi-chevron-down ms-1" style="font-size:.75rem;"></i>
-                                        </div>
-                                        <div class="mc-gd-panel" id="ward-gd-panel">
-                                            <input type="text" class="mc-gd-search" placeholder="🔍 Tìm phường/xã...">
-                                            <div class="mc-gd-grid cols-3" id="ward-gd-grid"></div>
-                                        </div>
-                                        <input type="hidden" id="ward_id" name="ward_id" value="{{ $selectedWardId }}">
-                                    </div>
-                                </div>
-                                <div class="col-12 col-md-4">
-                                    <label for="delivery_time" class="form-label mc-form-label">Giờ giao hàng</label>
-                                    <input type="text" class="form-control mc-form-control" id="delivery_time" name="delivery_time"
-                                        value="{{ old('delivery_time', $customer->delivery_time) }}" placeholder="VD: 8h-10h, sau 17h">
-                                    <div class="mc-help mt-1">Dùng mặc định khi tạo đơn.</div>
-                                </div>
-                            </div>
+
                         </div></div>{{-- /.mc-card-body-wrap --}}
                     </div>
 
@@ -279,7 +294,7 @@
                                         <input type="text" class="form-control mc-form-control" name="production"
                                             value="{{ old('production', $customer->production) }}" placeholder="VD: 120 con">
                                     </div>
-                                    <div class="col-12 col-md-2">
+                                    <div class="col-12 col-md-4">
                                         <label class="form-label mc-form-label" style="font-size:0.82rem;">Ghi chú</label>
                                         <input type="text" class="form-control mc-form-control" name="product_note"
                                             value="{{ old('product_note', $customer->product_note ?? '') }}" placeholder="Yêu cầu thêm...">
@@ -418,40 +433,7 @@
                     </div>
 
                 </form>
-            </div>
-
-            {{-- ── RIGHT COLUMN: info sidebar ── --}}
-            <div class="col-12 col-lg-4">
-                <div class="card mc-info-card">
-                    <div class="card-header"><i class="bi bi-info-circle me-1 text-primary"></i> Thông tin nhanh</div>
-                    <div class="card-body">
-                        <div class="mc-meta-item">
-                            <span class="mc-meta-label">Mã khách hàng</span>
-                            <span class="mc-meta-value">#{{ $customer->id }}</span>
-                        </div>
-                        <div class="mc-meta-item">
-                            <span class="mc-meta-label">Giờ giao hiện tại</span>
-                            <span class="mc-meta-value">{{ $customer->delivery_time ?: '-' }}</span>
-                        </div>
-                        <div class="mc-meta-item">
-                            <span class="mc-meta-label">Địa chỉ hiện tại</span>
-                            <span class="mc-meta-value" style="font-size:0.875rem;">{{ $defaultAddress->note ?? $customer->address ?: '-' }}</span>
-                        </div>
-                        <div class="mc-meta-item">
-                            <span class="mc-meta-label">Nhà xe</span>
-                            <span class="mc-meta-value">{{ $customer->truckStation->name ?? '-' }}</span>
-                        </div>
-                        <div class="mc-meta-item">
-                            <span class="mc-meta-label">Cập nhật gần nhất</span>
-                            <span class="mc-meta-value">{{ optional($customer->updated_at)->format('d/m/Y H:i') ?: '-' }}</span>
-                        </div>
-                        <div class="mc-meta-item">
-                            <span class="mc-meta-label">Tạo lúc</span>
-                            <span class="mc-meta-value">{{ optional($customer->created_at)->format('d/m/Y H:i') ?: '-' }}</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            </div> 
         </div>
     </div>
 </div>

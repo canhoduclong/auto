@@ -89,9 +89,14 @@
                                     <strong>
                                         <i class="bi {{ $featureIcon }} me-1 text-primary"></i>{{ ucfirst($feature) }}
                                     </strong>
-                                    <button type="button" class="btn btn-sm btn-outline-dark js-check-group" data-feature="{{ strtolower($feature) }}">
-                                        <i class="bi bi-check2 me-1"></i>Chọn nhóm
-                                    </button>
+                                    <div class="d-flex gap-2">
+                                        <button type="button" class="btn btn-sm btn-outline-dark js-check-group" data-feature="{{ strtolower($feature) }}">
+                                            <i class="bi bi-check2 me-1"></i>Chọn nhóm
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-danger js-uncheck-group" data-feature="{{ strtolower($feature) }}">
+                                            <i class="bi bi-x-square me-1"></i>Bỏ chọn nhóm
+                                        </button>
+                                    </div>
                                 </div>
 
                                 @foreach($perms as $permission)
@@ -155,12 +160,19 @@ document.addEventListener('DOMContentLoaded', function () {
         btn.addEventListener('click', function () {
             const feature = btn.getAttribute('data-feature');
             const group = document.querySelector(`.permission-group[data-feature="${feature}"]`);
-            if (!group) {
-                return;
-            }
-
+            if (!group) return;
             group.querySelectorAll('input[name="permissions[]"]').forEach(function (checkbox) {
                 checkbox.checked = true;
+            });
+        });
+    });
+    document.querySelectorAll('.js-uncheck-group').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            const feature = btn.getAttribute('data-feature');
+            const group = document.querySelector(`.permission-group[data-feature="${feature}"]`);
+            if (!group) return;
+            group.querySelectorAll('input[name="permissions[]"]').forEach(function (checkbox) {
+                checkbox.checked = false;
             });
         });
     });
