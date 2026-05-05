@@ -533,70 +533,7 @@ document.addEventListener('DOMContentLoaded', function () {
             .catch(() => {});
     }
 
-    /* ── Truck station AJAX ── */
-    const btnLoadTrucks      = document.getElementById('btn-load-trucks');
-    const truckLoadStatus    = document.getElementById('truck-load-status');
-    const truckSearchArea    = document.getElementById('truck-search-area');
-    const truckDetailSection = document.getElementById('truck-detail-section');
-    const truckTbody         = document.getElementById('truck-station-tbody');
-    const truckSearchName    = document.getElementById('truck-search-name');
-    const truckSearchDest    = document.getElementById('truck-search-dest');
-    const truckStationIdInput= document.getElementById('truck_station_id');
-    const useTruckHidden     = document.getElementById('use_truck_station_hidden');
-    const btnClearTruck      = document.getElementById('btn-clear-truck');
-    const truckSelectedLabel = document.getElementById('truck-selected-label');
-
-    let allTruckStations = @json($truckStations ?? []);
-    let trucksLoaded = false;
-
-    function renderTrucks(stations) {
-        if (!stations.length) {
-            truckTbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">Không có nhà xe phù hợp.</td></tr>';
-            return;
-        }
-        const selectedId = truckStationIdInput.value;
-        truckTbody.innerHTML = stations.map(s => {
-            const dest     = s.province ? s.province.name : (s.province_id || '');
-            const selected = String(s.id) === String(selectedId) ? 'selected-station' : '';
-            const icon     = selected ? 'check-circle-fill text-primary' : 'circle text-muted';
-            return `<tr class="${selected}" data-id="${s.id}" data-name="${s.name}" data-dest="${dest}">
-                <td class="text-center"><i class="bi bi-${icon}"></i></td>
-                <td>${s.name}</td>
-                <td>${dest}</td>
-                <td class="text-muted" style="font-size:0.8rem;">${s.ward ? s.ward.name : ''}</td>
-            </tr>`;
-        }).join('');
-    }
-
-    function filterTrucks() {
-        const q1 = truckSearchName.value.toLowerCase();
-        const q2 = truckSearchDest.value.toLowerCase();
-        renderTrucks(allTruckStations.filter(s => {
-            const dest = s.province ? s.province.name.toLowerCase() : '';
-            return s.name.toLowerCase().includes(q1) && dest.includes(q2);
-        }));
-    }
-
-    btnLoadTrucks.addEventListener('click', function () {
-        if (trucksLoaded) { truckSearchArea.style.display = truckSearchArea.style.display === 'none' ? '' : 'none'; return; }
-        truckLoadStatus.textContent = 'Đang tải...';
-        btnLoadTrucks.disabled = true;
-        fetch(`{{ route('pages.my_truck_stations.ajax') }}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-            .then(r => r.json())
-            .then(data => {
-                allTruckStations = Array.isArray(data) ? data : (data.data || data.stations || allTruckStations);
-                trucksLoaded = true; btnLoadTrucks.disabled = false;
-                truckLoadStatus.textContent = `Đã tải ${allTruckStations.length} nhà xe.`;
-                renderTrucks(allTruckStations);
-                truckSearchArea.style.display = '';
-            })
-            .catch(() => {
-                trucksLoaded = true; btnLoadTrucks.disabled = false;
-                truckLoadStatus.textContent = `Hiển thị ${allTruckStations.length} nhà xe.`;
-                renderTrucks(allTruckStations);
-                truckSearchArea.style.display = '';
-            });
-    });
+    // Đã bỏ toàn bộ logic load/truck station AJAX vì không còn sử dụng nhà xe
 
     truckSearchName.addEventListener('input', filterTrucks);
     truckSearchDest.addEventListener('input', filterTrucks);
