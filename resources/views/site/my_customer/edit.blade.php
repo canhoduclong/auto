@@ -64,17 +64,12 @@ document.addEventListener('DOMContentLoaded', function () {
             const origin = stops[0]?.station?.name || '';
             const destination = stops.length > 1 ? stops[stops.length-1]?.station?.name : '';
             const selected = String(route.id) === String(selectedId) ? 'selected-station' : '';
-            // Giờ đi và điện thoại lấy từ trường route.departure_time và route.brand.phone nếu có
-            const departureTime = route.departure_time || '';
-            const phone = route.brand?.phone || '';
             return `<tr class="${selected}" data-id="${route.id}" data-name="${route.name}" data-origin="${origin}" data-destination="${destination}">
                 <td class="text-center"><i class="bi bi-${selected ? 'check-circle-fill text-primary' : 'circle text-muted'}"></i></td>
                 <td>${route.name}</td>
                 <td>${route.brand ? route.brand.name : ''}</td>
                 <td>${origin}</td>
-                <td>${departureTime}</td>
                 <td>${destination}</td>
-                <td>${phone}</td>
             </tr>`;
         }).join('');
     }
@@ -538,8 +533,6 @@ document.addEventListener('DOMContentLoaded', function () {
                                                 <th>Nhà xe</th>
                                                 <th>Điểm đi</th>
                                                 <th>Điểm đến</th>
-                                                <th>Giờ đi</th>
-                                                <th>Điện thoại</th>
                                             </tr>
                                         </thead>
                                         <tbody id="truck-station-tbody">
@@ -642,18 +635,15 @@ document.addEventListener('DOMContentLoaded', function () {
             getValue()      { return hidden?.value || ''; },
             setValue(v, l)  { selectItem(v, l); },
             clearValue()    { selectItem('', ''); },
-        truckDetailSection.innerHTML = `
-            <div class="mb-2"><strong>Tuyến:</strong> ${route.name} ${route.brand ? '(' + route.brand.name + ')' : ''}</div>
-            <div class="mb-2"><strong>Nhà xe:</strong> ${route.brand ? route.brand.name : ''} ${route.brand?.phone ? ' - ' + route.brand.phone : ''}</div>
-            <div class="mb-2"><strong>Điểm đi:</strong> ${route.stops && route.stops[0]?.station?.name ? route.stops[0].station.name : ''}</div>
-            <div class="mb-2"><strong>Giờ đi:</strong> ${route.departure_time || ''}</div>
-            <div class="mb-2"><strong>Điểm đến:</strong> ${route.stops && route.stops.length > 1 && route.stops[route.stops.length-1]?.station?.name ? route.stops[route.stops.length-1].station.name : ''}</div>
-            <div class="mb-2"><strong>Giá hiện tại:</strong> ${route.current_price ? (route.current_price + ' ₫') : '---'}</div>
-            <div class="mb-2"><strong>Mô tả:</strong> ${route.description || ''}</div>
-            <button type="button" class="btn btn-outline-danger w-100 mt-2" id="btn-clear-truck">
-                <i class="bi bi-x-circle me-1"></i> Bỏ chọn tuyến
-            </button>
-        `;
+            setItems(items) {
+                if (!grid) return;
+                grid.querySelectorAll('.mc-gd-item,.mc-gd-empty').forEach(el => el.remove());
+                items.forEach(item => {
+                    const el = document.createElement('div');
+                    el.className = 'mc-gd-item'; el.dataset.value = item.id; el.dataset.label = item.name; el.textContent = item.name;
+                    grid.appendChild(el);
+                });
+            },
             disable() { disabled=true; trigger.classList.add('mc-gd-disabled'); trigger.style.opacity='.5'; trigger.style.pointerEvents='none'; close(); },
             enable()  { disabled=false; trigger.classList.remove('mc-gd-disabled'); trigger.style.opacity=''; trigger.style.pointerEvents=''; },
         };
