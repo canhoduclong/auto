@@ -1,3 +1,159 @@
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // ===================== TRUCK ROUTE AJAX =====================
+    const btnLoadTrucks     = document.getElementById('btn-load-trucks');
+    const truckLoadStatus   = document.getElementById('truck-load-status');
+    const truckSearchArea   = document.getElementById('truck-search-area');
+    const truckDetailSection= document.getElementById('truck-detail-section');
+    const truckTbody        = document.getElementById('truck-station-tbody');
+    const truckSearchName   = document.getElementById('truck-search-name');
+    const truckSearchDest   = document.getElementById('truck-search-dest');
+    const truckStationIdInput = document.getElementById('truck_station_id');
+    const truckRouteIdInput = document.getElementById('truck_route_id');
+    const useTruckHidden    = document.getElementById('use_truck_station_hidden');
+    const truckSelectedLabel= document.getElementById('truck-selected-label');
+
+    let allTruckRoutes = [];
+    let routesLoaded = false;
+    let selectedRoute = null;
+
+    function renderRouteDetail(route) {
+        if (!route) {
+            truckDetailSection.style.display = 'none';
+            return;
+        }
+        let stopsHtml = '';
+        if (route.stops && route.stops.length) {
+            stopsHtml = '<ol class="ps-3 mb-2">' + route.stops.map((stop, idx) => {
+                const s = stop.station;
+                return `<li><strong>${s?.name || ''}</strong>${s?.address ? ' - ' + s.address : ''}${s?.province ? ', ' + s.province.name : ''}</li>`;
+            }).join('') + '</ol>';
+        }
+        truckDetailSection.innerHTML = `
+            <div class="mb-2"><strong>Tuyến:</strong> ${route.name} ${route.brand ? '(' + route.brand.name + ')' : ''}</div>
+            <div class="mb-2"><strong>Chặng:</strong> ${stopsHtml}</div>
+            <div class="mb-2"><strong>Giá hiện tại:</strong> ${route.current_price ? (route.current_price + ' ₫') : '---'}</div>
+            <div class="mb-2"><strong>Mô tả:</strong> ${route.description || ''}</div>
+            <button type="button" class="btn btn-outline-danger w-100 mt-2" id="btn-clear-truck">
+                <i class="bi bi-x-circle me-1"></i> Bỏ chọn tuyến
+            </button>
+        `;
+        truckDetailSection.style.display = '';
+        document.getElementById('btn-clear-truck').onclick = function () {
+            truckStationIdInput.value = '';
+            truckRouteIdInput.value = '';
+            selectedRoute = null;
+            truckSelectedLabel.textContent = 'Chưa chọn tuyến vận chuyển.';
+            truckDetailSection.style.display = 'none';
+            truckTbody.querySelectorAll('tr').forEach(r => {
+                r.classList.remove('selected-station');
+                const ico = r.querySelector('i');
+                if (ico) ico.className = 'bi bi-circle text-muted';
+            });
+        };
+    }
+
+    function renderRoutes(routes) {
+        if (!routes.length) {
+            truckTbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">Không có tuyến vận chuyển phù hợp.</td></tr>';
+            return;
+        }
+        const selectedId = truckStationIdInput.value;
+        truckTbody.innerHTML = routes.map(route => {
+            const stops = route.stops || [];
+            const origin = stops[0]?.station?.name || '';
+            const destination = stops.length > 1 ? stops[stops.length-1]?.station?.name : '';
+            const selected = String(route.id) === String(selectedId) ? 'selected-station' : '';
+            return `<tr class="${selected}" data-id="${route.id}" data-name="${route.name}" data-origin="${origin}" data-destination="${destination}">
+                <td class="text-center"><i class="bi bi-${selected ? 'check-circle-fill text-primary' : 'circle text-muted'}"></i></td>
+                <td>${route.name}</td>
+                <td>${route.brand ? route.brand.name : ''}</td>
+                <td>${origin}</td>
+                <td>${destination}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    function filterRoutes() {
+        const q1 = truckSearchName.value.toLowerCase();
+        const q2 = truckSearchDest.value.toLowerCase();
+        const filtered = allTruckRoutes.filter(route => {
+            const stops = route.stops || [];
+            const origin = stops[0]?.station?.name?.toLowerCase() || '';
+            const destination = stops.length > 1 ? stops[stops.length-1]?.station?.name?.toLowerCase() : '';
+            return route.name.toLowerCase().includes(q1) && (origin.includes(q2) || destination.includes(q2));
+        });
+        renderRoutes(filtered);
+    }
+
+    btnLoadTrucks.addEventListener('click', function () {
+        if (routesLoaded) {
+            truckSearchArea.style.display = truckSearchArea.style.display === 'none' ? '' : 'none';
+            return;
+        }
+        truckLoadStatus.textContent = 'Đang tải...';
+        btnLoadTrucks.disabled = true;
+        fetch(`{{ route('api.truck_routes') }}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(r => r.json())
+            .then(data => {
+                allTruckRoutes = Array.isArray(data) ? data : [];
+                routesLoaded = true;
+                btnLoadTrucks.disabled = false;
+                truckLoadStatus.textContent = `Đã tải ${allTruckRoutes.length} tuyến vận chuyển.`;
+                renderRoutes(allTruckRoutes);
+                truckSearchArea.style.display = '';
+            })
+            .catch(() => {
+                routesLoaded = true;
+                btnLoadTrucks.disabled = false;
+                truckLoadStatus.textContent = `Không thể tải tuyến vận chuyển.`;
+                renderRoutes([]);
+                truckSearchArea.style.display = '';
+            });
+    });
+
+    truckSearchName.addEventListener('input', filterRoutes);
+    truckSearchDest.addEventListener('input', filterRoutes);
+
+    truckTbody.addEventListener('click', function (e) {
+        const row = e.target.closest('tr[data-id]');
+        if (!row) return;
+        const id   = row.dataset.id;
+        const name = row.dataset.name;
+        truckTbody.querySelectorAll('tr').forEach(r => {
+            r.classList.remove('selected-station');
+            const ico = r.querySelector('i');
+            if (ico) ico.className = 'bi bi-circle text-muted';
+        });
+        row.classList.add('selected-station');
+        const ico = row.querySelector('i');
+        if (ico) ico.className = 'bi bi-check-circle-fill text-primary';
+        truckStationIdInput.value = id;
+        truckRouteIdInput.value = id;
+        useTruckHidden.value = '1';
+        truckSelectedLabel.innerHTML = `<i class=\"bi bi-check-circle-fill text-primary me-1\"></i>Đã chọn: <strong>${name}</strong>`;
+        selectedRoute = allTruckRoutes.find(r => String(r.id) === String(id));
+        renderRouteDetail(selectedRoute);
+    });
+
+    // Pre-select if old value exists
+    if (truckStationIdInput.value) {
+        useTruckHidden.value = '1';
+        truckDetailSection.style.display = '';
+        // Try to find the selected route and show its name
+        fetch(`{{ route('api.truck_routes') }}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(r => r.json())
+            .then(data => {
+                allTruckRoutes = Array.isArray(data) ? data : [];
+                const found = allTruckRoutes.find(r => String(r.id) === String(truckStationIdInput.value));
+                if (found) {
+                    truckSelectedLabel.innerHTML = `<i class=\"bi bi-check-circle-fill text-primary me-1\"></i>Đã chọn: <strong>${found.name}</strong>`;
+                    renderRouteDetail(found);
+                }
+            });
+    }
+});
+</script>
 @extends('layouts.site')
 
 @section('content')
@@ -344,56 +500,50 @@
                         </div></div>{{-- /.mc-card-body-wrap --}}
                     </div>
 
-                    {{-- CARD 4: Thông tin nhà xe --}}
+                {{-- CARD 4: Tuyến vận chuyển (nhà xe) --}}
                     <div class="card mc-edit-card collapsed" id="card-4">
                         <div class="card-header" onclick="toggleCard('card-4')">
                             <span class="card-num">4</span>
-                            <i class="bi bi-truck text-primary"></i> Thông tin nhà xe
+                            <i class="bi bi-truck text-primary"></i> Tuyến vận chuyển (nhà xe)
                             <span class="mc-card-toggle-icon"><i class="bi bi-chevron-down"></i></span>
                         </div>
                         <div class="mc-card-body-wrap"><div class="card-body">
-                            <input type="hidden" name="use_truck_station" id="use_truck_station_hidden"
-                                value="{{ old('use_truck_station', $customer->use_truck_station ? '1' : '0') }}">
-                            <input type="hidden" name="truck_station_id" id="truck_station_id"
-                                value="{{ old('truck_station_id', $customer->truck_station_id) }}">
+                            <input type="hidden" name="use_truck_station" id="use_truck_station_hidden" value="{{ old('use_truck_station', $customer->use_truck_station ? '1' : '0') }}">
+                            <input type="hidden" name="truck_station_id" id="truck_station_id" value="{{ old('truck_station_id', $customer->truck_station_id) }}">
+                            <input type="hidden" name="truck_route_id" id="truck_route_id" value="{{ old('truck_route_id', $customer->truck_route_id ?? '') }}">
 
-
-                            <!-- Đã bỏ phần load danh sách nhà xe, chỉ giữ lại các trường nhập tay -->
-
-                            <div id="truck-detail-section" class="mt-3" style="display:none;">
-                                <div class="row g-3">
-                                    <div class="col-12 col-md-6">
-                                        <label for="truck_station_address" class="form-label mc-form-label">Địa chỉ giao nhà xe</label>
-                                        <input type="text" class="form-control mc-form-control" id="truck_station_address" name="truck_station_address"
-                                            value="{{ old('truck_station_address', $customer->truck_station_address) }}">
-                                    </div>
-                                    <div class="col-12 col-md-6">
-                                        <label for="truck_station_phone" class="form-label mc-form-label">Số điện thoại nhà xe</label>
-                                        <input type="text" class="form-control mc-form-control" id="truck_station_phone" name="truck_station_phone"
-                                            value="{{ old('truck_station_phone', $customer->truck_station_phone) }}">
-                                    </div>
-                                    <div class="col-12 col-md-3">
-                                        <label for="truck_receive_time" class="form-label mc-form-label">Giờ nhận hàng</label>
-                                        <input type="text" class="form-control mc-form-control" id="truck_receive_time" name="truck_receive_time"
-                                            value="{{ old('truck_receive_time', $customer->truck_receive_time) }}" placeholder="VD: 7h-9h">
-                                    </div>
-                                    <div class="col-12 col-md-3">
-                                        <label for="truck_return_time" class="form-label mc-form-label">Giờ trả hàng</label>
-                                        <input type="text" class="form-control mc-form-control" id="truck_return_time" name="truck_return_time"
-                                            value="{{ old('truck_return_time', $customer->truck_return_time) }}" placeholder="VD: 17h-19h">
-                                    </div>
-                                    <div class="col-12 col-md-3">
-                                        <label for="truck_fee" class="form-label mc-form-label">Phí nhà xe (₫)</label>
-                                        <input type="number" class="form-control mc-form-control" id="truck_fee" name="truck_fee"
-                                            value="{{ old('truck_fee', $customer->truck_fee ?? '') }}" placeholder="0">
-                                    </div>
-                                    <div class="col-12 col-md-3 d-flex align-items-end">
-                                        <button type="button" class="btn btn-outline-danger w-100" id="btn-clear-truck">
-                                            <i class="bi bi-x-circle me-1"></i> Bỏ chọn nhà xe
-                                        </button>
-                                    </div>
-                                </div>
+                            <div class="d-flex align-items-center gap-3 mb-3">
+                                <button type="button" class="btn btn-outline-primary" id="btn-load-trucks">
+                                    <i class="bi bi-arrow-clockwise me-1"></i> Load tuyến vận chuyển
+                                </button>
+                                <span class="text-muted mc-help" id="truck-load-status">Bấm để tải danh sách tuyến vận chuyển.</span>
                             </div>
+
+                            <div id="truck-search-area" style="display:none;">
+                                <div class="truck-search-bar">
+                                    <input type="text" class="form-control mc-form-control" id="truck-search-name" placeholder="🔍 Tìm theo tên tuyến...">
+                                    <input type="text" class="form-control mc-form-control" id="truck-search-dest" placeholder="🔍 Tìm theo điểm đi/điểm đến...">
+                                </div>
+                                <div class="table-responsive" style="max-height:280px;overflow-y:auto;">
+                                    <table class="table table-bordered table-hover truck-station-table mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th style="width:36px"></th>
+                                                <th>Tên tuyến</th>
+                                                <th>Nhà xe</th>
+                                                <th>Điểm đi</th>
+                                                <th>Điểm đến</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="truck-station-tbody">
+                                            <tr><td colspan="5" class="text-center text-muted">Đang tải...</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div class="mt-1 mc-help" id="truck-selected-label">Chưa chọn tuyến vận chuyển.</div>
+                            </div>
+
+                            <div id="truck-detail-section" class="mt-3" style="display:none;"></div>
                         </div></div>{{-- /.mc-card-body-wrap --}}
                     </div>
 
