@@ -441,12 +441,12 @@
                 </div></div>{{-- /.mc-card-body-wrap --}}
             </div>
 
-            {{-- ===================== CARD 4: Thông tin nhà xe ===================== --}}
+            {{-- ===================== CARD 4: Tuyến vận chuyển (nhà xe) ===================== --}}
             <div class="overflow-hidden card mc-edit-card{{ $errors->hasAny(['truck_station_id','truck_station_address','truck_station_phone','truck_receive_time','truck_return_time','truck_fee']) ? ' has-error' : ' collapsed' }}" id="card-4">
                 <div class="card-header" onclick="toggleCard('card-4')">
                     <span class="card-num">4</span>
-                    <i class="bi bi-truck text-primary"></i> Thông tin nhà xe
-                    <span class="mc-card-err-badge"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.345 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg> Có lỗi</span>
+                    <i class="bi bi-truck text-primary"></i> Tuyến vận chuyển (nhà xe)
+                    <span class="mc-card-err-badge"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.345 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0 1 10 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg> Có lỗi</span>
                     <span class="mc-card-toggle-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd"/></svg></span>
                 </div>
                 <div class="mc-card-body-wrap"><div class="card-body">
@@ -455,14 +455,15 @@
 
                     <div class="d-flex align-items-center gap-3 mb-3">
                         <button type="button" class="btn btn-outline-primary" id="btn-load-trucks">
-                            <i class="bi bi-arrow-clockwise me-1"></i> Load nhà xe
+                            <i class="bi bi-arrow-clockwise me-1"></i> Load Tuyến vận chuyển
                         </button>
                         <span class="text-muted mc-help" id="truck-load-status">Bấm để tải danh sách nhà xe.</span>
+                                            <span class="text-muted mc-help" id="truck-load-status">Bấm để tải danh sách tuyến vận chuyển (nhà xe).</span>
                     </div>
 
                     <div id="truck-search-area" style="display:none;">
                         <div class="truck-search-bar">
-                            <input type="text" class="form-control mc-form-control" id="truck-search-name" placeholder="🔍 Tìm theo tên nhà xe...">
+                            <input type="text" class="form-control mc-form-control" id="truck-search-name" placeholder="🔍 Tìm theo tuyến vận chuyển...">
                             <input type="text" class="form-control mc-form-control" id="truck-search-dest" placeholder="🔍 Tìm theo điểm đến (tỉnh/thành)...">
                         </div>
                         <div class="table-responsive" style="max-height:280px;overflow-y:auto;">
@@ -470,7 +471,7 @@
                                 <thead>
                                     <tr>
                                         <th style="width:36px"></th>
-                                        <th>Tên nhà xe</th>
+                                        <th>Tuyến vận chuyển (nhà xe)</th>
                                         <th>Điểm đến</th>
                                         <th>Địa chỉ</th>
                                     </tr>
@@ -481,6 +482,7 @@
                             </table>
                         </div>
                         <div class="mt-1 mc-help" id="truck-selected-label">Chưa chọn nhà xe.</div>
+                                            <div class="mt-1 mc-help" id="truck-selected-label">Chưa chọn tuyến vận chuyển.</div>
                     </div>
 
                     <div id="truck-detail-section" class="mt-3" style="display:none;">
@@ -512,7 +514,7 @@
                             </div>
                             <div class="col-12 col-md-3 d-flex align-items-end">
                                 <button type="button" class="btn btn-outline-danger w-100" id="btn-clear-truck">
-                                    <i class="bi bi-x-circle me-1"></i> Bỏ chọn nhà xe
+                                    <i class="bi bi-x-circle me-1"></i> Bỏ chọn tuyến vận chuyển
                                 </button>
                             </div>
                         </div>
