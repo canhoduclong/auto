@@ -533,44 +533,8 @@ document.addEventListener('DOMContentLoaded', function () {
             .catch(() => {});
     }
 
-    // Đã bỏ toàn bộ logic load/truck station AJAX vì không còn sử dụng nhà xe
 
-    truckSearchName.addEventListener('input', filterTrucks);
-    truckSearchDest.addEventListener('input', filterTrucks);
-
-    truckTbody.addEventListener('click', function (e) {
-        const row = e.target.closest('tr[data-id]');
-        if (!row) return;
-        truckTbody.querySelectorAll('tr').forEach(r => {
-            r.classList.remove('selected-station');
-            const ico = r.querySelector('i'); if (ico) ico.className = 'bi bi-circle text-muted';
-        });
-        row.classList.add('selected-station');
-        const ico = row.querySelector('i'); if (ico) ico.className = 'bi bi-check-circle-fill text-primary';
-        truckStationIdInput.value = row.dataset.id;
-        useTruckHidden.value = '1';
-        truckSelectedLabel.innerHTML = `<i class="bi bi-check-circle-fill text-primary me-1"></i>Đã chọn: <strong>${row.dataset.name}</strong>`;
-        truckDetailSection.style.display = '';
-    });
-
-    btnClearTruck.addEventListener('click', function () {
-        truckStationIdInput.value = '';
-        useTruckHidden.value = '0';
-        truckSelectedLabel.textContent = 'Chưa chọn nhà xe.';
-        truckDetailSection.style.display = 'none';
-        truckTbody.querySelectorAll('tr').forEach(r => {
-            r.classList.remove('selected-station');
-            const ico = r.querySelector('i'); if (ico) ico.className = 'bi bi-circle text-muted';
-        });
-    });
-
-    // Pre-select truck if customer already has one
-    if (truckStationIdInput.value) {
-        useTruckHidden.value = '1';
-        truckDetailSection.style.display = '';
-        const found = allTruckStations.find(s => String(s.id) === String(truckStationIdInput.value));
-        if (found) truckSelectedLabel.innerHTML = `<i class="bi bi-check-circle-fill text-primary me-1"></i>Đã chọn: <strong>${found.name}</strong>`;
-    }
+    // Đã xoá toàn bộ logic truck station, không còn thao tác với truckSearchName, truckSearchDest, truckTbody, truckStationIdInput, useTruckHidden, btnClearTruck, truckSelectedLabel, truckDetailSection, allTruckStations
 
     /* ── Dynamic product rows ── */
     const extraRows  = document.getElementById('extra-product-rows');
