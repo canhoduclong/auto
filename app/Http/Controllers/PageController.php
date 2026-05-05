@@ -1799,14 +1799,23 @@ public function apiTruckRoutes(Request $request)
         $customers = (clone $customerQuery)
             ->withCount('orders')
             ->withSum('orders as total_debt', 'amount_due')
-            ->with(['type', 'currentOwner:id,name', 'assignedTo:id,name', 'user:id,name', 'priorities' => function ($priorityQuery) use ($userId) {
-                $priorityQuery->where('sale_id', $userId)
-                    ->where('is_active', true)
-                    ->orderBy('priority_level')
-                    ->orderByDesc('updated_at');
-            }, 'addresses' => function ($q) {
-                $q->where('is_default', true)->orWhere('is_default', null)->limit(1);
-            }])
+            ->with([
+                'type',
+                'currentOwner:id,name',
+                'assignedTo:id,name',
+                'user:id,name',
+                'priorities' => function ($priorityQuery) use ($userId) {
+                    $priorityQuery->where('sale_id', $userId)
+                        ->where('is_active', true)
+                        ->orderBy('priority_level')
+                        ->orderByDesc('updated_at');
+                },
+                'addresses' => function ($q) {
+                    $q->where('is_default', true)->orWhere('is_default', null)->limit(1);
+                },
+                'truckRoute.brand',
+                'truckRoute.stops.station',
+            ])
             ->when($request->search, function ($q, $s) {
                 $q->where(function ($searchQuery) use ($s) {
                     $searchQuery->where('name', 'like', "%{$s}%")
@@ -2010,7 +2019,9 @@ public function apiTruckRoutes(Request $request)
                 },
                 'addresses' => function ($q) {
                     $q->where('is_default', true)->orWhere('is_default', null)->limit(1);
-                }
+                },
+                'truckRoute.brand',
+                'truckRoute.stops.station',
             ])
             ->when($request->search, function ($q, $s) {
                 $q->where(function ($searchQuery) use ($s) {
@@ -2056,6 +2067,12 @@ public function apiTruckRoutes(Request $request)
             }
             $myPriority = $customer->priorities->first();
 
+            // Ensure AJAX response always has route data for rendering stops on cards.
+            $route = $customer->truckRoute;
+            if (!$route && $customer->truck_station_id) {
+                $route = $customer->truckRouteByStation;
+            }
+
             $customer->address_text = $addressText;
             $customer->updated_at_formatted = $customer->updated_at ? $customer->updated_at->format('d/m/Y') : null;
             $customer->deleted_at_formatted = $customer->deleted_at ? $customer->deleted_at->format('d/m/Y H:i') : null;
@@ -2067,6 +2084,7 @@ public function apiTruckRoutes(Request $request)
                 ?? $customer->assignedTo?->name
                 ?? $customer->user?->name;
             $customer->is_free_customer = (string) $customer->customer_status === 'free' || $customer->isFree();
+            $customer->truck_route = $route ? $route->toArray() : null;
             return $customer;
         });
 
@@ -2312,6 +2330,9 @@ public function apiTruckRoutes(Request $request)
         }
         if ($request->has('truck_station_id')) {
             $rules['truck_station_id'] = ['nullable', 'exists:truck_stations,id'];
+        }
+        if ($request->has('truck_route_id')) {
+            $rules['truck_route_id'] = ['nullable', 'exists:truck_routes,id'];
         }
         if ($request->has('truck_station_address')) {
             $rules['truck_station_address'] = ['nullable', 'string', 'max:255'];
@@ -3581,6 +3602,7 @@ public function apiTruckRoutes(Request $request)
             'company_email' => 'nullable|email|max:255',
             'use_truck_station' => 'nullable|boolean',
             'truck_station_id' => 'nullable|exists:truck_stations,id',
+            'truck_route_id' => 'nullable|exists:truck_routes,id',
             'truck_station_address' => 'nullable|string|max:255',
             'truck_station_phone' => 'nullable|string|max:30',
             'truck_receive_time' => 'nullable|string|max:255',
@@ -3689,6 +3711,7 @@ public function apiTruckRoutes(Request $request)
         $customer->company_email = $validated['company_email'] ?? null;
         $customer->use_truck_station = (bool) ($validated['use_truck_station'] ?? false);
         $customer->truck_station_id = $validated['truck_station_id'] ?? null;
+        $customer->truck_route_id = $validated['truck_route_id'] ?? null;
         $customer->truck_station_address = $validated['truck_station_address'] ?? null;
         $customer->truck_station_phone = $validated['truck_station_phone'] ?? null;
         $customer->truck_receive_time = $validated['truck_receive_time'] ?? null;

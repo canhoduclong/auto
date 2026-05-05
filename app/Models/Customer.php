@@ -3,13 +3,42 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+// ...existing code...
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
+
 class Customer extends Model
 {
     use HasFactory, SoftDeletes;
+
+    /**
+     * Quan hệ: Customer thuộc một tuyến vận chuyển
+     */
+    public function truckRoute()
+    {
+        return $this->belongsTo(TruckRoute::class, 'truck_route_id');
+    }
+
+    /**
+     * Get a truck route that passes through this customer's truck station (fallback accessor)
+     */
+    public function getTruckRouteByStationAttribute()
+    {
+        if (!$this->truck_station_id) {
+            return null;
+        }
+
+        // Try to find an active route that has a stop at this station
+        return TruckRoute::query()
+            ->where('is_active', true)
+            ->whereHas('stops', function ($q) {
+                $q->where('truck_station_id', $this->truck_station_id);
+            })
+            ->with(['brand', 'stops.station'])
+            ->first();
+    }
 
     public function reminders()
     {
@@ -52,6 +81,7 @@ class Customer extends Model
         'foam_box_price',
         'use_truck_station',
         'truck_station_id',
+        'truck_route_id',
         'truck_station_address',
         'truck_receive_time',
         'truck_return_time',

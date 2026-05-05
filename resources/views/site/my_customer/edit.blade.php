@@ -58,13 +58,14 @@ document.addEventListener('DOMContentLoaded', function () {
             truckTbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">Không có tuyến vận chuyển phù hợp.</td></tr>';
             return;
         }
-        const selectedId = truckStationIdInput.value;
+        const selectedRouteId = truckRouteIdInput.value;
         truckTbody.innerHTML = routes.map(route => {
             const stops = route.stops || [];
             const origin = stops[0]?.station?.name || '';
             const destination = stops.length > 1 ? stops[stops.length-1]?.station?.name : '';
-            const selected = String(route.id) === String(selectedId) ? 'selected-station' : '';
-            return `<tr class="${selected}" data-id="${route.id}" data-name="${route.name}" data-origin="${origin}" data-destination="${destination}">
+            const firstStationId = stops[0]?.station?.id || stops[0]?.truck_station_id || '';
+            const selected = String(route.id) === String(selectedRouteId) ? 'selected-station' : '';
+            return `<tr class="${selected}" data-id="${route.id}" data-name="${route.name}" data-origin="${origin}" data-destination="${destination}" data-first-station-id="${firstStationId}">
                 <td class="text-center"><i class="bi bi-${selected ? 'check-circle-fill text-primary' : 'circle text-muted'}"></i></td>
                 <td>${route.name}</td>
                 <td>${route.brand ? route.brand.name : ''}</td>
@@ -118,7 +119,8 @@ document.addEventListener('DOMContentLoaded', function () {
     truckTbody.addEventListener('click', function (e) {
         const row = e.target.closest('tr[data-id]');
         if (!row) return;
-        const id   = row.dataset.id;
+        const routeId = row.dataset.id;
+        const firstStationId = row.dataset.firstStationId || '';
         const name = row.dataset.name;
         truckTbody.querySelectorAll('tr').forEach(r => {
             r.classList.remove('selected-station');
@@ -128,11 +130,11 @@ document.addEventListener('DOMContentLoaded', function () {
         row.classList.add('selected-station');
         const ico = row.querySelector('i');
         if (ico) ico.className = 'bi bi-check-circle-fill text-primary';
-        truckStationIdInput.value = id;
-        truckRouteIdInput.value = id;
+        truckRouteIdInput.value = routeId;
+        truckStationIdInput.value = firstStationId;
         useTruckHidden.value = '1';
         truckSelectedLabel.innerHTML = `<i class=\"bi bi-check-circle-fill text-primary me-1\"></i>Đã chọn: <strong>${name}</strong>`;
-        selectedRoute = allTruckRoutes.find(r => String(r.id) === String(id));
+        selectedRoute = allTruckRoutes.find(r => String(r.id) === String(routeId));
         renderRouteDetail(selectedRoute);
     });
 
@@ -145,8 +147,15 @@ document.addEventListener('DOMContentLoaded', function () {
             .then(r => r.json())
             .then(data => {
                 allTruckRoutes = Array.isArray(data) ? data : [];
-                const found = allTruckRoutes.find(r => String(r.id) === String(truckStationIdInput.value));
+                let found = null;
+                if (truckRouteIdInput.value) {
+                    found = allTruckRoutes.find(r => String(r.id) === String(truckRouteIdInput.value));
+                }
+                if (!found && truckStationIdInput.value) {
+                    found = allTruckRoutes.find(r => (r.stops || []).some(s => String(s?.station?.id || s?.truck_station_id || '') === String(truckStationIdInput.value)));
+                }
                 if (found) {
+                    truckRouteIdInput.value = found.id;
                     truckSelectedLabel.innerHTML = `<i class=\"bi bi-check-circle-fill text-primary me-1\"></i>Đã chọn: <strong>${found.name}</strong>`;
                     renderRouteDetail(found);
                 }
@@ -200,7 +209,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     .mc-edit-card .card-header:hover .mc-card-toggle-icon { background: #e2e8f0; color: #374151; }
     .mc-edit-card.collapsed .mc-card-toggle-icon { transform: rotate(-90deg); }
-    .mc-card-body-wrap { overflow: hidden; transition: max-height .3s ease; max-height: 2000px; }
+    .mc-card-body-wrap {  transition: max-height .3s ease; max-height: 2000px; }
     .mc-edit-card.collapsed .mc-card-body-wrap { max-height: 0; }
     .mc-card-err-badge { display:none; align-items:center; gap:0.3rem; font-size:0.78rem; font-weight:600; color:#dc2626; margin-left:0.5rem; }
     .mc-edit-card.has-error .mc-card-err-badge { display:inline-flex; }

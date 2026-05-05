@@ -677,7 +677,7 @@
                                     <div class="d-flex align-items-start gap-3">
                                         
                                         <div>
-                                                                                        <h6 class="mb-1 fw-bold fs-5">{{ $customer->name }}</h6>
+                                            <h6 class="mb-1 fw-bold fs-5">{{ $customer->name }}</h6>
                                             @if($customer->updated_at)
                                                 <small class="text-muted fst-italic"><i class="bi bi-clock me-1"></i>Cập nhật: {{ $customer->updated_at->format('d/m/Y') }}</small><br>
                                             @endif
@@ -702,39 +702,15 @@
                                             @endif
                                             <span class="mc-status-badge {{ $statusClass }}">{{ $statusLabel }}</span>
                                             <br>
+                                            
                                             @if($customer->brand)
                                                 <small class="text-muted">Brand: {{ $customer->brand }}</small><br>
                                             @endif
-                                            
                                             @if($customer->phone)
                                                 <small class="fw-bold fs-6"><i class="bi bi-telephone me-1"></i>{{ $customer->phone }}</small><br>
                                             @endif
                                             @if($addressText)
                                                 <small class="text-muted"><i class="bi bi-geo-alt me-1"></i>{{ $addressText }}</small><br>
-                                            @endif
-                                            @if($customer->truckRoute)
-                                                <div class="mt-2 mb-2">
-                                                    <table class="table table-sm table-bordered mb-0" style="font-size:0.92em;">
-                                                        <thead class="table-light">
-                                                            <tr>
-                                                                <th>Nhà xe</th>
-                                                                <th>Điện thoại</th>
-                                                                <th>Điểm đi</th>
-                                                                <th>Giờ đi</th>
-                                                                <th>Điểm đến</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            <tr>
-                                                                <td>{{ $customer->truckRoute->brand->name ?? '' }}</td>
-                                                                <td>{{ $customer->truckRoute->brand->phone ?? '' }}</td>
-                                                                <td>{{ $customer->truckRoute->stops[0]->station->name ?? '' }}</td>
-                                                                <td>{{ $customer->truckRoute->departure_time ?? '' }}</td>
-                                                                <td>{{ $customer->truckRoute->stops[count($customer->truckRoute->stops)-1]->station->name ?? '' }}</td>
-                                                            </tr>
-                                                        </tbody>
-                                                    </table>
-                                                </div>
                                             @endif
                                             @if($customer->email)
                                                 <small class="text-muted"><i class="bi bi-envelope me-1"></i>{{ $customer->email }}</small>
@@ -800,6 +776,54 @@
                                     </div>
                                 </div>
                             </div>
+                            <div class="row justify-content-between">
+                                <div class="col-md-12">
+@php
+                                            
+                                                $route = $customer->truckRoute;
+                                                if (!$route && $customer->truck_station_id) {
+                                                    $route = $customer->truckRouteByStation;
+                                                }
+                                            @endphp
+                                            @if($route)
+                                                <div class="mt-2 mb-2">
+                                                    <div class="small">
+                                                        <div class="d-flex flex-wrap gap-2 mb-2">
+                                                            <span class="badge bg-primary">Nhà xe: {{ $route->brand->name ?? 'N/A' }}</span>
+                                                            @if(!empty($route->brand->phone))
+                                                                <span class="badge bg-light text-dark border">SĐT: {{ $route->brand->phone }}</span>
+                                                            @endif
+                                                            <span class="badge bg-secondary">Tuyến: {{ $route->name }}</span>
+                                                        </div>
+                                                        @if($route->stops && $route->stops->count() > 0)
+                                                            <div class="border rounded p-2 bg-light">
+                                                                <div class="fw-semibold mb-1">Các chặng:</div>
+                                                                @foreach($route->stops as $stop)
+                                                                    <div class="mb-1">
+                                                                        <i class="bi bi-geo-alt me-1"></i>
+                                                                        <strong>{{ optional($stop->station)->name ?: 'Không rõ điểm dừng' }}</strong>
+                                                                        @if(!empty(optional($stop->station)->address))
+                                                                            - {{ $stop->station->address }}
+                                                                        @endif
+                                                                        @php
+                                                                            $stopTime = $stop->arrival_time ?? $stop->departure_time ?? null;
+                                                                        @endphp
+                                                                        @if(!empty($stopTime))
+                                                                            <span class="text-info">({{ $stopTime }})</span>
+                                                                        @endif
+                                                                    </div>
+                                                                @endforeach
+                                                            </div>
+                                                        @else
+                                                            <div class="border rounded p-2 bg-light text-muted">
+                                                                Tuyến này chưa được cấu hình chặng xe.
+                                                            </div>
+                                                        @endif
+                                                    </div>
+                                                </div>
+                                            @endif
+                                </div>
+                            </div>                           
                         </div>
                     </div>
                 @endforeach
@@ -1041,7 +1065,6 @@
             const updatedAt = escapeHtml(customer.updated_at_formatted || '');
             const deletedAt = escapeHtml(customer.deleted_at_formatted || '');
             const typeName = customer.type ? escapeHtml(customer.type.name || '') : '';
-            const brand = escapeHtml(customer.brand || '');
             const priorityLevelRaw = customer.my_priority_level;
             const priorityLevel = priorityLevelRaw !== null && priorityLevelRaw !== undefined ? Number(priorityLevelRaw) : 0;
             const priorityScore = Number(customer.my_priority_score || 0);
@@ -1056,6 +1079,35 @@
             const statusLabel = isFreeCustomer ? 'Khách tự do' : (customerStatusRaw === 'ordered' ? 'Đã đặt đơn' : 'Đang được chăm sóc');
             const statusClass = isFreeCustomer ? 'mc-status-free' : (customerStatusRaw === 'ordered' ? 'mc-status-ordered' : 'mc-status-active');
 
+            // Transport info (nhà xe)
+            let transportHtml = '';
+            // Fallback logic: prefer truckRouteByStation if present, else truckRoute
+            let route = customer.truck_route_by_station || customer.truckRouteByStation || customer.truck_route || customer.truckRoute;
+            if (route) {
+                const brandName = route.brand ? escapeHtml(route.brand.name || '') : '';
+                const routeName = escapeHtml(route.name || '');
+                let stopsHtml = '';
+                if (Array.isArray(route.stops) && route.stops.length > 0) {
+                    stopsHtml = route.stops.map(stop => {
+                        const station = stop.station || {};
+                        const stationName = escapeHtml(station.name || '');
+                        const stationAddr = escapeHtml(station.address || '');
+                        const stationPhone = escapeHtml(station.phone || '');
+                        const arrival = stop.arrival_time ? `<span class='text-info'>${escapeHtml(stop.arrival_time)}</span>` : '';
+                        return `<div><i class='bi bi-geo-alt me-1'></i><strong>${stationName}</strong> ${stationAddr ? `- ${stationAddr}` : ''} ${stationPhone ? `- ${stationPhone}` : ''} ${arrival}</div>`;
+                    }).join('');
+                } else {
+                    stopsHtml = `<div class='text-muted'>Tuyến này chưa được cấu hình chặng xe.</div>`;
+                }
+                transportHtml = `
+                    <div class='mt-1 mb-1'>
+                        <span class='badge bg-primary'>Nhà xe: ${brandName}</span>
+                        <span class='badge bg-secondary ms-2'>Tuyến: ${routeName}</span>
+                        <div class='ms-2 mt-1'>${stopsHtml}</div>
+                    </div>
+                `;
+            }
+
             return `
             <div class="col-12">
                 <div class="mc-customer-card border rounded p-3 bg-white">
@@ -1068,7 +1120,6 @@
                                         ${updatedAt ? `<small class="text-muted fst-italic"><i class="bi bi-clock me-1"></i>Cập nhật: ${updatedAt}</small>` : ''}
                                         <span class=" fst-italic">, Mã KH: <strong>${code}</strong> - Trạng thái: <strong>${status}</strong></span> 
                                         ${deletedAt ? `<small class="text-danger fst-italic"><i class="bi bi-trash me-1"></i>Đã xóa: ${deletedAt}</small>` : ''}
-                                        ${brand ? `<small class="text-muted">Brand: ${brand}</small><br>` : ''} 
                                         ${phone ? `<small class="fw-bold fs-6"><i class="bi bi-telephone me-1"></i>${phone}</small><br>` : ''}
                                         ${addressText ? `<small class="text-muted"><i class="bi bi-geo-alt me-1"></i>${addressText}</small><br>` : ''}
                                         ${email ? `<small class="text-muted"><i class="bi bi-envelope me-1"></i>${email}</small><br>` : ''} 
@@ -1103,6 +1154,11 @@
                                     <div class="mc-actions justify-content-end gap-2">${actionButtonsHtml(customer)}</div>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                    <div class="row justify-content-between mt-3">
+                        <div class="col-md-12">
+                            ${transportHtml}
                         </div>
                     </div>
                 </div>
