@@ -357,35 +357,8 @@
                             <input type="hidden" name="truck_station_id" id="truck_station_id"
                                 value="{{ old('truck_station_id', $customer->truck_station_id) }}">
 
-                            <div class="d-flex align-items-center gap-3 mb-3">
-                                <button type="button" class="btn btn-outline-primary" id="btn-load-trucks">
-                                    <i class="bi bi-arrow-clockwise me-1"></i> Load nhà xe
-                                </button>
-                                <span class="text-muted mc-help" id="truck-load-status">Bấm để tải danh sách nhà xe.</span>
-                            </div>
 
-                            <div id="truck-search-area" style="display:none;">
-                                <div class="truck-search-bar">
-                                    <input type="text" class="form-control mc-form-control" id="truck-search-name" placeholder="🔍 Tìm theo tên nhà xe...">
-                                    <input type="text" class="form-control mc-form-control" id="truck-search-dest" placeholder="🔍 Tìm theo điểm đến (tỉnh/thành)...">
-                                </div>
-                                <div class="table-responsive" style="max-height:280px;overflow-y:auto;">
-                                    <table class="table table-bordered table-hover truck-station-table mb-0">
-                                        <thead>
-                                            <tr>
-                                                <th style="width:36px"></th>
-                                                <th>Tên nhà xe</th>
-                                                <th>Điểm đến</th>
-                                                <th>Địa chỉ</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="truck-station-tbody">
-                                            <tr><td colspan="4" class="text-center text-muted">Đang tải...</td></tr>
-                                        </tbody>
-                                    </table>
-                                </div>
-                                <div class="mt-1 mc-help" id="truck-selected-label">Chưa chọn nhà xe.</div>
-                            </div>
+                            <!-- Đã bỏ phần load danh sách nhà xe, chỉ giữ lại các trường nhập tay -->
 
                             <div id="truck-detail-section" class="mt-3" style="display:none;">
                                 <div class="row g-3">

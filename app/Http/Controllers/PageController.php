@@ -2237,17 +2237,11 @@ public function apiTruckRoutes(Request $request)
         $this->ensureManagedCustomer($customer);
         $customer->load('addresses');
         $provinces = Province::query()->orderBy('name')->get(['id', 'name']);
-        $truckStations = TruckStation::query()
-            ->where('is_active', true)
-            ->with(['province:id,name', 'ward:id,name'])
-            ->orderBy('name')
-            ->get(['id', 'name', 'province_id', 'ward_id']);
-
+        // Không load nhà xe (truckStations) ở đây nữa
         return view('site.my_customer.edit', [
             'customer' => $customer,
             'settings' => $this->settings,
             'provinces' => $provinces,
-            'truckStations' => $truckStations,
         ]);
     }
 
