@@ -406,12 +406,12 @@
                                 @endif
                                 @if($bankAccount)
                                     <div class="sp-company-line"><span class="sp-company-label">Số tài khoản:</span>{{ $bankAccount }}</div>
+                                @endif                                
+                                @if($bankBranch)
+                                    <div class="sp-company-line full"><span class="sp-company-label">Chi nhánh:</span>{{ $bankBranch }}</div>
                                 @endif
                                 @if($bankName)
                                     <div class="sp-company-line"><span class="sp-company-label">Ngân hàng:</span>{{ $bankName }}</div>
-                                @endif
-                                @if($bankBranch)
-                                    <div class="sp-company-line full"><span class="sp-company-label">Chi nhánh:</span>{{ $bankBranch }}</div>
                                 @endif
                             </div>
                         </div>
