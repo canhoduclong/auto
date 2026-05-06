@@ -566,7 +566,22 @@
                         </div>
 
                         <h2 class="profile-name">{{ old('name', $customer->name ?? $user->name) }}</h2>
-                        <p class="profile-role mb-3">Tài khoản khách hàng</p>
+                        @php
+                            $roleTitleMap = [
+                                'sale'          => 'Nhân viên Kinh Doanh',
+                                'leader_sale'   => 'Trưởng phòng Kinh Doanh',
+                                'leader'        => 'Trưởng phòng Kinh Doanh',
+                                'sale_manager'  => 'Giám đốc Kinh Doanh',
+                                'manager'       => 'Giám đốc',
+                                'director'      => 'Giám đốc',
+                                'admin'         => 'Quản trị viên',
+                                'warehouse'     => 'Nhân viên Kho',
+                                'accountant'    => 'Kế toán',
+                            ];
+                            $firstRole = $user->roles->first();
+                            $userJobTitle = $roleTitleMap[strtolower($firstRole?->name ?? '')] ?? ($firstRole?->name ? ucwords(str_replace('_', ' ', $firstRole->name)) : 'Nhân viên');
+                        @endphp
+                        <p class="profile-role mb-3">{{ $userJobTitle }}</p>
 
                         <div class="profile-meter text-start">
                             <div class="profile-meter__row">
@@ -591,7 +606,7 @@
                                 <span class="profile-detail-icon"><i class="bi bi-telephone"></i></span>
                                 <div>
                                     <strong>Số điện thoại</strong>
-                                    <span>{{ old('phone', $customer->phone ?? 'Chưa cập nhật') }}</span>
+                                    <span>{{ $user->phone ?? $customer->phone ?? 'Chưa cập nhật' }}</span>
                                 </div>
                             </div>
                             <div class="profile-detail-item">
@@ -657,7 +672,7 @@
 
                                     <div class="col-md-6 profile-field">
                                         <label for="phone">Số điện thoại</label>
-                                        <input type="text" class="form-control" id="phone" name="phone" value="{{ old('phone', $customer->phone ?? '') }}" placeholder="Nhập số điện thoại liên hệ">
+                                        <input type="text" class="form-control" id="phone" name="phone" value="{{ old('phone', $user->phone ?? $customer->phone ?? '') }}" placeholder="Nhập số điện thoại liên hệ">
                                         @error('phone')
                                             <span class="profile-error">{{ $message }}</span>
                                         @else

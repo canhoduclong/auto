@@ -37,6 +37,8 @@ use App\Models\District;
 use App\Models\TruckBrand;
 use App\Models\TruckStation;
 use App\Models\Ward;
+use App\Models\Company;
+use App\Models\User;
 
 class PageController extends Controller
 {
@@ -456,6 +458,9 @@ class PageController extends Controller
         if ($request->filled('email')) {
             $user->email = $request->input('email');
         }
+        if ($request->has('phone')) {
+            $user->phone = $request->input('phone');
+        }
         $user->save();
 
         if ($request->hasFile('avatar')) {
@@ -646,7 +651,6 @@ class PageController extends Controller
             ->latest('created_at');
 
         $keyword = trim((string) $request->input('keyword', ''));
-        $showAllVariants = $request->boolean('show_all_variants');
         if ($keyword !== '') {
             $query->where(function ($sub) use ($keyword) {
                 $sub->where('code', 'like', "%{$keyword}%")
@@ -742,6 +746,12 @@ class PageController extends Controller
 
         $keyword = trim((string) $request->input('keyword', ''));
         $showAllVariants = $request->boolean('show_all_variants');
+        $selectedProductIds = collect((array) $request->input('product_ids', []))
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
 
         $products = Product::query()
             ->with([
@@ -762,6 +772,9 @@ class PageController extends Controller
                                 ->orWhere('name', 'like', "%{$keyword}%");
                         });
                 });
+            })
+            ->when(!empty($selectedProductIds), function ($query) use ($selectedProductIds) {
+                $query->whereIn('id', $selectedProductIds);
             })
             ->orderBy('name')
             ->paginate(20)
@@ -833,10 +846,35 @@ class PageController extends Controller
                         });
                 });
             })
+            ->when(!empty($selectedProductIds), function ($query) use ($selectedProductIds) {
+                $query->whereIn('product_id', $selectedProductIds);
+            })
             ->count();
 
         $differentVariantCountOnPage = $products->getCollection()
             ->sum(fn (Product $product) => $product->priceDiffVariants->count());
+
+        $selectableProducts = Product::query()
+            ->select(['id', 'name'])
+            ->where('status', true)
+            ->whereHas('variants', function ($variantQuery) {
+                $variantQuery->whereHas('latestPriceLog', function ($priceLogQuery) {
+                    $priceLogQuery->where('new_price', '>', 0);
+                });
+            })
+            ->orderBy('name')
+            ->get();
+
+        // Lấy thông tin công ty
+        $company = Company::query()->first();
+
+        // Lấy Trưởng phòng Kinh Doanh (Leader)
+        $businessLeader = User::query()
+            ->whereHas('roles', function ($query) {
+                $query->whereIn('name', ['leader_sale', 'leader', 'sale_manager']);
+            })
+            ->orderBy('created_at')
+            ->first();
 
         return view('site.sales.daily_prices', [
             'settings' => $this->settings,
@@ -846,7 +884,11 @@ class PageController extends Controller
             'differentVariantCountOnPage' => $differentVariantCountOnPage,
             'showAllVariants' => $showAllVariants,
             'keyword' => $keyword,
+            'selectedProductIds' => $selectedProductIds,
+            'selectableProducts' => $selectableProducts,
             'asOfDate' => now(),
+            'company' => $company,
+            'businessLeader' => $businessLeader,
         ]);
     }
 

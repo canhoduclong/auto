@@ -287,6 +287,44 @@
                             </div>
                         </div>
                     </div>
+
+                    <div class="col-xl-4 col-md-6">
+                        @php $priceLogoMedia = isset($settings['price_logo']) ? App\Models\Media::find($settings['price_logo']->value) : null; @endphp
+                        <div class="media-field">
+                            <div class="media-field__label">Logo Bảng Giá <small class="text-muted fw-normal">(dùng trong trang báo giá hàng ngày)</small></div>
+                            <div class="media-preview" id="price-logo-preview">
+                                @if($priceLogoMedia)
+                                    <img src="{{ asset('storage/' . $priceLogoMedia->file_path) }}" class="media-preview__img" alt="Price Logo">
+                                @else
+                                    <span class="media-preview__empty">Chưa chọn ảnh</span>
+                                @endif
+                            </div>
+                            <input type="hidden" name="price_logo" id="price-logo-media-id" value="{{ $settings['price_logo']->value ?? '' }}">
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-primary btn-sm" id="btnSelectPriceLogo">Chọn ảnh</button>
+                                <button type="button" class="btn btn-light btn-sm border" data-clear-target="price-logo">Bỏ chọn</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-xl-4 col-md-6">
+                        @php $alertLogoMedia = isset($settings['alert_logo']) ? App\Models\Media::find($settings['alert_logo']->value) : null; @endphp
+                        <div class="media-field">
+                            <div class="media-field__label">Logo Thông Báo <small class="text-muted fw-normal">(dùng trong các thông báo, alert)</small></div>
+                            <div class="media-preview" id="alert-logo-preview">
+                                @if($alertLogoMedia)
+                                    <img src="{{ asset('storage/' . $alertLogoMedia->file_path) }}" class="media-preview__img" alt="Alert Logo">
+                                @else
+                                    <span class="media-preview__empty">Chưa chọn ảnh</span>
+                                @endif
+                            </div>
+                            <input type="hidden" name="alert_logo" id="alert-logo-media-id" value="{{ $settings['alert_logo']->value ?? '' }}">
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-primary btn-sm" id="btnSelectAlertLogo">Chọn ảnh</button>
+                                <button type="button" class="btn btn-light btn-sm border" data-clear-target="alert-logo">Bỏ chọn</button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -313,6 +351,33 @@
                     <div class="col-lg-4">
                         <label for="tax_number" class="form-label">Tax Number</label>
                         <input type="text" class="form-control" id="tax_number" name="tax_number" value="{{ $settings['tax_number']->value ?? '' }}">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white border-0 pt-3 pb-0">
+                <h5 class="mb-1">Thông tin công ty (bảng báo giá)</h5>
+                <p class="text-muted small mb-0">Tên pháp lý, tài khoản ngân hàng dùng trên bảng báo giá.</p>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-lg-6">
+                        <label for="company_legal_name" class="form-label">Tên công ty (pháp lý)</label>
+                        <input type="text" class="form-control" id="company_legal_name" name="company_legal_name" value="{{ $settings['company_legal_name']->value ?? '' }}" placeholder="VD: CÔNG TY TNHH HOÀNG LONG TNT">
+                    </div>
+                    <div class="col-lg-6">
+                        <label for="bank_account" class="form-label">Số tài khoản</label>
+                        <input type="text" class="form-control" id="bank_account" name="bank_account" value="{{ $settings['bank_account']->value ?? '' }}" placeholder="VD: 123456789">
+                    </div>
+                    <div class="col-lg-6">
+                        <label for="bank_name" class="form-label">Ngân hàng</label>
+                        <input type="text" class="form-control" id="bank_name" name="bank_name" value="{{ $settings['bank_name']->value ?? '' }}" placeholder="VD: Vietcombank">
+                    </div>
+                    <div class="col-lg-6">
+                        <label for="bank_branch" class="form-label">Chi nhánh</label>
+                        <input type="text" class="form-control" id="bank_branch" name="bank_branch" value="{{ $settings['bank_branch']->value ?? '' }}" placeholder="VD: Chi nhánh TP. Hồ Chí Minh">
                     </div>
                 </div>
             </div>
@@ -634,6 +699,8 @@ document.addEventListener('DOMContentLoaded', function () {
     setupMediaSelector('btnSelectLogo', 'logo-preview', 'logo-media-id');
     setupMediaSelector('btnSelectBanner', 'banner-preview', 'banner-media-id');
     setupMediaSelector('btnSelectFooterLogo', 'footer-logo-preview', 'footer-logo-media-id');
+    setupMediaSelector('btnSelectPriceLogo', 'price-logo-preview', 'price-logo-media-id');
+    setupMediaSelector('btnSelectAlertLogo', 'alert-logo-preview', 'alert-logo-media-id');
     @for ($i = 1; $i <= 5; $i++)
         setupMediaSelector('btnSelectSlider{{ $i }}', 'slider_{{ $i }}-preview', 'slider_{{ $i }}-media-id');
     @endfor
@@ -642,6 +709,8 @@ document.addEventListener('DOMContentLoaded', function () {
         'logo': { previewId: 'logo-preview', inputId: 'logo-media-id' },
         'banner': { previewId: 'banner-preview', inputId: 'banner-media-id' },
         'footer-logo': { previewId: 'footer-logo-preview', inputId: 'footer-logo-media-id' },
+        'price-logo': { previewId: 'price-logo-preview', inputId: 'price-logo-media-id' },
+        'alert-logo': { previewId: 'alert-logo-preview', inputId: 'alert-logo-media-id' },
         @for ($i = 1; $i <= 5; $i++)
         'slider_{{ $i }}': { previewId: 'slider_{{ $i }}-preview', inputId: 'slider_{{ $i }}-media-id' },
         @endfor
