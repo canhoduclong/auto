@@ -72,12 +72,22 @@
                         $currentUser = auth()->user();
                         $isAdmin = $currentUser?->hasRole('admin') ?? false;
                         $hasNotificationsTable = \Illuminate\Support\Facades\Schema::hasTable('notifications');
+                        $hasUserLastSeenColumn = \Illuminate\Support\Facades\Schema::hasColumn('users', 'last_seen_at');
                         $unreadNotificationsCount = ($isAdmin && $hasNotificationsTable)
                             ? ($currentUser?->unreadNotifications()->count() ?? 0)
                             : 0;
                         $latestNotifications = ($isAdmin && $hasNotificationsTable)
                             ? ($currentUser?->notifications()->latest()->take(5)->get() ?? collect())
                             : collect();
+                        $onlineUsers = ($isAdmin && $hasUserLastSeenColumn)
+                            ? (\App\Models\User::query()
+                                ->whereNotNull('last_seen_at')
+                                ->where('last_seen_at', '>=', now()->subMinutes(5))
+                                ->orderByDesc('last_seen_at')
+                                ->take(12)
+                                ->get())
+                            : collect();
+                        $onlineUsersCount = $onlineUsers->count();
                         $currentLocale = app()->getLocale();
                     @endphp
 
@@ -99,6 +109,32 @@
 
                     @if($isAdmin)
                         <div class="ms-auto d-flex align-items-center gap-2 py-2">
+                            <div class="dropdown">
+                                <button class="btn btn-light btn-sm position-relative" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="User online">
+                                    <i class="ph ph-users-three"></i>
+                                    @if($onlineUsersCount > 0)
+                                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-success">
+                                            {{ $onlineUsersCount > 99 ? '99+' : $onlineUsersCount }}
+                                        </span>
+                                    @endif
+                                </button>
+                                <div class="dropdown-menu dropdown-menu-end p-0" style="width: 320px; max-height: 420px; overflow-y: auto;">
+                                    <div class="d-flex justify-content-between align-items-center p-2 border-bottom">
+                                        <strong>User online (5 phút)</strong>
+                                        <span class="small text-muted">{{ $onlineUsersCount }}</span>
+                                    </div>
+                                    @forelse($onlineUsers as $onlineUser)
+                                        <div class="dropdown-item py-2 border-bottom">
+                                            <div class="fw-semibold">{{ $onlineUser->name }}</div>
+                                            <div class="small text-muted">{{ $onlineUser->email }}</div>
+                                            <div class="small text-muted">Hoạt động: {{ optional($onlineUser->last_seen_at)->diffForHumans() }}</div>
+                                        </div>
+                                    @empty
+                                        <div class="p-3 text-muted text-center">Chưa có user online</div>
+                                    @endforelse
+                                </div>
+                            </div>
+
                             <div class="dropdown">
                                 <button class="btn btn-light btn-sm position-relative" type="button" data-bs-toggle="dropdown" aria-expanded="false">
                                     <i class="ph ph-bell"></i>

@@ -85,12 +85,18 @@
     .sp-company-card {
         padding: 24px;
     }
+    .sp-company-header {
+        display: grid;
+        grid-template-columns: 160px minmax(0, 1fr);
+        gap: 20px;
+        align-items: start;
+    }
     .sp-company-logo-wrap {
         min-height: 120px;
         display: flex;
-        align-items: flex-end;
-        justify-content: right;
-        padding-right: 25px 
+        align-items: flex-start;
+        justify-content: flex-start;
+        padding-right: 0;
     }
     .sp-company-logo {
         max-height: 88px;
@@ -133,6 +139,22 @@
         border-radius: 12px;
         font-weight: 700;
         padding: 8px 14px;
+    }
+    .sp-signature {
+        text-align: center;
+    }
+    .sp-signature-title {
+        text-align: center;
+        margin-bottom: 60px;
+        font-size: 0.9rem;
+        font-weight: 700;
+        color: #0f172a;
+    }
+    .sp-signature-name {
+        padding-top: 12px;
+        font-size: 0.85rem;
+        color: #0f172a;
+        font-weight: 600;
     }
     .sp-table-wrap {
         padding: 0 18px 18px;
@@ -212,6 +234,9 @@
             font-size: 1.35rem;
         }
         .sp-company-grid {
+            grid-template-columns: 1fr;
+        }
+        .sp-company-header {
             grid-template-columns: 1fr;
         }
         .sp-actions {
@@ -346,203 +371,206 @@
             $logoMedia       = $logoMediaId ? App\Models\Media::find($logoMediaId) : null;
         @endphp
         <div class="card sp-card mb-4">
-            <div class="border-bottom" style="padding: 12px 24px;">
-                <div class="sp-actions">
-                    <button type="button" class="btn btn-outline-primary" id="btnExportPdf">
-                        <i class="fa fa-file-pdf-o me-1"></i>Xuất PDF
-                    </button>
-                    <a href="#" class="btn btn-outline-success" id="btnShareZalo" target="_blank" rel="noopener">
-                        <i class="fa fa-share-alt me-1"></i>Chia sẻ Zalo
-                    </a>
-                </div>
-            </div>
+            
             <div id="pdfExportContent">
-            <div class="sp-company-card">
-                <div class="row g-4 align-items-center">
-                    <div class="col-md-3 col-lg-3">
-                        <div class="sp-company-logo-wrap">
-                            @if($logoMedia)
-                                <img src="{{ asset('storage/' . $logoMedia->file_path) }}" alt="{{ $brandName }}" class="sp-company-logo">
-                            @else
-                                <div style="height: 64px; width: 64px; display: flex; align-items: center; justify-content: center;    font-weight: 900; font-size: 1.4rem; color: #334155;">
-                                    {{ mb_substr($companyLegal ?? $brandName ?? 'C', 0, 1) }}
-                                </div>
-                            @endif
+                <div class="sp-company-card">
+                    <div class="sp-company-header">
+                        <div>
+                            <div class="sp-company-logo-wrap">
+                                @if($logoMedia)
+                                    <img src="{{ asset('storage/' . $logoMedia->file_path) }}" alt="{{ $brandName }}" class="sp-company-logo">
+                                @else
+                                    <div style="height: 64px; width: 64px; display: flex; align-items: center; justify-content: center;    font-weight: 900; font-size: 1.4rem; color: #334155;">
+                                        {{ mb_substr($companyLegal ?? $brandName ?? 'C', 0, 1) }}
+                                    </div>
+                                @endif
+                            </div>
                         </div>
-                    </div>
 
-                    <div class="col-md-9 col-lg-9">
-                        <div class="sp-company-title">{{ $companyLegal ?? $brandName ?? '-' }}</div>
+                        <div>
+                            <div class="sp-company-title">{{ $companyLegal ?? $brandName ?? '-' }}</div>
 
-                        <div class="sp-company-grid">
-                            @if($brandTax)
-                                <div class="sp-company-line"><span class="sp-company-label">Mã số thuế:</span>{{ $brandTax }}</div>
-                            @endif
-                            @if($user->phone)
-                                <div class="sp-company-line"><span class="sp-company-label">Điện thoại:</span>{{ $user->phone }}</div>
-                            @elseif($brandPhone)
-                                <div class="sp-company-line"><span class="sp-company-label">Điện thoại:</span>{{ $brandPhone }}</div>
-                            @endif
-                            @if($user->email)
-                                <div class="sp-company-line"><span class="sp-company-label">Email:</span>{{ $user->email }}</div>
-                            @endif
-                            @if($brandAddr)
-                                <div class="sp-company-line full"><span class="sp-company-label">Địa chỉ:</span>{{ $brandAddr }}</div>
-                            @endif
-                            @if($bankAccount)
-                                <div class="sp-company-line"><span class="sp-company-label">Số tài khoản:</span>{{ $bankAccount }}</div>
-                            @endif
-                            @if($bankName)
-                                <div class="sp-company-line"><span class="sp-company-label">Ngân hàng:</span>{{ $bankName }}</div>
-                            @endif
-                            @if($bankBranch)
-                                <div class="sp-company-line full"><span class="sp-company-label">Chi nhánh:</span>{{ $bankBranch }}</div>
-                            @endif
+                            <div class="sp-company-grid">
+                                @if($brandTax)
+                                    <div class="sp-company-line"><span class="sp-company-label">Mã số thuế:</span>{{ $brandTax }}</div>
+                                @endif
+                                @if($user->phone)
+                                    <div class="sp-company-line"><span class="sp-company-label">Điện thoại:</span>{{ $user->phone }}</div>
+                                @elseif($brandPhone)
+                                    <div class="sp-company-line"><span class="sp-company-label">Điện thoại:</span>{{ $brandPhone }}</div>
+                                @endif
+                                @if($user->email)
+                                    <div class="sp-company-line"><span class="sp-company-label">Email:</span>{{ $user->email }}</div>
+                                @endif
+                                @if($brandAddr)
+                                    <div class="sp-company-line full"><span class="sp-company-label">Địa chỉ:</span>{{ $brandAddr }}</div>
+                                @endif
+                                @if($bankAccount)
+                                    <div class="sp-company-line"><span class="sp-company-label">Số tài khoản:</span>{{ $bankAccount }}</div>
+                                @endif
+                                @if($bankName)
+                                    <div class="sp-company-line"><span class="sp-company-label">Ngân hàng:</span>{{ $bankName }}</div>
+                                @endif
+                                @if($bankBranch)
+                                    <div class="sp-company-line full"><span class="sp-company-label">Chi nhánh:</span>{{ $bankBranch }}</div>
+                                @endif
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
-            <div class="p4 Text-center border-top" style="background: #f8f9fa;">
-                <h2 class="text-center p-4">BẢNG BÁO GIÁ</h2>
-            </div>
-
-            <div class="sp-table-wrap">
-                <div class="d-flex justify-content-between align-items-center px-1 py-3">
-                    <span class="date-approved">
-                        <i class="fa fa-calendar"></i>
-                        Hiệu lực: <strong>{{ $asOfDate->format('d/m/Y H:i') }}</strong>
-                    </span> 
-                    <span class="text-muted small">Trang {{ $products->currentPage() }}/{{ max(1, $products->lastPage()) }}</span>
+                <div class="p4 Text-center border-top" style="background: #f8f9fa;">
+                    <h2 class="text-center p-4">BẢNG BÁO GIÁ</h2>
                 </div>
-                <div class="table-responsive border-top">
-                    <table class="table sp-table mb-0">
-                        <thead>
-                            <tr>
-                                <th>#</th>
-                                <th>Sản phẩm</th>
-                                <th>DVT</th>
-                                <th>Size</th>
-                                <th class="text-end">Bảng giá (VNĐ)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @forelse($products as $index => $product)
-                                @php
-                                    $price = (float) ($product->current_price ?? 0);
-                                    $imagePath = $product->avatar?->media?->file_path;
-                                    $allVariantsSamePrice = ($product->priceDiffVariants->count() ?? 0) === 0;
-                                    $size = $allVariantsSamePrice ? 'ALL' : '-';
-                                @endphp
+
+                <div class="sp-table-wrap">
+                    <div class="d-flex justify-content-between align-items-center px-1 py-3">
+                        <span class="date-approved">
+                            <i class="fa fa-calendar"></i>
+                            Hiệu lực: <strong>{{ $asOfDate->format('d/m/Y H:i') }}</strong>
+                        </span> 
+                        <span class="text-muted small">Trang {{ $products->currentPage() }}/{{ max(1, $products->lastPage()) }}</span>
+                    </div>
+                    <div class="table-responsive border-top">
+                        <table class="table sp-table mb-0">
+                            <thead>
                                 <tr>
-                                    <td>{{ $products->firstItem() + $index }}</td>
-                                    <td>
-                                        <div class="d-flex align-items-center gap-2">
-                                            @if($imagePath)
-                                                <img src="{{ asset('storage/' . $imagePath) }}" alt="{{ $product->name }}" class="sp-avatar">
-                                            @else
-                                                <div class="sp-avatar d-flex align-items-center justify-content-center bg-light text-muted">
-                                                    <i class="bi bi-image"></i>
-                                                </div>
-                                            @endif
-                                            <div>
-                                                <div class="sp-product-name">{{ $product->name ?? '-' }}</div>
-                                                <div class="sp-product-sub">
-                                                    {{ number_format((int) ($product->total_variants_count ?? 0)) }} biến thể
-                                                    @if(($product->priceDiffVariants->count() ?? 0) > 0)
-                                                        · {{ number_format($product->priceDiffVariants->count()) }} {{ !empty($showAllVariants) ? 'biến thể hiển thị' : 'biến thể lệch giá' }}
-                                                    @endif
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td>{{ $product->is_priced_by_kg ? 'kg' : ($product->unit_label ?? '-') }}</td>
-                                    <td>{{ $size }}</td>
-                                    <td class="text-end"><span class="sp-price">{{ number_format($price, 0, ',', '.') }} đ</span></td>
+                                    <th>#</th>
+                                    <th>Sản phẩm</th>
+                                    <th>DVT</th>
+                                    <th>Size</th>
+                                    <th class="text-end">Bảng giá (VNĐ)</th>
                                 </tr>
-
-                                @foreach(($product->priceDiffVariants ?? collect()) as $diffVariant)
+                            </thead>
+                            <tbody>
+                                @forelse($products as $index => $product)
+                                    @php
+                                        $price = (float) ($product->current_price ?? 0);
+                                        $imagePath = $product->avatar?->media?->file_path;
+                                        $allVariantsSamePrice = ($product->priceDiffVariants->count() ?? 0) === 0;
+                                        $size = $allVariantsSamePrice ? 'ALL' : '-';
+                                    @endphp
                                     <tr>
-                                        <td></td>
+                                        <td>{{ $products->firstItem() + $index }}</td>
                                         <td>
-                                            <div class="ps-4">
-                                                <div class="fw-semibold">• {{ $diffVariant->name ?: ('Biến thể #' . $diffVariant->id) }}</div>
-                                                <div class="sp-product-sub">SKU: {{ $diffVariant->sku ?: '-' }}</div>
+                                            <div class="d-flex align-items-center gap-2">
+                                                @if($imagePath)
+                                                    <img src="{{ asset('storage/' . $imagePath) }}" alt="{{ $product->name }}" class="sp-avatar">
+                                                @else
+                                                    <div class="sp-avatar d-flex align-items-center justify-content-center bg-light text-muted">
+                                                        <i class="bi bi-image"></i>
+                                                    </div>
+                                                @endif
+                                                <div>
+                                                    <div class="sp-product-name">{{ $product->name ?? '-' }}</div>
+                                                    <div class="sp-product-sub">
+                                                        {{ number_format((int) ($product->total_variants_count ?? 0)) }} biến thể
+                                                        @if(($product->priceDiffVariants->count() ?? 0) > 0)
+                                                            · {{ number_format($product->priceDiffVariants->count()) }} {{ !empty($showAllVariants) ? 'biến thể hiển thị' : 'biến thể lệch giá' }}
+                                                        @endif
+                                                    </div>
+                                                </div>
                                             </div>
                                         </td>
                                         <td>{{ $product->is_priced_by_kg ? 'kg' : ($product->unit_label ?? '-') }}</td>
-                                        <td>{{ $diffVariant->size ?: '-' }}</td>
-                                        <td class="text-end"><span class="sp-price">{{ number_format((float) ($diffVariant->current_price ?? 0), 0, ',', '.') }} đ</span></td>
+                                        <td>{{ $size }}</td>
+                                        <td class="text-end"><span class="sp-price">{{ number_format($price, 0, ',', '.') }} đ</span></td>
                                     </tr>
-                                @endforeach
-                            @empty
-                                <tr>
-                                    <td colspan="5"><div class="sp-empty">Không có dữ liệu bảng giá theo bộ lọc hiện tại.</div></td>
-                                </tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            </div>
-            @if($products->hasPages())
-                <div class="card-footer bg-white border-0 pt-2 pb-3">
-                    {{ $products->links() }}
-                </div>
-            @endif
-            <div class="row mt-4 sp-non-export">
-                <!-- Notes -->
-                <div class="col-md-6" >
-                    <div class="pl-4">
-                        <h5 style="font-weight: 700; color: #0f172a; margin-bottom: 12px;">Ghi chú:</h5>
-                        <ul style="margin: 0; padding-left: 24px; color: #64748b; line-height: 1.8; margin-left: 15px;">
-                            <li>Giá trên chưa bao gồm VAT</li>
-                            <li>Các giấy tờ theo yêu cầu</li>
-                        </ul>
+
+                                    @foreach(($product->priceDiffVariants ?? collect()) as $diffVariant)
+                                        <tr>
+                                            <td></td>
+                                            <td>
+                                                <div class="ps-4">
+                                                    <div class="fw-semibold">• {{ $diffVariant->name ?: ('Biến thể #' . $diffVariant->id) }}</div>
+                                                    <div class="sp-product-sub">SKU: {{ $diffVariant->sku ?: '-' }}</div>
+                                                </div>
+                                            </td>
+                                            <td>{{ $product->is_priced_by_kg ? 'kg' : ($product->unit_label ?? '-') }}</td>
+                                            <td>{{ $diffVariant->size ?: '-' }}</td>
+                                            <td class="text-end"><span class="sp-price">{{ number_format((float) ($diffVariant->current_price ?? 0), 0, ',', '.') }} đ</span></td>
+                                        </tr>
+                                    @endforeach
+                                @empty
+                                    <tr>
+                                        <td colspan="5"><div class="sp-empty">Không có dữ liệu bảng giá theo bộ lọc hiện tại.</div></td>
+                                    </tr>
+                                @endforelse
+                            </tbody>
+                        </table>
                     </div>
                 </div>
-                <div class="col-md-6" >
-                    <!-- Signature Section -->
-                    @php
-                        $userRole = $user->roles->first();
-                        $roleTitleMap = [
-                            'sale' => 'Nhân viên Kinh Doanh',
-                            'leader_sale' => 'Trưởng phòng Kinh Doanh',
-                            'leader' => 'Trưởng phòng Kinh Doanh',
-                            'sale_manager' => 'Giám đốc Kinh Doanh',
-                            'manager' => 'Giám đốc',
-                            'director' => 'Giám đốc',
-                            'admin' => 'Quản trị viên',
-                        ];
-                        $userTitle = trim((string) ($userRole?->description ?? ''));
-                        if ($userTitle === '') {
-                            $userTitle = $roleTitleMap[strtolower((string) ($userRole?->name ?? ''))]
-                                ?? ucwords(str_replace(['_', '-'], ' ', (string) ($userRole?->name ?? 'Nhân viên Kinh Doanh')));
-                        }
-                    @endphp
-                    <div style="text-align: center;">
-                        <div class="text-center">
-                            Đại diện công ty
-                        </div>
-                        <div style="margin-bottom: 60px; font-size: 0.9rem; font-weight: 700; color: #0f172a;">
-                            {{ $userTitle }}
-                        </div>
-                        <div style="padding-top: 12px;">
-                            <div style="font-size: 0.85rem; color: #0f172a; font-weight: 600;">
-                                {{ $user->name ?? '-' }}
-                            </div> 
+            
+                @if($products->hasPages())
+                    <div class="card-footer bg-white border-0 pt-2 pb-3">
+                        {{ $products->links() }}
+                    </div>
+                @endif
+                <div class="row mt-4 sp-non-export">
+                    <!-- Notes -->
+                    <div class="col-md-8" >
+                        <div class="pl-4">
+                            <h5 style="font-weight: 700; color: #0f172a; margin-bottom: 12px;">Ghi chú:</h5>
+                            <ul style="margin: 0; padding-left: 24px; color: #64748b; line-height: 1.8; margin-left: 15px;">
+                                <li>Giá trên chưa bao gồm VAT</li>
+                                <li>Các giấy tờ theo yêu cầu</li>
+                            </ul>
                         </div>
                     </div>
+                    <div class="col-md-4" >
+                        <!-- Signature Section -->
+                        @php
+                            $userRole = $user->roles->first();
+                            $roleTitleMap = [
+                                'sale' => 'Nhân viên Kinh Doanh',
+                                'leader_sale' => 'Trưởng phòng Kinh Doanh',
+                                'leader' => 'Trưởng phòng Kinh Doanh',
+                                'sale_manager' => 'Giám đốc Kinh Doanh',
+                                'manager' => 'Giám đốc',
+                                'director' => 'Giám đốc',
+                                'admin' => 'Quản trị viên',
+                            ];
+                            $userTitle = trim((string) ($userRole?->description ?? ''));
+                            if ($userTitle === '') {
+                                $userTitle = $roleTitleMap[strtolower((string) ($userRole?->name ?? ''))]
+                                    ?? ucwords(str_replace(['_', '-'], ' ', (string) ($userRole?->name ?? 'Nhân viên Kinh Doanh')));
+                            }
+                        @endphp
+                        <div class="sp-signature">
+                            <div>
+                                Đại diện công ty
+                            </div>
+                            <div class="sp-signature-title">
+                                {{ $userTitle }}
+                            </div>
+                            <div>
+                                <div class="sp-signature-name">{{ $user->name ?? '-' }}</div>
+                            </div>
+                        </div>
 
-                </div>
+                    </div>
 
-                <div style="text-align: center; margin-top: 32px; padding-top: 24px; border-top: 1px solid #e8edf5;">
-                    <div style="font-size: 0.8rem; color: #94a3b8;" class="pb-3">
-                        Bảng giá có hiệu lực từ lúc {{ $asOfDate->format('H:i:s') }} ngày {{ $asOfDate->format('d/m/Y') }}
+                    <div style="text-align: center; margin-top: 32px; padding-top: 24px; border-top: 1px solid #e8edf5;">
+                        <div style="font-size: 0.8rem; color: #94a3b8;" class="pb-3">
+                            Bảng giá có hiệu lực từ lúc {{ $asOfDate->format('H:i:s') }} ngày {{ $asOfDate->format('d/m/Y') }}
+                        </div>
                     </div>
                 </div>
             </div>
 
-
+        </div>
+        <div class="row">
+            <div class="col-md-12">
+                <div style="padding: 12px 24px;">
+                    <div class="sp-actions">
+                        <button type="button" class="btn btn-outline-primary" id="btnExportPdf">
+                            <i class="fa fa-file-pdf-o me-1"></i>Xuất PDF
+                        </button>
+                        <a href="#" class="btn btn-outline-success" id="btnShareZalo" target="_blank" rel="noopener">
+                            <i class="fa fa-share-alt me-1"></i>Chia sẻ Zalo
+                        </a>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -578,7 +606,33 @@ document.addEventListener('DOMContentLoaded', function () {
                     <style>
                         body { background: #fff !important; margin: 0; padding: 16px; }
                         .card { border: none !important; box-shadow: none !important; }
-                        .sp-actions, .card-footer, .sp-non-export { display: none !important; }
+                        .sp-actions { display: none !important; }
+                        .card-footer { display: block !important; }
+                        .sp-non-export { display: flex !important; }
+                        .sp-company-header {
+                            display: grid !important;
+                            grid-template-columns: 160px minmax(0, 1fr) !important;
+                            gap: 20px !important;
+                            align-items: start !important;
+                        }
+                        .sp-company-logo-wrap {
+                            justify-content: flex-start !important;
+                            align-items: flex-start !important;
+                            padding-right: 0 !important;
+                            min-height: auto !important;
+                        }
+                        .sp-company-logo {
+                            display: block !important;
+                            margin: 0 !important;
+                        }
+                        .sp-signature,
+                        .sp-signature-title,
+                        .sp-signature-name { 
+                            text-align: center !important;
+                        }
+                        .sp-company-grid {
+                            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+                        }
                     </style>
                 </head>
                 <body>
