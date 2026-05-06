@@ -321,9 +321,11 @@
                                         <a class="dropdown-item" href="{{ route('pages.my_dashboard') }}">
                                             <i class="bi bi-person-circle"></i> {{ __('site.profile') }}
                                         </a>
+                                        @if(Auth::user()->isSalesFlowRole())
                                         <a class="dropdown-item" href="{{ route('pages.my_orders') }}">
                                             <i class="bi bi-bag-check"></i> {{ __('site.my_orders') }}
                                         </a>
+                                        @endif
                                         @php
                                             $canViewMonitoring = Auth::user()->isAdmin() || Auth::user()->hasPermission('orders.monitoring');
                                         @endphp
@@ -332,12 +334,14 @@
                                                 <i class="bi bi-activity"></i> Theo dõi đơn hàng
                                             </a>
                                         @endif
+                                        @if(Auth::user()->isSalesFlowRole())
                                         <a class="dropdown-item" href="{{ route('pages.my_customer') }}">
                                             <i class="bi bi-people"></i> {{ __('site.my_customers') }}
                                         </a>
                                         <a class="dropdown-item" href="{{ route('my_customer.schedules.index') }}">
                                             <i class="bi bi-calendar2-check"></i> Lịch lên đơn
                                         </a>
+                                        @endif
                                         @if(Auth::user()->isSalesFlowRole())
                                             <a class="dropdown-item" href="{{ route('pages.my_truck_stations') }}">
                                                 <i class="bi bi-truck"></i> Danh sách nhà xe

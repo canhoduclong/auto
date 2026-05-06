@@ -93,11 +93,11 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/my-customer/{customer}/reminders', [\App\Http\Controllers\CustomerReminderController::class, 'store'])->name('customer_reminders.store');
         Route::put('/my-customer/{customer}/reminders/{reminder}', [\App\Http\Controllers\CustomerReminderController::class, 'update'])->name('customer_reminders.update');
         Route::delete('/my-customer/{customer}/reminders/{reminder}', [\App\Http\Controllers\CustomerReminderController::class, 'destroy'])->name('customer_reminders.destroy');
-        Route::get('/my-customer-appointments', [CustomerAppointmentController::class, 'index'])->name('pages.my_customer_appointments');
-        Route::get('/my-customer-appointments/search-customers', [CustomerAppointmentController::class, 'searchCustomers'])->name('customer_appointments.search_customers');
-        Route::post('/my-customer-appointments', [CustomerAppointmentController::class, 'store'])->name('customer_appointments.store');
-        Route::put('/my-customer-appointments/{reminder}', [CustomerAppointmentController::class, 'update'])->name('customer_appointments.update');
-        Route::delete('/my-customer-appointments/{reminder}', [CustomerAppointmentController::class, 'destroy'])->name('customer_appointments.destroy');
+        Route::get('/my-customer-appointments', [CustomerAppointmentController::class, 'index'])->name('pages.my_customer_appointments')->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
+        Route::get('/my-customer-appointments/search-customers', [CustomerAppointmentController::class, 'searchCustomers'])->name('customer_appointments.search_customers')->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
+        Route::post('/my-customer-appointments', [CustomerAppointmentController::class, 'store'])->name('customer_appointments.store')->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
+        Route::put('/my-customer-appointments/{reminder}', [CustomerAppointmentController::class, 'update'])->name('customer_appointments.update')->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
+        Route::delete('/my-customer-appointments/{reminder}', [CustomerAppointmentController::class, 'destroy'])->name('customer_appointments.destroy')->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
     // Báo cáo công việc cho user frontend
     Route::get('work-reports', [\App\Http\Controllers\WorkReportController::class, 'index'])
         ->name('work-reports.index');
@@ -422,7 +422,8 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::get('profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::put('profile', [ProfileController::class, 'update'])->name('profile.update');
 
-    // My Customer Page
+    // My Customer Page (sale / leader / manager only)
+    Route::middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin')->group(function () {
     Route::get('/my-customer', [PageController::class, 'myCustomer'])->name('pages.my_customer');
     Route::get('/my-customer/ajax', [PageController::class, 'myCustomerAjax'])->name('pages.my_customer.ajax');
     Route::get('/my-customer/create', [PageController::class, 'myCustomerCreate'])->name('my_customer.create');
@@ -456,14 +457,17 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::get('/my-customer/{customer}/order', [PageController::class, 'myCustomerOrderCreate'])->name('my_customer.order.create');
     Route::post('/my-customer/{customer}/order', [PageController::class, 'myCustomerOrderStore'])->name('my_customer.order.store');
     Route::get('/my-customer/{customer}/orders-quick-view', [PageController::class, 'myCustomerOrdersQuickView'])->name('my_customer.orders_quick_view');
+    }); // end my-customer role group
 
 
-    // My Truck Stations
+    // My Truck Stations (sale / leader / manager only)
+    Route::middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin')->group(function () {
     Route::get('/my-truck-stations', [PageController::class, 'myTruckStations'])->name('pages.my_truck_stations');
     Route::get('/my-truck-stations/list', [PageController::class, 'myTruckStationsAjax'])->name('pages.my_truck_stations.ajax');
     Route::get('/my-truck-stations/regions', [PageController::class, 'myTruckStationsRegions'])->name('pages.my_truck_stations.regions');
     Route::post('/my-truck-stations', [PageController::class, 'myTruckStationsStore'])->name('pages.my_truck_stations.store');
     Route::put('/my-truck-stations/{truckStation}', [PageController::class, 'myTruckStationsUpdate'])->name('pages.my_truck_stations.update');
+    }); // end my-truck-stations role group
 
     // API: Truck Routes for customer create
     Route::get('/api/truck-routes', [PageController::class, 'apiTruckRoutes'])->name('api.truck_routes');
@@ -522,20 +526,24 @@ Route::get('/variant/{variant:slug}', [PageController::class, 'variantDetail'])-
 
 Route::get('/my-profile', [PageController::class, 'myDashboard'])->name('pages.my_dashboard')->middleware('auth');
 Route::post('/my-profile', [PageController::class, 'updateProfile'])->name('pages.update_profile')->middleware('auth');
-Route::get('/my-orders', [PageController::class, 'myOrders'])->name('pages.my_orders')->middleware('auth');
-Route::get('/my-orders/monitoring', [PageController::class, 'myOrdersMonitoring'])
-    ->name('pages.my_orders.monitoring')
-    ->middleware(['auth', 'permission:orders.monitoring']);
-Route::get('/my-orders/daily-prices', [PageController::class, 'dailyProductPrices'])->name('pages.my_orders.daily_prices')->middleware('auth');
-Route::get('/my-orders/daily-inventories', [PageController::class, 'dailyInventories'])->name('pages.my_orders.daily_inventories')->middleware('auth');
-Route::get('/my-orders/customers/ajax', [PageController::class, 'myOrderCustomersAjax'])->name('site.orders.customers.ajax')->middleware('auth');
-// AJAX: Danh sách biến thể cho đơn hàng (my-orders/{order}/edit)
-Route::get('/my-orders/variants/ajax', [App\Http\Controllers\OrderAjaxController::class, 'variantsAjax'])->name('site.orders.variants.ajax')->middleware('auth');
-Route::get('/my-orders/{order}', [PageController::class, 'myOrderDetail'])->name('site.orders.show')->middleware('auth');
-Route::get('/my-orders/{order}/edit', [PageController::class, 'myOrderEdit'])->name('site.orders.edit')->middleware('auth');
-Route::put('/my-orders/{order}', [PageController::class, 'myOrderUpdate'])->name('site.orders.update')->middleware('auth');
-Route::get('/my-orders/{id}/copy', [PageController::class, 'copyOrder'])->name('site.orders.copy')->middleware('auth');
-Route::post('/my-orders/{order}/confirm-copy', [PageController::class, 'confirmCopyOrder'])->name('site.orders.confirm-copy')->middleware('auth');
+
+// My Orders routes (sale / leader / manager only)
+Route::middleware(['auth', 'role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin'])->group(function () {
+    Route::get('/my-orders', [PageController::class, 'myOrders'])->name('pages.my_orders');
+    Route::get('/my-orders/monitoring', [PageController::class, 'myOrdersMonitoring'])
+        ->name('pages.my_orders.monitoring')
+        ->middleware('permission:orders.monitoring');
+    Route::get('/my-orders/daily-prices', [PageController::class, 'dailyProductPrices'])->name('pages.my_orders.daily_prices');
+    Route::get('/my-orders/daily-inventories', [PageController::class, 'dailyInventories'])->name('pages.my_orders.daily_inventories');
+    Route::get('/my-orders/customers/ajax', [PageController::class, 'myOrderCustomersAjax'])->name('site.orders.customers.ajax');
+    // AJAX: Danh sách biến thể cho đơn hàng (my-orders/{order}/edit)
+    Route::get('/my-orders/variants/ajax', [App\Http\Controllers\OrderAjaxController::class, 'variantsAjax'])->name('site.orders.variants.ajax');
+    Route::get('/my-orders/{order}', [PageController::class, 'myOrderDetail'])->name('site.orders.show');
+    Route::get('/my-orders/{order}/edit', [PageController::class, 'myOrderEdit'])->name('site.orders.edit');
+    Route::put('/my-orders/{order}', [PageController::class, 'myOrderUpdate'])->name('site.orders.update');
+    Route::get('/my-orders/{id}/copy', [PageController::class, 'copyOrder'])->name('site.orders.copy');
+    Route::post('/my-orders/{order}/confirm-copy', [PageController::class, 'confirmCopyOrder'])->name('site.orders.confirm-copy');
+}); // end my-orders role group
 
 Route::get('/page/{slug}', [PageController::class, 'show'])->name('pages.show');
 
