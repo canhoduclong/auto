@@ -224,6 +224,7 @@
         .sp-hero,
         .sp-filter,
         .sp-actions,
+        .sp-non-export,
         .btn,
         .pagination,
         .card-footer {
@@ -287,7 +288,7 @@
             </div>
         </div>
 
-        <div class="card sp-card mb-4">
+        <div class="card sp-card mb-4" id="priceExportScope">
             <div class="sp-filter">
                 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
                     <div>
@@ -355,6 +356,7 @@
                     </a>
                 </div>
             </div>
+            <div id="pdfExportContent">
             <div class="sp-company-card">
                 <div class="row g-4 align-items-center">
                     <div class="col-md-3 col-lg-3">
@@ -376,7 +378,9 @@
                             @if($brandTax)
                                 <div class="sp-company-line"><span class="sp-company-label">Mã số thuế:</span>{{ $brandTax }}</div>
                             @endif
-                            @if($brandPhone)
+                            @if($user->phone)
+                                <div class="sp-company-line"><span class="sp-company-label">Điện thoại:</span>{{ $user->phone }}</div>
+                            @elseif($brandPhone)
                                 <div class="sp-company-line"><span class="sp-company-label">Điện thoại:</span>{{ $brandPhone }}</div>
                             @endif
                             @if($user->email)
@@ -479,12 +483,13 @@
                     </table>
                 </div>
             </div>
+            </div>
             @if($products->hasPages())
                 <div class="card-footer bg-white border-0 pt-2 pb-3">
                     {{ $products->links() }}
                 </div>
             @endif
-            <div class="row mt-4">
+            <div class="row mt-4 sp-non-export">
                 <!-- Notes -->
                 <div class="col-md-6" >
                     <div class="pl-4">
@@ -547,7 +552,50 @@ document.addEventListener('DOMContentLoaded', function () {
     var pdfButton = document.getElementById('btnExportPdf');
     if (pdfButton) {
         pdfButton.addEventListener('click', function () {
-            window.print();
+            var exportNode = document.getElementById('pdfExportContent');
+            if (!exportNode) {
+                window.print();
+                return;
+            }
+
+            var printWindow = window.open('', '_blank', 'width=1024,height=768');
+            if (!printWindow) {
+                window.print();
+                return;
+            }
+
+            var styleTags = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+                .map(function (node) { return node.outerHTML; })
+                .join('');
+
+            var printHtml = `
+                <!doctype html>
+                <html>
+                <head>
+                    <meta charset="utf-8">
+                    <title>Bang bao gia</title>
+                    ${styleTags}
+                    <style>
+                        body { background: #fff !important; margin: 0; padding: 16px; }
+                        .card { border: none !important; box-shadow: none !important; }
+                        .sp-actions, .card-footer, .sp-non-export { display: none !important; }
+                    </style>
+                </head>
+                <body>
+                    ${exportNode.outerHTML}
+                </body>
+                </html>
+            `;
+
+            printWindow.document.open();
+            printWindow.document.write(printHtml);
+            printWindow.document.close();
+
+            printWindow.onload = function () {
+                printWindow.focus();
+                printWindow.print();
+                printWindow.close();
+            };
         });
     }
 
