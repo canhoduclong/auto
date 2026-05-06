@@ -110,10 +110,7 @@
         margin-bottom: 10px;
     }
     .sp-company-grid {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 10px 16px;
-        font-size: .86rem;
+         
         color: #475569;
     }
     .sp-company-line {
