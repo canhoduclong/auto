@@ -93,10 +93,8 @@
     }
     .sp-company-logo-wrap {
         min-height: 120px;
-        display: flex;
-        align-items: flex-start;
-        justify-content: flex-start;
-        padding-right: 0;
+         text-align: center 
+         
     }
     .sp-company-logo {
         max-height: 88px;
