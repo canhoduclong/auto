@@ -369,6 +369,7 @@
             $priceLogoId     = $settings['price_logo']->value ?? null;
             $logoMediaId     = $priceLogoId ?: ($settings['logo']->value ?? null);
             $logoMedia       = $logoMediaId ? App\Models\Media::find($logoMediaId) : null;
+            $displayPhone    = $user->phone ?: ($user->customer?->phone ?: $brandPhone);
         @endphp
         <div class="card sp-card mb-4">
             
@@ -394,10 +395,8 @@
                                 @if($brandTax)
                                     <div class="sp-company-line"><span class="sp-company-label">Mã số thuế:</span>{{ $brandTax }}</div>
                                 @endif
-                                @if($user->phone)
-                                    <div class="sp-company-line"><span class="sp-company-label">Điện thoại:</span>{{ $user->phone }}</div>
-                                @elseif($brandPhone)
-                                    <div class="sp-company-line"><span class="sp-company-label">Điện thoại:</span>{{ $brandPhone }}</div>
+                                @if($displayPhone)
+                                    <div class="sp-company-line"><span class="sp-company-label">Điện thoại:</span>{{ $displayPhone }}</div>
                                 @endif
                                 @if($user->email)
                                     <div class="sp-company-line"><span class="sp-company-label">Email:</span>{{ $user->email }}</div>
