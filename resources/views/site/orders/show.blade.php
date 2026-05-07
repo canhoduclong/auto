@@ -53,6 +53,9 @@
     $canEdit = $isCopiedOrder
         || ($order->status === \App\Models\Order::STATUS_PENDING_LEADER_APPROVAL
             && $order->created_at?->isToday());
+    $canCancelToday = $order->created_at?->isToday()
+        && !in_array((string) $order->status, ['cancelled', 'completed', 'returned', 'returned_completed'], true);
+    $canRequestAdjustment = !in_array((string) $order->status, ['cancelled', 'rejected'], true);
 
     $statusText = \App\Models\Order::statusOptions()[$order->status] ?? ucfirst(str_replace('_', ' ', (string) $order->status));
     $paymentStatusText = match((string) $order->payment_status) {
@@ -982,6 +985,17 @@
                                         <i class="fa fa-pencil me-1"></i>Sửa
                                     </a>
                                 @endif
+                                @if($canRequestAdjustment)
+                                    <a href="{{ route('site.order-adjustments.create', $order) }}" class="btn btn-warning btn-sm text-dark">
+                                        <i class="fa fa-exchange me-1"></i>Yêu cầu điều chỉnh
+                                    </a>
+                                @endif
+                                @if($canCancelToday)
+                                    <button type="button" class="btn btn-outline-danger btn-sm"
+                                            data-bs-toggle="modal" data-bs-target="#cancelOrderModal">
+                                        <i class="fa fa-times-circle me-1"></i>Hủy đơn hàng
+                                    </button>
+                                @endif
                                 <a href="{{ route('pages.my_orders') }}" class="btn btn-outline-primary btn-sm">
                                     Quay lại danh sách đơn
                                 </a>
@@ -993,4 +1007,64 @@
         </div>
     </div>
 </section>
+
+@if($canCancelToday)
+{{-- Cancel Order Modal --}}
+<div class="modal fade" id="cancelOrderModal" tabindex="-1" aria-labelledby="cancelOrderModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form action="{{ route('site.orders.cancel', $order) }}" method="POST" enctype="multipart/form-data">
+                @csrf
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title" id="cancelOrderModalLabel">
+                        <i class="fa fa-times-circle me-2"></i>Hủy đơn hàng #{{ $order->code }}
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning mb-3">
+                        <i class="fa fa-exclamation-triangle me-1"></i>
+                        Đơn hàng sẽ bị hủy và tồn kho sẽ được giải phóng. Hành động này không thể hoàn tác.
+                    </div>
+                    <div class="mb-3">
+                        <label for="cancel_reason" class="form-label fw-semibold">Lý do hủy <span class="text-muted">(tùy chọn)</span></label>
+                        <textarea class="form-control" id="cancel_reason" name="cancel_reason" rows="3"
+                                  placeholder="Nhập lý do hủy đơn hàng..." maxlength="2000"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="cancel_images" class="form-label fw-semibold">Hình ảnh đính kèm <span class="text-muted">(tùy chọn, tối đa 5 ảnh)</span></label>
+                        <input class="form-control" type="file" id="cancel_images" name="cancel_images[]"
+                               accept="image/*" multiple>
+                        <div class="form-text">Định dạng: JPG, PNG, GIF. Dung lượng tối đa 5MB/ảnh.</div>
+                        <div id="cancelImagePreviews" class="d-flex flex-wrap gap-2 mt-2"></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fa fa-times-circle me-1"></i>Xác nhận hủy đơn
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+document.getElementById('cancel_images').addEventListener('change', function () {
+    const container = document.getElementById('cancelImagePreviews');
+    container.innerHTML = '';
+    Array.from(this.files).forEach(file => {
+        const reader = new FileReader();
+        reader.onload = e => {
+            const img = document.createElement('img');
+            img.src = e.target.result;
+            img.style.cssText = 'width:80px;height:80px;object-fit:cover;border-radius:6px;border:1px solid #dee2e6;';
+            container.appendChild(img);
+        };
+        reader.readAsDataURL(file);
+    });
+});
+</script>
+@endif
+
 @endsection

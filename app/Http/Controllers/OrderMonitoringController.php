@@ -54,6 +54,10 @@ class OrderMonitoringController extends Controller
     {
         $workflow = ApprovalWorkflow::query()
             ->where('is_active', true)
+            ->where(function ($query): void {
+                $query->whereJsonContains('applies_to', ApprovalWorkflow::ACTIVITY_ORDER_CREATE)
+                    ->orWhereNull('applies_to');
+            })
             ->with('steps')
             ->orderByDesc('id')
             ->first();

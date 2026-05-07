@@ -623,6 +623,8 @@
                             'rejected' => 'Từ Chối',
                             default => $visualStatus,
                         };
+                        $hasStockAlert = (string) ($order->stock_alert_status ?? '') === 'waiting_stock'
+                            || (int) ($order->stock_sufficient ?? 1) === 0;
                         $isOldOrder = !optional($order->created_at)?->isToday();
                         $rowStateClass = match ($visualStatus) {
                             'approved' => 'tmo-row-approved',
@@ -704,6 +706,11 @@
                             {{-- Cột 3: Status + Bước duyệt --}}
                             <div>
                                 <span class="tmo-status js-order-status {{ $statusClass }}" data-status="{{ $visualStatus }}">{{ $statusLabel }}</span>
+                                @if($hasStockAlert)
+                                    <div class="mt-1">
+                                        <span class="badge text-bg-warning">Chờ bổ sung kho</span>
+                                    </div>
+                                @endif
                                 <div class="tmo-mini mt-1">Bước: {{ $step?->step?->role_slug ?? 'Không có' }}</div>
                             </div>
                             {{-- Cột 4: Các nút --}}

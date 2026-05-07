@@ -563,6 +563,7 @@ class OrderController extends Controller
                     'note' => $request->note,
                     'order_discount' => (float) $request->input('order_discount', 0),
                     'order_discount_type' => $this->normalizeDiscountType($request->input('order_discount_type')),
+                    'allow_backorder' => true,
                     'status' => OrderStatus::Pending->value,
                     'payment_status' => PaymentStatus::Unpaid->value,
                     'delivery_status' => DeliveryStatus::NotShipped->value,
@@ -1123,15 +1124,59 @@ class OrderController extends Controller
 
     public function cancel(Order $order)
     {
+        $request = request();
+        $user = auth()->user();
+
+        if ($request->routeIs('site.orders.cancel')) {
+            if (!$user) {
+                abort(403);
+            }
+
+            $isAdmin = $this->hasAnyRole($user, ['admin']);
+            $isOwner = (int) $order->user_id === (int) $user->id;
+
+            if (!$isAdmin && !$isOwner) {
+                abort(403);
+            }
+
+            if (!$order->created_at?->isToday()) {
+                return back()->with('error', 'Chi duoc huy don duoc tao trong ngay.');
+            }
+        }
+
+        $validated = $request->validate([
+            'cancel_reason' => 'nullable|string|max:2000',
+            'cancel_images' => 'nullable|array|max:5',
+            'cancel_images.*' => 'image|max:5120',
+        ]);
+
         $this->assertValidTransition($order, ['pending_leader_approval', 'pending_manager_approval', 'approved', 'packing', 'pending', 'confirmed', 'picking'], 'cancelled');
         $statusBefore = (string) $order->status;
+        $reason = trim((string) ($validated['cancel_reason'] ?? ''));
 
-        DB::transaction(function () use ($order) {
+        $imagePaths = [];
+        foreach ($request->file('cancel_images', []) as $file) {
+            $imagePaths[] = $file->store('orders/cancel', 'public');
+        }
+
+        DB::transaction(function () use ($order, $user, $reason, $imagePaths) {
             $this->releaseReservedStockForOrder($order);
-            $order->update(['status' => 'cancelled']);
+            $order->update([
+                'status' => 'cancelled',
+                'cancelled_by' => $user?->id,
+                'cancelled_at' => now(),
+                'cancel_reason' => $reason !== '' ? $reason : null,
+                'cancel_images' => $imagePaths ?: null,
+            ]);
         });
 
-        $this->logOrderHistory($order, 'cancel_order', $statusBefore, 'cancelled', 'Huy don hang va giai phong booking');
+        $this->logOrderHistory(
+            $order,
+            'cancel_order',
+            $statusBefore,
+            'cancelled',
+            $reason !== '' ? ('Huy don hang: ' . $reason) : 'Huy don hang va giai phong booking'
+        );
 
         return back()->with('success', __('orders.messages.cancelled_and_released'));
     }
@@ -1211,7 +1256,9 @@ class OrderController extends Controller
             throw new \RuntimeException(__('orders.runtime.warehouse_unassigned'));
         }
 
-        return DB::transaction(function () use ($items, $orderData, $approvalService) {
+        $allowBackorder = (bool) ($orderData['allow_backorder'] ?? false);
+
+        return DB::transaction(function () use ($items, $orderData, $approvalService, $allowBackorder) {
             $customer = null;
             $customerId = (int) ($orderData['customer_id'] ?? 0);
             if ($customerId > 0) {
@@ -1246,7 +1293,7 @@ class OrderController extends Controller
                 }
 
                 $availableQty = $this->getAvailableStock($variantId, $managedWarehouseId);
-                if ($availableQty < $quantity) {
+                if (!$allowBackorder && $availableQty < $quantity) {
                     throw new \RuntimeException(__('orders.runtime.insufficient_stock', [
                         'sku' => $variant->sku,
                         'available' => $availableQty,
@@ -1366,7 +1413,7 @@ class OrderController extends Controller
             }
 
             // OMS flow: create order => reserve stock only, not deduct on-hand yet.
-            $this->reserveStockForOrder($order, $managedWarehouseId);
+            $this->reserveStockForOrder($order, $managedWarehouseId, $allowBackorder);
 
             $approvalService->initOrderApproval($order);
 
@@ -1509,6 +1556,7 @@ class OrderController extends Controller
                 'daily_sequence' => $sequence,
                 'stock_sufficient' => $isSufficient ? 1 : 0,
                 'stock_shortage_detail' => $isSufficient ? null : $shortages,
+                'stock_alert_status' => $isSufficient ? 'ready' : 'waiting_stock',
             ]));
         }
     }
@@ -1594,7 +1642,7 @@ class OrderController extends Controller
         ]));
     }
 
-    private function reserveStockForOrder(Order $order, ?int $managedWarehouseId): void
+    private function reserveStockForOrder(Order $order, ?int $managedWarehouseId, bool $allowBackorder = false): void
     {
         $order->loadMissing('items.variant');
 
@@ -1609,6 +1657,10 @@ class OrderController extends Controller
                     ->first();
 
                 if (!$inventory) {
+                    if ($allowBackorder) {
+                        continue;
+                    }
+
                     throw new \RuntimeException(__('orders.runtime.no_inventory_for_booking', [
                         'sku' => $item->variant->sku ?? $variantId,
                     ]));
@@ -1616,9 +1668,17 @@ class OrderController extends Controller
 
                 $available = max(0, (int) $inventory->quantity - (int) $inventory->reserved_quantity);
                 if ($available < $reserveQty) {
-                    throw new \RuntimeException(__('orders.runtime.no_available_stock_for_booking', [
-                        'sku' => $item->variant->sku ?? $variantId,
-                    ]));
+                    if ($allowBackorder) {
+                        $reserveQty = $available;
+                    } else {
+                        throw new \RuntimeException(__('orders.runtime.no_available_stock_for_booking', [
+                            'sku' => $item->variant->sku ?? $variantId,
+                        ]));
+                    }
+                }
+
+                if ($reserveQty <= 0) {
+                    continue;
                 }
 
                 $inventory->reserved_quantity += $reserveQty;
@@ -1636,7 +1696,11 @@ class OrderController extends Controller
                     ->get();
 
                 if ($inventories->isEmpty()) {
-                    throw new \RuntimeException(__('orders.runtime.inventory_not_configured', [
+                    if ($allowBackorder) {
+                        continue;
+                    }
+
+                    throw new \RuntimeException(__('orders.runtime.no_available_stock_for_booking', [
                         'sku' => $item->variant->sku ?? $variantId,
                     ]));
                 }
@@ -1665,7 +1729,7 @@ class OrderController extends Controller
                     $remaining -= $reservedNow;
                 }
 
-                if ($remaining > 0) {
+                if (!$allowBackorder && $remaining > 0) {
                     throw new \RuntimeException(__('orders.runtime.no_available_stock_for_booking', [
                         'sku' => $item->variant->sku ?? $variantId,
                     ]));

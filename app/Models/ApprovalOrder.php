@@ -13,6 +13,8 @@ class ApprovalOrder extends Model
 
     protected $fillable = [
         'order_id',
+        'order_adjustment_id',
+        'transaction_id',
         'approval_step_id',
         'status',
         'approved_by',
@@ -27,6 +29,21 @@ class ApprovalOrder extends Model
     public function order()
     {
         return $this->belongsTo(Order::class);
+    }
+
+    public function orderAdjustment()
+    {
+        return $this->belongsTo(OrderAdjustment::class, 'order_adjustment_id');
+    }
+
+    public function transaction()
+    {
+        return $this->belongsTo(Transaction::class, 'transaction_id');
+    }
+
+    public function task()
+    {
+        return $this->belongsTo(\App\Models\TaskAssignment::class, 'task_id');
     }
 
     public function step()

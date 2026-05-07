@@ -56,19 +56,33 @@
         .acc-nav a {
             display: flex;
             align-items: center;
-            gap: 9px;
-            color: #dbeafe;
+            gap: 10px;
+            color: #cbd5e1;
             text-decoration: none;
-            padding: 10px 12px;
+            padding: 9px 12px;
             border-radius: 10px;
-            margin-bottom: 6px;
-            font-size: 14px;
+            margin-bottom: 2px;
+            font-size: 13.5px;
+            font-weight: 500;
+            transition: background .15s, color .15s;
+            white-space: nowrap;
+            overflow: hidden;
         }
-        .acc-nav a:hover { background: rgba(14, 165, 233, 0.15); }
+        .acc-nav a i { font-size: 17px; flex-shrink: 0; opacity: .85; }
+        .acc-nav a:hover { background: rgba(14, 165, 233, 0.15); color: #fff; }
         .acc-nav a.active {
-            background: linear-gradient(90deg, rgba(14, 165, 233, 0.22), rgba(59, 130, 246, 0.14));
+            background: linear-gradient(90deg, rgba(14, 165, 233, 0.28), rgba(59, 130, 246, 0.18));
             color: #fff;
             box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.35);
+        }
+        .acc-nav a.active i { opacity: 1; }
+        .acc-nav .nav-section {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .1em;
+            color: #475569;
+            padding: 12px 12px 4px;
         }
         .acc-sidebar-footer {
             padding: 12px;
@@ -153,27 +167,69 @@
 <div class="acc-shell">
     <aside class="acc-sidebar">
         <div class="acc-brand">
-            Accounting Workspace
-            <small>Ke toan - doi soat - bao cao</small>
+            <span style="font-size:15px">&#x1F4CA; Kế Toán</span>
+            <small>Kế toán &mdash; đối soát &mdash; báo cáo</small>
         </div>
 
         <nav class="acc-nav">
-            <a href="{{ route('accounting.dashboard') }}" class="{{ request()->routeIs('accounting.dashboard') ? 'active' : '' }}"><i class="bi bi-speedometer2"></i> Dashboard</a>
-            <a href="{{ route('accounting.customer-debts') }}" class="{{ request()->routeIs('accounting.customer-debts') ? 'active' : '' }}"><i class="bi bi-people"></i> Cong no khach hang</a>
-            <a href="{{ route('accounting.supplier-debts') }}" class="{{ request()->routeIs('accounting.supplier-debts') ? 'active' : '' }}"><i class="bi bi-building"></i> Cong no nha cung cap</a>
-            <a href="{{ route('accounting.cashflow') }}" class="{{ request()->routeIs('accounting.cashflow') ? 'active' : '' }}"><i class="bi bi-cash-stack"></i> Thu chi</a>
-            <a href="{{ route('accounting.reconciliation') }}" class="{{ request()->routeIs('accounting.reconciliation') ? 'active' : '' }}"><i class="bi bi-check2-square"></i> Doi soat don hang</a>
-            <a href="{{ route('accounting.inventory') }}" class="{{ request()->routeIs('accounting.inventory') ? 'active' : '' }}"><i class="bi bi-boxes"></i> Thong ke kho</a>
-            <a href="{{ route('accounting.commissions') }}" class="{{ request()->routeIs('accounting.commissions') ? 'active' : '' }}"><i class="bi bi-award"></i> Hoa hong khach hang</a>
-            <a href="{{ route('accounting.discounts') }}" class="{{ request()->routeIs('accounting.discounts') ? 'active' : '' }}"><i class="bi bi-percent"></i> Chiet khau khach hang</a>
-            <a href="{{ route('accounting.daily-orders') }}" class="{{ request()->routeIs('accounting.daily-orders') ? 'active' : '' }}"><i class="bi bi-list-ul"></i> Don hang hang ngay</a>
-            <a href="{{ route('accounting.financial-reports') }}" class="{{ request()->routeIs('accounting.financial-reports') ? 'active' : '' }}"><i class="bi bi-graph-up-arrow"></i> Bao cao tai chinh</a>
+            <div class="nav-section">Tổng quan</div>
+            <a href="{{ route('accounting.dashboard') }}" class="{{ request()->routeIs('accounting.dashboard') ? 'active' : '' }}">
+                <i class="bi bi-speedometer2"></i> Dashboard
+            </a>
+
+            <div class="nav-section">Đơn hàng</div>
+            <a href="{{ route('accounting.orders') }}" class="{{ request()->routeIs('accounting.orders') ? 'active' : '' }}">
+                <i class="bi bi-bag-check"></i> Danh sách đơn hàng
+            </a>
+            <a href="{{ route('accounting.daily-orders') }}" class="{{ request()->routeIs('accounting.daily-orders') ? 'active' : '' }}">
+                <i class="bi bi-calendar3"></i> Đơn hàng hàng ngày
+            </a>
+            <a href="{{ route('accounting.daily-sales') }}" class="{{ request()->routeIs('accounting.daily-sales') ? 'active' : '' }}">
+                <i class="bi bi-bar-chart-line"></i> Thống kê bán hàng
+            </a>
+            <a href="{{ route('accounting.reconciliation') }}" class="{{ request()->routeIs('accounting.reconciliation') ? 'active' : '' }}">
+                <i class="bi bi-check2-square"></i> Đối soát đơn hàng
+            </a>
+
+            <div class="nav-section">Tài chính</div>
+            <a href="{{ route('accounting.cashflow') }}" class="{{ request()->routeIs('accounting.cashflow') ? 'active' : '' }}">
+                <i class="bi bi-cash-stack"></i> Thu chi
+            </a>
+            <a href="{{ route('accounting.transactions.create') }}" class="{{ request()->routeIs('accounting.transactions.create') ? 'active' : '' }}">
+                <i class="bi bi-plus-circle"></i> Tạo giao dịch
+            </a>
+            <a href="{{ route('accounting.financial-reports') }}" class="{{ request()->routeIs('accounting.financial-reports') ? 'active' : '' }}">
+                <i class="bi bi-graph-up-arrow"></i> Báo cáo tài chính
+            </a>
+
+            <div class="nav-section">Công nợ</div>
+            <a href="{{ route('accounting.customer-debts') }}" class="{{ request()->routeIs('accounting.customer-debts') ? 'active' : '' }}">
+                <i class="bi bi-people"></i> Công nợ khách hàng
+            </a>
+            <a href="{{ route('accounting.supplier-debts') }}" class="{{ request()->routeIs('accounting.supplier-debts') ? 'active' : '' }}">
+                <i class="bi bi-building"></i> Công nợ nhà cung cấp
+            </a>
+
+            <div class="nav-section">Chính sách</div>
+            <a href="{{ route('accounting.commissions') }}" class="{{ request()->routeIs('accounting.commissions') ? 'active' : '' }}">
+                <i class="bi bi-award"></i> Hoa hồng khách hàng
+            </a>
+            <a href="{{ route('accounting.discounts') }}" class="{{ request()->routeIs('accounting.discounts') ? 'active' : '' }}">
+                <i class="bi bi-percent"></i> Chiết khấu khách hàng
+            </a>
+
+            <div class="nav-section">Kho</div>
+            <a href="{{ route('accounting.inventory') }}" class="{{ request()->routeIs('accounting.inventory') ? 'active' : '' }}">
+                <i class="bi bi-boxes"></i> Thống kê kho
+            </a>
         </nav>
 
         <div class="acc-sidebar-footer">
             <form method="POST" action="{{ route('logout') }}">
                 @csrf
-                <button type="submit" class="btn btn-outline-danger w-100 btn-sm"><i class="bi bi-box-arrow-right"></i> Dang xuat</button>
+                <button type="submit" class="btn btn-outline-danger w-100 btn-sm">
+                    <i class="bi bi-box-arrow-right"></i> Đăng xuất
+                </button>
             </form>
         </div>
     </aside>

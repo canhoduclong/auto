@@ -474,65 +474,77 @@
                                 <div id="selectedCustomerPreview" class="alert alert-info mt-2 mb-0 py-2 px-3" style="display:none;"></div>
                             </div>
 
-                            <div id="customerPickerPanel" class="checkout-customer-panel p-3 mb-3" style="display:none;">
-                                <div class="row g-2 align-items-end">
-                                    <div class="col-md-4">
-                                        <label for="customer_search" class="form-label mb-1">Tìm khách hàng (tên, email, số điện thoại)</label>
-                                        <input type="text" id="customer_search" class="form-control" placeholder="Nhập từ khóa tìm kiếm...">
-                                    </div>
-                                    <div class="col-md-2">
-                                        <label for="customer_sort_field" class="form-label mb-1">Sắp xếp theo</label>
-                                        <select id="customer_sort_field" class="form-select">
-                                            <option value="name">Tên</option>
-                                            <option value="created_at">Ngày tạo</option>
-                                            <option value="priority">Ưu tiên</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-2">
-                                        <label for="customer_sort_order" class="form-label mb-1">Thứ tự</label>
-                                        <select id="customer_sort_order" class="form-select">
-                                            <option value="asc">Tăng dần</option>
-                                            <option value="desc">Giảm dần</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-2">
-                                        <label for="customer_per_page" class="form-label mb-1">Số dòng</label>
-                                        <select id="customer_per_page" class="form-select">
-                                            <option value="10">10</option>
-                                            <option value="15" selected>15</option>
-                                            <option value="20">20</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-2">
-                                        <button type="button" class="btn btn-primary w-100" id="btnSearchCustomer">Tìm</button>
-                                    </div>
-                                </div>
+                            <div class="modal fade" id="customerPickerModal" tabindex="-1" aria-labelledby="customerPickerModalLabel" aria-hidden="true">
+                                <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title" id="customerPickerModalLabel">Chọn khách hàng cho đơn hàng</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <div id="customerPickerPanel" class="checkout-customer-panel p-3">
+                                                <div class="row g-2 align-items-end">
+                                                    <div class="col-md-4">
+                                                        <label for="customer_search" class="form-label mb-1">Tìm khách hàng (tên, email, số điện thoại)</label>
+                                                        <input type="text" id="customer_search" class="form-control" placeholder="Nhập từ khóa tìm kiếm...">
+                                                    </div>
+                                                    <div class="col-md-2">
+                                                        <label for="customer_sort_field" class="form-label mb-1">Sắp xếp theo</label>
+                                                        <select id="customer_sort_field" class="form-select">
+                                                            <option value="name">Tên</option>
+                                                            <option value="created_at">Ngày tạo</option>
+                                                            <option value="priority">Ưu tiên</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-md-2">
+                                                        <label for="customer_sort_order" class="form-label mb-1">Thứ tự</label>
+                                                        <select id="customer_sort_order" class="form-select">
+                                                            <option value="asc">Tăng dần</option>
+                                                            <option value="desc">Giảm dần</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-md-2">
+                                                        <label for="customer_per_page" class="form-label mb-1">Số dòng</label>
+                                                        <select id="customer_per_page" class="form-select">
+                                                            <option value="10">10</option>
+                                                            <option value="15" selected>15</option>
+                                                            <option value="20">20</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-md-2">
+                                                        <button type="button" class="btn btn-primary w-100" id="btnSearchCustomer">Tìm</button>
+                                                    </div>
+                                                </div>
 
-                                <div class="table-responsive mt-3">
-                                    <table class="table table-sm table-bordered align-middle mb-0">
-                                        <thead>
-                                            <tr>
-                                                <th>Tên</th>
-                                                <th>Email</th>
-                                                <th>Số điện thoại</th>
-                                                <th>Địa chỉ</th>
-                                                <th>Ghi chú</th>
-                                                <th width="100">Thao tác</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="customerSearchResults">
-                                            <tr>
-                                                <td colspan="6" class="text-center text-muted">Nhập từ khóa để tìm khách hàng.</td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
-                                </div>
+                                                <div class="table-responsive mt-3">
+                                                    <table class="table table-sm table-bordered align-middle mb-0">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>Tên</th>
+                                                                <th>Email</th>
+                                                                <th>Số điện thoại</th>
+                                                                <th>Địa chỉ</th>
+                                                                <th>Ghi chú</th>
+                                                                <th width="100">Thao tác</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody id="customerSearchResults">
+                                                            <tr>
+                                                                <td colspan="6" class="text-center text-muted">Nhập từ khóa để tìm khách hàng.</td>
+                                                            </tr>
+                                                        </tbody>
+                                                    </table>
+                                                </div>
 
-                                <div class="d-flex justify-content-between align-items-center mt-2">
-                                    <div id="customerPaginationInfo" class="text-muted small"></div>
-                                    <div class="btn-group" role="group">
-                                        <button type="button" class="btn btn-outline-secondary btn-sm" id="btnCustomerPrev">Trước</button>
-                                        <button type="button" class="btn btn-outline-secondary btn-sm" id="btnCustomerNext">Sau</button>
+                                                <div class="d-flex justify-content-between align-items-center mt-2">
+                                                    <div id="customerPaginationInfo" class="text-muted small"></div>
+                                                    <div class="btn-group" role="group">
+                                                        <button type="button" class="btn btn-outline-secondary btn-sm" id="btnCustomerPrev">Trước</button>
+                                                        <button type="button" class="btn btn-outline-secondary btn-sm" id="btnCustomerNext">Sau</button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -1028,6 +1040,7 @@
 <script>
 (() => {
     const pickerPanel = document.getElementById('customerPickerPanel');
+    const pickerModalEl = document.getElementById('customerPickerModal');
     const togglePickerBtn = document.getElementById('btnToggleCustomerPicker');
     const clearCustomerBtn = document.getElementById('btnClearCustomer');
     const searchInput = document.getElementById('customer_search');
@@ -1041,9 +1054,13 @@
     const nextBtn = document.getElementById('btnCustomerNext');
     const selectedPreview = document.getElementById('selectedCustomerPreview');
 
-    if (!pickerPanel || !togglePickerBtn || !clearCustomerBtn || !searchInput || !searchBtn || !perPageSelect || !resultsBody || !infoText || !prevBtn || !nextBtn || !selectedPreview) {
+    if (!pickerPanel || !pickerModalEl || !togglePickerBtn || !clearCustomerBtn || !searchInput || !searchBtn || !perPageSelect || !resultsBody || !infoText || !prevBtn || !nextBtn || !selectedPreview) {
         return;
     }
+
+    const pickerModal = (typeof bootstrap !== 'undefined' && bootstrap.Modal)
+        ? new bootstrap.Modal(pickerModalEl)
+        : null;
 
     const selectedCustomerIdInput = document.getElementById('selected_customer_id');
     const recipientName = document.getElementById('recipient_name');
@@ -1196,28 +1213,17 @@
         }
     }
 
-    // Luôn ẩn panel khi load
-    pickerPanel.style.display = 'none';
-
-    // Hiện panel khi nhấn nút chọn khách hàng
+    // Hiện popup khi nhấn nút chọn khách hàng
     togglePickerBtn.addEventListener('click', () => {
-        pickerPanel.style.display = 'block';
+        if (pickerModal) {
+            pickerModal.show();
+        }
         fetchCustomers(1);
     });
 
-    // Ẩn panel khi nhấn nút Bỏ chọn
+    // Bỏ chọn khách hàng khỏi đơn hiện tại
     clearCustomerBtn.addEventListener('click', () => {
-        pickerPanel.style.display = 'none';
         clearSelectedCustomer();
-    });
-
-    // Ẩn panel khi click ra ngoài panel (chỉ khi đang mở)
-    document.addEventListener('mousedown', function(event) {
-        if (pickerPanel.style.display === 'block') {
-            if (!pickerPanel.contains(event.target) && event.target !== togglePickerBtn) {
-                pickerPanel.style.display = 'none';
-            }
-        }
     });
 
     searchBtn.addEventListener('click', () => fetchCustomers(1));
@@ -1256,6 +1262,9 @@
 
         const customer = JSON.parse(decodeURIComponent(raw));
         applySelectedCustomer(customer);
+        if (pickerModal) {
+            pickerModal.hide();
+        }
     });
 
     clearCustomerBtn.addEventListener('click', clearSelectedCustomer);

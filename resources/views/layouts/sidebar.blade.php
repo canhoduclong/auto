@@ -130,6 +130,20 @@
 								<span>Quy trình duyệt</span>
 							</a>
 						</li>
+						<li class="nav-item">
+							<a href="{{ route('task-assignments.index') }}" class="nav-link{{ request()->routeIs('task-assignments.*') ? ' active' : '' }}">
+								<i class="ph-clipboard-text"></i>
+								<span>Giao Việc</span>
+							</a>
+						</li>
+						@if(auth()->user()?->hasRole('admin'))
+						<li class="nav-item">
+							<a href="{{ route('task-delegate-configs.index') }}" class="nav-link{{ request()->routeIs('task-delegate-configs.*') ? ' active' : '' }}">
+								<i class="ph-user-gear"></i>
+								<span>Phan Quyen Giao Viec</span>
+							</a>
+						</li>
+						@endif
 
 						<!-- Khách hàng -->
 						<li class="nav-item-header">

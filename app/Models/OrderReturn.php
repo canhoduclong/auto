@@ -11,6 +11,7 @@ class OrderReturn extends Model
 
     protected $fillable = [
         'order_id',
+        'order_adjustment_id',
         'customer_id',
         'warehouse_id',
         'created_by',
@@ -35,6 +36,11 @@ class OrderReturn extends Model
     public function order()
     {
         return $this->belongsTo(Order::class);
+    }
+
+    public function adjustment()
+    {
+        return $this->belongsTo(OrderAdjustment::class, 'order_adjustment_id');
     }
 
     public function customer()

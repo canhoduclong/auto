@@ -14,14 +14,14 @@ class WarehouseSeeder extends Seeder
     {
         $warehouses = [
             [
-                'name' => 'Kho Chiến Lược',
-                'address' => 'Khu công nghiệp Tân Kim, Long An',
-                'phone' => '0900000001',
+                'name'    => 'Kho Chiến Lược',
+                'address' => '177C Chiến Lược, Bình Trị Đông, Hồ Chí Minh',
+                'phone'   => '0900000001',
             ],
             [
-                'name' => 'Kho Long An',
-                'address' => 'Bến Lức, Long An',
-                'phone' => '0900000002',
+                'name'    => 'Kho Long An',
+                'address' => 'ấp Chánh, Xã Đức Lập, Tỉnh Tây Ninh',
+                'phone'   => '0900000002',
             ],
         ];
 

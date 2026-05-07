@@ -25,6 +25,29 @@
                 </div>
             </div>
 
+            <div class="mb-3">
+                <label class="form-label d-block">Ap dung cho hoat dong</label>
+                @php
+                    $oldAppliesTo = old('applies_to', $approvalWorkflow->applies_to ?: [\App\Models\ApprovalWorkflow::ACTIVITY_ORDER_CREATE]);
+                @endphp
+                <div class="d-flex flex-wrap gap-3">
+                    @foreach($activities as $activityKey => $activityLabel)
+                        <div class="form-check">
+                            <input
+                                class="form-check-input"
+                                type="checkbox"
+                                name="applies_to[]"
+                                value="{{ $activityKey }}"
+                                id="applies_to_{{ $activityKey }}"
+                                {{ in_array($activityKey, (array) $oldAppliesTo, true) ? 'checked' : '' }}
+                            >
+                            <label class="form-check-label" for="applies_to_{{ $activityKey }}">{{ $activityLabel }}</label>
+                        </div>
+                    @endforeach
+                </div>
+                <small class="text-muted">Moi hoat dong chi nen co 1 quy trinh dang kich hoat de he thong tu chon dung luong duyet.</small>
+            </div>
+
             <h6 class="mt-2">Các bước duyệt</h6>
             <p class="text-muted mb-2">Chọn role theo thứ tự duyệt.</p>
 

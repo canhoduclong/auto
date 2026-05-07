@@ -21,11 +21,15 @@ class Order extends Model
         'qr_code', 'packed_image_path', 'delivered_image_path', 'has_return_order',
         'collected_amount', 'delivered_at', 'return_reason', 'proof_images', 'shipper_note', 'delivery_time',
         'daily_sequence', 'stock_sufficient', 'stock_shortage_detail',
+        'stock_alert_status',
+        'cancelled_by', 'cancelled_at', 'cancel_reason', 'cancel_images',
     ];
 
     protected $casts = [
         'proof_images' => 'array',
+        'cancel_images' => 'array',
         'delivered_at' => 'datetime',
+        'cancelled_at' => 'datetime',
         'total_weight' => 'decimal:3',
         'actual_weight' => 'decimal:3',
         'charge_shipping_fee' => 'boolean',
@@ -33,6 +37,7 @@ class Order extends Model
         'charge_foam_box_fee' => 'boolean',
         'foam_box_price' => 'decimal:2',
         'stock_shortage_detail' => 'array',
+        'stock_alert_status' => 'string',
     ];
     
     public function approvals()
@@ -89,6 +94,7 @@ class Order extends Model
     public function returnWarehouse() { return $this->belongsTo(Warehouse::class, 'return_warehouse_id'); }
     public function items() { return $this->hasMany(OrderItem::class); }
     public function schedule() { return $this->hasOne(OrderSchedule::class, 'generated_order_id'); }
+    public function adjustments() { return $this->hasMany(OrderAdjustment::class); }
 
     public function getPaymentStatusTextAttribute()
     {

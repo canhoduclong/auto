@@ -45,22 +45,26 @@ class ProductSeeder extends Seeder
 
         $hasStatus = Schema::hasColumn('products', 'status');
 
+        // name, description, unit, status (0=inactive)
         $products = [
-            ['name' => 'Vịt nguyên con làm sạch', 'description' => 'Vịt nguyên con đã làm sạch, phân loại theo trọng lượng.'],
-            ['name' => 'Vịt loại bầm', 'description' => 'Vịt sơ chế theo quy cách loại bầm.'],
-            ['name' => 'Vịt bọng', 'description' => 'Vịt bọng với nhiều lựa chọn sơ chế theo yêu cầu.'],
-            ['name' => 'Đùi góc tư vịt', 'description' => 'Phần đùi góc tư vịt đã sơ chế.'],
-            ['name' => 'Ức vịt', 'description' => 'Ức vịt các dạng dài, ngắn, phi lê.'],
-            ['name' => 'Cánh vịt', 'description' => 'Cánh vịt chia 2 khúc hoặc 3 khúc.'],
-            ['name' => 'Đầu vịt', 'description' => 'Đầu vịt sơ chế theo lô.'],
-            ['name' => 'Đầu cổ vịt', 'description' => 'Đầu cổ vịt đóng theo quy cách sản xuất.'],
-            ['name' => 'Phao câu vịt', 'description' => 'Phao câu vịt sơ chế.'],
-            ['name' => 'Lòng vịt', 'description' => 'Lòng vịt phân loại theo size lớn, vừa, nhỏ.'],
-            ['name' => 'Mề vịt', 'description' => 'Mề vịt sơ chế.'],
-            ['name' => 'Huyết vịt', 'description' => 'Huyết vịt tươi theo lô.'],
-            ['name' => 'Huyết nếp', 'description' => 'Huyết nếp sơ chế cho sản xuất thực phẩm.'],
-            ['name' => 'Thùng xốp đóng hàng', 'description' => 'Thùng xốp phục vụ quy cách đóng hàng 50, 60, 70, 100.'],
+            ['name' => 'Vịt nguyên con làm sạch', 'description' => 'Vịt nguyên con đã làm sạch, phân loại theo trọng lượng.',  'unit' => 'con',  'status' => 1],
+            ['name' => 'Vịt loại bầm',             'description' => 'Vịt sơ chế theo quy cách loại bầm.',                       'unit' => 'cai',  'status' => 1],
+            ['name' => 'Vịt bọng',                 'description' => 'Vịt bọng với nhiều lựa chọn sơ chế theo yêu cầu.',         'unit' => 'con',  'status' => 1],
+            ['name' => 'Đùi góc tư vịt',           'description' => 'Phần đùi góc tư vịt đã sơ chế.',                          'unit' => 'kg',   'status' => 1],
+            ['name' => 'Ức vịt',                   'description' => 'Ức vịt các dạng dài, ngắn, phi lê.',                       'unit' => 'kg',   'status' => 1],
+            ['name' => 'Cánh vịt',                 'description' => 'Cánh vịt chia 2 khúc hoặc 3 khúc.',                        'unit' => 'cai',  'status' => 1],
+            ['name' => 'Đầu vịt',                  'description' => 'Đầu vịt sơ chế theo lô.',                                  'unit' => 'cai',  'status' => 1],
+            ['name' => 'Đầu cổ vịt',               'description' => 'Đầu cổ vịt đóng theo quy cách sản xuất.',                  'unit' => 'kg',   'status' => 1],
+            ['name' => 'Phao câu vịt',             'description' => 'Phao câu vịt sơ chế.',                                     'unit' => 'kg',   'status' => 1],
+            ['name' => 'Lòng vịt',                 'description' => 'Lòng vịt phân loại theo size lớn, vừa, nhỏ.',              'unit' => 'bo',   'status' => 1],
+            ['name' => 'Mề vịt',                   'description' => 'Mề vịt sơ chế.',                                           'unit' => 'cai',  'status' => 1],
+            ['name' => 'Huyết vịt',                'description' => 'Huyết vịt tươi theo lô.',                                  'unit' => 'banh', 'status' => 1],
+            ['name' => 'Huyết nếp',                'description' => 'Huyết nếp sơ chế cho sản xuất thực phẩm.',                 'unit' => 'cai',  'status' => 0],
+            ['name' => 'Thùng xốp đóng hàng',      'description' => 'Thùng xốp phục vụ quy cách đóng hàng 50, 60, 70, 100.',   'unit' => 'cai',  'status' => 0],
         ];
+
+        $hasUnit = Schema::hasColumn('products', 'unit');
+        $hasIsKg = Schema::hasColumn('products', 'is_priced_by_kg');
 
         $rows = [];
         foreach ($products as $product) {
@@ -78,7 +82,16 @@ class ProductSeeder extends Seeder
             ];
 
             if ($hasStatus) {
-                $row['status'] = 1;
+                $row['status'] = $product['status'];
+            }
+
+            if ($hasUnit) {
+                $row['unit'] = $product['unit'];
+            }
+
+            if ($hasIsKg) {
+                $row['is_priced_by_kg'] = 1;
+                $row['kg'] = 1;
             }
 
             $rows[] = $row;

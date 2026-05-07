@@ -4,6 +4,12 @@
 @section('subtitle', 'Phieu thu, phieu chi va luong tien phat sinh')
 
 @section('accounting_content')
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div></div>
+    <a href="{{ route('accounting.transactions.create') }}" class="btn btn-primary btn-sm">
+        <i class="bi bi-plus-circle me-1"></i>Tao giao dich
+    </a>
+</div>
 <div class="acc-kpi mb-3">
     <div class="item"><div class="label">Tong thu</div><div class="value text-success">{{ number_format($incomeTotal) }} d</div></div>
     <div class="item"><div class="label">Tong chi</div><div class="value text-danger">{{ number_format($expenseTotal) }} d</div></div>

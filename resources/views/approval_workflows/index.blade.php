@@ -16,6 +16,7 @@
                             <th>ID</th>
                             <th>Mã quy trình</th>
                             <th>Tên quy trình</th>
+                            <th>Hoạt động áp dụng</th>
                             <th>Trạng thái</th>
                             <th>Các bước</th>
                             <th>Ngày tạo</th>
@@ -28,6 +29,15 @@
                                 <td>{{ $workflow->id }}</td>
                                 <td>{{ $workflow->code }}</td>
                                 <td>{{ $workflow->name }}</td>
+                                <td>
+                                    @php
+                                        $labels = \App\Models\ApprovalWorkflow::availableActivities();
+                                        $appliesTo = $workflow->applies_to ?: [\App\Models\ApprovalWorkflow::ACTIVITY_ORDER_CREATE];
+                                    @endphp
+                                    @foreach((array) $appliesTo as $activity)
+                                        <span class="badge bg-light text-dark border me-1 mb-1">{{ $labels[$activity] ?? $activity }}</span>
+                                    @endforeach
+                                </td>
                                 <td>
                                     @if($workflow->is_active)
                                         <span class="badge bg-success">Đang áp dụng</span>
@@ -49,7 +59,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="7" class="text-center">Chưa có quy trình nào.</td>
+                                <td colspan="8" class="text-center">Chưa có quy trình nào.</td>
                             </tr>
                         @endforelse
                     </tbody>

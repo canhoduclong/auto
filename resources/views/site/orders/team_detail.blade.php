@@ -651,6 +651,23 @@
                     </div>
                     @endif
 
+                    @php
+                        $detailUser = auth()->user();
+                        $canRequestAdjustment = $detailUser && (
+                            $detailUser->hasRole('admin')
+                            || ($detailUser->hasRole('sale') && (int) $order->user_id === (int) $detailUser->id)
+                        );
+                    @endphp
+                    @if($canRequestAdjustment)
+                    <div class="my-3 px-3">
+                        <div class="d-flex flex-wrap gap-2 justify-content-end">
+                            <a href="{{ route('site.order-adjustments.create', $order) }}" class="btn btn-warning text-dark">
+                                <i class="bi bi-arrow-left-right me-1"></i>Yeu cau dieu chinh
+                            </a>
+                        </div>
+                    </div>
+                    @endif
+
                 </div> 
                 
             

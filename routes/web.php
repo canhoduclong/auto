@@ -120,6 +120,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
 
     Route::prefix('accounting')->name('accounting.')->middleware('role:accountant,accounting,admin')->group(function () {
         Route::get('/', [AccountingDashboardController::class, 'index'])->name('dashboard');
+        Route::get('/orders', [AccountingDashboardController::class, 'orders'])->name('orders');
         Route::get('/customer-debts', [AccountingDashboardController::class, 'customerDebts'])->name('customer-debts');
         Route::get('/supplier-debts', [AccountingDashboardController::class, 'supplierDebts'])->name('supplier-debts');
         Route::get('/cashflow', [AccountingDashboardController::class, 'cashflow'])->name('cashflow');
@@ -130,7 +131,16 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/discounts', [AccountingDashboardController::class, 'discounts'])->name('discounts');
         Route::post('/discounts', [AccountingDashboardController::class, 'storeDiscount'])->name('discounts.store');
         Route::get('/daily-orders', [AccountingDashboardController::class, 'dailyOrders'])->name('daily-orders');
+        Route::get('/daily-sales', [AccountingDashboardController::class, 'dailySales'])->name('daily-sales');
         Route::get('/financial-reports', [AccountingDashboardController::class, 'financialReports'])->name('financial-reports');
+        Route::get('/transactions/create', [AccountingDashboardController::class, 'transactionCreate'])->name('transactions.create');
+        Route::post('/transactions', [AccountingDashboardController::class, 'transactionStore'])->name('transactions.store');
+        Route::post('/transactions/{transaction}/approve', [AccountingDashboardController::class, 'transactionApprove'])->name('transactions.approve');
+        Route::post('/transactions/{transaction}/reject', [AccountingDashboardController::class, 'transactionReject'])->name('transactions.reject');
+        Route::get('/api/orders-list', [AccountingDashboardController::class, 'apiOrdersList'])->name('api.orders-list');
+        Route::get('/api/customers-list', [AccountingDashboardController::class, 'apiCustomersList'])->name('api.customers-list');
+        Route::get('/api/order-detail/{order}', [AccountingDashboardController::class, 'apiOrderDetail'])->name('api.order-detail');
+        Route::get('/api/customer-detail/{customer}', [AccountingDashboardController::class, 'apiCustomerDetail'])->name('api.customer-detail');
     });
 
     // ─── Warehouse module ───────────────────────────────────────────────────
@@ -298,6 +308,18 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::post('approval-workflows', [ApprovalWorkflowController::class, 'store'])->name('approval-workflows.store');
     Route::get('approval-workflows/{approvalWorkflow}/edit', [ApprovalWorkflowController::class, 'edit'])->name('approval-workflows.edit');
     Route::put('approval-workflows/{approvalWorkflow}', [ApprovalWorkflowController::class, 'update'])->name('approval-workflows.update');
+
+    // Giao việc (Task Assignment)
+    Route::post('task-assignments/{taskAssignment}/approve',        [\App\Http\Controllers\TaskAssignmentController::class, 'approve'])->name('task-assignments.approve');
+    Route::post('task-assignments/{taskAssignment}/reject',         [\App\Http\Controllers\TaskAssignmentController::class, 'reject'])->name('task-assignments.reject');
+    Route::post('task-assignments/{taskAssignment}/cancel',         [\App\Http\Controllers\TaskAssignmentController::class, 'cancel'])->name('task-assignments.cancel');
+    Route::post('task-assignments/{taskAssignment}/assignee-update',[\App\Http\Controllers\TaskAssignmentController::class, 'assigneeUpdate'])->name('task-assignments.assignee-update');
+    Route::resource('task-assignments', \App\Http\Controllers\TaskAssignmentController::class);
+
+    // Phân quyền giao việc (Admin only)
+    Route::post('task-delegate-configs/{taskDelegateConfig}/toggle', [\App\Http\Controllers\TaskDelegateConfigController::class, 'toggle'])->name('task-delegate-configs.toggle');
+    Route::post('task-delegate-configs/destroy-assigner',            [\App\Http\Controllers\TaskDelegateConfigController::class, 'destroyAssigner'])->name('task-delegate-configs.destroy-assigner');
+    Route::resource('task-delegate-configs', \App\Http\Controllers\TaskDelegateConfigController::class)->only(['index','create','store','destroy']);
 
     // Quản lý danh mục
     Route::post('categories/bulk-delete', [CategoryController::class, 'bulkDelete'])->name('categories.bulk-delete')->middleware('permission');
@@ -539,11 +561,21 @@ Route::middleware(['auth', 'role:sale,leader,leader_sale,sale_manager,manager,ma
     // AJAX: Danh sách biến thể cho đơn hàng (my-orders/{order}/edit)
     Route::get('/my-orders/variants/ajax', [App\Http\Controllers\OrderAjaxController::class, 'variantsAjax'])->name('site.orders.variants.ajax');
     Route::get('/my-orders/{order}', [PageController::class, 'myOrderDetail'])->name('site.orders.show');
+    Route::post('/my-orders/{order}/cancel', [OrderController::class, 'cancel'])->name('site.orders.cancel');
     Route::get('/my-orders/{order}/edit', [PageController::class, 'myOrderEdit'])->name('site.orders.edit');
     Route::put('/my-orders/{order}', [PageController::class, 'myOrderUpdate'])->name('site.orders.update');
+    Route::get('/my-orders/{order}/adjustments/create', [\App\Http\Controllers\OrderAdjustmentController::class, 'create'])->name('site.order-adjustments.create');
+    Route::post('/my-orders/{order}/adjustments', [\App\Http\Controllers\OrderAdjustmentController::class, 'store'])->name('site.order-adjustments.store');
     Route::get('/my-orders/{id}/copy', [PageController::class, 'copyOrder'])->name('site.orders.copy');
     Route::post('/my-orders/{order}/confirm-copy', [PageController::class, 'confirmCopyOrder'])->name('site.orders.confirm-copy');
 }); // end my-orders role group
+
+Route::middleware(['auth'])->group(function () {
+    Route::get('/my-order-adjustments/{orderAdjustment}', [\App\Http\Controllers\OrderAdjustmentController::class, 'show'])->name('site.order-adjustments.show');
+    Route::post('/my-order-adjustments/{orderAdjustment}/approve', [\App\Http\Controllers\OrderAdjustmentController::class, 'approve'])->name('site.order-adjustments.approve');
+    Route::post('/my-order-adjustments/{orderAdjustment}/reject', [\App\Http\Controllers\OrderAdjustmentController::class, 'reject'])->name('site.order-adjustments.reject');
+    Route::post('/my-order-adjustments/{orderAdjustment}/warehouse-confirm', [\App\Http\Controllers\OrderAdjustmentController::class, 'warehouseConfirm'])->name('site.order-adjustments.warehouse-confirm');
+});
 
 Route::get('/page/{slug}', [PageController::class, 'show'])->name('pages.show');
 
