@@ -201,6 +201,12 @@
             <a href="{{ route('accounting.financial-reports') }}" class="{{ request()->routeIs('accounting.financial-reports') ? 'active' : '' }}">
                 <i class="bi bi-graph-up-arrow"></i> Báo cáo tài chính
             </a>
+            <a href="{{ route('accounting.accounts.index') }}" class="{{ request()->routeIs('accounting.accounts.*') ? 'active' : '' }}">
+                <i class="bi bi-wallet2"></i> Tài khoản
+            </a>
+            <a href="{{ route('accounting.transaction-categories.index') }}" class="{{ request()->routeIs('accounting.transaction-categories.*') ? 'active' : '' }}">
+                <i class="bi bi-diagram-3"></i> Quản trị danh mục giao dịch
+            </a>
 
             <div class="nav-section">Công nợ</div>
             <a href="{{ route('accounting.customer-debts') }}" class="{{ request()->routeIs('accounting.customer-debts') ? 'active' : '' }}">

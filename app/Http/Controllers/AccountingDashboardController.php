@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Company;
+use App\Models\Account;
 use App\Models\Customer;
 use App\Models\Inventory;
 use App\Models\InventoryDocument;
@@ -152,23 +153,82 @@ class AccountingDashboardController extends Controller
     {
         [$from, $to, $rangeLabel] = $this->resolveDateRange($request);
         $type = (string) $request->input('type', '');
+        $accountId = (int) $request->input('account_id', 0);
 
-        $transactions = Transaction::query()
-            ->with(['customer:id,name', 'order:id,code'])
+        $baseQuery = Transaction::query()
             ->whereBetween('created_at', [$from, $to])
             ->when($type !== '', fn ($q) => $q->where('type', $type))
+            ->when($accountId > 0, fn ($q) => $q->where('account_id', $accountId));
+
+        $transactions = (clone $baseQuery)
+            ->with([
+                'customer:id,name',
+                'order:id,code',
+                'submitter:id,name',
+                'transactionCategory:id,code,name,flow_direction',
+                'account:id,name,type,balance,warning_threshold',
+            ])
             ->latest('created_at')
             ->paginate(25)
             ->appends($request->query());
 
+        $accountSummaries = DB::table('accounts as a')
+            ->leftJoin('transactions as t', function ($join) use ($from, $to, $type) {
+                $join->on('t.account_id', '=', 'a.id')
+                    ->whereBetween('t.created_at', [$from, $to]);
+                if ($type !== '') {
+                    $join->where('t.type', '=', $type);
+                }
+            })
+            ->leftJoin('transaction_categories as tc', 'tc.id', '=', 't.transaction_category_id')
+            ->when($accountId > 0, fn ($q) => $q->where('a.id', $accountId))
+            ->selectRaw('a.id, a.name, a.type, a.balance, a.warning_threshold')
+            ->selectRaw('COUNT(t.id) as txn_count')
+            ->selectRaw("COALESCE(SUM(CASE WHEN COALESCE(tc.flow_direction, CASE WHEN t.type IN ('payment','extra_income') THEN 'in' ELSE 'out' END) = 'in' THEN t.amount ELSE 0 END), 0) as total_in")
+            ->selectRaw("COALESCE(SUM(CASE WHEN COALESCE(tc.flow_direction, CASE WHEN t.type IN ('payment','extra_income') THEN 'in' ELSE 'out' END) = 'out' THEN t.amount ELSE 0 END), 0) as total_out")
+            ->groupBy('a.id', 'a.name', 'a.type', 'a.balance', 'a.warning_threshold')
+            ->orderBy('a.name')
+            ->get();
+
         return view('accounting.cashflow', [
             'transactions' => $transactions,
+            'accounts' => Account::active()->orderBy('name')->get(['id', 'name']),
+            'accountId' => $accountId,
+            'accountSummaries' => $accountSummaries,
             'from' => $from,
             'to' => $to,
             'rangeLabel' => $rangeLabel,
             'type' => $type,
-            'incomeTotal' => (float) Transaction::query()->whereBetween('created_at', [$from, $to])->where('type', 'payment')->sum('amount'),
-            'expenseTotal' => (float) Transaction::query()->whereBetween('created_at', [$from, $to])->whereIn('type', ['refund', 'expense'])->sum('amount'),
+            'incomeTotal' => (float) (clone $baseQuery)->whereIn('type', ['payment', 'extra_income'])->sum('amount'),
+            'expenseTotal' => (float) (clone $baseQuery)->whereIn('type', ['refund', 'fee', 'expense', 'extra_expense'])->sum('amount'),
+        ]);
+    }
+
+    public function cashflowShow(Transaction $transaction)
+    {
+        $transaction->load([
+            'customer:id,name',
+            'order:id,code,total',
+            'submitter:id,name',
+            'approver:id,name',
+            'rejecter:id,name',
+            'expenseType:id,name',
+            'payeeUser:id,name',
+            'transactionCategory:id,code,name,flow_direction',
+            'approvalSteps.approver:id,name',
+        ]);
+
+        $user = auth()->user();
+        $approvalService = app(\App\Services\ApprovalService::class);
+        $canReview = $transaction->status === Transaction::STATUS_PENDING_APPROVAL && (
+            $user->hasRole('admin') ||
+            $user->hasRole('accountant') ||
+            $approvalService->canApproveTransactionStep($transaction, $user)
+        );
+
+        return view('accounting.cashflow_show', [
+            'transaction' => $transaction,
+            'canReview' => $canReview,
         ]);
     }
 
@@ -205,15 +265,92 @@ class AccountingDashboardController extends Controller
         $selectedDate = (string) $request->input('selected_date', now()->toDateString());
         $targetDate = $timeFilter === 'today' ? now()->toDateString() : $selectedDate;
         $warehouseId = (int) $request->input('warehouse_id', 0);
+        $sortBy = (string) $request->input('sort_by', 'product_variant');
+        if (!in_array($sortBy, ['product_variant', 'warehouse', 'quantity', 'selling_price', 'amount'], true)) {
+            $sortBy = 'product_variant';
+        }
+        $sortDir = strtolower((string) $request->input('sort_dir', 'asc'));
+        if (!in_array($sortDir, ['asc', 'desc'], true)) {
+            $sortDir = 'asc';
+        }
 
-        $inventoryQuery = Inventory::query()
+        $today = now()->toDateString();
+        $activeRuleSub = DB::table('product_price_rules as ppr_s')
+            ->selectRaw('ppr_s.product_variant_id, MAX(ppr_s.id) as latest_rule_id')
+            ->where(function ($q) use ($today) {
+                $q->whereNull('ppr_s.start_date')
+                  ->orWhereDate('ppr_s.start_date', '<=', $today);
+            })
+            ->where(function ($q) use ($today) {
+                $q->whereNull('ppr_s.end_date')
+                  ->orWhereDate('ppr_s.end_date', '>=', $today);
+            })
+            ->groupBy('ppr_s.product_variant_id');
+
+        $inventoryBase = Inventory::query()
+            ->leftJoin('product_variants as pv', 'pv.id', '=', 'inventories.product_variant_id')
+            ->leftJoin('products as p', 'p.id', '=', 'pv.product_id')
+            ->leftJoin('warehouses as wh', 'wh.id', '=', 'inventories.warehouse_id')
+            ->leftJoinSub($activeRuleSub, 'active_rule', 'active_rule.product_variant_id', '=', 'inventories.product_variant_id')
+            ->leftJoin('product_price_rules as ppr', 'ppr.id', '=', 'active_rule.latest_rule_id')
+            ->select([
+                'inventories.*',
+                DB::raw('COALESCE(ppr.price, p.price, 0) as selling_price'),
+            ])
             ->with(['productVariant.product:id,name', 'warehouse:id,name'])
             ->when($warehouseId > 0, fn ($q) => $q->where('warehouse_id', $warehouseId));
 
+        $inventoryQuery = clone $inventoryBase;
+
+        if ($sortBy === 'warehouse') {
+            $inventoryQuery
+                ->orderBy('wh.name', $sortDir)
+                ->orderBy('p.name')
+                ->orderByRaw("COALESCE(pv.name, '')")
+                ->orderByRaw("COALESCE(pv.size, '')")
+                ->orderByDesc('inventories.quantity');
+        } elseif ($sortBy === 'quantity') {
+            $inventoryQuery
+                ->orderBy('inventories.quantity', $sortDir)
+                ->orderBy('p.name')
+                ->orderByRaw("COALESCE(pv.name, '')")
+                ->orderByRaw("COALESCE(pv.size, '')")
+                ->orderBy('wh.name');
+        } elseif ($sortBy === 'selling_price') {
+            $inventoryQuery
+                ->orderByRaw('COALESCE(ppr.price, p.price, 0) ' . strtoupper($sortDir))
+                ->orderBy('p.name')
+                ->orderByRaw("COALESCE(pv.name, '')")
+                ->orderByRaw("COALESCE(pv.size, '')")
+                ->orderBy('wh.name');
+        } elseif ($sortBy === 'amount') {
+            $inventoryQuery
+                ->orderByRaw('inventories.quantity * COALESCE(ppr.price, p.price, 0) ' . strtoupper($sortDir))
+                ->orderBy('p.name')
+                ->orderByRaw("COALESCE(pv.name, '')")
+                ->orderByRaw("COALESCE(pv.size, '')")
+                ->orderBy('wh.name');
+        } else {
+            $inventoryQuery
+                ->orderBy('p.name', $sortDir)
+                ->orderByRaw("COALESCE(pv.name, '')")
+                ->orderByRaw("COALESCE(pv.size, '')")
+                ->orderBy('wh.name')
+                ->orderByDesc('inventories.quantity');
+        }
+
         $inventories = $inventoryQuery
-            ->orderByDesc('quantity')
             ->paginate(25)
             ->appends($request->query());
+
+        $totalAmount = (float) DB::table('inventories')
+            ->leftJoin('product_variants as pv', 'pv.id', '=', 'inventories.product_variant_id')
+            ->leftJoin('products as p', 'p.id', '=', 'pv.product_id')
+            ->leftJoinSub($activeRuleSub, 'active_rule', 'active_rule.product_variant_id', '=', 'inventories.product_variant_id')
+            ->leftJoin('product_price_rules as ppr', 'ppr.id', '=', 'active_rule.latest_rule_id')
+            ->when($warehouseId > 0, fn ($q) => $q->where('warehouse_id', $warehouseId))
+            ->selectRaw('SUM(inventories.quantity * COALESCE(ppr.price, p.price, 0)) as total_amount')
+            ->value('total_amount');
 
         $documentBase = InventoryDocumentItem::query()
             ->join('inventory_documents', 'inventory_documents.id', '=', 'inventory_document_items.inventory_document_id')
@@ -236,11 +373,14 @@ class AccountingDashboardController extends Controller
             'inventories' => $inventories,
             'warehouses' => Warehouse::query()->orderBy('name')->get(),
             'warehouseId' => $warehouseId,
+            'sortBy' => $sortBy,
+            'sortDir' => $sortDir,
             'timeFilter' => $timeFilter,
             'selectedDate' => $selectedDate,
             'rangeLabel' => $rangeLabel,
             'imports' => $imports,
             'exports' => $exports,
+            'totalAmount' => $totalAmount,
             'closingStock' => (int) Inventory::query()->when($warehouseId > 0, fn ($q) => $q->where('warehouse_id', $warehouseId))->sum('quantity'),
         ]);
     }
@@ -713,19 +853,29 @@ class AccountingDashboardController extends Controller
 
     public function transactionCreate(Request $request)
     {
-        return view('accounting.transaction_create');
+        $transactionCategories = \App\Models\TransactionCategory::active()->orderBy('sort_order')->get();
+        $accounts = \App\Models\Account::active()->orderBy('name')->get(['id', 'name', 'type', 'balance', 'warning_threshold']);
+        return view('accounting.transaction_create', compact('transactionCategories', 'accounts'));
     }
 
     public function transactionStore(Request $request)
     {
+        // Strip thousand-separator formatting from amount
+        $raw = str_replace(['.', ' '], '', $request->input('amount', ''));
+        $request->merge(['amount' => $raw]);
+
         $data = $request->validate([
-            'order_id'      => 'nullable|exists:orders,id',
-            'customer_id'   => 'nullable|exists:customers,id',
-            'amount'        => 'required|numeric|min:0.01',
-            'type'          => 'required|in:payment,refund,fee,extra_income,extra_expense',
-            'method'        => 'nullable|string|max:50',
-            'note'          => 'nullable|string|max:1000',
-            'receipt_image' => 'nullable|image|max:5120',
+            'order_id'        => 'nullable|exists:orders,id',
+            'customer_id'     => 'nullable|exists:customers,id',
+            'amount'          => 'required|numeric|min:0.01',
+            'type'            => 'required|in:payment,refund,fee,extra_income,extra_expense',
+            'expense_type_id' => 'nullable|exists:expense_types,id',
+            'payee_user_id'   => 'nullable|exists:users,id',
+            'method'          => 'nullable|string|max:50',
+            'transaction_category_id' => 'nullable|exists:transaction_categories,id',
+            'account_id'      => 'nullable|exists:accounts,id',
+            'note'            => 'nullable|string|max:1000',
+            'receipt_image'   => 'nullable|image|max:5120',
         ]);
 
         if ($request->hasFile('receipt_image')) {

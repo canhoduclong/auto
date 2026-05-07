@@ -7,6 +7,8 @@ use App\Models\Role;
 use App\Models\Setting;
 use App\Models\Team;
 use App\Models\Warehouse;
+use App\Models\Block;
+use App\Models\Department;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -130,7 +132,9 @@ class UserController extends Controller
         $roles = Role::all();
         $teams = Team::orderBy('name')->get();
         $warehouses = Warehouse::orderBy('name')->get();
-        return view('users.create', compact('roles', 'teams', 'warehouses'));
+        $blocks = Block::active()->orderBy('name')->get();
+        $departments = Department::active()->with('block')->orderBy('name')->get();
+        return view('users.create', compact('roles', 'teams', 'warehouses', 'blocks', 'departments'));
     }
 
     public function store(Request $request)
@@ -146,14 +150,18 @@ class UserController extends Controller
             'roles' => 'array',
             'warehouse_id' => 'nullable|exists:warehouses,id',
             'team_id' => 'nullable|exists:teams,id',
+            'block_id' => 'nullable|exists:blocks,id',
+            'department_id' => 'nullable|exists:departments,id',
         ]);
 
         $user = User::create([
-            'name'     => $request->name,
-            'email'    => $request->email,
-            'password' => Hash::make($request->password),
-            'warehouse_id' => $request->warehouse_id,
-            'team_id' => $request->team_id,
+            'name'          => $request->name,
+            'email'         => $request->email,
+            'password'      => Hash::make($request->password),
+            'warehouse_id'  => $request->warehouse_id,
+            'team_id'       => $request->team_id,
+            'block_id'      => $request->block_id,
+            'department_id' => $request->department_id,
         ]);
 
         if ($request->roles) {
@@ -173,7 +181,9 @@ class UserController extends Controller
         $roles = Role::all();
         $teams = Team::orderBy('name')->get();
         $warehouses = Warehouse::orderBy('name')->get();
-        return view('users.edit', compact('user','roles', 'teams', 'warehouses'));
+        $blocks = Block::active()->orderBy('name')->get();
+        $departments = Department::active()->with('block')->orderBy('name')->get();
+        return view('users.edit', compact('user','roles', 'teams', 'warehouses', 'blocks', 'departments'));
     }
 
     public function update(Request $request, User $user)
@@ -185,14 +195,18 @@ class UserController extends Controller
             'roles' => 'array',
             'warehouse_id' => 'nullable|exists:warehouses,id',
             'team_id' => 'nullable|exists:teams,id',
+            'block_id' => 'nullable|exists:blocks,id',
+            'department_id' => 'nullable|exists:departments,id',
         ]);
 
         $user->update([
-            'name'     => $request->name,
-            'email'    => $request->email,
-            'password' => $request->password ? Hash::make($request->password) : $user->password,
-            'warehouse_id' => $request->warehouse_id,
-            'team_id' => $request->team_id,
+            'name'          => $request->name,
+            'email'         => $request->email,
+            'password'      => $request->password ? Hash::make($request->password) : $user->password,
+            'warehouse_id'  => $request->warehouse_id,
+            'team_id'       => $request->team_id,
+            'block_id'      => $request->block_id,
+            'department_id' => $request->department_id,
         ]);
 
         $user->roles()->sync($request->roles ?? []);

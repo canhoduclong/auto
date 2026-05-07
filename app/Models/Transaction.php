@@ -18,6 +18,10 @@ class Transaction extends Model
         'customer_id',
         'amount',
         'type',
+        'expense_type_id',
+        'payee_user_id',
+        'transaction_category_id',
+        'account_id',
         'method',
         'note',
         'receipt_image_path',
@@ -38,6 +42,10 @@ class Transaction extends Model
 
     public function order() { return $this->belongsTo(Order::class); }
     public function orderReturn() { return $this->belongsTo(OrderReturn::class); }
+    public function expenseType() { return $this->belongsTo(ExpenseType::class); }
+    public function payeeUser() { return $this->belongsTo(User::class, 'payee_user_id'); }
+    public function transactionCategory() { return $this->belongsTo(TransactionCategory::class, 'transaction_category_id'); }
+    public function account() { return $this->belongsTo(Account::class); }
     public function customer() { return $this->belongsTo(Customer::class); }
     public function submitter() { return $this->belongsTo(User::class, 'submitted_by'); }
     public function approver() { return $this->belongsTo(User::class, 'approved_by'); }

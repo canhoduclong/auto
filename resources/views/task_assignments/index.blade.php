@@ -106,9 +106,6 @@
                                         @endforeach
                                     </div>
                                 @endif
-                                @endforeach
-                            </div>
-                        @endif
 
                         <div class="d-flex justify-content-between align-items-center ta-meta">
                             <span>

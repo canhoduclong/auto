@@ -124,20 +124,17 @@
                 {{-- Biến thể --}}
                 <div class="mb-3 mt-4">
                     <label class="form-label">Biến thể</label>
-                    <table class="table table-bordered" id="variant-table">
-                        <thead>
+                    <table class="table table-bordered table-sm align-top" id="variant-table">
+                        <thead class="table-light">
                             <tr>
-                                <th>SKU</th>
-                                <th>Size</th>
-                                <th>Kg</th>
-                                <th>Theo Kg</th>
-                                <th>Chất lượng</th>
-                                <th>Ngày SX</th>
-                                <th>Hình ảnh</th>
-                                <th>Giá bán</th>
-                                <th>Ngày áp dụng</th>
-                                <th>Số lượng tồn</th>
-                                <th></th>
+                                <th style="min-width:110px">SKU</th>
+                                <th style="min-width:80px">Size</th>
+                                <th style="width:80px">Kg</th>
+                                <th style="width:70px" class="text-center">Theo Kg</th>
+                                <th style="min-width:100px">Chất lượng</th>
+                                <th style="width:130px">Ngày SX</th>
+                                <th style="width:90px">Hình ảnh</th>
+                                <th style="width:130px"></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -177,19 +174,6 @@
                                         <input type="hidden" name="variants[{{ $variant->id }}][media_id]" id="variant-media-id-{{ $variant->id }}" value="{{ old('variants.'.$variant->id.'.media_id', $variant->media_id ?? '') }}">
                                         <button type="button" class="btn btn-sm btn-secondary select-variant-image" data-variant-id="{{ $variant->id }}">Chọn ảnh</button>
                                     </div>
-                                </td>
-                                <td>
-                                    <input type="number" name="variants[{{ $variant->id }}][price]" class="form-control" min="0" step="1000" value="{{ old('variants.'.$variant->id.'.price', $variant->final_price) }}">
-                                </td>
-                                <td>
-                                    @php
-                                        $latestRule = $variant->priceRules()->whereNull('end_date')->latest('start_date')->first();
-                                    @endphp
-                                    <div>{{ $latestRule ? \Carbon\Carbon::parse($latestRule->start_date)->format('d/m/Y H:i') : '' }}</div>
-                                </td>
-                                <td>
-                                    <input type="number" name="variants[{{ $variant->id }}][stock]" class="form-control"
-                                        value="{{ old('variants.'.$variant->id.'.stock', $variant->stock) }}">
                                 </td>
                                 <td>
                                     <button type="button" class="btn btn-danger btn-sm remove-variant">X</button>
@@ -383,9 +367,6 @@ document.addEventListener('DOMContentLoaded', function () {
                             <button type="button" class="btn btn-sm btn-secondary select-variant-image" data-variant-id="new_${index}">Chọn ảnh</button>
                         </div>
                     </td>
-                    <td><input type="number" name="variants[new_${index}][price]" class="form-control" min="0" step="1000"></td>
-                    <td>-</td>
-                    <td><input type="number" name="variants[new_${index}][stock]" class="form-control"></td>
                     <td><button type="button" class="btn btn-danger btn-sm remove-variant">X</button></td>
                 </tr>`;
             tbody.insertAdjacentHTML('beforeend', row);

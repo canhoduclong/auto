@@ -86,6 +86,41 @@
                         @error('type')<div class="text-danger small mt-1">{{ $message }}</div>@enderror
                     </div>
 
+                    {{-- transaction category --}}
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small text-uppercase text-muted">Danh mục giao dịch</label>
+                        <input type="hidden" name="transaction_category_id" id="f_cat_id" value="{{ old('transaction_category_id') }}">
+                        <div class="input-group">
+                            <input type="text" id="f_cat_display" class="form-control" readonly placeholder="-- Chọn danh mục --"
+                                   value="{{ old('transaction_category_id') ? \App\Models\TransactionCategory::find(old('transaction_category_id'))?->name : '' }}"
+                                   style="cursor:pointer;background:#fff" onclick="openCategoryPopup()">
+                            <button type="button" class="btn btn-outline-primary" onclick="openCategoryPopup()">
+                                <i class="bi bi-grid-3x3-gap"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="clearCategory()" id="btn_clear_cat" style="{{ old('transaction_category_id') ? '' : 'display:none' }}">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    {{-- account --}}
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small text-uppercase text-muted">Tài khoản</label>
+                        <select name="account_id" id="f_account_id" class="form-select">
+                            <option value="">-- Không chọn --</option>
+                            @foreach($accounts as $acc)
+                                @php $low = (float)$acc->balance < (float)$acc->warning_threshold; @endphp
+                                <option value="{{ $acc->id }}" {{ old('account_id') == $acc->id ? 'selected' : '' }}
+                                        style="{{ $low ? 'color:#dc3545' : '' }}">
+                                    {{ $acc->name }}
+                                    ({{ $acc->type === 'cash' ? 'Tiền mặt' : 'Ngân hàng' }})
+                                    — {{ number_format((float)$acc->balance) }}đ
+                                    {{ $low ? ' ⚠️' : '' }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+
                     {{-- order selector --}}
                     <div class="mb-3" id="orderSection">
                         <label class="form-label fw-semibold small text-uppercase text-muted">Don hang lien ket</label>
@@ -249,6 +284,67 @@
 </div>
 
 {{-- ══ Order Popup Modal ═══════════════════════════════════════════ --}}
+{{-- ══ Category Popup Modal ══════════════════════════════════════════ --}}
+<div class="modal fade" id="categoryPopupModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-grid-3x3-gap me-2"></i>Chọn danh mục giao dịch</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3 d-flex gap-2">
+                    <input type="text" id="cat_search" class="form-control" placeholder="Tìm theo tên hoặc mã...">
+                </div>
+                <div id="cat_grid" class="row g-2">
+                    @foreach($transactionCategories as $cat)
+                        <div class="col-6 col-md-4 cat-item" data-search="{{ strtolower($cat->code . ' ' . $cat->name . ' ' . ($cat->flow_direction ?? 'out')) }}">
+                            <div class="border rounded p-2 d-flex align-items-center gap-2 cat-btn"
+                                 style="cursor:pointer;transition:all .12s"
+                                 onclick="selectCategory({{ $cat->id }}, '{{ addslashes($cat->name) }}', '{{ addslashes($cat->code) }}', '{{ $cat->flow_direction ?? 'out' }}')">
+                                <span class="badge bg-primary fw-bold" style="font-size:11px;min-width:60px">{{ $cat->code }}</span>
+                                <div>
+                                    <span class="small fw-semibold d-block">{{ $cat->name }}</span>
+                                    <span class="badge {{ ($cat->flow_direction ?? 'out') === 'in' ? 'bg-success' : 'bg-danger' }}" style="font-size:10px">
+                                        {{ ($cat->flow_direction ?? 'out') === 'in' ? 'Thu vào tài khoản' : 'Chi từ tài khoản' }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+                <hr>
+                <div>
+                    <div class="fw-semibold small text-muted mb-2"><i class="bi bi-plus-circle me-1"></i>Thêm danh mục mới</div>
+                    <div class="row g-2 align-items-end">
+                        <div class="col-4">
+                            <label class="form-label form-label-sm">Mã giao dịch</label>
+                            <input type="text" id="new_cat_code" class="form-control form-control-sm" placeholder="VD: CPKD2" maxlength="20">
+                        </div>
+                        <div class="col-5">
+                            <label class="form-label form-label-sm">Tên danh mục</label>
+                            <input type="text" id="new_cat_name" class="form-control form-control-sm" placeholder="Tên đầy đủ..." maxlength="100">
+                        </div>
+                        <div class="col-3">
+                            <label class="form-label form-label-sm">Chiều tiền</label>
+                            <select id="new_cat_flow" class="form-select form-select-sm">
+                                <option value="in">Thu vào TK</option>
+                                <option value="out" selected>Chi từ TK</option>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <button type="button" class="btn btn-success btn-sm w-100" id="btn_save_cat">
+                                <i class="bi bi-plus-lg"></i> Lưu
+                            </button>
+                        </div>
+                    </div>
+                    <div id="cat_error" class="text-danger small mt-1" style="display:none"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="orderPopupModal" tabindex="-1" aria-labelledby="orderPopupLabel">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
@@ -532,6 +628,85 @@ function renderPagination(containerId, current, last, fn) {
 // ── Keyboard search triggers ───────────────────────────────────────
 document.getElementById('op_keyword').addEventListener('keydown', e => { if(e.key==='Enter'){e.preventDefault();loadOrders(1);} });
 document.getElementById('cp_keyword').addEventListener('keydown', e => { if(e.key==='Enter'){e.preventDefault();loadCustomers(1);} });
+
+// ── Category popup ─────────────────────────────────────────────────
+function openCategoryPopup() {
+    const m = new bootstrap.Modal(document.getElementById('categoryPopupModal'));
+    m.show();
+}
+function clearCategory() {
+    document.getElementById('f_cat_id').value = '';
+    document.getElementById('f_cat_display').value = '';
+    document.getElementById('btn_clear_cat').style.display = 'none';
+}
+function selectCategory(id, name, code, flowDirection) {
+    document.getElementById('f_cat_id').value = id;
+    const flowText = flowDirection === 'in' ? 'Thu vào TK' : 'Chi từ TK';
+    document.getElementById('f_cat_display').value = '[' + code + '] ' + name + ' - ' + flowText;
+    document.getElementById('btn_clear_cat').style.display = '';
+    bootstrap.Modal.getInstance(document.getElementById('categoryPopupModal'))?.hide();
+}
+
+// Category search filter
+document.getElementById('cat_search').addEventListener('input', function () {
+    const q = this.value.toLowerCase();
+    document.querySelectorAll('.cat-item').forEach(el => {
+        el.style.display = el.dataset.search.includes(q) ? '' : 'none';
+    });
+});
+
+// Hover effect on category buttons
+document.querySelectorAll('.cat-btn').forEach(btn => {
+    btn.addEventListener('mouseenter', () => btn.style.background = '#eff6ff');
+    btn.addEventListener('mouseleave', () => btn.style.background = '');
+});
+
+// Save new category via AJAX
+document.getElementById('btn_save_cat').addEventListener('click', function () {
+    const code = document.getElementById('new_cat_code').value.trim();
+    const name = document.getElementById('new_cat_name').value.trim();
+    const flow_direction = document.getElementById('new_cat_flow').value;
+    const errDiv = document.getElementById('cat_error');
+    if (!code || !name) { errDiv.textContent = 'Vui lòng nhập đủ mã và tên.'; errDiv.style.display = ''; return; }
+    this.disabled = true;
+    fetch('{{ route('accounting.transaction-categories.store') }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' },
+        body: JSON.stringify({ code, name, flow_direction })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.id) {
+            // Add to grid
+            const col = document.createElement('div');
+            col.className = 'col-6 col-md-4 cat-item';
+            col.dataset.search = (data.code + ' ' + data.name + ' ' + (data.flow_direction || 'out')).toLowerCase();
+            const flowBadgeClass = (data.flow_direction === 'in') ? 'bg-success' : 'bg-danger';
+            const flowLabel = (data.flow_direction === 'in') ? 'Thu vào tài khoản' : 'Chi từ tài khoản';
+            col.innerHTML = `<div class="border rounded p-2 d-flex align-items-center gap-2 cat-btn"
+                style="cursor:pointer;transition:all .12s"
+                onclick="selectCategory(${data.id}, '${data.name.replace(/'/g,"\\'")}', '${data.code.replace(/'/g,"\\'")}', '${(data.flow_direction || 'out').replace(/'/g,"\\'")}')">
+                <span class="badge bg-primary fw-bold" style="font-size:11px;min-width:60px">${data.code}</span>
+                <div>
+                    <span class="small fw-semibold d-block">${data.name}</span>
+                    <span class="badge ${flowBadgeClass}" style="font-size:10px">${flowLabel}</span>
+                </div>
+            </div>`;
+            document.getElementById('cat_grid').appendChild(col);
+            document.getElementById('new_cat_code').value = '';
+            document.getElementById('new_cat_name').value = '';
+            document.getElementById('new_cat_flow').value = 'out';
+            errDiv.style.display = 'none';
+            // Auto-select newly added
+            selectCategory(data.id, data.name, data.code, data.flow_direction || 'out');
+        } else {
+            const msg = Object.values(data.errors || {}).flat()[0] || data.message || 'Lỗi không xác định';
+            errDiv.textContent = msg; errDiv.style.display = '';
+        }
+    })
+    .catch(() => { errDiv.textContent = 'Lỗi kết nối.'; errDiv.style.display = ''; })
+    .finally(() => { this.disabled = false; });
+});
 </script>
 @endsection
 

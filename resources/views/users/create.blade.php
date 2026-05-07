@@ -59,8 +59,50 @@
             <small class="text-muted">User role warehouse se chi thao tac tren kho duoc gan.</small>
         </div>
 
+        {{-- Khối / Phòng --}}
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <label class="form-label">Khối</label>
+                <select name="block_id" id="block_id_create" class="form-control">
+                    <option value="">-- Chọn khối --</option>
+                    @foreach($blocks as $block)
+                        <option value="{{ $block->id }}" {{ old('block_id') == $block->id ? 'selected' : '' }}>{{ $block->name }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Phòng / Ban</label>
+                <select name="department_id" id="dept_id_create" class="form-control">
+                    <option value="">-- Chọn phòng --</option>
+                    @foreach($departments as $dept)
+                        <option value="{{ $dept->id }}" data-block="{{ $dept->block_id }}" {{ old('department_id') == $dept->id ? 'selected' : '' }}>
+                            {{ $dept->name }}
+                        </option>
+                    @endforeach
+                </select>
+            </div>
+        </div>
+
         <button type="submit" class="btn btn-success">Tạo</button>
         <a href="{{ route('users.index') }}" class="btn btn-secondary">Hủy</a>
     </form>
 </div>
+<script>
+(function() {
+    const blockSel = document.getElementById('block_id_create');
+    const deptSel  = document.getElementById('dept_id_create');
+    function filterDepts() {
+        const blockId = blockSel.value;
+        Array.from(deptSel.options).forEach(opt => {
+            if (!opt.value) return;
+            opt.hidden = blockId && opt.dataset.block !== blockId;
+        });
+        if (blockId && deptSel.value && deptSel.options[deptSel.selectedIndex]?.dataset?.block !== blockId) {
+            deptSel.value = '';
+        }
+    }
+    blockSel.addEventListener('change', filterDepts);
+    filterDepts();
+})();
+</script>
 @endsection

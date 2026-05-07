@@ -31,6 +31,8 @@ class User extends Authenticatable
         'email_verified_at',
         'warehouse_id',
         'team_id',
+        'block_id',
+        'department_id',
     ];
 
     /**
@@ -86,6 +88,16 @@ class User extends Authenticatable
     public function team()
     {
         return $this->belongsTo(Team::class);
+    }
+
+    public function block()
+    {
+        return $this->belongsTo(\App\Models\Block::class);
+    }
+
+    public function department()
+    {
+        return $this->belongsTo(\App\Models\Department::class);
     }
 
      //die( $permissionName);

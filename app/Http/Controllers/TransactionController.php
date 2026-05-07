@@ -5,6 +5,7 @@ use App\Models\Transaction;
 use App\Models\Order;
 use App\Models\Customer;
 use Illuminate\Http\Request;
+use App\Models\ExpenseType;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
@@ -152,20 +153,27 @@ class TransactionController extends Controller
         $this->authorize('create', Transaction::class);
         $orders = Order::all();
         $customers = Customer::all();
-        return view('transactions.create', compact('orders', 'customers'));
+        $expenseTypes = ExpenseType::active()->orderBy('name')->get();
+        return view('transactions.create', compact('orders', 'customers', 'expenseTypes'));
     }
 
     public function store(Request $request)
     {
         $this->authorize('create', Transaction::class);
+        // Strip thousand-separator formatting from amount before validation
+        $raw = str_replace(['.', ' '], '', $request->input('amount', ''));
+        $request->merge(['amount' => $raw]);
         $data = $request->validate([
             'order_id' => 'nullable|exists:orders,id',
             'customer_id' => 'nullable|exists:customers,id',
-            'amount' => 'required|numeric',
+            'amount' => 'required|numeric|min:0.01',
             'type' => 'required|string',
+            'expense_type_id' => 'nullable|exists:expense_types,id',
+            'payee_user_id' => 'nullable|exists:users,id',
             'method' => 'nullable|string|max:50',
             'note' => 'nullable|string|max:255',
         ]);
+        $data['submitted_by'] = auth()->id();
         $transaction = Transaction::create($data);
 
         if ($transaction->order_id) {
@@ -189,5 +197,13 @@ class TransactionController extends Controller
         }
 
         return redirect()->route('transactions.index')->with('success', __('transactions.messages.created'));
+    }
+
+    public function storeExpenseType(Request $request)
+    {
+        $this->authorize('create', Transaction::class);
+        $data = $request->validate(['name' => 'required|string|max:100|unique:expense_types,name']);
+        $type = ExpenseType::create(['name' => $data['name'], 'created_by' => auth()->id()]);
+        return response()->json(['id' => $type->id, 'name' => $type->name]);
     }
 }
