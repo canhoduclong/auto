@@ -157,6 +157,13 @@ class TaskAssignment extends Model
     {
         return $this->due_date && $this->due_date->isPast() && !in_array($this->status, [self::STATUS_DONE, self::STATUS_CANCELLED]);
     }
+    /*
+    public function isOverdue(): bool
+    {
+        return $this->due_date && $this->due_date->isPast()
+            && !in_array($this->status, [self::STATUS_COMPLETED, self::STATUS_CANCELLED, self::STATUS_REJECTED]);
+    }
+    */
 
     public function canBeCompleted(): bool
     {
@@ -189,15 +196,20 @@ class TaskAssignment extends Model
         
         return "TASK-{$date}-{$newNumber}";
     }
-}
-
-    // ── Helpers ──────────────────────────────────────────────────────
-
-    public function isOverdue(): bool
+    
+    /* 
+    public static function generateCode(): string
     {
-        return $this->due_date && $this->due_date->isPast()
-            && !in_array($this->status, [self::STATUS_COMPLETED, self::STATUS_CANCELLED, self::STATUS_REJECTED]);
+        $prefix = 'TA-' . now()->format('Ymd') . '-';
+        $last = self::where('code', 'like', $prefix . '%')->orderByDesc('id')->first();
+        $seq = $last ? ((int) substr($last->code, -3)) + 1 : 1;
+        return $prefix . str_pad($seq, 3, '0', STR_PAD_LEFT);
     }
+     */
+
+    
+
+   
 
     public function priorityColor(): string
     {
@@ -221,13 +233,5 @@ class TaskAssignment extends Model
         };
     }
 
-    // ── Code generator ───────────────────────────────────────────────
-
-    public static function generateCode(): string
-    {
-        $prefix = 'TA-' . now()->format('Ymd') . '-';
-        $last = self::where('code', 'like', $prefix . '%')->orderByDesc('id')->first();
-        $seq = $last ? ((int) substr($last->code, -3)) + 1 : 1;
-        return $prefix . str_pad($seq, 3, '0', STR_PAD_LEFT);
-    }
+ 
 }
