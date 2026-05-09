@@ -325,10 +325,20 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::put('approval-workflows/{approvalWorkflow}', [ApprovalWorkflowController::class, 'update'])->name('approval-workflows.update');
 
     // Giao việc (Task Assignment)
-    Route::post('task-assignments/{taskAssignment}/approve',        [\App\Http\Controllers\TaskAssignmentController::class, 'approve'])->name('task-assignments.approve');
-    Route::post('task-assignments/{taskAssignment}/reject',         [\App\Http\Controllers\TaskAssignmentController::class, 'reject'])->name('task-assignments.reject');
-    Route::post('task-assignments/{taskAssignment}/cancel',         [\App\Http\Controllers\TaskAssignmentController::class, 'cancel'])->name('task-assignments.cancel');
-    Route::post('task-assignments/{taskAssignment}/assignee-update',[\App\Http\Controllers\TaskAssignmentController::class, 'assigneeUpdate'])->name('task-assignments.assignee-update');
+    Route::post('task-assignments/{taskAssignment}/approve',          [\App\Http\Controllers\TaskAssignmentController::class, 'approve'])->name('task-assignments.approve');
+    Route::post('task-assignments/{taskAssignment}/reject',           [\App\Http\Controllers\TaskAssignmentController::class, 'reject'])->name('task-assignments.reject');
+    Route::post('task-assignments/{taskAssignment}/cancel',           [\App\Http\Controllers\TaskAssignmentController::class, 'cancel'])->name('task-assignments.cancel');
+    Route::post('task-assignments/{taskAssignment}/assignee-update',  [\App\Http\Controllers\TaskAssignmentController::class, 'assigneeUpdate'])->name('task-assignments.assignee-update');
+    Route::post('task-assignments/{taskAssignment}/complete-content', [\App\Http\Controllers\TaskAssignmentController::class, 'completeWithContent'])->name('task-assignments.complete-with-content');
+    Route::post('task-assignments/{taskAssignment}/verify-completion', [\App\Http\Controllers\TaskAssignmentController::class, 'verifyCompletion'])->name('task-assignments.verify-completion');
+    Route::post('task-assignments/{taskAssignment}/reject-completion', [\App\Http\Controllers\TaskAssignmentController::class, 'rejectCompletion'])->name('task-assignments.reject-completion');
+    Route::get('task-assignments/assigned/to-me',                     [\App\Http\Controllers\TaskAssignmentController::class, 'assignedToMe'])->name('task-assignments.assigned-to-me');
+    Route::get('task-assignments/assigned/by-me',                     [\App\Http\Controllers\TaskAssignmentController::class, 'assignedByMe'])->name('task-assignments.assigned-by-me');
+    Route::get('task-assignments/in-progress',                        [\App\Http\Controllers\TaskAssignmentController::class, 'inProgress'])->name('task-assignments.in-progress');
+    Route::get('task-assignments/awaiting-verification',              [\App\Http\Controllers\TaskAssignmentController::class, 'awaitingVerification'])->name('task-assignments.awaiting-verification');
+    Route::get('task-assignments/verify-list',                        [\App\Http\Controllers\TaskAssignmentController::class, 'verifyList'])->name('task-assignments.verify');
+    Route::get('task-assignments/tracking',                           [\App\Http\Controllers\TaskAssignmentController::class, 'verifyList'])->name('task-assignments.tracking');
+    Route::get('task-assignments/history',                            [\App\Http\Controllers\TaskAssignmentController::class, 'history'])->name('task-assignments.history');
     Route::resource('task-assignments', \App\Http\Controllers\TaskAssignmentController::class);
 
     // Phân quyền giao việc (Admin only)

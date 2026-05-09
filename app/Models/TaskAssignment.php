@@ -8,12 +8,17 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class TaskAssignment extends Model
 {
-    public const STATUS_DRAFT      = 'draft';
-    public const STATUS_PENDING    = 'pending';
-    public const STATUS_IN_PROGRESS = 'in_progress';
-    public const STATUS_COMPLETED  = 'completed';
-    public const STATUS_REJECTED   = 'rejected';
-    public const STATUS_CANCELLED  = 'cancelled';
+    // New unified status constants based on user requirements
+    public const STATUS_PENDING     = 'pending';      // Chờ thực hiện
+    public const STATUS_PROCESSING  = 'processing';   // Đang thực hiện
+    public const STATUS_COMPLETED   = 'completed';    // Chờ xác nhận hoàn thành (was "done")
+    public const STATUS_DONE        = 'done';         // Đã hoàn thành (was "completed")
+    public const STATUS_REJECTED    = 'rejected';     // Yêu cầu làm lại
+    public const STATUS_CANCELLED   = 'cancelled';    // Hủy
+
+    // Legacy status constants for backward compatibility
+    public const STATUS_DRAFT       = 'draft';
+    public const STATUS_IN_PROGRESS = 'processing';   // Map to processing
 
     public const PRIORITY_LOW    = 'low';
     public const PRIORITY_MEDIUM = 'medium';
@@ -21,31 +26,45 @@ class TaskAssignment extends Model
     public const PRIORITY_URGENT = 'urgent';
 
     public const PRIORITY_LABELS = [
-        self::PRIORITY_LOW    => 'Thap',
-        self::PRIORITY_MEDIUM => 'Trung binh',
+        self::PRIORITY_LOW    => 'Thấp',
+        self::PRIORITY_MEDIUM => 'Trung bình',
         self::PRIORITY_HIGH   => 'Cao',
-        self::PRIORITY_URGENT => 'Khan cap',
+        self::PRIORITY_URGENT => 'Khẩn cấp',
     ];
 
     public const STATUS_LABELS = [
-        self::STATUS_DRAFT       => 'Nhap',
-        self::STATUS_PENDING     => 'Cho xu ly',
-        self::STATUS_IN_PROGRESS => 'Dang thuc hien',
-        self::STATUS_COMPLETED   => 'Hoan thanh',
-        self::STATUS_REJECTED    => 'Bi tu choi',
-        self::STATUS_CANCELLED   => 'Da huy',
+        self::STATUS_PENDING     => 'Chờ thực hiện',
+        self::STATUS_PROCESSING  => 'Đang thực hiện',
+        self::STATUS_COMPLETED   => 'Chờ xác nhận hoàn thành',
+        self::STATUS_DONE        => 'Đã hoàn thành',
+        self::STATUS_REJECTED    => 'Yêu cầu làm lại',
+        self::STATUS_CANCELLED   => 'Hủy',
+        self::STATUS_DRAFT       => 'Nháp',
+    ];
+
+    public const STATUS_COLORS = [
+        self::STATUS_PENDING     => 'secondary',  // Gray
+        self::STATUS_PROCESSING  => 'primary',    // Blue
+        self::STATUS_COMPLETED   => 'warning',    // Yellow/Orange
+        self::STATUS_DONE        => 'success',    // Green
+        self::STATUS_REJECTED    => 'danger',     // Red
+        self::STATUS_CANCELLED   => 'secondary',  // Gray
+        self::STATUS_DRAFT       => 'light',      // Light Gray
     ];
 
     protected $fillable = [
         'code', 'title', 'description', 'priority', 'status',
         'created_by', 'approval_flow_id', 'parent_id',
         'due_date', 'completed_at', 'attachments', 'reject_reason',
+        'completion_content', 'completion_notes', 'completion_verified_at',
+        'completion_verified_by', 'rejected_reason',
     ];
 
     protected $casts = [
-        'due_date'     => 'datetime',
-        'completed_at' => 'datetime',
-        'attachments'  => 'array',
+        'due_date'                  => 'datetime',
+        'completed_at'              => 'datetime',
+        'completion_verified_at'    => 'datetime',
+        'attachments'               => 'array',
     ];
 
     // ── Relations ────────────────────────────────────────────────────
@@ -80,11 +99,29 @@ class TaskAssignment extends Model
         return $this->hasMany(TaskAssignee::class, 'task_id');
     }
 
+    public function completionImages(): HasMany
+    {
+        return $this->hasMany(TaskCompletionImage::class, 'task_id');
+    }
+
+    public function statusLogs(): HasMany
+    {
+        return $this->hasMany(TaskStatusLog::class, 'task_id');
+    }
+
+    public function verifiedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'completion_verified_by');
+    }
+
     // ── Scopes ───────────────────────────────────────────────────────
 
     public function scopePending($q)   { return $q->where('status', self::STATUS_PENDING); }
-    public function scopeInProgress($q){ return $q->where('status', self::STATUS_IN_PROGRESS); }
-    public function scopeCompleted($q) { return $q->where('status', self::STATUS_COMPLETED); }
+    public function scopeProcessing($q){ return $q->where('status', self::STATUS_PROCESSING); }
+    public function scopeCompleted($q) { return $q->whereIn('status', [self::STATUS_COMPLETED, self::STATUS_DONE]); }
+    public function scopeDone($q)      { return $q->where('status', self::STATUS_DONE); }
+    public function scopeRejected($q)  { return $q->where('status', self::STATUS_REJECTED); }
+    public function scopeAwaitingVerification($q) { return $q->where('status', self::STATUS_COMPLETED); }
 
     public function scopeVisibleTo($q, User $user): void
     {
@@ -98,6 +135,61 @@ class TaskAssignment extends Model
                   ->orWhereHas('approvalSteps.step', fn($s) => $s->where('role_slug', $user->roles->pluck('name')->first()));
         });
     }
+
+    // ── Helper Methods ───────────────────────────────────────────────
+
+    public function getStatusLabel(): string
+    {
+        return self::STATUS_LABELS[$this->status] ?? ucfirst($this->status);
+    }
+
+    public function getStatusColor(): string
+    {
+        return self::STATUS_COLORS[$this->status] ?? 'secondary';
+    }
+
+    public function getPriorityLabel(): string
+    {
+        return self::PRIORITY_LABELS[$this->priority] ?? ucfirst($this->priority);
+    }
+
+    public function isOverdue(): bool
+    {
+        return $this->due_date && $this->due_date->isPast() && !in_array($this->status, [self::STATUS_DONE, self::STATUS_CANCELLED]);
+    }
+
+    public function canBeCompleted(): bool
+    {
+        return in_array($this->status, [self::STATUS_PENDING, self::STATUS_PROCESSING]);
+    }
+
+    public function canBeVerified(): bool
+    {
+        return $this->status === self::STATUS_COMPLETED;
+    }
+
+    public function canBeRejected(): bool
+    {
+        return $this->status === self::STATUS_COMPLETED;
+    }
+
+    public static function generateCode(): string
+    {
+        $date = now()->format('Ymd');
+        $lastTask = self::whereDate('created_at', now()->toDateString())
+            ->orderByDesc('id')
+            ->value('code');
+        
+        if (!$lastTask) {
+            return "TASK-{$date}-001";
+        }
+        
+        $lastNumber = (int) substr($lastTask, -3);
+        $newNumber = str_pad($lastNumber + 1, 3, '0', STR_PAD_LEFT);
+        
+        return "TASK-{$date}-{$newNumber}";
+    }
+}
 
     // ── Helpers ──────────────────────────────────────────────────────
 

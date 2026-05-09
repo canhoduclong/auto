@@ -5,10 +5,13 @@ namespace App\Http\Controllers;
 use App\Models\ApprovalWorkflow;
 use App\Models\TaskAssignee;
 use App\Models\TaskAssignment;
+use App\Models\TaskCompletionImage;
+use App\Models\TaskStatusLog;
 use App\Models\TaskDelegateConfig;
 use App\Models\User;
 use App\Services\ApprovalService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class TaskAssignmentController extends Controller
@@ -276,5 +279,254 @@ class TaskAssignmentController extends Controller
 
         return redirect()->route('task-assignments.show', $taskAssignment)
             ->with('success', 'Da cap nhat trang thai cua ban.');
+    }
+
+    // ── Complete Task with Content and Images ─────────────────────────
+
+    public function completeWithContent(Request $request, TaskAssignment $taskAssignment)
+    {
+        $user = auth()->user();
+
+        // Check if user can complete this task
+        $canComplete = $taskAssignment->assignees()
+            ->where('user_id', $user->id)
+            ->exists();
+
+        if (!$canComplete && !$user->hasRole('admin')) {
+            return back()->with('error', 'Ban khong co quyen hoan thanh cong viec nay.');
+        }
+
+        $request->validate([
+            'completion_content' => 'required|string|min:10|max:5000',
+            'completion_notes'   => 'nullable|string|max:2000',
+            'images'             => 'nullable|array',
+            'images.*'           => 'image|mimes:jpeg,png,jpg,gif,webp|max:5120',
+        ]);
+
+        try {
+            DB::transaction(function () use ($request, $taskAssignment, $user) {
+                // Update task with completion content
+                $taskAssignment->update([
+                    'status'               => TaskAssignment::STATUS_COMPLETED,
+                    'completion_content'   => $request->completion_content,
+                    'completion_notes'     => $request->completion_notes,
+                    'completed_at'         => now(),
+                ]);
+
+                // Log status change
+                TaskStatusLog::log(
+                    $taskAssignment,
+                    TaskAssignment::STATUS_COMPLETED,
+                    $user,
+                    'Gửi hoàn thành công việc'
+                );
+
+                // Handle image uploads
+                if ($request->hasFile('images')) {
+                    foreach ($request->file('images') as $index => $image) {
+                        $path = $image->store(
+                            'task-completions/' . $taskAssignment->id . '/' . now()->format('Y/m/d'),
+                            'public'
+                        );
+
+                        TaskCompletionImage::create([
+                            'task_id'           => $taskAssignment->id,
+                            'image_path'        => $path,
+                            'original_filename' => $image->getClientOriginalName(),
+                            'sort_order'        => $index,
+                        ]);
+                    }
+                }
+
+                // Update assignee record if exists
+                TaskAssignee::where('task_id', $taskAssignment->id)
+                    ->where('user_id', $user->id)
+                    ->update([
+                        'status'       => 'completed',
+                        'completed_at' => now(),
+                    ]);
+            });
+
+            // Send notification to task creator
+            // You can integrate Laravel notifications here
+            // TaskCompletedNotification::dispatch($taskAssignment, $user);
+
+            return redirect()->route('task-assignments.show', $taskAssignment)
+                ->with('success', 'Cong viec da duoc gui hoan thanh. Dang cho xac nhan.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Loi: ' . $e->getMessage());
+        }
+    }
+
+    // ── Verify/Approve Task Completion ────────────────────────────────
+
+    public function verifyCompletion(Request $request, TaskAssignment $taskAssignment)
+    {
+        $user = auth()->user();
+
+        if (!$taskAssignment->canBeVerified()) {
+            return back()->with('error', 'Cong viec khong o trang thai cho xac nhan.');
+        }
+
+        if (!($user->hasRole('admin') || $user->hasRole('CEO') || $user->hasRole('manager') || $taskAssignment->created_by === $user->id)) {
+            return back()->with('error', 'Ban khong co quyen xac nhan cong viec nay.');
+        }
+
+        $request->validate([
+            'verification_notes' => 'nullable|string|max:2000',
+        ]);
+
+        try {
+            DB::transaction(function () use ($request, $taskAssignment, $user) {
+                $taskAssignment->update([
+                    'status'                  => TaskAssignment::STATUS_DONE,
+                    'completion_verified_at'  => now(),
+                    'completion_verified_by'  => $user->id,
+                ]);
+
+                TaskStatusLog::log(
+                    $taskAssignment,
+                    TaskAssignment::STATUS_DONE,
+                    $user,
+                    $request->verification_notes ?? 'Xác nhận hoàn thành'
+                );
+            });
+
+            return redirect()->route('task-assignments.show', $taskAssignment)
+                ->with('success', 'Cong viec da duoc xac nhan hoan thanh.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Loi: ' . $e->getMessage());
+        }
+    }
+
+    // ── Reject Task Completion ────────────────────────────────────────
+
+    public function rejectCompletion(Request $request, TaskAssignment $taskAssignment)
+    {
+        $user = auth()->user();
+
+        if (!$taskAssignment->canBeRejected()) {
+            return back()->with('error', 'Cong viec khong o trang thai cho tu choi.');
+        }
+
+        if (!($user->hasRole('admin') || $user->hasRole('CEO') || $user->hasRole('manager') || $taskAssignment->created_by === $user->id)) {
+            return back()->with('error', 'Ban khong co quyen tu choi cong viec nay.');
+        }
+
+        $request->validate([
+            'rejected_reason' => 'required|string|min:10|max:2000',
+        ]);
+
+        try {
+            DB::transaction(function () use ($request, $taskAssignment, $user) {
+                $taskAssignment->update([
+                    'status'           => TaskAssignment::STATUS_REJECTED,
+                    'rejected_reason'  => $request->rejected_reason,
+                ]);
+
+                TaskStatusLog::log(
+                    $taskAssignment,
+                    TaskAssignment::STATUS_REJECTED,
+                    $user,
+                    $request->rejected_reason
+                );
+
+                // Reset assignee status to allow retry
+                TaskAssignee::where('task_id', $taskAssignment->id)
+                    ->update(['status' => 'pending']);
+            });
+
+            return redirect()->route('task-assignments.show', $taskAssignment)
+                ->with('success', 'Cong viec da duoc yeu cau lam lai.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Loi: ' . $e->getMessage());
+        }
+    }
+
+    // ── Assigned To Me ────────────────────────────────────────────────
+
+    public function assignedToMe(Request $request)
+    {
+        $user = auth()->user();
+
+        $tasks = TaskAssignment::whereHas('assignees', fn($q) => $q->where('user_id', $user->id))
+            ->with(['creator:id,name', 'completionImages', 'statusLogs'])
+            ->latest()
+            ->paginate(20);
+
+        return view('task_assignments.assigned-to-me', compact('tasks'));
+    }
+
+    // ── Assigned By Me ────────────────────────────────────────────────
+
+    public function assignedByMe(Request $request)
+    {
+        $user = auth()->user();
+
+        $tasks = TaskAssignment::where('created_by', $user->id)
+            ->with(['assignees.user:id,name', 'completionImages', 'statusLogs'])
+            ->latest()
+            ->paginate(20);
+
+        return view('task_assignments.assigned-by-me', compact('tasks'));
+    }
+
+    // ── In Progress ───────────────────────────────────────────────────
+
+    public function inProgress(Request $request)
+    {
+        $user = auth()->user();
+
+        $tasks = TaskAssignment::whereHas('assignees', fn($q) => $q->where('user_id', $user->id))
+            ->where('status', TaskAssignment::STATUS_PROCESSING)
+            ->with(['creator:id,name', 'statusLogs'])
+            ->latest()
+            ->paginate(20);
+
+        return view('task_assignments.in-progress', compact('tasks'));
+    }
+
+    // ── Awaiting Verification ────────────────────────────────────────
+
+    public function awaitingVerification(Request $request)
+    {
+        $user = auth()->user();
+
+        $tasks = TaskAssignment::where('status', TaskAssignment::STATUS_COMPLETED)
+            ->where(fn($q) => $q->where('created_by', $user->id)->orWhere('completion_verified_by', $user->id))
+            ->with(['assignees.user:id,name', 'completionImages', 'statusLogs'])
+            ->latest()
+            ->paginate(20);
+
+        return view('task_assignments.awaiting-verification', compact('tasks'));
+    }
+
+    // ── Verify List ───────────────────────────────────────────────────
+
+    public function verifyList(Request $request)
+    {
+        $user = auth()->user();
+
+        $tasks = TaskAssignment::where('status', TaskAssignment::STATUS_COMPLETED)
+            ->with(['creator:id,name', 'completionImages', 'statusLogs'])
+            ->latest()
+            ->paginate(20);
+
+        return view('task_assignments.verify-list', compact('tasks'));
+    }
+
+    // ── History ───────────────────────────────────────────────────────
+
+    public function history(Request $request)
+    {
+        $user = auth()->user();
+
+        $tasks = TaskAssignment::whereHas('assignees', fn($q) => $q->where('user_id', $user->id))
+            ->whereIn('status', [TaskAssignment::STATUS_DONE, TaskAssignment::STATUS_REJECTED, TaskAssignment::STATUS_CANCELLED])
+            ->with(['creator:id,name', 'statusLogs', 'completionImages'])
+            ->latest()
+            ->paginate(20);
+
+        return view('task_assignments.history', compact('tasks'));
     }
 }

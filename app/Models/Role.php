@@ -26,5 +26,8 @@ class Role extends Model
             ->withTimestamps();
     }
 
-
+    public function taskPermissions()
+    {
+        return $this->hasMany(TaskPermission::class);
+    }
 }
