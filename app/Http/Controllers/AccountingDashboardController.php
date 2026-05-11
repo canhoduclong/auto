@@ -1141,7 +1141,61 @@ class AccountingDashboardController extends Controller
             $totalPaid > 0                      => 'partially_paid',
             default                             => 'unpaid',
         };
+
+        $isFullyPaid = $totalPaid >= (float) $order->total;
+        if ($isFullyPaid && !in_array((string) $order->status, ['completed', 'cancelled', 'returned', 'returned_completed'], true)) {
+            $order->status = 'completed';
+        }
+
         $order->save();
+
+        if ($isFullyPaid) {
+            $this->createCommissionForCompletedOrder($order);
+        }
+    }
+
+    private function createCommissionForCompletedOrder(Order $order): void
+    {
+        if (!Schema::hasTable('order_commissions')) {
+            return;
+        }
+
+        $saleUserId = (int) ($order->user_id ?? 0);
+        if ($saleUserId <= 0) {
+            return;
+        }
+
+        $snapshotPercent = (float) ($order->commission_percent_snapshot ?? 0);
+        if ($snapshotPercent <= 0 && $order->customer_id) {
+            $snapshotPercent = (float) Customer::query()
+                ->where('id', $order->customer_id)
+                ->value('commission_percent');
+        }
+
+        $orderTotal = (float) ($order->total ?? 0);
+        $commissionAmount = round(($orderTotal * $snapshotPercent) / 100, 2);
+
+        DB::table('order_commissions')->updateOrInsert(
+            ['order_id' => $order->id],
+            [
+                'sale_user_id' => $saleUserId,
+                'customer_id' => $order->customer_id,
+                'order_total' => $orderTotal,
+                'commission_percent' => $snapshotPercent,
+                'commission_amount' => $commissionAmount,
+                'status' => 'confirmed',
+                'confirmed_by' => auth()->id(),
+                'confirmed_at' => now(),
+                'updated_at' => now(),
+                'created_at' => now(),
+            ]
+        );
+
+        $order->forceFill([
+            'commission_percent_snapshot' => $snapshotPercent,
+            'commission_amount_snapshot' => $commissionAmount,
+            'commission_created_at' => now(),
+        ])->save();
     }
 }
 

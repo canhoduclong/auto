@@ -432,7 +432,7 @@ class ApprovalService
 
         if (!$workflow || $workflow->steps->isEmpty()) {
             // No workflow — mark as in_progress immediately
-            $task->update(['status' => \App\Models\TaskAssignment::STATUS_IN_PROGRESS]);
+            $task->update(['status' => 'in_progress']);
             return false;
         }
 
@@ -448,7 +448,7 @@ class ApprovalService
             ]);
         }
 
-        $task->update(['status' => \App\Models\TaskAssignment::STATUS_IN_PROGRESS]);
+        $task->update(['status' => 'in_progress']);
         return true;
     }
 

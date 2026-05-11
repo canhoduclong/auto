@@ -237,6 +237,14 @@
                 <i class="bi bi-boxes"></i> Đơn cần xử lý
             </a>
 
+            <div class="wh-nav-section">Nhiệm vụ kho</div>
+            <a href="{{ route('tasks.my-tasks') }}" class="wh-nav-link {{ request()->routeIs('tasks.my-tasks') || request()->routeIs('task-assignments.assigned-to-me') ? 'active' : '' }}">
+                <i class="bi bi-list-task"></i> Nhiệm vụ
+            </a>
+            <a href="{{ route('task-assignments.in-progress') }}" class="wh-nav-link {{ request()->routeIs('task-assignments.in-progress') || request()->routeIs('task-assignments.complete-form') ? 'active' : '' }}">
+                <i class="bi bi-check2-circle"></i> Thực hiện
+            </a>
+
             <div class="wh-nav-section">Trả hàng</div>
             <a href="{{ route('warehouse.returns') }}" class="wh-nav-link {{ request()->routeIs('warehouse.returns') ? 'active' : '' }}">
                 <i class="bi bi-arrow-return-left"></i> Đơn trả về

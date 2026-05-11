@@ -97,6 +97,7 @@ class Customer extends Model
         'customer_status',
         'free_from_date',
         'current_cycle_no',
+        'commission_percent',
         'is_employee',
         'deleted_by',
     ];
@@ -108,6 +109,7 @@ class Customer extends Model
         'next_appointment' => 'datetime',
         'assigned_at' => 'datetime',
         'free_from_date' => 'datetime',
+        'commission_percent' => 'decimal:2',
         'is_employee' => 'boolean',
     ];
 

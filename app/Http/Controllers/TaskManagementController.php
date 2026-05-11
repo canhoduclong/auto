@@ -58,7 +58,7 @@ class TaskManagementController extends Controller
             'description' => 'nullable|string',
             'type' => 'required|in:kpi,customer_task,general',
             'assigned_to' => 'required|exists:users,id',
-            'deadline' => 'nullable|date|after:today',
+            'deadline' => 'nullable|date|after_or_equal:today',
             'customer_id' => 'nullable|exists:customers,id',
         ]);
 
@@ -75,7 +75,7 @@ class TaskManagementController extends Controller
         if ($request->filled('note') || $request->filled('next_appointment')) {
             $validated = $request->validate([
                 'note' => 'nullable|string',
-                'next_appointment' => 'nullable|date|after:today',
+                'next_appointment' => 'nullable|date|after_or_equal:today',
             ]);
 
             $task->update($validated);

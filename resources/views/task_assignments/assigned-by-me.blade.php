@@ -1,4 +1,4 @@
-@extends('layouts.app')
+@extends($layout ?? 'layouts.app')
 
 @section('title', 'Công việc đã giao')
 
@@ -106,14 +106,14 @@
                 </h2>
                 <p class="text-muted">Danh sách các công việc bạn đã giao cho nhân viên</p>
             </div>
-            <a href="{{ route('task-assignments.create') }}" class="btn btn-primary btn-lg">
+            <a href="{{ route($createRoute ?? 'task-assignments.create') }}" class="btn btn-primary btn-lg">
                 <i class="fas fa-plus-circle"></i> Giao việc mới
             </a>
         </div>
 
         {{-- Filters --}}
         <div class="task-filters">
-            <form action="{{ route('task-assignments.assigned-by-me') }}" method="GET" class="row g-3">
+            <form action="{{ route($filterRoute ?? 'task-assignments.assigned-by-me') }}" method="GET" class="row g-3">
                 <div class="col-md-4">
                     <input type="text" class="form-control" name="search" placeholder="Tìm kiếm..." value="{{ request('search') }}">
                 </div>
@@ -212,7 +212,7 @@
                     </div>
                     <h5>Chưa có công việc nào</h5>
                     <p class="text-muted">Bạn chưa giao công việc cho ai. Hãy giao việc ngay!</p>
-                    <a href="{{ route('task-assignments.create') }}" class="btn btn-primary mt-3">
+                    <a href="{{ route($createRoute ?? 'task-assignments.create') }}" class="btn btn-primary mt-3">
                         <i class="fas fa-plus-circle"></i> Giao việc mới
                     </a>
                 </div>

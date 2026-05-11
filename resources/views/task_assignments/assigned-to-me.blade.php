@@ -1,4 +1,4 @@
-@extends('layouts.app')
+@extends($layout ?? 'layouts.app')
 
 @section('title', 'Công việc được giao cho tôi')
 
@@ -102,7 +102,7 @@
 
         {{-- Filters --}}
         <div class="task-filters">
-            <form action="{{ route('task-assignments.assigned-to-me') }}" method="GET" class="row g-3">
+            <form action="{{ route($filterRoute ?? 'task-assignments.assigned-to-me') }}" method="GET" class="row g-3">
                 <div class="col-md-4">
                     <input type="text" class="form-control" name="search" placeholder="Tìm kiếm..." value="{{ request('search') }}">
                 </div>
@@ -169,18 +169,18 @@
                 </div>
 
                 <div class="task-item-actions mt-3">
-                    <a href="{{ route('task-assignments.show', $task) }}" class="btn btn-info btn-sm">
+                    <a href="{{ route(auth()->user()?->isSalesFlowRole() ? 'tasks.show' : 'task-assignments.show', $task) }}" class="btn btn-info btn-sm">
                         <i class="fas fa-eye"></i> Chi tiết
                     </a>
                     
                     @if ($task->status !== 'completed' && $task->status !== 'done' && $task->status !== 'rejected')
-                        <a href="{{ route('task-assignments.show', $task) }}" class="btn btn-primary btn-sm">
+                        <a href="{{ route(auth()->user()?->isSalesFlowRole() ? 'tasks.show' : 'task-assignments.show', $task) }}" class="btn btn-primary btn-sm">
                             <i class="fas fa-edit"></i> Cập nhật
                         </a>
                     @endif
 
                     @if ($task->canBeCompleted())
-                        <a href="{{ route('task-assignments.show', $task) }}" class="btn btn-success btn-sm">
+                        <a href="{{ route('task-assignments.complete-form', $task) }}" class="btn btn-success btn-sm">
                             <i class="fas fa-check"></i> Hoàn thành
                         </a>
                     @endif

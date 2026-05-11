@@ -134,7 +134,7 @@ class AuthController extends Controller
 
         Auth::login($user);
 
-        return redirect()->route('pages.my_dashboard');
+        return redirect()->route('pages.my_profile');
     }
 
     private function redirectAfterLogin(Request $request, User $user)
@@ -173,11 +173,7 @@ class AuthController extends Controller
             || $user->canAccessSalesDailyFeatures();
 
         if ($isSalesLikeUser) {
-            if ($user->hasPermission('orders.monitoring')) {
-                return redirect()->route('pages.my_orders.monitoring');
-            }
-
-            return redirect()->route('pages.my_orders');
+            return redirect()->route('pages.my_dashboard');
         }
 
         // Người dùng chưa được gán team hoặc kho → trang chờ phân công
@@ -185,7 +181,7 @@ class AuthController extends Controller
             return redirect()->route('thankyou');
         }
 
-        return redirect()->route('pages.my_dashboard');
+        return redirect()->route('pages.my_profile');
     }
 
     private function resolveMobileRoute($user): ?string

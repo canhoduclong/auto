@@ -1,4 +1,4 @@
-@extends('layouts.app')
+@extends($layout ?? 'layouts.app')
 
 @section('title', 'Hoàn thành công việc: ' . $task->code)
 
@@ -122,7 +122,7 @@
             </div>
 
             <div class="completion-form">
-                <form id="completionForm" action="{{ route('task-assignments.complete-with-content', $task) }}" method="POST" enctype="multipart/form-data">
+                <form id="completionForm" action="{{ route($submitRoute ?? 'task-assignments.complete-with-content', $task) }}" method="POST" enctype="multipart/form-data">
                     @csrf
 
                     <div class="completion-info">
@@ -156,7 +156,7 @@
 
                     {{-- Ghi chú bổ sung --}}
                     <div class="form-group-title">
-                        <i class="fas fa-sticky-note"></i> Ghi chú bổ sung (Tùy chọn)
+                        <i class="fas fa-sticky-note"></i> Ghi chú hoàn thành <span class="text-danger">*</span>
                     </div>
                     <div class="mb-3">
                         <label for="completion_notes" class="form-label">
@@ -168,9 +168,11 @@
                             name="completion_notes"
                             rows="4"
                             placeholder="Ví dụ: Công việc hoàn thành sớm hơn dự kiến, khách hàng rất hài lòng..."
+                            minlength="5"
                             maxlength="2000"
+                            required
                         >{{ old('completion_notes') }}</textarea>
-                        <small class="form-text text-muted">Tối đa 2000 ký tự</small>
+                        <small class="form-text text-muted">Bắt buộc, tối thiểu 5 ký tự, tối đa 2000 ký tự</small>
                         @error('completion_notes')
                             <div class="invalid-feedback d-block">{{ $message }}</div>
                         @enderror
@@ -178,7 +180,7 @@
 
                     {{-- Upload hình ảnh --}}
                     <div class="form-group-title">
-                        <i class="fas fa-image"></i> Tải lên hình ảnh minh chứng (Tùy chọn)
+                        <i class="fas fa-image"></i> Tải lên hình ảnh minh chứng <span class="text-danger">*</span>
                     </div>
                     <div class="mb-3">
                         <div 
@@ -202,6 +204,7 @@
                                 name="images[]" 
                                 multiple 
                                 accept="image/*"
+                                required
                                 style="display: none;"
                                 onchange="handleFileSelect(event)"
                             >
@@ -222,7 +225,7 @@
                         <button type="submit" class="btn btn-success btn-lg">
                             <i class="fas fa-check-circle"></i> Gửi hoàn thành
                         </button>
-                        <a href="{{ route('task-assignments.show', $task) }}" class="btn btn-secondary btn-lg">
+                        <a href="{{ route($showRoute ?? 'task-assignments.show', $task) }}" class="btn btn-secondary btn-lg">
                             Hủy
                         </a>
                     </div>
@@ -300,6 +303,12 @@ function removeImage(index) {
 
 // Update file input when preview is changed
 document.getElementById('completionForm').addEventListener('submit', function(e) {
+    if (selectedFiles.length === 0) {
+        e.preventDefault();
+        alert('Vui long tai len it nhat 1 hinh anh minh chung.');
+        return;
+    }
+
     // Create FormData with files
     const dataTransfer = new DataTransfer();
     selectedFiles.forEach(file => dataTransfer.items.add(file));

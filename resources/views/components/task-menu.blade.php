@@ -3,6 +3,8 @@
     $user = auth()->user();
     $canAssign = TaskMenuService::canAssignTasks($user);
     $canComplete = TaskMenuService::canCompleteTasks($user);
+    $isFrontRole = $user && $user->isSalesFlowRole();
+    $myTasksRoute = $isFrontRole ? 'my-tasks' : 'tasks.my-tasks';
 @endphp
 
 @if ($canAssign || $canComplete)
@@ -14,12 +16,12 @@
                 </h6>
                 <ul class="list-unstyled">
                     <li>
-                        <a href="{{ route('task-assignments.create') }}" class="task-menu-link">
+                        <a href="{{ route('tasks.create') }}" class="task-menu-link">
                             <i class="fas fa-plus-circle"></i> Giao việc
                         </a>
                     </li>
                     <li>
-                        <a href="{{ route('task-assignments.assigned-by-me') }}" class="task-menu-link">
+                        <a href="{{ route('tasks.assigned') }}" class="task-menu-link">
                             <i class="fas fa-list"></i> Công việc đã giao
                         </a>
                     </li>
@@ -29,8 +31,13 @@
                         </a>
                     </li>
                     <li>
-                        <a href="{{ route('task-assignments.verify') }}" class="task-menu-link">
+                        <a href="{{ route('tasks.verify') }}" class="task-menu-link">
                             <i class="fas fa-check-double"></i> Xác nhận hoàn thành
+                        </a>
+                    </li>
+                    <li>
+                        <a href="{{ route('tasks.rejected') }}" class="task-menu-link">
+                            <i class="fas fa-undo"></i> Task bị từ chối/làm lại
                         </a>
                     </li>
                 </ul>
@@ -44,17 +51,17 @@
                 </h6>
                 <ul class="list-unstyled">
                     <li>
-                        <a href="{{ route('task-assignments.assigned-to-me') }}" class="task-menu-link">
+                        <a href="{{ route($myTasksRoute) }}" class="task-menu-link">
                             <i class="fas fa-inbox"></i> Công việc được giao
                         </a>
                     </li>
                     <li>
-                        <a href="{{ route('task-assignments.in-progress') }}" class="task-menu-link">
+                        <a href="{{ route('tasks.in-progress') }}" class="task-menu-link">
                             <i class="fas fa-spinner"></i> Đang thực hiện
                         </a>
                     </li>
                     <li>
-                        <a href="{{ route('task-assignments.awaiting-verification') }}" class="task-menu-link">
+                        <a href="{{ route('tasks.awaiting-verification') }}" class="task-menu-link">
                             <i class="fas fa-hourglass-end"></i> Chờ xác nhận
                         </a>
                     </li>

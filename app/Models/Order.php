@@ -11,6 +11,7 @@ class Order extends Model
     use HasFactory;
     protected $fillable = [
         'customer_id', 'user_id', 'shipper_id', 'code', 'total', 'status',
+        'commission_percent_snapshot', 'commission_amount_snapshot', 'commission_created_at',
         'copied_from_order_id',
         'warehouse_id', 'return_warehouse_id',
         'recipient_name', 'recipient_phone', 'recipient_email', 'recipient_address', 'note',
@@ -38,6 +39,9 @@ class Order extends Model
         'foam_box_price' => 'decimal:2',
         'stock_shortage_detail' => 'array',
         'stock_alert_status' => 'string',
+        'commission_percent_snapshot' => 'decimal:2',
+        'commission_amount_snapshot' => 'decimal:2',
+        'commission_created_at' => 'datetime',
     ];
     
     public function approvals()

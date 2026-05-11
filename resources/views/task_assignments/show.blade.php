@@ -1,4 +1,4 @@
-@extends('layouts.admin')
+@extends($layout ?? 'layouts.admin')
 
 @section('title', $task->code . ' — ' . $task->title)
 
@@ -21,7 +21,7 @@
 @section('content')
 <div class="content-wrapper">
 <div class="content-header d-flex align-items-center py-3 px-4 gap-3">
-    <a href="{{ route('task-assignments.index') }}" class="btn btn-sm btn-outline-secondary">
+    <a href="{{ route($indexRoute ?? 'task-assignments.index') }}" class="btn btn-sm btn-outline-secondary">
         <i class="ph-arrow-left"></i>
     </a>
     <div class="flex-grow-1">
@@ -76,7 +76,7 @@
                         @if($task->parent)
                             <span class="ig-label">Cong viec cha</span>
                             <span class="ig-val">
-                                <a href="{{ route('task-assignments.show', $task->parent) }}">
+                                <a href="{{ route($showRoute ?? 'task-assignments.show', $task->parent) }}">
                                     {{ $task->parent->code }} — {{ $task->parent->title }}
                                 </a>
                             </span>
@@ -142,7 +142,7 @@
                             @foreach($task->subTasks as $sub)
                                 <li class="list-group-item d-flex justify-content-between align-items-center">
                                     <div>
-                                        <a href="{{ route('task-assignments.show', $sub) }}" class="fw-semibold text-decoration-none">
+                                        <a href="{{ route($showRoute ?? 'task-assignments.show', $sub) }}" class="fw-semibold text-decoration-none">
                                             {{ $sub->title }}
                                         </a>
                                         <div class="small text-muted">{{ $sub->code }} &bull; {{ $sub->creator?->name }}</div>
@@ -159,7 +159,7 @@
 
             {{-- Create sub-task shortcut --}}
             @if(in_array($task->status, [\App\Models\TaskAssignment::STATUS_PENDING, \App\Models\TaskAssignment::STATUS_IN_PROGRESS]))
-                <a href="{{ route('task-assignments.create', ['parent_id' => $task->id]) }}"
+                <a href="{{ route($createRoute ?? 'task-assignments.create', ['parent_id' => $task->id]) }}"
                    class="btn btn-sm btn-outline-primary">
                     <i class="ph-plus me-1"></i>Tao cong viec con
                 </a>
@@ -170,7 +170,7 @@
         <div class="col-lg-4">
 
             {{-- My assignee action card --}}
-            @if($myAssignee && in_array($myAssignee->status, ['pending','in_progress']))
+            @if($myAssignee && in_array($myAssignee->status, ['pending', 'in_progress', 'processing']))
                 <div class="card border-primary shadow-sm mb-3">
                     <div class="card-header bg-primary bg-opacity-10 py-2">
                         <span class="fw-semibold text-primary"><i class="ph-clipboard-text me-1"></i>Viec duoc giao cho ban</span>
@@ -183,8 +183,7 @@
                             @csrf
                             <div class="mb-2">
                                 <select name="status" class="form-select form-select-sm">
-                                    <option value="in_progress" {{ $myAssignee->status === 'in_progress' ? 'selected' : '' }}>Dang thuc hien</option>
-                                    <option value="completed">Da hoan thanh</option>
+                                    <option value="in_progress" {{ in_array($myAssignee->status, ['in_progress', 'processing']) ? 'selected' : '' }}>Dang thuc hien</option>
                                     <option value="rejected">Khong the thuc hien</option>
                                 </select>
                             </div>
@@ -196,6 +195,9 @@
                                 <i class="ph-check me-1"></i>Cap nhat trang thai
                             </button>
                         </form>
+                        <a href="{{ route('task-assignments.complete-form', $task) }}" class="btn btn-success btn-sm w-100 mt-2">
+                            <i class="ph-check-circle me-1"></i>Hoan thanh cong viec
+                        </a>
                     </div>
                 </div>
             @endif

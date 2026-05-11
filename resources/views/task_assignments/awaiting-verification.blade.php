@@ -1,4 +1,4 @@
-@extends('layouts.app')
+@extends($layout ?? 'layouts.app')
 
 @section('title', 'Công việc chờ xác nhận')
 
@@ -101,7 +101,7 @@
                 @endif
 
                 <div style="margin-top: 15px;">
-                    <a href="{{ route('task-assignments.show', $task) }}" class="btn btn-info btn-sm">
+                    <a href="{{ route($detailRoute ?? 'task-assignments.show', $task) }}" class="btn btn-info btn-sm">
                         <i class="fas fa-eye"></i> Xem chi tiết
                     </a>
                 </div>

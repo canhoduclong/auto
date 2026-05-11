@@ -51,6 +51,7 @@ use App\Http\Controllers\AccountingDashboardController;
 use App\Http\Controllers\TruckStationController;
 use App\Http\Controllers\CustomerAppointmentController;
 use App\Http\Controllers\OrderScheduleController;
+use App\Http\Controllers\MyDashboardController;
 
 
 
@@ -117,6 +118,12 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     // AJAX lấy tổng tiền đơn hàng
     Route::get('orders/ajax/total', [OrderAjaxController::class, 'total'])->name('orders.ajax.total');
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/my-dashboard', [MyDashboardController::class, 'index'])
+        ->name('pages.my_dashboard')
+        ->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
+    Route::get('/my-dashboard/stats', [MyDashboardController::class, 'stats'])
+        ->name('pages.my_dashboard.stats')
+        ->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
 
     Route::prefix('accounting')->name('accounting.')->middleware('role:accountant,accounting,admin')->group(function () {
         Route::get('/', [AccountingDashboardController::class, 'index'])->name('dashboard');
@@ -330,6 +337,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::post('task-assignments/{taskAssignment}/cancel',           [\App\Http\Controllers\TaskAssignmentController::class, 'cancel'])->name('task-assignments.cancel');
     Route::post('task-assignments/{taskAssignment}/assignee-update',  [\App\Http\Controllers\TaskAssignmentController::class, 'assigneeUpdate'])->name('task-assignments.assignee-update');
     Route::post('task-assignments/{taskAssignment}/complete-content', [\App\Http\Controllers\TaskAssignmentController::class, 'completeWithContent'])->name('task-assignments.complete-with-content');
+    Route::get('task-assignments/{taskAssignment}/complete', [\App\Http\Controllers\TaskAssignmentController::class, 'completeForm'])->name('task-assignments.complete-form');
     Route::post('task-assignments/{taskAssignment}/verify-completion', [\App\Http\Controllers\TaskAssignmentController::class, 'verifyCompletion'])->name('task-assignments.verify-completion');
     Route::post('task-assignments/{taskAssignment}/reject-completion', [\App\Http\Controllers\TaskAssignmentController::class, 'rejectCompletion'])->name('task-assignments.reject-completion');
     Route::get('task-assignments/assigned/to-me',                     [\App\Http\Controllers\TaskAssignmentController::class, 'assignedToMe'])->name('task-assignments.assigned-to-me');
@@ -340,6 +348,25 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::get('task-assignments/tracking',                           [\App\Http\Controllers\TaskAssignmentController::class, 'verifyList'])->name('task-assignments.tracking');
     Route::get('task-assignments/history',                            [\App\Http\Controllers\TaskAssignmentController::class, 'history'])->name('task-assignments.history');
     Route::resource('task-assignments', \App\Http\Controllers\TaskAssignmentController::class);
+
+    // My Tasks - cho Sale/Leader/Manager users
+    Route::get('/my-tasks', [\App\Http\Controllers\TaskAssignmentController::class, 'assignedToMe'])->name('my-tasks');
+
+    // User-facing task aliases
+    Route::get('/tasks', [\App\Http\Controllers\TaskAssignmentController::class, 'index'])->name('tasks.index');
+    Route::get('/tasks/create', [\App\Http\Controllers\TaskAssignmentController::class, 'create'])->name('tasks.create');
+    Route::post('/tasks', [\App\Http\Controllers\TaskAssignmentController::class, 'store'])->name('tasks.store');
+    Route::get('/tasks/my-tasks', [\App\Http\Controllers\TaskAssignmentController::class, 'assignedToMe'])->name('tasks.my-tasks');
+    Route::get('/tasks/assigned', [\App\Http\Controllers\TaskAssignmentController::class, 'assignedByMe'])->name('tasks.assigned');
+    Route::get('/tasks/in-progress', [\App\Http\Controllers\TaskAssignmentController::class, 'inProgress'])->name('tasks.in-progress');
+    Route::get('/tasks/awaiting-verification', [\App\Http\Controllers\TaskAssignmentController::class, 'awaitingVerification'])->name('tasks.awaiting-verification');
+    Route::get('/tasks/verify', [\App\Http\Controllers\TaskAssignmentController::class, 'verifyList'])->name('tasks.verify');
+    Route::get('/tasks/rejected', [\App\Http\Controllers\TaskAssignmentController::class, 'history'])->name('tasks.rejected');
+    Route::get('/tasks/{taskAssignment}', [\App\Http\Controllers\TaskAssignmentController::class, 'show'])->name('tasks.show');
+    Route::post('/tasks/{taskAssignment}/complete', [\App\Http\Controllers\TaskAssignmentController::class, 'completeWithContent'])->name('tasks.complete');
+    Route::get('/tasks/{taskAssignment}/complete', [\App\Http\Controllers\TaskAssignmentController::class, 'completeForm'])->name('tasks.complete-form');
+    Route::post('/tasks/{taskAssignment}/verify', [\App\Http\Controllers\TaskAssignmentController::class, 'verifyCompletion'])->name('tasks.verify-completion');
+    Route::post('/tasks/{taskAssignment}/reject', [\App\Http\Controllers\TaskAssignmentController::class, 'rejectCompletion'])->name('tasks.reject-completion');
 
     // Phân quyền giao việc (Admin only)
     Route::post('task-delegate-configs/{taskDelegateConfig}/toggle', [\App\Http\Controllers\TaskDelegateConfigController::class, 'toggle'])->name('task-delegate-configs.toggle');
@@ -572,7 +599,7 @@ Route::get('/danh-sach-san-pham/{category:slug?}', [PageController::class, 'prod
 //Route::get('/product/{product:slug}', [PageController::class, 'productDetail'])->name('pages.product_detail');
 Route::get('/variant/{variant:slug}', [PageController::class, 'variantDetail'])->name('pages.variant_detail');
 
-Route::get('/my-profile', [PageController::class, 'myDashboard'])->name('pages.my_dashboard')->middleware('auth');
+Route::get('/my-profile', [PageController::class, 'myDashboard'])->name('pages.my_profile')->middleware('auth');
 Route::post('/my-profile', [PageController::class, 'updateProfile'])->name('pages.update_profile')->middleware('auth');
 
 // My Orders routes (sale / leader / manager only)

@@ -1,4 +1,4 @@
-@extends('layouts.admin')
+@extends($layout ?? 'layouts.admin')
 
 @section('title', 'Tao Cong Viec Moi')
 
@@ -15,7 +15,7 @@
 @section('content')
 <div class="content-wrapper">
 <div class="content-header d-flex align-items-center py-3 px-4">
-    <a href="{{ route('task-assignments.index') }}" class="btn btn-sm btn-outline-secondary me-3">
+    <a href="{{ route($indexRoute ?? 'task-assignments.index') }}" class="btn btn-sm btn-outline-secondary me-3">
         <i class="ph-arrow-left"></i>
     </a>
     <div>
@@ -31,7 +31,7 @@
         </div>
     @endif
 
-    <form action="{{ route('task-assignments.store') }}" method="POST" enctype="multipart/form-data">
+    <form action="{{ route($storeRoute ?? 'task-assignments.store') }}" method="POST" enctype="multipart/form-data">
         @csrf
 
         <div class="row g-4">
@@ -66,8 +66,10 @@
                             </div>
                             <div class="col-sm-6">
                                 <label class="form-label fw-semibold">Han chot</label>
-                                <input type="datetime-local" name="due_date" class="form-control"
-                                       value="{{ old('due_date') }}">
+                                <input type="datetime-local" name="due_date" id="due_date_input" class="form-control"
+                                       value="{{ old('due_date') ? \Carbon\Carbon::parse(old('due_date'))->format('Y-m-d\\TH:i') : '' }}"
+                                       step="60">
+                                <small id="due_date_preview" class="text-muted d-block mt-1"></small>
                             </div>
                         </div>
 
@@ -163,7 +165,7 @@
                     <button type="submit" class="btn btn-primary">
                         <i class="ph-paper-plane-tilt me-1"></i>Tao va gui phe duyet
                     </button>
-                    <a href="{{ route('task-assignments.index') }}" class="btn btn-outline-secondary">Huy</a>
+                    <a href="{{ route($indexRoute ?? 'task-assignments.index') }}" class="btn btn-outline-secondary">Huy</a>
                 </div>
             </div>
         </div>
@@ -185,5 +187,43 @@ function selectWf(id) {
         if (inp) inp.checked = true;
     }
 }
+
+function formatDueDateForDisplay(value) {
+    if (!value) {
+        return '';
+    }
+
+    // Input format from datetime-local: YYYY-MM-DDTHH:mm
+    const [datePart, timePart] = value.split('T');
+    if (!datePart || !timePart) {
+        return value;
+    }
+
+    const [year, month, day] = datePart.split('-');
+    return `${day}/${month}/${year} ${timePart}`;
+}
+
+function initDueDatePreview() {
+    const input = document.getElementById('due_date_input');
+    const preview = document.getElementById('due_date_preview');
+    if (!input || !preview) {
+        return;
+    }
+
+    const render = () => {
+        if (!input.value) {
+            preview.textContent = 'Chua chon han chot';
+            return;
+        }
+
+        preview.textContent = `Hien thi: ${formatDueDateForDisplay(input.value)}`;
+    };
+
+    input.addEventListener('input', render);
+    input.addEventListener('change', render);
+    render();
+}
+
+document.addEventListener('DOMContentLoaded', initDueDatePreview);
 </script>
 @endsection

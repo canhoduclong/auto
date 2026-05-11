@@ -161,8 +161,13 @@
                         $offcanvasCanApproveTeamOrders = Auth::user()->hasRole('leader');
                         $offcanvasCanApproveDepartmentOrders = Auth::user()->hasRole('manager');
                         $offcanvasCanManageAppointments = Auth::user()->isAdmin() || Auth::user()->isSalesFlowRole();
+                        $offcanvasMyTasksRoute = Auth::user()->isSalesFlowRole() ? 'my-tasks' : 'tasks.my-tasks';
                     @endphp
-                    <li><a href="{{ route('pages.my_dashboard') }}" class="d-block py-1"><i class="bi bi-person-circle me-1"></i> {{ __('site.profile') }}</a></li>
+                    <li><a href="{{ route('pages.my_dashboard') }}" class="d-block py-1"><i class="bi bi-speedometer2 me-1"></i> My Dashboard</a></li>
+                    <li><a href="{{ route('pages.my_profile') }}" class="d-block py-1"><i class="bi bi-person-circle me-1"></i> {{ __('site.profile') }}</a></li>
+                    @if(Auth::user()->hasPermission('task.create') || Auth::user()->hasPermission('task.assign') || \App\Services\TaskMenuService::canAssignTasks(Auth::user()) || \App\Services\TaskMenuService::canCompleteTasks(Auth::user()))
+                        <li><a href="{{ route($offcanvasMyTasksRoute) }}" class="d-block py-1"><i class="bi bi-list-task me-1"></i> Nhiệm vụ được giao</a></li>
+                    @endif
                     <li><a href="{{ route('pages.my_orders') }}" class="d-block py-1"><i class="bi bi-bag-check me-1"></i> {{ __('site.my_orders') }}</a></li>
                     @if($offcanvasCanViewMonitoring)
                         <li><a href="{{ route('pages.my_orders.monitoring') }}" class="d-block py-1"><i class="bi bi-activity me-1"></i> Theo dõi đơn hàng</a></li>
@@ -319,8 +324,27 @@
                                         </div>
                                         <div class="dropdown-divider my-0"></div>
                                         <a class="dropdown-item" href="{{ route('pages.my_dashboard') }}">
+                                            <i class="bi bi-speedometer2"></i> My Dashboard
+                                        </a>
+                                        <a class="dropdown-item" href="{{ route('pages.my_profile') }}">
                                             <i class="bi bi-person-circle"></i> {{ __('site.profile') }}
                                         </a>
+                                        @if(Auth::user()->hasPermission('task.create') || Auth::user()->hasPermission('task.assign') || \App\Services\TaskMenuService::canAssignTasks(Auth::user()) || \App\Services\TaskMenuService::canCompleteTasks(Auth::user()))
+                                            @php
+                                                $headerMyTasksRoute = Auth::user()->isSalesFlowRole() ? 'my-tasks' : 'tasks.my-tasks';
+                                            @endphp
+                                            <div class="dropdown-divider my-0"></div>
+                                            <div class="px-3 py-2 text-muted small text-uppercase fw-semibold">Quản lý công việc</div>
+                                            <a class="dropdown-item" href="{{ route($headerMyTasksRoute) }}">
+                                                <i class="bi bi-list-task"></i> Nhiệm vụ
+                                            </a>
+                                            @if(Auth::user()->hasPermission('task.create') || Auth::user()->hasPermission('task.assign') || \App\Services\TaskMenuService::canAssignTasks(Auth::user()))
+                                               
+                                                <a class="dropdown-item" href="{{ route('tasks.assigned') }}">
+                                                    <i class="bi bi-kanban"></i> Giao việc
+                                                </a>
+                                            @endif
+                                        @endif
                                         @if(Auth::user()->isSalesFlowRole())
                                         <a class="dropdown-item" href="{{ route('pages.my_orders') }}">
                                             <i class="bi bi-bag-check"></i> {{ __('site.my_orders') }}

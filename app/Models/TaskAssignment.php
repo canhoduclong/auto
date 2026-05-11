@@ -44,6 +44,7 @@ class TaskAssignment extends Model
 
     public const STATUS_COLORS = [
         self::STATUS_PENDING     => 'secondary',  // Gray
+        'in_progress'            => 'primary',
         self::STATUS_PROCESSING  => 'primary',    // Blue
         self::STATUS_COMPLETED   => 'warning',    // Yellow/Orange
         self::STATUS_DONE        => 'success',    // Green
@@ -117,7 +118,7 @@ class TaskAssignment extends Model
     // ── Scopes ───────────────────────────────────────────────────────
 
     public function scopePending($q)   { return $q->where('status', self::STATUS_PENDING); }
-    public function scopeProcessing($q){ return $q->where('status', self::STATUS_PROCESSING); }
+    public function scopeProcessing($q){ return $q->whereIn('status', [self::STATUS_PROCESSING, 'in_progress']); }
     public function scopeCompleted($q) { return $q->whereIn('status', [self::STATUS_COMPLETED, self::STATUS_DONE]); }
     public function scopeDone($q)      { return $q->where('status', self::STATUS_DONE); }
     public function scopeRejected($q)  { return $q->where('status', self::STATUS_REJECTED); }
@@ -167,7 +168,7 @@ class TaskAssignment extends Model
 
     public function canBeCompleted(): bool
     {
-        return in_array($this->status, [self::STATUS_PENDING, self::STATUS_PROCESSING]);
+        return in_array($this->status, [self::STATUS_PENDING, self::STATUS_PROCESSING, 'in_progress']);
     }
 
     public function canBeVerified(): bool
@@ -224,11 +225,12 @@ class TaskAssignment extends Model
     public function statusColor(): string
     {
         return match ($this->status) {
-            self::STATUS_COMPLETED   => 'success',
+            self::STATUS_COMPLETED   => 'warning',
+            self::STATUS_DONE        => 'success',
             self::STATUS_IN_PROGRESS => 'primary',
             self::STATUS_REJECTED    => 'danger',
             self::STATUS_CANCELLED   => 'secondary',
-            self::STATUS_PENDING     => 'warning',
+            self::STATUS_PENDING     => 'secondary',
             default                  => 'light',
         };
     }

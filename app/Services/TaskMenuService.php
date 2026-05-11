@@ -13,6 +13,9 @@ class TaskMenuService
     public static function getMenuItems(User $user): array
     {
         $items = [];
+        $myTasksRoute = $user->isSalesFlowRole()
+            ? 'my-tasks'
+            : 'tasks.my-tasks';
 
         // Check if user can assign tasks
         if (self::canAssignTasks($user)) {
@@ -25,7 +28,7 @@ class TaskMenuService
             $items['task_list_assigned'] = [
                 'label' => 'Danh sách công việc đã giao',
                 'icon' => 'list',
-                'route' => 'task-assignments.assigned',
+                'route' => 'tasks.assigned',
                 'permission' => TaskPermission::ASSIGN_TASK,
             ];
             $items['task_tracking'] = [
@@ -47,7 +50,7 @@ class TaskMenuService
             $items['task_assigned_to_me'] = [
                 'label' => 'Công việc được giao',
                 'icon' => 'assignment_ind',
-                'route' => 'task-assignments.assigned-to-me',
+                'route' => $myTasksRoute,
                 'permission' => TaskPermission::COMPLETE_TASK,
             ];
             $items['task_in_progress'] = [
@@ -80,6 +83,9 @@ class TaskMenuService
     {
         $canAssign = self::canAssignTasks($user);
         $canComplete = self::canCompleteTasks($user);
+        $myTasksRoute = $user->isSalesFlowRole()
+            ? 'my-tasks'
+            : 'tasks.my-tasks';
 
         $groups = [];
 
@@ -95,7 +101,7 @@ class TaskMenuService
                     'task_list_assigned' => [
                         'label' => 'Danh sách công việc đã giao',
                         'icon' => 'list',
-                        'route' => 'task-assignments.assigned',
+                        'route' => 'tasks.assigned',
                     ],
                     'task_tracking' => [
                         'label' => 'Theo dõi tiến độ công việc',
@@ -118,7 +124,7 @@ class TaskMenuService
                     'task_assigned_to_me' => [
                         'label' => 'Công việc được giao',
                         'icon' => 'assignment_ind',
-                        'route' => 'task-assignments.assigned-to-me',
+                        'route' => $myTasksRoute,
                     ],
                     'task_in_progress' => [
                         'label' => 'Công việc đang thực hiện',
@@ -149,6 +155,10 @@ class TaskMenuService
     {
         // Check if user has task assignment permission through role
         $hasPermission = TaskPermission::userHasPermission($user, TaskPermission::ASSIGN_TASK);
+
+        if (!$hasPermission) {
+            $hasPermission = $user->hasPermission('task.create') || $user->hasPermission('task.assign');
+        }
         
         // Or check legacy: Admin, CEO, or Manager roles
         $hasRole = $user->hasRole('admin') || $user->hasRole('CEO') || $user->hasRole('manager') 
@@ -164,6 +174,10 @@ class TaskMenuService
     {
         // Check if user has task completion permission through role
         $hasPermission = TaskPermission::userHasPermission($user, TaskPermission::COMPLETE_TASK);
+
+        if (!$hasPermission) {
+            $hasPermission = $user->hasPermission('task.complete') || $user->hasPermission('task.view');
+        }
         
         // Or check legacy: non-admin roles
         $hasRole = !$user->hasRole('admin') && !$user->hasRole('CEO');

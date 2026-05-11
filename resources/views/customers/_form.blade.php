@@ -87,6 +87,21 @@
         @error('customer_type_id') <div class="text-danger small">{{ $message }}</div> @enderror
     </div>
 
+    <div class="col-md-6">
+        <label class="form-label">% hoa hồng sale</label>
+        <input
+            type="number"
+            name="commission_percent"
+            class="form-control"
+            min="0"
+            max="100"
+            step="0.01"
+            value="{{ old('commission_percent', $customer->commission_percent ?? 0) }}"
+            placeholder="Ví dụ: 3.50"
+        >
+        @error('commission_percent') <div class="text-danger small">{{ $message }}</div> @enderror
+    </div>
+
     <div class="col-12">
         <label class="form-label">{{ __('customers.form.note') }}</label>
         <textarea name="note" class="form-control" rows="3">{{ old('note', $customer->note ?? '') }}</textarea>

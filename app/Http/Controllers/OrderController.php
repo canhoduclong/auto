@@ -1364,6 +1364,11 @@ class OrderController extends Controller
             $total = max($subtotalAfterItemAdjustment - $orderLevelDiscount, 0);
             $totalDiscount = $itemDiscountTotal + $orderLevelDiscount;
 
+            $commissionPercentSnapshot = $customer
+                ? (float) ($customer->commission_percent ?? 0)
+                : 0.0;
+            $commissionAmountSnapshot = round(($total * $commissionPercentSnapshot) / 100, 2);
+
             $orderInsert = $this->filterExistingColumns('orders', [
                 'customer_id' => $orderData['customer_id'] ?? null,
                 'user_id' => $orderData['user_id'] ?? auth()->id(),
@@ -1376,6 +1381,8 @@ class OrderController extends Controller
                 'payment_status' => $orderData['payment_status'] ?? PaymentStatus::Unpaid->value,
                 'delivery_status' => $orderData['delivery_status'] ?? DeliveryStatus::NotShipped->value,
                 'total' => $total,
+                'commission_percent_snapshot' => $commissionPercentSnapshot,
+                'commission_amount_snapshot' => $commissionAmountSnapshot,
                 'subtotal_amount' => $subtotalBeforeDiscount,
                 'item_discount_total' => $itemDiscountTotal,
                 'extra_discount_total' => $orderLevelDiscount,

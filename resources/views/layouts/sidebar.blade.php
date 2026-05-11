@@ -229,6 +229,21 @@
 							</a>
 						</li>
 
+						@if(auth()->user()?->hasRole('warehouse') || auth()->user()?->hasRole('admin'))
+						<li class="nav-item">
+							<a href="{{ route('tasks.my-tasks') }}" class="nav-link{{ request()->routeIs('tasks.my-tasks') || request()->routeIs('task-assignments.assigned-to-me') ? ' active' : '' }}">
+								<i class="ph-clipboard-text"></i>
+								<span>Nhiệm vụ</span>
+							</a>
+						</li>
+						<li class="nav-item">
+							<a href="{{ route('task-assignments.in-progress') }}" class="nav-link{{ request()->routeIs('task-assignments.in-progress') || request()->routeIs('task-assignments.complete-form') ? ' active' : '' }}">
+								<i class="ph-check-circle"></i>
+								<span>Thực hiện</span>
+							</a>
+						</li>
+						@endif
+
 						<!-- Nhà xe -->
 						<li class="nav-item-header">
 							<div class="text-uppercase fs-sm lh-sm opacity-50 sidebar-resize-hide">Nhà xe</div>

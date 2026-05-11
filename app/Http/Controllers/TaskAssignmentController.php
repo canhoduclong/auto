@@ -10,13 +10,31 @@ use App\Models\TaskStatusLog;
 use App\Models\TaskDelegateConfig;
 use App\Models\User;
 use App\Services\ApprovalService;
+use Carbon\Carbon;
+use App\Models\Setting;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Throwable;
 
 class TaskAssignmentController extends Controller
 {
-    public function __construct(private ApprovalService $approvalService) {}
+    protected $settings;
+
+    public function __construct(private ApprovalService $approvalService)
+    {
+        try {
+            $this->settings = Cache::remember('settings', 60, function () {
+                return Setting::all()->keyBy('key');
+            });
+        } catch (Throwable $e) {
+            report($e);
+            $this->settings = collect();
+        }
+
+        view()->share('settings', $this->settings);
+    }
 
     // ── Index ─────────────────────────────────────────────────────────
 
@@ -64,7 +82,7 @@ class TaskAssignmentController extends Controller
         $counts = [
             'all'         => TaskAssignment::count(),
             'pending'     => TaskAssignment::where('status', 'pending')->count(),
-            'in_progress' => TaskAssignment::where('status', 'in_progress')->count(),
+            'in_progress' => TaskAssignment::whereIn('status', ['in_progress', TaskAssignment::STATUS_PROCESSING])->count(),
             'completed'   => TaskAssignment::where('status', 'completed')->count(),
         ];
 
@@ -76,6 +94,8 @@ class TaskAssignmentController extends Controller
     public function create(Request $request)
     {
         $user = auth()->user();
+        $isFrontRoles = $user && $user->isSalesFlowRole();
+        $isFrontendRoute = $request->routeIs('tasks.create');
 
         $workflows = ApprovalWorkflow::where('is_active', true)
             ->where(function ($q) {
@@ -93,7 +113,12 @@ class TaskAssignmentController extends Controller
 
         $users = User::orderBy('name')->get(['id', 'name']);
 
-        return view('task_assignments.create', compact('workflows', 'users', 'allowedAssignees', 'parentId'));
+        $useFrontend = $isFrontRoles && $isFrontendRoute;
+        $layout = $useFrontend ? 'layouts.site' : 'layouts.admin';
+        $indexRoute = $useFrontend ? 'tasks.index' : 'task-assignments.index';
+        $storeRoute = $useFrontend ? 'tasks.store' : 'task-assignments.store';
+
+        return view('task_assignments.create', compact('workflows', 'users', 'allowedAssignees', 'parentId', 'layout', 'indexRoute', 'storeRoute'));
     }
 
     // ── Store ─────────────────────────────────────────────────────────
@@ -108,11 +133,15 @@ class TaskAssignmentController extends Controller
             'priority'         => 'required|in:low,medium,high,urgent',
             'approval_flow_id' => 'nullable|exists:approval_flows,id',
             'parent_id'        => 'nullable|exists:task_assignments,id',
-            'due_date'         => 'nullable|date|after:now',
+            'due_date'         => 'nullable|date_format:Y-m-d\TH:i|after_or_equal:now',
             'attachments.*'    => 'nullable|file|max:10240|mimes:jpg,jpeg,png,pdf,doc,docx,xlsx,zip',
             'assignee_ids'     => 'nullable|array',
             'assignee_ids.*'   => 'exists:users,id',
         ]);
+
+        if (!empty($data['due_date'])) {
+            $data['due_date'] = Carbon::createFromFormat('Y-m-d\TH:i', $data['due_date'])->format('Y-m-d H:i:s');
+        }
 
         // Validate that chosen assignees are actually allowed for this user
         if (!empty($data['assignee_ids'])) {
@@ -179,11 +208,18 @@ class TaskAssignmentController extends Controller
         $user    = auth()->user();
         $canAct  = $this->approvalService->canApproveTaskStep($task, $user);
         $current = $this->approvalService->getCurrentPendingTaskStep($task);
+        $isFrontRoles = $user && $user->isSalesFlowRole();
+        $isWarehouse = $user && $user->hasRole('warehouse');
 
         // Current user's assignee record (if any)
         $myAssignee = $task->assignees->firstWhere('user_id', $user->id);
 
-        return view('task_assignments.show', compact('task', 'canAct', 'current', 'myAssignee'));
+        $layout = $isWarehouse ? 'layouts.warehouse' : ($isFrontRoles ? 'layouts.site' : 'layouts.admin');
+        $indexRoute = $isWarehouse ? 'tasks.my-tasks' : ($isFrontRoles ? 'my-tasks' : 'task-assignments.index');
+        $showRoute = $isFrontRoles ? 'tasks.show' : 'task-assignments.show';
+        $createRoute = $isFrontRoles ? 'tasks.create' : 'task-assignments.create';
+
+        return view('task_assignments.show', compact('task', 'canAct', 'current', 'myAssignee', 'layout', 'indexRoute', 'showRoute', 'createRoute'));
     }
 
     // ── Approve ───────────────────────────────────────────────────────
@@ -249,22 +285,26 @@ class TaskAssignmentController extends Controller
     public function assigneeUpdate(Request $request, TaskAssignment $taskAssignment)
     {
         $request->validate([
-            'status' => 'required|in:in_progress,completed,rejected',
+            'status' => 'required|in:in_progress,processing,completed,rejected',
             'note'   => 'nullable|string|max:1000',
         ]);
+
+        $assigneeStatus = $request->status === 'in_progress'
+            ? TaskAssignment::STATUS_PROCESSING
+            : $request->status;
 
         $record = TaskAssignee::where('task_id', $taskAssignment->id)
             ->where('user_id', auth()->id())
             ->firstOrFail();
 
         $record->update([
-            'status'       => $request->status,
+            'status'       => $assigneeStatus,
             'note'         => $request->note,
-            'completed_at' => $request->status === 'completed' ? now() : null,
+            'completed_at' => $assigneeStatus === 'completed' ? now() : null,
         ]);
 
         // If ALL assignees are done, mark overall task completed
-        if ($request->status === 'completed') {
+        if ($assigneeStatus === 'completed') {
             $allDone = TaskAssignee::where('task_id', $taskAssignment->id)
                 ->whereNotIn('status', ['completed', 'rejected'])
                 ->doesntExist();
@@ -283,6 +323,32 @@ class TaskAssignmentController extends Controller
 
     // ── Complete Task with Content and Images ─────────────────────────
 
+    public function completeForm(TaskAssignment $taskAssignment)
+    {
+        $user = auth()->user();
+        $isFrontRoles = $user && $user->isSalesFlowRole();
+        $isWarehouse = $user && $user->hasRole('warehouse');
+
+        $canComplete = $taskAssignment->assignees()
+            ->where('user_id', $user->id)
+            ->exists();
+
+        if (!$canComplete && !$user->hasRole('admin')) {
+            return back()->with('error', 'Ban khong co quyen hoan thanh cong viec nay.');
+        }
+
+        $layout = $isWarehouse ? 'layouts.warehouse' : ($isFrontRoles ? 'layouts.site' : 'layouts.app');
+        $showRoute = $isFrontRoles ? 'tasks.show' : 'task-assignments.show';
+        $submitRoute = $isFrontRoles ? 'tasks.complete' : 'task-assignments.complete-with-content';
+
+        return view('task_assignments.complete', [
+            'task' => $taskAssignment->load(['creator:id,name', 'assignees.user:id,name']),
+            'layout' => $layout,
+            'showRoute' => $showRoute,
+            'submitRoute' => $submitRoute,
+        ]);
+    }
+
     public function completeWithContent(Request $request, TaskAssignment $taskAssignment)
     {
         $user = auth()->user();
@@ -298,9 +364,9 @@ class TaskAssignmentController extends Controller
 
         $request->validate([
             'completion_content' => 'required|string|min:10|max:5000',
-            'completion_notes'   => 'nullable|string|max:2000',
-            'images'             => 'nullable|array',
-            'images.*'           => 'image|mimes:jpeg,png,jpg,gif,webp|max:5120',
+            'completion_notes'   => 'required|string|min:5|max:2000',
+            'images'             => 'required|array|min:1',
+            'images.*'           => 'required|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
         ]);
 
         try {
@@ -351,7 +417,9 @@ class TaskAssignmentController extends Controller
             // You can integrate Laravel notifications here
             // TaskCompletedNotification::dispatch($taskAssignment, $user);
 
-            return redirect()->route('task-assignments.show', $taskAssignment)
+            $showRoute = $user->isSalesFlowRole() ? 'tasks.show' : 'task-assignments.show';
+
+            return redirect()->route($showRoute, $taskAssignment)
                 ->with('success', 'Cong viec da duoc gui hoan thanh. Dang cho xac nhan.');
         } catch (\Exception $e) {
             return back()->with('error', 'Loi: ' . $e->getMessage());
@@ -448,13 +516,23 @@ class TaskAssignmentController extends Controller
     public function assignedToMe(Request $request)
     {
         $user = auth()->user();
+        $isFrontRoles = $user && $user->isSalesFlowRole();
+        $isWarehouse = $user && $user->hasRole('warehouse');
+        $isFrontendRoute = $request->routeIs('my-tasks');
 
         $tasks = TaskAssignment::whereHas('assignees', fn($q) => $q->where('user_id', $user->id))
             ->with(['creator:id,name', 'completionImages', 'statusLogs'])
             ->latest()
             ->paginate(20);
 
-        return view('task_assignments.assigned-to-me', compact('tasks'));
+        $layout = $isWarehouse
+            ? 'layouts.warehouse'
+            : (($isFrontRoles && $isFrontendRoute) ? 'layouts.site' : 'layouts.app');
+        $filterRoute = $isWarehouse
+            ? 'tasks.my-tasks'
+            : (($isFrontRoles && $isFrontendRoute) ? 'my-tasks' : 'task-assignments.assigned-to-me');
+
+        return view('task_assignments.assigned-to-me', compact('tasks', 'layout', 'filterRoute'));
     }
 
     // ── Assigned By Me ────────────────────────────────────────────────
@@ -462,13 +540,18 @@ class TaskAssignmentController extends Controller
     public function assignedByMe(Request $request)
     {
         $user = auth()->user();
+        $isFrontRoles = $user && $user->isSalesFlowRole();
 
         $tasks = TaskAssignment::where('created_by', $user->id)
             ->with(['assignees.user:id,name', 'completionImages', 'statusLogs'])
             ->latest()
             ->paginate(20);
 
-        return view('task_assignments.assigned-by-me', compact('tasks'));
+        $layout = $isFrontRoles ? 'layouts.site' : 'layouts.app';
+        $filterRoute = 'tasks.assigned';
+        $createRoute = $isFrontRoles ? 'tasks.create' : 'task-assignments.create';
+
+        return view('task_assignments.assigned-by-me', compact('tasks', 'layout', 'filterRoute', 'createRoute'));
     }
 
     // ── In Progress ───────────────────────────────────────────────────
@@ -476,14 +559,19 @@ class TaskAssignmentController extends Controller
     public function inProgress(Request $request)
     {
         $user = auth()->user();
+        $isFrontRoles = $user && $user->isSalesFlowRole();
+        $isWarehouse = $user && $user->hasRole('warehouse');
 
         $tasks = TaskAssignment::whereHas('assignees', fn($q) => $q->where('user_id', $user->id))
-            ->where('status', TaskAssignment::STATUS_PROCESSING)
+            ->whereIn('status', ['in_progress', TaskAssignment::STATUS_PROCESSING])
             ->with(['creator:id,name', 'statusLogs'])
             ->latest()
             ->paginate(20);
 
-        return view('task_assignments.in-progress', compact('tasks'));
+        $layout = $isWarehouse ? 'layouts.warehouse' : ($isFrontRoles ? 'layouts.site' : 'layouts.app');
+        $detailRoute = $isFrontRoles ? 'tasks.show' : 'task-assignments.show';
+
+        return view('task_assignments.in-progress', compact('tasks', 'layout', 'detailRoute'));
     }
 
     // ── Awaiting Verification ────────────────────────────────────────
@@ -491,6 +579,7 @@ class TaskAssignmentController extends Controller
     public function awaitingVerification(Request $request)
     {
         $user = auth()->user();
+        $isFrontRoles = $user && $user->isSalesFlowRole();
 
         $tasks = TaskAssignment::where('status', TaskAssignment::STATUS_COMPLETED)
             ->where(fn($q) => $q->where('created_by', $user->id)->orWhere('completion_verified_by', $user->id))
@@ -498,7 +587,10 @@ class TaskAssignmentController extends Controller
             ->latest()
             ->paginate(20);
 
-        return view('task_assignments.awaiting-verification', compact('tasks'));
+        $layout = $isFrontRoles ? 'layouts.site' : 'layouts.app';
+        $detailRoute = $isFrontRoles ? 'tasks.show' : 'task-assignments.show';
+
+        return view('task_assignments.awaiting-verification', compact('tasks', 'layout', 'detailRoute'));
     }
 
     // ── Verify List ───────────────────────────────────────────────────
@@ -520,6 +612,7 @@ class TaskAssignmentController extends Controller
     public function history(Request $request)
     {
         $user = auth()->user();
+        $isFrontRoles = $user && $user->isSalesFlowRole();
 
         $tasks = TaskAssignment::whereHas('assignees', fn($q) => $q->where('user_id', $user->id))
             ->whereIn('status', [TaskAssignment::STATUS_DONE, TaskAssignment::STATUS_REJECTED, TaskAssignment::STATUS_CANCELLED])
@@ -527,6 +620,9 @@ class TaskAssignmentController extends Controller
             ->latest()
             ->paginate(20);
 
-        return view('task_assignments.history', compact('tasks'));
+        $layout = $isFrontRoles ? 'layouts.site' : 'layouts.app';
+        $detailRoute = $isFrontRoles ? 'tasks.show' : 'task-assignments.show';
+
+        return view('task_assignments.history', compact('tasks', 'layout', 'detailRoute'));
     }
 }

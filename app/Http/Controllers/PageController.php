@@ -469,7 +469,7 @@ class PageController extends Controller
             $user->update(['avatar' => 'avatars/' . $avatarName]);
         }
 
-        return redirect()->route('pages.my_dashboard')->with('success', 'Profile updated successfully.');
+        return redirect()->route('pages.my_profile')->with('success', 'Profile updated successfully.');
     }
 
     public function variantDetail(ProductVariant $variant)

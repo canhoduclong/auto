@@ -43,9 +43,7 @@ class DashboardController extends Controller
             || $user?->hasRole('manager_sale');
 
         if ($isSalesFlowRole) {
-            return redirect()
-                ->route('pages.my_orders.monitoring')
-                ->with('error', 'Vai trò của bạn không được truy cập Dashboard.');
+            return redirect()->route('pages.my_dashboard');
         }
 
         $roleName = $user?->roles()->pluck('name')->first() ?? 'default';
