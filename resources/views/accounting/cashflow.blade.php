@@ -101,6 +101,116 @@
     </div>
 </div>
 
+{{-- Deposit/Withdraw Summary Section --}}
+@php
+    // Get account adjustments from the accounting module
+    $depositTotal = 0;
+    $withdrawTotal = 0;
+    $adjustmentsList = [];
+    
+    if (class_exists('App\Models\AccountAdjustment')) {
+        $query = \App\Models\AccountAdjustment::query()
+            ->with(['account', 'performer']);
+        
+        if ($accountId) {
+            $query->where('account_id', $accountId);
+        }
+        
+        $adjustmentsList = $query->latest('created_at')->get();
+        $depositTotal = $adjustmentsList->where('type', 'deposit')->sum('amount');
+        $withdrawTotal = $adjustmentsList->where('type', 'withdraw')->sum('amount');
+    }
+@endphp
+
+<div class="acc-card mb-3">
+    <div class="card-body p-0">
+        <button class="btn btn-link text-start w-100 p-3" data-bs-toggle="collapse" data-bs-target="#depositWithdrawSummary" style="text-decoration: none; border-bottom: 1px solid var(--acc-line);">
+            <div class="d-flex justify-content-between align-items-center w-100">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="text-primary fs-5">
+                        <i class="bi bi-arrow-left-right"></i>
+                    </div>
+                    <div class="text-start">
+                        <div class="fw-bold text-dark">Hoạt động Nạp/Rút Tiền Tài Khoản</div>
+                        <div class="small text-muted">{{ count($adjustmentsList) }} hoạt động</div>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center gap-4">
+                    <div class="text-end">
+                        <div class="small text-muted fw-semibold">Nạp: <span class="text-success">+{{ number_format($depositTotal) }}đ</span></div>
+                        <div class="small text-muted fw-semibold">Rút: <span class="text-danger">-{{ number_format($withdrawTotal) }}đ</span></div>
+                    </div>
+                    <i class="bi bi-chevron-down" style="transition: transform 0.3s;"></i>
+                </div>
+            </div>
+        </button>
+        
+        <div class="collapse show" id="depositWithdrawSummary">
+            <div style="border-top: 1px solid var(--acc-line);" class="table-responsive">
+                @if(count($adjustmentsList) > 0)
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>#</th>
+                                <th>Thời gian</th>
+                                <th>Người thực hiện</th>
+                                <th>Tài khoản</th>
+                                <th class="text-center">Loại</th>
+                                <th class="text-end">Số tiền</th>
+                                <th class="text-end">Số dư trước</th>
+                                <th class="text-end">Số dư sau</th>
+                                <th>Ghi chú</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        @foreach($adjustmentsList as $adj)
+                            <tr>
+                                <td class="text-muted small">{{ $adj->id }}</td>
+                                <td>
+                                    <div class="fw-semibold small">{{ $adj->created_at->format('d/m/Y') }}</div>
+                                    <div class="text-muted" style="font-size:12px">{{ $adj->created_at->format('H:i:s') }}</div>
+                                </td>
+                                <td>
+                                    <div class="fw-semibold">{{ $adj->performer?->name ?? '—' }}</div>
+                                </td>
+                                <td>
+                                    <div class="fw-semibold">{{ $adj->account?->name ?? '—' }}</div>
+                                    <div class="small text-muted">
+                                        {{ $adj->account?->type === 'cash' ? 'Tiền mặt' : 'Ngân hàng' }}
+                                    </div>
+                                </td>
+                                <td class="text-center">
+                                    @if($adj->type === 'deposit')
+                                        <span class="badge bg-success">
+                                            <i class="bi bi-plus-circle me-1"></i>Nạp tiền
+                                        </span>
+                                    @else
+                                        <span class="badge bg-danger">
+                                            <i class="bi bi-dash-circle me-1"></i>Rút tiền
+                                        </span>
+                                    @endif
+                                </td>
+                                <td class="text-end fw-bold {{ $adj->type === 'deposit' ? 'text-success' : 'text-danger' }}">
+                                    {{ $adj->type === 'deposit' ? '+' : '-' }}{{ number_format((float)$adj->amount) }}đ
+                                </td>
+                                <td class="text-end text-muted">{{ number_format((float)$adj->balance_before) }}đ</td>
+                                <td class="text-end fw-semibold">{{ number_format((float)$adj->balance_after) }}đ</td>
+                                <td class="text-muted small">{{ $adj->note ?? '—' }}</td>
+                            </tr>
+                        @endforeach
+                        </tbody>
+                    </table>
+                @else
+                    <div class="p-4 text-center text-muted">
+                        <i class="bi bi-inbox fs-5 d-block mb-2"></i>
+                        Chưa có hoạt động nạp/rút tiền
+                    </div>
+                @endif
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="acc-card">
     <div class="card-body table-responsive">
         @if(session('success'))
@@ -170,4 +280,30 @@
         {{ $transactions->links() }}
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Handle chevron rotation for deposit/withdraw summary
+    const summaryBtn = document.querySelector('[data-bs-target="#depositWithdrawSummary"]');
+    const summaryCollapse = document.getElementById('depositWithdrawSummary');
+    
+    if (summaryBtn && summaryCollapse) {
+        const chevron = summaryBtn.querySelector('.bi-chevron-down');
+        
+        summaryCollapse.addEventListener('show.bs.collapse', () => {
+            if (chevron) chevron.style.transform = 'rotate(-180deg)';
+        });
+        
+        summaryCollapse.addEventListener('hide.bs.collapse', () => {
+            if (chevron) chevron.style.transform = 'rotate(0deg)';
+        });
+        
+        // Set initial state
+        if (summaryCollapse.classList.contains('show')) {
+            if (chevron) chevron.style.transform = 'rotate(-180deg)';
+        }
+    }
+});
+</script>
+
 @endsection

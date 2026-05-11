@@ -1,14 +1,17 @@
-@extends('layouts.accounting')
+@extends(accounting_layout())
 
 @section('title', 'Chi Tiet Thu Chi')
 @section('subtitle', 'Thong tin day du va duyet giao dich')
 
 @section('accounting_content')
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <a href="{{ route('accounting.cashflow') }}" class="btn btn-outline-secondary btn-sm">
+    <a href="{{ accounting_route('cashflow') }}" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-arrow-left"></i> Quay lai
     </a>
-    <div>
+    <div class="d-flex gap-2 align-items-center">
+        <a href="{{ accounting_route('transactions.edit', $transaction) }}" class="btn btn-outline-warning btn-sm">
+            <i class="bi bi-pencil me-1"></i> Sua giao dich
+        </a>
         @if($transaction->status === \App\Models\Transaction::STATUS_APPROVED)
             <span class="badge text-bg-success">Da duyet</span>
         @elseif($transaction->status === \App\Models\Transaction::STATUS_REJECTED)
@@ -124,7 +127,7 @@
         <div class="acc-card h-100">
             <div class="card-body">
                 <h6 class="mb-3">Duyet giao dich</h6>
-                <form method="POST" action="{{ route('accounting.transactions.approve', $transaction) }}">
+                <form method="POST" action="{{ accounting_route('transactions.approve', $transaction) }}">
                     @csrf
                     <div class="mb-2">
                         <label class="form-label">Ghi chu (tuy chon)</label>
@@ -141,7 +144,7 @@
         <div class="acc-card h-100">
             <div class="card-body">
                 <h6 class="mb-3">Tu choi giao dich</h6>
-                <form method="POST" action="{{ route('accounting.transactions.reject', $transaction) }}">
+                <form method="POST" action="{{ accounting_route('transactions.reject', $transaction) }}">
                     @csrf
                     <div class="mb-2">
                         <label class="form-label">Ly do tu choi <span class="text-danger">*</span></label>

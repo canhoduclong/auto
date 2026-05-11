@@ -102,6 +102,19 @@
         @error('commission_percent') <div class="text-danger small">{{ $message }}</div> @enderror
     </div>
 
+    <div class="col-md-6">
+        <label class="form-label">Mã Code cũ <span class="text-muted small">(hệ thống cũ)</span></label>
+        <input
+            type="text"
+            name="legacy_code"
+            class="form-control"
+            value="{{ old('legacy_code', $customer->legacy_code ?? '') }}"
+            placeholder="Mã từ hệ thống cũ"
+            maxlength="50"
+        >
+        @error('legacy_code') <div class="text-danger small">{{ $message }}</div> @enderror
+    </div>
+
     <div class="col-12">
         <label class="form-label">{{ __('customers.form.note') }}</label>
         <textarea name="note" class="form-control" rows="3">{{ old('note', $customer->note ?? '') }}</textarea>

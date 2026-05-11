@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Company;
 use App\Models\Account;
+use App\Models\AccountBalanceRefreshLog;
 use App\Models\Customer;
 use App\Models\Inventory;
 use App\Models\InventoryDocument;
@@ -11,6 +12,7 @@ use App\Models\InventoryDocumentItem;
 use App\Models\Order;
 use App\Models\OrderAdjustment;
 use App\Models\Transaction;
+use App\Models\TransactionCategory;
 use App\Models\User;
 use App\Models\Warehouse;
 use Carbon\Carbon;
@@ -152,12 +154,13 @@ class AccountingDashboardController extends Controller
     public function cashflow(Request $request)
     {
         [$from, $to, $rangeLabel] = $this->resolveDateRange($request);
-        $type = (string) $request->input('type', '');
+        $categoryId = (int) $request->input('category_id', 0);
         $accountId = (int) $request->input('account_id', 0);
 
         $baseQuery = Transaction::query()
             ->whereBetween('created_at', [$from, $to])
-            ->when($type !== '', fn ($q) => $q->where('type', $type))
+            ->where('status', Transaction::STATUS_APPROVED)
+            ->when($categoryId > 0, fn ($q) => $q->where('transaction_category_id', $categoryId))
             ->when($accountId > 0, fn ($q) => $q->where('account_id', $accountId));
 
         $transactions = (clone $baseQuery)
@@ -173,11 +176,12 @@ class AccountingDashboardController extends Controller
             ->appends($request->query());
 
         $accountSummaries = DB::table('accounts as a')
-            ->leftJoin('transactions as t', function ($join) use ($from, $to, $type) {
+            ->leftJoin('transactions as t', function ($join) use ($from, $to, $categoryId) {
                 $join->on('t.account_id', '=', 'a.id')
-                    ->whereBetween('t.created_at', [$from, $to]);
-                if ($type !== '') {
-                    $join->where('t.type', '=', $type);
+                    ->whereBetween('t.created_at', [$from, $to])
+                    ->where('t.status', '=', Transaction::STATUS_APPROVED);
+                if ($categoryId > 0) {
+                    $join->where('t.transaction_category_id', '=', $categoryId);
                 }
             })
             ->leftJoin('transaction_categories as tc', 'tc.id', '=', 't.transaction_category_id')
@@ -194,11 +198,13 @@ class AccountingDashboardController extends Controller
             'transactions' => $transactions,
             'accounts' => Account::active()->orderBy('name')->get(['id', 'name']),
             'accountId' => $accountId,
+            'categoryId' => $categoryId,
+            'type' => $request->input('type', ''),
+            'transactionCategories' => TransactionCategory::active()->orderBy('sort_order')->get(['id', 'code', 'name', 'flow_direction']),
             'accountSummaries' => $accountSummaries,
             'from' => $from,
             'to' => $to,
             'rangeLabel' => $rangeLabel,
-            'type' => $type,
             'incomeTotal' => (float) (clone $baseQuery)->whereIn('type', ['payment', 'extra_income'])->sum('amount'),
             'expenseTotal' => (float) (clone $baseQuery)->whereIn('type', ['refund', 'fee', 'expense', 'extra_expense'])->sum('amount'),
         ]);
@@ -795,8 +801,19 @@ class AccountingDashboardController extends Controller
         [$from, $to, $rangeLabel] = $this->resolveDateRange($request);
 
         $revenue = (float) Order::query()->whereBetween('created_at', [$from, $to])->sum('total');
-        $received = (float) Transaction::query()->whereBetween('created_at', [$from, $to])->where('type', 'payment')->sum('amount');
-        $cost = (float) Transaction::query()->whereBetween('created_at', [$from, $to])->whereIn('type', ['refund', 'expense'])->sum('amount');
+
+        $received = (float) Transaction::query()
+            ->whereBetween('created_at', [$from, $to])
+            ->where('status', Transaction::STATUS_APPROVED)
+            ->where('type', 'payment')
+            ->sum('amount');
+
+        $cost = (float) Transaction::query()
+            ->whereBetween('created_at', [$from, $to])
+            ->where('status', Transaction::STATUS_APPROVED)
+            ->whereIn('type', ['refund', 'expense'])
+            ->sum('amount');
+
         $profit = $received - $cost;
 
         $series = Transaction::query()
@@ -804,11 +821,64 @@ class AccountingDashboardController extends Controller
             ->selectRaw("SUM(CASE WHEN type = 'payment' THEN amount ELSE 0 END) as income")
             ->selectRaw("SUM(CASE WHEN type IN ('refund', 'expense') THEN amount ELSE 0 END) as expense")
             ->whereBetween('created_at', [$from, $to])
+            ->where('status', Transaction::STATUS_APPROVED)
             ->groupBy('day_key')
             ->orderBy('day_key')
             ->get();
 
-        return view('accounting.financial_reports', compact('revenue', 'received', 'cost', 'profit', 'series', 'from', 'to', 'rangeLabel'));
+        // Transaction by category with customers and accounts
+        $accountFilterId = $request->input('account_id');
+        $catStatsQuery = Transaction::query()
+            ->with([
+                'transactionCategory:id,code,name,flow_direction',
+                'customer:id,name',
+                'account:id,name,type'
+            ])
+            ->whereBetween('created_at', [$from, $to])
+            ->where('status', Transaction::STATUS_APPROVED)
+            ->whereNotNull('transaction_category_id');
+
+        if ($accountFilterId) {
+            $catStatsQuery->where('account_id', $accountFilterId);
+        }
+
+        $allTransactionsByCategory = $catStatsQuery->get();
+
+        // Group and aggregate
+        $catStats = collect();
+        foreach ($allTransactionsByCategory->groupBy('transaction_category_id') as $categoryId => $transactions) {
+            $totalAmount = $transactions->sum('amount');
+            $totalCount = $transactions->count();
+
+            // Get unique customers and accounts for this category
+            $customers = $transactions
+                ->filter(fn($t) => $t->customer_id)
+                ->map(fn($t) => ['id' => $t->customer_id, 'name' => $t->customer?->name ?? 'N/A'])
+                ->unique('id')
+                ->values();
+
+            $accounts = $transactions
+                ->filter(fn($t) => $t->account_id)
+                ->map(fn($t) => ['id' => $t->account_id, 'name' => $t->account?->name ?? 'N/A', 'type' => $t->account?->type ?? 'N/A'])
+                ->unique('id')
+                ->values();
+
+            $catStats->push((object)[
+                'transaction_category_id' => $categoryId,
+                'transactionCategory' => $transactions->first()?->transactionCategory,
+                'total_count' => $totalCount,
+                'total_amount' => $totalAmount,
+                'customers' => $customers,
+                'accounts' => $accounts,
+            ]);
+        }
+
+        $catStats = $catStats->sortByDesc('total_amount')->values();
+
+        // Get available accounts for filter
+        $accounts = Account::active()->orderBy('name')->get(['id', 'name', 'type']);
+
+        return view('accounting.financial_reports', compact('revenue', 'received', 'cost', 'profit', 'series', 'from', 'to', 'rangeLabel', 'catStats', 'accounts', 'accountFilterId'));
     }
 
     private function resolveDateRange(Request $request): array
@@ -858,6 +928,16 @@ class AccountingDashboardController extends Controller
         return view('accounting.transaction_create', compact('transactionCategories', 'accounts'));
     }
 
+    public function transactionEdit(Transaction $transaction)
+    {
+        $transaction->load(['transactionCategory:id,code,name,flow_direction', 'order.customer:id,name', 'customer:id,name', 'account:id,name,type,balance,warning_threshold']);
+
+        $transactionCategories = \App\Models\TransactionCategory::active()->orderBy('sort_order')->get();
+        $accounts = \App\Models\Account::active()->orderBy('name')->get(['id', 'name', 'type', 'balance', 'warning_threshold']);
+
+        return view('accounting.transaction_create', compact('transactionCategories', 'accounts', 'transaction'));
+    }
+
     public function transactionStore(Request $request)
     {
         // Strip thousand-separator formatting from amount
@@ -868,15 +948,19 @@ class AccountingDashboardController extends Controller
             'order_id'        => 'nullable|exists:orders,id',
             'customer_id'     => 'nullable|exists:customers,id',
             'amount'          => 'required|numeric|min:0.01',
-            'type'            => 'required|in:payment,refund,fee,extra_income,extra_expense',
             'expense_type_id' => 'nullable|exists:expense_types,id',
             'payee_user_id'   => 'nullable|exists:users,id',
             'method'          => 'nullable|string|max:50',
-            'transaction_category_id' => 'nullable|exists:transaction_categories,id',
+            'transaction_category_id' => 'required|exists:transaction_categories,id',
             'account_id'      => 'nullable|exists:accounts,id',
             'note'            => 'nullable|string|max:1000',
             'receipt_image'   => 'nullable|image|max:5120',
         ]);
+
+        // Infer 'type' from transaction category's flow_direction
+        $category = \App\Models\TransactionCategory::find($data['transaction_category_id']);
+        $flowDirection = $category?->flow_direction ?? 'out';
+        $data['type'] = $flowDirection === 'in' ? 'payment' : 'refund';
 
         if ($request->hasFile('receipt_image')) {
             $data['receipt_image_path'] = $request->file('receipt_image')->store('transactions/receipts', 'public');
@@ -899,12 +983,50 @@ class AccountingDashboardController extends Controller
                 'approved_at' => now(),
             ]);
             $this->applyTransactionToOrder($transaction);
-            return redirect()->route('accounting.transactions.create')
+            return redirect()->route(accounting_route_name('transactions.create'))
                 ->with('success', 'Da tao va duyet giao dich #' . $transaction->id . ' thanh cong.');
         }
 
-        return redirect()->route('accounting.transactions.create')
+        return redirect()->route(accounting_route_name('transactions.create'))
             ->with('success', 'Da gui giao dich #' . $transaction->id . ' cho quy trinh duyet. Cho cap tren xac nhan.');
+    }
+
+    public function transactionUpdate(Request $request, Transaction $transaction)
+    {
+        $previousAccountId = $transaction->account_id;
+        $previousOrderId = $transaction->order_id;
+
+        $raw = str_replace(['.', ' '], '', $request->input('amount', ''));
+        $request->merge(['amount' => $raw]);
+
+        $data = $request->validate([
+            'order_id'        => 'nullable|exists:orders,id',
+            'customer_id'     => 'nullable|exists:customers,id',
+            'amount'          => 'required|numeric|min:0.01',
+            'expense_type_id' => 'nullable|exists:expense_types,id',
+            'payee_user_id'   => 'nullable|exists:users,id',
+            'method'          => 'nullable|string|max:50',
+            'transaction_category_id' => 'required|exists:transaction_categories,id',
+            'account_id'      => 'nullable|exists:accounts,id',
+            'note'            => 'nullable|string|max:1000',
+            'receipt_image'   => 'nullable|image|max:5120',
+        ]);
+
+        $category = \App\Models\TransactionCategory::find($data['transaction_category_id']);
+        $flowDirection = $category?->flow_direction ?? 'out';
+        $data['type'] = $flowDirection === 'in' ? 'payment' : 'refund';
+
+        if ($request->hasFile('receipt_image')) {
+            $data['receipt_image_path'] = $request->file('receipt_image')->store('transactions/receipts', 'public');
+        }
+        unset($data['receipt_image']);
+
+        $transaction->update($data);
+
+        $this->syncTransactionAccountingState($transaction, $previousAccountId, $previousOrderId);
+
+        return redirect()->route(accounting_route_name('cashflow.show'), $transaction)
+            ->with('success', 'Đã cập nhật giao dịch #' . $transaction->id . '.');
     }
 
     public function transactionApprove(Request $request, Transaction $transaction)
@@ -1122,15 +1244,80 @@ class AccountingDashboardController extends Controller
 
     private function applyTransactionToOrder(Transaction $transaction): void
     {
-        if (!$transaction->order_id) {
+        if ($transaction->status !== Transaction::STATUS_APPROVED) {
+            return;
+        }
+        if ($transaction->account_id) {
+            $this->refreshAccountBalanceById((int) $transaction->account_id);
+        }
+
+        if ($transaction->order_id) {
+            $this->refreshOrderFinancialState($transaction->order);
+        }
+    }
+
+    private function syncTransactionAccountingState(Transaction $transaction, ?int $previousAccountId = null, ?int $previousOrderId = null): void
+    {
+        if ($transaction->status !== Transaction::STATUS_APPROVED) {
+            if ($previousOrderId && $previousOrderId !== $transaction->order_id) {
+                $previousOrder = Order::query()->find($previousOrderId);
+                if ($previousOrder) {
+                    $this->refreshOrderFinancialState($previousOrder);
+                }
+            }
+
             return;
         }
 
-        $order = $transaction->order;
-        if (!$order) {
+        collect([$previousAccountId, $transaction->account_id])
+            ->filter(fn ($accountId) => (int) $accountId > 0)
+            ->unique()
+            ->each(function ($accountId) {
+                $this->refreshAccountBalanceById((int) $accountId);
+            });
+
+        collect([$previousOrderId, $transaction->order_id])
+            ->filter(fn ($orderId) => (int) $orderId > 0)
+            ->unique()
+            ->each(function ($orderId) {
+                $order = Order::query()->find((int) $orderId);
+                if ($order) {
+                    $this->refreshOrderFinancialState($order);
+                }
+            });
+    }
+
+    private function refreshAccountBalanceById(int $accountId): void
+    {
+        $account = Account::query()->find($accountId);
+        if (!$account) {
             return;
         }
 
+        $openingBalance = (float) ($account->opening_balance ?? 0);
+        $allTransactions = Transaction::query()
+            ->with('transactionCategory:id,flow_direction')
+            ->where('account_id', $account->id)
+            ->where('status', Transaction::STATUS_APPROVED)
+            ->get(['id', 'amount', 'type', 'transaction_category_id']);
+
+        $txnNet = (float) 0;
+        foreach ($allTransactions as $txn) {
+            $flowDirection = $txn->transactionCategory?->flow_direction
+                ?? (in_array((string) $txn->type, ['payment', 'extra_income'], true) ? 'in' : 'out');
+
+            if ($flowDirection === 'in') {
+                $txnNet += (float) $txn->amount;
+            } else {
+                $txnNet -= (float) $txn->amount;
+            }
+        }
+
+        $account->update(['balance' => $openingBalance + $txnNet]);
+    }
+
+    private function refreshOrderFinancialState(Order $order): void
+    {
         $totalPaid = (float) $order->transactions()->where('status', Transaction::STATUS_APPROVED)->where('type', 'payment')->sum('amount')
                    - (float) $order->transactions()->where('status', Transaction::STATUS_APPROVED)->where('type', 'refund')->sum('amount');
 
@@ -1196,6 +1383,138 @@ class AccountingDashboardController extends Controller
             'commission_amount_snapshot' => $commissionAmount,
             'commission_created_at' => now(),
         ])->save();
+    }
+
+    public function apiReconcileAccountBalances(Request $request)
+    {
+        $accountId = $request->input('account_id');
+        $fromDate = $request->input('from_date');
+        $toDate = $request->input('to_date');
+
+        $accountsToReconcile = $accountId
+            ? Account::query()->where('id', $accountId)->get()
+            : Account::query()->where('is_active', true)->get();
+
+        $reconciliationResults = [];
+        $totalUpdated = 0;
+        $totalAmount = 0;
+
+        DB::transaction(function () use (
+            $accountsToReconcile,
+            &$reconciliationResults,
+            &$totalUpdated,
+            &$totalAmount,
+            $accountId,
+            $fromDate,
+            $toDate
+        ) {
+            foreach ($accountsToReconcile as $account) {
+                $oldBalance = (float) $account->balance;
+                // opening_balance is the anchor: initial + manual deposits/withdrawals (NOT from transactions)
+                $openingBalance = (float) ($account->opening_balance ?? 0);
+
+                // Calculate transaction net from ALL approved transactions (no date filter)
+                $allTransactions = Transaction::query()
+                    ->with('transactionCategory:id,flow_direction')
+                    ->where('account_id', $account->id)
+                    ->where('status', Transaction::STATUS_APPROVED)
+                    ->get(['id', 'amount', 'type', 'transaction_category_id']);
+
+                $txnNet = (float) 0;
+                foreach ($allTransactions as $txn) {
+                    $flowDirection = $txn->transactionCategory?->flow_direction
+                        ?? (in_array((string) $txn->type, ['payment', 'extra_income'], true) ? 'in' : 'out');
+
+                    if ($flowDirection === 'in') {
+                        $txnNet += (float) $txn->amount;
+                    } else {
+                        $txnNet -= (float) $txn->amount;
+                    }
+                }
+
+                // Correct balance = opening balance + net of all approved transactions
+                $calculatedBalance = $openingBalance + $txnNet;
+
+                $difference = $calculatedBalance - $oldBalance;
+                $hasDiscrepancy = abs($difference) > 0.01; // Allow 1 cent tolerance
+
+                if ($hasDiscrepancy) {
+                    $account->update(['balance' => $calculatedBalance]);
+                    $totalUpdated++;
+                    $totalAmount += abs($difference);
+                }
+
+                $reconciliationResults[] = [
+                    'account_id' => $account->id,
+                    'account_name' => $account->name,
+                    'account_type' => $account->type,
+                    'opening_balance' => $openingBalance,
+                    'txn_net' => $txnNet,
+                    'old_balance' => $oldBalance,
+                    'calculated_balance' => $calculatedBalance,
+                    'difference' => $difference,
+                    'transaction_count' => $allTransactions->count(),
+                    'updated' => $hasDiscrepancy,
+                ];
+            }
+
+            AccountBalanceRefreshLog::create([
+                'refreshed_by' => auth()->id(),
+                'filter_account_id' => $accountId ?: null,
+                'from_date' => $fromDate ?: null,
+                'to_date' => $toDate ?: null,
+                'accounts_reconciled' => count($accountsToReconcile),
+                'accounts_updated' => $totalUpdated,
+                'total_amount_adjusted' => $totalAmount,
+                'results_json' => $reconciliationResults,
+            ]);
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => "Da kiem tra va cap nhat " . $totalUpdated . " tai khoan. Tong sai khac: " . number_format($totalAmount) . "d",
+            'accounts_reconciled' => count($accountsToReconcile),
+            'accounts_updated' => $totalUpdated,
+            'total_amount_adjusted' => $totalAmount,
+            'results' => $reconciliationResults,
+        ]);
+    }
+
+    public function refreshHistory(Request $request)
+    {
+        $accountId = (int) $request->input('account_id', 0);
+        $fromDate = (string) $request->input('from_date', '');
+        $toDate = (string) $request->input('to_date', '');
+
+        $query = AccountBalanceRefreshLog::query()
+            ->with([
+                'performer:id,name',
+                'filterAccount:id,name,type',
+            ])
+            ->latest();
+
+        if ($accountId > 0) {
+            $query->where('filter_account_id', $accountId);
+        }
+
+        if ($fromDate !== '') {
+            $query->whereDate('created_at', '>=', $fromDate);
+        }
+
+        if ($toDate !== '') {
+            $query->whereDate('created_at', '<=', $toDate);
+        }
+
+        $runs = $query->paginate(20)->appends($request->query());
+        $accounts = Account::active()->orderBy('name')->get(['id', 'name', 'type']);
+
+        return view('accounting.refresh_history', [
+            'runs' => $runs,
+            'accounts' => $accounts,
+            'accountId' => $accountId,
+            'fromDate' => $fromDate,
+            'toDate' => $toDate,
+        ]);
     }
 }
 

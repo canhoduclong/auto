@@ -13,14 +13,15 @@
 @endpush
 
 @section('content')
-<div class="content-wrapper">
+<div class="content-wrapper container">
 <div class="content-header d-flex align-items-center py-3 px-4">
-    <a href="{{ route($indexRoute ?? 'task-assignments.index') }}" class="btn btn-sm btn-outline-secondary me-3">
-        <i class="ph-arrow-left"></i>
+    
+    <a href="{{ route('task-assignments.my-tasks') }}" class="btn btn-sm btn-outline-secondary me-3">
+        <i class="ph ph-arrow-left"></i>
     </a>
     <div>
-        <h4 class="mb-0">Tao Cong Viec Moi</h4>
-        <small class="text-muted">Dien thong tin va chon quy trinh phe duyet</small>
+        <h4 class="mb-0">Tạo công việc mới</h4>
+        <small class="text-muted">Điền thông tin và chọn quy trình phê duyệt</small>
     </div>
 </div>
 
@@ -41,21 +42,21 @@
                     <div class="card-body">
 
                         <div class="mb-3">
-                            <label class="form-label fw-semibold">Tieu de cong viec <span class="text-danger">*</span></label>
+                            <label class="form-label fw-semibold">Tiêu đề công việc <span class="text-danger">*</span></label>
                             <input type="text" name="title" class="form-control @error('title') is-invalid @enderror"
                                    value="{{ old('title') }}" maxlength="255" placeholder="Nham tat, mo ta ngan gon...">
                             @error('title')<div class="invalid-feedback">{{ $message }}</div>@enderror
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label fw-semibold">Mo ta chi tiet</label>
+                            <label class="form-label fw-semibold">Mô tả chi tiết</label>
                             <textarea name="description" class="form-control" rows="5" maxlength="5000"
-                                      placeholder="Ghi ro yeu cau, ket qua can dat, ghi chu...">{{ old('description') }}</textarea>
+                                      placeholder="Ghi rõ yêu cầu, kết quả cần đạt, ghi chú...">{{ old('description') }}</textarea>
                         </div>
 
                         <div class="row g-3 mb-3">
                             <div class="col-sm-6">
-                                <label class="form-label fw-semibold">Muc uu tien <span class="text-danger">*</span></label>
+                                <label class="form-label fw-semibold">Mức ưu tiên <span class="text-danger">*</span></label>
                                 <select name="priority" class="form-select">
                                     @foreach(\App\Models\TaskAssignment::PRIORITY_LABELS as $v => $l)
                                         <option value="{{ $v }}" {{ old('priority', 'medium') == $v ? 'selected' : '' }}>
@@ -65,7 +66,7 @@
                                 </select>
                             </div>
                             <div class="col-sm-6">
-                                <label class="form-label fw-semibold">Han chot</label>
+                                <label class="form-label fw-semibold">Hạn chót</label>
                                 <input type="datetime-local" name="due_date" id="due_date_input" class="form-control"
                                        value="{{ old('due_date') ? \Carbon\Carbon::parse(old('due_date'))->format('Y-m-d\\TH:i') : '' }}"
                                        step="60">
@@ -74,9 +75,9 @@
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label fw-semibold">Cong viec cha <span class="text-muted small">(tuy chon — de tao cong viec con)</span></label>
+                            <label class="form-label fw-semibold">Công việc cha <span class="text-muted small">(tùy chọn — để tạo công việc con)</span></label>
                             <select name="parent_id" class="form-select">
-                                <option value="">-- Khong co --</option>
+                                <option value="">-- Không có --</option>
                                 @foreach(\App\Models\TaskAssignment::where('status', '!=', 'completed')
                                     ->where('status', '!=', 'cancelled')
                                     ->where('created_by', auth()->id())
@@ -92,13 +93,13 @@
                         @if($allowedAssignees->isNotEmpty())
                         <div class="mb-3">
                             <label class="form-label fw-semibold">
-                                <i class="ph-users me-1 text-primary"></i>Giao viec cho thanh vien
+                                <i class="ph-users me-1 text-primary"></i>Giao việc cho thành viên
                                 <span class="badge bg-primary ms-1">Custom</span>
                             </label>
                             <div class="border rounded p-3" style="background:#f8fafc">
                                 <p class="small text-muted mb-3">
-                                    Ban duoc phep giao truc tiep cho cac thanh vien sau. Co the chon nhieu nguoi.
-                                    Cong viec hoan thanh khi <strong>tat ca</strong> nguoi nhan bao cao xong.
+                                    Bạn được phép giao trực tiếp cho các thành viên sau. Có thể chọn nhiều người.
+                                    Công việc hoàn thành khi <strong>tất cả</strong> người nhận báo cáo xong.
                                 </p>
                                 <div class="row g-2">
                                     @foreach($allowedAssignees as $au)
@@ -118,7 +119,7 @@
                         @endif
 
                         <div class="mb-3">
-                            <label class="form-label fw-semibold">Dinh kem <span class="text-muted small">(anh, PDF, doc — toi da 10MB moi file)</span></label>
+                            <label class="form-label fw-semibold">Đính kèm <span class="text-muted small">(ảnh, PDF, doc — tối đa 10MB mỗi file)</span></label>
                             <input type="file" name="attachments[]" class="form-control" multiple accept="image/*,.pdf,.doc,.docx,.xlsx,.zip">
                         </div>
                     </div>
@@ -129,10 +130,10 @@
             <div class="col-lg-4">
                 <div class="card shadow-sm">
                     <div class="card-header py-2">
-                        <span class="fw-semibold"><i class="ph-flow-arrow me-1"></i>Quy trinh phe duyet</span>
+                        <span class="fw-semibold"><i class="ph-flow-arrow me-1"></i>Quy trình phê duyệt</span>
                     </div>
                     <div class="card-body">
-                        <p class="small text-muted mb-3">Chon quy trinh cho cong viec nay. Thanh vien tuong ung trong tung buoc se phe duyet de hoan thanh cong viec.</p>
+                        <p class="small text-muted mb-3">Chọn quy trình cho công việc này. Thành viên tương ứng trong từng bước sẽ phê duyệt để hoàn thành công việc.</p>
 
                         @forelse($workflows as $wf)
                             <label class="wf-card mb-2 d-block {{ old('approval_flow_id') == $wf->id ? 'selected' : '' }}"
@@ -149,21 +150,21 @@
                                 </div>
                             </label>
                         @empty
-                            <div class="text-muted small">Chua co quy trinh nao duoc cau hinh cho hoat dong "Giao viec". Hay vao <a href="{{ route('approval-workflows.create') }}">Quy trinh duyet</a> de tao.</div>
+                            <div class="text-muted small mb-3">Chưa có quy trình nào được cấu hình cho hoạt động "Giao việc". Hãy vào <a href="{{ route('approval-workflows.create') }}">Quy trình duyệt</a> để tạo.</div>
                         @endforelse
 
                         <label class="wf-card mb-2 d-block {{ old('approval_flow_id') === '' && !old('approval_flow_id') ? '' : '' }}"
                                id="wfl-none" onclick="selectWf(null)">
                             <input type="radio" name="approval_flow_id" value="" class="d-none">
-                            <div class="fw-semibold" style="font-size:13px">Khong can phe duyet</div>
-                            <div class="text-muted" style="font-size:11px">Cong viec se chuyen sang trang thai dang thuc hien ngay.</div>
+                            <div class="fw-semibold" style="font-size:13px">Không cần phê duyệt</div>
+                            <div class="text-muted" style="font-size:11px">Công việc sẽ chuyển sang trạng thái đang thực hiện ngay.</div>
                         </label>
                     </div>
                 </div>
 
                 <div class="mt-3 d-grid gap-2">
                     <button type="submit" class="btn btn-primary">
-                        <i class="ph-paper-plane-tilt me-1"></i>Tao va gui phe duyet
+                        <i class="ph-paper-plane-tilt me-1"></i>Lưu lại
                     </button>
                     <a href="{{ route($indexRoute ?? 'task-assignments.index') }}" class="btn btn-outline-secondary">Huy</a>
                 </div>

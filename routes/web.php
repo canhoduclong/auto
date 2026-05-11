@@ -131,6 +131,8 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/customer-debts', [AccountingDashboardController::class, 'customerDebts'])->name('customer-debts');
         Route::get('/supplier-debts', [AccountingDashboardController::class, 'supplierDebts'])->name('supplier-debts');
         Route::get('/cashflow', [AccountingDashboardController::class, 'cashflow'])->name('cashflow');
+        Route::get('/cashflow/refresh-history', [AccountingDashboardController::class, 'refreshHistory'])->name('refresh-history');
+        Route::get('/cashflow/{transaction}/edit', [AccountingDashboardController::class, 'transactionEdit'])->name('transactions.edit');
         Route::get('/cashflow/{transaction}', [AccountingDashboardController::class, 'cashflowShow'])->name('cashflow.show');
         Route::get('/reconciliation', [AccountingDashboardController::class, 'reconciliation'])->name('reconciliation');
         Route::get('/inventory', [AccountingDashboardController::class, 'inventory'])->name('inventory');
@@ -143,12 +145,14 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/financial-reports', [AccountingDashboardController::class, 'financialReports'])->name('financial-reports');
         Route::get('/transactions/create', [AccountingDashboardController::class, 'transactionCreate'])->name('transactions.create');
         Route::post('/transactions', [AccountingDashboardController::class, 'transactionStore'])->name('transactions.store');
+        Route::put('/transactions/{transaction}', [AccountingDashboardController::class, 'transactionUpdate'])->name('transactions.update');
         Route::post('/transactions/{transaction}/approve', [AccountingDashboardController::class, 'transactionApprove'])->name('transactions.approve');
         Route::post('/transactions/{transaction}/reject', [AccountingDashboardController::class, 'transactionReject'])->name('transactions.reject');
         Route::get('/api/orders-list', [AccountingDashboardController::class, 'apiOrdersList'])->name('api.orders-list');
         Route::get('/api/customers-list', [AccountingDashboardController::class, 'apiCustomersList'])->name('api.customers-list');
         Route::get('/api/order-detail/{order}', [AccountingDashboardController::class, 'apiOrderDetail'])->name('api.order-detail');
         Route::get('/api/customer-detail/{customer}', [AccountingDashboardController::class, 'apiCustomerDetail'])->name('api.customer-detail');
+        Route::post('/api/reconcile-account-balances', [AccountingDashboardController::class, 'apiReconcileAccountBalances'])->name('api.reconcile-account-balances');
         // Transaction categories
         Route::get('/transaction-categories', [\App\Http\Controllers\TransactionCategoryController::class, 'index'])->name('transaction-categories.index');
         Route::post('/transaction-categories', [\App\Http\Controllers\TransactionCategoryController::class, 'store'])->name('transaction-categories.store');
@@ -157,6 +161,37 @@ Route::middleware(['auth', 'assigned'])->group(function () {
 
         // Accounts management
         Route::get('/accounts', [\App\Http\Controllers\AccountController::class, 'index'])->name('accounts.index');
+        Route::get('/accounts/adjustments', [\App\Http\Controllers\AccountController::class, 'adjustmentHistory'])->name('accounts.adjustments');
+        Route::get('/accounts/create', [\App\Http\Controllers\AccountController::class, 'create'])->name('accounts.create');
+        Route::post('/accounts', [\App\Http\Controllers\AccountController::class, 'store'])->name('accounts.store');
+        Route::get('/accounts/{account}/edit', [\App\Http\Controllers\AccountController::class, 'edit'])->name('accounts.edit');
+        Route::put('/accounts/{account}', [\App\Http\Controllers\AccountController::class, 'update'])->name('accounts.update');
+        Route::post('/accounts/{account}/deposit', [\App\Http\Controllers\AccountController::class, 'deposit'])->name('accounts.deposit');
+        Route::post('/accounts/{account}/withdraw', [\App\Http\Controllers\AccountController::class, 'withdraw'])->name('accounts.withdraw');
+    });
+
+    Route::prefix('admin/accounting')->name('admin.accounting.')->middleware('role:admin')->group(function () {
+        Route::get('/cashflow', [AccountingDashboardController::class, 'cashflow'])->name('cashflow');
+        Route::get('/cashflow/refresh-history', [AccountingDashboardController::class, 'refreshHistory'])->name('refresh-history');
+        Route::get('/cashflow/{transaction}/edit', [AccountingDashboardController::class, 'transactionEdit'])->name('transactions.edit');
+        Route::get('/cashflow/{transaction}', [AccountingDashboardController::class, 'cashflowShow'])->name('cashflow.show');
+        Route::get('/financial-reports', [AccountingDashboardController::class, 'financialReports'])->name('financial-reports');
+        Route::get('/transactions/create', [AccountingDashboardController::class, 'transactionCreate'])->name('transactions.create');
+        Route::post('/transactions', [AccountingDashboardController::class, 'transactionStore'])->name('transactions.store');
+        Route::put('/transactions/{transaction}', [AccountingDashboardController::class, 'transactionUpdate'])->name('transactions.update');
+        Route::post('/transactions/{transaction}/approve', [AccountingDashboardController::class, 'transactionApprove'])->name('transactions.approve');
+        Route::post('/transactions/{transaction}/reject', [AccountingDashboardController::class, 'transactionReject'])->name('transactions.reject');
+        Route::get('/api/orders-list', [AccountingDashboardController::class, 'apiOrdersList'])->name('api.orders-list');
+        Route::get('/api/customers-list', [AccountingDashboardController::class, 'apiCustomersList'])->name('api.customers-list');
+        Route::get('/api/order-detail/{order}', [AccountingDashboardController::class, 'apiOrderDetail'])->name('api.order-detail');
+        Route::get('/api/customer-detail/{customer}', [AccountingDashboardController::class, 'apiCustomerDetail'])->name('api.customer-detail');
+        Route::post('/api/reconcile-account-balances', [AccountingDashboardController::class, 'apiReconcileAccountBalances'])->name('api.reconcile-account-balances');
+        Route::get('/transaction-categories', [\App\Http\Controllers\TransactionCategoryController::class, 'index'])->name('transaction-categories.index');
+        Route::post('/transaction-categories', [\App\Http\Controllers\TransactionCategoryController::class, 'store'])->name('transaction-categories.store');
+        Route::put('/transaction-categories/{transactionCategory}', [\App\Http\Controllers\TransactionCategoryController::class, 'update'])->name('transaction-categories.update');
+        Route::post('/transaction-categories/{transactionCategory}/toggle-active', [\App\Http\Controllers\TransactionCategoryController::class, 'toggleActive'])->name('transaction-categories.toggle-active');
+        Route::get('/accounts', [\App\Http\Controllers\AccountController::class, 'index'])->name('accounts.index');
+        Route::get('/accounts/adjustments', [\App\Http\Controllers\AccountController::class, 'adjustmentHistory'])->name('accounts.adjustments');
         Route::get('/accounts/create', [\App\Http\Controllers\AccountController::class, 'create'])->name('accounts.create');
         Route::post('/accounts', [\App\Http\Controllers\AccountController::class, 'store'])->name('accounts.store');
         Route::get('/accounts/{account}/edit', [\App\Http\Controllers\AccountController::class, 'edit'])->name('accounts.edit');

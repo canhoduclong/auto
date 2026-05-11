@@ -16,7 +16,7 @@
 <div class="content-wrapper">
 <div class="content-header d-flex align-items-center py-3 px-4">
     <a href="{{ route('task-delegate-configs.index') }}" class="btn btn-sm btn-outline-secondary me-3">
-        <i class="ph-arrow-left"></i>
+        <i class="ph ph-arrow-left"></i>
     </a>
     <div>
         <h4 class="mb-0">Them Phan Quyen Giao Viec</h4>

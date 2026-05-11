@@ -8,11 +8,12 @@ class Account extends Model
 {
     protected $fillable = [
         'name', 'type', 'owner_type', 'owner_name', 'account_number', 'bank_name',
-        'balance', 'warning_threshold', 'is_active', 'note',
+        'balance', 'opening_balance', 'warning_threshold', 'is_active', 'note',
     ];
 
     protected $casts = [
         'balance' => 'decimal:2',
+        'opening_balance' => 'decimal:2',
         'warning_threshold' => 'decimal:2',
         'is_active' => 'boolean',
     ];

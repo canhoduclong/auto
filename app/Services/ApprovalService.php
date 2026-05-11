@@ -323,7 +323,7 @@ class ApprovalService
 
             foreach ($sortedSteps as $step) {
                 ApprovalOrder::create([
-                    'order_id' => $transaction->order_id ?? 0,
+                    'order_id' => $transaction->order_id ?: null,
                     'transaction_id' => $transaction->id,
                     'approval_step_id' => $step->id,
                     'status' => 'pending',

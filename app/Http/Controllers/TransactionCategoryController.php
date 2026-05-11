@@ -35,7 +35,7 @@ class TransactionCategoryController extends Controller
             ]);
         }
 
-        return redirect()->route('accounting.transaction-categories.index')->with('success', 'Đã thêm danh mục giao dịch.');
+        return redirect()->route(accounting_route_name('transaction-categories.index'))->with('success', 'Đã thêm danh mục giao dịch.');
     }
 
     public function update(Request $request, TransactionCategory $transactionCategory)
@@ -50,13 +50,13 @@ class TransactionCategoryController extends Controller
 
         $transactionCategory->update($data);
 
-        return redirect()->route('accounting.transaction-categories.index')->with('success', 'Đã cập nhật danh mục giao dịch.');
+        return redirect()->route(accounting_route_name('transaction-categories.index'))->with('success', 'Đã cập nhật danh mục giao dịch.');
     }
 
     public function toggleActive(TransactionCategory $transactionCategory)
     {
         $transactionCategory->update(['is_active' => ! $transactionCategory->is_active]);
 
-        return redirect()->route('accounting.transaction-categories.index')->with('success', 'Đã cập nhật trạng thái danh mục.');
+        return redirect()->route(accounting_route_name('transaction-categories.index'))->with('success', 'Đã cập nhật trạng thái danh mục.');
     }
 }

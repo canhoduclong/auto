@@ -1,28 +1,17 @@
-@extends('layouts.accounting')
+@extends(accounting_layout())
 
-@section('title', 'Tao Giao Dich')
-@section('subtitle', 'Ghi nhan thu chi, thanh toan, hoan tien')
+@php
+    $editingTransaction = $transaction ?? null;
+@endphp
+
+@section('title', $editingTransaction ? 'Sua Giao Dich' : 'Tao Giao Dich')
+@section('subtitle', $editingTransaction ? 'Chinh sua thu chi, thanh toan, hoan tien' : 'Ghi nhan thu chi, thanh toan, hoan tien')
 
 @push('styles')
 <style>
 /* ── layout ─────────────────────────────────────────── */
 .txn-shell { display: grid; grid-template-columns: 1fr 400px; gap: 20px; align-items: start; }
 @media (max-width: 1100px) { .txn-shell { grid-template-columns: 1fr; } }
-
-/* ── type selector ───────────────────────────────────── */
-.txn-type-grid { display: grid; grid-template-columns: repeat(5,1fr); gap: 8px; }
-@media (max-width: 700px) { .txn-type-grid { grid-template-columns: repeat(3,1fr); } }
-.txn-type-btn {
-    border: 2px solid #e2e8f0; border-radius: 10px; padding: 10px 6px;
-    text-align: center; cursor: pointer; transition: all .14s;
-    background:#fff; font-size:12px; user-select:none;
-}
-.txn-type-btn:hover { border-color: #94a3b8; background:#f8fafc; }
-.txn-type-btn.sel-payment     { border-color:#22c55e; background:#f0fdf4; color:#15803d; }
-.txn-type-btn.sel-refund      { border-color:#ef4444; background:#fef2f2; color:#b91c1c; }
-.txn-type-btn.sel-fee         { border-color:#f59e0b; background:#fffbeb; color:#b45309; }
-.txn-type-btn.sel-extra_income  { border-color:#06b6d4; background:#ecfeff; color:#0e7490; }
-.txn-type-btn.sel-extra_expense { border-color:#8b5cf6; background:#f5f3ff; color:#6d28d9; }
 
 /* ── entity card ─────────────────────────────────────── */
 .entity-card {
@@ -55,44 +44,26 @@
     <div>
         <div class="acc-card mb-3">
             <div class="card-body">
-                <div class="fw-bold mb-4 fs-6"><i class="bi bi-plus-circle me-2 text-primary"></i>Tao giao dich moi</div>
+                <div class="fw-bold mb-4 fs-6">
+                    <i class="bi bi-plus-circle me-2 text-primary"></i>
+                    {{ $editingTransaction ? 'Chinh sua giao dich' : 'Tao giao dich moi' }}
+                </div>
 
-                <form id="txnForm" action="{{ route('accounting.transactions.store') }}" method="POST" enctype="multipart/form-data">
+                <form id="txnForm" action="{{ $editingTransaction ? accounting_route('transactions.update', $editingTransaction) : accounting_route('transactions.store') }}" method="POST" enctype="multipart/form-data">
                     @csrf
+                    @if($editingTransaction)
+                        @method('PUT')
+                    @endif
                     <input type="hidden" name="order_id"    id="f_order_id">
                     <input type="hidden" name="customer_id" id="f_customer_id">
 
-                    {{-- type --}}
+                    {{-- transaction category (required) --}}
                     <div class="mb-4">
-                        <label class="form-label fw-semibold small text-uppercase text-muted ls-1">Loai giao dich <span class="text-danger">*</span></label>
-                        <div class="txn-type-grid">
-                            @foreach([
-                                ['payment',       'bi-cash-coin',        'Thanh toan',   'Thu tien'],
-                                ['refund',        'bi-arrow-return-left','Hoan tien',    'Tra lai'],
-                                ['fee',           'bi-receipt',          'Phi DV',       'Phi ship/PS'],
-                                ['extra_income',  'bi-graph-up-arrow',   'Thu them',     'Ngoai don'],
-                                ['extra_expense', 'bi-graph-down-arrow', 'Chi them',     'Ngoai don'],
-                            ] as [$val, $icon, $label, $desc])
-                                <label class="txn-type-btn {{ old('type')===$val ? 'sel-'.$val : '' }}"
-                                       id="tl-{{ $val }}" onclick="selectType('{{ $val }}')">
-                                    <input type="radio" name="type" value="{{ $val }}"
-                                           {{ old('type')===$val ? 'checked' : '' }} class="d-none">
-                                    <div><i class="bi {{ $icon }} fs-5"></i></div>
-                                    <div class="fw-semibold mt-1">{{ $label }}</div>
-                                    <div class="text-muted" style="font-size:10px">{{ $desc }}</div>
-                                </label>
-                            @endforeach
-                        </div>
-                        @error('type')<div class="text-danger small mt-1">{{ $message }}</div>@enderror
-                    </div>
-
-                    {{-- transaction category --}}
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold small text-uppercase text-muted">Danh mục giao dịch</label>
-                        <input type="hidden" name="transaction_category_id" id="f_cat_id" value="{{ old('transaction_category_id') }}">
+                        <label class="form-label fw-semibold small text-uppercase text-muted ls-1">Danh mục giao dịch <span class="text-danger">*</span></label>
+                        <input type="hidden" name="transaction_category_id" id="f_cat_id" value="{{ old('transaction_category_id', $editingTransaction?->transaction_category_id) }}">
                         <div class="input-group">
-                            <input type="text" id="f_cat_display" class="form-control" readonly placeholder="-- Chọn danh mục --"
-                                   value="{{ old('transaction_category_id') ? \App\Models\TransactionCategory::find(old('transaction_category_id'))?->name : '' }}"
+                            <input type="text" id="f_cat_display" class="form-control @error('transaction_category_id') is-invalid @enderror" readonly placeholder="-- Chọn danh mục --"
+                            value="{{ old('transaction_category_id', $editingTransaction?->transaction_category_id) ? (old('transaction_category_id') ? \App\Models\TransactionCategory::find(old('transaction_category_id'))?->name : $editingTransaction?->transactionCategory?->name) : '' }}"
                                    style="cursor:pointer;background:#fff" onclick="openCategoryPopup()">
                             <button type="button" class="btn btn-outline-primary" onclick="openCategoryPopup()">
                                 <i class="bi bi-grid-3x3-gap"></i>
@@ -101,6 +72,7 @@
                                 <i class="bi bi-x-lg"></i>
                             </button>
                         </div>
+                        @error('transaction_category_id')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
                     </div>
 
                     {{-- account --}}
@@ -109,8 +81,10 @@
                         <select name="account_id" id="f_account_id" class="form-select">
                             <option value="">-- Không chọn --</option>
                             @foreach($accounts as $acc)
-                                @php $low = (float)$acc->balance < (float)$acc->warning_threshold; @endphp
-                                <option value="{{ $acc->id }}" {{ old('account_id') == $acc->id ? 'selected' : '' }}
+                                @php
+                                    $low = (float) $acc->balance < (float) $acc->warning_threshold;
+                                @endphp
+                                <option value="{{ $acc->id }}" {{ old('account_id', $editingTransaction?->account_id) == $acc->id ? 'selected' : '' }}
                                         style="{{ $low ? 'color:#dc3545' : '' }}">
                                     {{ $acc->name }}
                                     ({{ $acc->type === 'cash' ? 'Tiền mặt' : 'Ngân hàng' }})
@@ -166,7 +140,7 @@
                             <label class="form-label fw-semibold">So tien (VND) <span class="text-danger">*</span></label>
                             <input type="number" name="amount" id="f_amount"
                                    class="form-control @error('amount') is-invalid @enderror"
-                                   value="{{ old('amount') }}" min="0" step="1000" placeholder="0">
+                                   value="{{ old('amount', $editingTransaction?->amount) }}" min="0" step="1000" placeholder="0">
                             @error('amount')<div class="invalid-feedback">{{ $message }}</div>@enderror
                         </div>
                         <div class="col-sm-6">
@@ -174,7 +148,7 @@
                             <select name="method" class="form-select">
                                 <option value="">-- Chon --</option>
                                 @foreach(['cash'=>'Tien mat','bank_transfer'=>'Chuyen khoan','momo'=>'MoMo','zalo_pay'=>'ZaloPay','other'=>'Khac'] as $v=>$l)
-                                    <option value="{{ $v }}" {{ old('method')===$v ? 'selected':'' }}>{{ $l }}</option>
+                                    <option value="{{ $v }}" {{ old('method', $editingTransaction?->method) === $v ? 'selected':'' }}>{{ $l }}</option>
                                 @endforeach
                             </select>
                         </div>
@@ -183,7 +157,7 @@
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Ghi chu</label>
                         <textarea name="note" class="form-control" rows="2" maxlength="1000"
-                                  placeholder="Mo ta giao dich...">{{ old('note') }}</textarea>
+                                  placeholder="Mo ta giao dich...">{{ old('note', $editingTransaction?->note) }}</textarea>
                     </div>
 
                     <div class="mb-4">
@@ -194,9 +168,9 @@
 
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-primary px-4">
-                            <i class="bi bi-send me-1"></i>Gui phe duyet
+                            <i class="bi bi-send me-1"></i>{{ $editingTransaction ? 'Cap nhat giao dich' : 'Gui phe duyet' }}
                         </button>
-                        <a href="{{ route('accounting.cashflow') }}" class="btn btn-outline-secondary">Huy</a>
+                        <a href="{{ accounting_route('cashflow') }}" class="btn btn-outline-secondary">Huy</a>
                     </div>
                 </form>
             </div>
@@ -240,7 +214,7 @@
 
                         @if($canAct)
                             <div class="d-flex gap-1 mt-2">
-                                <form action="{{ route('accounting.transactions.approve', $txn) }}" method="POST" class="flex-grow-1">
+                                <form action="{{ accounting_route('transactions.approve', $txn) }}" method="POST" class="flex-grow-1">
                                     @csrf
                                     <button type="submit" class="btn btn-success btn-sm w-100"
                                             onclick="return confirm('Duyet giao dich #{{ $txn->id }}?')">
@@ -258,7 +232,7 @@
                     @if($canAct)
                     <div class="modal fade" id="rejectTxnModal{{ $txn->id }}" tabindex="-1">
                         <div class="modal-dialog modal-sm">
-                            <form action="{{ route('accounting.transactions.reject', $txn) }}" method="POST" class="modal-content">
+                            <form action="{{ accounting_route('transactions.reject', $txn) }}" method="POST" class="modal-content">
                                 @csrf
                                 <div class="modal-header py-2">
                                     <h6 class="modal-title">Tu choi GD #{{ $txn->id }}</h6>
@@ -407,18 +381,6 @@
 </div>
 
 <script>
-// ── Type selector ──────────────────────────────────────────────────
-function selectType(val) {
-    ['payment','refund','fee','extra_income','extra_expense'].forEach(t => {
-        const el = document.getElementById('tl-' + t);
-        if (!el) return;
-        el.className = 'txn-type-btn';
-        el.querySelector('input').checked = false;
-    });
-    const chosen = document.getElementById('tl-' + val);
-    if (chosen) { chosen.classList.add('sel-' + val); chosen.querySelector('input').checked = true; }
-}
-
 // ── Receipt preview ────────────────────────────────────────────────
 document.getElementById('receiptFile').addEventListener('change', function () {
     const p = document.getElementById('receiptPreview');
@@ -456,7 +418,7 @@ function resetOrder() {
 }
 
 function selectOrder(orderId) {
-    fetch('{{ route('accounting.api.order-detail', ['order' => '__ID__']) }}'.replace('__ID__', orderId))
+    return fetch('{{ accounting_route('api.order-detail', ['order' => '__ID__']) }}'.replace('__ID__', orderId))
         .then(r => r.json())
         .then(data => {
             document.getElementById('f_order_id').value = orderId;
@@ -510,7 +472,7 @@ function resetCustomer() {
 }
 
 function selectCustomer(customerId) {
-    fetch('{{ route('accounting.api.customer-detail', ['customer' => '__ID__']) }}'.replace('__ID__', customerId))
+    fetch('{{ accounting_route('api.customer-detail', ['customer' => '__ID__']) }}'.replace('__ID__', customerId))
         .then(r => r.json())
         .then(c => {
             document.getElementById('f_customer_id').value = c.id;
@@ -541,7 +503,7 @@ function loadOrders(page) {
         per_page: document.getElementById('op_per_page').value,
     });
     document.getElementById('orderTableWrap').innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm"></div></div>';
-    fetch('{{ route('accounting.api.orders-list') }}?' + params)
+    fetch('{{ accounting_route('api.orders-list') }}?' + params)
         .then(r => r.json())
         .then(data => {
             if (!data.data.length) {
@@ -590,7 +552,7 @@ function loadCustomers(page) {
         per_page: document.getElementById('cp_per_page').value,
     });
     document.getElementById('customerTableWrap').innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm"></div></div>';
-    fetch('{{ route('accounting.api.customers-list') }}?' + params)
+    fetch('{{ accounting_route('api.customers-list') }}?' + params)
         .then(r => r.json())
         .then(data => {
             if (!data.data.length) {
@@ -669,7 +631,7 @@ document.getElementById('btn_save_cat').addEventListener('click', function () {
     const errDiv = document.getElementById('cat_error');
     if (!code || !name) { errDiv.textContent = 'Vui lòng nhập đủ mã và tên.'; errDiv.style.display = ''; return; }
     this.disabled = true;
-    fetch('{{ route('accounting.transaction-categories.store') }}', {
+    fetch('{{ accounting_route('transaction-categories.store') }}', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' },
         body: JSON.stringify({ code, name, flow_direction })
@@ -707,6 +669,27 @@ document.getElementById('btn_save_cat').addEventListener('click', function () {
     .catch(() => { errDiv.textContent = 'Lỗi kết nối.'; errDiv.style.display = ''; })
     .finally(() => { this.disabled = false; });
 });
+
+// ── Auto-set payment method when account is selected ───────────────
+document.getElementById('f_account_id').addEventListener('change', function () {
+    const methodSelect = document.querySelector('select[name="method"]');
+    if (this.value) {
+        // When an account is selected, auto-set method to bank_transfer
+        methodSelect.value = 'bank_transfer';
+    }
+});
+
+@if($editingTransaction)
+document.addEventListener('DOMContentLoaded', function () {
+    @if($editingTransaction->order_id)
+        selectOrder({{ $editingTransaction->order_id }}).then(() => {
+            document.getElementById('f_amount').value = {{ (float) $editingTransaction->amount }};
+        });
+    @elseif($editingTransaction->customer_id)
+        selectCustomer({{ $editingTransaction->customer_id }});
+    @endif
+});
+@endif
 </script>
 @endsection
 

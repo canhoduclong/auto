@@ -119,12 +119,6 @@
 							</a>
 						</li>
 						<li class="nav-item">
-							<a href="{{ route('transactions.index') }}" class="nav-link{{ request()->routeIs('transactions.*') ? ' active' : '' }}">
-								<i class="ph-currency-circle-dollar"></i>
-								<span>{{ __('menu.transactions') }}</span>
-							</a>
-						</li>
-						<li class="nav-item">
 							<a href="{{ route('approval-workflows.index') }}" class="nav-link{{ request()->routeIs('approval-workflows.*') ? ' active' : '' }}">
 								<i class="ph-flow-arrow"></i>
 								<span>Quy trình duyệt</span>
@@ -141,6 +135,78 @@
 							<a href="{{ route('task-delegate-configs.index') }}" class="nav-link{{ request()->routeIs('task-delegate-configs.*') ? ' active' : '' }}">
 								<i class="ph-user-gear"></i>
 								<span>Phan Quyen Giao Viec</span>
+							</a>
+						</li>
+						@endif
+
+						@if(auth()->user()?->isAdmin())
+						<li class="nav-item-header">
+							<div class="text-uppercase fs-sm lh-sm opacity-50 sidebar-resize-hide">Tài chính</div>
+							<i class="ph-dots-three sidebar-resize-show"></i>
+						</li>
+						<li class="nav-item">
+							<a href="{{ route('admin.accounting.cashflow') }}" class="nav-link{{ request()->routeIs('admin.accounting.cashflow') || request()->routeIs('admin.accounting.cashflow.*') || request()->routeIs('admin.accounting.refresh-history') ? ' active' : '' }}">
+								<i class="ph-currency-circle-dollar"></i>
+								<span>Thu/chi</span>
+							</a>
+						</li>
+						<li class="nav-item">
+							<a href="{{ route('admin.accounting.transactions.create') }}" class="nav-link{{ request()->routeIs('admin.accounting.transactions.*') ? ' active' : '' }}">
+								<i class="ph-plus-circle"></i>
+								<span>Tạo giao dịch</span>
+							</a>
+						</li>
+						<li class="nav-item">
+							<a href="{{ route('admin.accounting.financial-reports') }}" class="nav-link{{ request()->routeIs('admin.accounting.financial-reports') ? ' active' : '' }}">
+								<i class="ph-chart-line-up"></i>
+								<span>Báo cáo tài chính</span>
+							</a>
+						</li>
+						<li class="nav-item">
+							<a href="{{ route('admin.accounting.accounts.index') }}" class="nav-link{{ request()->routeIs('admin.accounting.accounts.*') ? ' active' : '' }}">
+								<i class="ph-wallet"></i>
+								<span>Tài khoản</span>
+							</a>
+						</li>
+						<li class="nav-item">
+							<a href="{{ route('admin.accounting.transaction-categories.index') }}" class="nav-link{{ request()->routeIs('admin.accounting.transaction-categories.*') ? ' active' : '' }}">
+								<i class="ph-tree-structure"></i>
+								<span>Quản trị danh mục giao dịch</span>
+							</a>
+						</li>
+						@elseif(auth()->user()?->hasRole('accountant') || auth()->user()?->hasRole('accounting'))
+						<li class="nav-item-header">
+							<div class="text-uppercase fs-sm lh-sm opacity-50 sidebar-resize-hide">Kế toán</div>
+							<i class="ph-dots-three sidebar-resize-show"></i>
+						</li>
+						<li class="nav-item">
+							<a href="{{ route('accounting.cashflow') }}" class="nav-link{{ request()->routeIs('accounting.cashflow') || request()->routeIs('accounting.cashflow.*') || request()->routeIs('accounting.refresh-history') ? ' active' : '' }}">
+								<i class="ph-currency-circle-dollar"></i>
+								<span>Thu/chi</span>
+							</a>
+						</li>
+						<li class="nav-item">
+							<a href="{{ route('accounting.transactions.create') }}" class="nav-link{{ request()->routeIs('accounting.transactions.*') ? ' active' : '' }}">
+								<i class="ph-plus-circle"></i>
+								<span>Tạo giao dịch</span>
+							</a>
+						</li>
+						<li class="nav-item">
+							<a href="{{ route('accounting.financial-reports') }}" class="nav-link{{ request()->routeIs('accounting.financial-reports') ? ' active' : '' }}">
+								<i class="ph-chart-line-up"></i>
+								<span>Báo cáo tài chính</span>
+							</a>
+						</li>
+						<li class="nav-item">
+							<a href="{{ route('accounting.accounts.index') }}" class="nav-link{{ request()->routeIs('accounting.accounts.*') ? ' active' : '' }}">
+								<i class="ph-wallet"></i>
+								<span>Tài khoản</span>
+							</a>
+						</li>
+						<li class="nav-item">
+							<a href="{{ route('accounting.transaction-categories.index') }}" class="nav-link{{ request()->routeIs('accounting.transaction-categories.*') ? ' active' : '' }}">
+								<i class="ph-tree-structure"></i>
+								<span>Quản trị danh mục giao dịch</span>
 							</a>
 						</li>
 						@endif

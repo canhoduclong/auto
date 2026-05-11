@@ -102,12 +102,12 @@
         <div class="d-flex justify-content-between align-items-center mb-4">
             <div>
                 <h2>
-                    <i class="fas fa-tasks"></i> Công việc đã giao
+                    <i class="bi bi-list-task"></i> Công việc đã giao
                 </h2>
                 <p class="text-muted">Danh sách các công việc bạn đã giao cho nhân viên</p>
             </div>
             <a href="{{ route($createRoute ?? 'task-assignments.create') }}" class="btn btn-primary btn-lg">
-                <i class="fas fa-plus-circle"></i> Giao việc mới
+               <i class="bi bi-plus-circle-fill"></i> Giao việc mới
             </a>
         </div>
 
@@ -137,7 +137,7 @@
                 </div>
                 <div class="col-md-2">
                     <button type="submit" class="btn btn-primary w-100">
-                        <i class="fas fa-search"></i> Tìm
+                        <i class="bi bi-search"></i> Tìm
                     </button>
                 </div>
             </form>
@@ -213,7 +213,7 @@
                     <h5>Chưa có công việc nào</h5>
                     <p class="text-muted">Bạn chưa giao công việc cho ai. Hãy giao việc ngay!</p>
                     <a href="{{ route($createRoute ?? 'task-assignments.create') }}" class="btn btn-primary mt-3">
-                        <i class="fas fa-plus-circle"></i> Giao việc mới
+                        <i class="bi bi-plus-circle-fill"></i> Giao việc mới
                     </a>
                 </div>
             </div>

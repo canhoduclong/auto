@@ -17,7 +17,7 @@
                 <ul class="list-unstyled">
                     <li>
                         <a href="{{ route('tasks.create') }}" class="task-menu-link">
-                            <i class="fas fa-plus-circle"></i> Giao việc
+                            <i class="bi bi-plus-circle"></i> Giao việc
                         </a>
                     </li>
                     <li>

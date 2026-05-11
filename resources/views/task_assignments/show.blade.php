@@ -19,10 +19,10 @@
 @endpush
 
 @section('content')
-<div class="content-wrapper">
-<div class="content-header d-flex align-items-center py-3 px-4 gap-3">
+<div class="content-wrapper container">
+<div class="content-header d-flex align-items-center py-3 gap-3">
     <a href="{{ route($indexRoute ?? 'task-assignments.index') }}" class="btn btn-sm btn-outline-secondary">
-        <i class="ph-arrow-left"></i>
+        <i class="ph ph-arrow-left"></i>
     </a>
     <div class="flex-grow-1">
         <div class="d-flex align-items-center gap-2">
@@ -42,14 +42,14 @@
                   onsubmit="return confirm('Huy cong viec nay?')">
                 @csrf
                 <button type="submit" class="btn btn-sm btn-outline-danger">
-                    <i class="ph-x me-1"></i>Huy cong viec
+                    <i class="ph-x me-1"></i> Huy cong viec
                 </button>
             </form>
         @endif
     @endif
 </div>
 
-<div class="content-body px-4 pb-4">
+<div class="content-body pb-4">
     @if(session('success'))<div class="alert alert-success alert-dismissible fade show">{{ session('success') }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>@endif
     @if(session('error'))<div class="alert alert-danger alert-dismissible fade show">{{ session('error') }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>@endif
 

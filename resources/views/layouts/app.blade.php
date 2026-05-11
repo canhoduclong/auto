@@ -18,7 +18,7 @@
 	<link href="{{ asset('assets/css/ltr/all.min.css') }}" id="stylesheet" rel="stylesheet" type="text/css">
     <link href="{{ asset('assets/css/mobile-responsive.css') }}" rel="stylesheet" type="text/css">
 	<!-- /global stylesheets -->
-
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
 	<!-- Core JS files -->
 	<script src="{{ asset('assets/demo/demo_configurator.js') }}"></script>
 	<script src="{{ asset('assets/js/jquery/jquery.min.js') }}"></script> 

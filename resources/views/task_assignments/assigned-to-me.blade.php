@@ -95,7 +95,7 @@
     <div class="container">
         <div class="mb-4">
             <h2>
-                <i class="fas fa-inbox"></i> Công việc được giao cho tôi
+                <i class="bi bi-list-task"></i> Công việc được giao cho tôi
             </h2>
             <p class="text-muted">Danh sách các công việc được giao bởi người quản lý</p>
         </div>
@@ -125,7 +125,7 @@
                 </div>
                 <div class="col-md-2">
                     <button type="submit" class="btn btn-primary w-100">
-                        <i class="fas fa-search"></i> Tìm
+                       <i class="bi bi-search"></i> Tìm
                     </button>
                 </div>
             </form>

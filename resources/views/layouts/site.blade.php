@@ -39,6 +39,7 @@ use App\Models\Setting;
     <!--link rel="stylesheet" href="{{ asset('css/mixitup.min.css') }}" type="text/css"-->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
     <style>
         :root {
             --theme-primary: #0f766e;

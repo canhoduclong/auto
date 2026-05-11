@@ -1,4 +1,4 @@
-@extends('layouts.accounting')
+@extends(accounting_layout())
 
 @section('title', 'Quản Trị Danh Mục Giao Dịch')
 @section('subtitle', 'Khai báo danh mục và xác định chiều tiền vào/ra tài khoản')
@@ -9,7 +9,7 @@
         <div class="acc-card">
             <div class="card-body">
                 <div class="fw-bold mb-3"><i class="bi bi-plus-circle me-1 text-primary"></i>Thêm danh mục</div>
-                <form method="POST" action="{{ route('accounting.transaction-categories.store') }}">
+                <form method="POST" action="{{ accounting_route('transaction-categories.store') }}">
                     @csrf
                     <div class="mb-3">
                         <label class="form-label">Mã</label>
@@ -70,7 +70,7 @@
                                             data-bs-toggle="modal" data-bs-target="#editCat{{ $cat->id }}">
                                         <i class="bi bi-pencil"></i>
                                     </button>
-                                    <form method="POST" action="{{ route('accounting.transaction-categories.toggle-active', $cat) }}" class="d-inline">
+                                    <form method="POST" action="{{ accounting_route('transaction-categories.toggle-active', $cat) }}" class="d-inline">
                                         @csrf
                                         <button type="submit" class="btn btn-sm {{ $cat->is_active ? 'btn-outline-warning' : 'btn-outline-success' }}">
                                             <i class="bi {{ $cat->is_active ? 'bi-pause-circle' : 'bi-play-circle' }}"></i>
@@ -81,7 +81,7 @@
 
                             <div class="modal fade" id="editCat{{ $cat->id }}" tabindex="-1">
                                 <div class="modal-dialog">
-                                    <form class="modal-content" method="POST" action="{{ route('accounting.transaction-categories.update', $cat) }}">
+                                    <form class="modal-content" method="POST" action="{{ accounting_route('transaction-categories.update', $cat) }}">
                                         @csrf
                                         @method('PUT')
                                         <div class="modal-header">

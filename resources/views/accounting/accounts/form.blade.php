@@ -1,4 +1,4 @@
-@extends('layouts.accounting')
+@extends(accounting_layout())
 
 @section('title', $account ? 'Sửa Tài Khoản' : 'Thêm Tài Khoản')
 @section('subtitle', $account ? 'Cập nhật thông tin tài khoản' : 'Tạo tài khoản tiền mặt hoặc ngân hàng')
@@ -19,7 +19,7 @@
                     </div>
                 @endif
 
-                <form action="{{ $account ? route('accounting.accounts.update', $account) : route('accounting.accounts.store') }}"
+                <form action="{{ $account ? accounting_route('accounts.update', $account) : accounting_route('accounts.store') }}"
                       method="POST">
                     @csrf
                     @if($account) @method('PUT') @endif
@@ -107,7 +107,7 @@
                         <button type="submit" class="btn btn-primary px-4">
                             <i class="bi bi-save me-1"></i>{{ $account ? 'Cập nhật' : 'Tạo tài khoản' }}
                         </button>
-                        <a href="{{ route('accounting.accounts.index') }}" class="btn btn-outline-secondary">Hủy</a>
+                        <a href="{{ accounting_route('accounts.index') }}" class="btn btn-outline-secondary">Hủy</a>
                     </div>
                 </form>
             </div>

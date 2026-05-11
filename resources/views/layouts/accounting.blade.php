@@ -201,8 +201,14 @@
             <a href="{{ route('accounting.financial-reports') }}" class="{{ request()->routeIs('accounting.financial-reports') ? 'active' : '' }}">
                 <i class="bi bi-graph-up-arrow"></i> Báo cáo tài chính
             </a>
-            <a href="{{ route('accounting.accounts.index') }}" class="{{ request()->routeIs('accounting.accounts.*') ? 'active' : '' }}">
+            <a href="{{ route('accounting.accounts.index') }}" class="{{ request()->routeIs('accounting.accounts.index') || request()->routeIs('accounting.accounts.create') || request()->routeIs('accounting.accounts.edit') ? 'active' : '' }}">
                 <i class="bi bi-wallet2"></i> Tài khoản
+            </a>
+            <a href="{{ route('accounting.accounts.adjustments') }}" class="{{ request()->routeIs('accounting.accounts.adjustments') ? 'active' : '' }}" style="padding-left:2rem;font-size:13px">
+                <i class="bi bi-clock-history"></i> Lịch sử nạp / rút tiền
+            </a>
+            <a href="{{ route('accounting.accounts.index') }}?action=deposit" style="padding-left:2rem;font-size:13px">
+                <i class="bi bi-plus-circle text-success"></i> Nạp / Rút tiền
             </a>
             <a href="{{ route('accounting.transaction-categories.index') }}" class="{{ request()->routeIs('accounting.transaction-categories.*') ? 'active' : '' }}">
                 <i class="bi bi-diagram-3"></i> Quản trị danh mục giao dịch

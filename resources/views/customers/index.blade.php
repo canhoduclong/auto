@@ -286,6 +286,7 @@
                         <th>{{ __('customers.index.phone') }}</th>
                         <th>{{ __('customers.index.email') }}</th>
                         <th>Loại khách</th>
+                        <th>Mã Code cũ</th>
                         <th>Sale phụ trách</th>
                         <th>Người tạo</th>
                         <th>Hạn giữ khách</th>
@@ -359,6 +360,16 @@
                                 </span>
                             @else
                                 <span class="text-muted">—</span>
+                            @endif
+                        </td>
+
+                        <td>
+                            @if($customer->legacy_code)
+                                <span class="badge rounded-pill" style="background:#f0fdf4;color:#166534;font-size:.72rem;font-weight:600;">
+                                    {{ $customer->legacy_code }}
+                                </span>
+                            @else
+                                <span class="text-muted" style="font-size:.78rem;">—</span>
                             @endif
                         </td>
 
@@ -440,7 +451,7 @@
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="{{ $isAdmin ? 11 : 10 }}">
+                        <td colspan="{{ $isAdmin ? 12 : 11 }}">
                             <div class="cust-empty">
                                 <div><i class="ph ph-users"></i></div>
                                 <div style="font-weight:600;">{{ __('customers.index.empty') }}</div>

@@ -1,4 +1,4 @@
-@extends('layouts.accounting')
+@extends(accounting_layout())
 
 @section('title', 'Bao Cao Tai Chinh Noi Bo')
 @section('subtitle', 'Doanh thu, thu thuc nhan, chi phi va loi nhuan tam tinh')
@@ -19,6 +19,17 @@
             </div>
             <div><label class="form-label">Tu ngay</label><input class="form-control" type="date" name="from_date" value="{{ request('from_date', $from->format('Y-m-d')) }}"></div>
             <div><label class="form-label">Den ngay</label><input class="form-control" type="date" name="to_date" value="{{ request('to_date', $to->format('Y-m-d')) }}"></div>
+            <div>
+                <label class="form-label">Tai khoan</label>
+                <select class="form-select" name="account_id">
+                    <option value="">Tat ca tai khoan</option>
+                    @foreach($accounts as $acc)
+                        <option value="{{ $acc->id }}" {{ (int)$accountFilterId === $acc->id ? 'selected' : '' }}>
+                            {{ $acc->name }} ({{ $acc->type === 'cash' ? 'Tien mat' : 'Ngan hang' }})
+                        </option>
+                    @endforeach
+                </select>
+            </div>
             <div class="d-flex align-items-end"><button class="btn btn-primary w-100">Loc</button></div>
             <div class="d-flex align-items-end"><span class="badge text-bg-light border w-100 text-start p-2">{{ $rangeLabel }}</span></div>
         </form>
@@ -91,16 +102,10 @@
 
 {{-- Transaction by category --}}
 @php
-    $catStats = \App\Models\Transaction::query()
-        ->with('transactionCategory:id,code,name')
-        ->whereBetween('created_at', [$from, $to])
-        ->whereNotNull('transaction_category_id')
-        ->selectRaw('transaction_category_id, COUNT(*) as total_count, SUM(amount) as total_amount')
-        ->groupBy('transaction_category_id')
-        ->orderByDesc('total_amount')
-        ->get();
+    // Using the pre-aggregated catStats from controller
+    $catStatsList = $catStats ?? collect();
 @endphp
-@if($catStats->isNotEmpty())
+@if($catStatsList->isNotEmpty())
 <div class="acc-card mt-3">
     <div class="card-body">
         <div class="fw-bold mb-3 fs-6"><i class="bi bi-grid-3x3-gap me-2 text-info"></i>Thống kê theo danh mục giao dịch</div>
@@ -108,24 +113,46 @@
             <table class="table table-hover align-middle">
                 <thead class="table-light">
                     <tr>
-                        <th>Mã</th><th>Danh mục</th>
+                        <th>Mã</th>
+                        <th>Danh mục</th>
                         <th class="text-center">Số GD</th>
+                        <th>Khách hàng (nếu có)</th>
+                        <th>Tài khoản nhận tiền / Tiền mặt</th>
                         <th class="text-end">Tổng tiền</th>
                     </tr>
                 </thead>
                 <tbody>
-                @foreach($catStats as $cs)
+                @foreach($catStatsList as $cs)
                     <tr>
                         <td><span class="badge bg-primary">{{ $cs->transactionCategory?->code ?? '?' }}</span></td>
                         <td>{{ $cs->transactionCategory?->name ?? 'Không rõ' }}</td>
                         <td class="text-center">{{ number_format($cs->total_count) }}</td>
+                        <td>
+                            @if($cs->customers->isNotEmpty())
+                                @foreach($cs->customers as $cust)
+                                    <div class="badge bg-info">{{ $cust['name'] }}</div>
+                                @endforeach
+                            @else
+                                <span class="text-muted small">-</span>
+                            @endif
+                        </td>
+                        <td>
+                            @if($cs->accounts->isNotEmpty())
+                                @foreach($cs->accounts as $acc)
+                                    <div class="badge bg-warning">{{ $acc['name'] }} <small>({{ $acc['type'] === 'cash' ? 'Tiền mặt' : 'Ngân hàng' }})</small></div>
+                                @endforeach
+                            @else
+                                <span class="text-muted small">-</span>
+                            @endif
+                        </td>
                         <td class="text-end fw-semibold">{{ number_format((float)$cs->total_amount) }}đ</td>
                     </tr>
                 @endforeach
                     <tr class="table-light fw-bold">
                         <td colspan="2">Tổng</td>
-                        <td class="text-center">{{ number_format($catStats->sum('total_count')) }}</td>
-                        <td class="text-end">{{ number_format((float)$catStats->sum('total_amount')) }}đ</td>
+                        <td class="text-center">{{ number_format($catStatsList->sum('total_count')) }}</td>
+                        <td colspan="2"></td>
+                        <td class="text-end">{{ number_format((float)$catStatsList->sum('total_amount')) }}đ</td>
                     </tr>
                 </tbody>
             </table>

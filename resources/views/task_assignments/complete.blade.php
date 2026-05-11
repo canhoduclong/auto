@@ -102,7 +102,7 @@
     <div class="row">
         <div class="col-lg-10 offset-lg-1">
             <h3 class="mb-4">
-                <i class="fas fa-tasks"></i>
+                <i class="bi bi-list-task"></i>
                 Hoàn thành công việc: <strong>{{ $task->code }}</strong>
             </h3>
             

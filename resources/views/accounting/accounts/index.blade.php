@@ -1,4 +1,4 @@
-@extends('layouts.accounting')
+@extends(accounting_layout())
 
 @section('title', 'Tài Khoản')
 @section('subtitle', 'Quản lý tài khoản tiền mặt và ngân hàng')
@@ -53,7 +53,7 @@
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h5 class="fw-bold mb-0"><i class="bi bi-wallet2 me-2 text-primary"></i>Danh sách tài khoản</h5>
-    <a href="{{ route('accounting.accounts.create') }}" class="btn btn-primary btn-sm">
+    <a href="{{ accounting_route('accounts.create') }}" class="btn btn-primary btn-sm">
         <i class="bi bi-plus-lg me-1"></i>Thêm tài khoản
     </a>
 </div>
@@ -123,14 +123,14 @@
                                         title="Rút tiền">
                                     <i class="bi bi-dash-circle"></i>
                                 </button>
-                                <a href="{{ route('accounting.accounts.edit', $acc) }}" class="btn btn-sm btn-outline-secondary" title="Sửa">
+                                <a href="{{ accounting_route('accounts.edit', $acc) }}" class="btn btn-sm btn-outline-secondary" title="Sửa">
                                     <i class="bi bi-pencil"></i>
                                 </a>
                             </div>
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="8" class="text-center text-muted py-4">Chưa có tài khoản nào. <a href="{{ route('accounting.accounts.create') }}">Thêm ngay</a></td></tr>
+                    <tr><td colspan="8" class="text-center text-muted py-4">Chưa có tài khoản nào. <a href="{{ accounting_route('accounts.create') }}">Thêm ngay</a></td></tr>
                 @endforelse
                 </tbody>
             </table>
@@ -142,7 +142,7 @@
 @foreach($accounts as $acc)
 <div class="modal fade" id="depositModal{{ $acc->id }}" tabindex="-1">
     <div class="modal-dialog modal-sm">
-        <form action="{{ route('accounting.accounts.deposit', $acc) }}" method="POST" class="modal-content">
+        <form action="{{ accounting_route('accounts.deposit', $acc) }}" method="POST" class="modal-content">
             @csrf
             <div class="modal-header py-2">
                 <h6 class="modal-title"><i class="bi bi-plus-circle text-success me-1"></i>Nạp tiền — {{ $acc->name }}</h6>
@@ -151,7 +151,7 @@
             <div class="modal-body">
                 <div class="mb-2 small text-muted">Số dư hiện tại: <strong>{{ number_format((float)$acc->balance) }}đ</strong></div>
                 <label class="form-label">Số tiền nạp</label>
-                <input type="number" name="amount" class="form-control" required min="1" step="1000" placeholder="0">
+                <input type="text" name="amount" class="form-control money-input" required inputmode="numeric" autocomplete="off" placeholder="500000">
                 <label class="form-label mt-2">Ghi chú</label>
                 <input type="text" name="note" class="form-control" maxlength="300">
             </div>
@@ -164,7 +164,7 @@
 </div>
 <div class="modal fade" id="withdrawModal{{ $acc->id }}" tabindex="-1">
     <div class="modal-dialog modal-sm">
-        <form action="{{ route('accounting.accounts.withdraw', $acc) }}" method="POST" class="modal-content">
+        <form action="{{ accounting_route('accounts.withdraw', $acc) }}" method="POST" class="modal-content">
             @csrf
             <div class="modal-header py-2">
                 <h6 class="modal-title"><i class="bi bi-dash-circle text-warning me-1"></i>Rút tiền — {{ $acc->name }}</h6>
@@ -173,7 +173,7 @@
             <div class="modal-body">
                 <div class="mb-2 small text-muted">Số dư hiện tại: <strong>{{ number_format((float)$acc->balance) }}đ</strong></div>
                 <label class="form-label">Số tiền rút</label>
-                <input type="number" name="amount" class="form-control" required min="1" step="1000" max="{{ (float)$acc->balance }}" placeholder="0">
+                <input type="text" name="amount" class="form-control money-input" required inputmode="numeric" autocomplete="off" placeholder="500000">
                 <label class="form-label mt-2">Ghi chú</label>
                 <input type="text" name="note" class="form-control" maxlength="300">
             </div>
@@ -185,5 +185,38 @@
     </div>
 </div>
 @endforeach
+
+<script>
+document.querySelectorAll('form[action*="/deposit"], form[action*="/withdraw"]').forEach((form) => {
+    form.addEventListener('submit', function () {
+        const amountInput = form.querySelector('.money-input');
+        if (!amountInput) {
+            return;
+        }
+
+        const normalized = amountInput.value
+            .toString()
+            .replace(/\s+/g, '')
+            .replace(/[,.]/g, '')
+            .replace(/[^\d-]/g, '');
+
+        amountInput.value = normalized;
+    });
+});
+</script>
+
+@if(request()->input('action') === 'deposit')
+@php $firstAccount = $accounts->where('is_active', true)->first(); @endphp
+@if($firstAccount)
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const modal = new bootstrap.Modal(document.getElementById('depositModal{{ $firstAccount->id }}'));
+    modal.show();
+    // Scroll to first account row
+    document.querySelector('table')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+</script>
+@endif
+@endif
 
 @endsection
