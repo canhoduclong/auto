@@ -92,7 +92,7 @@
 
                 <div class="col-12">
                     <label class="form-label fw-semibold">Ghi chú</label>
-                    <textarea name="note" class="form-control" rows="2">{{ old('note', $station?->note) }}</textarea>
+                    <textarea name="note" class="form-control" rows="6">{{ old('note', $station?->note) }}</textarea>
                 </div>
 
                 <div class="col-12">
