@@ -181,7 +181,7 @@
                                         </span>
                                     @endif
                                 </button>
-                                <div class="dropdown-menu dropdown-menu-end p-0" style="min-width: 340px;">
+                                <div class="dropdown-menu dropdown-menu-end p-0" style="min-width: 340px; max-height: calc(100vh - 80px); overflow-y: auto;">
                                     {{-- Header --}}
                                     <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom bg-light">
                                         <div class="fw-semibold" style="font-size:.82rem;letter-spacing:.04em;text-transform:uppercase;color:#64748b">Trạng thái người dùng</div>
