@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AdminEvent;
 use App\Models\User;
 use App\Models\Role;
 use App\Models\Setting;
@@ -174,6 +175,20 @@ class UserController extends Controller
         */
 
         return redirect()->route('users.index')->with('success', __('users.messages.created'));
+    }
+
+    public function show(User $user)
+    {
+        $user->load('roles', 'team', 'warehouse', 'department');
+
+        $activities = Schema::hasTable('admin_events')
+            ? AdminEvent::where('actor_id', $user->id)
+                ->orderByDesc('created_at')
+                ->limit(50)
+                ->get()
+            : collect();
+
+        return view('users.show', compact('user', 'activities'));
     }
 
     public function edit(User $user)
