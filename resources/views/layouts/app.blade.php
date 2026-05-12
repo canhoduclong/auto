@@ -60,19 +60,57 @@
             height: 9px;
             border-radius: 999px;
             display: inline-block;
-            margin-right: 6px;
             flex-shrink: 0;
         }
 
         .user-presence-dot.online {
             background: #22c55e;
-            box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
+            box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.22);
         }
 
         .user-presence-dot.offline {
             background: #94a3b8;
-            box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.16);
+            box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.18);
         }
+
+        .presence-avatar {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            object-fit: cover;
+            flex-shrink: 0;
+        }
+
+        .presence-avatar-wrap {
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        .presence-avatar-wrap .presence-status-dot {
+            position: absolute;
+            bottom: 1px;
+            right: 1px;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            border: 2px solid #fff;
+        }
+
+        .presence-status-dot.online  { background: #22c55e; }
+        .presence-status-dot.offline { background: #94a3b8; }
+
+        .presence-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 9px 14px;
+            border-bottom: 1px solid rgba(0,0,0,.07);
+            cursor: default;
+            transition: background .12s;
+        }
+
+        .presence-row:hover { background: rgba(0,0,0,.03); }
+        .presence-row:last-child { border-bottom: none; }
     </style>
 
     @stack('styles')
@@ -101,9 +139,9 @@
                         $onlineWindowMinutes = 5;
                         $presenceUsers = ($isAdmin && $hasUserLastSeenColumn)
                             ? (\App\Models\User::query()
-                                ->select(['id', 'name', 'email', 'last_seen_at'])
+                                ->select(['id', 'name', 'email', 'avatar', 'google_avatar', 'last_seen_at'])
                                 ->orderByDesc('last_seen_at')
-                                ->take(12)
+                                ->take(20)
                                 ->get())
                             : collect();
                         $presenceUsers = $presenceUsers->map(function ($user) use ($onlineWindowMinutes) {
@@ -143,33 +181,53 @@
                                         </span>
                                     @endif
                                 </button>
-                                <div class="dropdown-menu dropdown-menu-end p-0" style="width: 320px; max-height: 420px; overflow-y: auto;">
-                                    <div class="d-flex justify-content-between align-items-center p-2 border-bottom">
-                                        <strong>User Online/Offline</strong>
+                                <div class="dropdown-menu dropdown-menu-end p-0" style="min-width: 340px;">
+                                    {{-- Header --}}
+                                    <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom bg-light">
+                                        <div class="fw-semibold" style="font-size:.82rem;letter-spacing:.04em;text-transform:uppercase;color:#64748b">Trạng thái người dùng</div>
                                         <div class="d-flex align-items-center gap-2">
-                                            <span class="badge rounded-pill bg-success bg-opacity-10 text-success">Online {{ $onlineUsersCount }}</span>
-                                            <span class="badge rounded-pill bg-secondary bg-opacity-10 text-secondary">Offline {{ $offlineUsersCount }}</span>
+                                            <span class="badge rounded-pill d-flex align-items-center gap-1" style="background:rgba(34,197,94,.12);color:#16a34a;font-size:.75rem;">
+                                                <span class="user-presence-dot online"></span> Online {{ $onlineUsersCount }}
+                                            </span>
+                                            <span class="badge rounded-pill d-flex align-items-center gap-1" style="background:rgba(148,163,184,.15);color:#64748b;font-size:.75rem;">
+                                                <span class="user-presence-dot offline"></span> Offline {{ $offlineUsersCount }}
+                                            </span>
                                         </div>
                                     </div>
+                                    {{-- User rows --}}
                                     @forelse($presenceUsers as $presenceUser)
-                                        <div class="dropdown-item py-2 border-bottom">
-                                            <div class="d-flex justify-content-between align-items-start gap-2">
-                                                <div class="min-w-0">
-                                                    <div class="fw-semibold text-truncate">{{ $presenceUser->name }}</div>
-                                                    <div class="small text-muted text-truncate">{{ $presenceUser->email }}</div>
+                                        @php
+                                            $puAvatar = $presenceUser->avatar
+                                                ? asset($presenceUser->avatar)
+                                                : ($presenceUser->google_avatar ?: 'https://ui-avatars.com/api/?name=' . urlencode($presenceUser->name ?? 'U') . '&background=0F172A&color=F8FAFC&size=80&bold=true');
+                                        @endphp
+                                        <div class="presence-row">
+                                            {{-- Avatar + status dot --}}
+                                            <div class="presence-avatar-wrap">
+                                                <img src="{{ $puAvatar }}" alt="{{ $presenceUser->name }}" class="presence-avatar">
+                                                <span class="presence-status-dot {{ $presenceUser->is_online ? 'online' : 'offline' }}"></span>
+                                            </div>
+                                            {{-- Info --}}
+                                            <div class="flex-grow-1 min-w-0">
+                                                <div class="fw-semibold text-truncate" style="font-size:.875rem;color:#1e293b;">{{ $presenceUser->name }}</div>
+                                                <div class="text-truncate" style="font-size:.75rem;color:#64748b;">{{ $presenceUser->email }}</div>
+                                                <div style="font-size:.72rem;color:#94a3b8;margin-top:1px;">
+                                                    @if($presenceUser->is_online)
+                                                        <span style="color:#16a34a;">● Đang online</span>
+                                                    @else
+                                                        {{ $presenceUser->last_seen_at ? 'Login ' . $presenceUser->last_seen_at->format('d/m H:i') . ' (' . $presenceUser->last_seen_at->diffForHumans() . ')' : 'Chưa đăng nhập' }}
+                                                    @endif
                                                 </div>
-                                                <span class="badge rounded-pill {{ $presenceUser->is_online ? 'bg-success bg-opacity-10 text-success' : 'bg-secondary bg-opacity-10 text-secondary' }}">
-                                                    <span class="user-presence-dot {{ $presenceUser->is_online ? 'online' : 'offline' }}"></span>
-                                                    {{ $presenceUser->is_online ? 'Online' : 'Offline' }}
-                                                </span>
                                             </div>
-                                            <div class="small text-muted mt-1">
-                                                {{ $presenceUser->is_online ? 'Đang hoạt động' : 'Truy cập gần nhất' }}:
-                                                {{ optional($presenceUser->last_seen_at)->diffForHumans() ?? 'Chưa ghi nhận' }}
-                                            </div>
+                                            {{-- Badge --}}
+                                            <span class="badge rounded-pill flex-shrink-0 d-flex align-items-center gap-1"
+                                                  style="font-size:.72rem; {{ $presenceUser->is_online ? 'background:rgba(34,197,94,.12);color:#16a34a;' : 'background:rgba(148,163,184,.15);color:#94a3b8;' }}">
+                                                <span class="user-presence-dot {{ $presenceUser->is_online ? 'online' : 'offline' }}"></span>
+                                                {{ $presenceUser->is_online ? 'Online' : 'Offline' }}
+                                            </span>
                                         </div>
                                     @empty
-                                        <div class="p-3 text-muted text-center">Chưa có dữ liệu trạng thái user</div>
+                                        <div class="p-4 text-muted text-center" style="font-size:.85rem;">Chưa có dữ liệu trạng thái user</div>
                                     @endforelse
                                 </div>
                             </div>
