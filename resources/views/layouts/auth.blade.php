@@ -14,7 +14,7 @@
     <!--link href="{{ asset('assets/css/colors.min.css?v=1.1') }}" rel="stylesheet"-->
     <style type="text/css">
         .bg-light {
-            background: url(https://hoanglongtnt.com/storage/media/bg-main.png);
+            background: url(https://hoanglongtnt.com/storage/media/bg-cover.png);
             background-size: cover;
             background-position: center;
         }
