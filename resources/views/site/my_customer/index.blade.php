@@ -1126,7 +1126,7 @@
                                        
                                     </div>
                                     <div class="">
-                                        <span class="mc-priority-pill ${priorityClass}">${priorityLabel}</span> 
+                                        <!--span class="mc-priority-pill ${priorityClass}">${priorityLabel}</span--> 
                                         <span class="mc-status-badge ${statusClass}">${statusLabel}</span>
                                     </div>
                                 </div>
