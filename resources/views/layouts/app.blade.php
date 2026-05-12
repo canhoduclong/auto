@@ -54,6 +54,25 @@
                 width: 100%;
             }
         }
+
+        .user-presence-dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 999px;
+            display: inline-block;
+            margin-right: 6px;
+            flex-shrink: 0;
+        }
+
+        .user-presence-dot.online {
+            background: #22c55e;
+            box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
+        }
+
+        .user-presence-dot.offline {
+            background: #94a3b8;
+            box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.16);
+        }
     </style>
 
     @stack('styles')
@@ -79,15 +98,21 @@
                         $latestNotifications = ($isAdmin && $hasNotificationsTable)
                             ? ($currentUser?->notifications()->latest()->take(5)->get() ?? collect())
                             : collect();
-                        $onlineUsers = ($isAdmin && $hasUserLastSeenColumn)
+                        $onlineWindowMinutes = 5;
+                        $presenceUsers = ($isAdmin && $hasUserLastSeenColumn)
                             ? (\App\Models\User::query()
-                                ->whereNotNull('last_seen_at')
-                                ->where('last_seen_at', '>=', now()->subMinutes(5))
+                                ->select(['id', 'name', 'email', 'last_seen_at'])
                                 ->orderByDesc('last_seen_at')
                                 ->take(12)
                                 ->get())
                             : collect();
-                        $onlineUsersCount = $onlineUsers->count();
+                        $presenceUsers = $presenceUsers->map(function ($user) use ($onlineWindowMinutes) {
+                            $isOnline = !empty($user->last_seen_at) && $user->last_seen_at->gte(now()->subMinutes($onlineWindowMinutes));
+                            $user->is_online = $isOnline;
+                            return $user;
+                        });
+                        $onlineUsersCount = $presenceUsers->where('is_online', true)->count();
+                        $offlineUsersCount = $presenceUsers->where('is_online', false)->count();
                         $currentLocale = app()->getLocale();
                     @endphp
 
@@ -110,7 +135,7 @@
                     @if($isAdmin)
                         <div class="ms-auto d-flex align-items-center gap-2 py-2">
                             <div class="dropdown">
-                                <button class="btn btn-light btn-sm position-relative" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="User online">
+                                <button class="btn btn-light btn-sm position-relative" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="User Online/Offline">
                                     <i class="ph ph-users-three"></i>
                                     @if($onlineUsersCount > 0)
                                         <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-success">
@@ -120,17 +145,31 @@
                                 </button>
                                 <div class="dropdown-menu dropdown-menu-end p-0" style="width: 320px; max-height: 420px; overflow-y: auto;">
                                     <div class="d-flex justify-content-between align-items-center p-2 border-bottom">
-                                        <strong>User online (5 phút)</strong>
-                                        <span class="small text-muted">{{ $onlineUsersCount }}</span>
+                                        <strong>User Online/Offline</strong>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <span class="badge rounded-pill bg-success bg-opacity-10 text-success">Online {{ $onlineUsersCount }}</span>
+                                            <span class="badge rounded-pill bg-secondary bg-opacity-10 text-secondary">Offline {{ $offlineUsersCount }}</span>
+                                        </div>
                                     </div>
-                                    @forelse($onlineUsers as $onlineUser)
+                                    @forelse($presenceUsers as $presenceUser)
                                         <div class="dropdown-item py-2 border-bottom">
-                                            <div class="fw-semibold">{{ $onlineUser->name }}</div>
-                                            <div class="small text-muted">{{ $onlineUser->email }}</div>
-                                            <div class="small text-muted">Hoạt động: {{ optional($onlineUser->last_seen_at)->diffForHumans() }}</div>
+                                            <div class="d-flex justify-content-between align-items-start gap-2">
+                                                <div class="min-w-0">
+                                                    <div class="fw-semibold text-truncate">{{ $presenceUser->name }}</div>
+                                                    <div class="small text-muted text-truncate">{{ $presenceUser->email }}</div>
+                                                </div>
+                                                <span class="badge rounded-pill {{ $presenceUser->is_online ? 'bg-success bg-opacity-10 text-success' : 'bg-secondary bg-opacity-10 text-secondary' }}">
+                                                    <span class="user-presence-dot {{ $presenceUser->is_online ? 'online' : 'offline' }}"></span>
+                                                    {{ $presenceUser->is_online ? 'Online' : 'Offline' }}
+                                                </span>
+                                            </div>
+                                            <div class="small text-muted mt-1">
+                                                {{ $presenceUser->is_online ? 'Đang hoạt động' : 'Truy cập gần nhất' }}:
+                                                {{ optional($presenceUser->last_seen_at)->diffForHumans() ?? 'Chưa ghi nhận' }}
+                                            </div>
                                         </div>
                                     @empty
-                                        <div class="p-3 text-muted text-center">Chưa có user online</div>
+                                        <div class="p-3 text-muted text-center">Chưa có dữ liệu trạng thái user</div>
                                     @endforelse
                                 </div>
                             </div>
