@@ -685,7 +685,7 @@
                                                 <small class="text-muted">Phân loại: {{ $customer->type->name }}</small><br>
                                             @endif
                                             @if($myPriorityLevel > 0)
-                                                <span class="{{ $myPriorityLevel === 1 ? 'mc-priority-p1' : ($myPriorityLevel === 2 ? 'mc-priority-p2' : 'mc-priority-p3') }}">
+                                                <!--span class="{{ $myPriorityLevel === 1 ? 'mc-priority-p1' : ($myPriorityLevel === 2 ? 'mc-priority-p2' : 'mc-priority-p3') }}">
                                                     Ưu tiên: P{{ $myPriorityLevel }}
                                                     @if($myPriorityScore > 0)
                                                         · {{ $myPriorityScore }}đ
@@ -693,7 +693,7 @@
                                                     @if($myPriorityExpire)
                                                         · HSD {{ $myPriorityExpire }}
                                                     @endif
-                                                </span>
+                                                </span-->
                                             @else
                                                 <span class=" mc-priority-p3">Ưu tiên: Chưa phân hạng</span>
                                             @endif
