@@ -149,8 +149,11 @@
                             $user->is_online = $isOnline;
                             return $user;
                         });
-                        $onlineUsersCount = $presenceUsers->where('is_online', true)->count();
+                        $onlineUsersCount  = $presenceUsers->where('is_online', true)->count();
                         $offlineUsersCount = $presenceUsers->where('is_online', false)->count();
+                        $presenceUsers = $presenceUsers->where('is_online', true)
+                            ->concat($presenceUsers->where('is_online', false)->take(10))
+                            ->values();
                         $currentLocale = app()->getLocale();
                     @endphp
 
