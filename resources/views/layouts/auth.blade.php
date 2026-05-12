@@ -12,7 +12,13 @@
     <link href="{{ asset('assets/css/layout.min.css?v=1.1') }}" rel="stylesheet">
     <link href="{{ asset('assets/css/components.min.css?v=1.1') }}" rel="stylesheet">
     <!--link href="{{ asset('assets/css/colors.min.css?v=1.1') }}" rel="stylesheet"-->
-
+    <style type="text/css">
+        .bg-light {
+            background: url(https://hoanglongtnt.com/storage/media/bg-main.png);
+            background-size: cover;
+            background-position: center;
+        }
+    </style>
     @stack('styles')
 </head>
 <body class="bg-light">
