@@ -165,13 +165,7 @@
 
         <div class="row g-3">
             <div class="col-lg-7">
-                <div class="section-card p-3 mb-3">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h6 class="mb-0">Biểu đồ doanh số</h6>
-                        <small class="text-muted">Cập nhật tự động mỗi 30 giây</small>
-                    </div>
-                    <canvas id="salesChart" height="120"></canvas>
-                </div>
+                
 
                 <div class="section-card p-3" id="commission-feed">
                     <h6 class="mb-2">Chúc mừng nhận hoa hồng</h6>
@@ -189,19 +183,27 @@
                         <div class="text-muted small">Chưa có bản ghi hoa hồng.</div>
                     @endforelse
                 </div>
+                <div class="section-card p-3 mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 class="mb-0">Biểu đồ doanh số</h6>
+                        <small class="text-muted">Cập nhật tự động mỗi 30 giây</small>
+                    </div>
+                    <canvas id="salesChart" height="120"></canvas>
+                </div>
+
             </div>
 
             <div class="col-lg-5">
                 {{-- Assigned Customers Section --}}
-                <div class="section-card p-3 mb-3" id="assigned-customers">
-                    <h6 class="mb-2">Khách hàng được giao</h6>
+                <h6 class="mx-1 mb-3">Khách hàng mới</h6>
+                <div class="py-3 mb-3" id="assigned-customers"> 
                     @forelse($assignedCustomers as $idx => $customer)
                         <div class="assigned-customer-card p-2 mb-2 border rounded" style="background: #f8fafc;">
                             <div class="d-flex justify-content-between align-items-start gap-2">
-                                <div class="flex-grow-1">
-                                    <div class="small mb-1">
-                                        <span class="badge bg-secondary">{{ $idx + 1 }}</span>
-                                    </div>
+                                <div class="d-flex  border-right   text-muted justify-content-center align-items-center " style="width: 30px;"> 
+                                    <span class="fs-2">{{ $idx + 1 }}</span>
+                                </div>
+                                <div class="flex-grow-1">                                   
                                     <div class="small fw-semibold">{{ $customer['name'] }}</div>
                                     <div class="small text-muted">
                                         <i class="bi bi-telephone"></i> {{ $customer['phone'] ?: '—' }}
