@@ -385,73 +385,66 @@
                     <i class="bi bi-list"></i>
                 </button>
                 <div>
-                <strong>@yield('title', 'Executive')</strong>
-                <div class="text-muted small">@yield('subtitle', 'Bảng điều hành CEO')</div>
+                    <strong>@yield('title', 'Executive')</strong>
+                    <div class="text-muted small">@yield('subtitle', 'Bảng điều hành CEO')</div>
                 </div>
             </div>
-            <div class="d-flex align-items-center gap-2">
-                <div class="dropdown">
-                    <button class="btn btn-light btn-sm position-relative" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="User Online/Offline">
-                        <i class="bi bi-people-fill"></i>
-                        @if($onlineUsersCount > 0)
-                            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-success" style="font-size:.65rem;">
-                                {{ $onlineUsersCount > 99 ? '99+' : $onlineUsersCount }}
-                            </span>
-                        @endif
-                    </button>
-                    <div class="dropdown-menu dropdown-menu-end p-0" style="min-width: 340px; max-height: calc(100vh - 80px); overflow-y: auto;">
-                        {{-- Header --}}
-                        <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom bg-light">
-                            <div class="fw-semibold" style="font-size:.82rem;letter-spacing:.04em;text-transform:uppercase;color:#64748b">Trạng thái người dùng</div>
-                            <div class="d-flex align-items-center gap-2">
-                                <span class="badge rounded-pill d-flex align-items-center gap-1" style="background:rgba(34,197,94,.12);color:#16a34a;font-size:.75rem;">
-                                    <span class="user-presence-dot online"></span> Online {{ $onlineUsersCount }}
-                                </span>
-                                <span class="badge rounded-pill d-flex align-items-center gap-1" style="background:rgba(148,163,184,.15);color:#64748b;font-size:.75rem;">
-                                    <span class="user-presence-dot offline"></span> Offline {{ $offlineUsersCount }}
-                                </span>
-                            </div>
-                        </div>
-                        {{-- User rows --}}
-                        @forelse($presenceUsers as $presenceUser)
-                            @php
-                                $puAvatar = $presenceUser->avatar
-                                    ? asset($presenceUser->avatar)
-                                    : ($presenceUser->google_avatar ?: 'https://ui-avatars.com/api/?name=' . urlencode($presenceUser->name ?? 'U') . '&background=0F172A&color=F8FAFC&size=80&bold=true');
-                            @endphp
-                            <a href="{{ route('users.show', $presenceUser->id) }}" class="presence-row text-decoration-none" style="color:inherit;" target="_blank">
-                                {{-- Avatar + status dot --}}
-                                <div class="presence-avatar-wrap">
-                                    <img src="{{ $puAvatar }}" alt="{{ $presenceUser->name }}" class="presence-avatar">
-                                    <span class="presence-status-dot {{ $presenceUser->is_online ? 'online' : 'offline' }}"></span>
-                                </div>
-                                {{-- Info --}}
-                                <div class="flex-grow-1 min-w-0">
-                                    <div class="fw-semibold text-truncate" style="font-size:.875rem;color:#1e293b;">{{ $presenceUser->name }}</div>
-                                    <div class="text-truncate" style="font-size:.75rem;color:#64748b;">{{ $presenceUser->email }}</div>
-                                    <div style="font-size:.72rem;color:#94a3b8;margin-top:1px;">
-                                        @if($presenceUser->is_online)
-                                            <span style="color:#16a34a;">● Đang online</span>
-                                        @else
-                                            {{ $presenceUser->last_seen_at ? 'Login ' . $presenceUser->last_seen_at->format('d/m H:i') . ' (' . $presenceUser->last_seen_at->diffForHumans() . ')' : 'Chưa đăng nhập' }}
-                                        @endif
-                                    </div>
-                                </div>
-                                {{-- Badge --}}
-                                <span class="badge rounded-pill flex-shrink-0 d-flex align-items-center gap-1"
-                                      style="font-size:.72rem; {{ $presenceUser->is_online ? 'background:rgba(34,197,94,.12);color:#16a34a;' : 'background:rgba(148,163,184,.15);color:#94a3b8;' }}">
-                                    <span class="user-presence-dot {{ $presenceUser->is_online ? 'online' : 'offline' }}"></span>
-                                    {{ $presenceUser->is_online ? 'Online' : 'Offline' }}
-                                </span>
-                            </a>
-                        @empty
-                            <div class="p-4 text-muted text-center" style="font-size:.85rem;">Chưa có dữ liệu trạng thái user</div>
-                        @endforelse
+            @php
+                $layoutSwitchTargets = collect($currentUser?->roles ?? [])
+                    ->map(function ($role) {
+                        $roleName = strtolower((string) $role->name);
+
+                        return match ($roleName) {
+                            'accountant', 'accounting' => [
+                                'key' => 'accounting',
+                                'label' => 'Kế toán',
+                                'href' => url('/accounting'),
+                            ],
+                            'warehouse' => [
+                                'key' => 'warehouse',
+                                'label' => 'Kho',
+                                'href' => url('/warehouse'),
+                            ],  
+                            'shipper' => [
+                                'key' => 'shipper',
+                                'label' => 'Shipper',
+                                'href' => url('/shipper'),
+                            ],
+                            'admin' => [
+                                'key' => 'admin',
+                                'label' => 'Admin',
+                                'href' => url('/dashboard'),
+                            ],
+                            'ceo' => null,
+                            default => null,
+                        };
+                    })
+                    ->filter()
+                    ->unique('href')
+                    ->values();
+            @endphp
+            <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
+                @if($layoutSwitchTargets->count() > 1)
+                    <div class="dropdown">
+                        <button class="btn btn-outline-primary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            Chuyển layout
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                            @foreach($layoutSwitchTargets as $layoutSwitchTarget)
+                                <li>
+                                    <a class="dropdown-item d-flex align-items-center gap-2" href="{{ $layoutSwitchTarget['href'] }}">
+                                        <i class="bi bi-box-arrow-up-right text-primary"></i>
+                                        <span>{{ $layoutSwitchTarget['label'] }}</span>
+                                    </a>
+                                </li>
+                            @endforeach
+                        </ul>
                     </div>
+                @endif
+                <div class="ceo-user text-end">
+                    <span>{{ $currentUser->name ?? 'CEO' }} | {{ now()->format('d/m/Y H:i') }}</span>
                 </div>
-                <div class="ceo-user">
-                    <span>{{ auth()->user()->name ?? 'CEO' }} | {{ now()->format('d/m/Y H:i') }}</span>
-                </div>
+            </div>
             </div>
         </header>
         <section class="ceo-content">
