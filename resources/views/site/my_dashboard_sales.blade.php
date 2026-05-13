@@ -206,7 +206,7 @@
                                 </div>
                                 <div class="flex-grow-1">                                   
                                     <div class="small newcus fw-semibold fs-6 text-uppercase">{{ $customer['name'] }}</div>
-                                    <div class="small text-muted">
+                                    <div class="small text-muted fw-semibold ">
                                         {{ $customer['phone'] ?: '' }} 
                                     </div>
                                     <div class="small text-muted">
