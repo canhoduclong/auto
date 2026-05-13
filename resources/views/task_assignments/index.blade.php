@@ -122,6 +122,17 @@
                                 @endif
                             </span>
                         </div>
+
+                        <div class="d-flex gap-2 mt-3">
+                            <a href="{{ route('task-assignments.show', $task) }}" class="btn btn-sm btn-outline-info">
+                                <i class="ph-eye"></i> Chi tiết
+                            </a>
+                            @if($task->canBeEditedBy(auth()->user()))
+                                <a href="{{ route('task-assignments.edit', $task) }}" class="btn btn-sm btn-outline-primary">
+                                    <i class="ph-pencil"></i> Chỉnh sửa
+                                </a>
+                            @endif
+                        </div>
                     </div>
                 </div>
             @endforeach

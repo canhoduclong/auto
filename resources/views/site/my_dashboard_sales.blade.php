@@ -87,6 +87,21 @@
         top: 16px;
     }
 
+    .assigned-customer-card {
+        transition: all 0.2s ease;
+        border-left: 3px solid #0f766e !important;
+    }
+
+    .assigned-customer-card:hover {
+        box-shadow: 0 2px 8px rgba(15, 118, 110, 0.1);
+    }
+
+    .accept-customer-btn {
+        white-space: nowrap;
+        font-size: 12px;
+        padding: 4px 8px;
+    }
+
     @media (max-width: 1200px) {
         .stats-grid {
             grid-template-columns: repeat(3, minmax(120px, 1fr));
@@ -177,6 +192,41 @@
             </div>
 
             <div class="col-lg-5">
+                {{-- Assigned Customers Section --}}
+                <div class="section-card p-3 mb-3" id="assigned-customers">
+                    <h6 class="mb-2">Khách hàng được giao</h6>
+                    @forelse($assignedCustomers as $idx => $customer)
+                        <div class="assigned-customer-card p-2 mb-2 border rounded" style="background: #f8fafc;">
+                            <div class="d-flex justify-content-between align-items-start gap-2">
+                                <div class="flex-grow-1">
+                                    <div class="small mb-1">
+                                        <span class="badge bg-secondary">{{ $idx + 1 }}</span>
+                                    </div>
+                                    <div class="small fw-semibold">{{ $customer['name'] }}</div>
+                                    <div class="small text-muted">
+                                        <i class="bi bi-telephone"></i> {{ $customer['phone'] ?: '—' }}
+                                        @if($customer['address'])
+                                            <br><i class="bi bi-geo-alt"></i> {{ $customer['address'] }}
+                                        @endif
+                                    </div>
+                                </div>
+                                <button type="button" class="btn btn-sm {{ $customer['is_accepted'] ? 'btn-success' : 'btn-outline-primary' }} accept-customer-btn" 
+                                        data-customer-id="{{ $customer['id'] }}" 
+                                        {{ $customer['is_accepted'] ? 'disabled' : '' }}>
+                                    @if($customer['is_accepted'])
+                                        <i class="bi bi-check-circle"></i> Đã nhận
+                                    @else
+                                        <i class="bi bi-plus-circle"></i> Nhận
+                                    @endif
+                                </button>
+                            </div>
+                        </div>
+                    @empty
+                        <div class="text-muted small">Không có khách hàng nào được giao.</div>
+                    @endforelse
+                </div>
+
+                {{-- Activity Timeline Section --}}
                 <div class="section-card p-3" id="activity-timeline">
                     <h6 class="mb-2">Timeline hoạt động task</h6>
                     @forelse($timeline as $log)
@@ -309,6 +359,56 @@
         })
         .catch(() => {});
     }
+
+    // Handle accept customer buttons
+    document.querySelectorAll('.accept-customer-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const customerId = this.dataset.customerId;
+            const button = this;
+            const originalHTML = button.innerHTML;
+
+            button.disabled = true;
+            button.innerHTML = '<i class="bi bi-hourglass-split"></i> Đang xử lý...';
+
+            fetch("{{ route('pages.my_dashboard.accept_customer', ['customer' => ':id']) }}".replace(':id', customerId), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    button.classList.remove('btn-outline-primary');
+                    button.classList.add('btn-success');
+                    button.disabled = true;
+                    button.innerHTML = '<i class="bi bi-check-circle"></i> Đã nhận';
+                    
+                    // Show success message
+                    const alert = document.createElement('div');
+                    alert.className = 'alert alert-success alert-dismissible fade show mt-2';
+                    alert.innerHTML = `
+                        <strong>Thành công!</strong> ${data.message}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    `;
+                    document.querySelector('#assigned-customers')?.insertAdjacentElement('beforeend', alert);
+                } else {
+                    button.disabled = false;
+                    button.innerHTML = originalHTML;
+                    alert('Lỗi: ' + (data.error || 'Không thể nhận khách hàng'));
+                }
+            })
+            .catch(error => {
+                button.disabled = false;
+                button.innerHTML = originalHTML;
+                console.error('Error:', error);
+                alert('Lỗi kết nối: ' + error.message);
+            });
+        });
+    });
 
     setInterval(refreshDashboard, 30000);
 </script>

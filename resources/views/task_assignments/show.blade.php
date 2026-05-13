@@ -36,16 +36,17 @@
         </div>
         <small class="text-muted">{{ $task->code }} &bull; Tao boi {{ $task->creator?->name }} &bull; {{ $task->created_at?->format('d/m/Y H:i') }}</small>
     </div>
-    @if(in_array($task->status, [\App\Models\TaskAssignment::STATUS_PENDING, \App\Models\TaskAssignment::STATUS_IN_PROGRESS]))
-        @if(auth()->id() === $task->created_by || auth()->user()->hasRole('admin') || auth()->user()->hasRole('manager') || auth()->user()->hasRole('CEO'))
+    @if($task->canBeEditedBy(auth()->user()))
+            <a href="{{ route('task-assignments.edit', $task) }}" class="btn btn-sm btn-outline-primary">
+                <i class="ph-pencil me-1"></i> Chinh sua
+            </a>
             <form action="{{ route('task-assignments.cancel', $task) }}" method="POST"
-                  onsubmit="return confirm('Huy cong viec nay?')">
+                  onsubmit="return confirm('Huy cong viec nay?')" class="d-inline">
                 @csrf
                 <button type="submit" class="btn btn-sm btn-outline-danger">
                     <i class="ph-x me-1"></i> Huy cong viec
                 </button>
             </form>
-        @endif
     @endif
 </div>
 

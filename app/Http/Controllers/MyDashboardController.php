@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Order;
 use App\Models\TaskAssignment;
 use App\Models\User;
+use App\Models\Customer;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Collection;
@@ -37,6 +38,43 @@ class MyDashboardController extends Controller
         abort_unless($user, 403);
 
         return response()->json($this->buildPayload($user));
+    }
+
+    public function acceptCustomer(Customer $customer): JsonResponse
+    {
+        $user = auth()->user();
+        abort_unless($user, 403);
+
+        // Check if customer is assigned to this user
+        if ((int) $customer->assigned_to !== (int) $user->id) {
+            return response()->json(['error' => 'Khách hàng này không được giao cho bạn'], 403);
+        }
+
+        // Update current owner
+        $customer->update([
+            'current_owner_sale_id' => $user->id,
+        ]);
+
+        // Log the action
+        if (Schema::hasTable('admin_events')) {
+            DB::table('admin_events')->insert([
+                'user_id' => $user->id,
+                'event_type' => 'customer_accepted',
+                'reference_type' => Customer::class,
+                'reference_id' => $customer->id,
+                'metadata' => json_encode([
+                    'customer_name' => $customer->name,
+                    'customer_id' => $customer->id,
+                ]),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã nhận khách hàng: ' . $customer->name,
+        ]);
     }
 
     private function buildPayload(User $user): array
@@ -135,6 +173,27 @@ class MyDashboardController extends Controller
                 'u.name as changed_by_name',
             ]);
 
+        // Get assigned customers (for sales roles only)
+        $assignedCustomers = collect();
+        if ($user->hasRole(['sale', 'leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale'])) {
+            $assignedCustomers = Customer::query()
+                ->where('assigned_to', $user->id)
+                ->orderByDesc('assigned_at')
+                ->limit(10)
+                ->select('id', 'name', 'phone', 'address', 'assigned_at', 'current_owner_sale_id')
+                ->get()
+                ->map(function ($customer) {
+                    return [
+                        'id' => $customer->id,
+                        'name' => $customer->name,
+                        'phone' => $customer->phone,
+                        'address' => $customer->address,
+                        'assigned_at' => $customer->assigned_at,
+                        'is_accepted' => (int) $customer->current_owner_sale_id === (int) auth()->id(),
+                    ];
+                });
+        }
+
         return [
             'dashboardStats' => [
                 'total_revenue' => $totalRevenue,
@@ -148,6 +207,7 @@ class MyDashboardController extends Controller
             'commissionFeed' => $commissionFeed,
             'salesChart' => $salesChart,
             'timeline' => $timeline,
+            'assignedCustomers' => $assignedCustomers,
         ];
     }
 

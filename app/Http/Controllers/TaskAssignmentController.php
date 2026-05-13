@@ -222,6 +222,159 @@ class TaskAssignmentController extends Controller
         return view('task_assignments.show', compact('task', 'canAct', 'current', 'myAssignee', 'layout', 'indexRoute', 'showRoute', 'createRoute'));
     }
 
+    // ── Edit ──────────────────────────────────────────────────────────
+
+    public function edit(TaskAssignment $taskAssignment)
+    {
+        $user = auth()->user();
+        $task = $taskAssignment;
+
+        // Only users with configured task assignment rights can edit
+        if (!$task->canBeEditedBy($user)) {
+            return back()->with('error', 'Ban khong co quyen chinh sua cong viec nay.');
+        }
+
+        $isFrontRoles = $user && $user->isSalesFlowRole();
+        $isFrontendRoute = false; // Edit always in admin
+
+        $workflows = ApprovalWorkflow::where('is_active', true)
+            ->where(function ($q) {
+                $q->whereJsonContains('applies_to', ApprovalWorkflow::ACTIVITY_TASK_ASSIGNMENT)
+                  ->orWhereNull('applies_to');
+            })
+            ->with('steps')
+            ->get();
+
+        $allowedAssignees = TaskDelegateConfig::allowedAssignees($user);
+        $parentId = $task->parent_id;
+        $parentTasks = TaskAssignment::query()
+            ->where('status', '!=', TaskAssignment::STATUS_COMPLETED)
+            ->where('status', '!=', TaskAssignment::STATUS_CANCELLED)
+            ->where('created_by', auth()->id())
+            ->where('id', '!=', $task->id)
+            ->latest()
+            ->limit(50)
+            ->get(['id', 'code', 'title']);
+
+        $layout = 'layouts.admin';
+        $indexRoute = 'task-assignments.index';
+        $storeRoute = 'task-assignments.update';
+        $formMethod = 'PUT';
+
+        // Load current assignees for edit form
+        $currentAssigneeIds = $task->assignees->pluck('user_id')->toArray();
+
+        return view('task_assignments.edit', compact(
+            'task',
+            'workflows',
+            'allowedAssignees',
+            'parentId',
+            'parentTasks',
+            'layout',
+            'indexRoute',
+            'storeRoute',
+            'formMethod',
+            'currentAssigneeIds'
+        ));
+    }
+
+    // ── Update ────────────────────────────────────────────────────────
+
+    public function update(Request $request, TaskAssignment $taskAssignment)
+    {
+        $user = auth()->user();
+        $task = $taskAssignment;
+
+        // Only users with configured task assignment rights can update
+        if (!$task->canBeEditedBy($user)) {
+            return back()->with('error', 'Ban khong co quyen chinh sua cong viec nay.');
+        }
+
+        $data = $request->validate([
+            'title'            => 'required|string|max:255',
+            'description'      => 'nullable|string|max:5000',
+            'priority'         => 'required|in:low,medium,high,urgent',
+            'approval_flow_id' => 'nullable|exists:approval_flows,id',
+            'parent_id'        => 'nullable|exists:task_assignments,id',
+            'due_date'         => 'nullable|date_format:Y-m-d\TH:i',
+            'attachments.*'    => 'nullable|file|max:10240|mimes:jpg,jpeg,png,pdf,doc,docx,xlsx,zip',
+            'assignee_ids'     => 'nullable|array',
+            'assignee_ids.*'   => 'exists:users,id',
+        ]);
+
+        if (!empty($data['due_date'])) {
+            $data['due_date'] = Carbon::createFromFormat('Y-m-d\TH:i', $data['due_date'])->format('Y-m-d H:i:s');
+        }
+
+        // Validate that chosen assignees are actually allowed for this user
+        if (!empty($data['assignee_ids'])) {
+            $allowed = TaskDelegateConfig::allowedAssignees($user)->pluck('id')->toArray();
+            foreach ($data['assignee_ids'] as $aid) {
+                if (!in_array($aid, $allowed) && !$user->hasRole('admin')) {
+                    return back()->withErrors(['assignee_ids' => 'Ban khong co quyen giao viec cho nguoi dung ID ' . $aid]);
+                }
+            }
+        }
+
+        // Handle new file uploads
+        $paths = $task->attachments ? (is_array($task->attachments) ? $task->attachments : []) : [];
+        if ($request->hasFile('attachments')) {
+            foreach ($request->file('attachments') as $file) {
+                $paths[] = $file->store('task_assignments/' . now()->format('Y/m'), 'public');
+            }
+        }
+
+        try {
+            DB::transaction(function () use ($data, $paths, $task, $user) {
+                // Update task
+                $task->update([
+                    'title'            => $data['title'],
+                    'description'      => $data['description'] ?? null,
+                    'priority'         => $data['priority'],
+                    'approval_flow_id' => $data['approval_flow_id'] ?? null,
+                    'parent_id'        => $data['parent_id'] ?? null,
+                    'due_date'         => $data['due_date'] ?? null,
+                    'attachments'      => $paths ?: null,
+                ]);
+
+                // Update assignees
+                $newAssigneeIds = $data['assignee_ids'] ?? [];
+                $currentAssigneeIds = $task->assignees->pluck('user_id')->toArray();
+
+                // Remove assignees that are no longer selected
+                $toRemove = array_diff($currentAssigneeIds, $newAssigneeIds);
+                if (!empty($toRemove)) {
+                    TaskAssignee::where('task_id', $task->id)
+                        ->whereIn('user_id', $toRemove)
+                        ->delete();
+                }
+
+                // Add new assignees
+                $toAdd = array_diff($newAssigneeIds, $currentAssigneeIds);
+                foreach ($toAdd as $assigneeId) {
+                    TaskAssignee::create([
+                        'task_id' => $task->id,
+                        'user_id' => $assigneeId,
+                        'status'  => 'pending',
+                    ]);
+                }
+
+                // Log the update
+                TaskStatusLog::log(
+                    $task,
+                    $task->status,
+                    $user,
+                    'Da chinh sua cong viec'
+                );
+            });
+
+            return redirect()->route('task-assignments.show', $task)
+                ->with('success', 'Cong viec ' . $task->code . ' da duoc cap nhat.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Loi: ' . $e->getMessage());
+        }
+    }
+
     // ── Approve ───────────────────────────────────────────────────────
 
     public function approve(Request $request, TaskAssignment $taskAssignment)

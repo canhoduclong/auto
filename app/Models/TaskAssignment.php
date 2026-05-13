@@ -8,6 +8,21 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class TaskAssignment extends Model
 {
+        /**
+         * Check if all assignees are still in "pending" status
+         * Used to determine if creator can still edit the task
+         */
+        public function allAssigneePending(): bool
+        {
+            if ($this->assignees()->count() === 0) {
+                return true;
+            }
+
+            return !$this->assignees()
+                ->whereNotIn('status', ['pending'])
+                ->exists();
+        }
+
     // New unified status constants based on user requirements
     public const STATUS_PENDING     = 'pending';      // Chờ thực hiện
     public const STATUS_PROCESSING  = 'processing';   // Đang thực hiện
@@ -169,6 +184,17 @@ class TaskAssignment extends Model
     public function canBeCompleted(): bool
     {
         return in_array($this->status, [self::STATUS_PENDING, self::STATUS_PROCESSING, 'in_progress']);
+    }
+
+    public function canBeEditedBy(?User $user): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        return TaskDelegateConfig::canAssignTasks($user)
+            && in_array($this->status, [self::STATUS_PENDING, self::STATUS_IN_PROGRESS, 'in_progress'], true)
+            && $this->allAssigneePending();
     }
 
     public function canBeVerified(): bool

@@ -197,6 +197,12 @@
                         <i class="fas fa-eye"></i> Chi tiết
                     </a>
 
+                    @if($task->canBeEditedBy(auth()->user()))
+                        <a href="{{ route('task-assignments.edit', $task) }}" class="btn btn-primary btn-sm">
+                            <i class="fas fa-pen"></i> Chỉnh sửa
+                        </a>
+                    @endif
+
                     @if ($task->status === 'completed')
                         <a href="{{ route('task-assignments.show', $task) }}" class="btn btn-warning btn-sm">
                             <i class="fas fa-check-double"></i> Xác nhận
