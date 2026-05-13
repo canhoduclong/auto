@@ -2,7 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AdminEvent;
 use App\Models\Inventory;
+use App\Models\InventoryDocument;
+use App\Models\InventoryDocumentItem;
 use App\Models\InventoryMovement;
 use App\Models\Order;
 use App\Models\OrderHistory;
@@ -16,6 +19,8 @@ use Illuminate\Support\Facades\DB;
 
 class OrderReturnController extends Controller
 {
+    private const RETURN_RECEIPT_NOTE_PREFIX = '[order_return:#';
+
     private function logOrderHistory(Order $order, string $action, ?string $statusBefore, ?string $statusAfter, ?string $note = null): void
     {
         $user = Auth::user();
@@ -34,7 +39,7 @@ class OrderReturnController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
         $query = OrderReturn::with([
             'order',
@@ -56,8 +61,96 @@ class OrderReturnController extends Controller
             }
         }
 
-        $returns = $query->paginate(10);
-        return view('order-returns.index', compact('returns'));
+        $returns = $query->paginate(10)->appends($request->query());
+
+        $receiptMap = $this->receiptMapForReturnIds(
+            $returns->getCollection()->pluck('id')->map(fn ($id) => (int) $id)->all()
+        );
+
+        $syncHistory = AdminEvent::with('actor')
+            ->where('event_type', 'order_return_sync')
+            ->latest()
+            ->limit(10)
+            ->get();
+
+        $mismatchCount = $returns->getCollection()
+            ->filter(fn (OrderReturn $return) => $return->status === 'warehouse_received' && !isset($receiptMap[$return->id]))
+            ->count();
+
+        return view('order-returns.index', compact('returns', 'receiptMap', 'syncHistory', 'mismatchCount'));
+    }
+
+    public function syncWarehouseReceipts()
+    {
+        $user = Auth::user();
+        abort_unless($user && ($user->hasRole('warehouse') || $user->hasRole('admin')), 403);
+
+        $returnsQuery = OrderReturn::with(['order.items', 'returnItems'])
+            ->where('status', 'warehouse_received')
+            ->orderByDesc('warehouse_confirmed_at');
+
+        if ($user->hasRole('warehouse')) {
+            if (!$user->warehouse_id) {
+                return back()->with('error', 'Tai khoan kho chua duoc gan kho de dong bo.');
+            }
+
+            $returnsQuery->where('warehouse_id', $user->warehouse_id);
+        }
+
+        $returns = $returnsQuery->get();
+
+        $summary = [
+            'checked' => 0,
+            'created_count' => 0,
+            'updated_count' => 0,
+            'unchanged_count' => 0,
+            'items_adjusted_total' => 0,
+            'receipts' => [],
+        ];
+
+        DB::transaction(function () use ($returns, $user, &$summary) {
+            foreach ($returns as $return) {
+                $summary['checked']++;
+
+                [$document, $result, $adjustedItems] = $this->syncReceiptForReturn($return, (int) $user->id);
+
+                if ($result === 'created') {
+                    $summary['created_count']++;
+                } elseif ($result === 'updated') {
+                    $summary['updated_count']++;
+                } else {
+                    $summary['unchanged_count']++;
+                }
+
+                if ($result !== 'unchanged') {
+                    $summary['items_adjusted_total'] += $adjustedItems;
+                    $summary['receipts'][] = [
+                        'order_return_id' => (int) $return->id,
+                        'document_id' => (int) $document->id,
+                        'document_number' => (string) ($document->document_number ?? ('#' . $document->id)),
+                        'action' => $result,
+                        'items_adjusted' => (int) $adjustedItems,
+                    ];
+                }
+            }
+        });
+
+        AdminEvent::create([
+            'actor_id' => $user->id,
+            'event_type' => 'order_return_sync',
+            'action' => 'sync',
+            'subject_type' => OrderReturn::class,
+            'subject_id' => null,
+            'title' => 'Dong bo don tra hang voi phieu nhap kho',
+            'message' => 'Da kiem tra ' . $summary['checked'] . ' don tra. Tao moi ' . $summary['created_count'] . ', cap nhat ' . $summary['updated_count'] . '.',
+            'metadata' => $summary,
+            'url' => route('order-returns.index'),
+        ]);
+
+        return redirect()
+            ->route('order-returns.index')
+            ->with('success', 'Da refresh dong bo phieu nhap kho tu don tra hang.')
+            ->with('sync_result', $summary);
     }
 
     /**
@@ -443,5 +536,163 @@ class OrderReturnController extends Controller
     {
         $totalStock = (int) Inventory::where('product_variant_id', $variantId)->sum('quantity');
         \App\Models\ProductVariant::where('id', $variantId)->update(['stock' => $totalStock]);
+    }
+
+    private function syncReceiptForReturn(OrderReturn $orderReturn, int $actorId): array
+    {
+        $orderReturn->loadMissing(['order.items', 'returnItems']);
+
+        $expectedItems = $orderReturn->returnItems
+            ->groupBy('product_variant_id')
+            ->map(fn ($items) => (int) $items->sum('quantity'));
+
+        $unitCostByVariant = $orderReturn->order?->items
+            ? $orderReturn->order->items
+                ->groupBy('product_variant_id')
+                ->map(function ($items) {
+                    $totalQty = max((int) $items->sum('quantity'), 1);
+                    $totalAmount = (float) $items->sum(function ($item) {
+                        return ((float) $item->price) * ((int) $item->quantity);
+                    });
+
+                    return round($totalAmount / $totalQty, 2);
+                })
+            : collect();
+
+        $marker = $this->returnReceiptMarker((int) $orderReturn->id);
+
+        $document = InventoryDocument::query()
+            ->with('items')
+            ->where('type', 'import')
+            ->where('warehouse_id', $orderReturn->warehouse_id)
+            ->where('notes', 'like', '%' . $marker . '%')
+            ->latest('id')
+            ->first();
+
+        $result = 'unchanged';
+        $adjustedItems = 0;
+
+        if (!$document) {
+            $document = InventoryDocument::create([
+                'type' => 'import',
+                'warehouse_id' => $orderReturn->warehouse_id,
+                'document_date' => optional($orderReturn->warehouse_confirmed_at)->toDateString() ?: now()->toDateString(),
+                'notes' => 'Dong bo tu don tra hang #' . $orderReturn->id . ' ' . $marker,
+                'shipping_fee' => 0,
+                'user_id' => $actorId,
+            ]);
+            $document->load('items');
+            $result = 'created';
+        }
+
+        $currentItems = $document->items->keyBy('product_variant_id');
+
+        foreach ($expectedItems as $variantId => $expectedQty) {
+            $variantId = (int) $variantId;
+            $expectedQty = (int) $expectedQty;
+            $expectedUnitCost = (float) ($unitCostByVariant[$variantId] ?? 0);
+
+            $item = $currentItems->get($variantId);
+            if (!$item) {
+                InventoryDocumentItem::create([
+                    'inventory_document_id' => $document->id,
+                    'product_variant_id' => $variantId,
+                    'quantity' => $expectedQty,
+                    'unit_cost' => $expectedUnitCost,
+                ]);
+                $adjustedItems++;
+                if ($result === 'unchanged') {
+                    $result = 'updated';
+                }
+                continue;
+            }
+
+            $currentQty = (int) $item->quantity;
+            $currentUnitCost = (float) $item->unit_cost;
+            if ($currentQty !== $expectedQty || abs($currentUnitCost - $expectedUnitCost) > 0.0001) {
+                $item->update([
+                    'quantity' => $expectedQty,
+                    'unit_cost' => $expectedUnitCost,
+                ]);
+                $adjustedItems++;
+                if ($result === 'unchanged') {
+                    $result = 'updated';
+                }
+            }
+        }
+
+        $expectedVariantIds = $expectedItems->keys()->map(fn ($id) => (int) $id)->all();
+        $extraItems = $document->items->filter(fn ($item) => !in_array((int) $item->product_variant_id, $expectedVariantIds, true));
+        if ($extraItems->isNotEmpty()) {
+            $adjustedItems += $extraItems->count();
+            InventoryDocumentItem::whereIn('id', $extraItems->pluck('id')->all())->delete();
+            if ($result === 'unchanged') {
+                $result = 'updated';
+            }
+        }
+
+        $desiredNotes = trim((string) $document->notes);
+        if (strpos($desiredNotes, $marker) === false) {
+            $desiredNotes = trim($desiredNotes . ' ' . $marker);
+        }
+
+        $targetDate = optional($orderReturn->warehouse_confirmed_at)->toDateString() ?: optional($document->document_date)->toDateString() ?: now()->toDateString();
+        $docUpdates = [];
+        if ((string) optional($document->document_date)->toDateString() !== (string) $targetDate) {
+            $docUpdates['document_date'] = $targetDate;
+        }
+        if ((string) $document->notes !== (string) $desiredNotes) {
+            $docUpdates['notes'] = $desiredNotes;
+        }
+
+        if (!empty($docUpdates)) {
+            $document->update($docUpdates);
+            if ($result === 'unchanged') {
+                $result = 'updated';
+            }
+        }
+
+        $document->refresh();
+
+        return [$document, $result, $adjustedItems];
+    }
+
+    private function receiptMapForReturnIds(array $returnIds): array
+    {
+        $returnIds = array_values(array_unique(array_map('intval', $returnIds)));
+        if (empty($returnIds)) {
+            return [];
+        }
+
+        $documents = InventoryDocument::query()
+            ->where('type', 'import')
+            ->where(function ($query) use ($returnIds) {
+                foreach ($returnIds as $returnId) {
+                    $query->orWhere('notes', 'like', '%' . $this->returnReceiptMarker($returnId) . '%');
+                }
+            })
+            ->latest('id')
+            ->get();
+
+        $mapped = [];
+        foreach ($documents as $document) {
+            if (!preg_match('/\[order_return:#(\d+)\]/', (string) $document->notes, $matches)) {
+                continue;
+            }
+
+            $returnId = (int) ($matches[1] ?? 0);
+            if ($returnId <= 0 || isset($mapped[$returnId])) {
+                continue;
+            }
+
+            $mapped[$returnId] = $document;
+        }
+
+        return $mapped;
+    }
+
+    private function returnReceiptMarker(int $returnId): string
+    {
+        return self::RETURN_RECEIPT_NOTE_PREFIX . $returnId . ']';
     }
 }

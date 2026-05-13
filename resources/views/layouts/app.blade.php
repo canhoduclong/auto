@@ -204,7 +204,7 @@
                                                 ? asset($presenceUser->avatar)
                                                 : ($presenceUser->google_avatar ?: 'https://ui-avatars.com/api/?name=' . urlencode($presenceUser->name ?? 'U') . '&background=0F172A&color=F8FAFC&size=80&bold=true');
                                         @endphp
-                                        <div class="presence-row">
+                                        <a href="{{ route('users.show', $presenceUser->id) }}" class="presence-row text-decoration-none" style="color:inherit;">
                                             {{-- Avatar + status dot --}}
                                             <div class="presence-avatar-wrap">
                                                 <img src="{{ $puAvatar }}" alt="{{ $presenceUser->name }}" class="presence-avatar">
@@ -228,7 +228,7 @@
                                                 <span class="user-presence-dot {{ $presenceUser->is_online ? 'online' : 'offline' }}"></span>
                                                 {{ $presenceUser->is_online ? 'Online' : 'Offline' }}
                                             </span>
-                                        </div>
+                                        </a>
                                     @empty
                                         <div class="p-4 text-muted text-center" style="font-size:.85rem;">Chưa có dữ liệu trạng thái user</div>
                                     @endforelse

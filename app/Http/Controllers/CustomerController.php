@@ -40,10 +40,17 @@ class CustomerController extends Controller
     private function orderColumns(): array
     {
         if (self::$orderColumnsCache === null) {
-            self::$orderColumnsCache = Schema::getColumnListing('orders');
+            self::$orderColumnsCache = Schema::hasTable('orders')
+                ? Schema::getColumnListing('orders')
+                : [];
         }
 
         return self::$orderColumnsCache;
+    }
+
+    private function hasOrderColumn(string $column): bool
+    {
+        return in_array($column, $this->orderColumns(), true);
     }
 
 

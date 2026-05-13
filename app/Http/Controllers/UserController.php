@@ -45,7 +45,22 @@ class UserController extends Controller
         $roles = Role::orderBy('name')->get(['id', 'name']);
         $canCreateUsers = Setting::enabled('user_registration_enabled', true);
 
-        return view('users.index', compact('users', 'teams', 'roles', 'canCreateUsers'));
+        // Load selected user detail if user_id param exists
+        $selectedUser = null;
+        $activities = collect();
+        if ($request->filled('user_id')) {
+            $selectedUser = User::with('roles', 'team', 'warehouse', 'department')
+                ->find($request->input('user_id'));
+            
+            if ($selectedUser && Schema::hasTable('admin_events')) {
+                $activities = AdminEvent::where('actor_id', $selectedUser->id)
+                    ->orderByDesc('created_at')
+                    ->limit(50)
+                    ->get();
+            }
+        }
+
+        return view('users.index', compact('users', 'teams', 'roles', 'canCreateUsers', 'selectedUser', 'activities'));
     }
 
     public function bulkAssignTeamForm(Request $request)
@@ -187,6 +202,7 @@ class UserController extends Controller
                 ->limit(50)
                 ->get()
             : collect();
+
 
         return view('users.show', compact('user', 'activities'));
     }

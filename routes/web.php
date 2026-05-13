@@ -468,6 +468,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::post('/my-orders/{order}/returns', [OrderReturnController::class, 'storeForMyOrder'])->name('site.order-returns.store');
     Route::post('order-returns/{orderReturn}/ship-confirm', [OrderReturnController::class, 'shipConfirm'])->name('order-returns.ship-confirm')->middleware('permission');
     Route::post('order-returns/{orderReturn}/warehouse-confirm', [OrderReturnController::class, 'warehouseConfirm'])->name('order-returns.warehouse-confirm')->middleware('permission');
+    Route::post('order-returns/sync-warehouse-receipts', [OrderReturnController::class, 'syncWarehouseReceipts'])->name('order-returns.sync-warehouse-receipts')->middleware('permission');
     Route::resource('order-returns', OrderReturnController::class)->middleware('permission');
     
     // Route list toàn bộ địa chỉ (không cần customerId)

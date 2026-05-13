@@ -16,7 +16,7 @@
 <div class="content-wrapper container">
 <div class="content-header d-flex align-items-center py-3 px-4">
     
-    <a href="{{ route('task-assignments.my-tasks') }}" class="btn btn-sm btn-outline-secondary me-3">
+    <a href="{{ route('task-assignments.assigned-to-me') }}" class="btn btn-sm btn-outline-secondary me-3">
         <i class="ph ph-arrow-left"></i>
     </a>
     <div>

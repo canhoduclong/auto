@@ -65,6 +65,10 @@
 .cust-dob { font-size: .75rem; color: #94a3b8; margin-top: 2px; }
 .cust-phone { font-weight: 500; color: #334155; }
 .cust-email { color: #475569; font-size: .8rem; }
+.cust-contact { min-width: 210px; }
+.cust-meta-title { font-size: .78rem; font-weight: 700; color: #0f172a; }
+.cust-meta-sub { font-size: .73rem; color: #64748b; }
+.cust-manage { min-width: 260px; }
 .badge-free { background: #fff3cd; color: #92400e; border: 1px solid #fcd34d; font-size: .72rem; font-weight: 700; padding: 3px 8px; border-radius: 5px; }
 .badge-managed { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; font-size: .72rem; font-weight: 700; padding: 3px 8px; border-radius: 5px; }
 .badge-employee { background: #e0f2fe; color: #0c4a6e; border: 1px solid #7dd3fc; font-size: .72rem; font-weight: 700; padding: 3px 8px; border-radius: 5px; }
@@ -282,14 +286,9 @@
                     <tr>
                         <th style="width:36px;"><input type="checkbox" id="checkAll" class="row-check"></th>
                         <th style="width:48px;">#</th>
-                        <th>{{ __('customers.index.name') }}</th>
-                        <th>{{ __('customers.index.phone') }}</th>
-                        <th>{{ __('customers.index.email') }}</th>
-                        <th>Loại khách</th>
+                        <th style="min-width:360px;">Khách hàng</th>
                         <th>Mã Code cũ</th>
-                        <th>Sale phụ trách</th>
-                        <th>Người tạo</th>
-                        <th>Hạn giữ khách</th>
+                        <th class="cust-manage">Phụ trách &amp; hạn giữ</th>
                         @if($isAdmin)
                         <th style="min-width:230px;">Gán sale</th>
                         @endif
@@ -300,34 +299,6 @@
                     @forelse($customers as $customer)
                     <tr>
                         <td><input type="checkbox" class="row-check" value="{{ $customer->id }}"></td>
-                        @push('scripts')
-                        <script>
-                        document.addEventListener('DOMContentLoaded', function () {
-                            // Bulk checkboxes
-                            const checkAll = document.getElementById('checkAll');
-                            const rowChecks = document.querySelectorAll('.row-check');
-                            checkAll && checkAll.addEventListener('change', function () {
-                                rowChecks.forEach(cb => { if (cb !== checkAll) cb.checked = checkAll.checked; });
-                            });
-
-                            // Bulk assign sale
-                            const bulkForm = document.getElementById('bulkAssignSaleForm');
-                            if (bulkForm) {
-                                bulkForm.addEventListener('submit', function (e) {
-                                    const checked = Array.from(document.querySelectorAll('.row-check:checked'))
-                                        .filter(cb => cb.value && cb.id !== 'checkAll')
-                                        .map(cb => cb.value);
-                                    if (checked.length === 0) {
-                                        alert('Vui lòng chọn ít nhất 1 khách hàng!');
-                                        e.preventDefault();
-                                        return false;
-                                    }
-                                    document.getElementById('bulkAssignSaleIds').value = checked.join(',');
-                                });
-                            }
-                        });
-                        </script>
-                        @endpush
                         <td class="text-muted" style="font-size:.78rem;">{{ $customer->id }}</td>
 
                         <td>
@@ -347,20 +318,8 @@
                             <div class="cust-dob mt-1" style="font-size:.78rem;color:#64748b;">
                                 {{ $defaultAddr?->note ?: 'Chưa có địa chỉ mặc định' }}
                             </div>
-                        </td>
-
-                        <td class="cust-phone text-nowrap">{{ $customer->phone ?: '—' }}</td>
-
-                        <td class="cust-email">{{ $customer->email ?: '—' }}</td>
-
-                        <td>
-                            @if($customer->type)
-                                <span class="badge rounded-pill" style="background:#e0e7ff;color:#3730a3;font-size:.72rem;font-weight:600;">
-                                    {{ $customer->type->name }}
-                                </span>
-                            @else
-                                <span class="text-muted">—</span>
-                            @endif
+                            <div class="cust-phone text-nowrap mt-1">{{ $customer->phone ?: '—' }}</div>
+                            <div class="cust-email text-truncate" style="max-width:220px;">{{ $customer->email ?: '—' }}</div>
                         </td>
 
                         <td>
@@ -371,34 +330,35 @@
                             @else
                                 <span class="text-muted" style="font-size:.78rem;">—</span>
                             @endif
+                            <div class="cust-meta-sub mt-1">Người tạo: {{ optional($customer->user)->name ?? '—' }}</div>
+                            <div class="cust-meta-sub">Ngày tạo: {{ optional($customer->created_at)?->format('d/m/Y H:i') ?? '—' }}</div>
                         </td>
 
                         <td>
-                            @if($customer->is_employee)
-                                <span class="text-muted" style="font-size:.8rem;">Không áp dụng cho khách Nhân viên</span>
-                            @elseif($customer->isFree())
-                                <span class="text-muted fst-italic" style="font-size:.8rem;">Tự do</span>
-                                @if($customer->assignedTo)
-                                    <div class="sale-prev">Gần nhất: {{ $customer->assignedTo->name }}</div>
+                            <div class="cust-meta-title">
+                                @if($customer->is_employee)
+                                    Không áp dụng cho khách Nhân viên
+                                @elseif($customer->isFree())
+                                    <span class="text-muted fst-italic" style="font-size:.8rem;">Khách tự do</span>
+                                @else
+                                    Sale: <span class="sale-name">{{ optional($customer->assignedTo)->name ?? '—' }}</span>
                                 @endif
-                            @else
-                                <span class="sale-name">{{ optional($customer->assignedTo)->name ?? '—' }}</span>
-                            @endif
-                        </td>
-
-                        <td style="font-size:.8rem;color:#64748b;">{{ optional($customer->user)->name ?? '—' }}</td>
-
-                        <td>
-                            @if($customer->is_employee)
-                                <span class="text-muted" style="font-size:.78rem;">Không áp dụng</span>
-                            @elseif($customer->isFree())
-                                <span class="badge-free" style="font-size:.7rem;">Có thể gán</span>
-                            @elseif(($expiresAt = $customer->assignmentExpiresAt()))
-                                <div class="expires-date">{{ $expiresAt->format('d/m/Y') }}</div>
-                                <div class="expires-note">{{ $expiresAt->format('H:i') }} &bull; {{ $customerFreeDays }}d</div>
-                            @else
-                                <span class="text-muted" style="font-size:.78rem;">Không giới hạn</span>
-                            @endif
+                            </div>
+                            <div class="mt-1">
+                                @if($customer->is_employee)
+                                    <span class="text-muted" style="font-size:.78rem;">Không áp dụng hạn giữ</span>
+                                @elseif($customer->isFree())
+                                    <span class="badge-free" style="font-size:.7rem;">Có thể gán</span>
+                                    @if($customer->assignedTo)
+                                        <div class="sale-prev">Sale gần nhất: {{ $customer->assignedTo->name }}</div>
+                                    @endif
+                                @elseif(($expiresAt = $customer->assignmentExpiresAt()))
+                                    <div class="expires-date">Hạn: {{ $expiresAt->format('d/m/Y H:i') }}</div>
+                                    <div class="expires-note">Chu kỳ {{ $customerFreeDays }} ngày</div>
+                                @else
+                                    <span class="text-muted" style="font-size:.78rem;">Không giới hạn</span>
+                                @endif
+                            </div>
                         </td>
 
                         @if($isAdmin)
@@ -451,7 +411,7 @@
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="{{ $isAdmin ? 12 : 11 }}">
+                        <td colspan="{{ $isAdmin ? 8 : 7 }}">
                             <div class="cust-empty">
                                 <div><i class="ph ph-users"></i></div>
                                 <div style="font-weight:600;">{{ __('customers.index.empty') }}</div>
@@ -522,6 +482,19 @@ document.addEventListener('DOMContentLoaded', function () {
                 return false;
             }
             document.getElementById('bulkUnmarkEmployeeIds').value = ids.join(',');
+        });
+    }
+
+    const bulkAssignSaleForm = document.getElementById('bulkAssignSaleForm');
+    if (bulkAssignSaleForm) {
+        bulkAssignSaleForm.addEventListener('submit', function (e) {
+            const ids = Array.from(document.querySelectorAll('.row-check:not(#checkAll):checked')).map(cb => cb.value);
+            if (ids.length === 0) {
+                alert('Vui lòng chọn ít nhất 1 khách hàng!');
+                e.preventDefault();
+                return false;
+            }
+            document.getElementById('bulkAssignSaleIds').value = ids.join(',');
         });
     }
 });
