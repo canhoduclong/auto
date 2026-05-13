@@ -35,6 +35,27 @@
             display: flex;
             flex-direction: column;
             border-right: 1px solid rgba(148, 163, 184, 0.18);
+            overflow-y: auto;
+            overflow-x: hidden;
+            scrollbar-width: thin;
+            scrollbar-color: #5f7a96 transparent;
+        }
+        .acc-sidebar::-webkit-scrollbar {
+            width: 10px;
+        }
+        .acc-sidebar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .acc-sidebar::-webkit-scrollbar-thumb {
+            background: #5f7a96;
+            border-radius: 5px;
+            border: 2px solid transparent;
+            background-clip: padding-box;
+        }
+        .acc-sidebar::-webkit-scrollbar-thumb:hover {
+            background: #7b94b0;
+            border: 2px solid transparent;
+            background-clip: padding-box;
         }
         .acc-brand {
             padding: 18px;
@@ -51,7 +72,6 @@
         .acc-nav {
             padding: 12px;
             flex: 1;
-            overflow: auto;
         }
         .acc-nav a {
             display: flex;

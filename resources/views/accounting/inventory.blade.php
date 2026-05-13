@@ -1,4 +1,4 @@
-@extends('layouts.accounting')
+@extends(accounting_layout())
 
 @section('title', 'Thong Ke Kho')
 @section('subtitle', 'Tong ton he thong va ton theo tung kho')

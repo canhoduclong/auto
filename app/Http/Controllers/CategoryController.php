@@ -27,12 +27,14 @@ class CategoryController extends Controller
     
     public function create()
     {
+        $this->authorize('create', Category::class);
         $categories = Category::all(); // lấy để chọn parent
         return view('categories.create', compact('categories'));
     }
 
     public function store(Request $request)
     {
+        $this->authorize('create', Category::class);
         $request->validate([
             'name' => 'required|string|max:255',
             'parent_id' => 'nullable|exists:categories,id',
@@ -53,12 +55,14 @@ class CategoryController extends Controller
 
     public function edit(Category $category)
     {
+        $this->authorize('update', $category);
         $categories = Category::where('id', '!=', $category->id)->get(); // tránh chọn chính nó
         return view('categories.edit', compact('category', 'categories'));
     }
 
     public function update(Request $request, Category $category)
     {
+        $this->authorize('update', $category);
         $request->validate([
             'name' => 'required|string|max:255',
             'parent_id' => 'nullable|exists:categories,id',

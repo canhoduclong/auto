@@ -1,4 +1,4 @@
-@extends('layouts.accounting')
+@extends(accounting_layout())
 
 @section('title', 'Hoa Hong Khach Hang')
 @section('subtitle', 'Cau hinh hoa hong theo khach hang va ngay ap dung')
@@ -10,7 +10,7 @@
 
 <div class="acc-card mb-3">
     <div class="card-body">
-        <form method="POST" action="{{ route('accounting.commissions.store') }}" class="row g-2 align-items-end">
+        <form method="POST" action="{{ accounting_route('commissions.store') }}" class="row g-2 align-items-end">
             @csrf
             <div class="col-md-4">
                 <label class="form-label">Khach hang</label>

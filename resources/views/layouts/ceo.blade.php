@@ -9,6 +9,54 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <link rel="stylesheet" href="{{ asset('css/mobile-responsive.css') }}" type="text/css">
     @stack('styles')
+    {{-- Accounting component styles (used when accounting views render via CEO layout) --}}
+    <style>
+        :root {
+            --acc-bg: #f4f6fb;
+            --acc-panel: #ffffff;
+            --acc-line: #e2e8f0;
+            --acc-muted: #64748b;
+        }
+        .acc-card {
+            border: 1px solid var(--acc-line);
+            border-radius: 14px;
+            background: var(--acc-panel);
+            box-shadow: 0 8px 20px rgba(15,23,42,0.04);
+        }
+        .acc-card .card-body { padding: 16px; }
+        .acc-filter {
+            display: grid;
+            gap: 10px;
+            grid-template-columns: repeat(6, minmax(0, 1fr));
+        }
+        .acc-kpi {
+            display: grid;
+            gap: 12px;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+        .acc-kpi .item {
+            border: 1px solid var(--acc-line);
+            border-radius: 12px;
+            background: #fff;
+            padding: 12px;
+        }
+        .acc-kpi .item .label { color: var(--acc-muted); font-size: 12px; text-transform: uppercase; }
+        .acc-kpi .item .value { font-size: 22px; font-weight: 800; margin-top: 5px; }
+        .table thead th {
+            text-transform: uppercase;
+            font-size: 12px;
+            color: var(--acc-muted);
+            letter-spacing: 0.03em;
+        }
+        @media (max-width: 1200px) {
+            .acc-filter { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+            .acc-kpi { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (max-width: 768px) {
+            .acc-filter { grid-template-columns: 1fr; }
+            .acc-kpi { grid-template-columns: 1fr; }
+        }
+    </style>
     <style>
         :root {
             --ceo-sidebar-width: 260px;
@@ -30,12 +78,33 @@
             top: 0;
             left: 0;
             width: var(--ceo-sidebar-width);
-            min-height: 100vh;
+            height: 100vh;
             background: linear-gradient(180deg, var(--ceo-sidebar-bg) 0%, var(--ceo-sidebar-strong) 100%);
             color: #e2e8f0;
             z-index: 100;
             display: flex;
             flex-direction: column;
+            overflow-y: auto;
+            overflow-x: hidden;
+            scrollbar-width: thin;
+            scrollbar-color: #5f7a96 transparent;
+        }
+        .ceo-sidebar::-webkit-scrollbar {
+            width: 10px;
+        }
+        .ceo-sidebar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .ceo-sidebar::-webkit-scrollbar-thumb {
+            background: #5f7a96;
+            border-radius: 5px;
+            border: 2px solid transparent;
+            background-clip: padding-box;
+        }
+        .ceo-sidebar::-webkit-scrollbar-thumb:hover {
+            background: #7b94b0;
+            border: 2px solid transparent;
+            background-clip: padding-box;
         }
         .ceo-brand {
             padding: 1rem 1.25rem;
@@ -55,7 +124,6 @@
         }
         .ceo-nav {
             padding: .8rem;
-            overflow: auto;
             flex: 1;
         }
         .ceo-nav-footer {
@@ -84,7 +152,7 @@
             color: #dbeafe;
             text-decoration: none;
             border-radius: 12px;
-            padding: .55rem .7rem;
+            padding: .35rem .7rem;
             margin-bottom: .35rem;
             font-size: .92rem;
             transition: .15s ease;
@@ -124,6 +192,55 @@
             font-size: .9rem;
             color: #475569;
         }
+        /* Presence user list styles */
+        .user-presence-dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 999px;
+            display: inline-block;
+            flex-shrink: 0;
+        }
+        .user-presence-dot.online {
+            background: #22c55e;
+            box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.22);
+        }
+        .user-presence-dot.offline {
+            background: #94a3b8;
+            box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.18);
+        }
+        .presence-avatar {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            object-fit: cover;
+            flex-shrink: 0;
+        }
+        .presence-avatar-wrap {
+            position: relative;
+            flex-shrink: 0;
+        }
+        .presence-avatar-wrap .presence-status-dot {
+            position: absolute;
+            bottom: 1px;
+            right: 1px;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            border: 2px solid #fff;
+        }
+        .presence-status-dot.online  { background: #22c55e; }
+        .presence-status-dot.offline { background: #94a3b8; }
+        .presence-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 9px 14px;
+            border-bottom: 1px solid rgba(0,0,0,.07);
+            cursor: default;
+            transition: background .12s;
+        }
+        .presence-row:hover { background: rgba(0,0,0,.03); }
+        .presence-row:last-child { border-bottom: none; }
         @media (max-width: 992px) {
             .ceo-sidebar {
                 position: fixed;
@@ -157,18 +274,45 @@
             <span>CEO Executive</span>
         </div>
         <nav class="ceo-nav">
+            <div style="padding: 12px 16px; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.06em;">Tổng Quan</div>
             <a href="{{ route('ceo.dashboard') }}" class="ceo-nav-link {{ request()->routeIs('ceo.dashboard') ? 'active' : '' }}">
                 <i class="bi bi-speedometer2"></i> Dashboard
             </a>
             <a href="{{ route('ceo.profile') }}" class="ceo-nav-link {{ request()->routeIs('ceo.profile') ? 'active' : '' }}">
                 <i class="bi bi-person-circle"></i> Hồ sơ CEO
             </a>
-            <a href="{{ route('ceo.revenue') }}" class="ceo-nav-link {{ request()->routeIs('ceo.revenue') ? 'active' : '' }}">
-                <i class="bi bi-currency-dollar"></i> Doanh thu
-            </a>
+
+            <div style="padding: 12px 16px; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.06em; margin-top: 8px;">Đơn Hàng</div>
             <a href="{{ route('ceo.orders') }}" class="ceo-nav-link {{ request()->routeIs('ceo.orders') ? 'active' : '' }}">
                 <i class="bi bi-bag-check"></i> Đơn hàng
             </a>
+            <a href="{{ route('ceo.daily-sales') }}" class="ceo-nav-link {{ request()->routeIs('ceo.daily-sales') ? 'active' : '' }}">
+                <i class="bi bi-bar-chart-line"></i> Thống kê bán hàng
+            </a>
+
+            <div style="padding: 12px 16px; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.06em; margin-top: 8px;">Khách Hàng</div>
+            <a href="{{ route('ceo.customers') }}" class="ceo-nav-link {{ request()->routeIs('ceo.customers') ? 'active' : '' }}">
+                <i class="bi bi-people"></i> Khách hàng lớn
+            </a>
+            <a href="{{ route('ceo.customers-list') }}" class="ceo-nav-link {{ request()->routeIs('ceo.customers-list') ? 'active' : '' }}">
+                <i class="bi bi-card-list"></i> Danh sách khách hàng
+            </a>
+            <a href="{{ route('ceo.users-list') }}" class="ceo-nav-link {{ request()->routeIs('ceo.users-list') ? 'active' : '' }}">
+                <i class="bi bi-people-fill"></i> Danh sách user
+            </a>
+
+            <div style="padding: 12px 16px; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.06em; margin-top: 8px;">Tài Chính</div>
+            <a href="{{ route('ceo.revenue') }}" class="ceo-nav-link {{ request()->routeIs('ceo.revenue') ? 'active' : '' }}">
+                <i class="bi bi-currency-dollar"></i> Doanh thu
+            </a>
+            <a href="{{ route('ceo.cashflow') }}" class="ceo-nav-link {{ request()->routeIs('ceo.cashflow', 'ceo.cashflow.show', 'ceo.transactions.*') ? 'active' : '' }}">
+                <i class="bi bi-arrow-left-right"></i> Thu chi
+            </a>
+            <a href="{{ route('ceo.financial-reports') }}" class="ceo-nav-link {{ request()->routeIs('ceo.financial-reports') ? 'active' : '' }}">
+                <i class="bi bi-graph-up-arrow"></i> Báo cáo tài chính
+            </a>
+
+            <div style="padding: 12px 16px; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.06em; margin-top: 8px;">Hoạt Động</div>
             <a href="{{ route('ceo.sales') }}" class="ceo-nav-link {{ request()->routeIs('ceo.sales') ? 'active' : '' }}">
                 <i class="bi bi-graph-up-arrow"></i> Hiệu suất Sale
             </a>
@@ -181,14 +325,10 @@
             <a href="{{ route('ceo.shipper') }}" class="ceo-nav-link {{ request()->routeIs('ceo.shipper') ? 'active' : '' }}">
                 <i class="bi bi-truck"></i> Shipper
             </a>
-            <a href="{{ route('ceo.customers') }}" class="ceo-nav-link {{ request()->routeIs('ceo.customers') ? 'active' : '' }}">
-                <i class="bi bi-people"></i> Khách hàng
-            </a>
-            <a href="{{ route('ceo.alerts') }}" class="ceo-nav-link {{ request()->routeIs('ceo.alerts') ? 'active' : '' }}">
-                <i class="bi bi-exclamation-triangle"></i> Cảnh báo
-            </a>
+
+            <div style="padding: 12px 16px; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.06em; margin-top: 8px;">Báo Cáo</div>
             <a href="{{ route('ceo.reports') }}" class="ceo-nav-link {{ request()->routeIs('ceo.reports') ? 'active' : '' }}">
-                <i class="bi bi-journal-text"></i> Báo cáo
+                <i class="bi bi-journal-text"></i> Báo cáo điều hành
             </a>
             <a href="{{ route('ceo.weekly-report') }}" class="ceo-nav-link {{ request()->routeIs('ceo.weekly-report') ? 'active' : '' }}">
                 <i class="bi bi-calendar-week"></i> Báo cáo tuần
@@ -196,6 +336,11 @@
             <a href="{{ route('ceo.weekly-customer-report') }}" class="ceo-nav-link {{ request()->routeIs('ceo.weekly-customer-report') ? 'active' : '' }}">
                 <i class="bi bi-people-fill"></i> Báo cáo KH tuần
             </a>
+            <a href="{{ route('ceo.alerts') }}" class="ceo-nav-link {{ request()->routeIs('ceo.alerts') ? 'active' : '' }}">
+                <i class="bi bi-exclamation-triangle"></i> Cảnh báo
+            </a>
+
+            <div style="padding: 12px 16px; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.06em; margin-top: 8px;">Quản Lý</div>
             <a href="{{ route('ceo.task-management.index') }}" class="ceo-nav-link {{ request()->routeIs('ceo.task-management.*') ? 'active' : '' }}">
                 <i class="bi bi-checklist-rtl"></i> Giao việc
             </a>
@@ -213,6 +358,28 @@
 
     <main class="ceo-main">
         <header class="ceo-topbar">
+            @php
+                $currentUser = auth()->user();
+                $hasUserLastSeenColumn = \Illuminate\Support\Facades\Schema::hasColumn('users', 'last_seen_at');
+                $onlineWindowMinutes = 5;
+                $presenceUsers = ($hasUserLastSeenColumn)
+                    ? (\App\Models\User::query()
+                        ->select(['id', 'name', 'email', 'avatar', 'google_avatar', 'last_seen_at'])
+                        ->orderByDesc('last_seen_at')
+                        ->take(20)
+                        ->get())
+                    : collect();
+                $presenceUsers = $presenceUsers->map(function ($user) use ($onlineWindowMinutes) {
+                    $isOnline = !empty($user->last_seen_at) && $user->last_seen_at->gte(now()->subMinutes($onlineWindowMinutes));
+                    $user->is_online = $isOnline;
+                    return $user;
+                });
+                $onlineUsersCount  = $presenceUsers->where('is_online', true)->count();
+                $offlineUsersCount = $presenceUsers->where('is_online', false)->count();
+                $presenceUsers = $presenceUsers->where('is_online', true)
+                    ->concat($presenceUsers->where('is_online', false)->take(10))
+                    ->values();
+            @endphp
             <div class="d-flex align-items-center gap-2">
                 <button type="button" class="btn btn-light d-lg-none js-ceo-toggle" aria-label="Open menu">
                     <i class="bi bi-list"></i>
@@ -222,8 +389,69 @@
                 <div class="text-muted small">@yield('subtitle', 'Bảng điều hành CEO')</div>
                 </div>
             </div>
-            <div class="ceo-user">
-                <span>{{ auth()->user()->name ?? 'CEO' }} | {{ now()->format('d/m/Y H:i') }}</span>
+            <div class="d-flex align-items-center gap-2">
+                <div class="dropdown">
+                    <button class="btn btn-light btn-sm position-relative" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="User Online/Offline">
+                        <i class="bi bi-people-fill"></i>
+                        @if($onlineUsersCount > 0)
+                            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-success" style="font-size:.65rem;">
+                                {{ $onlineUsersCount > 99 ? '99+' : $onlineUsersCount }}
+                            </span>
+                        @endif
+                    </button>
+                    <div class="dropdown-menu dropdown-menu-end p-0" style="min-width: 340px; max-height: calc(100vh - 80px); overflow-y: auto;">
+                        {{-- Header --}}
+                        <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom bg-light">
+                            <div class="fw-semibold" style="font-size:.82rem;letter-spacing:.04em;text-transform:uppercase;color:#64748b">Trạng thái người dùng</div>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge rounded-pill d-flex align-items-center gap-1" style="background:rgba(34,197,94,.12);color:#16a34a;font-size:.75rem;">
+                                    <span class="user-presence-dot online"></span> Online {{ $onlineUsersCount }}
+                                </span>
+                                <span class="badge rounded-pill d-flex align-items-center gap-1" style="background:rgba(148,163,184,.15);color:#64748b;font-size:.75rem;">
+                                    <span class="user-presence-dot offline"></span> Offline {{ $offlineUsersCount }}
+                                </span>
+                            </div>
+                        </div>
+                        {{-- User rows --}}
+                        @forelse($presenceUsers as $presenceUser)
+                            @php
+                                $puAvatar = $presenceUser->avatar
+                                    ? asset($presenceUser->avatar)
+                                    : ($presenceUser->google_avatar ?: 'https://ui-avatars.com/api/?name=' . urlencode($presenceUser->name ?? 'U') . '&background=0F172A&color=F8FAFC&size=80&bold=true');
+                            @endphp
+                            <a href="{{ route('users.show', $presenceUser->id) }}" class="presence-row text-decoration-none" style="color:inherit;" target="_blank">
+                                {{-- Avatar + status dot --}}
+                                <div class="presence-avatar-wrap">
+                                    <img src="{{ $puAvatar }}" alt="{{ $presenceUser->name }}" class="presence-avatar">
+                                    <span class="presence-status-dot {{ $presenceUser->is_online ? 'online' : 'offline' }}"></span>
+                                </div>
+                                {{-- Info --}}
+                                <div class="flex-grow-1 min-w-0">
+                                    <div class="fw-semibold text-truncate" style="font-size:.875rem;color:#1e293b;">{{ $presenceUser->name }}</div>
+                                    <div class="text-truncate" style="font-size:.75rem;color:#64748b;">{{ $presenceUser->email }}</div>
+                                    <div style="font-size:.72rem;color:#94a3b8;margin-top:1px;">
+                                        @if($presenceUser->is_online)
+                                            <span style="color:#16a34a;">● Đang online</span>
+                                        @else
+                                            {{ $presenceUser->last_seen_at ? 'Login ' . $presenceUser->last_seen_at->format('d/m H:i') . ' (' . $presenceUser->last_seen_at->diffForHumans() . ')' : 'Chưa đăng nhập' }}
+                                        @endif
+                                    </div>
+                                </div>
+                                {{-- Badge --}}
+                                <span class="badge rounded-pill flex-shrink-0 d-flex align-items-center gap-1"
+                                      style="font-size:.72rem; {{ $presenceUser->is_online ? 'background:rgba(34,197,94,.12);color:#16a34a;' : 'background:rgba(148,163,184,.15);color:#94a3b8;' }}">
+                                    <span class="user-presence-dot {{ $presenceUser->is_online ? 'online' : 'offline' }}"></span>
+                                    {{ $presenceUser->is_online ? 'Online' : 'Offline' }}
+                                </span>
+                            </a>
+                        @empty
+                            <div class="p-4 text-muted text-center" style="font-size:.85rem;">Chưa có dữ liệu trạng thái user</div>
+                        @endforelse
+                    </div>
+                </div>
+                <div class="ceo-user">
+                    <span>{{ auth()->user()->name ?? 'CEO' }} | {{ now()->format('d/m/Y H:i') }}</span>
+                </div>
             </div>
         </header>
         <section class="ceo-content">
@@ -235,6 +463,7 @@
             @endif
 
             @yield('content')
+            @yield('accounting_content')
         </section>
     </main>
 

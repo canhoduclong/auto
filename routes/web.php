@@ -253,10 +253,24 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/warehouse', [CeoDashboardController::class, 'warehouse'])->name('warehouse');
         Route::get('/shipper', [CeoDashboardController::class, 'shipper'])->name('shipper');
         Route::get('/customers', [CeoDashboardController::class, 'customers'])->name('customers');
+        Route::get('/customers-list', [CeoDashboardController::class, 'customersList'])->name('customers-list');
+        Route::get('/users-list', [CeoDashboardController::class, 'usersList'])->name('users-list');
         Route::get('/alerts', [CeoDashboardController::class, 'alerts'])->name('alerts');
         Route::get('/reports', [CeoDashboardController::class, 'reports'])->name('reports');
         Route::get('/weekly-report', [CeoDashboardController::class, 'weeklyReport'])->name('weekly-report');
         Route::get('/weekly-customer-report', [CeoDashboardController::class, 'weeklyCustomerReport'])->name('weekly-customer-report');
+        Route::get('/financial-reports', [CeoDashboardController::class, 'financialReports'])->name('financial-reports');
+        Route::get('/daily-sales', [CeoDashboardController::class, 'dailySales'])->name('daily-sales');
+
+        // Thu chi (cashflow) — reuse AccountingDashboardController, CEO layout via helpers
+        Route::get('/cashflow', [AccountingDashboardController::class, 'cashflow'])->name('cashflow');
+        Route::get('/cashflow/{transaction}/edit', [AccountingDashboardController::class, 'transactionEdit'])->name('transactions.edit');
+        Route::get('/cashflow/{transaction}', [AccountingDashboardController::class, 'cashflowShow'])->name('cashflow.show');
+        Route::get('/transactions/create', [AccountingDashboardController::class, 'transactionCreate'])->name('transactions.create');
+        Route::post('/transactions', [AccountingDashboardController::class, 'transactionStore'])->name('transactions.store');
+        Route::put('/transactions/{transaction}', [AccountingDashboardController::class, 'transactionUpdate'])->name('transactions.update');
+        Route::post('/transactions/{transaction}/approve', [AccountingDashboardController::class, 'transactionApprove'])->name('transactions.approve');
+        Route::post('/transactions/{transaction}/reject', [AccountingDashboardController::class, 'transactionReject'])->name('transactions.reject');
 
         // Task Management Routes
         Route::get('/task-management', [TaskManagementController::class, 'index'])->name('task-management.index');
@@ -301,8 +315,8 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::post('products/{product}/restore', [ProductController::class, 'restore'])->name('products.restore')->middleware('permission');
     Route::get('products/{product}/quick-edit-form', [ProductController::class, 'getQuickEditForm'])->name('products.getQuickEditForm');
     // Quản trị biến thể sản phẩm
-    Route::resource('product-variants', ProductVariantController::class)->only(['index', 'create', 'store', 'edit', 'update']);
-    Route::post('product-variants/bulk-delete', [ProductVariantController::class, 'bulkDelete'])->name('product-variants.bulk-delete');
+    Route::resource('product-variants', ProductVariantController::class)->only(['index', 'create', 'store', 'edit', 'update'])->middleware('permission');
+    Route::post('product-variants/bulk-delete', [ProductVariantController::class, 'bulkDelete'])->name('product-variants.bulk-delete')->middleware('permission');
     Route::post('product-variants/{variant}/duplicate', [ProductVariantController::class, 'duplicate'])->name('product-variants.duplicate')->middleware('permission');
 
     // AJAX popup chọn khách hàng
@@ -518,8 +532,8 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::resource('posts', PostController::class);
         Route::resource('post-categories', PostCategoryController::class);
         Route::resource('pages', PageController::class);
-        Route::resource('brands', \App\Http\Controllers\BrandController::class);
-        Route::resource('suppliers', \App\Http\Controllers\Admin\SupplierController::class)->only(['index', 'store', 'update', 'destroy']);
+        Route::resource('brands', \App\Http\Controllers\BrandController::class)->middleware('permission');
+        Route::resource('suppliers', \App\Http\Controllers\Admin\SupplierController::class)->only(['index', 'store', 'update', 'destroy'])->middleware('permission');
 
         // Truck management
         Route::get('truck-brands/{truckBrand}/routes', [\App\Http\Controllers\Admin\TruckBrandController::class, 'routes'])->name('truck-brands.routes');

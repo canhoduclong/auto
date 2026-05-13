@@ -9,12 +9,17 @@ class ProductVariantPolicy
 {
     public function viewAny(User $user)
     {
-        return $user->hasPermission('product-variants.index');
+        return $user->isAdmin() || $user->hasPermission('product-variants.index');
     }
 
     public function update(User $user, ProductVariant $variant)
     {
-        return $user->hasPermission('product-variants.edit');
+        return $user->isAdmin() || $user->hasPermission('product-variants.edit') || $user->hasPermission('product-variants.update');
+    }
+
+    public function create(User $user)
+    {
+        return $user->isAdmin() || $user->hasPermission('product-variants.create') || $user->hasPermission('product-variants.store');
     }
 
     public function duplicate(User $user, ProductVariant $variant)

@@ -1,7 +1,7 @@
-@extends(accounting_layout())
+@extends('layouts.ceo')
 
-@section('title', 'Thong Ke Ban Hang')
-@section('subtitle', 'Thong ke chi tiet tung dong hang hoa da ban theo ngay')
+@section('title', 'Thống Kê Bán Hàng')
+@section('subtitle', 'Thống kê chi tiết từng dòng hàng hóa đã bán theo ngày')
 
 @push('styles')
 <style>
@@ -42,10 +42,19 @@
 
 /* ── toolbar ── */
 .ds-toolbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:space-between; margin-bottom:10px; }
+
+/* ── card ── */
+.acc-card {
+    border: 1px solid var(--acc-line);
+    border-radius: 14px;
+    background: var(--acc-panel);
+    box-shadow: 0 8px 20px rgba(15,23,42,0.04);
+}
+.acc-card .card-body { padding: 16px; }
 </style>
 @endpush
 
-@section('accounting_content')
+@section('content')
 
 {{-- ── Filter ─────────────────────────────────────────────────────── --}}
 <div class="acc-card mb-3">

@@ -19,9 +19,13 @@ if (!function_exists('current_accounting_route_prefix')) {
     {
         $routeName = request()->route()?->getName() ?? '';
 
-        return str_starts_with($routeName, 'admin.accounting.')
-            ? 'admin.accounting.'
-            : 'accounting.';
+        if (str_starts_with($routeName, 'admin.accounting.')) {
+            return 'admin.accounting.';
+        }
+        if (str_starts_with($routeName, 'ceo.')) {
+            return 'ceo.';
+        }
+        return 'accounting.';
     }
 }
 
@@ -42,8 +46,13 @@ if (!function_exists('accounting_route')) {
 if (!function_exists('accounting_layout')) {
     function accounting_layout(): string
     {
-        return current_accounting_route_prefix() === 'admin.accounting.'
-            ? 'layouts.admin-accounting'
-            : 'layouts.accounting';
+        $prefix = current_accounting_route_prefix();
+        if ($prefix === 'admin.accounting.') {
+            return 'layouts.admin-accounting';
+        }
+        if ($prefix === 'ceo.') {
+            return 'layouts.ceo';
+        }
+        return 'layouts.accounting';
     }
 }

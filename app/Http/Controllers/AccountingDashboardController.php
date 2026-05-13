@@ -24,7 +24,7 @@ class AccountingDashboardController extends Controller
 {
     public function __construct()
     {
-        $this->middleware(['auth', 'role:accountant,accounting,admin']);
+        $this->middleware(['auth', 'role:accountant,accounting,ceo,admin']);
     }
 
     public function index(Request $request)

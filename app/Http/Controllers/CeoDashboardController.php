@@ -2,11 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AdminEvent;
 use App\Models\Customer;
+use App\Models\CustomerType;
 use App\Models\Inventory;
 use App\Models\Order;
+use App\Models\OrderAdjustment;
 use App\Models\OrderItem;
 use App\Models\ProductPriceLog;
+use App\Models\Role;
+use App\Models\Team;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Models\Warehouse;
@@ -320,6 +325,126 @@ class CeoDashboardController extends Controller
                 number_format((float) $row->total_amount) . ' đ',
             ])->all(),
         ]);
+    }
+
+    public function customersList(Request $request)
+    {
+        $query = Customer::with(['type', 'addresses', 'assignedTo', 'user', 'lastOrder']);
+
+        if ($request->filled('type_id')) {
+            $query->where('customer_type_id', $request->input('type_id'));
+        }
+
+        if ($request->filled('assigned_to')) {
+            $query->where('assigned_to', $request->input('assigned_to'));
+        }
+
+        if ($request->filled('user_id')) {
+            $query->where('user_id', $request->input('user_id'));
+        }
+
+        if ($request->boolean('is_employee')) {
+            $query->where('is_employee', true);
+        } else {
+            $query->where('is_employee', false);
+        }
+
+        if (!$request->boolean('is_employee') && $request->filled('ownership_status')) {
+            if ($request->input('ownership_status') === 'free') {
+                $query->free();
+            }
+
+            if ($request->input('ownership_status') === 'managed') {
+                $query->managed();
+            }
+        }
+
+        if ($search = $request->input('q')) {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('phone', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%");
+            });
+        }
+
+        $perPage = (int) $request->input('per_page', 15);
+        if (!in_array($perPage, [10, 15, 25, 50, 100], true)) {
+            $perPage = 15;
+        }
+
+        $customers = $query->orderBy('name')
+            ->paginate($perPage)
+            ->appends($request->query());
+
+        $types = CustomerType::query()
+            ->orderByDesc('priority_level')
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        $users = User::query()
+            ->whereHas('roles', function ($q) {
+                $q->whereIn(DB::raw('LOWER(name)'), ['sale', 'leader', 'leader_sale', 'sale_manager']);
+            })
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        $creatorUsers = User::query()
+            ->whereIn('id', Customer::query()->select('user_id')->whereNotNull('user_id')->distinct())
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        $customerFreeDays = Customer::freeCustomerDays();
+
+        return view('ceo.customers_list', compact(
+            'customers',
+            'types',
+            'users',
+            'creatorUsers',
+            'customerFreeDays'
+        ));
+    }
+
+    public function usersList(Request $request)
+    {
+        $query = User::with('roles', 'warehouse', 'team');
+
+        if ($request->filled('q')) {
+            $search = $request->input('q');
+            $query->where(function ($sub) use ($search) {
+                $sub->where('name', 'like', '%' . $search . '%')
+                    ->orWhere('email', 'like', '%' . $search . '%');
+            });
+        }
+
+        if ($request->filled('team_id')) {
+            $query->where('team_id', $request->input('team_id'));
+        }
+
+        if ($request->filled('role_id')) {
+            $roleId = (int) $request->input('role_id');
+            $query->whereHas('roles', function ($sub) use ($roleId) {
+                $sub->where('roles.id', $roleId);
+            });
+        }
+
+        $users = $query->orderBy('name')->paginate(15)->appends($request->query());
+        $teams = Team::orderBy('name')->get(['id', 'name']);
+        $roles = Role::orderBy('name')->get(['id', 'name']);
+
+        $selectedUser = null;
+        $activities = collect();
+        if ($request->filled('user_id')) {
+            $selectedUser = User::with('roles', 'team', 'warehouse', 'department')
+                ->find($request->input('user_id'));
+            if ($selectedUser && Schema::hasTable('admin_events')) {
+                $activities = AdminEvent::where('actor_id', $selectedUser->id)
+                    ->orderByDesc('created_at')
+                    ->limit(50)
+                    ->get();
+            }
+        }
+
+        return view('ceo.users_list', compact('users', 'teams', 'roles', 'selectedUser', 'activities'));
     }
 
     public function alerts(Request $request)
@@ -812,5 +937,218 @@ class CeoDashboardController extends Controller
         $avgDailyRevenue = $totalRevenue / 7;
 
         return view('ceo.weekly_customer_report', compact('customerWeeklyData', 'dailyRevenue', 'totalRevenue', 'totalCustomers', 'avgDailyRevenue'));
+    }
+
+    public function financialReports(Request $request)
+    {
+        [$from, $to, $rangeLabel] = $this->resolveRange($request);
+
+        $revenue = (float) Order::query()->whereBetween('created_at', [$from, $to])->sum('total');
+
+        $received = (float) Transaction::query()
+            ->whereBetween('created_at', [$from, $to])
+            ->where('status', Transaction::STATUS_APPROVED)
+            ->where('type', 'payment')
+            ->sum('amount');
+
+        $cost = (float) Transaction::query()
+            ->whereBetween('created_at', [$from, $to])
+            ->where('status', Transaction::STATUS_APPROVED)
+            ->whereIn('type', ['refund', 'expense'])
+            ->sum('amount');
+
+        $profit = $received - $cost;
+
+        $series = Transaction::query()
+            ->selectRaw('DATE(created_at) as day_key')
+            ->selectRaw("SUM(CASE WHEN type = 'payment' THEN amount ELSE 0 END) as income")
+            ->selectRaw("SUM(CASE WHEN type IN ('refund', 'expense') THEN amount ELSE 0 END) as expense")
+            ->whereBetween('created_at', [$from, $to])
+            ->where('status', Transaction::STATUS_APPROVED)
+            ->groupBy('day_key')
+            ->orderBy('day_key')
+            ->get();
+
+        $accountFilterId = $request->input('account_id');
+        $catStatsQuery = Transaction::query()
+            ->with([
+                'transactionCategory:id,code,name,flow_direction',
+                'customer:id,name',
+                'account:id,name,type',
+            ])
+            ->whereBetween('created_at', [$from, $to])
+            ->where('status', Transaction::STATUS_APPROVED)
+            ->whereNotNull('transaction_category_id');
+
+        if ($accountFilterId) {
+            $catStatsQuery->where('account_id', $accountFilterId);
+        }
+
+        $allTransactionsByCategory = $catStatsQuery->get();
+
+        $catStats = collect();
+        foreach ($allTransactionsByCategory->groupBy('transaction_category_id') as $transactions) {
+            $totalAmount = $transactions->sum('amount');
+            $totalCount = $transactions->count();
+
+            $customers = $transactions
+                ->filter(fn ($t) => $t->customer_id)
+                ->map(fn ($t) => ['id' => $t->customer_id, 'name' => $t->customer?->name ?? 'N/A'])
+                ->unique('id')
+                ->values();
+
+            $accounts = $transactions
+                ->filter(fn ($t) => $t->account_id)
+                ->map(fn ($t) => ['id' => $t->account_id, 'name' => $t->account?->name ?? 'N/A', 'type' => $t->account?->type ?? 'N/A'])
+                ->unique('id')
+                ->values();
+
+            $catStats->push((object) [
+                'transaction_category_id' => $transactions->first()?->transaction_category_id,
+                'transactionCategory'     => $transactions->first()?->transactionCategory,
+                'total_count'             => $totalCount,
+                'total_amount'            => $totalAmount,
+                'customers'               => $customers,
+                'accounts'                => $accounts,
+            ]);
+        }
+
+        $catStats = $catStats->sortByDesc('total_amount')->values();
+
+        $accounts = \App\Models\Account::active()->orderBy('name')->get(['id', 'name', 'type']);
+
+        return view('ceo.financial_reports', compact(
+            'revenue', 'received', 'cost', 'profit',
+            'series', 'from', 'to', 'rangeLabel',
+            'catStats', 'accounts', 'accountFilterId'
+        ));
+    }
+
+    public function dailySales(Request $request)
+    {
+        $fromDate = (string) $request->input('from_date', now()->toDateString());
+        $toDate   = (string) $request->input('to_date', now()->toDateString());
+        $from = Carbon::parse($fromDate)->startOfDay();
+        $to   = Carbon::parse($toDate)->endOfDay();
+        if ($from->gt($to)) {
+            [$from, $to] = [$to->copy()->startOfDay(), $from->copy()->endOfDay()];
+            [$fromDate, $toDate] = [$toDate, $fromDate];
+        }
+
+        $saleId     = (int) $request->input('sale_id', 0);
+        $customerId = (int) $request->input('customer_id', 0);
+        $sort       = (string) $request->input('sort', 'date_desc');
+
+        $allowedPerPage = [10, 20, 50, 100, 200];
+        $perPage = (int) $request->input('per_page', 20);
+        if (!in_array($perPage, $allowedPerPage, true)) {
+            $perPage = 20;
+        }
+
+        // Sub-query: one approved adjustment item per order_item (latest id wins)
+        $approvedAdjSub = DB::table('order_adjustment_items as oai_s')
+            ->join('order_adjustments as oa_s', function ($j) {
+                $j->on('oa_s.id', '=', 'oai_s.order_adjustment_id')
+                  ->where('oa_s.status', '=', OrderAdjustment::STATUS_APPROVED);
+            })
+            ->selectRaw('oai_s.order_item_id, MAX(oai_s.id) as adj_item_id')
+            ->groupBy('oai_s.order_item_id');
+
+        $makeBase = function () use ($approvedAdjSub, $from, $to, $saleId, $customerId) {
+            return DB::table('order_items')
+                ->join('orders', 'order_items.order_id', '=', 'orders.id')
+                ->join('products', 'order_items.product_id', '=', 'products.id')
+                ->leftJoin('product_variants', 'order_items.product_variant_id', '=', 'product_variants.id')
+                ->leftJoin('customers', 'orders.customer_id', '=', 'customers.id')
+                ->leftJoin('users', 'orders.user_id', '=', 'users.id')
+                ->leftJoinSub($approvedAdjSub, 'adj_max', 'adj_max.order_item_id', '=', 'order_items.id')
+                ->leftJoin('order_adjustment_items as adj', 'adj.id', '=', 'adj_max.adj_item_id')
+                ->whereNotIn('orders.status', ['rejected', 'cancelled'])
+                ->whereBetween('orders.created_at', [$from, $to])
+                ->when($saleId > 0, fn ($q) => $q->where('orders.user_id', $saleId))
+                ->when($customerId > 0, fn ($q) => $q->where('orders.customer_id', $customerId));
+        };
+
+        // ── Paginated list ────────────────────────────────────────────
+        $listQ = $makeBase()->select([
+            'order_items.id',
+            'orders.id as order_id_val',
+            'orders.created_at as order_date',
+            'orders.code as order_code',
+            'products.name as product_name',
+            'products.unit as product_unit',
+            DB::raw("COALESCE(product_variants.size, '') as variant_size"),
+            DB::raw("COALESCE(product_variants.name, '') as variant_name"),
+            'customers.name as customer_name',
+            DB::raw("COALESCE(customers.customer_code, '') as customer_code"),
+            'users.name as sale_name',
+            'order_items.quantity',
+            'order_items.price',
+            'order_items.total',
+            'order_items.total_weight',
+            'order_items.is_priced_by_kg',
+            DB::raw("COALESCE(adj.adjusted_quantity, order_items.quantity) as eff_qty"),
+            DB::raw("COALESCE(adj.adjusted_price,    order_items.price)    as eff_price"),
+            DB::raw("COALESCE(adj.adjusted_weight,   order_items.total_weight) as eff_weight"),
+            DB::raw("CASE WHEN adj.id IS NOT NULL THEN 1 ELSE 0 END as has_adj"),
+            DB::raw("CASE WHEN adj.id IS NOT NULL THEN
+                        CASE WHEN order_items.is_priced_by_kg = 1
+                            THEN COALESCE(adj.adjusted_weight, order_items.total_weight) * COALESCE(adj.adjusted_price, order_items.price)
+                            ELSE COALESCE(adj.adjusted_quantity, order_items.quantity)   * COALESCE(adj.adjusted_price, order_items.price)
+                        END
+                     ELSE order_items.total END as eff_total"),
+        ]);
+
+        match ($sort) {
+            'date_asc'     => $listQ->orderBy('orders.created_at'),
+            'product_asc'  => $listQ->orderBy('products.name')->orderByDesc('orders.created_at'),
+            'product_desc' => $listQ->orderByDesc('products.name')->orderByDesc('orders.created_at'),
+            'amount_asc'   => $listQ->orderBy('order_items.total')->orderByDesc('orders.created_at'),
+            'amount_desc'  => $listQ->orderByDesc('order_items.total')->orderByDesc('orders.created_at'),
+            'qty_asc'      => $listQ->orderBy('order_items.quantity')->orderByDesc('orders.created_at'),
+            'qty_desc'     => $listQ->orderByDesc('order_items.quantity')->orderByDesc('orders.created_at'),
+            'weight_asc'   => $listQ->orderBy('order_items.total_weight')->orderByDesc('orders.created_at'),
+            'weight_desc'  => $listQ->orderByDesc('order_items.total_weight')->orderByDesc('orders.created_at'),
+            default        => $listQ->orderByDesc('orders.created_at'),
+        };
+
+        $items = $listQ->paginate($perPage)->appends($request->query());
+
+        // ── Grand summary (all pages) ──────────────────────────────────
+        $effTotalExpr = "CASE WHEN adj.id IS NOT NULL THEN
+            CASE WHEN order_items.is_priced_by_kg = 1
+                THEN COALESCE(adj.adjusted_weight, order_items.total_weight) * COALESCE(adj.adjusted_price, order_items.price)
+                ELSE COALESCE(adj.adjusted_quantity, order_items.quantity)   * COALESCE(adj.adjusted_price, order_items.price)
+            END
+         ELSE order_items.total END";
+
+        $summary = $makeBase()->selectRaw("
+            COUNT(DISTINCT order_items.id)                                                          as item_count,
+            COUNT(DISTINCT order_items.order_id)                                                    as order_count,
+            SUM(COALESCE(adj.adjusted_quantity,  order_items.quantity))                             as grand_qty,
+            SUM(COALESCE(adj.adjusted_weight,    order_items.total_weight))                         as grand_weight,
+            SUM({$effTotalExpr})                                                                     as grand_total
+        ")->first();
+
+        // ── Product stats ──────────────────────────────────────────────
+        $productStats = $makeBase()->select([
+            'products.id as product_id',
+            'products.name as product_name',
+            'products.unit as product_unit',
+            DB::raw("SUM(COALESCE(adj.adjusted_quantity,  order_items.quantity))         as total_qty"),
+            DB::raw("SUM(COALESCE(adj.adjusted_weight,    order_items.total_weight))     as total_weight"),
+            DB::raw("SUM({$effTotalExpr})                                                as total_amount"),
+        ])->groupBy('products.id', 'products.name', 'products.unit')
+          ->orderByDesc('total_amount')
+          ->get();
+
+        $sales     = User::query()->orderBy('name')->select('id', 'name')->get();
+        $customers = Customer::query()->orderBy('name')->select('id', 'name', 'customer_code')->get();
+
+        return view('ceo.daily_sales', compact(
+            'items', 'productStats', 'summary',
+            'fromDate', 'toDate', 'saleId', 'customerId',
+            'sort', 'perPage', 'sales', 'customers',
+        ));
     }
 }

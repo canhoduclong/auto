@@ -34,9 +34,9 @@
     @can('create', App\Models\Product::class)
         <a href="{{ route('products.create') }}" class="btn btn-success mb-3">{{ __('admin.product.create') }}</a>
     @endcan
-    @if(auth()->check() && auth()->user()->hasPermission('edit'))
+    @can('update', App\Models\Product::class)
         <a href="{{ route('products.price-management.index') }}" class="btn btn-outline-primary mb-3">Quản lý giá sản phẩm</a>
-    @endif
+    @endcan
     <div class="card"> 
         <div class="card-header">
             <h5 class="mb-0">{{ __('admin.product.list') }}</h5>
@@ -52,12 +52,12 @@
                 </div>
             </div>
             
-            @if(auth()->user()->hasPermission('add'))
+            @can('create', App\Models\Product::class)
                 <a class="btn btn-outline-success btn-sm" href="{{ route('products.create') }}">
                     <i class="ph-plus ph-sm me-2"></i>
                     {{ __('admin.product.create') }}
                 </a> 
-            @endif
+            @endcan
 
         </div> 
       
@@ -111,11 +111,11 @@
                 <td>
                     <div class="d-flex justify-content-end list-actions"> 
                         
-                        @if(auth()->user()->hasPermission('edit'))
+                        @can('update', $product)
                             <a href="{{ route('products.edit', ['product' => $product->id, 'page' =>  request()->page, 'perPage' => $perPage] ) }}" class="btn btn-warning btn-sm me-1">
                                 <i class="ph ph-pencil-line"></i>
                             </a>
-                        @endif
+                        @endcan
     
                          @can('update', $product)
                             <a href="{{ route('products.edit', ['product' => $product->id, 'page' =>  request()->page, 'perPage' => $perPage ]) }}" class="btn btn-primary btn-sm">Sửa</a>

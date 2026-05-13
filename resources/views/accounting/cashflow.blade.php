@@ -1,4 +1,4 @@
-@extends('layouts.accounting')
+@extends(accounting_layout())
 
 @section('title', 'Quan Ly Thu Chi')
 @section('subtitle', 'Phieu thu, phieu chi va luong tien phat sinh')
@@ -6,9 +6,11 @@
 @section('accounting_content')
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div></div>
-    <a href="{{ route('accounting.transactions.create') }}" class="btn btn-primary btn-sm">
-        <i class="bi bi-plus-circle me-1"></i>Tao giao dich
-    </a>
+    @if(current_accounting_route_prefix() !== 'ceo.')
+        <a href="{{ accounting_route('transactions.create') }}" class="btn btn-primary btn-sm">
+            <i class="bi bi-plus-circle me-1"></i>Tao giao dich
+        </a>
+    @endif
 </div>
 <div class="acc-kpi mb-3">
     <div class="item"><div class="label">Tong thu</div><div class="value text-success">{{ number_format($incomeTotal) }} d</div></div>
@@ -267,7 +269,7 @@
                     <td>{{ $tx->customer?->name ?? '-' }}</td>
                     <td>{{ optional($tx->created_at)->format('d/m/Y H:i') }}</td>
                     <td>
-                        <a href="{{ route('accounting.cashflow.show', $tx) }}" class="btn btn-sm btn-outline-primary">
+                        <a href="{{ accounting_route('cashflow.show', $tx) }}" class="btn btn-sm btn-outline-primary">
                             <i class="bi bi-eye"></i> Chi tiet
                         </a>
                     </td>

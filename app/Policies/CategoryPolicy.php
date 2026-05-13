@@ -9,22 +9,22 @@ class CategoryPolicy
 {
     public function viewAny(User $user)
     {
-        return $user->hasPermission('categories.index');
+        return $user->isAdmin() || $user->hasPermission('categories.index');
     }
 
     public function create(User $user)
     {
-        return $user->hasPermission('categories.create');
+        return $user->isAdmin() || $user->hasPermission('categories.create') || $user->hasPermission('categories.store');
     }
 
     public function update(User $user, Category $category)
     {
-        return $user->hasPermission('categories.update');
+        return $user->isAdmin() || $user->hasPermission('categories.update') || $user->hasPermission('categories.edit');
     }
 
     public function delete(User $user, Category $category)
     {
-        return $user->hasRole('admin') || $user->hasPermission('categories.delete');
+        return $user->isAdmin() || $user->hasPermission('categories.delete') || $user->hasPermission('categories.destroy');
     }
     
 }
