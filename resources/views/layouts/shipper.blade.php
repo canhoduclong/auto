@@ -210,6 +210,37 @@
     <!-- Main content -->
     <div class="sp-main">
         <header class="sp-topbar">
+            @php
+                $currentUser = auth()->user();
+                $layoutSwitchTargets = collect($currentUser?->roles ?? [])
+                    ->map(function ($role) {
+                        $roleName = strtolower((string) $role->name);
+
+                        return match ($roleName) {
+                            'accountant', 'accounting' => [
+                                'label' => 'Kế toán',
+                                'href' => url('/accounting'),
+                            ],
+                            'warehouse' => [
+                                'label' => 'Kho',
+                                'href' => url('/warehouse'),
+                            ],
+                            'ceo' => [
+                                'label' => 'CEO',
+                                'href' => url('/ceo'),
+                            ],
+                            'admin' => [
+                                'label' => 'Admin',
+                                'href' => url('/admin/dashboard'),
+                            ],
+                            'shipper' => null,
+                            default => null,
+                        };
+                    })
+                    ->filter()
+                    ->unique('href')
+                    ->values();
+            @endphp
             <div class="d-flex align-items-center gap-2">
                 <button type="button" class="btn btn-light d-md-none js-sp-toggle" aria-label="Open menu">
                     <i class="bi bi-list"></i>
@@ -222,6 +253,23 @@
                 </div>
             </div>
             <div class="d-flex align-items-center gap-3">
+                @if($layoutSwitchTargets->count() > 1)
+                    <div class="dropdown">
+                        <button class="btn btn-outline-primary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            Chuyển layout
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                            @foreach($layoutSwitchTargets as $layoutSwitchTarget)
+                                <li>
+                                    <a class="dropdown-item d-flex align-items-center gap-2" href="{{ $layoutSwitchTarget['href'] }}">
+                                        <i class="bi bi-box-arrow-up-right text-primary"></i>
+                                        <span>{{ $layoutSwitchTarget['label'] }}</span>
+                                    </a>
+                                </li>
+                            @endforeach
+                        </ul>
+                    </div>
+                @endif
                 <span class="text-muted small">
                     <i class="bi bi-clock me-1"></i>
                     <span id="current-time">{{ now()->format('H:i') }}</span>
