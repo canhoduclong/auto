@@ -37,6 +37,9 @@
         color: #64748b;
         margin-bottom: 8px;
     }
+    .newcus{
+        color: #0f766e;
+    }
 
     .stat-value {
         font-size: 22px;
@@ -164,11 +167,9 @@
         </div>
 
         <div class="row g-3">
-            <div class="col-lg-7">
-                
+            <div class="col-lg-7"> 
 
-                <div class="section-card p-3" id="commission-feed">
-                    <h6 class="mb-2">Chúc mừng nhận hoa hồng</h6>
+                <div class="section-card p-3 mb-3" id="commission-feed"> 
                     @forelse($commissionFeed as $item)
                         <div class="feed-item">
                             <div class="fw-semibold">{{ $item->order_code ?: ('#' . $item->order_id) }} - {{ $item->customer_name ?: 'Khách hàng' }}</div>
@@ -195,21 +196,21 @@
 
             <div class="col-lg-5">
                 {{-- Assigned Customers Section --}}
-                <h6 class="mx-1 mb-3 text-uppercase">Khách hàng mới</h6>
+                <h6 class="mx-1 mb-3 text-uppercase fs-5 newcus">Khách hàng mới</h6>
                 <div class="pb-3 mb-3" id="assigned-customers"> 
                     @forelse($assignedCustomers as $idx => $customer)
                         <div class="assigned-customer-card p-2 mb-2 border rounded" style="background: #f8fafc;">
-                            <div class="d-flex justify-content-between align-items-start gap-2">
-                                <div class="d-flex  border-right   text-muted justify-content-center align-items-center " style="width: 30px;"> 
-                                    <span class="fs-2">{{ $idx + 1 }}</span>
+                            <div class="d-flex align-items-center bd-highlight  ">
+                                <div class="d-flex  border-right  mr-2    text-muted justify-content-center align-items-center " style="width: 30px;"> 
+                                    <span class="fs-2 newcus">{{ $idx + 1 }}</span>
                                 </div>
                                 <div class="flex-grow-1">                                   
-                                    <div class="small fw-semibold">{{ $customer['name'] }}</div>
+                                    <div class="small newcus fw-semibold fs-6 text-uppercase">{{ $customer['name'] }}</div>
                                     <div class="small text-muted">
-                                        <i class="bi bi-telephone"></i> {{ $customer['phone'] ?: '—' }}
-                                        @if($customer['address'])
-                                            <br><i class="bi bi-geo-alt"></i> {{ $customer['address'] }}
-                                        @endif
+                                        {{ $customer['phone'] ?: '' }} 
+                                    </div>
+                                    <div class="small text-muted">
+                                        {{ $customer['address'] ?: '' }}
                                     </div>
                                 </div>
                                 <button type="button" class="btn btn-sm {{ $customer['is_accepted'] ? 'btn-success' : 'btn-outline-primary' }} accept-customer-btn" 
