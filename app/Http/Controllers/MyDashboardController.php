@@ -16,6 +16,8 @@ use Illuminate\Support\Facades\Cache;
 
 class MyDashboardController extends Controller
 {
+    protected $settings;
+
     public function __construct()
     {
         $this->settings = Cache::remember('settings', 60, function () {
@@ -173,9 +175,9 @@ class MyDashboardController extends Controller
                 'u.name as changed_by_name',
             ]);
 
-        // Get assigned customers (for sales roles only)
+        // Get assigned customers (for sales-flow roles only)
         $assignedCustomers = collect();
-        if ($user->hasRole(['sale', 'leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale'])) {
+        if ($user->isSalesFlowRole()) {
             $assignedCustomers = Customer::query()
                 ->where('assigned_to', $user->id)
                 ->orderByDesc('assigned_at')
