@@ -11,9 +11,8 @@
     }
 
     .my-dashboard .hero-card {
-        border: 0;
-        border-radius: 18px;
-        background: linear-gradient(135deg, #0f766e, #15803d);
+        border: 0; 
+        background: linear-gradient(135deg, #020258, #030a8c);
         color: #fff;
         box-shadow: 0 10px 30px rgba(15, 118, 110, 0.25);
     }
