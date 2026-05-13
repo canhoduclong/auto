@@ -195,8 +195,8 @@
 
             <div class="col-lg-5">
                 {{-- Assigned Customers Section --}}
-                <h6 class="mx-1 mb-3">Khách hàng mới</h6>
-                <div class="py-3 mb-3" id="assigned-customers"> 
+                <h6 class="mx-1 mb-3 text-uppercase">Khách hàng mới</h6>
+                <div class="pb-3 mb-3" id="assigned-customers"> 
                     @forelse($assignedCustomers as $idx => $customer)
                         <div class="assigned-customer-card p-2 mb-2 border rounded" style="background: #f8fafc;">
                             <div class="d-flex justify-content-between align-items-start gap-2">
