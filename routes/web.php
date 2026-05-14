@@ -6,6 +6,7 @@ use App\Http\Controllers\ProductVariantPriceController;
 use App\Http\Controllers\ProductVariantController;
 use App\Http\Controllers\CategoryController; 
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\RoleSwitchController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\PermissionController;
@@ -76,6 +77,10 @@ Route::middleware('guest')->group(function () {
 
 
 Route::middleware(['auth', 'assigned'])->group(function () {
+
+    // Role switching
+    Route::post('/switch-role/{role}', [RoleSwitchController::class, 'switch'])->name('role.switch');
+    Route::post('/clear-role', [RoleSwitchController::class, 'clear'])->name('role.clear');
 
     // Làm mới priority cho khách đang chăm
     Route::post('/my-customer/refresh-priority', [\App\Http\Controllers\MyCustomerController::class, 'refreshPriority'])->name('my_customer.refresh_priority');

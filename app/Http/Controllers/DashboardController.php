@@ -19,6 +19,38 @@ class DashboardController extends Controller
     {
         $user = Auth::user();
 
+        // Check for selected/active role from session
+        $activeRole = strtolower(session('active_role') ?? '');
+        
+        // If there's an active role selected, and user has it, redirect to that role's dashboard
+        if ($activeRole) {
+            if ($activeRole === 'admin' && $user?->hasRole('admin')) {
+                $roleName = 'admin';
+                goto show_admin_dashboard;
+            }
+            if ($activeRole === 'ceo' && $user?->hasRole('ceo')) {
+                return redirect()->route('ceo.dashboard');
+            }
+            if (($activeRole === 'accountant' || $activeRole === 'accounting') && ($user?->hasRole('accountant') || $user?->hasRole('accounting'))) {
+                return redirect()->route('accounting.dashboard');
+            }
+            if ($activeRole === 'warehouse' && $user?->hasRole('warehouse')) {
+                return redirect()->route('warehouse.dashboard');
+            }
+            if ($activeRole === 'shipper' && $user?->hasRole('shipper')) {
+                return redirect()->route('shipper.dashboard');
+            }
+            if (in_array($activeRole, ['sale', 'leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale']) && $user?->hasRole($activeRole)) {
+                return redirect()->route('pages.my_dashboard');
+            }
+        }
+
+        // Fallback: redirect based on first matching role (in priority order)
+        if ($user?->hasRole('admin')) {
+            $roleName = 'admin';
+            goto show_admin_dashboard;
+        }
+
         if ($user?->hasRole('ceo')) {
             return redirect()->route('ceo.dashboard');
         }
@@ -47,6 +79,8 @@ class DashboardController extends Controller
         }
 
         $roleName = $user?->roles()->pluck('name')->first() ?? 'default';
+
+        show_admin_dashboard:
 
         $adminData = [];
         if ($roleName === 'admin') {

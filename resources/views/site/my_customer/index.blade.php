@@ -1148,7 +1148,7 @@
                             <div class="mt-2">
                                 <div class="d-flex justify-content-end align-items-center">
                                     <div class="text-end me-3">
-                                        <small class="text-muted">Đơn: {{ $customer->orders_count }}</small>
+                                        <small class="text-muted">Đơn: ${Number(customer.orders_count || 0).toLocaleString('vi-VN')}</small>
                                     </div>
                                     ${currentParams.tab === 'trash' ? '' : `<div class="text-end me-3 mt-1"><input type="checkbox" name="ids[]" value="${customer.id}" class="customer-checkbox"></div>`}
                                     <div class="mc-actions justify-content-end gap-2">${actionButtonsHtml(customer)}</div>

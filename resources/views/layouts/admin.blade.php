@@ -77,6 +77,32 @@
                     </button>
 
                     <div class="ms-auto d-flex align-items-center gap-2 py-2">
+                        <!-- Role Switcher Dropdown -->
+                        @if($currentUser->roles->count() > 1)
+                        <div class="dropdown">
+                            <button class="btn btn-light btn-sm" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Chuyển vai trò">
+                                <i class="ph ph-user-switch"></i>
+                                <span class="d-none d-sm-inline ms-1">{{ ucfirst(session('active_role', auth()->user()->roles()->first()->name ?? 'User')) }}</span>
+                            </button>
+                            <div class="dropdown-menu dropdown-menu-end p-2">
+                                <div class="small fw-semibold mb-2 px-2">Chọn vai trò</div>
+                                @foreach($currentUser->roles as $role)
+                                    @php
+                                        $isActive = strtolower(session('active_role')) === strtolower($role->name);
+                                    @endphp
+                                    <form action="{{ route('role.switch', $role->name) }}" method="POST" class="d-grid">
+                                        @csrf
+                                        <button type="submit" 
+                                            class="btn btn-sm {{ $isActive ? 'btn-primary' : 'btn-outline-secondary' }} text-start"
+                                            title="Chuyển sang vai trò {{ $role->name }}">
+                                            <i class="ph {{ $isActive ? 'ph-check-circle' : 'ph-circle' }} me-2"></i>{{ ucfirst($role->name) }}
+                                        </button>
+                                    </form>
+                                @endforeach
+                            </div>
+                        </div>
+                        @endif
+
                         <div class="dropdown">
                             <button class="btn btn-light btn-sm position-relative" type="button" data-bs-toggle="dropdown" aria-expanded="false">
                                 <i class="ph ph-bell"></i>

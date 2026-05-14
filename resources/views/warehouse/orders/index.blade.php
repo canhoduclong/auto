@@ -277,7 +277,7 @@
     }
 
     /* ── Stock Drawer (offcanvas) ───────────────────────── */
-    :root { --stock-drawer-width: 380px; }
+    :root { --stock-drawer-width: min(92vw, 460px); }
     #stockDrawer {
         width: var(--stock-drawer-width);
     }
@@ -294,8 +294,7 @@
         background: #f8fafc;
         border-bottom: 1px solid #e2e8f0;
     }
-    #stockDrawer .offcanvas-body {
-        padding: 16px;
+    #stockDrawer .offcanvas-body { 
         overflow-y: auto;
     }
     #stockDrawerPinBtn.pinned {
@@ -327,8 +326,7 @@
         margin-left: 4px;
     }
     .wh-stock-summary {
-        border: 1px solid #e2e8f0;
-        border-radius: 10px;
+        border: 1px solid #e2e8f0; 
         background: #f8fafc;
         padding: 10px 12px;
         margin-bottom: 14px;
@@ -345,6 +343,84 @@
     .wh-stock-summary-row .label { color: #64748b; }
     .wh-stock-summary-row .value { font-weight: 700; color: #0f172a; }
     .wh-stock-summary-row .value.danger { color: #dc2626; }
+    .wh-stock-list {
+        border: 1px solid #e2e8f0; 
+        overflow: hidden;
+        background: #fff;
+    }
+    .wh-stock-row {
+        display: grid;
+        grid-template-columns: minmax(110px, 2.2fr) minmax(50px, .95fr) minmax(50px, .95fr) minmax(55px, .9fr) minmax(60px, 1fr);
+        column-gap: 8px;
+        align-items: center;
+        padding: 6px 9px;
+        border-bottom: 1px solid #eef2f7;
+    }
+    .wh-stock-row:last-child {
+        border-bottom: 0;
+    }
+    .wh-stock-row.is-short {
+        background: #fff8f8;
+    }
+    .wh-stock-row.head {
+        background: #f8fafc;
+        font-size: .74rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+        color: #334155;
+    }
+    .wh-stock-col {
+        min-width: 0;
+    }
+    .wh-stock-col.num {
+        text-align: right;
+        font-weight: 700;
+        color: #0f172a;
+        white-space: nowrap;
+    }
+    .wh-stock-col.col-available {
+        color: var(--theme-primary);
+    }
+    .wh-stock-col.col-ordered {
+        color: #984107;
+    }
+    .wh-stock-col.col-packed {
+        color: #600240;
+    }
+    .wh-stock-col.num.is-low {
+        color: #dc2626;
+    }
+    .wh-stock-product-name {
+        font-size: .86rem;
+        font-weight: 700;
+        color: #0f172a;
+        line-height: 1.3;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .wh-stock-product-sku {
+        font-size: .74rem;
+        color: #64748b;
+        margin-top: 2px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    @media (max-width: 560px) {
+        .wh-stock-row {
+            grid-template-columns: minmax(140px, 2fr) repeat(4, minmax(56px, .8fr));
+            column-gap: 6px;
+            padding: 9px 10px;
+        }
+        .wh-stock-row.head {
+            font-size: .67rem;
+        }
+        .wh-stock-col.num {
+            font-size: .8rem;
+        }
+    }
     .wh-drawer-date-badge {
         display: inline-block;
         font-size: .75rem;
@@ -946,10 +1022,8 @@
 <div class="offcanvas offcanvas-end" tabindex="-1" id="stockDrawer" aria-labelledby="stockDrawerLabel" data-bs-scroll="true" data-bs-backdrop="false">
     <div class="offcanvas-header">
         <div id="stockDrawerLabel">
-            <div class="fw-bold" style="font-size:1rem;">
-                <i class="bi bi-bar-chart-steps me-1 text-primary"></i>Tồn kho theo sản phẩm
-            </div>
-            <div class="wh-drawer-date-badge">
+            
+            <div class=" fw-bold" style="font-size:1rem;">
                 <i class="bi bi-calendar3 me-1"></i>
                 @php
                     $displayDate = \Illuminate\Support\Carbon::parse($selectedDate);
@@ -968,109 +1042,40 @@
             <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Đóng"></button>
         </div>
     </div>
-    <div class="offcanvas-body">
+    <div class="warehouse-body">
         @if($inventoryStats->isEmpty())
             <div class="text-center text-muted py-5">
                 <i class="bi bi-inbox fs-1"></i>
                 <p class="mt-2">Không có đơn hàng nào trong ngày này.</p>
             </div>
         @else
-            {{-- Summary --}}
-            <div class="wh-stock-summary">
-                <div class="wh-stock-summary-row">
-                    <span class="label">Số loại hàng</span>
-                    <span class="value">{{ $stockSummary['total_products'] }}</span>
+           
+            <div class="wh-stock-list">
+                <div class="wh-stock-row head">
+                    <div class="wh-stock-col">Tên sản phẩm</div>
+                    <div class="wh-stock-col num">Tồn kho</div>
+                    <div class="wh-stock-col num col-available">Khả dụng</div>
+                    <div class="wh-stock-col num col-ordered">SL đặt</div>
+                    <div class="wh-stock-col num col-packed">Đã đóng</div>
                 </div>
-                @if($stockSummary['short_products'] > 0)
-                <div class="wh-stock-summary-row">
-                    <span class="label">⚠ Loại thiếu hàng</span>
-                    <span class="value danger">{{ $stockSummary['short_products'] }}</span>
-                </div>
-                @endif
-                <div class="wh-stock-summary-row">
-                    <span class="label">Tổng SL đặt trong ngày</span>
-                    <span class="value">{{ number_format($stockSummary['total_ordered'], 0, ',', '.') }}</span>
-                </div>
-                <div class="wh-stock-summary-row">
-                    <span class="label">Đã đóng gói</span>
-                    <span class="value">{{ number_format($stockSummary['total_packed'], 0, ',', '.') }}</span>
-                </div>
-                @if($stockSummary['total_shortage'] > 0)
-                <div class="wh-stock-summary-row">
-                    <span class="label">Tổng SL thiếu kho</span>
-                    <span class="value danger">{{ number_format($stockSummary['total_shortage'], 0, ',', '.') }}</span>
-                </div>
-                @endif
+                @foreach($inventoryStats as $stockItem)
+                    @php
+                        $isShort = (bool) ($stockItem['is_short'] ?? false);
+                    @endphp
+                    <div class="wh-stock-row {{ $isShort ? 'is-short' : '' }}">
+                        <div class="wh-stock-col">
+                            <div class="wh-stock-product-name" title="{{ $stockItem['name'] }}">{{ $stockItem['name'] }}</div>
+                            @if(!empty($stockItem['sku']))
+                                <div class="wh-stock-product-sku" title="SKU: {{ $stockItem['sku'] }}">SKU: {{ $stockItem['sku'] }}</div>
+                            @endif
+                        </div>
+                        <div class="wh-stock-col num">{{ number_format((float) ($stockItem['raw_stock'] ?? 0), 0, ',', '.') }}</div>
+                        <div class="wh-stock-col num col-available">{{ number_format((float) ($stockItem['fifo_remaining'] ?? 0), 0, ',', '.') }}</div>
+                        <div class="wh-stock-col num col-ordered">{{ number_format((float) ($stockItem['ordered_qty'] ?? 0), 0, ',', '.') }}</div>
+                        <div class="wh-stock-col num col-packed">{{ number_format((float) ($stockItem['packed_qty'] ?? 0), 0, ',', '.') }}</div>
+                    </div>
+                @endforeach
             </div>
-
-            {{-- Per-product --}}
-            @foreach($inventoryStats as $stockItem)
-                @php
-                    $isShort      = (bool) $stockItem['is_short'];
-                    $fifoRemaining = (float) $stockItem['fifo_remaining'];
-                    $maxBar       = max(1, (float) $stockItem['raw_stock'], (float) $stockItem['ordered_qty']);
-                    $orderedWidth  = min(100, ((float) $stockItem['ordered_qty'] / $maxBar) * 100);
-                    $packedWidth   = min(100, ((float) $stockItem['packed_qty']  / $maxBar) * 100);
-                    $fifoBarW      = min(100, $maxBar > 0 ? ($fifoRemaining / $maxBar) * 100 : 0);
-                    $rawBarW       = min(100, $maxBar > 0 ? ((float) $stockItem['raw_stock'] / $maxBar) * 100 : 0);
-                @endphp
-                <div class="wh-stock-item mb-2 {{ $isShort ? 'is-short' : '' }}">
-                    <div class="wh-stock-name">
-                        {{ $stockItem['name'] }}
-                        @if(!empty($stockItem['sku']))
-                            <span class="text-muted small d-block mt-1">SKU: {{ $stockItem['sku'] }}</span>
-                        @endif
-                        @if($isShort)
-                            <span class="wh-stock-shortage-badge">Thiếu {{ number_format($stockItem['shortage'], 0, ',', '.') }}</span>
-                        @endif
-                    </div>
-
-                    {{-- Tồn kho khả dụng (quantity - reserved_quantity) --}}
-                    <div class="stock-bar-wrap">
-                        <div class="stock-bar-meta">
-                            <span>Tồn kho khả dụng</span>
-                            <strong>{{ number_format($stockItem['raw_stock'], 0, ',', '.') }}</strong>
-                        </div>
-                        <div class="stock-bar-track">
-                            <div class="stock-bar-fill stock-available" style="width: {{ $rawBarW }}%"></div>
-                        </div>
-                    </div>
-
-                    {{-- Khả dụng cho đơn ngày này (sau khi FIFO trừ đơn toàn cục đứng trước) --}}
-                    <div class="stock-bar-wrap">
-                        <div class="stock-bar-meta">
-                            <span>Khả dụng cho đơn ngày này</span>
-                            <strong class="{{ $isShort ? 'text-danger' : 'text-success' }}">{{ number_format($fifoRemaining, 0, ',', '.') }}</strong>
-                        </div>
-                        <div class="stock-bar-track">
-                            <div class="stock-bar-fill" style="width: {{ $fifoBarW }}%; background: {{ $isShort ? '#ef4444' : 'linear-gradient(90deg,#16a34a,#22c55e)' }};"></div>
-                        </div>
-                    </div>
-
-                    {{-- Đặt theo đơn --}}
-                    <div class="stock-bar-wrap">
-                        <div class="stock-bar-meta">
-                            <span>Đặt theo đơn ngày {{ \Illuminate\Support\Carbon::parse($selectedDate)->format('d/m') }}</span>
-                            <strong>{{ number_format($stockItem['ordered_qty'], 0, ',', '.') }}</strong>
-                        </div>
-                        <div class="stock-bar-track">
-                            <div class="stock-bar-fill stock-ordered" style="width: {{ $orderedWidth }}%"></div>
-                        </div>
-                    </div>
-
-                    {{-- Đã đóng gói --}}
-                    <div class="stock-bar-wrap">
-                        <div class="stock-bar-meta">
-                            <span>Đã đóng gói</span>
-                            <strong>{{ number_format($stockItem['packed_qty'], 0, ',', '.') }}</strong>
-                        </div>
-                        <div class="stock-bar-track">
-                            <div class="stock-bar-fill stock-packed" style="width: {{ $packedWidth }}%"></div>
-                        </div>
-                    </div>
-
-                </div>
-            @endforeach
         @endif
     </div>
 </div>

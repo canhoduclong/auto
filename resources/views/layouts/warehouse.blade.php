@@ -325,18 +325,29 @@
                 </div>
             </div>
             <div class="d-flex align-items-center gap-3">
-                @if($layoutSwitchTargets->count() > 1)
+                <!-- Role Switcher Dropdown -->
+                @if($currentUser->roles->count() > 1)
                     <div class="dropdown">
                         <button class="btn btn-outline-primary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            Chuyển layout
+                            <i class="bi bi-person-badge"></i> {{ ucfirst(session('active_role', 'Vai trò')) }}
                         </button>
                         <ul class="dropdown-menu dropdown-menu-end shadow-sm">
-                            @foreach($layoutSwitchTargets as $layoutSwitchTarget)
+                            <li><h6 class="dropdown-header">Chọn vai trò</h6></li>
+                            <li><hr class="dropdown-divider"></li>
+                            @foreach($currentUser->roles as $role)
+                                @php
+                                    $isActive = strtolower(session('active_role')) === strtolower($role->name);
+                                @endphp
                                 <li>
-                                    <a class="dropdown-item d-flex align-items-center gap-2" href="{{ $layoutSwitchTarget['href'] }}">
-                                        <i class="bi bi-box-arrow-up-right text-primary"></i>
-                                        <span>{{ $layoutSwitchTarget['label'] }}</span>
-                                    </a>
+                                    <form action="{{ route('role.switch', $role->name) }}" method="POST" class="d-inline-block w-100">
+                                        @csrf
+                                        <button type="submit" 
+                                            class="dropdown-item d-flex align-items-center gap-2 {{ $isActive ? 'bg-light' : '' }}"
+                                            title="Chuyển sang vai trò {{ $role->name }}">
+                                            <i class="bi {{ $isActive ? 'bi-check-circle-fill text-primary' : 'bi-circle' }}"></i>
+                                            <span>{{ ucfirst($role->name) }}</span>
+                                        </button>
+                                    </form>
                                 </li>
                             @endforeach
                         </ul>

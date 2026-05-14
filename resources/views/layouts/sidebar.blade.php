@@ -67,7 +67,28 @@
 
 					</div>
 
-
+					<!-- Role Switcher -->
+					@if(auth()->user()->roles->count() > 1)
+					<div class="p-3 border-t border-gray-700">
+						<div class="text-xs font-semibold mb-2 text-gray-400">CHỌN VAI TRÒ</div>
+						<div class="d-flex flex-wrap gap-2">
+							@foreach(auth()->user()->roles as $role)
+								@php
+									$isActive = session('active_role') === $role->name || 
+										(session()->missing('active_role') && auth()->user()->roles->first()->name === $role->name);
+								@endphp
+								<form action="{{ route('role.switch', $role->name) }}" method="POST" class="inline-block">
+									@csrf
+									<button type="submit" 
+										class="btn btn-sm {{ $isActive ? 'btn-primary' : 'btn-outline-secondary' }}"
+										title="Chuyển sang vai trò {{ $role->name }}">
+										{{ ucfirst($role->name) }}
+									</button>
+								</form>
+							@endforeach
+						</div>
+					</div>
+					@endif
 						 
 					</div>
 				</div>
