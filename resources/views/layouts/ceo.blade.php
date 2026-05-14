@@ -435,6 +435,10 @@
                             <li><hr class="dropdown-divider"></li>
                             @foreach($currentUser->roles as $role)
                                 @php
+                                    $roleName = strtolower((string) $role->name);
+                                    if (in_array($roleName, ['accountant', 'accounting'], true)) {
+                                        continue;
+                                    }
                                     $isActive = strtolower(session('active_role')) === strtolower($role->name);
                                 @endphp
                                 <li>

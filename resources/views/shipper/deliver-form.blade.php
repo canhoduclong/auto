@@ -23,6 +23,10 @@
     $foamBoxFee = (float) (($order->charge_foam_box_fee ?? false) ? ($order->foam_box_price ?? 0) : 0);
     $codAmount = (float) ($order->total ?? ($itemsSubtotal + $shippingFee + $foamBoxFee));
     $hasKgItem = $order->items->contains(fn($item) => (bool) $item->effective_priced_by_kg);
+    $isTruckStationDelivery = (bool) ($order->customer?->use_truck_station ?? false)
+        && !empty($order->customer?->truck_station_id);
+    $truckStationName = $order->customer?->truckStation?->name;
+    $truckStationAddress = $order->customer?->truckStation?->address;
 @endphp
 <style>
     .shipper-deliver-shell .card {
@@ -338,6 +342,19 @@
                     <i class="bi bi-shield-check me-1"></i>Vui lòng kiểm tra đúng số tiền thu và ảnh bằng chứng trước khi xác nhận.
                 </div>
 
+                @if($isTruckStationDelivery)
+                    <div class="alert alert-warning mt-3 mb-3" style="border:1px solid #fcd34d;background:#fffbeb;">
+                        <div class="fw-semibold mb-1"><i class="bi bi-truck me-1"></i>Đơn giao nhà xe</div>
+                        <div class="small mb-1">Bắt buộc upload chứng từ bàn giao cho nhà xe trước khi xác nhận hoàn thành đơn.</div>
+                        <div class="small text-muted">
+                            Nhà xe: {{ $truckStationName ?: 'Chưa cấu hình' }}
+                            @if($truckStationAddress)
+                                | Địa chỉ: {{ $truckStationAddress }}
+                            @endif
+                        </div>
+                    </div>
+                @endif
+
                 <form action="{{ route('shipper.mark-delivered', $order) }}" method="POST" enctype="multipart/form-data">
                     @csrf
 
@@ -498,6 +515,19 @@
                             <img id="proofPreviewImg" src="" class="img-fluid rounded" style="max-height:200px;">
                         </div>
                     </div>
+
+                    @if($isTruckStationDelivery)
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">
+                            <i class="bi bi-file-earmark-check me-1 text-warning"></i>Chứng từ giao nhà xe <span class="text-danger">*</span>
+                        </label>
+                        <input type="file" name="truck_station_receipt_image" class="form-control" accept="image/*" required id="truckStationReceiptInput">
+                        <div class="form-text text-muted">Ảnh biên nhận/phiếu gửi tại trạm xe (tối đa 5MB)</div>
+                        <div id="truckStationReceiptPreview" class="mt-2 d-none">
+                            <img id="truckStationReceiptPreviewImg" src="" class="img-fluid rounded" style="max-height:200px;">
+                        </div>
+                    </div>
+                    @endif
 
                     <div class="d-flex gap-2">
                         <a href="{{ route('shipper.my-orders') }}" class="btn btn-outline-secondary">
@@ -703,6 +733,7 @@
     }
     bindPreview('proofPreviewInput', 'proofPreview', 'proofPreviewImg');
     bindPreview('weightImageInput', 'weightImagePreview', 'weightImagePreviewImg');
+    bindPreview('truckStationReceiptInput', 'truckStationReceiptPreview', 'truckStationReceiptPreviewImg');
 
     // Init return badges from old() values
     document.querySelectorAll('.delivered-qty-input').forEach(function (inp) {

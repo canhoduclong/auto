@@ -88,6 +88,10 @@
                                 <div class="small fw-semibold mb-2 px-2">Chọn vai trò</div>
                                 @foreach($currentUser->roles as $role)
                                     @php
+                                        $roleName = strtolower((string) $role->name);
+                                        if (in_array($roleName, ['accountant', 'accounting'], true)) {
+                                            continue;
+                                        }
                                         $isActive = strtolower(session('active_role')) === strtolower($role->name);
                                     @endphp
                                     <form action="{{ route('role.switch', $role->name) }}" method="POST" class="d-grid">

@@ -74,6 +74,10 @@
 						<div class="d-flex flex-wrap gap-2">
 							@foreach(auth()->user()->roles as $role)
 								@php
+									$roleName = strtolower((string) $role->name);
+									if (in_array($roleName, ['accountant', 'accounting'], true)) {
+										continue;
+									}
 									$isActive = session('active_role') === $role->name || 
 										(session()->missing('active_role') && auth()->user()->roles->first()->name === $role->name);
 								@endphp

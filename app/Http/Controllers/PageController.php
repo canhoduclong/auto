@@ -3081,6 +3081,10 @@ public function apiTruckRoutes(Request $request)
     {
         $this->ensureManagedCustomer($customer);
 
+        $customer->load(['addresses' => function ($query) {
+            $query->orderByDesc('is_default')->orderByDesc('id');
+        }]);
+
         return view('site.my_customer.order_create', [
             'customer' => $customer,
             'settings' => $this->settings
@@ -3091,6 +3095,29 @@ public function apiTruckRoutes(Request $request)
     {
         $this->ensureManagedCustomer($customer);
         $request->merge(['customer_id' => $customer->id]);
+
+        // Đồng bộ nhanh thông tin chăm sóc khách từ form lên hồ sơ khách.
+        $newAddress = trim((string) $request->input('recipient_address', ''));
+        $newDeliveryTime = trim((string) $request->input('delivery_time', ''));
+        $newNote = trim((string) $request->input('note', ''));
+
+        $customerUpdates = [];
+
+        if ($newAddress !== '' && $newAddress !== (string) ($customer->address ?? '')) {
+            $customerUpdates['address'] = mb_substr($newAddress, 0, 1000);
+        }
+
+        if ($newDeliveryTime !== (string) ($customer->delivery_time ?? '')) {
+            $customerUpdates['delivery_time'] = $newDeliveryTime !== '' ? mb_substr($newDeliveryTime, 0, 255) : null;
+        }
+
+        if ($newNote !== (string) ($customer->note ?? '')) {
+            $customerUpdates['note'] = $newNote !== '' ? mb_substr($newNote, 0, 1000) : null;
+        }
+
+        if (!empty($customerUpdates)) {
+            $customer->update($customerUpdates);
+        }
 
         return app(\App\Http\Controllers\OrderController::class)->storeANewOrder($request, $approvalService);
     }

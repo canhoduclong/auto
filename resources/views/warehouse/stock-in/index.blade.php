@@ -22,6 +22,31 @@
 .form-section { background: #fff; border-radius: 12px; box-shadow: 0 4px 14px rgba(15,23,42,.07); padding: 24px 28px; margin-bottom: 24px; }
 .form-section h5 { font-weight: 700; color: #0f172a; border-bottom: 2px solid #e0f2fe; padding-bottom: 10px; margin-bottom: 18px; }
 .item-row { background: #f8fafc; border-radius: 8px; padding: 12px; margin-bottom: 8px; }
+.stockin-items-scroll {
+    max-height: 340px;
+    overflow-y: auto;
+    overflow-x: auto;
+    padding-right: 4px;
+}
+.stockin-items-head,
+.stockin-item-grid {
+    min-width: 980px;
+    display: grid;
+    grid-template-columns: 4.3fr 1.2fr 1fr 1.7fr 2fr 1.3fr 36px;
+    gap: 8px;
+    align-items: center;
+}
+.stockin-items-head {
+    font-size: .72rem;
+    text-transform: uppercase;
+}
+.stockin-item-grid .line-total {
+    text-align: right;
+    white-space: nowrap;
+}
+.stockin-item-grid .item-remove {
+    justify-self: center;
+}
 .btn-add-row { border: 2px dashed #93c5fd; background: #eff6ff; color: #1d4ed8; border-radius: 8px; padding: 8px 18px; font-size: .82rem; font-weight: 700; transition: background .15s; }
 .btn-add-row:hover { background: #dbeafe; }
 .item-remove { color: #ef4444; background: none; border: 0; font-size: 1.1rem; line-height: 1; padding: 2px 4px; cursor: pointer; }
@@ -276,18 +301,19 @@
                     </div>
 
                     <div id="itemsContainerIn">
-                        <div class="row g-2 mb-1 align-items-end small fw-600 text-muted px-1" style="font-size:.72rem;text-transform:uppercase;">
-                            <div class="col-5">Sản phẩm / Biến thể</div>
-                            <div class="col-2">Số lượng</div>
-                            <div class="col-1">ĐVT</div>
-                            <div class="col-2">Khối lượng</div>
-                            <div class="col-3">Đơn giá nhập (đ)</div>
-                            <div class="col-1 text-end">Thành tiền</div>
-                            <div class="col-1"></div>
+                        <div class="stockin-items-head mb-1 fw-600 text-muted px-1">
+                            <div>Sản phẩm / Biến thể</div>
+                            <div>Số lượng</div>
+                            <div>ĐVT</div>
+                            <div>Khối lượng</div>
+                            <div>Đơn giá nhập (đ)</div>
+                            <div class="text-end">Thành tiền</div>
+                            <div></div>
                         </div>
+                        <div class="stockin-items-scroll">
                         <div class="item-row" data-item-row>
-                            <div class="row g-2 align-items-center">
-                                <div class="col-5">
+                            <div class="stockin-item-grid">
+                                <div>
                                     <select name="items[0][product_variant_id]" class="form-select form-select-sm variant-select" required>
                                         <option value="">-- Chọn sản phẩm --</option>
                                         @foreach($productVariants as $v)
@@ -307,26 +333,27 @@
                                         @endforeach
                                     </select>
                                 </div>
-                                <div class="col-2">
+                                <div>
                                     <input type="number" name="items[0][quantity]" class="form-control form-control-sm qty-input" min="1" value="1" required>
                                 </div>
-                                <div class="col-1">
+                                <div>
                                     <input type="text" class="form-control form-control-sm unit-label" value="Cái" readonly>
                                 </div>
-                                <div class="col-2">
+                                <div>
                                     <div class="d-flex align-items-center gap-1">
                                         <input type="number" class="form-control form-control-sm weight-input" value="0.000" step="0.001" min="0" readonly>
                                         <span class="text-muted small weight-unit-label" style="white-space: nowrap;">Kg</span>
                                     </div>
                                 </div>
-                                <div class="col-3">
+                                <div>
                                     <input type="number" name="items[0][unit_cost]" class="form-control form-control-sm cost-input" min="0" step="1000" value="0" required>
                                 </div>
-                                <div class="col-1 text-end line-total fw-700" style="font-size:.82rem;color:#059669;">0đ</div>
-                                <div class="col-1 text-center">
+                                <div class="line-total fw-700" style="font-size:.82rem;color:#059669;">0đ</div>
+                                <div>
                                     <button type="button" class="item-remove" onclick="removeRow(this)" title="Xoá dòng"><i class="bi bi-x-circle"></i></button>
                                 </div>
                             </div>
+                        </div>
                         </div>
                     </div>
 

@@ -29,7 +29,7 @@ class RoleSwitchController extends Controller
             'ceo' => redirect()->route('ceo.dashboard'),
             'accountant', 'accounting' => redirect()->route('accounting.dashboard'),
             'warehouse' => redirect()->route('warehouse.dashboard'),
-            'shipper' => redirect()->route('shipper.dashboard'),
+            'shipper', 'manager_shipper' => redirect()->route('shipper.dashboard'),
             'sale', 'leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale' => redirect()->route('pages.my_dashboard'),
             default => redirect()->route('dashboard')->with('error', 'Vai trò không hợp lệ: ' . $role),
         };

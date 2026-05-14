@@ -188,6 +188,10 @@
 
 @section('content')
 <section class="checkout-page">
+    @php
+        $defaultAddress = $customer->addresses->firstWhere('is_default', 1) ?: $customer->addresses->first();
+        $preferredAddress = $defaultAddress->note ?? $customer->address;
+    @endphp
     <div class="container checkout-shell">
         <div class="checkout-hero">
             <div class="small text-uppercase fw-bold" style="letter-spacing:.08em;opacity:.8;">My Customers</div>
@@ -253,11 +257,11 @@
                                 </div>
                                 <div class="col-12 mb-3">
                                     <label class="form-label fw-bold">Địa chỉ nhận hàng</label>
-                                    <textarea name="recipient_address" rows="3" class="form-control" required>{{ old('recipient_address', $customer->address) }}</textarea>
+                                    <textarea name="recipient_address" rows="3" class="form-control" required>{{ old('recipient_address', $preferredAddress) }}</textarea>
                                 </div>
                                 <div class="col-12 mb-3">
                                     <label class="form-label fw-bold">Ghi chú đơn hàng</label>
-                                    <textarea name="note" rows="3" class="form-control" placeholder="Ghi chú cho đơn hàng">{{ old('note') }}</textarea>
+                                    <textarea name="note" rows="3" class="form-control" placeholder="Ghi chú cho đơn hàng">{{ old('note', $customer->note) }}</textarea>
                                 </div>
                             </div>
                         </div>
@@ -295,6 +299,11 @@
                     <div class="checkout-panel">
                         <div class="checkout-panel-body">
                             <h2 class="h6 fw-bold mb-3">Thêm biến thể sản phẩm</h2>
+                            <div class="input-group mb-2">
+                                <button class="btn btn-success" type="button" id="variant-show-all-button">
+                                    <i class="bi bi-plus-circle me-1"></i> Thêm sản phẩm
+                                </button>
+                            </div>
                             <div class="input-group">
                                 <input type="text" id="variant-search" class="form-control" placeholder="Nhập SKU hoặc tên sản phẩm">
                                 <button class="btn btn-outline-secondary" type="button" id="variant-search-button">Tìm</button>
@@ -396,6 +405,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const cartContainer = document.getElementById('cart-items-container');
     const variantSearchInput = document.getElementById('variant-search');
     const variantSearchButton = document.getElementById('variant-search-button');
+    const variantShowAllButton = document.getElementById('variant-show-all-button');
     const variantSearchResults = document.getElementById('variant-search-results');
     const subtotalEl = document.getElementById('summarySubtotal');
     const itemDiscountEl = document.getElementById('summaryItemDiscount');
@@ -625,6 +635,19 @@ document.addEventListener('DOMContentLoaded', function () {
             search: term,
             per_page: currentVariantSearchPerPage,
             exclude_ids: getCartVariantIds()
+        });
+    }
+
+    if (variantShowAllButton) {
+        variantShowAllButton.addEventListener('click', function () {
+            fetchVariantData('{{ route('orders.ajax_variant_search') }}', {
+                page: 1,
+                per_page: currentVariantSearchPerPage,
+                exclude_ids: getCartVariantIds()
+            });
+            if (variantSearchInput) {
+                variantSearchInput.value = '';
+            }
         });
     }
 

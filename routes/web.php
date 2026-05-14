@@ -236,7 +236,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     });
 
     // ─── Shipper module ─────────────────────────────────────────────────────
-    Route::prefix('shipper')->name('shipper.')->middleware('role:shipper,admin')->group(function () {
+    Route::prefix('shipper')->name('shipper.')->middleware('role:shipper,manager_shipper,admin')->group(function () {
         Route::get('/',                                [ShipperDashboardController::class, 'index'])->name('dashboard');
         Route::get('/available',                       [ShipperDashboardController::class, 'available'])->name('available');
         Route::post('/available/{order}/accept',       [ShipperDashboardController::class, 'accept'])->name('accept');
@@ -246,6 +246,26 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/orders/{order}/return-form',      [ShipperDashboardController::class, 'returnForm'])->name('return-form');
         Route::post('/orders/{order}/store-return',    [ShipperDashboardController::class, 'storeReturn'])->name('store-return');
         Route::get('/history',                         [ShipperDashboardController::class, 'history'])->name('history');
+
+        // Manager Shipper routes
+        Route::middleware('role:manager_shipper,admin')->group(function () {
+            Route::get('/manage-assignments',                [ShipperDashboardController::class, 'manageAssignments'])->name('manage-assignments');
+            Route::post('/assign-order/{order}/{shipper}',   [ShipperDashboardController::class, 'assignOrder'])->name('assign-order');
+            Route::delete('/unassign-order/{order}',         [ShipperDashboardController::class, 'unassignOrder'])->name('unassign-order');
+            Route::post('/bulk-transfer-assignments',       [ShipperDashboardController::class, 'bulkTransferAssignments'])->name('bulk-transfer-assignments');
+            Route::post('/move-order-up/{order}',            [ShipperDashboardController::class, 'moveOrderUp'])->name('move-order-up');
+            Route::post('/move-order-down/{order}',          [ShipperDashboardController::class, 'moveOrderDown'])->name('move-order-down');
+            Route::post('/create-delivery-schedule',         [ShipperDashboardController::class, 'createDeliverySchedule'])->name('create-delivery-schedule');
+            Route::get('/manage-fees',                       [ShipperDashboardController::class, 'manageFees'])->name('manage-fees');
+            Route::post('/update-fee/{order}',               [ShipperDashboardController::class, 'updateFee'])->name('update-fee');
+            Route::post('/bulk-update-fees',                 [ShipperDashboardController::class, 'bulkUpdateFees'])->name('bulk-update-fees');
+            Route::get('/route-planning',                    [ShipperDashboardController::class, 'routePlanning'])->name('route-planning');
+            Route::get('/team-report',                       [ShipperDashboardController::class, 'teamReport'])->name('team-report');
+        });
+
+        // Shipper delivery schedule routes
+        Route::get('/delivery-schedules',                 [ShipperDashboardController::class, 'deliverySchedules'])->name('delivery-schedules');
+        Route::post('/delivery-schedule/{schedule}/confirm', [ShipperDashboardController::class, 'confirmDeliverySchedule'])->name('confirm-delivery-schedule');
     });
 
     // ─── CEO module ────────────────────────────────────────────────────────

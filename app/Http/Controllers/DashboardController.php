@@ -40,6 +40,9 @@ class DashboardController extends Controller
             if ($activeRole === 'shipper' && $user?->hasRole('shipper')) {
                 return redirect()->route('shipper.dashboard');
             }
+            if ($activeRole === 'manager_shipper' && $user?->hasRole('manager_shipper')) {
+                return redirect()->route('shipper.dashboard');
+            }
             if (in_array($activeRole, ['sale', 'leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale']) && $user?->hasRole($activeRole)) {
                 return redirect()->route('pages.my_dashboard');
             }
@@ -64,6 +67,10 @@ class DashboardController extends Controller
         }
 
         if ($user?->hasRole('shipper')) {
+            return redirect()->route('shipper.dashboard');
+        }
+
+        if ($user?->hasRole('manager_shipper')) {
             return redirect()->route('shipper.dashboard');
         }
 
