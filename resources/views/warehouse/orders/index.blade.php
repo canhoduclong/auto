@@ -350,7 +350,7 @@
     }
     .wh-stock-row {
         display: grid;
-        grid-template-columns: minmax(110px, 2.2fr) minmax(50px, .95fr) minmax(50px, .95fr) minmax(55px, .9fr) minmax(60px, 1fr);
+        grid-template-columns: minmax(110px, 2.1fr) minmax(52px, .8fr) minmax(50px, .95fr) minmax(50px, .95fr) minmax(55px, .9fr) minmax(60px, 1fr);
         column-gap: 8px;
         align-items: center;
         padding: 6px 9px;
@@ -377,6 +377,12 @@
         text-align: right;
         font-weight: 700;
         color: #0f172a;
+        white-space: nowrap;
+    }
+    .wh-stock-col.col-size {
+        text-align: center;
+        font-weight: 700;
+        color: #334155;
         white-space: nowrap;
     }
     .wh-stock-col.col-available {
@@ -410,7 +416,7 @@
     }
     @media (max-width: 560px) {
         .wh-stock-row {
-            grid-template-columns: minmax(140px, 2fr) repeat(4, minmax(56px, .8fr));
+            grid-template-columns: minmax(136px, 1.8fr) repeat(5, minmax(50px, .72fr));
             column-gap: 6px;
             padding: 9px 10px;
         }
@@ -532,6 +538,7 @@
                 'variant_id' => $variantId,
                 'name' => $name,
                 'sku' => $variant->sku,
+                'size' => $variant->size,
                 'raw_stock' => $rawStock,
                 'fifo_remaining' => $fifoRemaining,
                 'ordered_qty' => $orderedQty,
@@ -659,7 +666,7 @@
                 $canStartPacking = (bool) ($stockGuard['can_start_packing'] ?? true);
                 $stockShortages = collect($stockGuard['shortages'] ?? []);
             @endphp
-            <div class="col-12 col-lg-8 col-xxl-4">
+            <div class="col-12 col-lg-8 col-xxl-6">
                 <div class="card wh-order-card js-order-card" data-order-id="{{ $order->id }}">
                      
                     <span class="wh-order-index">#{{ $loop->iteration }}</span>
@@ -1023,7 +1030,7 @@
     <div class="offcanvas-header">
         <div id="stockDrawerLabel">
             
-            <div class=" fw-bold" style="font-size:1rem;">
+            <div class="text-uppercase fw-bold" style="font-size:1rem;">
                 <i class="bi bi-calendar3 me-1"></i>
                 @php
                     $displayDate = \Illuminate\Support\Carbon::parse($selectedDate);
@@ -1053,6 +1060,7 @@
             <div class="wh-stock-list">
                 <div class="wh-stock-row head">
                     <div class="wh-stock-col">Tên sản phẩm</div>
+                    <div class="wh-stock-col col-size">Size</div>
                     <div class="wh-stock-col num">Tồn kho</div>
                     <div class="wh-stock-col num col-available">Khả dụng</div>
                     <div class="wh-stock-col num col-ordered">SL đặt</div>
@@ -1069,6 +1077,7 @@
                                 <div class="wh-stock-product-sku" title="SKU: {{ $stockItem['sku'] }}">SKU: {{ $stockItem['sku'] }}</div>
                             @endif
                         </div>
+                        <div class="wh-stock-col col-size">{{ (is_numeric($stockItem['size']) && (float) $stockItem['size'] > 0) ? rtrim(rtrim(number_format((float) $stockItem['size'], 2, '.', ''), '0'), '.') : '-' }}</div>
                         <div class="wh-stock-col num">{{ number_format((float) ($stockItem['raw_stock'] ?? 0), 0, ',', '.') }}</div>
                         <div class="wh-stock-col num col-available">{{ number_format((float) ($stockItem['fifo_remaining'] ?? 0), 0, ',', '.') }}</div>
                         <div class="wh-stock-col num col-ordered">{{ number_format((float) ($stockItem['ordered_qty'] ?? 0), 0, ',', '.') }}</div>
