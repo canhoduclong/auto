@@ -261,6 +261,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
             Route::post('/bulk-update-fees',                 [ShipperDashboardController::class, 'bulkUpdateFees'])->name('bulk-update-fees');
             Route::get('/route-planning',                    [ShipperDashboardController::class, 'routePlanning'])->name('route-planning');
             Route::get('/team-report',                       [ShipperDashboardController::class, 'teamReport'])->name('team-report');
+            Route::get('/shipping-fee-report',               [ShipperDashboardController::class, 'shippingFeeReport'])->name('shipping-fee-report');
         });
 
         // Shipper delivery schedule routes

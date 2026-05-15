@@ -239,6 +239,26 @@
                                     <label class="form-label fw-bold">Email</label>
                                     <input type="email" class="form-control" value="{{ $customer->email }}" readonly>
                                 </div>
+                                @php
+                                    $selectedRoute = $customer->truckRoute;
+                                    if (!$selectedRoute && $customer->truck_station_id) {
+                                        $selectedRoute = $customer->truckRouteByStation;
+                                    }
+                                    $hasTransportSelection = !empty($customer->truck_route_id) || !empty($customer->truck_station_id);
+                                    $truckStationName = $customer->truckStation?->name
+                                        ?: ($selectedRoute?->stops?->first()?->station?->name);
+                                    $selectedRouteName = $selectedRoute?->name;
+                                @endphp
+                                @if($hasTransportSelection)
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label fw-bold">Trạm nhận</label>
+                                        <input type="text" class="form-control" value="{{ $truckStationName ?: 'Chưa cập nhật' }}" readonly>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label fw-bold">Tuyến vận chuyển</label>
+                                        <input type="text" class="form-control" value="{{ $selectedRouteName ?: 'Chưa cập nhật' }}" readonly>
+                                    </div>
+                                @endif
                                 <div class="col-md-6 mb-3">
                                     <label class="form-label fw-bold">Giờ giao hàng</label>
                                     <input type="text" name="delivery_time" id="delivery_time" class="form-control" value="{{ old('delivery_time', $customer->delivery_time) }}" placeholder="Ví dụ: 9h-11h hoặc sau 17h">
@@ -634,6 +654,7 @@ document.addEventListener('DOMContentLoaded', function () {
             page: page,
             search: term,
             per_page: currentVariantSearchPerPage,
+            allow_backorder: 1,
             exclude_ids: getCartVariantIds()
         });
     }
@@ -643,6 +664,7 @@ document.addEventListener('DOMContentLoaded', function () {
             fetchVariantData('{{ route('orders.ajax_variant_search') }}', {
                 page: 1,
                 per_page: currentVariantSearchPerPage,
+                allow_backorder: 1,
                 exclude_ids: getCartVariantIds()
             });
             if (variantSearchInput) {
@@ -681,7 +703,6 @@ document.addEventListener('DOMContentLoaded', function () {
         const variantSku = addBtn.dataset.variantSku || 'N/A';
         const variantSize = addBtn.dataset.variantSize || '';
         const variantPrice = parseFloat(addBtn.dataset.variantPrice || '0');
-        const variantStock = parseInt(addBtn.dataset.variantStock || '0', 10);
         const variantImage = addBtn.dataset.variantImage || 'https://via.placeholder.com/48';
         const variantUnitLabel = addBtn.dataset.variantUnitLabel || 'Cái';
         const variantWeight = parseFloat(addBtn.dataset.variantWeight || '0');
@@ -727,7 +748,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 <div class="selling-price-feedback"></div>
             </td>
             <td class="text-center">
-                <input type="number" name="items[${itemIndex}][quantity]" class="form-control form-control-sm quantity-input min50" min="1" max="${variantStock > 0 ? variantStock : ''}" value="1" required>
+                <input type="number" name="items[${itemIndex}][quantity]" class="form-control form-control-sm quantity-input min50" min="1" value="1" required>
             </td>
             <td class="text-center">
                 ${variantIsPricedByKg

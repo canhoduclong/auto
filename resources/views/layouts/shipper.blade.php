@@ -181,29 +181,29 @@
 
             <div class="sp-nav-section">Lịch trình</div>
             <a href="{{ route('shipper.delivery-schedules') }}" class="sp-nav-link {{ request()->routeIs('shipper.delivery-schedules') ? 'active' : '' }}">
-                <i class="bi bi-calendar-event"></i> Lịch trình giao hàng
+                <i class="bi bi-calendar-event"></i> Lộ trình giao hàng
             </a>
 
             <div class="sp-nav-section">Đang giao</div>
             <a href="{{ route('shipper.my-orders') }}" class="sp-nav-link {{ request()->routeIs('shipper.my-orders') ? 'active' : '' }}">
-                <i class="bi bi-truck"></i> Đơn của tôi
+                <i class="bi bi-truck"></i> Đơn giao của tôi
             </a>
 
             <div class="sp-nav-section">Lịch sử</div>
             <a href="{{ route('shipper.history') }}" class="sp-nav-link {{ request()->routeIs('shipper.history') ? 'active' : '' }}">
-                <i class="bi bi-clock-history"></i> Lịch sử giao
+                <i class="bi bi-clock-history"></i> Lịch sử giao hàng
             </a>
 
             @if(auth()->user()->hasRole('manager_shipper'))
                 <div class="sp-nav-section">Quản lý ship</div>
                 <a href="{{ route('shipper.manage-assignments') }}" class="sp-nav-link {{ request()->routeIs('shipper.manage-assignments') ? 'active' : '' }}">
-                    <i class="bi bi-person-badge"></i> Gán đơn cho ship
+                    <i class="bi bi-person-badge"></i> Giao đơn cho ship
                 </a>
                 <a href="{{ route('shipper.manage-fees') }}" class="sp-nav-link {{ request()->routeIs('shipper.manage-fees') ? 'active' : '' }}">
                     <i class="bi bi-cash-coin"></i> Quản lý phí ship
                 </a>
-                <a href="{{ route('shipper.route-planning') }}" class="sp-nav-link {{ request()->routeIs('shipper.route-planning') ? 'active' : '' }}">
-                    <i class="bi bi-map"></i> Sắp xếp tuyến đường
+                <a href="{{ route('shipper.shipping-fee-report') }}" class="sp-nav-link {{ request()->routeIs('shipper.shipping-fee-report') ? 'active' : '' }}">
+                    <i class="bi bi-graph-up-arrow"></i> Báo cáo chi phí ship
                 </a>
                 <a href="{{ route('shipper.team-report') }}" class="sp-nav-link {{ request()->routeIs('shipper.team-report') ? 'active' : '' }}">
                     <i class="bi bi-bar-chart-line"></i> Báo cáo đội hình ship

@@ -33,6 +33,70 @@
     .ds-product-item:last-child {
         border-bottom: none;
     }
+    .ds-product-section {
+        border-top: 1px dashed #e2e8f0;
+        padding-top: 8px;
+        margin-top: 8px;
+    }
+    .ds-product-table-head,
+    .ds-product-table-row {
+        display: grid;
+        grid-template-columns: minmax(0, 2fr) 36px 44px 34px 92px 110px;
+        gap: 8px;
+        align-items: center;
+    }
+    .ds-product-table-head {
+        font-size: .72rem;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+        color: #64748b;
+        font-weight: 700;
+        padding: 0 0 4px;
+        border-bottom: 1px solid #e2e8f0;
+        margin-bottom: 6px;
+    }
+    .ds-product-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 6px;
+    }
+    .ds-product-row {
+        display: grid;
+        gap: 4px;
+        border-bottom: 1px solid #f1f5f9;
+        padding-bottom: 6px;
+    }
+    .ds-product-row:last-child {
+        border-bottom: 0;
+        padding-bottom: 0;
+    }
+    .ds-product-name {
+        font-size: .88rem;
+        font-weight: 700;
+        color: #0f172a;
+        line-height: 1.25;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .ds-product-cell {
+        font-size: .8rem;
+        color: #475569;
+        text-align: right;
+    }
+    .ds-product-cell strong {
+        color: #0f172a;
+    }
+    @media (max-width: 575px) {
+        .ds-product-table-head,
+        .ds-product-table-row {
+            grid-template-columns: minmax(0, 1.3fr) 40px 58px 74px 86px;
+            gap: 6px;
+        }
+    }
 </style>
 @endpush
 
@@ -67,9 +131,9 @@
 @else
     <form id="delivery-schedule-form" method="POST" action="{{ route('shipper.confirm-delivery-schedule', ['schedule' => 'bulk']) }}">
         @csrf
-        <div class="row g-3" id="orders-list">
+        <div class="d-flex flex-column gap-3" id="orders-list">
             @foreach($orders as $idx => $order)
-                <div class="col-lg-6 order-item" data-order-id="{{ $order->id }}">
+                <div class="order-item w-100" data-order-id="{{ $order->id }}">
                     <input type="hidden" name="order_ids[]" value="{{ $order->id }}">
                     <div class="card ds-order-card h-100">
                         <div class="d-flex align-items-start gap-3 mb-2">
@@ -100,23 +164,50 @@
                         </div>
 
                         @if($order->items->isNotEmpty())
-                            <div class="mt-3 pt-2 border-top">
+                            <div class="mt-3 pt-2 border-top ds-product-section">
                                 <div class="text-muted small fw-semibold mb-2">Chi tiết sản phẩm:</div>
-                                <div>
+                                <div class="ds-product-table-head">
+                                    <div>Sản phẩm</div>
+                                    <div class="text-end">SL</div>
+                                    <div class="text-end">Size</div>
+                                    <div class="text-end">Kg</div>
+                                    <div class="text-end">Đơn giá</div>
+                                    <div class="text-end">Thành tiền</div>
+                                </div>
+                                <ul class="ds-product-list">
                                     @foreach($order->items as $item)
-                                        <div class="ds-product-item">
-                                            <div class="d-flex justify-content-between align-items-start">
-                                                <div class="flex-fill">
-                                                    <span class="fw-semibold">{{ $item->variant?->name ?? $item->product_name }}</span>
-                                                    @if($item->variant?->size)
-                                                        <span class="text-muted small">- Size: {{ $item->variant->size }}</span>
+                                        @php
+                                            $qty = (int) $item->quantity;
+                                            $unitPrice = (float) ($item->price ?? 0);
+                                            $lineTotal = $qty * $unitPrice;
+                                            $variantSize = $item->variant?->size;
+                                            $formattedVariantSize = (!is_null($variantSize) && $variantSize !== '')
+                                                ? rtrim(rtrim(number_format((float) $variantSize, 2, '.', ''), '0'), '.')
+                                                : '-';
+                                            $itemActualWeight = null;
+                                            if ($item->actual_weight) {
+                                                $itemActualWeight = rtrim(rtrim(number_format((float) $item->actual_weight, 2, '.', ''), '0'), '.');
+                                            } else {
+                                                $itemActualWeight = '-';
+                                            }
+                                        @endphp
+                                        <li class="ds-product-row">
+                                            <div class="ds-product-table-row">
+                                                <div class="ds-product-name">
+                                                    {{ $item->variant?->name ?? $item->variant?->sku ?? $item->product_name ?? 'Sản phẩm' }}
+                                                    @if($item->variant?->sku)
+                                                        <span class="text-muted small">({{ $item->variant->sku }})</span>
                                                     @endif
                                                 </div>
-                                                <span class="badge bg-primary ms-2">x{{ $item->quantity }}</span>
+                                                <div class="ds-product-cell"><strong>{{ $qty }}</strong></div>
+                                                <div class="ds-product-cell"><strong>{{ $formattedVariantSize }}</strong></div>
+                                                <div class="ds-product-cell"><strong>{{ $itemActualWeight }}</strong></div>
+                                                <div class="ds-product-cell">{{ number_format($unitPrice) }}đ</div>
+                                                <div class="ds-product-cell"><strong>{{ number_format($lineTotal) }}đ</strong></div>
                                             </div>
-                                        </div>
+                                        </li>
                                     @endforeach
-                                </div>
+                                </ul>
                             </div>
                         @endif
 

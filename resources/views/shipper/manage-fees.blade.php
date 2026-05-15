@@ -179,14 +179,17 @@
             <div>
                 <div class="mf-label d-lg-none">Phí hiện tại:</div>
                 <div class="mf-fee-current">
-                    {{ number_format($order->shipping_fee ?? 0, 0, ',', '.') }} đ
+                    {{ number_format($order->shipping_fee ?? $order->customer?->shipping_fee ?? 0, 0, ',', '.') }} đ
                 </div>
+                @if($order->customer?->shipping_fee !== null)
+                    <div class="mt-1 small text-muted">Phí mặc định theo khách: {{ number_format($order->customer->shipping_fee, 0, ',', '.') }} đ</div>
+                @endif
             </div>
             <div>
                 <div class="mf-label d-lg-none">Phí mới:</div>
                 <form action="{{ route('shipper.update-fee', $order->id) }}" method="POST" class="d-inline-block w-100">
                     @csrf
-                    <input type="number" name="shipping_fee" class="form-control mf-fee-input" value="{{ $order->shipping_fee ?? 0 }}" step="1000" required style="width: 100%;">
+                    <input type="number" name="shipping_fee" class="form-control mf-fee-input" value="{{ $order->shipping_fee ?? $order->customer?->shipping_fee ?? 0 }}" step="1000" required style="width: 100%;">
             </div>
             <div>
                 <div class="mf-label d-lg-none">Hành động:</div>

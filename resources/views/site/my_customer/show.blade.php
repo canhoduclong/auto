@@ -641,6 +641,15 @@
     $reportOrderTotal = (float) $reportByMonth->sum('order_total');
     $reportOutstandingTotal = (float) $reportByMonth->sum('outstanding_total');
 
+    $selectedRoute = $customer->truckRoute;
+    if (!$selectedRoute && $customer->truck_station_id) {
+        $selectedRoute = $customer->truckRouteByStation;
+    }
+    $hasTransportSelection = !empty($customer->truck_route_id) || !empty($customer->truck_station_id);
+    $truckStationName = $customer->truckStation?->name
+        ?: ($selectedRoute?->stops?->first()?->station?->name);
+    $selectedRouteName = $selectedRoute?->name;
+
     $recentTwoPeriods = collect($reportByMonth)->sortByDesc('period')->take(2)->values();
     $frequencyTrendLabel = 'Ổn định';
     $frequencyTrendClass = 'badge-info';
@@ -813,6 +822,16 @@
                         <span class="customer-info-label">Địa chỉ</span>
                         <div class="customer-info-value">{{ $fullAddress ?: '-' }}</div>
                     </div>
+                        @if($hasTransportSelection)
+                            <div class="customer-info-row">
+                                <span class="customer-info-label">Trạm nhận</span>
+                                <div class="customer-info-value">{{ $truckStationName ?: 'Chưa cập nhật' }}</div>
+                            </div>
+                            <div class="customer-info-row">
+                                <span class="customer-info-label">Tuyến vận chuyển</span>
+                                <div class="customer-info-value">{{ $selectedRouteName ?: 'Chưa cập nhật' }}</div>
+                            </div>
+                        @endif
                 </div>
             </div>
 

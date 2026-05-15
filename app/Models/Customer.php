@@ -45,6 +45,16 @@ class Customer extends Model
         return $this->hasMany(CustomerReminder::class);
     }
 
+    public function shippingFeeHistories()
+    {
+        return $this->hasMany(CustomerShippingFeeHistory::class);
+    }
+
+    public function latestShippingFeeHistory()
+    {
+        return $this->hasOne(CustomerShippingFeeHistory::class)->latestOfMany();
+    }
+
     // Placeholder for care logs relationship (to be implemented if care log model/table exists)
     public function careLogs()
     {
@@ -91,6 +101,7 @@ class Customer extends Model
         'truck_delivery_image',
         'truck_station_phone',
         'truck_fee',
+        'shipping_fee',
         'assigned_to',
         'current_owner_sale_id',
         'assigned_at',
@@ -111,6 +122,7 @@ class Customer extends Model
         'assigned_at' => 'datetime',
         'free_from_date' => 'datetime',
         'commission_percent' => 'decimal:2',
+        'shipping_fee' => 'decimal:2',
         'is_employee' => 'boolean',
     ];
 

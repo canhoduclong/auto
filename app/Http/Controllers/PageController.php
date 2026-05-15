@@ -1855,6 +1855,7 @@ public function apiTruckRoutes(Request $request)
                 'addresses' => function ($q) {
                     $q->where('is_default', true)->orWhere('is_default', null)->limit(1);
                 },
+                'truckStation',
                 'truckRoute.brand',
                 'truckRoute.stops.station',
             ])
@@ -2062,6 +2063,7 @@ public function apiTruckRoutes(Request $request)
                 'addresses' => function ($q) {
                     $q->where('is_default', true)->orWhere('is_default', null)->limit(1);
                 },
+                'truckStation',
                 'truckRoute.brand',
                 'truckRoute.stops.station',
             ])
@@ -2127,6 +2129,7 @@ public function apiTruckRoutes(Request $request)
                 ?? $customer->user?->name;
             $customer->is_free_customer = (string) $customer->customer_status === 'free' || $customer->isFree();
             $customer->truck_route = $route ? $route->toArray() : null;
+            $customer->truck_station = $customer->truckStation ? $customer->truckStation->toArray() : null;
             return $customer;
         });
 
@@ -2709,6 +2712,7 @@ public function apiTruckRoutes(Request $request)
 
         $customerList = Customer::query()
             ->withCount('orders')
+            ->with(['truckStation:id,name,address', 'truckRoute:id,name'])
             ->where(function ($q) use ($userId) {
                 $q->where('user_id', $userId)
                     ->orWhere('assigned_to', $userId);
@@ -2732,7 +2736,7 @@ public function apiTruckRoutes(Request $request)
             $validated['to_date'] ?? null
         );
 
-        $customer->load(['type', 'assignedTo', 'addresses', 'reminders']);
+        $customer->load(['type', 'assignedTo', 'addresses', 'reminders', 'truckStation', 'truckRoute']);
         // Load careLogs if implemented in future
         $customer->setRelation('careLogs', $customer->careLogs);
 
@@ -3118,6 +3122,8 @@ public function apiTruckRoutes(Request $request)
         if (!empty($customerUpdates)) {
             $customer->update($customerUpdates);
         }
+
+        $request->merge(['allow_backorder' => true]);
 
         return app(\App\Http\Controllers\OrderController::class)->storeANewOrder($request, $approvalService);
     }

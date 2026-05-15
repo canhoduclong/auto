@@ -657,6 +657,14 @@
                             $parts = array_filter([$address->house_number, $address->street, $address->ward, $address->city]);
                             $addressText = implode(', ', $parts);
                         }
+                        $selectedRoute = $customer->truckRoute;
+                        if (!$selectedRoute && $customer->truck_station_id) {
+                            $selectedRoute = $customer->truckRouteByStation;
+                        }
+                        $hasTransportSelection = !empty($customer->truck_route_id) || !empty($customer->truck_station_id);
+                        $truckStationName = $customer->truckStation?->name
+                            ?: ($selectedRoute?->stops?->first()?->station?->name);
+                        $selectedRouteName = $selectedRoute?->name;
                         $myPriority = $customer->priorities->first();
                         $myPriorityLevel = (int) ($myPriority?->priority_level ?? 0);
                         $myPriorityScore = (int) ($myPriority?->care_score ?? 0);
@@ -711,6 +719,10 @@
                                             @endif
                                             @if($addressText)
                                                 <small class="text-muted"><i class="bi bi-geo-alt me-1"></i>{{ $addressText }}</small><br>
+                                            @endif
+                                            @if($hasTransportSelection)
+                                                <small class="text-muted"><i class="bi bi-building me-1"></i>Trạm nhận: {{ $truckStationName ?: 'Chưa cập nhật' }}</small><br>
+                                                <small class="text-muted"><i class="bi bi-signpost-split me-1"></i>Tuyến vận chuyển: {{ $selectedRouteName ?: 'Chưa cập nhật' }}</small><br>
                                             @endif
                                             @if($customer->email)
                                                 <small class="text-muted"><i class="bi bi-envelope me-1"></i>{{ $customer->email }}</small>
@@ -1083,6 +1095,13 @@
             let transportHtml = '';
             // Fallback logic: prefer truckRouteByStation if present, else truckRoute
             let route = customer.truck_route_by_station || customer.truckRouteByStation || customer.truck_route || customer.truckRoute;
+            const hasTransportSelection = !!(customer.truck_route_id || customer.truck_station_id || route);
+            const truckStation = customer.truck_station || customer.truckStation || null;
+            const firstStopStation = route && Array.isArray(route.stops) && route.stops.length > 0
+                ? (route.stops[0].station || null)
+                : null;
+            const truckStationName = escapeHtml((truckStation && truckStation.name) || (firstStopStation && firstStopStation.name) || 'Chưa cập nhật');
+            const routeNameText = escapeHtml((route && route.name) || 'Chưa cập nhật');
             if (route) {
                 const brandName = route.brand ? escapeHtml(route.brand.name || '') : '';
                 const routeName = escapeHtml(route.name || '');
@@ -1121,7 +1140,7 @@
                                         <span class=" fst-italic">, Mã KH: <strong>${code}</strong> - Trạng thái: <strong>${status}</strong></span> 
                                         ${deletedAt ? `<small class="text-danger fst-italic"><i class="bi bi-trash me-1"></i>Đã xóa: ${deletedAt}</small>` : ''}
                                         ${phone ? `<small class="fw-bold fs-6"><i class="bi bi-telephone me-1"></i>${phone}</small><br>` : ''}
-                                        ${addressText ? `<small class="text-muted"><i class="bi bi-geo-alt me-1"></i>${addressText}</small><br>` : ''}
+                                        ${addressText ? `<small class="text-muted"><i class="bi bi-geo-alt me-1"></i>${addressText}</small><br>` : ''} 
                                         ${email ? `<small class="text-muted"><i class="bi bi-envelope me-1"></i>${email}</small><br>` : ''} 
                                        
                                     </div>

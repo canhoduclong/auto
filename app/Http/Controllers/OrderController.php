@@ -62,6 +62,15 @@ class OrderController extends Controller
         );
     }
 
+    private function resolveCustomerShippingFee(?Customer $customer): ?float
+    {
+        if (!$customer || $customer->shipping_fee === null) {
+            return null;
+        }
+
+        return round((float) $customer->shipping_fee, 2);
+    }
+
     private function hasAnyRole(User $user, array $roles): bool
     {
         $roleNames = $user->roles->pluck('name')->map(fn ($name) => strtolower((string) $name))->all();
@@ -288,12 +297,15 @@ class OrderController extends Controller
 
         $query = ProductVariant::query()
             ->withAvailableStock()
-            ->inStock()
             ->with(['product.avatar.media', 'latestPriceRule', 'mediaLink.media'])
             ->where('status', true)
             ->whereHas('product', function ($productQuery) {
                 $productQuery->where('status', true);
             });
+
+        if (!$request->boolean('allow_backorder')) {
+            $query->inStock();
+        }
 
         if ($request->has('search') && $request->input('search') != '') {
             $searchTerm = $request->input('search');
@@ -363,6 +375,7 @@ class OrderController extends Controller
                     'status' => OrderStatus::Pending->value,
                     'payment_status' => PaymentStatus::Unpaid->value,
                     'delivery_status' => DeliveryStatus::NotShipped->value,
+                    'allow_backorder' => $request->boolean('allow_backorder'),
                     'order_discount' => max(0, (float) $request->input('order_discount', 0)),
                     'order_discount_type' => $this->normalizeDiscountType($request->input('order_discount_type')),
                 ],
@@ -422,6 +435,7 @@ class OrderController extends Controller
                     'status' => OrderStatus::Pending->value,
                     'payment_status' => PaymentStatus::Unpaid->value,
                     'delivery_status' => DeliveryStatus::NotShipped->value,
+                    'allow_backorder' => $request->boolean('allow_backorder'),
                     'order_discount' => max(0, (float) $request->input('order_discount', 0)),
                     'order_discount_type' => $this->normalizeDiscountType($request->input('order_discount_type')),
                 ],
@@ -1361,7 +1375,18 @@ class OrderController extends Controller
                 ? -1 * $orderLevelDiscountAmount
                 : $orderLevelDiscountAmount;
 
-            $total = max($subtotalAfterItemAdjustment - $orderLevelDiscount, 0);
+            $customerShippingFee = $this->resolveCustomerShippingFee($customer);
+            $shippingFee = array_key_exists('shipping_fee', $orderData)
+                ? round(max(0, (float) $orderData['shipping_fee']), 2)
+                : ($customerShippingFee ?? 0.0);
+            $chargeShippingFee = array_key_exists('charge_shipping_fee', $orderData)
+                ? (bool) $orderData['charge_shipping_fee']
+                : true;
+            if ($customerShippingFee !== null) {
+                $chargeShippingFee = true;
+            }
+
+            $total = max($subtotalAfterItemAdjustment - $orderLevelDiscount + ($chargeShippingFee ? $shippingFee : 0), 0);
             $totalDiscount = $itemDiscountTotal + $orderLevelDiscount;
 
             $commissionPercentSnapshot = $customer
@@ -1380,6 +1405,8 @@ class OrderController extends Controller
                 'status' => $orderData['status'] ?? OrderStatus::Pending->value,
                 'payment_status' => $orderData['payment_status'] ?? PaymentStatus::Unpaid->value,
                 'delivery_status' => $orderData['delivery_status'] ?? DeliveryStatus::NotShipped->value,
+                'charge_shipping_fee' => $chargeShippingFee,
+                'shipping_fee' => $chargeShippingFee ? $shippingFee : 0,
                 'total' => $total,
                 'commission_percent_snapshot' => $commissionPercentSnapshot,
                 'commission_amount_snapshot' => $commissionAmountSnapshot,

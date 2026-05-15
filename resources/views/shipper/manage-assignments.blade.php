@@ -79,25 +79,28 @@
 @endpush
 
 @section('content')
-<div class="ma-filter-group">
-    <form method="GET" action="{{ route('shipper.manage-assignments') }}" class="d-flex gap-2 align-items-center flex-grow-1">
-        <input type="date" name="date" value="{{ $selectedDate }}" class="form-control form-control-sm" style="max-width: 150px">
-        <button type="submit" class="btn btn-sm btn-primary">
-            <i class="bi bi-search me-1"></i>Lọc
-        </button>
-        <a href="{{ route('shipper.manage-assignments') }}" class="btn btn-sm btn-outline-secondary">
-            <i class="bi bi-arrow-clockwise me-1"></i>Đặt lại
-        </a>
-    </form>
-    
-    <form method="POST" action="{{ route('shipper.create-delivery-schedule') }}" class="d-flex gap-2 align-items-center ms-auto">
-        @csrf
-        <input type="text" name="notes" class="form-control form-control-sm" maxlength="500" placeholder="Ghi chú (tùy chọn)" style="max-width: 280px">
-        <button type="submit" class="btn btn-sm btn-success" title="Gửi lịch trình cho tất cả shipper">
-            <i class="bi bi-check-circle me-1"></i>Hoàn thành & Gửi xác nhận
-        </button>
-    </form>
-</div>
+<div class="row ">
+    <div class="col col-md-6">
+        <form method="GET" action="{{ route('shipper.manage-assignments') }}" class="d-flex gap-2 align-items-center flex-grow-1">
+            <input type="date" name="date" value="{{ $selectedDate }}" class="form-control form-control-sm" style="max-width: 150px">
+            <button type="submit" class="btn btn-sm btn-primary">
+                <i class="bi bi-search me-1"></i>Lọc
+            </button>
+            <a href="{{ route('shipper.manage-assignments') }}" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-arrow-clockwise me-1"></i>Đặt lại
+            </a>
+        </form>
+    </div>
+    <div class="col col-md-6 d-flex justify-content-end align-items-center">
+        <form method="POST" action="{{ route('shipper.create-delivery-schedule') }}" class="d-flex gap-2 align-items-center ms-auto">
+            @csrf
+            <input type="text" name="notes" class="form-control form-control-sm" maxlength="5000" placeholder="Ghi chú (tùy chọn)" style="width: 100%">
+            <button type="submit" class="btn btn-sm btn-success" style="min-width: 220px" title="Gửi lịch trình cho tất cả shipper">
+                <i class="bi bi-check-circle me-1"></i>Hoàn thành & Gửi xác nhận
+            </button>
+        </form>
+    </div>
+</div> 
 
 <div class="d-flex align-items-center gap-3 mb-3">
     @if(!empty($confirmedShipperIds) && count($confirmedShipperIds) > 0)
@@ -217,10 +220,12 @@
                                                 <div class="d-flex flex-column align-items-center" style="min-width:32px;">
                                                     <form action="{{ route('shipper.move-order-up', [$order->id]) }}" method="POST" style="margin-bottom:2px;">
                                                         @csrf
+                                                        <input type="hidden" name="date" value="{{ $selectedDate }}">
                                                         <button type="submit" class="btn btn-light btn-sm px-1 py-0" title="Lên trên" {{ $idx === 0 ? 'disabled' : '' }}><i class="bi bi-arrow-up"></i></button>
                                                     </form>
                                                     <form action="{{ route('shipper.move-order-down', [$order->id]) }}" method="POST">
                                                         @csrf
+                                                        <input type="hidden" name="date" value="{{ $selectedDate }}">
                                                         <button type="submit" class="btn btn-light btn-sm px-1 py-0" title="Xuống dưới" {{ $idx === $shipperOrders->count()-1 ? 'disabled' : '' }}><i class="bi bi-arrow-down"></i></button>
                                                     </form>
                                                 </div>
