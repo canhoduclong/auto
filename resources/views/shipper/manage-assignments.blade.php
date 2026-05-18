@@ -39,6 +39,12 @@
         padding: 6px 12px;
         white-space: nowrap;
     }
+    .ma-shipper-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .4rem;
+        margin-top: .35rem;
+    }
     .ma-filter-group {
         display: flex;
         gap: 1rem;
@@ -102,18 +108,6 @@
     </div>
 </div> 
 
-<div class="d-flex align-items-center gap-3 mb-3">
-    @if(!empty($confirmedShipperIds) && count($confirmedShipperIds) > 0)
-        @php
-            $confirmedShippers = $shippers->whereIn('id', $confirmedShipperIds)->pluck('name')->implode(', ');
-        @endphp
-        <div class="alert alert-success alert-sm d-inline-flex align-items-center gap-2 mb-0 py-2 px-3" style="border-radius: 0.5rem;">
-            <i class="bi bi-check-circle"></i>
-            <span class="fw-semibold" style="font-size: 0.9rem;">Đã duyệt: {{ $confirmedShippers }}</span>
-        </div>
-    @endif
-</div>
-
 <div class="ma-stats">
     <div class="ma-stat-card">
         <div class="ma-stat-value">{{ $totalOrdersCount }}</div>
@@ -134,7 +128,7 @@
 </div>
 
 <div class="row g-3">
-    <div class="col-lg-7">
+    <div class="col-lg-6">
         <div class="card border-0 shadow-sm h-100">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -165,7 +159,7 @@
         </div>
     </div>
 
-    <div class="col-lg-5">
+    <div class="col-lg-6">
         <div class="border-0   h-100">
             <div class="body">
                 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -186,14 +180,34 @@
                         @foreach($assignedOrders as $shipperId => $shipperOrders)
                             @if($shipperOrders->isNotEmpty())
                                 @php $shipper = $shippers->firstWhere('id', $shipperId); @endphp
+                                @php
+                                    $scheduleStatus = $shipperScheduleStatuses[$shipperId] ?? 'waiting';
+                                    $scheduleBadgeClass = match ($scheduleStatus) {
+                                        'confirmed' => 'bg-success',
+                                        'rejected' => 'bg-danger',
+                                        default => 'bg-warning text-dark',
+                                    };
+                                    $scheduleLabel = match ($scheduleStatus) {
+                                        'confirmed' => 'Đã Xác nhận',
+                                        'rejected' => 'Từ chối',
+                                        default => 'Chờ xác nhận',
+                                    };
+                                @endphp
                                 <div class="border rounded-3 p-3 bg-white">
                                     <div class="d-flex justify-content-between align-items-center mb-3 gap-2">
                                         <div>
                                             <div class="fw-semibold text-dark">{{ $shipper?->name ?? 'Shipper #' . $shipperId }}</div>
                                             <div class="text-muted small">{{ $shipper?->phone ?? $shipper?->email ?? 'Không có liên hệ' }}</div>
+                                            
                                         </div>
-                                        <div class="d-flex align-items-center gap-2">
-                                            <span class="badge bg-primary rounded-pill" style="white-space: nowrap;">{{ $shipperOrders->count() }}</span>
+                                        <div class="d-flex align-items-center gap-2">                                            
+                                            <div class="d-flex">
+                                                <span class="badge bg-primary rounded-pill  me-2" style="white-space: nowrap;">{{ $shipperOrders->count() }}</span>
+                                                <div class="ma-shipper-meta">
+                                                    <span class="badge {{ $scheduleBadgeClass }}">{{ $scheduleLabel }}</span>
+                                                </div>
+                                                
+                                            </div>
                                             <form method="POST" action="{{ route('shipper.bulk-transfer-assignments') }}" class="d-flex gap-1" style="width: 220px;">
                                                 @csrf
                                                 <input type="hidden" name="from_shipper_id" value="{{ $shipperId }}">
@@ -204,10 +218,10 @@
                                                             <option value="{{ $s->id }}">{{ $s->name }}</option>
                                                         @endif
                                                     @endforeach
-                                                </select>
+                                                </select> 
                                                 <button type="submit" class="btn btn-sm btn-outline-warning px-2" title="Chuyển tất cả {{ $shipperOrders->count() }} đơn">
                                                     <i class="bi bi-arrow-right"></i>
-                                                </button>
+                                                </button>                                                 
                                             </form>
                                         </div>
                                     </div>

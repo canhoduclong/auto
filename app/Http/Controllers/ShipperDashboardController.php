@@ -360,12 +360,27 @@ class ShipperDashboardController extends Controller
         if ($request->filled('has_partial_return') && $request->input('has_partial_return') == '1') {
             $order->loadMissing('items');
             $partialWeightInput = $request->input('partial_weight', []);
+            $actualWeightInput = $request->input('actual_weight', []);
             $weightErrors = [];
             foreach ($order->items as $item) {
                 if (!array_key_exists($item->id, $partialWeightInput)) continue;
                 $entered  = $partialWeightInput[$item->id];
                 if ($entered === null || $entered === '') continue;
-                $maxWeight = (float) $item->effective_unit_weight * (int) $item->quantity;
+
+                $baseWeight = $item->packed_weight !== null
+                    ? (float) $item->packed_weight
+                    : (($item->actual_weight !== null && (float) $item->actual_weight > 0)
+                        ? (float) $item->actual_weight
+                        : (float) $item->effective_unit_weight * (int) $item->quantity);
+
+                if (array_key_exists($item->id, $actualWeightInput)
+                    && $actualWeightInput[$item->id] !== null
+                    && $actualWeightInput[$item->id] !== ''
+                ) {
+                    $baseWeight = max(0, (float) $actualWeightInput[$item->id]);
+                }
+
+                $maxWeight = max(0, $baseWeight);
                 if ((float) $entered > $maxWeight) {
                     $weightErrors["partial_weight.{$item->id}"] = "Khối lượng giao của '{$item->variant?->name}' tối đa {$maxWeight} kg (đã nhập " . (float)$entered . ' kg)';
                 }
@@ -421,7 +436,21 @@ class ShipperDashboardController extends Controller
                             $updates['actual_weight'] = max(0, (float) $partialWeights[$item->id]);
                         }
 
-                        $partialReturnNotes[] = ($item->variant?->name ?? 'SP') . ': giao ' . $deliveredQty . '/' . $originalQty . ' (trả ' . $returnedQty . ')';
+                        $noteSegment = ($item->variant?->name ?? 'SP') . ': giao ' . $deliveredQty . '/' . $originalQty . ' (trả ' . $returnedQty . ')';
+                        if ((bool) $item->effective_priced_by_kg) {
+                            $baseWeight = $item->packed_weight !== null
+                                ? (float) $item->packed_weight
+                                : (($item->actual_weight !== null && (float) $item->actual_weight > 0)
+                                    ? (float) $item->actual_weight
+                                    : (float) $item->effective_unit_weight * $originalQty);
+                            $deliveredWeight = array_key_exists($item->id, $partialWeights)
+                                ? max(0, (float) ($partialWeights[$item->id] ?? 0))
+                                : 0;
+                            $returnedWeight = max(0, round($baseWeight - $deliveredWeight, 3));
+                            $noteSegment .= ' ~ ' . $returnedWeight . ' kg';
+                        }
+
+                        $partialReturnNotes[] = $noteSegment;
                         $returnedItems[$item->id] = [
                             'variant_id'   => (int) $item->product_variant_id,
                             'returned_qty' => $returnedQty,
@@ -790,7 +819,7 @@ class ShipperDashboardController extends Controller
             ? Carbon::parse($request->input('date'))->toDateString()
             : Carbon::today()->toDateString();
 
-        $ordersQuery = Order::with(['customer', 'items.variant', 'shipper'])
+        $ordersQuery = Order::with(['customer.truckStation', 'customer.truckRoute.stops.station', 'items.variant', 'shipper'])
             ->whereIn('status', $this->assignmentStatuses())
             ->where(function ($query) use ($selectedDate) {
                 $query->whereDate('created_at', $selectedDate)
@@ -835,13 +864,7 @@ class ShipperDashboardController extends Controller
             ->orderBy('name')
             ->get();
 
-        // Get shipper IDs that have confirmed delivery schedule today
-        $confirmedShipperIds = OrderHistory::query()
-            ->where('action', 'schedule_confirmed')
-            ->whereDate('created_at', $selectedDate)
-            ->distinct('user_id')
-            ->pluck('user_id')
-            ->toArray();
+        $shipperScheduleStatuses = $this->resolveShipperScheduleStatuses($selectedDate);
 
         return view('shipper.manage-assignments', compact(
             'unassignedOrders',
@@ -851,8 +874,75 @@ class ShipperDashboardController extends Controller
             'assignedOrdersCount',
             'unassignedOrdersCount',
             'totalOrdersCount',
-            'confirmedShipperIds'
+            'shipperScheduleStatuses'
         ));
+    }
+
+    private function resolveShipperScheduleStatuses(string $selectedDate): array
+    {
+        $scheduleActions = OrderHistory::query()
+            ->join('orders', 'orders.id', '=', 'order_histories.order_id')
+            ->whereDate('order_histories.created_at', '<=', $selectedDate)
+            ->whereIn('order_histories.action', ['schedule_created', 'schedule_confirmed', 'schedule_rejected'])
+            ->whereNotNull('orders.shipper_id')
+            ->orderBy('orders.shipper_id')
+            ->orderByDesc('order_histories.created_at')
+            ->orderByDesc('order_histories.id')
+            ->get(['orders.shipper_id as shipper_id', 'order_histories.action as action']);
+
+        $statusByShipperId = [];
+
+        foreach ($scheduleActions as $scheduleAction) {
+            $statusByShipperId[(int) $scheduleAction->shipper_id] = match ($scheduleAction->action) {
+                'schedule_confirmed' => 'confirmed',
+                'schedule_rejected' => 'rejected',
+                default => 'waiting',
+            };
+        }
+
+        return $statusByShipperId;
+    }
+
+    private function buildDeliveryScheduleSnapshot($orders): array
+    {
+        return $orders->map(function ($order) {
+            return [
+                'order_id' => (int) $order->id,
+                'daily_sequence' => $order->daily_sequence !== null ? (int) $order->daily_sequence : null,
+                'delivery_time' => $order->delivery_time,
+                'updated_at' => optional($order->updated_at)->toDateTimeString(),
+            ];
+        })->values()->all();
+    }
+
+    private function hashDeliveryScheduleSnapshot(array $snapshot): string
+    {
+        return hash('sha256', json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+    }
+
+    private function latestDeliveryScheduleHistoryForShipper(int $shipperId): ?OrderHistory
+    {
+        return OrderHistory::query()
+            ->join('orders', 'orders.id', '=', 'order_histories.order_id')
+            ->where('orders.shipper_id', $shipperId)
+            ->whereIn('order_histories.action', ['schedule_created', 'schedule_confirmed', 'schedule_rejected'])
+            ->orderByDesc('order_histories.created_at')
+            ->orderByDesc('order_histories.id')
+            ->select('order_histories.*')
+            ->first();
+    }
+
+    private function latestDeliveryScheduleHistoryForShipperOnDate(int $shipperId, string $selectedDate): ?OrderHistory
+    {
+        return OrderHistory::query()
+            ->join('orders', 'orders.id', '=', 'order_histories.order_id')
+            ->where('orders.shipper_id', $shipperId)
+            ->whereDate('order_histories.created_at', $selectedDate)
+            ->whereIn('order_histories.action', ['schedule_created', 'schedule_confirmed', 'schedule_rejected'])
+            ->orderByDesc('order_histories.created_at')
+            ->orderByDesc('order_histories.id')
+            ->select('order_histories.*')
+            ->first();
     }
 
     /**
@@ -1006,6 +1096,8 @@ class ShipperDashboardController extends Controller
 
         $totalOrdersCount = 0;
         $processedShippers = [];
+        $skippedShippers = [];
+        $changedRouteShippers = [];
 
         // Lặp qua từng shipper và tạo lịch trình
         foreach ($shipperIds as $shipperId) {
@@ -1019,10 +1111,34 @@ class ShipperDashboardController extends Controller
                     $query->whereDate('created_at', $date)
                         ->orWhereDate('updated_at', $date);
                 })
+                ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
+                ->orderBy('daily_sequence', 'asc')
                 ->orderBy('delivery_time', 'asc')
+                ->orderBy('created_at', 'asc')
+                ->orderBy('id', 'asc')
                 ->get();
 
             if ($orders->isNotEmpty()) {
+                $snapshot = $this->buildDeliveryScheduleSnapshot($orders);
+                $snapshotHash = $this->hashDeliveryScheduleSnapshot($snapshot);
+                $latestHistory = $this->latestDeliveryScheduleHistoryForShipper($shipper->id);
+                $latestHash = $latestHistory?->schedule_snapshot_hash;
+                $latestAction = $latestHistory?->action;
+
+                if ($latestHash === $snapshotHash && $latestAction === 'schedule_confirmed') {
+                    $skippedShippers[] = $shipper->name;
+                    continue;
+                }
+
+                $isRouteChanged = $latestHash !== null && $latestHash !== $snapshotHash;
+                if ($isRouteChanged) {
+                    $changedRouteShippers[] = $shipper->name;
+                }
+
+                $message = $isRouteChanged
+                    ? 'Có sự thay đổi lộ trình giao hàng, đề nghị kiểm tra và xác nhận.'
+                    : 'Lịch trình giao hàng đã được gửi cho ' . $shipper->name;
+
                 // Ghi lại OrderHistory cho mỗi đơn
                 foreach ($orders as $order) {
                     OrderHistory::create([
@@ -1032,7 +1148,9 @@ class ShipperDashboardController extends Controller
                         'role'          => 'manager_shipper',
                         'status_before' => $order->status,
                         'status_after'  => $order->status,
-                        'note'          => 'Lịch trình giao hàng đã được gửi cho ' . $shipper->name,
+                        'note'          => $message,
+                        'schedule_snapshot_hash' => $snapshotHash,
+                        'schedule_snapshot'      => json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
                     ]);
                 }
 
@@ -1042,11 +1160,25 @@ class ShipperDashboardController extends Controller
         }
 
         if (empty($processedShippers)) {
+            if (!empty($skippedShippers)) {
+                return back()->with('info', 'Các shipper đã xác nhận và không đổi lộ trình nên không gửi lại: ' . implode(', ', $skippedShippers) . '.');
+            }
+
             return back()->with('warning', 'Không có đơn nào để tạo lịch trình giao hàng.');
         }
 
         $shipperList = implode(', ', $processedShippers);
-        return back()->with('success', 'Đã gửi lịch trình giao hàng cho ' . count($processedShippers) . ' shipper (' . $totalOrdersCount . ' đơn): ' . $shipperList . '. Các shipper sẽ nhận được thông báo xác nhận.');
+        $message = 'Đã gửi lịch trình giao hàng cho ' . count($processedShippers) . ' shipper (' . $totalOrdersCount . ' đơn): ' . $shipperList . '. Các shipper sẽ nhận được thông báo xác nhận.';
+
+        if (!empty($changedRouteShippers)) {
+            $message .= ' Có sự thay đổi lộ trình giao hàng, đề nghị kiểm tra và xác nhận: ' . implode(', ', array_unique($changedRouteShippers)) . '.';
+        }
+
+        if (!empty($skippedShippers)) {
+            $message .= ' Đã bỏ qua các shipper đã xác nhận và không đổi lộ trình: ' . implode(', ', array_unique($skippedShippers)) . '.';
+        }
+
+        return back()->with('success', $message);
     }
 
     /**
@@ -1069,7 +1201,19 @@ class ShipperDashboardController extends Controller
             ->orderBy('delivery_time', 'asc')
             ->get();
 
-        return view('shipper.delivery-schedules', compact('orders', 'selectedDate'));
+        $currentSnapshot = $this->buildDeliveryScheduleSnapshot($orders);
+        $currentSnapshotHash = $this->hashDeliveryScheduleSnapshot($currentSnapshot);
+        $latestHistory = $this->latestDeliveryScheduleHistoryForShipperOnDate($userId, $selectedDate);
+
+        $scheduleAlreadyConfirmed = $latestHistory
+            && $latestHistory->action === 'schedule_confirmed'
+            && $latestHistory->schedule_snapshot_hash === $currentSnapshotHash;
+
+        return view('shipper.delivery-schedules', compact(
+            'orders',
+            'selectedDate',
+            'scheduleAlreadyConfirmed'
+        ));
     }
 
     /**
@@ -1077,7 +1221,20 @@ class ShipperDashboardController extends Controller
      */
     public function confirmDeliverySchedule(Request $request, $schedule)
     {
+        return $this->recordDeliveryScheduleDecision($request, $schedule, 'schedule_confirmed', 'Bạn đã xác nhận nhận lịch trình giao hàng. Sẵn sàng giao hàng!');
+    }
+
+    public function rejectDeliverySchedule(Request $request, $schedule)
+    {
+        return $this->recordDeliveryScheduleDecision($request, $schedule, 'schedule_rejected', 'Bạn đã từ chối nhận lịch trình giao hàng.');
+    }
+
+    private function recordDeliveryScheduleDecision(Request $request, $schedule, string $historyAction, string $successMessage)
+    {
         $userId = Auth::id();
+        $selectedDate = $request->filled('date')
+            ? Carbon::parse($request->input('date'))->toDateString()
+            : Carbon::today()->toDateString();
 
         if ($schedule === 'bulk') {
             $validated = $request->validate([
@@ -1088,41 +1245,74 @@ class ShipperDashboardController extends Controller
             $orders = Order::query()
                 ->whereIn('id', $validated['order_ids'])
                 ->where('shipper_id', $userId)
+                ->where(function ($query) use ($selectedDate) {
+                    $query->whereDate('created_at', $selectedDate)
+                        ->orWhereDate('updated_at', $selectedDate);
+                })
+                ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
+                ->orderBy('daily_sequence', 'asc')
+                ->orderBy('delivery_time', 'asc')
+                ->orderBy('created_at', 'asc')
+                ->orderBy('id', 'asc')
                 ->get();
 
             abort_if($orders->count() !== count($validated['order_ids']), 403, 'Có đơn không thuộc về bạn.');
 
-            DB::transaction(function () use ($orders, $userId): void {
+            $snapshot = $this->buildDeliveryScheduleSnapshot($orders);
+            $snapshotHash = $this->hashDeliveryScheduleSnapshot($snapshot);
+
+            DB::transaction(function () use ($orders, $userId, $historyAction, $snapshotHash, $snapshot): void {
                 foreach ($orders as $order) {
                     OrderHistory::create([
                         'order_id'      => $order->id,
-                        'action'        => 'schedule_confirmed',
+                        'action'        => $historyAction,
                         'user_id'       => $userId,
                         'role'          => 'shipper',
                         'status_before' => $order->status,
                         'status_after'  => $order->status,
-                        'note'          => 'Shipper ' . Auth::user()->name . ' đã xác nhận nhận lịch trình giao hàng.',
+                        'note'          => 'Shipper ' . Auth::user()->name . ' đã cập nhật trạng thái lịch trình giao hàng.',
+                        'schedule_snapshot_hash' => $snapshotHash,
+                        'schedule_snapshot'      => json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
                     ]);
                 }
             });
 
-            return back()->with('success', 'Bạn đã xác nhận nhận toàn bộ lịch trình giao hàng. Sẵn sàng giao hàng!');
+            return back()->with('success', $successMessage);
         }
 
         $order = Order::findOrFail($schedule);
         abort_if($order->shipper_id !== $userId, 403, 'Đơn này không thuộc về bạn.');
 
+        $orders = Order::query()
+            ->where('shipper_id', $userId)
+            ->whereIn('status', $this->assignmentStatuses())
+            ->where(function ($query) use ($selectedDate) {
+                $query->whereDate('created_at', $selectedDate)
+                    ->orWhereDate('updated_at', $selectedDate);
+            })
+            ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
+            ->orderBy('daily_sequence', 'asc')
+            ->orderBy('delivery_time', 'asc')
+            ->orderBy('created_at', 'asc')
+            ->orderBy('id', 'asc')
+            ->get();
+
+        $snapshot = $this->buildDeliveryScheduleSnapshot($orders);
+        $snapshotHash = $this->hashDeliveryScheduleSnapshot($snapshot);
+
         OrderHistory::create([
             'order_id'      => $order->id,
-            'action'        => 'schedule_confirmed',
+            'action'        => $historyAction,
             'user_id'       => $userId,
             'role'          => 'shipper',
             'status_before' => $order->status,
             'status_after'  => $order->status,
-            'note'          => 'Shipper ' . Auth::user()->name . ' đã xác nhận nhận lịch trình giao hàng.',
+            'note'          => 'Shipper ' . Auth::user()->name . ' đã cập nhật trạng thái lịch trình giao hàng.',
+            'schedule_snapshot_hash' => $snapshotHash,
+            'schedule_snapshot'      => json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         ]);
 
-        return back()->with('success', 'Bạn đã xác nhận nhận lịch trình giao hàng. Sẵn sàng giao hàng!');
+        return back()->with('success', $successMessage);
     }
 
     private function assignmentStatuses(): array

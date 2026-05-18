@@ -194,39 +194,39 @@
             </div>
 
             <div class="col-lg-5">
-                {{-- Assigned Customers Section --}}
-                <h6 class="mx-1 mb-3 text-uppercase fs-5 newcus">Khách hàng mới</h6>
-                <div class="pb-3 mb-3" id="assigned-customers"> 
-                    @forelse($assignedCustomers as $idx => $customer)
-                        <div class="assigned-customer-card p-2 mb-2 border rounded" style="background: #f8fafc;">
-                            <div class="d-flex align-items-center bd-highlight  ">
-                                <div class="d-flex  border-right  mr-2    text-muted justify-content-center align-items-center " style="width: 30px;"> 
-                                    <span class="fs-2 newcus">{{ $idx + 1 }}</span>
-                                </div>
-                                <div class="flex-grow-1">                                   
-                                    <div class="small newcus fw-semibold fs-6 text-uppercase">{{ $customer['name'] }}</div>
-                                    <div class="small text-muted fw-semibold ">
-                                        {{ $customer['phone'] ?: '' }} 
+                @if(($assignedCustomers ?? collect())->isNotEmpty())
+                    {{-- Assigned Customers Section --}}
+                    <h6 class="mx-1 mb-3 text-uppercase fs-5 newcus">Khách hàng mới</h6>
+                    <div class="pb-3 mb-3" id="assigned-customers"> 
+                        @foreach($assignedCustomers as $idx => $customer)
+                            <div class="assigned-customer-card p-2 mb-2 border rounded" style="background: #f8fafc;">
+                                <div class="d-flex align-items-center bd-highlight  ">
+                                    <div class="d-flex  border-right  mr-2    text-muted justify-content-center align-items-center " style="width: 30px;"> 
+                                        <span class="fs-2 newcus">{{ $idx + 1 }}</span>
                                     </div>
-                                    <div class="small text-muted">
-                                        {{ $customer['address'] ?: '' }}
+                                    <div class="flex-grow-1">                                   
+                                        <div class="small newcus fw-semibold fs-6 text-uppercase">{{ $customer['name'] }}</div>
+                                        <div class="small text-muted fw-semibold ">
+                                            {{ $customer['phone'] ?: '' }} 
+                                        </div>
+                                        <div class="small text-muted">
+                                            {{ $customer['address'] ?: '' }}
+                                        </div>
                                     </div>
+                                    <button type="button" class="btn btn-sm {{ $customer['is_accepted'] ? 'btn-success' : 'btn-outline-primary' }} accept-customer-btn" 
+                                            data-customer-id="{{ $customer['id'] }}" 
+                                            {{ $customer['is_accepted'] ? 'disabled' : '' }}>
+                                        @if($customer['is_accepted'])
+                                            <i class="bi bi-check-circle"></i> Đã nhận
+                                        @else
+                                            <i class="bi bi-plus-circle"></i> Nhận
+                                        @endif
+                                    </button>
                                 </div>
-                                <button type="button" class="btn btn-sm {{ $customer['is_accepted'] ? 'btn-success' : 'btn-outline-primary' }} accept-customer-btn" 
-                                        data-customer-id="{{ $customer['id'] }}" 
-                                        {{ $customer['is_accepted'] ? 'disabled' : '' }}>
-                                    @if($customer['is_accepted'])
-                                        <i class="bi bi-check-circle"></i> Đã nhận
-                                    @else
-                                        <i class="bi bi-plus-circle"></i> Nhận
-                                    @endif
-                                </button>
                             </div>
-                        </div>
-                    @empty
-                        <div class="text-muted small">Không có khách hàng nào được giao.</div>
-                    @endforelse
-                </div>
+                        @endforeach
+                    </div>
+                @endif
 
                 {{-- Activity Timeline Section --}}
                 <div class="section-card p-3" id="activity-timeline">

@@ -131,6 +131,7 @@
 @else
     <form id="delivery-schedule-form" method="POST" action="{{ route('shipper.confirm-delivery-schedule', ['schedule' => 'bulk']) }}">
         @csrf
+        <input type="hidden" name="date" value="{{ $selectedDate }}">
         <div class="d-flex flex-column gap-3" id="orders-list">
             @foreach($orders as $idx => $order)
                 <div class="order-item w-100" data-order-id="{{ $order->id }}">
@@ -220,11 +221,19 @@
                 </div>
             @endforeach
         </div>
-        <div class="mt-4 text-center">
-            <button type="submit" class="btn btn-primary px-5">
+        <div class="mt-4 text-center d-flex justify-content-center gap-2 flex-wrap">
+            <button type="submit" class="btn btn-primary px-5" formaction="{{ route('shipper.confirm-delivery-schedule', ['schedule' => 'bulk']) }}" @if($scheduleAlreadyConfirmed) disabled @endif>
                 <i class="bi bi-check2-circle me-1"></i> Xác nhận lịch trình & nhận đơn
             </button>
+            <button type="submit" class="btn btn-outline-danger px-5" formaction="{{ route('shipper.reject-delivery-schedule', ['schedule' => 'bulk']) }}">
+                <i class="bi bi-x-circle me-1"></i> Từ chối nhận
+            </button>
         </div>
+        @if($scheduleAlreadyConfirmed)
+            <div class="text-center mt-2 text-success small fw-semibold">
+                Lịch trình đã được xác nhận. Chỉ còn có thể từ chối nếu cần.
+            </div>
+        @endif
     </form>
 @push('scripts')
 <script>

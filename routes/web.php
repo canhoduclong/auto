@@ -267,6 +267,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         // Shipper delivery schedule routes
         Route::get('/delivery-schedules',                 [ShipperDashboardController::class, 'deliverySchedules'])->name('delivery-schedules');
         Route::post('/delivery-schedule/{schedule}/confirm', [ShipperDashboardController::class, 'confirmDeliverySchedule'])->name('confirm-delivery-schedule');
+        Route::post('/delivery-schedule/{schedule}/reject', [ShipperDashboardController::class, 'rejectDeliverySchedule'])->name('reject-delivery-schedule');
     });
 
     // ─── CEO module ────────────────────────────────────────────────────────

@@ -17,6 +17,8 @@ class OrderHistory extends Model
         'status_before',
         'status_after',
         'note',
+        'schedule_snapshot_hash',
+        'schedule_snapshot',
     ];
 
     public function order()
