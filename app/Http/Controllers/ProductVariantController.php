@@ -142,8 +142,11 @@ class ProductVariantController extends Controller
             return view('product_variants._variants_table', compact('variants'))->render();
         }
 
+        // Nhóm biến thể theo sản phẩm
+        $groupedVariants = $variants->groupBy('product_id');
+        
         $products = \App\Models\Product::orderBy('name')->get();
-        return view('product_variants.index', compact('variants', 'products'));
+        return view('product_variants.index', compact('groupedVariants', 'variants', 'products'));
     }
 
     public function bulkDelete(Request $request)
