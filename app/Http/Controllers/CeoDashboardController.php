@@ -1186,10 +1186,32 @@ class CeoDashboardController extends Controller
         $sales     = User::query()->orderBy('name')->select('id', 'name')->get();
         $customers = Customer::query()->orderBy('name')->select('id', 'name', 'customer_code')->get();
 
+        // Get sales statistics by employee
+        $salesStats = $makeBase()
+            ->select([
+                'orders.user_id',
+                DB::raw('u_sale.name as sale_name'),
+                DB::raw('COUNT(DISTINCT orders.id) as order_count'),
+                DB::raw("SUM({$effTotalExpr}) as total_value"),
+            ])
+            ->leftJoin('users as u_sale', 'u_sale.id', '=', 'orders.user_id')
+            ->groupBy('orders.user_id', 'u_sale.name')
+            ->orderByDesc('total_value')
+            ->get()
+            ->map(function ($stat) {
+                return [
+                    'sale_id' => $stat->user_id,
+                    'sale_name' => $stat->sale_name ?? 'N/A',
+                    'order_count' => $stat->order_count,
+                    'total_value' => $stat->total_value,
+                ];
+            })
+            ->values();
+
         return view('ceo.daily_sales', compact(
             'items', 'productStats', 'summary',
             'fromDate', 'toDate', 'saleId', 'customerId',
-            'sort', 'perPage', 'sales', 'customers',
+            'sort', 'perPage', 'sales', 'customers', 'salesStats',
         ));
     }
 }
