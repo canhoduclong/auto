@@ -28,10 +28,10 @@ class ProductPolicy
         return $this->create($user);
     }
 
-    public function update(User $user, Product $product) {
+    public function update(User $user, ?Product $product = null) {
         return $user->isAdmin() || $user->hasPermission('products.update') || $user->hasPermission('products.edit');
     }
-    public function edit(User $user, Product $product) {
+    public function edit(User $user, ?Product $product = null) {
         return $this->update($user, $product);
     } 
     public function delete(User $user, Product $product) {

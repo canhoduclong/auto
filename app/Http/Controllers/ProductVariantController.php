@@ -4,6 +4,8 @@ use App\Models\ProductVariant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Pagination\Paginator;
 
 class ProductVariantController extends Controller
 {
@@ -136,17 +138,36 @@ class ProductVariantController extends Controller
         }
 
         $perPage = $request->input('per_page', 20);
-        $variants = $query->orderByDesc('id')->paginate($perPage)->appends($request->query());
+        
+        // Get all matching variants first (without pagination)
+        $allVariants = $query->orderByDesc('id')->get();
+        
+        // Group by product
+        $groupedVariants = $allVariants->groupBy('product_id');
 
         if ($request->ajax()) {
-            return view('product_variants._variants_table', compact('variants'))->render();
+            return view('product_variants._variants_table', compact('allVariants'))->render();
         }
 
-        // Nhóm biến thể theo sản phẩm
-        $groupedVariants = $variants->groupBy('product_id');
+        // Create a custom paginated collection for display
+        $page = Paginator::resolveCurrentPage() ?: 1;
+        $offset = ($page - 1) * $perPage;
+        $paginatedGroups = collect($groupedVariants)->slice($offset, $perPage);
+        
+        // Create a LengthAwarePaginator for pagination links
+        $paginator = new LengthAwarePaginator(
+            $paginatedGroups->values(),
+            $groupedVariants->count(),
+            $perPage,
+            $page,
+            [
+                'path' => $request->url(),
+                'query' => $request->query(),
+            ]
+        );
         
         $products = \App\Models\Product::orderBy('name')->get();
-        return view('product_variants.index', compact('groupedVariants', 'variants', 'products'));
+        return view('product_variants.index', compact('paginatedGroups', 'paginator', 'products', 'allVariants'));
     }
 
     public function bulkDelete(Request $request)

@@ -7,7 +7,7 @@
             <h3 class="mb-0 fw-bold text-primary">
                 <i class="fas fa-cube me-2"></i>Quản lý Biến Thể Sản Phẩm
             </h3>
-            <p class="text-muted small mt-1">Tổng cộng: {{ $variants->total() }} biến thể</p>
+            <p class="text-muted small mt-1">Tổng cộng: {{ $allVariants->count() }} biến thể</p>
         </div>
         <a href="{{ route('product-variants.create') }}" class="btn btn-success btn-lg">
             <i class="fas fa-plus me-2"></i>Thêm Biến Thể Mới
@@ -81,7 +81,7 @@
 
     <!-- Grouped Variants by Product -->
     <div id="variants-container">
-        @forelse($groupedVariants as $productId => $productVariants)
+        @forelse($paginatedGroups as $productId => $productVariants)
             @php
                 $product = $productVariants->first()->product;
             @endphp
@@ -208,10 +208,10 @@
         @endforelse
 
         <!-- Pagination -->
-        @if($variants->hasPages())
+        @if($paginator->hasPages())
         <nav aria-label="Page navigation" class="mt-4">
             <ul class="pagination justify-content-center">
-                {{ $variants->links() }}
+                {{ $paginator->links() }}
             </ul>
         </nav>
         @endif
@@ -240,10 +240,118 @@
 <script>
 $(document).ready(function() {
     // Select all checkboxes in a product group
-    $('.variant-checkbox-all').on('change', function() {
+    $(document).on('change', '.variant-checkbox-all', function() {
         const productId = $(this).data('product-id');
         const isChecked = this.checked;
         $('input.variant-checkbox').prop('checked', isChecked);
+    });
+
+    // Clone variant - using event delegation
+    $(document).on('click', '.clone-variant-index', function() {
+        const variantId = $(this).data('variant-id');
+        
+        if (!variantId) return;
+        
+        if (confirm('Bạn có chắc chắn muốn nhân bản biến thể này?')) {
+            $.ajax({
+                url: `/product-variants/${variantId}/duplicate`,
+                method: 'POST',
+                data: {
+                    _token: $('meta[name="csrf-token"]').attr('content')
+                },
+                success: function(response) {
+                    showNotification('Đã nhân bản biến thể thành công!', 'success');
+                    setTimeout(() => location.reload(), 1500);
+                },
+                error: function() {
+                    showNotification('Có lỗi xảy ra khi nhân bản', 'error');
+                }
+            });
+        }
+    });
+
+    // Quick edit variant - using event delegation
+    $(document).on('click', '.quick-edit-variant-index', function() {
+        const variantId = $(this).data('variant-id');
+        const tr = $(this).closest('tr');
+        
+        if (!variantId) return;
+        
+        // Kiểm tra nếu đã có form sửa
+        if (tr.next().hasClass('quick-edit-row')) return;
+        
+        // Get current values from row
+        const tds = tr.find('td');
+        const sku = $(tds[3]).find('strong').text().trim() || '';
+        const size = $(tds[4]).find('.badge').text().trim() || '';
+        const quality = $(tds[5]).text().trim() || '';
+        const price = $(tds[7]).find('strong').text().trim().replace(/[^0-9]/g, '') || '0';
+        const stock = $(tds[8]).find('.badge').text().trim() || '0';
+
+        const html = `
+            <tr class="quick-edit-row">
+                <td colspan="10">
+                    <div class="p-3 bg-light rounded">
+                        <form method="POST" action="/product-variants/${variantId}" class="quick-edit-form">
+                            <input type="hidden" name="_token" value="${$('meta[name="csrf-token"]').attr('content')}">
+                            <input type="hidden" name="_method" value="PUT">
+                            <div class="row g-2">
+                                <div class="col-auto">
+                                    <label class="form-label small fw-semibold">SKU</label>
+                                    <input type="text" name="sku" value="${sku}" class="form-control form-control-sm" style="width: 100px;">
+                                </div>
+                                <div class="col-auto">
+                                    <label class="form-label small fw-semibold">Size</label>
+                                    <input type="text" name="size" value="${size}" class="form-control form-control-sm" style="width: 80px;">
+                                </div>
+                                <div class="col-auto">
+                                    <label class="form-label small fw-semibold">Chất Lượng</label>
+                                    <input type="text" name="quality" value="${quality}" class="form-control form-control-sm" style="width: 100px;">
+                                </div>
+                                <div class="col-auto">
+                                    <label class="form-label small fw-semibold">Giá</label>
+                                    <input type="number" name="price" value="${price}" class="form-control form-control-sm" style="width: 100px;">
+                                </div>
+                                <div class="col-auto">
+                                    <label class="form-label small fw-semibold">Tồn Kho</label>
+                                    <input type="number" name="stock" value="${stock}" class="form-control form-control-sm" style="width: 80px;">
+                                </div>
+                                <div class="col-auto pt-3">
+                                    <button type="submit" class="btn btn-sm btn-primary">Lưu</button>
+                                    <button type="button" class="btn btn-sm btn-secondary cancel-quick-edit">Hủy</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+        `;
+
+        tr.after(html);
+    });
+
+    // Cancel quick edit
+    $(document).on('click', '.cancel-quick-edit', function() {
+        $(this).closest('.quick-edit-row').remove();
+    });
+    
+    // Submit quick edit form
+    $(document).on('submit', '.quick-edit-form', function(e) {
+        e.preventDefault();
+        const form = $(this);
+        
+        $.ajax({
+            url: form.attr('action'),
+            method: 'POST',
+            data: form.serialize(),
+            success: function() {
+                showNotification('Cập nhật thành công!', 'success');
+                setTimeout(() => location.reload(), 1500);
+            },
+            error: function(xhr) {
+                showNotification('Có lỗi xảy ra', 'error');
+            }
+        });
     });
 
     // Bulk delete
@@ -302,59 +410,6 @@ $(document).ready(function() {
         e.preventDefault();
         const url = "{{ route('product-variants.index') }}" + "?" + $(this).serialize();
         window.location.href = url;
-    });
-});
-</script>
-@endpush
-        load_variants(url);
-    });
-
-    $(document).on('change', 'select[name=per_page]', function() {
-        $('#filter-form').submit();
-    });
-
-    $(document).on('click', '.pagination a', function(event) {
-        event.preventDefault();
-        load_variants($(this).attr('href'));
-    });
-    
-    $(document).on('change', '#select-all', function() {
-        $('.variant-checkbox').prop('checked', $(this).prop('checked'));
-    });
-
-    $(document).on('click', '#bulk-delete-btn', function() {
-        var selected = [];
-        $('.variant-checkbox:checked').each(function() {
-            selected.push($(this).val());
-        });
-        
-        if (selected.length > 0) {
-            if (confirm('Bạn có chắc muốn xoá các biến thể đã chọn?')) {
-                $.ajax({
-                    url: "{{ route('product-variants.bulk-delete') }}",
-                    type: 'POST',
-                    data: {
-                        _token: '{{ csrf_token() }}',
-                        ids: selected
-                    },
-                    success: function(response) {
-                        showNotification(response.success, 'success');
-                        // Reload the current page
-                        var currentPageUrl = $('.pagination .active .page-link').attr('href') || "{{ route('product-variants.index') }}";
-                        load_variants(currentPageUrl);
-                    },
-                    error: function(xhr, status, error) {
-                        var errorMessage = 'Đã có lỗi xảy ra. Vui lòng thử lại.';
-                        if (xhr.responseJSON && xhr.responseJSON.message) {
-                            errorMessage = xhr.responseJSON.message;
-                        }
-                        showNotification(errorMessage, 'danger');
-                    }
-                });
-            }
-        } else {
-            showNotification('Vui lòng chọn ít nhất một biến thể để xoá.', 'warning');
-        }
     });
 });
 </script>
