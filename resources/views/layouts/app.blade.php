@@ -172,6 +172,58 @@
                             </ul>
                         </div>
                     </div>
+                        <div class="ms-auto d-flex align-items-center gap-2 py-2">
+                            @if($currentUser)
+                                <div class="dropdown">
+                                    <button class="btn btn-light btn-sm" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                        <i class="ph ph-user me-1"></i>{{ $currentUser->name }}
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end">
+                                        @php
+                                            $userRoles = $currentUser->roles()->pluck('name')->toArray();
+                                            $dashboardUrl = null;
+                                            if (in_array('accountant', $userRoles) || in_array('accounting', $userRoles)) {
+                                                $dashboardUrl = route('accounting.dashboard');
+                                            } elseif (array_intersect($userRoles, ['sale', 'leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale'])) {
+                                                $dashboardUrl = route('pages.my_dashboard');
+                                            } else {
+                                                $dashboardUrl = route('dashboard');
+                                            }
+                                        @endphp
+                                        <li>
+                                            <a class="dropdown-item" href="{{ $dashboardUrl }}">
+                                                <i class="ph ph-house me-2"></i>Dashboard
+                                            </a>
+                                        </li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
+                                            <a class="dropdown-item" href="{{ route('profile.edit') }}">
+                                                <i class="ph ph-gear me-2"></i>Profile
+                                            </a>
+                                        </li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
+                                            <form action="{{ route('logout') }}" method="POST" class="d-inline">
+                                                @csrf
+                                                <button type="submit" class="dropdown-item text-danger">
+                                                    <i class="ph ph-sign-out me-2"></i>Logout
+                                                </button>
+                                            </form>
+                                        </li>
+                                    </ul>
+                                </div>
+                            @endif
+
+                            <div class="dropdown">
+                                <button class="btn btn-light btn-sm" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    {{ __('common.language.label') }}: {{ strtoupper($currentLocale) }}
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li><a class="dropdown-item {{ $currentLocale === 'vi' ? 'active' : '' }}" href="{{ route('locale.switch', 'vi') }}">{{ __('common.language.vi') }}</a></li>
+                                    <li><a class="dropdown-item {{ $currentLocale === 'en' ? 'active' : '' }}" href="{{ route('locale.switch', 'en') }}">{{ __('common.language.en') }}</a></li>
+                                </ul>
+                            </div>
+                        </div>
 
                     @if($isAdmin)
                         <div class="ms-auto d-flex align-items-center gap-2 py-2">

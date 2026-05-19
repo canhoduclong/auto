@@ -474,6 +474,8 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::post('users/bulk-delete', [UserController::class, 'bulkDelete'])->name('users.bulk-delete')->middleware('permission');
     Route::resource('users', UserController::class)->middleware('permission');
     Route::resource('teams', TeamController::class)->middleware('permission');
+    Route::post('teams/{team}/assign-user', [TeamController::class, 'assignUser'])->name('teams.assign-user')->middleware('permission');
+    Route::post('teams/{team}/remove-user', [TeamController::class, 'removeUser'])->name('teams.remove-user')->middleware('permission');
 
     // Ví dụ: khi sau này bạn thêm Customer
     Route::get('customers/export', [CustomerController::class, 'export'])->name('customers.export')->middleware('permission');

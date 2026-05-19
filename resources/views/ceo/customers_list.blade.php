@@ -143,6 +143,29 @@
                     </select>
                 </div>
                 <div class="col-auto">
+                    <input type="date" name="from_date" value="{{ request('from_date') }}" class="form-control" placeholder="Từ ngày">
+                </div>
+                <div class="col-auto">
+                    <input type="date" name="to_date" value="{{ request('to_date') }}" class="form-control" placeholder="Đến ngày">
+                </div>
+                <div class="col-12">
+                    <div class="p-2 rounded" style="background: #f8faff; border: 1px solid #d8deea;">
+                        <div class="small fw-semibold text-muted mb-2" style="font-size:.8rem;">LOẠI BỎ NHÂN VIÊN KHỎI THỐNG KÊ</div>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px;">
+                            @php $excludeIds = request('exclude_users', []); @endphp
+                            @foreach($users as $u)
+                                <label class="d-flex align-items-center gap-2" style="cursor:pointer;margin-bottom:0;font-size:.875rem;">
+                                    <input type="checkbox" name="exclude_users[]" value="{{ $u->id }}" 
+                                        class="form-check-input" style="margin:0;cursor:pointer;"
+                                        {{ (is_array($excludeIds) ? in_array($u->id, $excludeIds) : false) ? 'checked' : '' }}
+                                        onchange="this.form.submit()">
+                                    <span style="user-select:none;">{{ $u->name }}</span>
+                                </label>
+                            @endforeach
+                        </div>
+                    </div>
+                </div>
+                <div class="col-auto">
                     <select name="per_page" class="form-select" onchange="this.form.submit()">
                         @foreach([10,15,25,50,100] as $pp)
                             <option value="{{ $pp }}" {{ (int)request('per_page',15) === $pp ? 'selected' : '' }}>{{ $pp }} / trang</option>
@@ -157,88 +180,122 @@
             </form>
         </div>
 
-        <div class="table-responsive">
-            <table class="table cust-table mb-0">
-                <thead>
-                    <tr>
-                        <th style="width:48px;">#</th>
-                        <th style="min-width:360px;">Khách hàng</th>
-                        <th>Mã Code cũ</th>
-                        <th>Phụ trách và hạn giữ</th>
-                        <th>Thông tin tạo</th>
-                        <th style="width:140px;">Chi tiết</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse($customers as $customer)
-                    <tr>
-                        <td class="text-muted" style="font-size:.78rem;">{{ $customer->id }}</td>
-                        <td>
-                            <div class="cust-name">{{ $customer->name }}</div>
-                            @if($customer->is_employee)
-                                <div class="mt-1"><span class="badge-employee">Khách nhân viên</span></div>
-                            @endif
-                            @if($customer->dob)
-                                <div class="cust-dob">{{ $customer->dob->format('d/m/Y') }} - {{ $customer->dob->age }} tuổi</div>
-                            @endif
-                            @php
-                                $defaultAddr = $customer->addresses->firstWhere('is_default', 1) ?? $customer->addresses->first();
-                            @endphp
-                            <div class="cust-dob mt-1" style="font-size:.78rem;color:#64748b;">{{ $defaultAddr?->note ?: 'Chưa có địa chỉ mặc định' }}</div>
-                            <div class="cust-phone text-nowrap mt-1">{{ $customer->phone ?: '-' }}</div>
-                            <div class="cust-email text-truncate" style="max-width:220px;">{{ $customer->email ?: '-' }}</div>
-                        </td>
-                        <td>
-                            @if($customer->legacy_code)
-                                <span class="badge rounded-pill" style="background:#f0fdf4;color:#166534;font-size:.72rem;font-weight:600;">{{ $customer->legacy_code }}</span>
-                            @else
-                                <span class="text-muted" style="font-size:.78rem;">-</span>
-                            @endif
-                        </td>
-                        <td>
-                            @if($customer->is_employee)
-                                <span class="text-muted" style="font-size:.78rem;">Không áp dụng cho khách nhân viên</span>
-                            @elseif($customer->isFree())
-                                <span class="badge-free" style="font-size:.7rem;">Có thể gán</span>
-                                @if($customer->assignedTo)
-                                    <div class="sale-prev">Sale gần nhất: {{ $customer->assignedTo->name }}</div>
-                                @endif
-                            @else
-                                <div>Sale: <span class="sale-name">{{ optional($customer->assignedTo)->name ?? '-' }}</span></div>
-                                @if(($expiresAt = $customer->assignmentExpiresAt()))
-                                    <div class="expires-date">Hạn: {{ $expiresAt->format('d/m/Y H:i') }}</div>
-                                    <div class="expires-note">Chu kỳ {{ $customerFreeDays }} ngày</div>
-                                @endif
-                            @endif
-                        </td>
-                        <td>
-                            <div class="small text-muted">Người tạo: {{ optional($customer->user)->name ?? '-' }}</div>
-                            <div class="small text-muted">Ngày tạo: {{ optional($customer->created_at)?->format('d/m/Y H:i') ?? '-' }}</div>
-                        </td>
-                        <td>
-                            <a href="{{ route('customers.show', array_merge(['customer' => $customer->id], request()->query(), ['tab' => 'reports'])) }}" class="btn btn-sm btn-outline-primary">
-                                <i class="bi bi-bar-chart"></i> Báo cáo
-                            </a>
-                        </td>
-                    </tr>
-                    @empty
-                    <tr>
-                        <td colspan="6">
-                            <div class="cust-empty">
-                                <div style="font-weight:600;">Chưa có khách hàng phù hợp bộ lọc</div>
-                            </div>
-                        </td>
-                    </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
+        <div class="row g-3 mt-0">
+            <div class="col-lg-8">
+                <div class="table-responsive">
+                    <table class="table cust-table mb-0">
+                        <thead>
+                            <tr>
+                                <th style="width:48px;">#</th>
+                                <th style="min-width:360px;">Khách hàng</th>
+                                <th>Mã Code cũ</th>
+                                <th>Phụ trách và hạn giữ</th>
+                                <th>Thông tin tạo</th>
+                                <th style="width:140px;">Chi tiết</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse($customers as $customer)
+                            <tr>
+                                <td class="text-muted" style="font-size:.78rem;">{{ $customer->id }}</td>
+                                <td>
+                                    <div class="cust-name">{{ $customer->name }}</div>
+                                    @if($customer->is_employee)
+                                        <div class="mt-1"><span class="badge-employee">Khách nhân viên</span></div>
+                                    @endif
+                                    @if($customer->dob)
+                                        <div class="cust-dob">{{ $customer->dob->format('d/m/Y') }} - {{ $customer->dob->age }} tuổi</div>
+                                    @endif
+                                    @php
+                                        $defaultAddr = $customer->addresses->firstWhere('is_default', 1) ?? $customer->addresses->first();
+                                    @endphp
+                                    <div class="cust-dob mt-1" style="font-size:.78rem;color:#64748b;">{{ $defaultAddr?->note ?: 'Chưa có địa chỉ mặc định' }}</div>
+                                    <div class="cust-phone text-nowrap mt-1">{{ $customer->phone ?: '-' }}</div>
+                                    <div class="cust-email text-truncate" style="max-width:220px;">{{ $customer->email ?: '-' }}</div>
+                                </td>
+                                <td>
+                                    @if($customer->legacy_code)
+                                        <span class="badge rounded-pill" style="background:#f0fdf4;color:#166534;font-size:.72rem;font-weight:600;">{{ $customer->legacy_code }}</span>
+                                    @else
+                                        <span class="text-muted" style="font-size:.78rem;">-</span>
+                                    @endif
+                                </td>
+                                <td>
+                                    @if($customer->is_employee)
+                                        <span class="text-muted" style="font-size:.78rem;">Không áp dụng cho khách nhân viên</span>
+                                    @elseif($customer->isFree())
+                                        <span class="badge-free" style="font-size:.7rem;">Có thể gán</span>
+                                        @if($customer->assignedTo)
+                                            <div class="sale-prev">Sale gần nhất: {{ $customer->assignedTo->name }}</div>
+                                        @endif
+                                    @else
+                                        <div>Sale: <span class="sale-name">{{ optional($customer->assignedTo)->name ?? '-' }}</span></div>
+                                        @if(($expiresAt = $customer->assignmentExpiresAt()))
+                                            <div class="expires-date">Hạn: {{ $expiresAt->format('d/m/Y H:i') }}</div>
+                                            <div class="expires-note">Chu kỳ {{ $customerFreeDays }} ngày</div>
+                                        @endif
+                                    @endif
+                                </td>
+                                <td>
+                                    <div class="small text-muted">Người tạo: {{ optional($customer->user)->name ?? '-' }}</div>
+                                    <div class="small text-muted">Ngày tạo: {{ optional($customer->created_at)?->format('d/m/Y H:i') ?? '-' }}</div>
+                                </td>
+                                <td>
+                                    <a href="{{ route('customers.show', array_merge(['customer' => $customer->id], request()->query(), ['tab' => 'reports'])) }}" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-bar-chart"></i> Báo cáo
+                                    </a>
+                                </td>
+                            </tr>
+                            @empty
+                            <tr>
+                                <td colspan="6">
+                                    <div class="cust-empty">
+                                        <div style="font-weight:600;">Chưa có khách hàng phù hợp bộ lọc</div>
+                                    </div>
+                                </td>
+                            </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
 
-        <div class="cust-pagination d-flex align-items-center justify-content-between flex-wrap gap-2">
-            <div style="font-size:.8rem;color:#64748b;">
-                Hiển thị {{ $customers->firstItem() ?? 0 }}-{{ $customers->lastItem() ?? 0 }} / {{ number_format($customers->total()) }} khách hàng
+                <div class="cust-pagination d-flex align-items-center justify-content-between flex-wrap gap-2">
+                    <div style="font-size:.8rem;color:#64748b;">
+                        Hiển thị {{ $customers->firstItem() ?? 0 }}-{{ $customers->lastItem() ?? 0 }} / {{ number_format($customers->total()) }} khách hàng
+                    </div>
+                    <div>{{ $customers->appends(request()->except('page'))->links() }}</div>
+                </div>
             </div>
-            <div>{{ $customers->appends(request()->except('page'))->links() }}</div>
+
+            <div class="col-lg-4">
+                <div class="card border-0 shadow-sm" style="position: sticky; top: 20px;">
+                    <div class="card-header bg-white border-bottom d-flex align-items-center justify-content-between">
+                        <div class="fw-semibold text-muted small mb-0">THỐNG KÊ NHÂN VIÊN</div>
+                        <div class="small text-muted" style="font-size:.8rem;">
+                            Từ: <strong>{{ request('from_date') ? \Carbon\Carbon::parse(request('from_date'))->format('d/m/Y') : '—' }}</strong> 
+                            — <strong>{{ request('to_date') ? \Carbon\Carbon::parse(request('to_date'))->format('d/m/Y') : '—' }}</strong>
+                        </div>
+                    </div>
+                    <div class="card-body p-0" style="max-height: calc(100vh - 360px); overflow-y: auto;">
+                        @forelse($employeeStats as $idx => $stat)
+                            <div class="d-flex align-items-center gap-2 px-3 py-2 border-bottom" style="background:{{ $loop->odd ? '#fff' : '#f8faff' }};">
+                                <div class="text-muted small fw-semibold" style="width:24px;text-align:center;">{{ $idx + 1 }}</div>
+                                <div class="flex-grow-1 min-w-0">
+                                    <div class="fw-semibold text-truncate" style="font-size:.9rem;color:#1e293b;">{{ $stat['employee_name'] }}</div>
+                                </div>
+                                <div class="text-end">
+                                    <div class="fw-bold text-primary" style="font-size:.95rem;">{{ number_format($stat['customer_count']) }}</div>
+                                    <div class="small text-muted" style="font-size:.7rem;">khách</div>
+                                </div>
+                            </div>
+                        @empty
+                            <div class="p-4 text-center text-muted small">
+                                Chưa có dữ liệu nhân viên
+                            </div>
+                        @endforelse
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>

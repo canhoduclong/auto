@@ -208,6 +208,37 @@
                 <a href="{{ route('shipper.team-report') }}" class="sp-nav-link {{ request()->routeIs('shipper.team-report') ? 'active' : '' }}">
                     <i class="bi bi-bar-chart-line"></i> Báo cáo đội hình ship
                 </a>
+                @endif
+
+                <!-- Switch Role Dropdown -->
+                <div class="sp-nav-section">Chuyển vai trò</div>
+                @if(auth()->user()->hasRole('accountant'))
+                    <form id="switch-role-accountant" action="{{ route('role.switch', 'accountant') }}" method="POST" class="d-inline">@csrf
+                        <button type="submit" class="sp-nav-link w-100 text-start" style="background:none;border:none;padding:0;">
+                            <i class="bi bi-cash-stack"></i> Kế toán (accountant)
+                        </button>
+                    </form>
+                @endif
+                @if(auth()->user()->hasRole('accounting'))
+                    <form id="switch-role-accounting" action="{{ route('role.switch', 'accounting') }}" method="POST" class="d-inline">@csrf
+                        <button type="submit" class="sp-nav-link w-100 text-start" style="background:none;border:none;padding:0;">
+                            <i class="bi bi-cash-stack"></i> Kế toán (accounting)
+                        </button>
+                    </form>
+                @endif
+                @if(auth()->user()->hasRole('ceo'))
+                    <form id="switch-role-ceo" action="{{ route('role.switch', 'ceo') }}" method="POST" class="d-inline">@csrf
+                        <button type="submit" class="sp-nav-link w-100 text-start" style="background:none;border:none;padding:0;">
+                            <i class="bi bi-briefcase"></i> CEO
+                        </button>
+                    </form>
+                @endif
+                @if(auth()->user()->isAdmin())
+                    <form id="switch-role-admin" action="{{ route('role.switch', 'admin') }}" method="POST" class="d-inline">@csrf
+                        <button type="submit" class="sp-nav-link w-100 text-start" style="background:none;border:none;padding:0;">
+                            <i class="bi bi-shield-lock"></i> Admin
+                        </button>
+                    </form>
             @endif
         </nav>
         <div class="p-3 border-top border-success border-opacity-25">

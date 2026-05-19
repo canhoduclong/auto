@@ -205,33 +205,9 @@
 							<i class="ph-dots-three sidebar-resize-show"></i>
 						</li>
 						<li class="nav-item">
-							<a href="{{ route('accounting.cashflow') }}" class="nav-link{{ request()->routeIs('accounting.cashflow') || request()->routeIs('accounting.cashflow.*') || request()->routeIs('accounting.refresh-history') ? ' active' : '' }}">
+							<a href="{{ route('accounting.dashboard') }}" class="nav-link{{ request()->routeIs('accounting.dashboard') ? ' active' : '' }}">
 								<i class="ph-currency-circle-dollar"></i>
-								<span>Thu/chi</span>
-							</a>
-						</li>
-						<li class="nav-item">
-							<a href="{{ route('accounting.transactions.create') }}" class="nav-link{{ request()->routeIs('accounting.transactions.*') ? ' active' : '' }}">
-								<i class="ph-plus-circle"></i>
-								<span>Tạo giao dịch</span>
-							</a>
-						</li>
-						<li class="nav-item">
-							<a href="{{ route('accounting.financial-reports') }}" class="nav-link{{ request()->routeIs('accounting.financial-reports') ? ' active' : '' }}">
-								<i class="ph-chart-line-up"></i>
-								<span>Báo cáo tài chính</span>
-							</a>
-						</li>
-						<li class="nav-item">
-							<a href="{{ route('accounting.accounts.index') }}" class="nav-link{{ request()->routeIs('accounting.accounts.*') ? ' active' : '' }}">
-								<i class="ph-wallet"></i>
-								<span>Tài khoản</span>
-							</a>
-						</li>
-						<li class="nav-item">
-							<a href="{{ route('accounting.transaction-categories.index') }}" class="nav-link{{ request()->routeIs('accounting.transaction-categories.*') ? ' active' : '' }}">
-								<i class="ph-tree-structure"></i>
-								<span>Quản trị danh mục giao dịch</span>
+								<span>Dashboard Kế toán</span>
 							</a>
 						</li>
 						@endif

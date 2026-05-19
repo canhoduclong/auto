@@ -316,6 +316,33 @@
                 @endif
                 <span class="text-muted small" style="white-space: nowrap;">{{ auth()->user()->name ?? 'Accounting' }} | {{ now()->format('d/m/Y H:i') }}</span>
             </div>
+                    <div class="dropdown">
+                        <button class="btn btn-light btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-person-circle"></i>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                            <li>
+                                <a class="dropdown-item" href="{{ route('pages.my_dashboard') }}">
+                                    <i class="bi bi-house me-2"></i>Dashboard chính
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <a class="dropdown-item" href="{{ route('profile.edit') }}">
+                                    <i class="bi bi-gear me-2"></i>Hồ sơ
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <form action="{{ route('logout') }}" method="POST" class="d-inline-block w-100">
+                                    @csrf
+                                    <button type="submit" class="dropdown-item text-danger">
+                                        <i class="bi bi-box-arrow-right me-2"></i>Đăng xuất
+                                    </button>
+                                </form>
+                            </li>
+                        </ul>
+                    </div>
         </header>
 
         <section class="acc-content">

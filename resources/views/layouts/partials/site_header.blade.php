@@ -404,21 +404,39 @@
                                                 <i class="bi bi-speedometer2"></i> {{ __('site.dashboard') }}
                                             </a>
                                         @endif
-                                        @if(Auth::user()->isAdmin() || Auth::user()->hasRole('accountant') || Auth::user()->hasRole('accounting'))
+                                        @if(Auth::user()->hasRole('accountant'))
                                             <div class="dropdown-divider my-0"></div>
-                                            <div class="px-3 py-2 text-muted small text-uppercase fw-semibold">Kế toán</div>
-                                            <a class="dropdown-item" href="{{ route('accounting.cashflow') }}">
-                                                <i class="bi bi-cash-stack"></i> Thu chi
+                                            <a class="dropdown-item" href="#" onclick="event.preventDefault(); document.getElementById('switch-role-accountant').submit();">
+                                                <i class="bi bi-cash-stack"></i> Dashboard Kế toán
                                             </a>
-                                            <a class="dropdown-item" href="{{ route('accounting.transactions.create') }}">
-                                                <i class="bi bi-plus-circle"></i> Tạo giao dịch
+                                            <form id="switch-role-accountant" action="{{ route('role.switch', 'accountant') }}" method="POST" class="d-none">@csrf</form>
+                                        @elseif(Auth::user()->hasRole('accounting'))
+                                            <div class="dropdown-divider my-0"></div>
+                                            <a class="dropdown-item" href="#" onclick="event.preventDefault(); document.getElementById('switch-role-accounting').submit();">
+                                                <i class="bi bi-cash-stack"></i> Dashboard Kế toán
                                             </a>
-                                            <a class="dropdown-item" href="{{ route('accounting.accounts.index') }}">
-                                                <i class="bi bi-wallet2"></i> Nạp / Rút tiền tài khoản
+                                            <form id="switch-role-accounting" action="{{ route('role.switch', 'accounting') }}" method="POST" class="d-none">@csrf</form>
+                                        @endif
+                                        @if(Auth::user()->hasRole('ceo'))
+                                            <div class="dropdown-divider my-0"></div>
+                                            <a class="dropdown-item" href="#" onclick="event.preventDefault(); document.getElementById('switch-role-ceo').submit();">
+                                                <i class="bi bi-briefcase"></i> Dashboard CEO
                                             </a>
-                                            <a class="dropdown-item" href="{{ route('accounting.accounts.adjustments') }}">
-                                                <i class="bi bi-clock-history"></i> Lịch sử nạp / rút tiền
+                                            <form id="switch-role-ceo" action="{{ route('role.switch', 'ceo') }}" method="POST" class="d-none">@csrf</form>
+                                        @endif
+                                        @if(Auth::user()->isAdmin())
+                                            <div class="dropdown-divider my-0"></div>
+                                            <a class="dropdown-item" href="#" onclick="event.preventDefault(); document.getElementById('switch-role-admin').submit();">
+                                                <i class="bi bi-shield-lock"></i> Dashboard Admin
                                             </a>
+                                            <form id="switch-role-admin" action="{{ route('role.switch', 'admin') }}" method="POST" class="d-none">@csrf</form>
+                                        @endif
+                                        @if(Auth::user()->hasRole('shipper'))
+                                            <div class="dropdown-divider my-0"></div>
+                                            <a class="dropdown-item" href="#" onclick="event.preventDefault(); document.getElementById('switch-role-shipper').submit();">
+                                                <i class="bi bi-truck"></i> Dashboard Shipper
+                                            </a>
+                                            <form id="switch-role-shipper" action="{{ route('role.switch', 'shipper') }}" method="POST" class="d-none">@csrf</form>
                                         @endif
                                         @if($canApproveTeamOrders)
                                             <div class="dropdown-divider my-0"></div>

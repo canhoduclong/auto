@@ -343,6 +343,15 @@ class CeoDashboardController extends Controller
             $query->where('user_id', $request->input('user_id'));
         }
 
+        // Date range filter
+        if ($request->filled('from_date')) {
+            $query->whereDate('created_at', '>=', $request->input('from_date'));
+        }
+
+        if ($request->filled('to_date')) {
+            $query->whereDate('created_at', '<=', $request->input('to_date'));
+        }
+
         if ($request->boolean('is_employee')) {
             $query->where('is_employee', true);
         } else {
@@ -395,12 +404,44 @@ class CeoDashboardController extends Controller
 
         $customerFreeDays = Customer::freeCustomerDays();
 
+        // Get customer statistics by employee (sales only)
+        $employeeStats = Customer::query()
+            ->select('assigned_to', DB::raw('COUNT(*) as customer_count'))
+            ->where('is_employee', false)
+            ->whereNotNull('assigned_to')
+            ->whereHas('assignedTo.roles', function ($q) {
+                $q->whereIn(DB::raw('LOWER(name)'), ['sale', 'leader', 'leader_sale', 'sale_manager']);
+            })
+            ->groupBy('assigned_to')
+            ->with('assignedTo:id,name')
+            ->orderByDesc('customer_count')
+            ->get()
+            ->map(function ($stat) {
+                return [
+                    'employee_id' => $stat->assigned_to,
+                    'employee_name' => optional($stat->assignedTo)->name ?? 'N/A',
+                    'customer_count' => $stat->customer_count,
+                ];
+            })
+            ->values();
+
+        // Exclude users from statistics
+        if ($request->filled('exclude_users')) {
+            $excludeIds = array_filter((array) $request->input('exclude_users'), 'is_numeric');
+            if (!empty($excludeIds)) {
+                $employeeStats = $employeeStats->filter(function ($stat) use ($excludeIds) {
+                    return !in_array($stat['employee_id'], $excludeIds);
+                })->values();
+            }
+        }
+
         return view('ceo.customers_list', compact(
             'customers',
             'types',
             'users',
             'creatorUsers',
-            'customerFreeDays'
+            'customerFreeDays',
+            'employeeStats'
         ));
     }
 

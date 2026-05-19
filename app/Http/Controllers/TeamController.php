@@ -9,8 +9,9 @@ class TeamController extends Controller
 {
     public function index()
     {
-        $teams = Team::withCount('users')->orderBy('name')->paginate(15);
-        return view('teams.index', compact('teams'));
+        $teams = Team::with('users')->withCount('users')->orderBy('name')->paginate(15);
+        $allUsers = \App\Models\User::orderBy('name')->get();
+        return view('teams.index', compact('teams', 'allUsers'));
     }
 
     public function create()
@@ -63,5 +64,31 @@ class TeamController extends Controller
         $team->delete();
 
         return redirect()->route('teams.index')->with('success', __('teams.messages.deleted'));
+    }
+
+    public function assignUser(Request $request, Team $team)
+    {
+        $request->validate([
+            'user_id' => 'required|integer|exists:users,id',
+        ]);
+
+        $user = \App\Models\User::find($request->input('user_id'));
+        $user->team_id = $team->id;
+        $user->save();
+
+        return back()->with('success', "Đã thêm {$user->name} vào team {$team->name}");
+    }
+
+    public function removeUser(Request $request, Team $team)
+    {
+        $request->validate([
+            'user_id' => 'required|integer|exists:users,id',
+        ]);
+
+        $user = \App\Models\User::find($request->input('user_id'));
+        $user->team_id = null;
+        $user->save();
+
+        return back()->with('success', "Đã xóa {$user->name} khỏi team {$team->name}");
     }
 }
