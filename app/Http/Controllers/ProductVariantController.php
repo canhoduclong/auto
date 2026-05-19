@@ -4,8 +4,6 @@ use App\Models\ProductVariant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Pagination\LengthAwarePaginator;
-use Illuminate\Pagination\Paginator;
 
 class ProductVariantController extends Controller
 {
@@ -106,7 +104,7 @@ class ProductVariantController extends Controller
     }
     public function index(Request $request)
     {
-        $query = ProductVariant::with(['product', 'mediaLink.media']);
+        $query = ProductVariant::with(['product.avatar.media', 'mediaLink.media']);
         if ($request->filled('q')) {
             $q = $request->input('q');
             $query->where('sku', 'like', "%$q%")
@@ -138,36 +136,22 @@ class ProductVariantController extends Controller
         }
 
         $perPage = $request->input('per_page', 20);
-        
-        // Get all matching variants first (without pagination)
-        $allVariants = $query->orderByDesc('id')->get();
-        
-        // Group by product
-        $groupedVariants = $allVariants->groupBy('product_id');
+        $sortBy = $request->input('sort');
+        $sortDir = $request->input('direction', 'asc') === 'desc' ? 'desc' : 'asc';
+        if ($sortBy === 'stock') {
+            $query->orderBy('product_id')->orderBy('stock', $sortDir);
+        } else {
+            $query->orderByDesc('id');
+        }
+        $variants = $query->paginate($perPage)->appends($request->query());
+        $groupedVariants = $variants->getCollection()->groupBy('product_id');
 
         if ($request->ajax()) {
-            return view('product_variants._variants_table', compact('allVariants'))->render();
+            return view('product_variants._variants_table', compact('variants'))->render();
         }
 
-        // Create a custom paginated collection for display
-        $page = Paginator::resolveCurrentPage() ?: 1;
-        $offset = ($page - 1) * $perPage;
-        $paginatedGroups = collect($groupedVariants)->slice($offset, $perPage);
-        
-        // Create a LengthAwarePaginator for pagination links
-        $paginator = new LengthAwarePaginator(
-            $paginatedGroups->values(),
-            $groupedVariants->count(),
-            $perPage,
-            $page,
-            [
-                'path' => $request->url(),
-                'query' => $request->query(),
-            ]
-        );
-        
         $products = \App\Models\Product::orderBy('name')->get();
-        return view('product_variants.index', compact('paginatedGroups', 'paginator', 'products', 'allVariants'));
+        return view('product_variants.index', compact('groupedVariants', 'variants', 'products'));
     }
 
     public function bulkDelete(Request $request)
