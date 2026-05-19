@@ -27,6 +27,8 @@
         && !empty($order->customer?->truck_station_id);
     $truckStationName = $order->customer?->truckStation?->name;
     $truckStationAddress = $order->customer?->truckStation?->address;
+    $selectedTruckRoute = $order->customer?->truckRoute ?: $order->customer?->truckRouteByStation;
+    $truckRouteName = $selectedTruckRoute?->name;
 @endphp
 <style>
     .shipper-deliver-shell .card {
@@ -347,7 +349,8 @@
                         <div class="fw-semibold mb-1"><i class="bi bi-truck me-1"></i>Đơn giao nhà xe</div>
                         <div class="small mb-1">Bắt buộc upload chứng từ bàn giao cho nhà xe trước khi xác nhận hoàn thành đơn.</div>
                         <div class="small text-muted">
-                            Nhà xe: {{ $truckStationName ?: 'Chưa cấu hình' }}
+                            Trạm xe: {{ $truckStationName ?: 'Chưa cấu hình' }}
+                            | Tuyến giao hàng: {{ $truckRouteName ?: 'Chưa cấu hình' }}
                             @if($truckStationAddress)
                                 | Địa chỉ: {{ $truckStationAddress }}
                             @endif
@@ -366,7 +369,11 @@
                             </div>
                             <div style="display:flex;gap:1rem;max-width:500px;margin:0 auto;">
                                 <button type="button" id="btnPaymentOnly" class="btn btn-lg btn-success flex-fill" style="padding:1rem;">
-                                    <i class="bi bi-credit-card me-2"></i>Thanh toán
+                                    @if($isTruckStationDelivery)
+                                        <i class="bi bi-truck me-2"></i>Bàn giao nhà xe
+                                    @else
+                                        <i class="bi bi-check2-square me-2"></i>Giao hàng
+                                    @endif
                                 </button>
                                 <button type="button" id="btnPartialReturn" class="btn btn-lg btn-warning flex-fill" style="padding:1rem;">
                                     <i class="bi bi-arrow-return-left me-2"></i>Trả hàng
@@ -572,7 +579,11 @@
                                 <i class="bi bi-arrow-left me-1"></i>Quay lại chỉnh sửa
                             </button>
                             <button type="button" id="step2ContinueBtn" class="btn btn-success flex-fill">
-                                <i class="bi bi-arrow-right me-1"></i>Tiếp tục thanh toán
+                                @if($isTruckStationDelivery)
+                                    <i class="bi bi-arrow-right me-1"></i>Tiếp tục bàn giao
+                                @else
+                                    <i class="bi bi-arrow-right me-1"></i>Tiếp tục hoàn tất đơn
+                                @endif
                             </button>
                         </div>
                     </div>
@@ -581,60 +592,36 @@
                     <div id="step-3-content" style="display:none;">
                         <div class="mb-3 p-3 rounded" style="background:#f0fdf4;border:1px solid #bbf7d0;">
                             <div class="fw-semibold mb-3" style="color:#15803d;font-size:1rem;">
-                                <i class="bi bi-credit-card me-1"></i>Hoàn thành thanh toán
+                                @if($isTruckStationDelivery)
+                                    <i class="bi bi-truck me-1"></i>Hoàn thành bàn giao nhà xe
+                                @else
+                                    <i class="bi bi-check-circle me-1"></i>Hoàn thành đơn hàng
+                                @endif
                             </div>
 
                             {{-- Tóm tắt thanh toán --}}
                             <div style="display:grid;grid-template-columns:1fr 1fr;gap:2rem;margin-bottom:1.5rem;padding:1rem;background:white;border-radius:6px;border:1px solid #dcfce7;">
                                 <div>
-                                    <div style="font-size:.8rem;color:#64748b;margin-bottom:4px;text-transform:uppercase;letter-spacing:.03em;">Tổng tiền cần thu</div>
+                                    <div id="cod-label-step3" style="font-size:.8rem;color:#64748b;margin-bottom:4px;text-transform:uppercase;letter-spacing:.03em;">
+                                        @if($isTruckStationDelivery)
+                                            Tổng tiền đơn hàng (thanh toán sau)
+                                        @else
+                                            Tổng tiền cần thu
+                                        @endif
+                                    </div>
                                     <div style="font-size:1.25rem;color:#15803d;font-weight:700;" id="cod-display-step3">{{ number_format($codAmount) }}đ</div>
                                 </div>
                                 <div>
-                                    <div style="font-size:.8rem;color:#64748b;margin-bottom:4px;text-transform:uppercase;letter-spacing:.03em;">Số tiền đã thu</div>
+                                    <div style="font-size:.8rem;color:#64748b;margin-bottom:4px;text-transform:uppercase;letter-spacing:.03em;">Số tiền thanh toán (nếu có)</div>
                                     <div style="font-size:1.25rem;color:#0f172a;font-weight:700;">
                                         <input type="number" name="collected_amount" id="collected_amount_input" class="form-control form-control-lg" 
-                                               value="{{ old('collected_amount', $order->total) }}"
-                                               step="1000" min="0" required style="max-width:200px;">
+                                               value="{{ old('collected_amount') }}"
+                                               step="1000" min="0" style="max-width:220px;">
                                     </div>
                                 </div>
                             </div>
 
-                            {{-- Phương thức thanh toán --}}
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold">Phương thức thanh toán <span class="text-danger">*</span></label>
-                                <div class="d-flex gap-3">
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="radio" name="payment_method"
-                                               id="pm_cash" value="cash" {{ old('payment_method', 'cash') === 'cash' ? 'checked' : '' }}>
-                                        <label class="form-check-label" for="pm_cash">
-                                            <i class="bi bi-cash me-1"></i>Tiền mặt
-                                        </label>
-                                    </div>
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="radio" name="payment_method"
-                                               id="pm_transfer" value="transfer" {{ old('payment_method') === 'transfer' ? 'checked' : '' }}>
-                                        <label class="form-check-label" for="pm_transfer">
-                                            <i class="bi bi-bank me-1"></i>Chuyển khoản
-                                        </label>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {{-- Ảnh cân hàng --}}
-                            @if($hasKgItem)
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold">
-                                    <i class="bi bi-camera me-1 text-secondary"></i>Ảnh cân hàng
-                                    <span class="text-muted fw-normal small">(tuỳ chọn – nếu cân lại)</span>
-                                </label>
-                                <input type="file" name="weight_image" class="form-control" accept="image/*" id="weightImageInput">
-                                <div class="form-text text-muted">Ảnh chụp cân khi giao cho khách (tối đa 5MB)</div>
-                                <div id="weightImagePreview" class="mt-2 d-none">
-                                    <img id="weightImagePreviewImg" src="" class="img-fluid rounded" style="max-height:160px;">
-                                </div>
-                            </div>
-                            @endif
+                            <div class="small text-muted mb-3">Hoàn tất bằng cách upload chứng từ và ảnh giao hàng. Nếu chưa thu tiền, có thể để trống số tiền thanh toán.</div>
 
                             {{-- Ảnh xác nhận giao hàng --}}
                             <div class="mb-3">
@@ -648,18 +635,28 @@
                                 </div>
                             </div>
 
-                            @if($isTruckStationDelivery)
                             <div class="mb-3">
                                 <label class="form-label fw-semibold">
-                                    <i class="bi bi-file-earmark-check me-1 text-warning"></i>Chứng từ giao nhà xe <span class="text-danger">*</span>
+                                    <i class="bi bi-file-earmark-check me-1 text-warning"></i>
+                                    @if($isTruckStationDelivery)
+                                        Chứng từ giao nhà xe
+                                    @else
+                                        Hóa đơn / chứng từ giao hàng
+                                    @endif
+                                    <span class="text-danger">*</span>
                                 </label>
                                 <input type="file" name="truck_station_receipt_image" class="form-control" accept="image/*" required id="truckStationReceiptInput">
-                                <div class="form-text text-muted">Ảnh biên nhận/phiếu gửi tại trạm xe (tối đa 5MB)</div>
+                                <div class="form-text text-muted">
+                                    @if($isTruckStationDelivery)
+                                        Ảnh biên nhận/phiếu gửi tại trạm xe (tối đa 5MB)
+                                    @else
+                                        Ảnh hóa đơn/chứng từ khách ký nhận hoặc biên nhận giao hàng (tối đa 5MB)
+                                    @endif
+                                </div>
                                 <div id="truckStationReceiptPreview" class="mt-2 d-none">
                                     <img id="truckStationReceiptPreviewImg" src="" class="img-fluid rounded" style="max-height:200px;">
                                 </div>
                             </div>
-                            @endif
 
                             <div class="mt-4 d-flex gap-2">
                                 <button type="button" id="step3BackBtn" class="btn btn-outline-secondary">
@@ -804,10 +801,18 @@
         const newCod = subtotal + shippingFee + foamBoxFee;
         const codEl = document.getElementById('cod-display');
         if (codEl) codEl.textContent = formatVnd(newCod);
+        const codElStep3 = document.getElementById('cod-display-step3');
+        if (codElStep3) codElStep3.textContent = formatVnd(newCod);
         const subtotalEl = document.getElementById('subtotal-display');
         if (subtotalEl) subtotalEl.textContent = formatVnd(subtotal);
-        const amtInput = document.getElementById('collected_amount_input');
-        if (amtInput) amtInput.value = Math.round(newCod);
+    }
+
+    function syncStep3Summary() {
+        const codDisplay = document.getElementById('cod-display');
+        const codDisplayStep3 = document.getElementById('cod-display-step3');
+        if (codDisplayStep3 && codDisplay) {
+            codDisplayStep3.textContent = codDisplay.textContent;
+        }
     }
 
     // Top-table actual_weight inputs (re-weigh)
@@ -1128,6 +1133,7 @@
     document.getElementById('btnPaymentOnly').addEventListener('click', function (e) {
         e.preventDefault();
         currentPath = 'payment';
+        syncStep3Summary();
         goToStep(3);
     });
 
@@ -1173,20 +1179,9 @@
 
         // Render order details
         renderOrderDetails();
-        
-        // Update cod display in step 3
-        const codDisplay = document.getElementById('cod-display');
-        const codDisplayStep3 = document.getElementById('cod-display-step3');
-        if (codDisplayStep3 && codDisplay) {
-            codDisplayStep3.textContent = codDisplay.textContent;
-        }
 
-        // Pre-fill collected amount in step 3
-        const collectedInput = document.getElementById('collected_amount_input');
-        const codValue = parseInt(codDisplay.textContent.replace(/[^0-9]/g, ''));
-        if (collectedInput) {
-            collectedInput.value = codValue;
-        }
+        // Update cod display in step 3
+        syncStep3Summary();
 
         goToStep(2);
     });
@@ -1194,6 +1189,7 @@
     // Step 2 → Step 3
     document.getElementById('step2ContinueBtn').addEventListener('click', function (e) {
         e.preventDefault();
+        syncStep3Summary();
         goToStep(3);
     });
 

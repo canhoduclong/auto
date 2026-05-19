@@ -246,6 +246,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/orders/{order}/return-form',      [ShipperDashboardController::class, 'returnForm'])->name('return-form');
         Route::post('/orders/{order}/store-return',    [ShipperDashboardController::class, 'storeReturn'])->name('store-return');
         Route::get('/history',                         [ShipperDashboardController::class, 'history'])->name('history');
+        Route::get('/history/{order}',                 [ShipperDashboardController::class, 'historyDetail'])->name('history-detail');
 
         // Manager Shipper routes
         Route::middleware('role:manager_shipper,admin')->group(function () {

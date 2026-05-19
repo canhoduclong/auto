@@ -316,7 +316,7 @@ class ShipperDashboardController extends Controller
         $this->authorizeShipper($order);
         abort_if($order->status !== Order::STATUS_DELIVERING, 403, 'Đơn không đang giao.');
 
-        $order->load(['customer.addresses', 'customer.truckStation', 'items.variant.product']);
+        $order->load(['customer.addresses', 'customer.truckStation', 'customer.truckRoute', 'items.variant.product']);
         $warehouses = Warehouse::query()->orderBy('name')->get();
 
         return view('shipper.deliver-form', compact('order', 'warehouses'));
@@ -335,10 +335,9 @@ class ShipperDashboardController extends Controller
             && !empty($order->customer?->truck_station_id);
 
         $validationRules = [
-            'collected_amount'      => 'required|numeric|min:0',
-            'payment_method'        => 'required|in:cash,transfer',
+            'collected_amount'      => 'nullable|numeric|min:0',
             'proof_image'           => 'required|image|max:5120',
-            'truck_station_receipt_image' => 'nullable|image|max:5120',
+            'truck_station_receipt_image' => 'required|image|max:5120',
             'weight_image'          => 'nullable|image|max:5120',
             'actual_weight'         => 'nullable|array',
             'actual_weight.*'       => 'nullable|numeric|min:0',
@@ -350,11 +349,11 @@ class ShipperDashboardController extends Controller
             'partial_return_reason' => 'required_if:has_partial_return,1|nullable|string',
         ];
 
-        if ($isTruckStationDelivery) {
-            $validationRules['truck_station_receipt_image'] = 'required|image|max:5120';
-        }
-
         $request->validate($validationRules);
+
+        $collectedAmount = $request->filled('collected_amount')
+            ? (float) $request->input('collected_amount', 0)
+            : null;
 
         // Validate partial_weight against each item's max weight (qty × unit_weight)
         if ($request->filled('has_partial_return') && $request->input('has_partial_return') == '1') {
@@ -487,8 +486,12 @@ class ShipperDashboardController extends Controller
             }
         });
 
-        $noteText = 'Giao hàng thành công. Đã thu: ' . number_format($request->collected_amount) . 'đ – '
-            . ($request->payment_method === 'cash' ? 'Tiền mặt' : 'Chuyển khoản');
+        $noteText = 'Giao hàng thành công.';
+        if ($collectedAmount !== null && $collectedAmount > 0) {
+            $noteText .= ' Đã thu: ' . number_format($collectedAmount) . 'đ.';
+        } else {
+            $noteText .= ' Chưa thu tiền / thanh toán sau.';
+        }
 
         if ($isTruckStationDelivery) {
             $stationName = $order->customer?->truckStation?->name ?: 'trạm xe';
@@ -514,7 +517,7 @@ class ShipperDashboardController extends Controller
 
         $order->update([
             'status'           => 'delivered',
-            'collected_amount' => $request->collected_amount,
+            'collected_amount' => $collectedAmount,
             'delivered_at'     => now(),
             'proof_images'     => $proofImages,
             'subtotal_amount'  => $newSubtotal,
@@ -679,6 +682,40 @@ class ShipperDashboardController extends Controller
         ];
 
         return view('shipper.history', compact('orders', 'stats', 'filters'));
+    }
+
+    public function historyDetail(Order $order)
+    {
+        $this->authorizeShipper($order);
+
+        abort_unless(
+            in_array($order->status, ['delivered', Order::STATUS_RETURNING, Order::STATUS_RETURNED_COMPLETED, 'completed'], true),
+            404,
+            'Đơn hàng này chưa có trong lịch sử giao hàng.'
+        );
+
+        $order->load([
+            'customer.addresses',
+            'customer.truckStation',
+            'items.variant.product',
+            'warehouse',
+            'returnWarehouse',
+            'histories.user',
+            'shipper',
+        ]);
+
+        $deliveryHistory = $order->histories
+            ->where('action', 'delivered')
+            ->sortByDesc('created_at')
+            ->first();
+
+        $latestReturn = OrderReturn::query()
+            ->with(['warehouse', 'creator', 'returnItems.productVariant'])
+            ->where('order_id', $order->id)
+            ->latest('id')
+            ->first();
+
+        return view('shipper.history-detail', compact('order', 'deliveryHistory', 'latestReturn'));
     }
 
     protected function authorizeShipper(Order $order): void

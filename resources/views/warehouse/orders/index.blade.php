@@ -443,10 +443,13 @@
 
 @section('content')
 @php
-    $formatKg = static function (float|int|string $value): string {
+    $formatCompactDecimal = static function (float|int|string $value, int $decimals = 2): string {
         $num = (float) $value;
-        $str = rtrim(rtrim(number_format($num, 3, '.', ''), '0'), '.');
-        return $str . 'kg';
+        $str = number_format($num, $decimals, ',', '.');
+        return rtrim(rtrim($str, '0'), ',');
+    };
+    $formatKg = static function (float|int|string $value) use ($formatCompactDecimal): string {
+        return $formatCompactDecimal($value) . ' kg';
     };
     $fifoRemainingStock = $fifoRemainingStock ?? [];
     $statusMeta = [
@@ -757,7 +760,7 @@
                                                 : ($orderedQty * $unitPrice);
                                             $variantSize = $variant?->size;
                                             $formattedVariantSize = (!is_null($variantSize) && $variantSize !== '')
-                                                ? rtrim(rtrim(number_format((float) $variantSize, 2, '.', ''), '0'), '.')
+                                                ? $formatCompactDecimal((float) $variantSize)
                                                 : '-';
                                             if ($pricedByKg) {
                                                 $displayActualWeight = (!is_null($itemActualWeight) && (float) $itemActualWeight > 0)
@@ -767,7 +770,7 @@
                                                 $nonKgVal = (!is_null($itemActualWeight) && (float) $itemActualWeight > 0)
                                                     ? (float) $itemActualWeight
                                                     : round((float) $item->effective_unit_weight * $orderedQty, 3);
-                                                $displayActualWeight = rtrim(rtrim(number_format($nonKgVal, 3, '.', ''), '0'), '.') . ' ' . $unitLabel;
+                                                $displayActualWeight = $formatCompactDecimal($nonKgVal) . ' ' . $unitLabel;
                                             }
                                             $imagePath = $variant?->avatar?->media?->file_path
                                                 ?? $item->product?->avatar?->media?->file_path
@@ -1093,6 +1096,15 @@
 @push('scripts')
 <script>
     document.addEventListener('DOMContentLoaded', function () {
+        function formatCompactDecimal(value, decimals = 2) {
+            const num = Number(value);
+            if (Number.isNaN(num)) return '';
+            return num.toLocaleString('vi-VN', {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: decimals,
+            });
+        }
+
         // ── Stock Drawer Pin/Unpin ────────────────────────────────
         const stockDrawerEl  = document.getElementById('stockDrawer');
         const stockPinBtn    = document.getElementById('stockDrawerPinBtn');
@@ -1195,7 +1207,7 @@
 
                         const readonlyKg = row.querySelector('.js-item-readonly-kg');
                         if (readonlyKg && !Number.isNaN(actualWeight)) {
-                            readonlyKg.textContent = actualWeight > 0 ? (actualWeight.toFixed(3).replace(/\.?0+$/, '') + 'kg') : '---';
+                            readonlyKg.textContent = actualWeight > 0 ? (formatCompactDecimal(actualWeight) + ' kg') : '---';
                         }
                     }
                 }
@@ -1232,7 +1244,7 @@
             const min = qty * (size - 0.25);
             const max = qty * (size + 0.25);
             if (val < min || val > max) {
-                return setInvalid(`Kg phải trong khoảng ${min.toFixed(3)} – ${max.toFixed(3)} (SL ${qty} × size ${size} ± 0.25)`);
+                return setInvalid(`Kg phải trong khoảng ${formatCompactDecimal(min)} – ${formatCompactDecimal(max)} (SL ${formatCompactDecimal(qty)} × size ${formatCompactDecimal(size)} ± 0,25)`);
             }
             return setValid();
         }

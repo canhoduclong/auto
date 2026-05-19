@@ -84,6 +84,9 @@
         font-weight: 700;
         color: #15803d;
     }
+    .sp-history-action {
+        white-space: nowrap;
+    }
 </style>
 @endpush
 
@@ -220,6 +223,7 @@ $statusMap = [
                     <th>Trạng thái</th>
                     <th>Lý do trả</th>
                     <th>Thời gian</th>
+                    <th class="text-end">Chi tiết</th>
                 </tr>
             </thead>
             <tbody>
@@ -257,6 +261,11 @@ $statusMap = [
                         {{ $reasons[$order->return_reason] ?? ($order->return_reason ? $order->return_reason : '—') }}
                     </td>
                     <td class="text-muted small">{{ $order->updated_at->format('d/m/Y H:i') }}</td>
+                    <td class="text-end sp-history-action">
+                        <a href="{{ route('shipper.history-detail', $order) }}" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-box-arrow-up-right me-1"></i>Xem chi tiết
+                        </a>
+                    </td>
                 </tr>
                 @endforeach
             </tbody>
