@@ -1,7 +1,7 @@
 @extends('layouts.warehouse')
 
 @section('title', 'Đơn hàng trả về')
-@section('subtitle', 'Xác nhận nhập kho hàng trả')
+@section('subtitle', 'Xác nhận và theo dõi đơn trả')
 
 @section('content')
 @php
@@ -9,7 +9,7 @@
 @endphp
 
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <span class="badge bg-danger rounded-pill">{{ $orders->count() }} đơn đang trả về</span>
+    <span class="badge bg-danger rounded-pill">{{ $orders->count() }} đơn trả</span>
     <a href="{{ route('warehouse.dashboard') }}" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-arrow-left me-1"></i>Dashboard
     </a>
@@ -45,7 +45,7 @@
             </div>
         </form>
         <div class="text-muted small mt-2">
-            Hệ thống mặc định hiển thị toàn bộ đơn trả chưa nhập kho, bao gồm cả đơn từ 1-2 ngày trước hoặc cũ hơn.
+            Hệ thống hiển thị cả đơn đang chờ xử lý và đơn đã nhập kho hoàn tất để theo dõi lịch sử.
         </div>
         @if(($filters['warning_days'] ?? 0) > 0)
             <div class="small mt-1 text-warning">
@@ -77,6 +77,7 @@
                     <th>Tổng tiền</th>
                     <th>Ngày tạo phiếu</th>
                     <th>Ngày cập nhật</th>
+                    <th>Trạng thái</th>
                     <th class="text-center">Chi tiết</th>
                     <th class="text-end">Hành động</th>
                 </tr>
@@ -86,12 +87,13 @@
                 @php
                     $returnWarehouseName = $order->resolved_return_warehouse_name;
                     $returnWarehouseId = $order->resolved_return_warehouse_id;
-                    $canConfirm = !$managedWarehouseId
-                        || ($returnWarehouseId && (int) $managedWarehouseId === (int) $returnWarehouseId);
+                    $isProcessed = (bool) ($order->is_return_processed ?? false);
+                    $canConfirm = !$isProcessed && (!$managedWarehouseId
+                        || ($returnWarehouseId && (int) $managedWarehouseId === (int) $returnWarehouseId));
                     $isOverdue = (bool) ($order->is_return_ticket_overdue ?? false);
                     $ticketAgeDays = (int) ($order->return_ticket_age_days ?? 0);
                 @endphp
-                <tr class="{{ $isOverdue ? 'table-warning' : '' }}">
+                    <tr class="{{ $isProcessed ? 'table-secondary' : ($isOverdue ? 'table-warning' : '') }}">
                     <td class="text-muted">{{ $i + 1 }}</td>
                     <td class="fw-semibold">{{ $order->code }}</td>
                     <td>
@@ -133,6 +135,17 @@
                         @endif
                     </td>
                     <td class="text-muted small">{{ $order->updated_at->format('d/m H:i') }}</td>
+                    <td>
+                        @if($isProcessed)
+                            <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25">
+                                Đã xử lý
+                            </span>
+                        @else
+                            <span class="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25">
+                                Chờ xác nhận
+                            </span>
+                        @endif
+                    </td>
                     <td class="text-center">
                         <button type="button" class="btn btn-outline-info btn-sm"
                                 data-bs-toggle="modal"
@@ -142,7 +155,10 @@
                         </button>
                     </td>
                     <td class="text-end">
-                        <div class="d-flex justify-content-end gap-1 flex-wrap">
+                        @if($isProcessed)
+                            <span class="text-muted small">Không còn thao tác</span>
+                        @else
+                            <div class="d-flex justify-content-end gap-1 flex-wrap">
                                      <a href="{{ route('warehouse.returns.weight-entry', ['order' => $order], false) }}"
                                class="btn btn-success btn-sm {{ $canConfirm ? '' : 'disabled' }}"
                                title="{{ $canConfirm ? 'Mở form chi tiết để cân lại và xác nhận trả hàng' : 'Đơn này không thuộc kho bạn quản lý' }}">
@@ -156,9 +172,10 @@
                                     title="{{ $canConfirm ? 'Chuyển tiếp phiếu trả sang kho khác' : 'Đơn này không thuộc kho bạn quản lý' }}">
                                 <i class="bi bi-arrow-left-right me-1"></i>Chuyển Kho
                             </button>
-                        </div>
-                        @if(!$canConfirm)
+                            </div>
+                            @if(!$canConfirm)
                             <div class="text-muted" style="font-size:.7rem;">Không đúng kho quản lý</div>
+                            @endif
                         @endif
                     </td>
                 </tr>
@@ -198,6 +215,18 @@
                     <div>
                         <span class="text-muted">Ngày tạo phiếu:</span>
                         <strong>{{ optional($order->return_ticket_created_at)->format('d/m/Y H:i') ?? '—' }}</strong>
+                    </div>
+                    <div>
+                        <span class="text-muted">Trạng thái:</span>
+                        @if($order->is_return_processed ?? false)
+                            <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25">
+                                Đã xử lý
+                            </span>
+                        @else
+                            <span class="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25">
+                                Chờ xác nhận
+                            </span>
+                        @endif
                     </div>
                     @php
                         $reasons = [

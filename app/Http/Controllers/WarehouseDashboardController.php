@@ -1064,8 +1064,8 @@ class WarehouseDashboardController extends Controller
             });
         }
 
-        // Fetch OrderReturn records waiting for warehouse confirmation
-        // Include statuses: pending_warehouse (shipper), requested (admin/customer), ship_confirmed (shipper confirmed)
+        // Fetch OrderReturn records for warehouse review and history
+        // Include statuses: pending_warehouse (shipper), requested (admin/customer), ship_confirmed (shipper confirmed), warehouse_received (processed)
         $orderReturnsQuery = OrderReturn::with([
             'order.customer',
             'order.shipper',
@@ -1075,7 +1075,7 @@ class WarehouseDashboardController extends Controller
             'warehouse',
             'returnItems.productVariant.product',
         ])
-        ->whereIn('status', ['pending_warehouse', 'requested', 'ship_confirmed'])
+        ->whereIn('status', ['pending_warehouse', 'requested', 'ship_confirmed', 'warehouse_received'])
         ->orderBy('updated_at', 'desc');
 
         // Filter by managed warehouse if user is warehouse staff
@@ -1110,6 +1110,7 @@ class WarehouseDashboardController extends Controller
             $order->setAttribute('shipper_note', $orderReturn->note);
             $order->setAttribute('return_status', $orderReturn->status);
             $order->setAttribute('return_ticket_created_at', $orderReturn->created_at);
+            $order->setAttribute('is_return_processed', $orderReturn->status === 'warehouse_received');
             $ageDays = $orderReturn->created_at
                 ? $orderReturn->created_at->startOfDay()->diffInDays(Carbon::today())
                 : 0;
@@ -1371,6 +1372,8 @@ class WarehouseDashboardController extends Controller
                 }
             }
 
+            $this->syncReturnImportDocument($orderReturn, (int) Auth::id());
+
             // Calculate total weight loss for report
             $totalWeightLoss = $orderReturn
                 ? (float) $orderReturn->returnItems()->whereNotNull('weight_loss')->sum('weight_loss')
@@ -1391,7 +1394,9 @@ class WarehouseDashboardController extends Controller
             ]);
         });
 
-        return back()->with('success', 'Đã lưu cân nặng và xác nhận nhập kho hàng trả – Đơn #' . $order->code);
+        return redirect()
+            ->route('warehouse.returns')
+            ->with('success', 'Đã lưu cân nặng và xác nhận nhập kho hàng trả – Đơn #' . $order->code);
     }
 
     public function transferReturnWarehouse(Request $request, Order $order)
@@ -1533,6 +1538,89 @@ class WarehouseDashboardController extends Controller
         $warehouseName = trim((string) ($matches[1] ?? ''));
 
         return $warehouseName !== '' ? $warehouseName : null;
+    }
+
+    private function syncReturnImportDocument(OrderReturn $orderReturn, int $actorId): ?InventoryDocument
+    {
+        $orderReturn->loadMissing(['order.items', 'returnItems']);
+
+        $expectedItems = $orderReturn->returnItems
+            ->groupBy('product_variant_id')
+            ->map(fn ($items) => (int) $items->sum('quantity'));
+
+        $unitCostByVariant = $orderReturn->order?->items
+            ? $orderReturn->order->items
+                ->groupBy('product_variant_id')
+                ->map(function ($items) {
+                    $totalQty = max((int) $items->sum('quantity'), 1);
+                    $totalAmount = (float) $items->sum(function ($item) {
+                        return ((float) $item->price) * ((int) $item->quantity);
+                    });
+
+                    return round($totalAmount / $totalQty, 2);
+                })
+            : collect();
+
+        $marker = $this->returnReceiptMarker((int) $orderReturn->id);
+
+        $document = InventoryDocument::query()
+            ->with('items')
+            ->where('type', 'import')
+            ->where('warehouse_id', $orderReturn->warehouse_id)
+            ->where('notes', 'like', '%' . $marker . '%')
+            ->latest('id')
+            ->first();
+
+        if (!$document) {
+            $document = InventoryDocument::create([
+                'type' => 'import',
+                'warehouse_id' => $orderReturn->warehouse_id,
+                'document_date' => optional($orderReturn->warehouse_confirmed_at)->toDateString() ?: now()->toDateString(),
+                'notes' => 'Đơn nhập hàng từ trả hàng #' . $orderReturn->id . ' ' . $marker,
+                'shipping_fee' => 0,
+                'user_id' => $actorId,
+            ]);
+            $document->load('items');
+        }
+
+        $currentItems = $document->items->keyBy('product_variant_id');
+
+        foreach ($expectedItems as $variantId => $expectedQty) {
+            $variantId = (int) $variantId;
+            $expectedQty = (int) $expectedQty;
+            $expectedUnitCost = (float) ($unitCostByVariant[$variantId] ?? 0);
+
+            $item = $currentItems->get($variantId);
+            if (!$item) {
+                InventoryDocumentItem::create([
+                    'inventory_document_id' => $document->id,
+                    'product_variant_id' => $variantId,
+                    'quantity' => $expectedQty,
+                    'unit_cost' => $expectedUnitCost,
+                ]);
+                continue;
+            }
+
+            if ((int) $item->quantity !== $expectedQty || abs((float) $item->unit_cost - $expectedUnitCost) > 0.0001) {
+                $item->update([
+                    'quantity' => $expectedQty,
+                    'unit_cost' => $expectedUnitCost,
+                ]);
+            }
+        }
+
+        $expectedVariantIds = $expectedItems->keys()->map(fn ($id) => (int) $id)->all();
+        $extraItems = $document->items->filter(fn ($item) => !in_array((int) $item->product_variant_id, $expectedVariantIds, true));
+        if ($extraItems->isNotEmpty()) {
+            InventoryDocumentItem::whereIn('id', $extraItems->pluck('id')->all())->delete();
+        }
+
+        return $document->refresh();
+    }
+
+    private function returnReceiptMarker(int $returnId): string
+    {
+        return '[return_receipt:' . $returnId . ']';
     }
 
     /**
