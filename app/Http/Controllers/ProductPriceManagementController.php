@@ -12,6 +12,11 @@ use Illuminate\Support\Facades\DB;
 
 class ProductPriceManagementController extends Controller
 {
+    private function isCeoPriceRoute(Request $request): bool
+    {
+        return $request->routeIs('ceo.price-management.*');
+    }
+
     public function index(Request $request)
     {
         $query = Product::query()
@@ -36,7 +41,11 @@ class ProductPriceManagementController extends Controller
             return $product;
         });
 
-        return view('products.price-management.index', compact('products'));
+        $view = $this->isCeoPriceRoute($request)
+            ? 'ceo.price-management.index'
+            : 'products.price-management.index';
+
+        return view($view, compact('products'));
     }
 
     public function show(Request $request, Product $product)
@@ -65,7 +74,11 @@ class ProductPriceManagementController extends Controller
 
         [$minPrice, $maxPrice] = $this->resolvePriceRange($product);
 
-        return view('products.price-management.show', [
+        $view = $this->isCeoPriceRoute($request)
+            ? 'ceo.price-management.show'
+            : 'products.price-management.show';
+
+        return view($view, [
             'product' => $product,
             'priceHistory' => $priceHistory,
             'fromDate' => $fromDate,
@@ -173,8 +186,12 @@ class ProductPriceManagementController extends Controller
             return back()->with('success', 'Không có biến thể nào thay đổi giá vì giá mới trùng với giá hiện tại.');
         }
 
+        $redirectRoute = $this->isCeoPriceRoute($request)
+            ? 'ceo.price-management.show'
+            : 'products.price-management.show';
+
         return redirect()
-            ->route('products.price-management.show', $product)
+            ->route($redirectRoute, $product)
             ->with('success', "Đã cập nhật giá cho {$updatedCount} biến thể từ ngày {$effectiveDate}.");
     }
 

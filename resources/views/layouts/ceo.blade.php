@@ -341,6 +341,9 @@
             </a>
 
             <div style="padding: 12px 16px; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.06em; margin-top: 8px;">Quản Lý</div>
+            <a href="{{ route('ceo.price-management.index') }}" class="ceo-nav-link {{ request()->routeIs('ceo.price-management.*') ? 'active' : '' }}">
+                <i class="bi bi-tags"></i> Quản lý giá
+            </a>
             <a href="{{ route('ceo.task-management.index') }}" class="ceo-nav-link {{ request()->routeIs('ceo.task-management.*') ? 'active' : '' }}">
                 <i class="bi bi-checklist-rtl"></i> Giao việc
             </a>

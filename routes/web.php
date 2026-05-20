@@ -290,6 +290,11 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/financial-reports', [CeoDashboardController::class, 'financialReports'])->name('financial-reports');
         Route::get('/daily-sales', [CeoDashboardController::class, 'dailySales'])->name('daily-sales');
 
+        // Quản lý giá (CEO layout)
+        Route::get('/price-management', [ProductPriceManagementController::class, 'index'])->name('price-management.index');
+        Route::get('/price-management/{product}', [ProductPriceManagementController::class, 'show'])->name('price-management.show');
+        Route::post('/price-management/{product}', [ProductPriceManagementController::class, 'update'])->name('price-management.update');
+
         // Thu chi (cashflow) — reuse AccountingDashboardController, CEO layout via helpers
         Route::get('/cashflow', [AccountingDashboardController::class, 'cashflow'])->name('cashflow');
         Route::get('/cashflow/{transaction}/edit', [AccountingDashboardController::class, 'transactionEdit'])->name('transactions.edit');
