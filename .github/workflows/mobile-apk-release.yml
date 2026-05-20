@@ -1,0 +1,53 @@
+name: Build Mobile APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_base_url:
+        description: API base URL for mobile app
+        required: true
+        default: https://hoanglongtnt.com
+  push:
+    tags:
+      - mobile-v*
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Flutter pub get
+        working-directory: mobile_app
+        run: flutter pub get
+
+      - name: Build release APK
+        working-directory: mobile_app
+        run: |
+          API_BASE_URL="${{ github.event.inputs.api_base_url || 'https://hoanglongtnt.com' }}"
+          flutter build apk --release --dart-define=API_BASE_URL=$API_BASE_URL
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: auto-mobile-apk
+          path: mobile_app/build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Attach APK to GitHub Release (tag build only)
+        if: startsWith(github.ref, 'refs/tags/mobile-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: mobile_app/build/app/outputs/flutter-apk/app-release.apk

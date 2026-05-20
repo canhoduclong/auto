@@ -729,6 +729,9 @@
                             <input type="hidden" name="customer_query" id="customer_query" value="{{ $customerSearch ?? '' }}">
                             <input type="hidden" name="sort_by" value="{{ $currentSortBy }}">
                             <input type="hidden" name="sort_dir" value="{{ $currentSortDir }}">
+                            @if(!empty($isTrashView))
+                                <input type="hidden" name="trash" value="1">
+                            @endif
                             <div id="selectedCustomerInputs">
                                 @foreach(($selectedCustomerIds ?? []) as $selectedCustomerId)
                                     <input type="hidden" name="customer_ids[]" value="{{ (int) $selectedCustomerId }}">
@@ -795,6 +798,7 @@
                         'sortBy' => $currentSortBy,
                         'sortDir' => $currentSortDir,
                         'stockWarnings' => $stockWarnings ?? [],
+                        'isTrashView' => $isTrashView ?? false,
                     ])
                 </div>
             </div>

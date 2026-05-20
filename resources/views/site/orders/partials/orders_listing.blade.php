@@ -39,6 +39,12 @@
 
     $currentSortBy = $sortBy ?? request('sort_by', 'created_at');
     $currentSortDir = strtolower($sortDir ?? request('sort_dir', 'desc'));
+    $isTrashView = (bool) ($isTrashView ?? (request('trash') === '1'));
+
+    $quickTrashUrl = request()->fullUrlWithQuery([
+        'trash' => $isTrashView ? 0 : 1,
+        'page' => 1,
+    ]);
 
     $sortDirFor = function (string $field) use ($currentSortBy, $currentSortDir): string {
         if ($currentSortBy === $field && $currentSortDir === 'asc') {
@@ -72,7 +78,12 @@
     @if($orders->count() > 0)
         <div class="pt-3 pb-3">
             <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
-                <div class="small text-muted">Sắp xếp nhanh:</div>
+                <div class="d-flex align-items-center gap-2">
+                    <a href="{{ $quickTrashUrl }}" class="btn btn-sm {{ $isTrashView ? 'btn-danger' : 'btn-outline-danger' }}" title="{{ $isTrashView ? 'Xem đơn đang hoạt động' : 'Xem thùng rác' }}">
+                        <i class="bi bi-trash"></i>
+                    </a>
+                    <div class="small text-muted">Sắp xếp nhanh:</div>
+                </div>
                 <div class="d-flex flex-wrap gap-2">
                     <a data-order-sort-link="1" href="{{ request()->fullUrlWithQuery(['sort_by' => 'created_at', 'sort_dir' => $sortDirFor('created_at'), 'page' => 1]) }}" class="btn btn-sm btn-outline-secondary">Ngày tạo <i class="fa {{ $sortIconFor('created_at') }}"></i></a>
                     <a data-order-sort-link="1" href="{{ request()->fullUrlWithQuery(['sort_by' => 'total', 'sort_dir' => $sortDirFor('total'), 'page' => 1]) }}" class="btn btn-sm btn-outline-secondary">Tổng tiền <i class="fa {{ $sortIconFor('total') }}"></i></a>
@@ -94,6 +105,7 @@
                             $statusClass = 'status-danger';
                         }
                         $canReturn = in_array($order->status, ['picked_up', 'shipping', 'completed'], true);
+                        $canMoveToTrash = in_array($order->status, [\App\Models\Order::STATUS_REJECTED, \App\Models\Order::STATUS_CANCELLED], true);
                         $isCopiedOrder = !empty($order->copied_from_order_id);
                         $canEdit = $isCopiedOrder
                             || ($order->status === \App\Models\Order::STATUS_PENDING_LEADER_APPROVAL
@@ -331,9 +343,15 @@
                                         <a href="{{ route('site.orders.show', $order) }}" class="btn btn-outline-primary btn-sm">
                                             <i class="fa fa-eye me-1"></i>Chi tiết
                                         </a>
-                                        <a href="{{ route('site.orders.copy', $order->id) }}" class="btn btn-info btn-sm">
-                                            <i class="fa fa-copy me-1"></i>Copy
-                                        </a>
+                                                                                @if(!$isTrashView && $canMoveToTrash)
+                                            <form action="{{ route('site.orders.trash', $order) }}" method="POST" class="d-inline"
+                                                  onsubmit="return confirm('Đưa đơn #{{ $order->code }} vào thùng rác?')">
+                                                @csrf
+                                                <button type="submit" class="btn btn-outline-danger btn-sm" title="Đưa vào thùng rác">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </form>
+                                        @endif
                                         @if($isCopiedOrder)
                                             <form action="{{ route('site.orders.confirm-copy', $order) }}" method="POST" class="d-inline"
                                                   onsubmit="return confirm('Xác nhận đơn copy #{{ $order->code }}? Hệ thống sẽ cập nhật giá và chuyển đơn sang Chờ leader duyệt.')">

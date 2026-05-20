@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use App\Models\Customer;
+use App\Models\MobileApiToken;
 use App\Models\Team;
 use App\Models\Warehouse;
 
@@ -63,6 +64,11 @@ class User extends Authenticatable
     public function roles()
     {
         return $this->belongsToMany(Role::class);
+    }
+
+    public function mobileApiTokens()
+    {
+        return $this->hasMany(MobileApiToken::class);
     }
     // có một vai trò
     public function hasRole($role)

@@ -24,6 +24,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\Rule;
  
 
 class OrderController extends Controller
@@ -829,7 +830,20 @@ class OrderController extends Controller
     {
         $order->load('items.variant.product');
 
-        $customers = Customer::orderBy('name')->get();
+        $authUser = auth()->user();
+        $customerQuery = Customer::query()->orderBy('name');
+
+        if ($authUser && !$this->hasAnyRole($authUser, ['admin', 'manager', 'leader'])) {
+            $customerQuery->where(function ($query) use ($authUser) {
+                $query->where('assigned_to', $authUser->id)
+                    ->orWhere(function ($fallbackQuery) use ($authUser) {
+                        $fallbackQuery->whereNull('assigned_to')
+                            ->where('user_id', $authUser->id);
+                    });
+            });
+        }
+
+        $customers = $customerQuery->get();
         $users = User::orderBy('name')->get();
         $statusOptions = collect(OrderStatus::cases())->mapWithKeys(function ($case) {
             return [$case->value => __('orders.statuses.' . $case->value)];
@@ -840,8 +854,21 @@ class OrderController extends Controller
 
     public function update(Request $request, Order $order)
     {
+        $authUser = auth()->user();
+        $customerRule = Rule::exists('customers', 'id');
+
+        if ($authUser && !$this->hasAnyRole($authUser, ['admin', 'manager', 'leader'])) {
+            $customerRule = $customerRule->where(function ($query) use ($authUser) {
+                $query->where('assigned_to', $authUser->id)
+                    ->orWhere(function ($fallbackQuery) use ($authUser) {
+                        $fallbackQuery->whereNull('assigned_to')
+                            ->where('user_id', $authUser->id);
+                    });
+            });
+        }
+
         $validated = $request->validate([
-            'customer_id' => ['required', 'exists:customers,id'],
+            'customer_id' => ['required', $customerRule],
             'user_id' => ['required', 'exists:users,id'],
             'status' => ['nullable', 'string'],
         ]);
@@ -1164,7 +1191,7 @@ class OrderController extends Controller
             'cancel_images.*' => 'image|max:5120',
         ]);
 
-        $this->assertValidTransition($order, ['pending_leader_approval', 'pending_manager_approval', 'approved', 'packing', 'pending', 'confirmed', 'picking'], 'cancelled');
+        $this->assertValidTransition($order, ['pending_leader_approval', 'pending_manager_approval', 'approved', 'packing', 'pending', 'confirmed', 'picking', Order::STATUS_ORDER_PLACED], 'cancelled');
         $statusBefore = (string) $order->status;
         $reason = trim((string) ($validated['cancel_reason'] ?? ''));
 

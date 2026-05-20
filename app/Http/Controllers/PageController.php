@@ -76,6 +76,26 @@ class PageController extends Controller
         });
     }
 
+    private function myAssignedCustomersQuery(int $userId): Builder
+    {
+        return Customer::query()
+            ->where(function ($q) use ($userId) {
+                $q->where('assigned_to', $userId)
+                    ->orWhere(function ($fallbackQuery) use ($userId) {
+                        $fallbackQuery->where(function ($emptyAssignQuery) {
+                            $emptyAssignQuery->whereNull('assigned_to')
+                                ->orWhere('assigned_to', 0);
+                        })->where('user_id', $userId);
+                    });
+            })
+                    ->where(function ($q) {
+                    $q->whereNull('is_employee')
+                        ->orWhere('is_employee', false)
+                        ->orWhere('is_employee', 0);
+                    })
+            ->whereNull('deleted_at');
+    }
+
     private function canAccessSalesDailyPages($user): bool
     {
         if (!$user) {
@@ -519,6 +539,15 @@ class PageController extends Controller
             'items.variant.product',
         ])->where('user_id', $user->id);
 
+        $isTrashView = $request->input('trash') === '1';
+        if ($this->hasOrderColumn('trash_at')) {
+            if ($isTrashView) {
+                $query->whereNotNull('trash_at');
+            } else {
+                $query->whereNull('trash_at');
+            }
+        }
+
         $selectedCustomerIds = collect($request->input('customer_ids', []))
             ->map(fn ($id) => (int) $id)
             ->filter(fn ($id) => $id > 0)
@@ -614,6 +643,7 @@ class PageController extends Controller
                 'sortBy' => $sortBy,
                 'sortDir' => $sortDir,
                 'stockWarnings' => $stockWarnings,
+                'isTrashView' => $isTrashView,
             ])->render();
 
             return response()->json([
@@ -632,7 +662,39 @@ class PageController extends Controller
             'sortBy' => $sortBy,
             'sortDir' => $sortDir,
             'stockWarnings' => $stockWarnings,
+            'isTrashView' => $isTrashView,
         ]);
+    }
+
+    public function moveOrderToTrash(Order $order)
+    {
+        if (!auth()->check()) {
+            abort(403);
+        }
+
+        $user = auth()->user();
+        if ((int) $order->user_id !== (int) $user->id && !$user->hasRole('admin')) {
+            abort(403);
+        }
+
+        if (!$this->hasOrderColumn('trash_at')) {
+            return back()->with('error', 'Chuc nang thung rac chua duoc khoi tao tren he thong.');
+        }
+
+        if (!empty($order->trash_at)) {
+            return back()->with('success', 'Don hang da nam trong thung rac.');
+        }
+
+        $trashableStatuses = [Order::STATUS_REJECTED, Order::STATUS_CANCELLED];
+        if (!in_array((string) $order->status, $trashableStatuses, true)) {
+            return back()->with('error', 'Chi duoc dua vao thung rac don bi tu choi hoac da huy.');
+        }
+
+        $order->update([
+            'trash_at' => now(),
+        ]);
+
+        return back()->with('success', 'Da dua don hang vao thung rac.');
     }
 
     public function myOrdersMonitoring(Request $request)
@@ -961,11 +1023,13 @@ class PageController extends Controller
             ->values()
             ->all();
 
-        $scope = $request->input('scope', 'orders'); // 'orders' or 'my_customers'
+        $scope = $request->input('scope'); // 'orders' or 'my_customers'
+        if (!in_array($scope, ['orders', 'my_customers'], true)) {
+            $scope = $mode === 'single' ? 'my_customers' : 'orders';
+        }
+
         if ($scope === 'my_customers') {
-            $baseQuery = Customer::query()->where(function ($q) use ($user) {
-                $q->where('user_id', $user->id)->orWhere('assigned_to', $user->id);
-            })->whereNull('deleted_at');
+            $baseQuery = $this->myAssignedCustomersQuery((int) $user->id);
         } else {
             $baseQuery = $this->myOrderCustomersBaseQuery($user->id);
         }
@@ -3201,10 +3265,8 @@ public function apiTruckRoutes(Request $request)
                 ->with('error', 'Don hang khong con du dieu kien de sua.');
         }
 
-        $customerIds = Order::query()
-            ->where('user_id', $user->id)
-            ->whereNotNull('customer_id')
-            ->pluck('customer_id')
+        $customerIds = $this->myAssignedCustomersQuery((int) $user->id)
+            ->pluck('id')
             ->unique()
             ->values()
             ->toArray();

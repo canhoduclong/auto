@@ -23,7 +23,7 @@ class Order extends Model
         'collected_amount', 'delivered_at', 'return_reason', 'proof_images', 'shipper_note', 'delivery_time',
         'daily_sequence', 'stock_sufficient', 'stock_shortage_detail',
         'stock_alert_status',
-        'cancelled_by', 'cancelled_at', 'cancel_reason', 'cancel_images',
+        'cancelled_by', 'cancelled_at', 'cancel_reason', 'cancel_images', 'trash_at',
     ];
 
     protected $casts = [
@@ -31,6 +31,7 @@ class Order extends Model
         'cancel_images' => 'array',
         'delivered_at' => 'datetime',
         'cancelled_at' => 'datetime',
+        'trash_at' => 'datetime',
         'total_weight' => 'decimal:3',
         'actual_weight' => 'decimal:3',
         'charge_shipping_fee' => 'boolean',

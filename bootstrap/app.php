@@ -7,6 +7,7 @@ use Illuminate\Foundation\Configuration\Middleware;
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
+        api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
         then: function () {
@@ -23,6 +24,8 @@ return Application::configure(basePath: dirname(__DIR__))
         'permission' => \App\Http\Middleware\PermissionMiddleware::class,
         'setLocale' => \App\Http\Middleware\SetLocale::class,
         'role' => \App\Http\Middleware\RoleMiddleware::class,
+        'mobile.api' => \App\Http\Middleware\AuthenticateMobileApiToken::class,
+        'mobile.api.log' => \App\Http\Middleware\LogMobileApiRequest::class,
         'mobile.role.redirect' => \App\Http\Middleware\CheckMobileRoleRedirect::class,
         'assigned' => \App\Http\Middleware\EnsureUserAssigned::class,
     ]);

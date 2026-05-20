@@ -219,9 +219,6 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/orders/rap-don-hang',              [WarehouseDashboardController::class, 'rapDonHang'])->name('orders.rap-don-hang');
         Route::get('/returns',     [WarehouseDashboardController::class, 'returns'])->name('returns');
         Route::post('/returns/{order}/confirm', [WarehouseDashboardController::class, 'confirmReturn'])->name('returns.confirm');
-        Route::get('/returns/{order}/weight-entry', [WarehouseDashboardController::class, 'showWeightEntry'])->name('returns.weight-entry');
-        Route::post('/returns/{order}/save-weights', [WarehouseDashboardController::class, 'saveWeights'])->name('returns.save-weights');
-        Route::post('/returns/{order}/transfer-warehouse', [WarehouseDashboardController::class, 'transferReturnWarehouse'])->name('returns.transfer-warehouse');
         
         // Warehouse Management Features
         Route::get('/stock-in',          [WarehouseDashboardController::class, 'stockIn'])->name('stock-in');
@@ -262,7 +259,6 @@ Route::middleware(['auth', 'assigned'])->group(function () {
             Route::post('/create-delivery-schedule',         [ShipperDashboardController::class, 'createDeliverySchedule'])->name('create-delivery-schedule');
             Route::get('/manage-fees',                       [ShipperDashboardController::class, 'manageFees'])->name('manage-fees');
             Route::post('/update-fee/{order}',               [ShipperDashboardController::class, 'updateFee'])->name('update-fee');
-            Route::post('/update-return-fee/{orderReturn}',  [ShipperDashboardController::class, 'updateReturnFee'])->name('update-return-fee');
             Route::post('/bulk-update-fees',                 [ShipperDashboardController::class, 'bulkUpdateFees'])->name('bulk-update-fees');
             Route::get('/route-planning',                    [ShipperDashboardController::class, 'routePlanning'])->name('route-planning');
             Route::get('/team-report',                       [ShipperDashboardController::class, 'teamReport'])->name('team-report');
@@ -478,8 +474,6 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::post('users/bulk-delete', [UserController::class, 'bulkDelete'])->name('users.bulk-delete')->middleware('permission');
     Route::resource('users', UserController::class)->middleware('permission');
     Route::resource('teams', TeamController::class)->middleware('permission');
-    Route::post('teams/{team}/assign-user', [TeamController::class, 'assignUser'])->name('teams.assign-user')->middleware('permission');
-    Route::post('teams/{team}/remove-user', [TeamController::class, 'removeUser'])->name('teams.remove-user')->middleware('permission');
 
     // Ví dụ: khi sau này bạn thêm Customer
     Route::get('customers/export', [CustomerController::class, 'export'])->name('customers.export')->middleware('permission');
@@ -702,6 +696,7 @@ Route::middleware(['auth', 'role:sale,leader,leader_sale,sale_manager,manager,ma
     Route::get('/my-orders/variants/ajax', [App\Http\Controllers\OrderAjaxController::class, 'variantsAjax'])->name('site.orders.variants.ajax');
     Route::get('/my-orders/{order}', [PageController::class, 'myOrderDetail'])->name('site.orders.show');
     Route::post('/my-orders/{order}/cancel', [OrderController::class, 'cancel'])->name('site.orders.cancel');
+    Route::post('/my-orders/{order}/trash', [PageController::class, 'moveOrderToTrash'])->name('site.orders.trash');
     Route::get('/my-orders/{order}/edit', [PageController::class, 'myOrderEdit'])->name('site.orders.edit');
     Route::put('/my-orders/{order}', [PageController::class, 'myOrderUpdate'])->name('site.orders.update');
     Route::get('/my-orders/{order}/adjustments/create', [\App\Http\Controllers\OrderAdjustmentController::class, 'create'])->name('site.order-adjustments.create');

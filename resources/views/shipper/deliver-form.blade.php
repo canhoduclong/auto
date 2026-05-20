@@ -6,9 +6,9 @@
 @section('content')
 @php
     $formatKg = static function (float|int|string $value): string {
-        $num = (float) $value;
-        $str = rtrim(rtrim(number_format($num, 3, '.', ''), '0'), '.');
-        return $str . 'kg';
+        $formatted = number_format((float) $value, 3, ',', '.');
+        $formatted = rtrim(rtrim($formatted, '0'), ',');
+        return $formatted . ' kg';
     };
     $customerAddress = $order->customer?->address
         ?? $order->customer?->addresses?->first()?->address
@@ -621,7 +621,7 @@
                                 </div>
                             </div>
 
-                            <div class="small text-muted mb-3">Hoàn tất bằng cách upload chứng từ và ảnh giao hàng. Có thể thu ít hơn tổng tiền đơn; phần còn lại sẽ tự ghi nhận vào công nợ khách hàng.</div>
+                            <div class="small text-muted mb-3">Hoàn tất bằng cách upload chứng từ và ảnh giao hàng. Nếu chưa thu tiền, có thể để trống số tiền thanh toán.</div>
 
                             {{-- Ảnh xác nhận giao hàng --}}
                             <div class="mb-3">
@@ -704,6 +704,14 @@
         return Math.round(n).toLocaleString('vi-VN');
     }
 
+    function formatKg(n) {
+        const value = Number(n) || 0;
+        return value.toLocaleString('vi-VN', {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 3,
+        }) + ' kg';
+    }
+
     function getDeliveredQty(id) {
         const inp = document.getElementById('dq-' + id);
         if (!inp) return itemData[id].originalQty;
@@ -773,7 +781,7 @@
             const deliveredWeight = getPartialWeight(id);
             const safeDeliveredWeight = deliveredWeight !== null ? deliveredWeight : 0;
             const returnedWeight = Math.max(0, baseWeight - safeDeliveredWeight);
-            badge.textContent = 'trả ' + returnedWeight.toFixed(3).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1') + ' kg';
+            badge.textContent = 'trả ' + formatKg(returnedWeight);
             return;
         }
 
@@ -1010,7 +1018,7 @@
             weightCol.style.cssText = 'text-align:right;color:#64748b;';
             if (d.pricedByKg) {
                 const weight = getPartialWeight(intId) !== null ? getPartialWeight(intId) : 0;
-                weightCol.textContent = weight.toFixed(3).replace(/\.?0+$/, '') + ' kg';
+                weightCol.textContent = formatKg(weight);
             } else {
                 weightCol.textContent = '—';
             }

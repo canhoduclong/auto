@@ -5,6 +5,10 @@
 
 @section('content')
 @php
+    $formatKg = static function (float|int|string|null $value): string {
+        $formatted = number_format((float) ($value ?? 0), 3, ',', '.');
+        return rtrim(rtrim($formatted, '0'), ',');
+    };
     $returnItems = $orderReturn?->returnItems ?? collect();
     $totalOriginalWeight = (float) $returnItems->sum(function ($returnItem) {
         return (float) ($returnItem->original_weight ?? 0);
@@ -72,7 +76,7 @@
                                     </td>
                                     <td class="text-center fw-semibold">{{ (int) $returnItem->quantity }}</td>
                                     <td class="text-center">
-                                        <span class="fw-semibold">{{ number_format($originalWeight, 3) }}</span>
+                                        <span class="fw-semibold">{{ $formatKg($originalWeight) }}</span>
                                     </td>
                                     <td>
                                         <input type="hidden" name="item_weights[{{ $idx }}][item_id]" value="{{ $returnItem->id }}">
@@ -94,7 +98,7 @@
                                     </td>
                                     <td class="text-center">
                                         <span class="weight-loss-display fw-semibold text-danger" data-idx="{{ $idx }}">
-                                            {{ $returnItem->weight_loss ? number_format((float) $returnItem->weight_loss, 3) : '—' }}
+                                            {{ $returnItem->weight_loss ? $formatKg((float) $returnItem->weight_loss) : '—' }}
                                         </span>
                                     </td>
                                     <td class="text-center">
@@ -115,13 +119,13 @@
                                 <tr>
                                     <th colspan="3" class="text-end">Tổng cộng</th>
                                     <th class="text-center">
-                                        <span class="fw-semibold" id="total-original">{{ number_format($totalOriginalWeight, 3) }}</span> kg
+                                        <span class="fw-semibold" id="total-original" data-value="{{ $totalOriginalWeight }}">{{ $formatKg($totalOriginalWeight) }}</span> kg
                                     </th>
                                     <th class="text-center">
-                                        <span class="fw-semibold text-primary" id="total-received">0.000</span> kg
+                                        <span class="fw-semibold text-primary" id="total-received">0</span> kg
                                     </th>
                                     <th class="text-center">
-                                        <span class="fw-semibold text-danger" id="total-loss">0.000</span> kg
+                                        <span class="fw-semibold text-danger" id="total-loss">0</span> kg
                                     </th>
                                     <th class="text-center">
                                         <span class="badge bg-danger bg-opacity-10 text-danger" id="total-loss-percent">0.0%</span>
@@ -233,7 +237,15 @@
 
 <script>
 const weightInputs = document.querySelectorAll('.weight-input');
-const totalOriginal = parseFloat(document.getElementById('total-original').textContent.replace(/[.,]/g, match => match === ',' ? '.' : ''));
+const totalOriginal = parseFloat(document.getElementById('total-original').dataset.value || '0');
+
+function formatKgValue(value) {
+    const number = Number(value) || 0;
+    return number.toLocaleString('vi-VN', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 3,
+    });
+}
 
 function calculateWeightLoss(idx, receivedWeight) {
     const originalStr = weightInputs[idx].dataset.original;
@@ -257,7 +269,7 @@ function updateTotals() {
         
         // Update loss display
         document.querySelector(`[data-idx="${idx}"].weight-loss-display`).textContent = 
-            loss > 0 ? loss.toFixed(3) : '—';
+            loss > 0 ? formatKgValue(loss) : '—';
         document.querySelector(`[data-idx="${idx}"].weight-loss-percent`).textContent = 
             loss > 0 ? lossPercent.toFixed(1) + '%' : '—';
         
@@ -267,8 +279,8 @@ function updateTotals() {
     
     const totalLossPercent = totalOriginal > 0 ? (totalLoss / totalOriginal) * 100 : 0;
     
-    document.getElementById('total-received').textContent = totalReceived.toFixed(3);
-    document.getElementById('total-loss').textContent = totalLoss.toFixed(3);
+    document.getElementById('total-received').textContent = formatKgValue(totalReceived);
+    document.getElementById('total-loss').textContent = formatKgValue(totalLoss);
     document.getElementById('total-loss-percent').textContent = totalLossPercent.toFixed(1) + '%';
 }
 
