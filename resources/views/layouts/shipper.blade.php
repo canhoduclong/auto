@@ -49,6 +49,31 @@
             display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100;
         }
         .sp-content { padding: 1.5rem; flex: 1; }
+        .mobile-drawer-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(2, 6, 23, 0.45);
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transition: opacity .2s ease;
+            z-index: 190;
+        }
+        body.mobile-menu-open { overflow: hidden; }
+        body.mobile-menu-open .mobile-drawer-overlay {
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+        }
+        .sp-topbar-left,
+        .sp-topbar-right { min-width: 0; }
+        .sp-topbar-title {
+            display: -webkit-box;
+            -webkit-line-clamp: 1;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .sp-current-time { white-space: nowrap; }
         .stat-card { border: none; border-radius: .75rem; transition: transform .15s; }
         .stat-card:hover { transform: translateY(-2px); }
 
@@ -152,17 +177,43 @@
         }
 
         @media (max-width: 768px) {
-            .sp-sidebar { transform: translateX(-100%); transition: transform .22s ease; }
+            .sp-sidebar {
+                width: min(84vw, 320px);
+                transform: translateX(-100%);
+                transition: transform .22s ease;
+                box-shadow: 0 12px 30px rgba(2, 6, 23, 0.28);
+            }
             .sp-sidebar.mobile-open { transform: translateX(0); }
             .sp-main { margin-left: 0; }
-            .sp-topbar { padding: .65rem .85rem; }
+            .sp-topbar {
+                padding: .65rem .85rem;
+                gap: .5rem;
+                align-items: flex-start;
+            }
+            .sp-topbar-left {
+                flex: 1 1 auto;
+                max-width: calc(100% - 128px);
+            }
+            .sp-topbar-right {
+                flex: 0 0 auto;
+                gap: .4rem !important;
+            }
+            .sp-topbar-title { font-size: .95rem; }
+            .sp-topbar-subtitle,
+            .sp-current-time { display: none; }
+            .sp-mobile-role {
+                font-size: .72rem;
+                padding: .22rem .45rem;
+            }
             .sp-content { padding: .9rem; }
+            .sp-nav-link { font-size: .9rem; padding: .7rem 1rem; }
+            .sp-nav-section { padding: .8rem 1rem .3rem; }
         }
     </style>
 </head>
 <body class="{{ !empty($isMobileClient) ? 'is-mobile-client' : '' }}">
     <!-- Sidebar -->
-    <aside class="sp-sidebar">
+    <aside class="sp-sidebar" id="shipper-sidebar">
         <div class="sp-brand">
             <i class="bi bi-bicycle fs-5"></i>
             <span>Shipper</span>
@@ -210,36 +261,7 @@
                 </a>
                 @endif
 
-                <!-- Switch Role Dropdown -->
-                <div class="sp-nav-section">Chuyển vai trò</div>
-                @if(auth()->user()->hasRole('accountant'))
-                    <form id="switch-role-accountant" action="{{ route('role.switch', 'accountant') }}" method="POST" class="d-inline">@csrf
-                        <button type="submit" class="sp-nav-link w-100 text-start" style="background:none;border:none;padding:0;">
-                            <i class="bi bi-cash-stack"></i> Kế toán (accountant)
-                        </button>
-                    </form>
-                @endif
-                @if(auth()->user()->hasRole('accounting'))
-                    <form id="switch-role-accounting" action="{{ route('role.switch', 'accounting') }}" method="POST" class="d-inline">@csrf
-                        <button type="submit" class="sp-nav-link w-100 text-start" style="background:none;border:none;padding:0;">
-                            <i class="bi bi-cash-stack"></i> Kế toán (accounting)
-                        </button>
-                    </form>
-                @endif
-                @if(auth()->user()->hasRole('ceo'))
-                    <form id="switch-role-ceo" action="{{ route('role.switch', 'ceo') }}" method="POST" class="d-inline">@csrf
-                        <button type="submit" class="sp-nav-link w-100 text-start" style="background:none;border:none;padding:0;">
-                            <i class="bi bi-briefcase"></i> CEO
-                        </button>
-                    </form>
-                @endif
-                @if(auth()->user()->isAdmin())
-                    <form id="switch-role-admin" action="{{ route('role.switch', 'admin') }}" method="POST" class="d-inline">@csrf
-                        <button type="submit" class="sp-nav-link w-100 text-start" style="background:none;border:none;padding:0;">
-                            <i class="bi bi-shield-lock"></i> Admin
-                        </button>
-                    </form>
-            @endif
+                
         </nav>
         <div class="p-3 border-top border-success border-opacity-25">
             <div class="d-flex align-items-center gap-2 mb-2">
@@ -293,22 +315,22 @@
                     ->unique('href')
                     ->values();
             @endphp
-            <div class="d-flex align-items-center gap-2">
-                <button type="button" class="btn btn-light d-md-none js-sp-toggle" aria-label="Open menu">
+            <div class="d-flex align-items-center gap-2 sp-topbar-left">
+                <button type="button" class="btn btn-light d-md-none js-sp-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="shipper-sidebar">
                     <i class="bi bi-list"></i>
                 </button>
                 <div>
-                <h6 class="mb-0 fw-semibold">@yield('title', 'Dashboard')</h6>
+                <h6 class="mb-0 fw-semibold sp-topbar-title">@yield('title', 'Dashboard')</h6>
                 @hasSection('subtitle')
-                    <div class="text-muted" style="font-size:.8rem;">@yield('subtitle')</div>
+                    <div class="text-muted sp-topbar-subtitle" style="font-size:.8rem;">@yield('subtitle')</div>
                 @endif
                 </div>
             </div>
-            <div class="d-flex align-items-center gap-3">
+            <div class="d-flex align-items-center gap-3 sp-topbar-right">
                 <!-- Role Switcher Dropdown -->
                 @if($currentUser->roles->count() > 1)
                     <div class="dropdown">
-                        <button class="btn btn-outline-primary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <button class="btn btn-outline-primary btn-sm dropdown-toggle sp-mobile-role" type="button" data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="bi bi-person-badge"></i> {{ ucfirst(session('active_role', 'Vai trò')) }}
                         </button>
                         <ul class="dropdown-menu dropdown-menu-end shadow-sm">
@@ -337,7 +359,7 @@
                         </ul>
                     </div>
                 @endif
-                <span class="text-muted small">
+                <span class="text-muted small sp-current-time">
                     <i class="bi bi-clock me-1"></i>
                     <span id="current-time">{{ now()->format('H:i') }}</span>
                     – {{ now()->format('d/m/Y') }}
@@ -382,19 +404,37 @@
             const sidebar = document.querySelector('.sp-sidebar');
             const toggle = document.querySelector('.js-sp-toggle');
             const overlay = document.querySelector('.js-sp-overlay');
+            const navLinks = document.querySelectorAll('.sp-sidebar .sp-nav-link');
 
             if (sidebar && toggle && overlay) {
                 const closeDrawer = function () {
                     sidebar.classList.remove('mobile-open');
                     document.body.classList.remove('mobile-menu-open');
+                    toggle.setAttribute('aria-expanded', 'false');
                 };
 
                 toggle.addEventListener('click', function () {
-                    sidebar.classList.add('mobile-open');
-                    document.body.classList.add('mobile-menu-open');
+                    const willOpen = !sidebar.classList.contains('mobile-open');
+                    sidebar.classList.toggle('mobile-open', willOpen);
+                    document.body.classList.toggle('mobile-menu-open', willOpen);
+                    toggle.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
                 });
 
                 overlay.addEventListener('click', closeDrawer);
+
+                document.addEventListener('keydown', function (event) {
+                    if (event.key === 'Escape') {
+                        closeDrawer();
+                    }
+                });
+
+                navLinks.forEach(function (link) {
+                    link.addEventListener('click', function () {
+                        if (window.matchMedia('(max-width: 768px)').matches) {
+                            closeDrawer();
+                        }
+                    });
+                });
             }
         });
     </script>

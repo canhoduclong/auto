@@ -124,114 +124,150 @@
 </div>
 
 <div class="card sp-detail-card mb-3">
-    <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
-        <span><i class="bi bi-receipt me-1 text-primary"></i>Thông tin giao hàng</span>
-        <span class="text-muted small">{{ optional($order->delivered_at ?? $deliveryHistory?->created_at)->format('d/m/Y H:i') ?? '—' }}</span>
+    <div class="card-header bg-white fw-semibold">
+        <i class="bi bi-person-badge me-1 text-primary"></i>Thông tin đơn hàng Sale lên đơn
     </div>
     <div class="card-body">
         <div class="row g-3">
-            <div class="col-lg-6">
-                <div class="small text-muted mb-1">Địa chỉ giao</div>
-                <div class="fw-semibold">{{ $order->recipient_name ?: ($order->customer?->name ?? '—') }}</div>
-                <div>{{ $order->recipient_phone ?: ($order->customer?->phone ?? '—') }}</div>
-                <div class="text-muted">{{ $order->recipient_address ?: 'Chưa có địa chỉ giao hàng' }}</div>
+            <div class="col-md-3 col-sm-6">
+                <div class="small text-muted mb-1">Nhân viên Sale</div>
+                <div class="fw-semibold">{{ $order->user?->name ?? '—' }}</div>
             </div>
-            <div class="col-lg-6">
-                <div class="small text-muted mb-1">Ghi chú giao hàng</div>
-                <div class="text-dark">{{ $deliveryHistory?->note ?? $order->shipper_note ?? 'Không có ghi chú.' }}</div>
+            <div class="col-md-3 col-sm-6">
+                <div class="small text-muted mb-1">Liên hệ Sale</div>
+                <div>{{ $order->user?->phone ?? $order->user?->email ?? '—' }}</div>
+            </div>
+            <div class="col-md-3 col-sm-6">
+                <div class="small text-muted mb-1">Thời gian lên đơn</div>
+                <div>{{ optional($order->created_at)->format('d/m/Y H:i') ?? '—' }}</div>
+            </div>
+            <div class="col-md-3 col-sm-6">
+                <div class="small text-muted mb-1">Kho xuất</div>
+                <div>{{ $order->warehouse?->name ?? '—' }}</div>
+            </div>
+            <div class="col-12">
+                <div class="small text-muted mb-1">Ghi chú Sale</div>
+                <div class="text-dark">{{ $order->note ?: 'Không có ghi chú.' }}</div>
             </div>
         </div>
     </div>
 </div>
 
-<div class="card sp-detail-card mb-3">
-    <div class="card-header bg-white fw-semibold">
-        <i class="bi bi-box-seam me-1 text-secondary"></i>Chi tiết sản phẩm đã giao
-    </div>
-    <div class="table-responsive">
-        <table class="table align-middle mb-0 sp-item-table">
-            <thead class="table-light">
-                <tr>
-                    <th>Sản phẩm</th>
-                    <th class="text-end">SL</th>
-                    <th class="text-end">Kg thực giao</th>
-                    <th class="text-end">Đơn giá</th>
-                    <th class="text-end">Thành tiền</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach($order->items as $item)
-                    @php
-                        $weight = (float) ($item->actual_weight ?? ($item->packed_weight ?? ($item->effective_unit_weight * $item->quantity)));
-                        $lineTotal = (bool) $item->effective_priced_by_kg
-                            ? $weight * (float) ($item->price ?? 0)
-                            : (int) $item->quantity * (float) ($item->price ?? 0);
-                    @endphp
-                    <tr>
-                        <td>
-                            <div class="fw-semibold">{{ $item->variant?->name ?? $item->variant?->sku ?? 'Sản phẩm' }}</div>
-                            <div class="text-muted small">{{ $item->variant?->sku ?? '—' }}</div>
-                        </td>
-                        <td class="text-end">{{ number_format((int) $item->quantity) }}</td>
-                        <td class="text-end">{{ (bool) $item->effective_priced_by_kg ? number_format($weight, 3) . ' kg' : '—' }}</td>
-                        <td class="text-end">{{ number_format((float) ($item->price ?? 0)) }}đ</td>
-                        <td class="text-end fw-semibold">{{ number_format($lineTotal) }}đ</td>
-                    </tr>
-                @endforeach
-            </tbody>
-        </table>
-    </div>
-</div>
-
-@if($latestReturn)
-<div class="card sp-detail-card mb-3">
-    <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
-        <span><i class="bi bi-arrow-return-left me-1 text-warning"></i>Thông tin hoàn trả</span>
-        <span class="badge bg-warning text-dark">{{ $latestReturn->status }}</span>
-    </div>
-    <div class="card-body">
-        <div class="row g-3 mb-3">
-            <div class="col-md-4">
-                <div class="small text-muted mb-1">Kho nhận hàng trả</div>
-                <div class="fw-semibold">{{ $latestReturn->warehouse?->name ?? '—' }}</div>
+<div class="row g-3 mb-3">
+    <div class="col-lg-7">
+        <div class="card sp-detail-card h-100">
+            <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-truck me-1 text-success"></i>Đơn hàng đã giao cho khách</span>
+                <span class="text-muted small">{{ optional($order->delivered_at ?? $deliveryHistory?->created_at)->format('d/m/Y H:i') ?? '—' }}</span>
             </div>
-            <div class="col-md-4">
-                <div class="small text-muted mb-1">Lý do</div>
-                <div class="fw-semibold">{{ $latestReturn->reason ?: '—' }}</div>
+            <div class="card-body pb-0">
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <div class="small text-muted mb-1">Địa chỉ giao</div>
+                        <div class="fw-semibold">{{ $order->recipient_name ?: ($order->customer?->name ?? '—') }}</div>
+                        <div>{{ $order->recipient_phone ?: ($order->customer?->phone ?? '—') }}</div>
+                        <div class="text-muted">{{ $order->recipient_address ?: 'Chưa có địa chỉ giao hàng' }}</div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="small text-muted mb-1">Ghi chú giao hàng</div>
+                        <div class="text-dark">{{ $deliveryHistory?->note ?? $order->shipper_note ?? 'Không có ghi chú.' }}</div>
+                    </div>
+                </div>
             </div>
-            <div class="col-md-4">
-                <div class="small text-muted mb-1">Người tạo phiếu</div>
-                <div class="fw-semibold">{{ $latestReturn->creator?->name ?? '—' }}</div>
-            </div>
-        </div>
-        <div class="small text-muted mb-1">Ghi chú</div>
-        <div class="mb-3">{{ $latestReturn->note ?: 'Không có ghi chú.' }}</div>
-
-        @if($latestReturn->returnItems->isNotEmpty())
             <div class="table-responsive">
-                <table class="table table-sm align-middle mb-0">
+                <table class="table align-middle mb-0 sp-item-table">
                     <thead class="table-light">
                         <tr>
-                            <th>Sản phẩm trả</th>
-                            <th class="text-end">Số lượng</th>
-                            <th>Tình trạng</th>
+                            <th>Sản phẩm</th>
+                            <th class="text-end">SL</th>
+                            <th class="text-end">Kg thực giao</th>
+                            <th class="text-end">Đơn giá</th>
+                            <th class="text-end">Thành tiền</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach($latestReturn->returnItems as $returnItem)
+                        @foreach($order->items as $item)
+                            @php
+                                $weight = (float) ($item->actual_weight ?? ($item->packed_weight ?? ($item->effective_unit_weight * $item->quantity)));
+                                $lineTotal = (bool) $item->effective_priced_by_kg
+                                    ? $weight * (float) ($item->price ?? 0)
+                                    : (int) $item->quantity * (float) ($item->price ?? 0);
+                            @endphp
                             <tr>
-                                <td>{{ $returnItem->productVariant?->name ?? $returnItem->productVariant?->sku ?? 'Sản phẩm' }}</td>
-                                <td class="text-end">{{ number_format((int) $returnItem->quantity) }}</td>
-                                <td>{{ $returnItem->condition ?: '—' }}</td>
+                                <td>
+                                    <div class="fw-semibold">{{ $item->variant?->name ?? $item->variant?->sku ?? 'Sản phẩm' }}</div>
+                                    <div class="text-muted small">{{ $item->variant?->sku ?? '—' }}</div>
+                                </td>
+                                <td class="text-end">{{ number_format((int) $item->quantity) }}</td>
+                                <td class="text-end">{{ (bool) $item->effective_priced_by_kg ? number_format($weight, 3) . ' kg' : '—' }}</td>
+                                <td class="text-end">{{ number_format((float) ($item->price ?? 0)) }}đ</td>
+                                <td class="text-end fw-semibold">{{ number_format($lineTotal) }}đ</td>
                             </tr>
                         @endforeach
                     </tbody>
                 </table>
             </div>
-        @endif
+        </div>
+    </div>
+    <div class="col-lg-5">
+        <div class="card sp-detail-card h-100">
+            <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-arrow-return-left me-1 text-warning"></i>Thông tin trả hàng về kho, ghi chú</span>
+                <span class="badge bg-warning text-dark">{{ $latestReturn?->status ?? 'không có phiếu trả' }}</span>
+            </div>
+            <div class="card-body">
+                @if($latestReturn)
+                    <div class="row g-3 mb-3">
+                        <div class="col-sm-6">
+                            <div class="small text-muted mb-1">Kho nhận hàng trả</div>
+                            <div class="fw-semibold">{{ $latestReturn->warehouse?->name ?? '—' }}</div>
+                        </div>
+                        <div class="col-sm-6">
+                            <div class="small text-muted mb-1">Người tạo phiếu</div>
+                            <div class="fw-semibold">{{ $latestReturn->creator?->name ?? '—' }}</div>
+                        </div>
+                        <div class="col-sm-6">
+                            <div class="small text-muted mb-1">Lý do trả</div>
+                            <div>{{ $latestReturn->reason ?: '—' }}</div>
+                        </div>
+                        <div class="col-sm-6">
+                            <div class="small text-muted mb-1">Phí ship trả về</div>
+                            <div class="fw-semibold text-danger">{{ number_format((float) ($latestReturn->return_shipping_fee ?? 0)) }}đ</div>
+                        </div>
+                    </div>
+
+                    <div class="small text-muted mb-1">Ghi chú</div>
+                    <div class="mb-3">{{ $latestReturn->note ?: 'Không có ghi chú.' }}</div>
+
+                    @if($latestReturn->returnItems->isNotEmpty())
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Sản phẩm trả</th>
+                                        <th class="text-end">SL</th>
+                                        <th>Tình trạng</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($latestReturn->returnItems as $returnItem)
+                                        <tr>
+                                            <td>{{ $returnItem->productVariant?->name ?? $returnItem->productVariant?->sku ?? 'Sản phẩm' }}</td>
+                                            <td class="text-end">{{ number_format((int) $returnItem->quantity) }}</td>
+                                            <td>{{ $returnItem->condition ?: '—' }}</td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    @endif
+                @else
+                    <div class="text-muted">Đơn này chưa có phiếu trả hàng về kho.</div>
+                @endif
+            </div>
+        </div>
     </div>
 </div>
-@endif
 
 @if(!empty($order->proof_images))
 <div class="card sp-detail-card">

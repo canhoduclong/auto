@@ -1186,22 +1186,33 @@ class CeoDashboardController extends Controller
         $sales     = User::query()->orderBy('name')->select('id', 'name')->get();
         $customers = Customer::query()->orderBy('name')->select('id', 'name', 'customer_code')->get();
 
-        // Get sales statistics by employee
-        $salesStats = $makeBase()
+        // Get sales statistics by employee:
+        // 1) aggregate each order total first, then
+        // 2) aggregate by sale to keep order count/value consistent.
+        $orderTotalsBySale = $makeBase()
             ->select([
+                'orders.id as order_id',
                 'orders.user_id',
-                DB::raw('u_sale.name as sale_name'),
-                DB::raw('COUNT(DISTINCT orders.id) as order_count'),
-                DB::raw("SUM({$effTotalExpr}) as total_value"),
+                DB::raw('MAX(users.name) as sale_name'),
+                DB::raw("SUM({$effTotalExpr}) as order_total"),
             ])
-            ->leftJoin('users as u_sale', 'u_sale.id', '=', 'orders.user_id')
-            ->groupBy('orders.user_id', 'u_sale.name')
+            ->groupBy('orders.id', 'orders.user_id');
+
+        $salesStats = DB::query()
+            ->fromSub($orderTotalsBySale, 'sale_orders')
+            ->select([
+                'sale_orders.user_id',
+                DB::raw("COALESCE(sale_orders.sale_name, 'N/A') as sale_name"),
+                DB::raw('COUNT(*) as order_count'),
+                DB::raw('SUM(sale_orders.order_total) as total_value'),
+            ])
+            ->groupBy('sale_orders.user_id', 'sale_orders.sale_name')
             ->orderByDesc('total_value')
             ->get()
             ->map(function ($stat) {
                 return [
                     'sale_id' => $stat->user_id,
-                    'sale_name' => $stat->sale_name ?? 'N/A',
+                    'sale_name' => $stat->sale_name,
                     'order_count' => $stat->order_count,
                     'total_value' => $stat->total_value,
                 ];

@@ -219,6 +219,9 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/orders/rap-don-hang',              [WarehouseDashboardController::class, 'rapDonHang'])->name('orders.rap-don-hang');
         Route::get('/returns',     [WarehouseDashboardController::class, 'returns'])->name('returns');
         Route::post('/returns/{order}/confirm', [WarehouseDashboardController::class, 'confirmReturn'])->name('returns.confirm');
+        Route::get('/returns/{order}/weight-entry', [WarehouseDashboardController::class, 'showWeightEntry'])->name('returns.weight-entry');
+        Route::post('/returns/{order}/save-weights', [WarehouseDashboardController::class, 'saveWeights'])->name('returns.save-weights');
+        Route::post('/returns/{order}/transfer-warehouse', [WarehouseDashboardController::class, 'transferReturnWarehouse'])->name('returns.transfer-warehouse');
         
         // Warehouse Management Features
         Route::get('/stock-in',          [WarehouseDashboardController::class, 'stockIn'])->name('stock-in');
@@ -259,6 +262,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
             Route::post('/create-delivery-schedule',         [ShipperDashboardController::class, 'createDeliverySchedule'])->name('create-delivery-schedule');
             Route::get('/manage-fees',                       [ShipperDashboardController::class, 'manageFees'])->name('manage-fees');
             Route::post('/update-fee/{order}',               [ShipperDashboardController::class, 'updateFee'])->name('update-fee');
+            Route::post('/update-return-fee/{orderReturn}',  [ShipperDashboardController::class, 'updateReturnFee'])->name('update-return-fee');
             Route::post('/bulk-update-fees',                 [ShipperDashboardController::class, 'bulkUpdateFees'])->name('bulk-update-fees');
             Route::get('/route-planning',                    [ShipperDashboardController::class, 'routePlanning'])->name('route-planning');
             Route::get('/team-report',                       [ShipperDashboardController::class, 'teamReport'])->name('team-report');

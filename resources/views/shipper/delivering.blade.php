@@ -1,7 +1,7 @@
 @extends('layouts.shipper')
 
 @section('title', 'Đơn của tôi')
-@section('subtitle', 'Bao gồm đơn đang giao và đơn đã hoàn thành')
+@section('subtitle', 'Bao gồm đơn đã gán, chờ nhận, đang giao và đã hoàn thành')
 
 @push('styles')
 <style>
@@ -121,10 +121,19 @@
 @endpush
 
 @section('content')
+@php
+    $waitingCount = $orders->whereIn('status', ['approved', 'ready_to_pack', 'packing'])->count();
+    $readyToShipCount = $orders->where('status', 'packed_waiting_pickup')->count();
+    $deliveringCount = $orders->where('status', 'delivering')->count();
+    $completedCount = $orders->where('status', 'completed')->count();
+@endphp
+
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div class="d-flex gap-2 flex-wrap">
-        <span class="badge bg-warning text-dark rounded-pill">Đang giao: {{ $orders->where('status', 'delivering')->count() }}</span>
-        <span class="badge bg-success rounded-pill">Hoàn thành: {{ $orders->where('status', 'completed')->count() }}</span>
+        <span class="badge bg-secondary rounded-pill">Chờ kho: {{ $waitingCount }}</span>
+        <span class="badge bg-primary rounded-pill">Chờ nhận: {{ $readyToShipCount }}</span>
+        <span class="badge bg-warning text-dark rounded-pill">Đang giao: {{ $deliveringCount }}</span>
+        <span class="badge bg-success rounded-pill">Hoàn thành: {{ $completedCount }}</span>
     </div>
     <a href="{{ route('shipper.available') }}" class="btn btn-outline-info btn-sm">
         <i class="bi bi-collection me-1"></i>Nhận thêm đơn
@@ -134,7 +143,7 @@
 @if($orders->isEmpty())
     <div class="card border-0 shadow-sm text-center py-5">
         <i class="bi bi-truck fs-1 text-muted"></i>
-        <p class="mt-2 text-muted">Bạn chưa có đơn đang giao hoặc đã hoàn thành.</p>
+        <p class="mt-2 text-muted">Bạn chưa có đơn được giao phụ trách.</p>
         <a href="{{ route('shipper.available') }}" class="btn btn-success btn-sm mx-auto" style="width:fit-content">
             <i class="bi bi-collection me-1"></i>Xem đơn có thể nhận
         </a>
@@ -201,11 +210,18 @@
                         <div class="sp-my-order-code">{{ $order->code }}</div>
                         <div class="sp-my-order-time">{{ $order->created_at->format('d/m/Y H:i') }}</div>
                     </div>
-                    @if($order->status === 'completed')
-                        <span class="badge bg-success">Hoàn thành</span>
-                    @else
-                        <span class="badge bg-warning text-dark">Đang giao</span>
-                    @endif
+                    @php
+                        $statusMap = [
+                            'approved' => ['Đã duyệt', 'bg-secondary'],
+                            'ready_to_pack' => ['Chờ đóng gói', 'bg-secondary'],
+                            'packing' => ['Đang đóng gói', 'bg-info'],
+                            'packed_waiting_pickup' => ['Chờ ship nhận', 'bg-primary'],
+                            'delivering' => ['Đang giao', 'bg-warning text-dark'],
+                            'completed' => ['Hoàn thành', 'bg-success'],
+                        ];
+                        [$statusLabel, $statusClass] = $statusMap[$order->status] ?? [strtoupper((string) $order->status), 'bg-light text-dark border'];
+                    @endphp
+                    <span class="badge {{ $statusClass }}">{{ $statusLabel }}</span>
                 </div>
             </div>
             <div class="card-body">
@@ -302,7 +318,7 @@
                 <div class="card-footer bg-white border-top">
                     <span class="badge bg-success-subtle text-success-emphasis border border-success-subtle">Đơn đã hoàn thành, không còn thao tác</span>
                 </div>
-            @else
+            @elseif($order->status === 'delivering')
                 <div class="card-footer bg-white border-top d-flex gap-2">
                     <a href="{{ route('shipper.delivered-form', $order) }}" class="btn btn-success flex-fill btn-sm">
                         <i class="bi bi-check-circle me-1"></i>Đã giao
@@ -310,6 +326,21 @@
                     <a href="{{ route('shipper.return-form', $order) }}" class="btn btn-outline-danger flex-fill btn-sm">
                         <i class="bi bi-arrow-return-left me-1"></i>Trả hàng
                     </a>
+                </div>
+            @elseif($order->status === 'packed_waiting_pickup')
+                <div class="card-footer bg-white border-top d-flex gap-2">
+                    <form method="POST" action="{{ route('shipper.accept', $order) }}" class="w-100">
+                        @csrf
+                        <button type="submit" class="btn btn-primary w-100 btn-sm">
+                            <i class="bi bi-truck me-1"></i>Nhận đơn để giao
+                        </button>
+                    </form>
+                </div>
+            @else
+                <div class="card-footer bg-white border-top">
+                    <span class="badge bg-light text-dark border">
+                        Đơn đã gán cho bạn, đang chờ kho xử lý trước khi nhận giao.
+                    </span>
                 </div>
             @endif
         </div>

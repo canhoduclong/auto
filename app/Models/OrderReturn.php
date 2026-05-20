@@ -24,6 +24,7 @@ class OrderReturn extends Model
         'evidence_image_path',
         'note',
         'refund_amount',
+        'return_shipping_fee',
         'return_scope',
     ];
 
@@ -31,6 +32,7 @@ class OrderReturn extends Model
         'ship_confirmed_at' => 'datetime',
         'warehouse_confirmed_at' => 'datetime',
         'refund_amount' => 'decimal:2',
+        'return_shipping_fee' => 'decimal:2',
     ];
 
     public function order()

@@ -621,7 +621,7 @@
                                 </div>
                             </div>
 
-                            <div class="small text-muted mb-3">Hoàn tất bằng cách upload chứng từ và ảnh giao hàng. Nếu chưa thu tiền, có thể để trống số tiền thanh toán.</div>
+                            <div class="small text-muted mb-3">Hoàn tất bằng cách upload chứng từ và ảnh giao hàng. Có thể thu ít hơn tổng tiền đơn; phần còn lại sẽ tự ghi nhận vào công nợ khách hàng.</div>
 
                             {{-- Ảnh xác nhận giao hàng --}}
                             <div class="mb-3">

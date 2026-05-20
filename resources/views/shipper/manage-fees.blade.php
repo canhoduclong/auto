@@ -117,6 +117,10 @@
         <div class="mf-stat-value">{{ number_format($orders->sum('shipping_fee'), 0, ',', '.') }}</div>
         <div class="mf-stat-label">Tổng phí (đ)</div>
     </div>
+    <div class="mf-stat-card">
+        <div class="mf-stat-value">{{ $orderReturns->count() }}</div>
+        <div class="mf-stat-label">Phiếu trả hàng</div>
+    </div>
 </div>
 
 <!-- Bulk Fee Update Section -->
@@ -206,4 +210,76 @@
     {{ $orders->links('pagination::bootstrap-5') }}
 </div>
 @endif
+
+<div class="mt-4">
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-arrow-return-left me-2 text-warning"></i>Đơn trả về - Phí ship trả về</span>
+            <span class="badge bg-warning text-dark">{{ $orderReturns->count() }} phiếu</span>
+        </div>
+        <div class="card-body">
+            @if($orderReturns->isEmpty())
+                <div class="text-muted">Không có phiếu trả hàng trong ngày đã chọn.</div>
+            @else
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Phiếu trả</th>
+                                <th>Đơn hàng</th>
+                                <th>Khách hàng</th>
+                                <th>Kho trả về</th>
+                                <th>Trạng thái</th>
+                                <th class="text-end">Phí hiện tại</th>
+                                <th style="min-width: 260px;">Cập nhật phí ship trả về</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($orderReturns as $return)
+                                <tr>
+                                    <td class="fw-semibold">#{{ $return->id }}</td>
+                                    <td>
+                                        @if($return->order)
+                                            {{ $return->order->code }}
+                                        @else
+                                            —
+                                        @endif
+                                    </td>
+                                    <td>{{ $return->order?->customer?->name ?? '—' }}</td>
+                                    <td>{{ $return->warehouse?->name ?? '—' }}</td>
+                                    <td>
+                                        <span class="badge bg-light text-dark">{{ $return->status }}</span>
+                                    </td>
+                                    <td class="text-end fw-semibold text-danger">{{ number_format((float) ($return->return_shipping_fee ?? 0), 0, ',', '.') }} đ</td>
+                                    <td>
+                                        <form action="{{ route('shipper.update-return-fee', $return) }}" method="POST" class="row g-2 align-items-center">
+                                            @csrf
+                                            <div class="col-5">
+                                                <input
+                                                    type="number"
+                                                    name="return_shipping_fee"
+                                                    class="form-control form-control-sm"
+                                                    value="{{ (float) ($return->return_shipping_fee ?? 0) }}"
+                                                    step="1000"
+                                                    min="0"
+                                                    required
+                                                >
+                                            </div>
+                                            <div class="col-4">
+                                                <input type="text" name="notes" class="form-control form-control-sm" placeholder="Ghi chú">
+                                            </div>
+                                            <div class="col-3">
+                                                <button type="submit" class="btn btn-sm btn-warning w-100">Lưu</button>
+                                            </div>
+                                        </form>
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @endif
+        </div>
+    </div>
+</div>
 @endsection

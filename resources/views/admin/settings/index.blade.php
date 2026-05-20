@@ -520,6 +520,21 @@
                                min="0" max="99" value="{{ $settings['stock_in_max_edits']->value ?? 3 }}">
                         <div class="form-text">Mặc định: 3. Đặt 0 để không cho phép sửa phiếu.</div>
                     </div>
+                    <div class="col-md-4">
+                        <label for="warehouse_return_warning_days" class="form-label fw-600">
+                            Cảnh báo phiếu trả quá hạn (ngày)
+                        </label>
+                        <input
+                            type="number"
+                            class="form-control"
+                            id="warehouse_return_warning_days"
+                            name="warehouse_return_warning_days"
+                            min="0"
+                            max="60"
+                            value="{{ $settings['warehouse_return_warning_days']->value ?? 2 }}"
+                        >
+                        <div class="form-text">Mặc định: 2 ngày. Đặt 0 để tắt cảnh báo quá hạn trên màn hình đơn trả.</div>
+                    </div>
                 </div>
             </div>
         </div>

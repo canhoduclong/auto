@@ -5,12 +5,15 @@ namespace App\Http\Controllers;
 use App\Models\Inventory;
 use App\Models\Order;
 use App\Models\OrderHistory;
+use App\Models\OrderReturn;
 use App\Models\InventoryDocument;
 use App\Models\InventoryDocumentItem;
 use App\Models\InventoryMovement;
 use App\Models\InventoryReservation;
 use App\Models\ProductVariant;
 use App\Models\Product;
+use App\Models\ReturnItem;
+use App\Models\Setting;
 use App\Models\Warehouse;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -974,24 +977,161 @@ class WarehouseDashboardController extends Controller
 
     /**
      * List returning orders waiting for warehouse confirmation.
+     * Fetches both:
+     * 1. Orders with status=RETURNING (from shipper partial delivery)
+     * 2. OrderReturn records with pending/requested status (from admin/customer return requests)
      */
-    public function returns()
+    public function returns(Request $request)
     {
         $managedWarehouseId = Auth::user()->warehouse_id ? (int) Auth::user()->warehouse_id : null;
+        $warningDays = max(0, (int) Setting::get('warehouse_return_warning_days', 2));
+        $period = (string) $request->input('period', 'all');
+        $fromDate = $request->filled('from_date')
+            ? Carbon::parse($request->input('from_date'))->toDateString()
+            : null;
+        $toDate = $request->filled('to_date')
+            ? Carbon::parse($request->input('to_date'))->toDateString()
+            : null;
 
-        $orders = Order::with(['customer', 'shipper', 'items.variant', 'items.product', 'warehouse', 'returnWarehouse'])
-            ->where('status', Order::STATUS_RETURNING)
+        if ($fromDate && $toDate && $fromDate > $toDate) {
+            [$fromDate, $toDate] = [$toDate, $fromDate];
+        }
+
+        if ($period === 'today') {
+            $fromDate = Carbon::today()->toDateString();
+            $toDate = Carbon::today()->toDateString();
+        } elseif ($period === '7_days') {
+            $fromDate = Carbon::today()->subDays(6)->toDateString();
+            $toDate = Carbon::today()->toDateString();
+        }
+
+        // Fetch orders with status=RETURNING (shipper partial delivery)
+        $ordersQuery = Order::with(['customer', 'shipper', 'items.variant', 'items.product', 'warehouse', 'returnWarehouse'])
+            ->where('status', Order::STATUS_RETURNING);
+
+        if ($managedWarehouseId) {
+            $ordersQuery->whereExists(function ($query) use ($managedWarehouseId) {
+                $query->select(DB::raw(1))
+                    ->from('order_returns')
+                    ->whereColumn('order_returns.order_id', 'orders.id')
+                    ->where('order_returns.warehouse_id', $managedWarehouseId);
+            });
+        }
+
+        if ($fromDate) {
+            $ordersQuery->whereDate('updated_at', '>=', $fromDate);
+        }
+
+        if ($toDate) {
+            $ordersQuery->whereDate('updated_at', '<=', $toDate);
+        }
+
+        $orders = $ordersQuery
             ->orderBy('updated_at', 'desc')
             ->get();
 
-        $orders->each(function (Order $order) {
-            $resolvedWarehouse = $this->resolveReturnWarehouse($order);
+        $orderReturnCreatedMap = collect();
+        if ($orders->isNotEmpty()) {
+            $orderReturnCreatedMap = \App\Models\OrderReturn::query()
+                ->whereIn('order_id', $orders->pluck('id')->all())
+                ->selectRaw('order_id, MAX(created_at) as return_ticket_created_at')
+                ->groupBy('order_id')
+                ->pluck('return_ticket_created_at', 'order_id');
+        }
 
+        $orders->each(function (Order $order) use ($warningDays) {
+            $resolvedWarehouse = $this->resolveReturnWarehouse($order);
             $order->setAttribute('resolved_return_warehouse_id', $resolvedWarehouse?->id);
             $order->setAttribute('resolved_return_warehouse_name', $resolvedWarehouse?->name);
+            $order->setAttribute('is_from_order_return', false);
+            $createdAt = $order->updated_at;
+            $order->setAttribute('return_ticket_created_at', $createdAt);
+            $ageDays = $createdAt ? Carbon::parse($createdAt)->startOfDay()->diffInDays(Carbon::today()) : 0;
+            $order->setAttribute('return_ticket_age_days', $ageDays);
+            $order->setAttribute('is_return_ticket_overdue', $warningDays > 0 && $ageDays >= $warningDays);
         });
 
-        return view('warehouse.returns.index', compact('orders', 'managedWarehouseId'));
+        if ($orderReturnCreatedMap->isNotEmpty()) {
+            $orders->each(function (Order $order) use ($orderReturnCreatedMap, $warningDays) {
+                $returnCreatedAt = $orderReturnCreatedMap->get($order->id);
+                if ($returnCreatedAt) {
+                    $createdAt = Carbon::parse($returnCreatedAt);
+                    $order->setAttribute('return_ticket_created_at', $createdAt);
+                    $ageDays = $createdAt->startOfDay()->diffInDays(Carbon::today());
+                    $order->setAttribute('return_ticket_age_days', $ageDays);
+                    $order->setAttribute('is_return_ticket_overdue', $warningDays > 0 && $ageDays >= $warningDays);
+                }
+            });
+        }
+
+        // Fetch OrderReturn records waiting for warehouse confirmation
+        // Include statuses: pending_warehouse (shipper), requested (admin/customer), ship_confirmed (shipper confirmed)
+        $orderReturnsQuery = OrderReturn::with([
+            'order.customer',
+            'order.shipper',
+            'order.items.variant',
+            'order.items.product',
+            'order.warehouse',
+            'warehouse',
+            'returnItems.productVariant.product',
+        ])
+        ->whereIn('status', ['pending_warehouse', 'requested', 'ship_confirmed'])
+        ->orderBy('updated_at', 'desc');
+
+        // Filter by managed warehouse if user is warehouse staff
+        if ($managedWarehouseId) {
+            $orderReturnsQuery->where('warehouse_id', $managedWarehouseId);
+        }
+
+        if ($fromDate) {
+            $orderReturnsQuery->whereDate('created_at', '>=', $fromDate);
+        }
+
+        if ($toDate) {
+            $orderReturnsQuery->whereDate('created_at', '<=', $toDate);
+        }
+
+        $orderReturns = $orderReturnsQuery->get();
+
+        // Map OrderReturn records to Order-like structure for view
+        $orderReturnsCollection = collect();
+        foreach ($orderReturns as $orderReturn) {
+            if (!$orderReturn->order) continue;
+
+            $order = $orderReturn->order;
+            
+            // Set attributes from OrderReturn onto Order for view compatibility
+            $order->setAttribute('order_return_id', $orderReturn->id);
+            $order->setAttribute('order_return', $orderReturn);
+            $order->setAttribute('resolved_return_warehouse_id', $orderReturn->warehouse_id);
+            $order->setAttribute('resolved_return_warehouse_name', $orderReturn->warehouse?->name);
+            $order->setAttribute('is_from_order_return', true);
+            $order->setAttribute('return_reason', $orderReturn->reason);
+            $order->setAttribute('shipper_note', $orderReturn->note);
+            $order->setAttribute('return_status', $orderReturn->status);
+            $order->setAttribute('return_ticket_created_at', $orderReturn->created_at);
+            $ageDays = $orderReturn->created_at
+                ? $orderReturn->created_at->startOfDay()->diffInDays(Carbon::today())
+                : 0;
+            $order->setAttribute('return_ticket_age_days', $ageDays);
+            $order->setAttribute('is_return_ticket_overdue', $warningDays > 0 && $ageDays >= $warningDays);
+            
+            $orderReturnsCollection->push($order);
+        }
+
+        // Merge both collections and remove duplicates by order_id
+        $allReturns = $orders->merge($orderReturnsCollection)->keyBy('id')->values();
+
+        $filters = [
+            'period' => $period,
+            'from_date' => $fromDate,
+            'to_date' => $toDate,
+            'warning_days' => $warningDays,
+        ];
+
+        $warehouses = Warehouse::query()->orderBy('name')->get(['id', 'name']);
+
+        return view('warehouse.returns.index', compact('allReturns', 'managedWarehouseId', 'filters', 'warehouses'))->with('orders', $allReturns);
     }
 
     /**
@@ -999,12 +1139,15 @@ class WarehouseDashboardController extends Controller
      */
     public function confirmReturn(Order $order)
     {
-        if ($order->status !== Order::STATUS_RETURNING) {
+        $activeOrderReturn = $this->resolveActiveOrderReturn($order);
+        $canHandleByOrderStatus = $order->status === Order::STATUS_RETURNING;
+        if (!$activeOrderReturn && !$canHandleByOrderStatus) {
             return back()->with('error', 'Đơn hàng không đang ở trạng thái Đang trả hàng.');
         }
 
         $managedWarehouseId = Auth::user()->warehouse_id ? (int) Auth::user()->warehouse_id : null;
-        $resolvedReturnWarehouse = $this->resolveReturnWarehouse($order);
+        $resolvedReturnWarehouse = $activeOrderReturn?->warehouse
+            ?: $this->resolveReturnWarehouse($order);
         $returnWarehouseId = $resolvedReturnWarehouse?->id;
 
         if ($managedWarehouseId && (!$returnWarehouseId || $managedWarehouseId !== $returnWarehouseId)) {
@@ -1015,8 +1158,16 @@ class WarehouseDashboardController extends Controller
             return back()->with('error', 'Đơn trả này chưa xác định kho nhận. Vui lòng yêu cầu shipper chọn kho trả về.');
         }
 
-        DB::transaction(function () use ($order, $returnWarehouseId) {
+        DB::transaction(function () use ($order, $returnWarehouseId, $activeOrderReturn) {
             $order->update(['status' => Order::STATUS_RETURNED_COMPLETED]);
+
+            if ($activeOrderReturn) {
+                $activeOrderReturn->update([
+                    'status' => 'warehouse_received',
+                    'warehouse_confirmed_by' => Auth::id(),
+                    'warehouse_confirmed_at' => now(),
+                ]);
+            }
 
             // Restore inventory for each item
             foreach ($order->items as $item) {
@@ -1039,8 +1190,291 @@ class WarehouseDashboardController extends Controller
         return back()->with('success', 'Đã xác nhận nhập kho hàng trả – Đơn #' . $order->code);
     }
 
+    /**
+     * Show weight re-entry form for returned items
+     */
+    public function showWeightEntry(Order $order)
+    {
+        $activeOrderReturn = $this->resolveActiveOrderReturn($order);
+        $canHandleByOrderStatus = $order->status === Order::STATUS_RETURNING;
+        if (!$activeOrderReturn && !$canHandleByOrderStatus) {
+            return back()->with('error', 'Đơn hàng không đang ở trạng thái Đang trả hàng.');
+        }
+
+        $managedWarehouseId = Auth::user()->warehouse_id ? (int) Auth::user()->warehouse_id : null;
+        $resolvedReturnWarehouse = $activeOrderReturn?->warehouse
+            ?: $this->resolveReturnWarehouse($order);
+        $returnWarehouseId = $resolvedReturnWarehouse?->id;
+
+        if ($managedWarehouseId && (!$returnWarehouseId || $managedWarehouseId !== $returnWarehouseId)) {
+            return back()->with('error', 'Bạn chỉ có thể xác nhận đơn trả về đúng kho mình quản lý.');
+        }
+
+        // Load order with all needed relationships
+        $order->load([
+            'customer',
+            'shipper',
+            'items.variant.product',
+            'items.product',
+            'warehouse',
+        ]);
+
+        // Get or create OrderReturn for weight confirmation flow
+        $orderReturn = $activeOrderReturn;
+
+        if (!$orderReturn) {
+            $orderReturn = OrderReturn::create([
+                'order_id' => $order->id,
+                'customer_id' => $order->customer_id,
+                'warehouse_id' => $returnWarehouseId,
+                'created_by' => Auth::id(),
+                'status' => 'pending_warehouse',
+                'reason' => $order->return_reason,
+                'note' => $order->shipper_note,
+            ]);
+
+            foreach ($order->items as $orderItem) {
+                ReturnItem::create([
+                    'order_return_id' => $orderReturn->id,
+                    'product_variant_id' => $orderItem->product_variant_id,
+                    'quantity' => (int) $orderItem->quantity,
+                    'condition' => null,
+                ]);
+            }
+
+            $orderReturn->load(['warehouse', 'returnItems.productVariant.product']);
+        } else {
+            $orderReturn->loadMissing(['warehouse', 'returnItems.productVariant.product']);
+        }
+
+        // Populate original_weight if not yet set
+        if ($orderReturn) {
+            foreach ($orderReturn->returnItems as $returnItem) {
+                if (!$returnItem->original_weight) {
+                    // Find the corresponding order item
+                    $orderItem = $order->items->where('product_variant_id', $returnItem->product_variant_id)->first();
+                    if ($orderItem) {
+                        $unitWeight = (float) ($orderItem->effective_unit_weight ?? $orderItem->unit_weight ?? 0);
+                        if ($unitWeight <= 0) {
+                            $unitWeight = (float) ($orderItem->variant->kg ?? 1);
+                        }
+                        $returnItem->update([
+                            'original_weight' => $unitWeight * (int) $returnItem->quantity,
+                        ]);
+                    }
+                }
+            }
+            // Reload after update
+            $orderReturn->load('returnItems');
+        }
+
+        return view('warehouse.returns.weight-entry', compact(
+            'order',
+            'orderReturn',
+            'resolvedReturnWarehouse'
+        ));
+    }
+
+    /**
+     * Save weight entries and confirm return
+     */
+    public function saveWeights(Request $request, Order $order)
+    {
+        $activeOrderReturn = $this->resolveActiveOrderReturn($order);
+        $canHandleByOrderStatus = $order->status === Order::STATUS_RETURNING;
+        if (!$activeOrderReturn && !$canHandleByOrderStatus) {
+            return back()->with('error', 'Đơn hàng không đang ở trạng thái Đang trả hàng.');
+        }
+
+        $managedWarehouseId = Auth::user()->warehouse_id ? (int) Auth::user()->warehouse_id : null;
+        $resolvedReturnWarehouse = $activeOrderReturn?->warehouse
+            ?: $this->resolveReturnWarehouse($order);
+        $returnWarehouseId = $resolvedReturnWarehouse?->id;
+
+        if ($managedWarehouseId && (!$returnWarehouseId || $managedWarehouseId !== $returnWarehouseId)) {
+            return back()->with('error', 'Bạn chỉ có thể xác nhận đơn trả về đúng kho mình quản lý.');
+        }
+
+        if (!$returnWarehouseId) {
+            return back()->with('error', 'Đơn trả này chưa xác định kho nhận.');
+        }
+
+        $orderReturn = $activeOrderReturn;
+        if ($orderReturn) {
+            $orderReturn->loadMissing('returnItems');
+        }
+
+        if (!$orderReturn || $orderReturn->returnItems->isEmpty()) {
+            return back()->with('error', 'Không tìm thấy chi tiết sản phẩm trả để cân ký lại.');
+        }
+
+        // Validate weight inputs
+        $validated = $request->validate([
+            'item_weights' => 'required|array|min:1',
+            'item_weights.*.item_id' => 'required|integer',
+            'item_weights.*.received_weight' => 'required|numeric|min:0',
+        ]);
+
+        $requiredIds = $orderReturn->returnItems->pluck('id')->map(fn ($id) => (int) $id)->unique()->values();
+        $submittedIds = collect($validated['item_weights'])
+            ->pluck('item_id')
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($requiredIds->diff($submittedIds)->isNotEmpty() || $submittedIds->diff($requiredIds)->isNotEmpty()) {
+            return back()->with('error', 'Vui lòng nhập cân nặng đầy đủ cho tất cả sản phẩm trong phiếu trả.')->withInput();
+        }
+
+        $returnItemsById = $orderReturn->returnItems->keyBy('id');
+
+        DB::transaction(function () use ($order, $returnWarehouseId, $validated, $resolvedReturnWarehouse, $orderReturn, $returnItemsById) {
+            // Update weight data for return items
+            foreach ($validated['item_weights'] as $weightData) {
+                $returnItem = $returnItemsById->get((int) $weightData['item_id']);
+                if (!$returnItem) {
+                    continue;
+                }
+
+                $receivedWeight = (float) $weightData['received_weight'];
+                $returnItem->update([
+                    'received_weight' => $receivedWeight,
+                    'weight_confirmed_at' => now(),
+                ]);
+
+                // Calculate weight loss
+                $returnItem->calculateWeightLoss();
+                $returnItem->save();
+            }
+
+            $orderReturn->update([
+                'status' => 'warehouse_received',
+                'warehouse_confirmed_by' => Auth::id(),
+                'warehouse_confirmed_at' => now(),
+            ]);
+
+            // Mark order as returned completed and restore inventory
+            $order->update(['status' => Order::STATUS_RETURNED_COMPLETED]);
+
+            // Restore inventory for each item
+            if ($orderReturn && $orderReturn->relationLoaded('returnItems')) {
+                foreach ($orderReturn->returnItems as $returnItem) {
+                    Inventory::where('product_variant_id', $returnItem->product_variant_id)
+                        ->where('warehouse_id', $returnWarehouseId)
+                        ->increment('quantity', (int) $returnItem->quantity);
+                }
+            } else {
+                foreach ($order->items as $item) {
+                    Inventory::where('product_variant_id', $item->product_variant_id)
+                        ->where('warehouse_id', $returnWarehouseId)
+                        ->increment('quantity', (int) $item->quantity);
+                }
+            }
+
+            // Calculate total weight loss for report
+            $totalWeightLoss = $orderReturn
+                ? (float) $orderReturn->returnItems()->whereNotNull('weight_loss')->sum('weight_loss')
+                : 0;
+
+            OrderHistory::create([
+                'order_id'      => $order->id,
+                'action'        => 'confirm_return',
+                'user_id'       => Auth::id(),
+                'role'          => 'warehouse',
+                'status_before' => Order::STATUS_RETURNING,
+                'status_after'  => Order::STATUS_RETURNED_COMPLETED,
+                'note'          => sprintf(
+                    'Kho xác nhận đã nhận hàng trả vào kho %s – Tồn kho đã cập nhật – Hao hụt KL: %.3f kg',
+                    $resolvedReturnWarehouse?->name ?? ('ID ' . $returnWarehouseId),
+                    $totalWeightLoss
+                ),
+            ]);
+        });
+
+        return back()->with('success', 'Đã lưu cân nặng và xác nhận nhập kho hàng trả – Đơn #' . $order->code);
+    }
+
+    public function transferReturnWarehouse(Request $request, Order $order)
+    {
+        $activeOrderReturn = $this->resolveActiveOrderReturn($order);
+        if (!$activeOrderReturn) {
+            return back()->with('error', 'Không tìm thấy phiếu trả đang chờ kho xử lý để chuyển kho.');
+        }
+
+        $validated = $request->validate([
+            'new_warehouse_id' => 'required|exists:warehouses,id',
+            'transfer_note' => 'nullable|string|max:500',
+        ]);
+
+        $managedWarehouseId = Auth::user()->warehouse_id ? (int) Auth::user()->warehouse_id : null;
+        $currentWarehouseId = (int) ($activeOrderReturn->warehouse_id ?? 0);
+
+        if ($managedWarehouseId && $currentWarehouseId !== $managedWarehouseId) {
+            return back()->with('error', 'Bạn chỉ có thể chuyển tiếp các phiếu trả thuộc kho bạn đang quản lý.');
+        }
+
+        $newWarehouseId = (int) $validated['new_warehouse_id'];
+        if ($newWarehouseId === $currentWarehouseId) {
+            return back()->with('error', 'Kho chuyển tiếp phải khác kho hiện tại.');
+        }
+
+        $newWarehouse = Warehouse::query()->findOrFail($newWarehouseId);
+        $oldWarehouseName = $activeOrderReturn->warehouse?->name ?? ('ID ' . $currentWarehouseId);
+        $extraNote = trim((string) ($validated['transfer_note'] ?? ''));
+        $transferNote = 'Chuyển kho tiếp nhận trả hàng từ ' . $oldWarehouseName . ' sang ' . $newWarehouse->name;
+        if ($extraNote !== '') {
+            $transferNote .= ' | Lý do: ' . $extraNote;
+        }
+
+        DB::transaction(function () use ($activeOrderReturn, $order, $newWarehouseId, $transferNote, $newWarehouse) {
+            $activeOrderReturn->update([
+                'warehouse_id' => $newWarehouseId,
+                'note' => trim(((string) ($activeOrderReturn->note ?? '')) . ' | ' . $transferNote, ' |'),
+            ]);
+
+            if (Schema::hasColumn('orders', 'return_warehouse_id')) {
+                $order->update(['return_warehouse_id' => $newWarehouseId]);
+            }
+
+            if (Schema::hasColumn('orders', 'warehouse_id') && $order->status === Order::STATUS_RETURNING) {
+                $order->update(['warehouse_id' => $newWarehouseId]);
+            }
+
+            OrderHistory::create([
+                'order_id' => $order->id,
+                'action' => 'transfer_return_warehouse',
+                'user_id' => Auth::id(),
+                'role' => Auth::user()?->roles->pluck('name')->first() ?? 'warehouse',
+                'status_before' => $order->status,
+                'status_after' => $order->status,
+                'note' => $transferNote,
+            ]);
+        });
+
+        return back()->with('success', 'Đã chuyển kho tiếp nhận trả hàng sang: ' . $newWarehouse->name);
+    }
+
+    protected function resolveActiveOrderReturn(Order $order): ?OrderReturn
+    {
+        return OrderReturn::query()
+            ->where('order_id', $order->id)
+            ->whereIn('status', ['pending_warehouse', 'requested', 'ship_confirmed'])
+            ->with(['warehouse', 'returnItems.productVariant.product'])
+            ->latest('id')
+            ->first();
+    }
+
     protected function resolveReturnWarehouse(Order $order): ?Warehouse
     {
+        $latestOrderReturnWarehouseId = OrderReturn::query()
+            ->where('order_id', $order->id)
+            ->latest('id')
+            ->value('warehouse_id');
+
+        if (!empty($latestOrderReturnWarehouseId)) {
+            return Warehouse::find((int) $latestOrderReturnWarehouseId);
+        }
+
         if ($order->relationLoaded('returnWarehouse') && $order->returnWarehouse) {
             return $order->returnWarehouse;
         }
