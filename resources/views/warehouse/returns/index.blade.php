@@ -17,7 +17,7 @@
 
 <div class="card border-0 shadow-sm mb-3">
     <div class="card-body py-3">
-        <form method="GET" action="{{ route('warehouse.returns') }}" class="row g-2 align-items-end">
+        <form method="GET" action="{{ route('warehouse.returns', [], false) }}" class="row g-2 align-items-end">
             <div class="col-md-3">
                 <label class="form-label small text-muted mb-1">Khoảng thời gian</label>
                 <select name="period" class="form-select form-select-sm">
@@ -39,7 +39,7 @@
                 <button type="submit" class="btn btn-sm btn-primary">
                     <i class="bi bi-funnel me-1"></i>Lọc
                 </button>
-                <a href="{{ route('warehouse.returns') }}" class="btn btn-sm btn-outline-secondary">
+                <a href="{{ route('warehouse.returns', [], false) }}" class="btn btn-sm btn-outline-secondary">
                     <i class="bi bi-arrow-counterclockwise me-1"></i>Bỏ lọc
                 </a>
             </div>
@@ -143,7 +143,7 @@
                     </td>
                     <td class="text-end">
                         <div class="d-flex justify-content-end gap-1 flex-wrap">
-                            <a href="{{ route('warehouse.returns.weight-entry', $order) }}"
+                                     <a href="{{ route('warehouse.returns.weight-entry', ['order' => $order], false) }}"
                                class="btn btn-success btn-sm {{ $canConfirm ? '' : 'disabled' }}"
                                title="{{ $canConfirm ? 'Mở form chi tiết để cân lại và xác nhận trả hàng' : 'Đơn này không thuộc kho bạn quản lý' }}">
                                 <i class="bi bi-check2-circle me-1"></i>Xác nhận Trả Hàng
@@ -302,7 +302,7 @@
                 </h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="{{ route('warehouse.returns.transfer-warehouse', $order) }}">
+            <form method="POST" action="{{ route('warehouse.returns.transfer-warehouse', ['order' => $order], false) }}">
                 @csrf
                 <div class="modal-body">
                     <div class="small text-muted mb-2">

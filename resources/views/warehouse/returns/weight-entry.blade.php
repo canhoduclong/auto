@@ -20,7 +20,7 @@
         <span class="badge bg-warning rounded-pill"><i class="bi bi-speedometer2 me-1"></i>{{ $returnItems->count() }} sản phẩm cần cân</span>
         <span class="badge bg-info rounded-pill ms-2">Đơn: <strong>{{ $order->code }}</strong></span>
     </div>
-    <a href="{{ route('warehouse.returns') }}" class="btn btn-outline-secondary btn-sm">
+    <a href="{{ route('warehouse.returns', [], false) }}" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-arrow-left me-1"></i>Quay lại
     </a>
 </div>
@@ -36,7 +36,7 @@
             </div>
 
             <div class="card-body p-0">
-                <form action="{{ route('warehouse.returns.save-weights', $order) }}" method="POST" id="weight-form">
+                <form action="{{ route('warehouse.returns.save-weights', ['order' => $order], false) }}" method="POST" id="weight-form">
                     @csrf
                     
                     <div class="table-responsive">
@@ -136,7 +136,7 @@
                     </div>
 
                     <div class="p-3 border-top d-flex gap-2 justify-content-between">
-                        <a href="{{ route('warehouse.returns') }}" class="btn btn-outline-secondary">
+                        <a href="{{ route('warehouse.returns', [], false) }}" class="btn btn-outline-secondary">
                             <i class="bi bi-x-circle me-1"></i>Hủy
                         </a>
                         <div>
