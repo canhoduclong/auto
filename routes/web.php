@@ -218,6 +218,9 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/orders/{order}/reopen-packing',   [WarehouseDashboardController::class, 'reopenPacking'])->name('orders.reopen-packing');
         Route::post('/orders/rap-don-hang',              [WarehouseDashboardController::class, 'rapDonHang'])->name('orders.rap-don-hang');
         Route::get('/returns',     [WarehouseDashboardController::class, 'returns'])->name('returns');
+        Route::get('/returns/{order}/weight-entry', [WarehouseDashboardController::class, 'showWeightEntry'])->name('returns.weight-entry');
+        Route::post('/returns/{order}/save-weights', [WarehouseDashboardController::class, 'saveWeights'])->name('returns.save-weights');
+        Route::post('/returns/{order}/transfer-warehouse', [WarehouseDashboardController::class, 'transferReturnWarehouse'])->name('returns.transfer-warehouse');
         Route::post('/returns/{order}/confirm', [WarehouseDashboardController::class, 'confirmReturn'])->name('returns.confirm');
         
         // Warehouse Management Features
