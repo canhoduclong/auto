@@ -136,93 +136,109 @@
             @foreach($orders as $idx => $order)
                 <div class="order-item w-100" data-order-id="{{ $order->id }}">
                     <input type="hidden" name="order_ids[]" value="{{ $order->id }}">
-                    <div class="card ds-order-card h-100">
-                        <div class="d-flex align-items-start gap-3 mb-2">
-                            <div class="ds-delivery-time">
-                                {{ $order->delivery_time ?: 'N/A' }}
-                            </div>
-                            <div class="flex-fill">
-                                <div class="fw-semibold text-dark">{{ $order->customer?->name ?? $order->recipient_name }}</div>
-                                <div class="text-muted small">
-                                    {{ $order->recipient_address ?: $order->customer?->address ?: 'Chưa cập nhật' }}
+                    <div class="d-flex align-items-stretch gap-2">
+                        <div class="card ds-order-card h-100 flex-fill">
+                            <div class="d-flex align-items-start gap-3 mb-2">
+                                <div class="ds-delivery-time">
+                                    {{ $order->delivery_time ?: 'N/A' }}
                                 </div>
-                                <div class="small mt-2">
-                                    <span class="badge bg-warning text-dark">{{ $order->items->sum('quantity') }} sp</span>
-                                    <span class="badge bg-light text-dark border ms-2">
-                                        @php
-                                            $statusLabel = match ($order->status) {
-                                                \App\Models\Order::STATUS_READY_TO_PACK => 'Chờ đóng gói',
-                                                \App\Models\Order::STATUS_PACKING => 'Đang đóng gói',
-                                                \App\Models\Order::STATUS_READY_TO_SHIP => 'Chờ nhận',
-                                                default => strtoupper((string) $order->status),
-                                            };
-                                        @endphp
-                                        {{ $statusLabel }}
-                                    </span>
+                                <div class="flex-fill">
+                                    <div class="fw-semibold text-dark">{{ $order->customer?->name ?? $order->recipient_name }}</div>
+                                    <div class="text-muted small">
+                                        {{ $order->recipient_address ?: $order->customer?->address ?: 'Chưa cập nhật' }}
+                                    </div>
+                                    <div class="small mt-2">
+                                        <span class="badge bg-warning text-dark">{{ $order->items->sum('quantity') }} sp</span>
+                                        <span class="badge bg-light text-dark border ms-2">
+                                            @php
+                                                $statusLabel = match ($order->status) {
+                                                    \App\Models\Order::STATUS_READY_TO_PACK => 'Chờ đóng gói',
+                                                    \App\Models\Order::STATUS_PACKING => 'Đang đóng gói',
+                                                    \App\Models\Order::STATUS_READY_TO_SHIP => 'Chờ nhận',
+                                                    default => strtoupper((string) $order->status),
+                                                };
+                                            @endphp
+                                            {{ $statusLabel }}
+                                        </span>
+                                    </div>
                                 </div>
+                                <div class="text-muted small fw-semibold">Mã: #{{ $order->code }}</div>
                             </div>
-                            <div class="text-muted small fw-semibold">Mã: #{{ $order->code }}</div>
-                        </div>
 
-                        @if($order->items->isNotEmpty())
-                            <div class="mt-3 pt-2 border-top ds-product-section">
-                                <div class="text-muted small fw-semibold mb-2">Chi tiết sản phẩm:</div>
-                                <div class="ds-product-table-head">
-                                    <div>Sản phẩm</div>
-                                    <div class="text-end">SL</div>
-                                    <div class="text-end">Size</div>
-                                    <div class="text-end">Kg</div>
-                                    <div class="text-end">Đơn giá</div>
-                                    <div class="text-end">Thành tiền</div>
-                                </div>
-                                <ul class="ds-product-list">
-                                    @foreach($order->items as $item)
-                                        @php
-                                            $qty = (int) $item->quantity;
-                                            $unitPrice = (float) ($item->price ?? 0);
-                                            $lineTotal = $qty * $unitPrice;
-                                            $variantSize = $item->variant?->size;
-                                            $formattedVariantSize = (!is_null($variantSize) && $variantSize !== '')
-                                                ? rtrim(rtrim(number_format((float) $variantSize, 2, '.', ''), '0'), '.')
-                                                : '-';
-                                            $itemActualWeight = null;
-                                            if ($item->actual_weight) {
-                                                $itemActualWeight = rtrim(rtrim(number_format((float) $item->actual_weight, 2, '.', ''), '0'), '.');
-                                            } else {
-                                                $itemActualWeight = '-';
-                                            }
-                                        @endphp
-                                        <li class="ds-product-row">
-                                            <div class="ds-product-table-row">
-                                                <div class="ds-product-name">
-                                                    {{ $item->variant?->name ?? $item->variant?->sku ?? $item->product_name ?? 'Sản phẩm' }}
-                                                    @if($item->variant?->sku)
-                                                        <span class="text-muted small">({{ $item->variant->sku }})</span>
-                                                    @endif
+                            @if($order->items->isNotEmpty())
+                                <div class="mt-3 pt-2 border-top ds-product-section">
+                                    <div class="text-muted small fw-semibold mb-2">Chi tiết sản phẩm:</div>
+                                    <div class="ds-product-table-head">
+                                        <div>Sản phẩm</div>
+                                        <div class="text-end">SL</div>
+                                        <div class="text-end">Size</div>
+                                        <div class="text-end">Kg</div>
+                                        <div class="text-end">Đơn giá</div>
+                                        <div class="text-end">Thành tiền</div>
+                                    </div>
+                                    <ul class="ds-product-list">
+                                        @foreach($order->items as $item)
+                                            @php
+                                                $qty = (int) $item->quantity;
+                                                $unitPrice = (float) ($item->price ?? 0);
+                                                $lineTotal = $qty * $unitPrice;
+                                                $variantSize = $item->variant?->size;
+                                                $formattedVariantSize = (!is_null($variantSize) && $variantSize !== '')
+                                                    ? rtrim(rtrim(number_format((float) $variantSize, 2, '.', ''), '0'), '.')
+                                                    : '-';
+                                                $itemActualWeight = null;
+                                                if ($item->actual_weight) {
+                                                    $itemActualWeight = rtrim(rtrim(number_format((float) $item->actual_weight, 2, '.', ''), '0'), '.');
+                                                } else {
+                                                    $itemActualWeight = '-';
+                                                }
+                                            @endphp
+                                            <li class="ds-product-row">
+                                                <div class="ds-product-table-row">
+                                                    <div class="ds-product-name">
+                                                        {{ $item->variant?->name ?? $item->variant?->sku ?? $item->product_name ?? 'Sản phẩm' }}
+                                                        @if($item->variant?->sku)
+                                                            <span class="text-muted small">({{ $item->variant->sku }})</span>
+                                                        @endif
+                                                    </div>
+                                                    <div class="ds-product-cell"><strong>{{ $qty }}</strong></div>
+                                                    <div class="ds-product-cell"><strong>{{ $formattedVariantSize }}</strong></div>
+                                                    <div class="ds-product-cell"><strong>{{ $itemActualWeight }}</strong></div>
+                                                    <div class="ds-product-cell">{{ number_format($unitPrice) }}đ</div>
+                                                    <div class="ds-product-cell"><strong>{{ number_format($lineTotal) }}đ</strong></div>
                                                 </div>
-                                                <div class="ds-product-cell"><strong>{{ $qty }}</strong></div>
-                                                <div class="ds-product-cell"><strong>{{ $formattedVariantSize }}</strong></div>
-                                                <div class="ds-product-cell"><strong>{{ $itemActualWeight }}</strong></div>
-                                                <div class="ds-product-cell">{{ number_format($unitPrice) }}đ</div>
-                                                <div class="ds-product-cell"><strong>{{ number_format($lineTotal) }}đ</strong></div>
-                                            </div>
-                                        </li>
-                                    @endforeach
-                                </ul>
-                            </div>
-                        @endif
+                                            </li>
+                                        @endforeach
+                                    </ul>
+                                </div>
+                            @endif
 
-                        <div class="mt-3 pt-2 border-top d-flex gap-2 align-items-center">
-                            <span class="badge bg-success">Đơn #<span class="order-index">{{ $idx + 1 }}</span>/{{ $orders->count() }}</span>
-                            <button type="button" class="btn btn-sm btn-outline-secondary move-up" title="Lên trên" @if($idx === 0) disabled @endif><i class="bi bi-arrow-up"></i></button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary move-down" title="Xuống dưới" @if($idx === count($orders)-1) disabled @endif><i class="bi bi-arrow-down"></i></button>
+                            <div class="mt-3 pt-2 border-top d-flex gap-2 align-items-center">
+                                <span class="badge bg-success">Đơn #{{ $idx + 1 }}/{{ $orders->count() }}</span>
+                            </div>
+                        </div>
+                        <div class="d-flex flex-column align-items-center justify-content-center" style="min-width:32px;">
+                            <button type="submit"
+                                class="btn btn-light btn-sm px-1 py-0"
+                                title="Lên trên"
+                                formaction="{{ route('shipper.delivery-schedules.move-up', [$order->id]) }}"
+                                {{ $idx === 0 ? 'disabled' : '' }}>
+                                <i class="bi bi-arrow-up"></i>
+                            </button>
+                            <button type="submit"
+                                class="btn btn-light btn-sm px-1 py-0"
+                                title="Xuống dưới"
+                                formaction="{{ route('shipper.delivery-schedules.move-down', [$order->id]) }}"
+                                {{ $idx === $orders->count()-1 ? 'disabled' : '' }}>
+                                <i class="bi bi-arrow-down"></i>
+                            </button>
                         </div>
                     </div>
                 </div>
             @endforeach
         </div>
         <div class="mt-4 text-center d-flex justify-content-center gap-2 flex-wrap">
-            <button type="submit" class="btn btn-primary px-5" formaction="{{ route('shipper.confirm-delivery-schedule', ['schedule' => 'bulk']) }}" @if($scheduleAlreadyConfirmed) disabled @endif>
+            <button type="submit" class="btn btn-primary px-5" formaction="{{ route('shipper.confirm-delivery-schedule', ['schedule' => 'bulk']) }}">
                 <i class="bi bi-check2-circle me-1"></i> Xác nhận lịch trình & nhận đơn
             </button>
             <button type="submit" class="btn btn-outline-danger px-5" formaction="{{ route('shipper.reject-delivery-schedule', ['schedule' => 'bulk']) }}">
@@ -235,40 +251,5 @@
             </div>
         @endif
     </form>
-@push('scripts')
-<script>
-    document.addEventListener('DOMContentLoaded', function () {
-        function updateOrderIndexes() {
-            document.querySelectorAll('#orders-list .order-item').forEach(function(item, idx) {
-                item.querySelector('.order-index').textContent = idx + 1;
-                // Disable/enable move up/down buttons
-                item.querySelector('.move-up').disabled = (idx === 0);
-                item.querySelector('.move-down').disabled = (idx === document.querySelectorAll('#orders-list .order-item').length - 1);
-            });
-        }
-        document.querySelectorAll('#orders-list').forEach(function(list) {
-            list.addEventListener('click', function(e) {
-                if (e.target.closest('.move-up') || e.target.classList.contains('move-up')) {
-                    var item = e.target.closest('.order-item');
-                    var prev = item.previousElementSibling;
-                    if (prev) {
-                        item.parentNode.insertBefore(item, prev);
-                        updateOrderIndexes();
-                    }
-                }
-                if (e.target.closest('.move-down') || e.target.classList.contains('move-down')) {
-                    var item = e.target.closest('.order-item');
-                    var next = item.nextElementSibling;
-                    if (next) {
-                        item.parentNode.insertBefore(next, item);
-                        updateOrderIndexes();
-                    }
-                }
-            });
-        });
-        updateOrderIndexes();
-    });
-</script>
-@endpush
 @endif
 @endsection

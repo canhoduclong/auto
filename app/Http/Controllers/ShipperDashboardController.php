@@ -154,6 +154,36 @@ class ShipperDashboardController extends Controller
         return back()->with('success', 'Đã đưa đơn #' . ($order->code ?: $order->id) . ' xuống dưới.');
     }
 
+    public function moveOwnScheduleUp(Request $request, Order $order)
+    {
+        $currentUser = Auth::user();
+        $canManageAny = $currentUser && ($currentUser->hasRole('manager_shipper') || $currentUser->hasRole('admin'));
+
+        if (!$canManageAny && (int) ($order->shipper_id ?? 0) !== (int) Auth::id()) {
+            abort(403, 'Đơn này không thuộc lịch trình của bạn.');
+        }
+
+        $dateString = $this->assignmentOrderingDate($request);
+        $this->moveOrderWithinShipper($order, -1, $dateString);
+
+        return back()->with('success', 'Đã đưa đơn #' . ($order->code ?: $order->id) . ' lên trên lịch trình.');
+    }
+
+    public function moveOwnScheduleDown(Request $request, Order $order)
+    {
+        $currentUser = Auth::user();
+        $canManageAny = $currentUser && ($currentUser->hasRole('manager_shipper') || $currentUser->hasRole('admin'));
+
+        if (!$canManageAny && (int) ($order->shipper_id ?? 0) !== (int) Auth::id()) {
+            abort(403, 'Đơn này không thuộc lịch trình của bạn.');
+        }
+
+        $dateString = $this->assignmentOrderingDate($request);
+        $this->moveOrderWithinShipper($order, 1, $dateString);
+
+        return back()->with('success', 'Đã đưa đơn #' . ($order->code ?: $order->id) . ' xuống dưới lịch trình.');
+    }
+
     public function index()
     {
         $userId = Auth::id();
@@ -219,7 +249,7 @@ class ShipperDashboardController extends Controller
             ];
         });
 
-        $orders = Order::with(['customer.addresses', 'items.variant.product'])
+        $orders = Order::with(['customer.addresses', 'items.variant.product', 'warehouse', 'histories.user.warehouse'])
             ->where('status', Order::STATUS_READY_TO_SHIP)
             ->where(function ($query) {
                 $query->whereNull('shipper_id')
@@ -231,6 +261,27 @@ class ShipperDashboardController extends Controller
             })
             ->orderBy('created_at', 'asc')
             ->get();
+
+        $receivedTransfersByOrder = WarehouseTransfer::query()
+            ->with('targetWarehouse:id,name')
+            ->whereIn('order_id', $orders->pluck('id')->all())
+            ->where('status', WarehouseTransfer::STATUS_RECEIVED_COMPLETED)
+            ->orderByDesc('id')
+            ->get()
+            ->unique('order_id')
+            ->keyBy('order_id');
+
+        $orders->each(function (Order $order) use ($receivedTransfersByOrder): void {
+            $receivedTransfer = $receivedTransfersByOrder->get($order->id);
+            if (!$receivedTransfer) {
+                return;
+            }
+
+            $targetWarehouseName = $receivedTransfer->targetWarehouse?->name;
+            if ($targetWarehouseName) {
+                $order->setAttribute('resolved_pickup_warehouse_name', $targetWarehouseName);
+            }
+        });
 
         return view('shipper.available', compact('orders', 'selectedDate', 'quickDates'));
     }
@@ -267,9 +318,20 @@ class ShipperDashboardController extends Controller
                                     ->latest('id')
                                     ->first();
 
-            $warehouseId = (int) ($fresh->warehouse_id
+            $latestReceivedTransfer = WarehouseTransfer::query()
+                ->where('order_id', $fresh->id)
+                ->where('status', WarehouseTransfer::STATUS_RECEIVED_COMPLETED)
+                ->latest('id')
+                ->first();
+
+            $warehouseId = (int) ($latestReceivedTransfer?->target_warehouse_id
+                ?: $fresh->warehouse_id
                 ?: $packingHistory?->user?->warehouse_id
                 ?: 0);
+
+            if ($warehouseId > 0 && (int) ($fresh->warehouse_id ?? 0) !== $warehouseId) {
+                $fresh->update(['warehouse_id' => $warehouseId]);
+            }
 
             $fresh->update([
                 'shipper_id' => Auth::id(),
@@ -1293,7 +1355,15 @@ class ShipperDashboardController extends Controller
         $statusByShipperId = [];
 
         foreach ($scheduleActions as $scheduleAction) {
-            $statusByShipperId[(int) $scheduleAction->shipper_id] = match ($scheduleAction->action) {
+            $shipperId = (int) $scheduleAction->shipper_id;
+
+            // Query is already ordered by newest action first per shipper,
+            // so keep only the first hit (latest status) and ignore older ones.
+            if (array_key_exists($shipperId, $statusByShipperId)) {
+                continue;
+            }
+
+            $statusByShipperId[$shipperId] = match ($scheduleAction->action) {
                 'schedule_confirmed' => 'confirmed',
                 'schedule_rejected' => 'rejected',
                 default => 'waiting',
@@ -1598,7 +1668,11 @@ class ShipperDashboardController extends Controller
                 $query->whereDate('created_at', $selectedDate)
                     ->orWhereDate('updated_at', $selectedDate);
             })
+            ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
+            ->orderBy('daily_sequence', 'asc')
             ->orderBy('delivery_time', 'asc')
+            ->orderBy('created_at', 'asc')
+            ->orderBy('id', 'asc')
             ->get();
 
         $currentSnapshot = $this->buildDeliveryScheduleSnapshot($orders);

@@ -263,9 +263,12 @@
                 <i class="bi bi-person-circle text-secondary"></i>
                 <div class="small">
                     <div class="text-white fw-semibold" style="font-size:.95rem;">{{ auth()->user()->name }}</div>
-                    <div style="color:#fef3c7;font-size:.82rem;">Warehouse</div>
-                </div>
+                    <div style="color:#fef3c7;font-size:.82rem;">{{ auth()->user()->warehouse?->name ?? 'Chưa được gán kho' }}</div>
+                    <div class="email" style="color:#ffffff;font-size:.72rem;">{{ auth()->user()->email }}</div>
+                </div> 
             </div>
+            
+             
             <form method="POST" action="{{ route('logout') }}">
                 @csrf
                 <button type="submit" class="btn btn-outline-secondary btn-sm w-100" style="font-size:.9rem;">

@@ -228,6 +228,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/orders/rap-don-hang',              [WarehouseDashboardController::class, 'rapDonHang'])->name('orders.rap-don-hang');
         Route::get('/transfers/incoming', [WarehouseDashboardController::class, 'incomingTransfers'])->name('transfers.incoming');
         Route::post('/transfers/{transfer}/confirm-receipt', [WarehouseDashboardController::class, 'confirmTransferReceipt'])->name('transfers.confirm-receipt');
+            Route::post('/transfers/{transfer}/rollback', [WarehouseDashboardController::class, 'rollbackIncomingTransfer'])->name('transfers.rollback');
         Route::get('/returns',     [WarehouseDashboardController::class, 'returns'])->name('returns');
         Route::get('/returns/{order}/weight-entry', [WarehouseDashboardController::class, 'showWeightEntry'])->name('returns.weight-entry');
         Route::post('/returns/{order}/save-weights', [WarehouseDashboardController::class, 'saveWeights'])->name('returns.save-weights');
@@ -287,6 +288,8 @@ Route::middleware(['auth', 'assigned'])->group(function () {
 
         // Shipper delivery schedule routes
         Route::get('/delivery-schedules',                 [ShipperDashboardController::class, 'deliverySchedules'])->name('delivery-schedules');
+        Route::post('/delivery-schedules/{order}/move-up', [ShipperDashboardController::class, 'moveOwnScheduleUp'])->name('delivery-schedules.move-up');
+        Route::post('/delivery-schedules/{order}/move-down', [ShipperDashboardController::class, 'moveOwnScheduleDown'])->name('delivery-schedules.move-down');
         Route::post('/delivery-schedule/{schedule}/confirm', [ShipperDashboardController::class, 'confirmDeliverySchedule'])->name('confirm-delivery-schedule');
         Route::post('/delivery-schedule/{schedule}/reject', [ShipperDashboardController::class, 'rejectDeliverySchedule'])->name('reject-delivery-schedule');
     });

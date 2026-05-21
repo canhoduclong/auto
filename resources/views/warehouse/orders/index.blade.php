@@ -684,6 +684,18 @@
                 $isRejectedBySale = $order->warehouse_adjustment_status === \App\Models\Order::WAREHOUSE_ADJUSTMENT_STATUS_SALE_REJECTED;
                 $adjustmentChanges = collect($order->warehouse_adjustment_changes ?? []);
                 $activeTransfer = $activeTransfersByOrder[$order->id] ?? null;
+                $shipPickupWarehouseName = $sourceWarehouseName;
+                $shipPickupWarehouseHint = null;
+
+                if ($activeTransfer?->targetWarehouse?->name) {
+                    $shipPickupWarehouseName = $activeTransfer->targetWarehouse->name;
+                    $shipPickupWarehouseHint = match ($activeTransfer->status) {
+                        'pending_shipper_pickup' => 'Đang điều chuyển sang kho nhận',
+                        'in_transit' => 'Đang vận chuyển sang kho nhận',
+                        'delivered_waiting_receive' => 'Chờ kho nhận tiếp nhận trước khi ship lấy',
+                        default => null,
+                    };
+                }
             @endphp
             <div class="col-12 col-lg-8 col-xxl-6">
                 <div class="card wh-order-card js-order-card" data-order-id="{{ $order->id }}">
@@ -875,6 +887,10 @@
                                 <div class="small text-muted mt-1">
                                     <i class="bi bi-box-seam me-1"></i>
                                     Từ kho: {{ $sourceWarehouseName ?: 'Chưa xác định' }}
+                                </div>
+                                <div class="small text-muted mt-1">
+                                    <i class="bi bi-truck me-1"></i>
+                                    Kho ship sẽ lấy: {{ $shipPickupWarehouseName ?: 'Chưa xác định' }}
                                 </div>
                             @endif
                         </div>
@@ -1168,6 +1184,13 @@
                                     <div class="col-6">
                                         <div class="wh-meta-label">Từ kho</div>
                                         <div class="wh-meta-value">{{ $sourceWarehouseName ?: 'Chưa xác định' }}</div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="wh-meta-label">Kho ship sẽ lấy</div>
+                                        <div class="wh-meta-value">{{ $shipPickupWarehouseName ?: 'Chưa xác định' }}</div>
+                                        @if($shipPickupWarehouseHint)
+                                            <div class="small text-muted">{{ $shipPickupWarehouseHint }}</div>
+                                        @endif
                                     </div>
                                     <div class="col-6">
                                         <div class="wh-meta-label">Nhân viên kho</div>

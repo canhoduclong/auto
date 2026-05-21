@@ -229,6 +229,15 @@
         $deliveryAddress = $order->recipient_address ?: ($order->customer?->address ?? null);
         $customerMainAddress = $order->customer?->address;
         $customerDeliveryTime = $order->delivery_time ?: $order->customer?->delivery_time;
+        $sourceWarehouseName = $order->resolved_pickup_warehouse_name ?: $order->warehouse?->name;
+
+        if (!$sourceWarehouseName) {
+            $packingHistory = $order->histories
+                ->whereIn('action', ['complete_packing', 'warehouse_complete_packing'])
+                ->sortByDesc('id')
+                ->first();
+            $sourceWarehouseName = $packingHistory?->user?->warehouse?->name;
+        }
 
         $normalizedDeliveryAddress = $deliveryAddress ? mb_strtolower(trim($deliveryAddress)) : null;
         $normalizedCustomerAddress = $customerMainAddress ? mb_strtolower(trim($customerMainAddress)) : null;
@@ -289,6 +298,7 @@
                     @if($customerDeliveryTime)
                         <div class="text-muted small"><i class="bi bi-clock me-1"></i>Giờ giao hàng: {{ $customerDeliveryTime }}</div>
                     @endif
+                    <div class="text-muted small"><i class="bi bi-box-seam me-1"></i>Từ kho: {{ $sourceWarehouseName ?: 'Chưa xác định' }}</div>
                 </div>
 
  

@@ -109,6 +109,9 @@ class WarehouseDashboardController extends Controller
         // Auto-cancel overdue orders before loading the page
         \Artisan::call('orders:auto-cancel-overdue');
 
+        $currentUser = Auth::user();
+        $managedWarehouseId = $currentUser?->warehouse_id ? (int) $currentUser->warehouse_id : null;
+
         $selectedDate = $request->filled('date')
             ? Carbon::parse($request->input('date'))->toDateString()
             : Carbon::today()->toDateString();
@@ -155,6 +158,10 @@ class WarehouseDashboardController extends Controller
             },
         ])
             ->whereDate('created_at', $selectedDate);
+
+        if ($managedWarehouseId && $currentUser?->hasRole('warehouse')) {
+            $ordersQuery->where('warehouse_id', $managedWarehouseId);
+        }
 
         if (!empty($status)) {
             $ordersQuery->where('status', $status);
@@ -472,6 +479,12 @@ class WarehouseDashboardController extends Controller
                 $receivedTotalWeight += $receivedWeight;
             }
 
+            if (Schema::hasColumn('orders', 'warehouse_id')) {
+                $order->update([
+                    'warehouse_id' => $transfer->target_warehouse_id,
+                ]);
+            }
+
             $packedTotalWeight = (float) ($transfer->packed_total_weight ?? 0);
             $weightLoss = round($packedTotalWeight - $receivedTotalWeight, 3);
 
@@ -498,6 +511,57 @@ class WarehouseDashboardController extends Controller
         });
 
         return back()->with('success', 'Đã tiếp nhận hàng điều chuyển, tạo phiếu nhập kho và cập nhật tồn kho thành công.');
+    }
+
+    public function rollbackIncomingTransfer(Request $request, WarehouseTransfer $transfer)
+    {
+        if ($transfer->status !== WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE) {
+            return back()->with('error', 'Phiếu điều chuyển không còn ở trạng thái chờ tiếp nhận.');
+        }
+
+        $managedWarehouseId = Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
+        if ($managedWarehouseId && (int) $transfer->target_warehouse_id !== $managedWarehouseId) {
+            return back()->with('error', 'Bạn chỉ có thể hoàn lại phiếu điều chuyển của kho mình quản lý.');
+        }
+
+        $validated = $request->validate([
+            'rollback_note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $transfer->loadMissing(['order', 'sourceWarehouse', 'targetWarehouse']);
+        $order = $transfer->order;
+
+        $reason = trim((string) ($validated['rollback_note'] ?? ''));
+        $noteParts = [
+            'Hoan lai truoc khi nhap kho (giu nguyen trang dieu chuyen).',
+            'Can xem xet nghiep vu dieu chinh kho neu co chenh lech.',
+        ];
+
+        if ($reason !== '') {
+            $noteParts[] = 'Ly do: ' . $reason;
+        }
+
+        $transfer->update([
+            'status' => WarehouseTransfer::STATUS_CANCELLED,
+            'note' => implode(' | ', $noteParts),
+        ]);
+
+        if ($order) {
+            OrderHistory::create([
+                'order_id' => $order->id,
+                'action' => 'warehouse_transfer_rolled_back_before_receive',
+                'user_id' => Auth::id(),
+                'role' => 'warehouse',
+                'status_before' => $order->status,
+                'status_after' => $order->status,
+                'note' => 'Hoan lai phieu dieu chuyen #' . $transfer->id
+                    . ' truoc khi nhap kho. Kho gui: ' . ($transfer->sourceWarehouse?->name ?? 'N/A')
+                    . '; Kho nhan: ' . ($transfer->targetWarehouse?->name ?? 'N/A')
+                    . ($reason !== '' ? '; Ly do: ' . $reason : ''),
+            ]);
+        }
+
+        return back()->with('success', 'Đã hoàn lại phiếu điều chuyển trước khi nhập kho.');
     }
 
     /**
