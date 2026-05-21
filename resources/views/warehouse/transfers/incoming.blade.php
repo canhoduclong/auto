@@ -127,7 +127,7 @@
                     <div class="card-header bg-white d-flex justify-content-between align-items-center gap-2">
                         <div>
                             <div class="fw-semibold">{{ $order?->customer?->name ?? 'Khách hàng' }}</div>
-                            <div class="small text-muted">{{ $order?->code ?? ('#' . $transfer->order_id) }}, {{ optional($transfer->delivered_at)->format('d/m/Y H:i') ?: '—' }}, {{ $transfer->sourceWarehouse?->name ?? '—' }}</div>
+                            <div class="small text-muted">{{ $order?->code ?? ('#' . $transfer->order_id) }}, {{ optional($transfer->delivered_at)->format('d/m/Y H:i') ?: '—' }}</div>
                             
                         </div>
                         <span class="badge {{ $statusMeta[1] }}">{{ $statusMeta[0] }}</span>
@@ -137,12 +137,12 @@
                         <div class="row g-2 mb-3 small"> 
                             <div class="col-12 col-md-6">
                                 <div class="text-muted">KL tiếp nhận</div>
-                                <div class="fw-semibold">{{ $transfer->received_total_weight !== null ? number_format((float) $transfer->received_total_weight, 3, ',', '.') . ' kg' : '—' }}</div>
+                                <div class="fw-semibold">{{ $transfer->received_total_weight !== null ? format_kg((float) $transfer->received_total_weight) : '—' }}</div>
                             </div>
                             <div class="col-12 col-md-6">
                                 <div class="text-muted">Hao hụt</div>
                                 <div class="fw-semibold {{ (float) ($transfer->weight_loss ?? 0) > 0 ? 'text-danger' : 'text-success' }}">
-                                    {{ $transfer->weight_loss !== null ? number_format((float) $transfer->weight_loss, 3, ',', '.') . ' kg' : '—' }}
+                                    {{ $transfer->weight_loss !== null ? format_kg((float) $transfer->weight_loss) : '—' }}
                                 </div>
                             </div>
                         </div>
@@ -191,7 +191,7 @@
                                                 <div class="wh-item-cell"><strong>{{ $formattedVariantSize }}</strong></div>
                                                 <div class="wh-item-cell"><strong>{{ number_format($orderedQty) }}</strong></div>
                                                 <div class="wh-item-cell"><strong>{{ $item->display_total_label ?? '—' }}</strong></div>
-                                                <div class="wh-item-cell text-end"><strong>{{ number_format($itemWeight, 3, ',', '.') }} kg</strong></div>
+                                                <div class="wh-item-cell text-end"><strong>{{ format_kg($itemWeight) }}</strong></div>
                                             </div>
                                         </li>
                                     @endforeach
@@ -201,8 +201,8 @@
                     </div>
 
                     <div class="card-footer bg-white border-top d-flex justify-content-between align-items-center gap-2">
-                        <div class="byshipper fw-semibold">
-                            {{ $transfer->shipper?->name ?? '—' }}
+                        <div class="byshipper" style="font-size:.8rem;">
+                            Từ kho: <strong>{{ $transfer->sourceWarehouse?->name ?? '—' }}</strong>, bởi :<strong>{{ $transfer->shipper?->name ?? '—' }}</strong>
                         </div>
                         <div class="actions">
                         @if($canConfirm)
