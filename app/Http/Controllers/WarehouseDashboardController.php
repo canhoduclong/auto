@@ -2315,6 +2315,58 @@ class WarehouseDashboardController extends Controller
     }
 
     /**
+     * Exported orders list, grouped by export documents associated with order code.
+     */
+    public function exportedOrders(Request $request)
+    {
+        $query = InventoryDocument::query()
+            ->where('type', 'export')
+            ->with(['warehouse', 'user', 'items.productVariant.product'])
+            ->orderByDesc('document_date')
+            ->orderByDesc('id');
+
+        $warehouseId = Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
+        if ($warehouseId) {
+            $query->where('warehouse_id', $warehouseId);
+        }
+
+        $from = $request->input('from_date', Carbon::now()->subDays(30)->toDateString());
+        $to = $request->input('to_date', Carbon::now()->toDateString());
+        $query->whereBetween('document_date', [$from, $to]);
+
+        $documents = $query->get();
+
+        $exportRows = $documents->map(function (InventoryDocument $document) {
+            $note = (string) ($document->notes ?? '');
+            $orderCode = null;
+
+            if (preg_match('/(?:đơn|don)\s*#\s*([A-Za-z0-9\-]+)/iu', $note, $matches)) {
+                $orderCode = strtoupper(trim((string) ($matches[1] ?? '')));
+            }
+
+            if (!$orderCode) {
+                return null;
+            }
+
+            $order = Order::query()
+                ->with(['customer', 'shipper', 'items.variant.product'])
+                ->whereRaw('UPPER(code) = ?', [$orderCode])
+                ->first();
+
+            if (!$order) {
+                return null;
+            }
+
+            return [
+                'document' => $document,
+                'order' => $order,
+            ];
+        })->filter()->values();
+
+        return view('warehouse.stock-out.orders', compact('exportRows', 'from', 'to'));
+    }
+
+    /**
      * Store a new Phiếu Xuất Kho (export document).
      */
     public function storeStockOut(Request $request)

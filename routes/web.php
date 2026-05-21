@@ -242,6 +242,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/stock-in/{document}/edit', [WarehouseDashboardController::class, 'editStockIn'])->name('stock-in.edit');
         Route::put('/stock-in/{document}', [WarehouseDashboardController::class, 'updateStockIn'])->name('stock-in.update');
         Route::get('/stock-out',         [WarehouseDashboardController::class, 'stockOut'])->name('stock-out');
+        Route::get('/stock-out/orders',  [WarehouseDashboardController::class, 'exportedOrders'])->name('stock-out.orders');
         Route::post('/stock-out',        [WarehouseDashboardController::class, 'storeStockOut'])->name('stock-out.store');
         Route::get('/stock-out/{document}', [WarehouseDashboardController::class, 'showDocument'])->name('stock-out.show');
         Route::get('/inventory',   [WarehouseDashboardController::class, 'inventory'])->name('inventory');

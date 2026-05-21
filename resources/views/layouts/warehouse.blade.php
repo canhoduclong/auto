@@ -225,6 +225,9 @@
             <a href="{{ route('warehouse.stock-out') }}" class="wh-nav-link {{ request()->routeIs('warehouse.stock-out') ? 'active' : '' }}">
                 <i class="bi bi-box-arrow-right"></i> Xuất Kho
             </a>
+            <a href="{{ route('warehouse.stock-out.orders') }}" class="wh-nav-link {{ request()->routeIs('warehouse.stock-out.orders') ? 'active' : '' }}">
+                <i class="bi bi-receipt-cutoff"></i> Đơn Xuất Kho
+            </a>
             <a href="{{ route('warehouse.inventory') }}" class="wh-nav-link {{ request()->routeIs('warehouse.inventory') ? 'active' : '' }}">
                 <i class="bi bi-stack"></i> Tồn Kho
             </a>
