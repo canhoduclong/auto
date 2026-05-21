@@ -226,8 +226,14 @@ class ProductController extends Controller
                 'gallery'     => 'nullable|array',
                 'gallery.*'   => 'integer|exists:media,id',
                 'variants'    => 'nullable|array',
+                'variants.*.sku' => 'nullable|string|max:255',
+                'variants.*.size' => 'nullable|string|max:255',
                 'variants.*.kg' => 'nullable|numeric|gt:0',
                 'variants.*.is_priced_by_kg' => 'nullable|boolean',
+                'variants.*.quality' => 'nullable|string|max:255',
+                'variants.*.production_date' => 'nullable|date',
+                'variants.*.stock' => 'nullable|integer|min:0',
+                'variants.*.media_id' => 'nullable|integer|exists:media,id',
             ]);
 
             // ===== Cập nhật thông tin cơ bản =====
@@ -276,17 +282,20 @@ class ProductController extends Controller
             $keepIds = [];
 
             foreach ($inputVariants as $variantId => $variantData) {
+                $rawSku = isset($variantData['sku']) ? trim((string) $variantData['sku']) : '';
+                $skuFromInput = $rawSku !== '' ? $rawSku : null;
+
                 if (is_numeric($variantId)) {
                     // Biến thể cũ
                     $variant = ProductVariant::updateOrCreate(
                         ['id' => $variantId, 'product_id' => $product->id],
                         [
-                            'sku'             => $variantData['sku'] ?? Str::upper(Str::random(10)),
+                            'sku'             => $skuFromInput ?: ProductVariant::where('id', $variantId)->value('sku') ?: Str::upper(Str::random(10)),
                             'size'            => $variantData['size'] ?? null,
                             'kg'              => isset($variantData['kg']) ? (float) $variantData['kg'] : 1,
                             'is_priced_by_kg' => (bool) ($variantData['is_priced_by_kg'] ?? true),
-                            'quality'         => $variantData['quality'] ?? null,
-                            'production_date' => $variantData['production_date'] ?? null,
+                            'quality'         => array_key_exists('quality', $variantData) ? $variantData['quality'] : ProductVariant::where('id', $variantId)->value('quality'),
+                            'production_date' => array_key_exists('production_date', $variantData) ? $variantData['production_date'] : ProductVariant::where('id', $variantId)->value('production_date'),
                             'stock'           => $variantData['stock'] ?? 0,
                         ]
                     );
@@ -295,7 +304,7 @@ class ProductController extends Controller
                     // Biến thể mới
                     $variant = ProductVariant::create([
                         'product_id'       => $product->id,
-                        'sku'              => $variantData['sku'] ?? Str::upper(Str::random(10)),
+                        'sku'              => $skuFromInput ?? Str::upper(Str::random(10)),
                         'size'             => $variantData['size'] ?? null,
                         'kg'               => isset($variantData['kg']) ? (float) $variantData['kg'] : 1,
                         'is_priced_by_kg'  => (bool) ($variantData['is_priced_by_kg'] ?? true),

@@ -1,10 +1,223 @@
 @extends('layouts.app')
 
+@push('styles')
+<style>
+    .edit-product-shell {
+        width: 100%;
+    }
+
+    .page-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 14px;
+    }
+
+    .page-head h4 {
+        margin: 0;
+        font-weight: 700;
+        color: #0f172a;
+    }
+
+    .page-head .sub {
+        margin-top: 4px;
+        color: #64748b;
+        font-size: .88rem;
+    }
+
+    .form-section {
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        background: #ffffff;
+        padding: 14px;
+        margin-bottom: 14px;
+    }
+
+    .section-title {
+        font-size: .82rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        color: #475569;
+        margin-bottom: 10px;
+    }
+
+    .form-label {
+        font-weight: 600;
+        color: #1e293b;
+        margin-bottom: .35rem;
+    }
+
+    .media-panel {
+        border: 1px dashed #cbd5e1;
+        border-radius: 10px;
+        padding: 12px;
+        background: #f8fafc;
+        height: 100%;
+    }
+
+    .description-panel {
+        border: 1px dashed #cbd5e1;
+        border-radius: 10px;
+        background: #f8fafc;
+        padding: 12px;
+        height: 100%;
+    }
+
+    .description-panel textarea {
+        min-height: 210px;
+        resize: vertical;
+    }
+
+    .gallery-item img {
+        width: 84px;
+        height: 84px;
+        object-fit: cover;
+        border: 1px solid #e2e8f0;
+    }
+
+    .variant-section {
+        padding-top: 12px;
+    }
+
+    .variant-headbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 10px;
+    }
+
+    .variant-headbar p {
+        margin: 0;
+        color: #64748b;
+        font-size: .82rem;
+    }
+
+    .variant-count-badge {
+        font-size: .74rem;
+        font-weight: 700;
+        border: 1px solid #cbd5e1;
+        color: #334155;
+        background: #f8fafc;
+        border-radius: 999px;
+        padding: 4px 10px;
+    }
+
+    .variant-block {
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        background: #fff;
+        padding: 12px;
+    }
+
+    .variant-list {
+        display: grid;
+        gap: 10px;
+    }
+
+    .variant-item {
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        background: #fcfdff;
+        padding: 10px;
+    }
+
+    .variant-grid {
+        display: grid;
+        grid-template-columns: 1.2fr .8fr .9fr .7fr 1fr 1.1fr;
+        gap: 10px;
+        align-items: start;
+    }
+
+    .variant-cell-label {
+        display: block;
+        margin-bottom: 4px;
+        font-size: .72rem;
+        font-weight: 700;
+        letter-spacing: .05em;
+        text-transform: uppercase;
+        color: #64748b;
+    }
+
+    .variant-grid .form-control {
+        font-size: .86rem;
+    }
+
+    .variant-image-preview img {
+        width: 52px;
+        height: 52px;
+        object-fit: cover;
+        border: 1px solid #e5e7eb;
+    }
+
+    .variant-select-image-btn {
+        width: 100%;
+    }
+
+    .variant-actions {
+        display: grid;
+        gap: 6px;
+    }
+
+    .variant-actions .btn {
+        width: 100%;
+        white-space: nowrap;
+    }
+
+    .variant-toolbar {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 10px;
+    }
+
+    .action-bar {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        padding-top: 4px;
+    }
+
+    .action-bar .btn {
+        min-width: 120px;
+    }
+
+    @media (max-width: 991.98px) {
+        .variant-grid {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .variant-grid .variant-cell.variant-cell-actions {
+            grid-column: 1 / -1;
+        }
+
+        .variant-grid .variant-cell.variant-cell-image {
+            grid-column: 1 / -1;
+        }
+
+        .action-bar {
+            flex-wrap: wrap;
+        }
+
+        .action-bar .btn {
+            min-width: 0;
+            flex: 1 1 auto;
+        }
+    }
+</style>
+@endpush
+
 @section('content')
-<div class="container">
-    <div class="row justify-content-center">
-        <div class="col-md-12">
-            <h4 class="mb-0">Chỉnh sửa sản phẩm</h4> 
+<div class="content">
+    <div class="edit-product-shell">
+            <div class="page-head">
+                <div>
+                    <h4>Chỉnh sửa sản phẩm</h4>
+                    <div class="sub">Cập nhật thông tin, hình ảnh và biến thể trong cùng một màn hình.</div>
+                </div>
+                <a href="{{ route('products.index') }}" class="btn btn-outline-secondary btn-sm">Quay lại danh sách</a>
+            </div>
 
             {{-- Hiển thị lỗi --}}
             @if ($errors->any())
@@ -22,187 +235,197 @@
                 @csrf
                 @method('PUT')
 
-                {{-- Tên sản phẩm --}}
-                <div class="mb-3">
-                    <label for="name" class="form-label">Tên sản phẩm <span class="text-danger">*</span></label>
-                    <input type="text" 
-                           name="name" 
-                           id="name" 
-                           class="form-control @error('name') is-invalid @enderror" 
-                           value="{{ old('name', $product->name) }}" 
-                           required>
-                    @error('name')
-                        <div class="invalid-feedback">{{ $message }}</div>
-                    @enderror
-                </div>
-
-                {{-- Danh mục --}}
-                <div class="mb-3">
-                    <label for="category_id" class="form-label">Danh mục <span class="text-danger">*</span></label>
-                    <select name="category_id" id="category_id" 
-                            class="form-select @error('category_id') is-invalid @enderror" required>
-                        <option value="">-- Chọn danh mục --</option>
-                        @foreach($categories as $category)
-                            <option value="{{ $category->id }}"
-                                {{ old('category_id', $product->category_id) == $category->id ? 'selected' : '' }}>
-                                {{ $category->name }}
-                            </option>
-                        @endforeach
-                    </select>
-                    @error('category_id')
-                        <div class="invalid-feedback">{{ $message }}</div>
-                    @enderror
-                </div>
-
-                <div class="mb-3">
-                    <label for="brand_id" class="form-label">Brand</label>
-                    <select name="brand_id" id="brand_id" class="form-select @error('brand_id') is-invalid @enderror">
-                        <option value="">-- Select a brand --</option>
-                        @foreach($brands as $brand)
-                            <option value="{{ $brand->id }}"
-                                {{ old('brand_id', $product->brand_id) == $brand->id ? 'selected' : '' }}>
-                                {{ $brand->name }}
-                            </option>
-                        @endforeach
-                    </select>
-                    @error('brand_id')
-                        <div class="invalid-feedback">{{ $message }}</div>
-                    @enderror
-                </div>
-
-                <div class="mb-3">
-                    <label for="unit" class="form-label">Đơn vị tính <span class="text-danger">*</span></label>
-                    <select name="unit" id="unit" class="form-select @error('unit') is-invalid @enderror" required>
-                        @foreach($unitOptions as $value => $label)
-                            <option value="{{ $value }}" {{ old('unit', $product->unit ?? 'cai') === $value ? 'selected' : '' }}>{{ $label }}</option>
-                        @endforeach
-                    </select>
-                    @error('unit')
-                        <div class="invalid-feedback">{{ $message }}</div>
-                    @enderror
-                </div>
-
-
-
-                {{-- Ảnh đại diện --}}
-                <div class="form-group">
-                    <label>Ảnh đại diện</label>
-                    <div>
-                        <button type="button" class="btn btn-primary" id="btnSelectMedia">
-                            Chọn ảnh
-                        </button>
-                        <input type="hidden" name="media_id" id="media_id"
-                            value="{{ old('media_id', $product->avatar->media_id ?? '') }}">
-                    </div>
-                    <div id="mediaPreview" style="margin-top:10px;">
-                        @if(!empty($product->avatar) && $product->avatar->media)
-                            <img src="{{ asset('storage/'.$product->avatar->media->file_path) }}"
-                                 width="120" class="img-thumbnail">
-                        @endif
-                    </div>
-                </div>
-
-                {{-- Gallery --}}
-                <div class="mt-3">
-                    <label>Gallery</label>
-                    <button type="button" data-bs-toggle="modal" data-bs-target="#mediaGalleryModal">
-                        Chọn ảnh
-                    </button>
-                    <div id="gallery-preview" class="mt-2 d-flex flex-wrap gap-2">
-                        @foreach($product->gallery as $link)
-                            @if($link->media)
-                                <div class="gallery-item position-relative" data-id="{{ $link->media->id }}">
-                                    <img src="{{ asset('storage/' . $link->media->file_path) }}" width="80" class="rounded">
-                                    <button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0 remove-gallery">&times;</button>
+                <div class="form-section">
+                    <div class="section-title">Thông Tin Cơ Bản</div>
+                    <div class="row g-3">
+                        <div class="col-xl-7">
+                            <div class="row g-3">
+                                <div class="col-lg-6">
+                                    <label for="name" class="form-label">Tên sản phẩm <span class="text-danger">*</span></label>
+                                    <input type="text"
+                                           name="name"
+                                           id="name"
+                                           class="form-control @error('name') is-invalid @enderror"
+                                           value="{{ old('name', $product->name) }}"
+                                           required>
+                                    @error('name')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
                                 </div>
-                            @endif
-                        @endforeach
+                                <div class="col-lg-6">
+                                    <label for="category_id" class="form-label">Danh mục <span class="text-danger">*</span></label>
+                                    <select name="category_id" id="category_id"
+                                            class="form-select @error('category_id') is-invalid @enderror" required>
+                                        <option value="">-- Chọn danh mục --</option>
+                                        @foreach($categories as $category)
+                                            <option value="{{ $category->id }}"
+                                                {{ old('category_id', $product->category_id) == $category->id ? 'selected' : '' }}>
+                                                {{ $category->name }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                    @error('category_id')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
+                                </div>
+                                <div class="col-lg-6">
+                                    <label for="brand_id" class="form-label">Brand</label>
+                                    <select name="brand_id" id="brand_id" class="form-select @error('brand_id') is-invalid @enderror">
+                                        <option value="">-- Select a brand --</option>
+                                        @foreach($brands as $brand)
+                                            <option value="{{ $brand->id }}"
+                                                {{ old('brand_id', $product->brand_id) == $brand->id ? 'selected' : '' }}>
+                                                {{ $brand->name }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                    @error('brand_id')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
+                                </div>
+                                <div class="col-lg-6">
+                                    <label for="unit" class="form-label">Đơn vị tính <span class="text-danger">*</span></label>
+                                    <select name="unit" id="unit" class="form-select @error('unit') is-invalid @enderror" required>
+                                        @foreach($unitOptions as $value => $label)
+                                            <option value="{{ $value }}" {{ old('unit', $product->unit ?? 'cai') === $value ? 'selected' : '' }}>{{ $label }}</option>
+                                        @endforeach
+                                    </select>
+                                    @error('unit')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-xl-5">
+                            <div class="description-panel">
+                                <label for="description" class="form-label">Mô tả</label>
+                                <textarea name="description"
+                                          id="description"
+                                          rows="8"
+                                          class="form-control @error('description') is-invalid @enderror">{{ old('description', $product->description) }}</textarea>
+                                @error('description')
+                                    <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                            </div>
+                        </div>
                     </div>
-                    <input type="hidden" name="gallery_ids" id="gallery-ids">
+                </div>
+
+                <div class="form-section">
+                    <div class="section-title">Hình Ảnh</div>
+                    <div class="row g-3">
+                        <div class="col-lg-4">
+                            <div class="media-panel">
+                                <label class="form-label mb-2">Ảnh đại diện</label>
+                                <div>
+                                    <button type="button" class="btn btn-primary btn-sm" id="btnSelectMedia">Chọn ảnh</button>
+                                    <input type="hidden" name="media_id" id="media_id"
+                                        value="{{ old('media_id', $product->avatar->media_id ?? '') }}">
+                                </div>
+                                <div id="mediaPreview" class="mt-2">
+                                    @if(!empty($product->avatar) && $product->avatar->media)
+                                        <img src="{{ asset('storage/'.$product->avatar->media->file_path) }}"
+                                             width="120" class="img-thumbnail">
+                                    @endif
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-8">
+                            <div class="media-panel">
+                                <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+                                    <label class="form-label mb-0">Gallery</label>
+                                    <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#mediaGalleryModal">Chọn ảnh</button>
+                                </div>
+                                <div id="gallery-preview" class="mt-2 d-flex flex-wrap gap-2">
+                                    @foreach($product->gallery as $link)
+                                        @if($link->media)
+                                            <div class="gallery-item position-relative" data-id="{{ $link->media->id }}">
+                                                <img src="{{ asset('storage/' . $link->media->file_path) }}" width="80" class="rounded">
+                                                <button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0 remove-gallery">&times;</button>
+                                            </div>
+                                        @endif
+                                    @endforeach
+                                </div>
+                                <input type="hidden" name="gallery_ids" id="gallery-ids">
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 {{-- Biến thể --}}
-                <div class="mb-3 mt-4">
-                    <label class="form-label">Biến thể</label>
-                    <table class="table table-bordered table-sm align-top" id="variant-table">
-                        <thead class="table-light">
-                            <tr>
-                                <th style="min-width:110px">SKU</th>
-                                <th style="min-width:80px">Size</th>
-                                <th style="width:80px">Kg</th>
-                                <th style="width:70px" class="text-center">Theo Kg</th>
-                                <th style="min-width:100px">Chất lượng</th>
-                                <th style="width:130px">Ngày SX</th>
-                                <th style="width:90px">Hình ảnh</th>
-                                <th style="width:130px"></th>
-                            </tr>
-                        </thead>
-                        <tbody>
+                <div class="form-section variant-section">
+                    <div class="variant-headbar">
+                        <div>
+                            <div class="section-title mb-1">Biến Thể Sản Phẩm</div>
+                            <p>Quản lý SKU, kích thước, khối lượng quy đổi và ảnh theo từng biến thể.</p>
+                        </div>
+                        <span class="variant-count-badge">Tổng biến thể: <span id="variant-count">{{ $product->variants->count() }}</span></span>
+                    </div>
+                    <div class="variant-block">
+                        <div id="variant-list" class="variant-list">
                             @foreach($product->variants as $variant)
-                            <tr data-variant-id="{{ $variant->id }}">
-                                {{-- key là id => server dùng để nhận diện existing variant --}}
-                                <td>
-                                    <input type="text" name="variants[{{ $variant->id }}][sku]" class="form-control" value="{{ old('variants.'.$variant->id.'.sku', $variant->sku) }}">
-                                </td>
-                                <td>
-                                    <input type="text" name="variants[{{ $variant->id }}][size]" class="form-control"
-                                        value="{{ old('variants.'.$variant->id.'.size', $variant->size) }}">
-                                </td>
-                                <td>
-                                    <input type="number" name="variants[{{ $variant->id }}][kg]" class="form-control" min="0.01" step="0.01"
-                                        value="{{ old('variants.'.$variant->id.'.kg', $variant->kg ?? 1) }}" required>
-                                </td>
-                                <td class="text-center">
-                                    <input type="checkbox" name="variants[{{ $variant->id }}][is_priced_by_kg]" value="1"
-                                        {{ old('variants.'.$variant->id.'.is_priced_by_kg', $variant->is_priced_by_kg ?? true) ? 'checked' : '' }}>
-                                </td>
-                                <td>
-                                    <input type="text" name="variants[{{ $variant->id }}][quality]" class="form-control"
-                                        value="{{ old('variants.'.$variant->id.'.quality', $variant->quality) }}">
-                                </td>
-                                <td>
-                                    <input type="date" name="variants[{{ $variant->id }}][production_date]" class="form-control"
-                                        value="{{ old('variants.'.$variant->id.'.production_date', $variant->production_date ? \Carbon\Carbon::parse($variant->production_date)->format('Y-m-d') : '') }}">
-                                </td>
-                                <td>
-                                    <div class="variant-image-preview mb-1">
-                                        @if($variant->media)
-                                            <img src="{{ asset('storage/' . $variant->media->file_path) }}" width="50" class="rounded">
-                                        @endif
+                            <div class="variant-item" data-variant-id="{{ $variant->id }}">
+                                <div class="variant-grid">
+                                    <div class="variant-cell">
+                                        <label class="variant-cell-label">SKU</label>
+                                        <input type="text" name="variants[{{ $variant->id }}][sku]" class="form-control" value="{{ old('variants.'.$variant->id.'.sku', $variant->sku) }}">
                                     </div>
-                                    <div>
+                                    <div class="variant-cell">
+                                        <label class="variant-cell-label">Size</label>
+                                        <input type="text" name="variants[{{ $variant->id }}][size]" class="form-control" value="{{ old('variants.'.$variant->id.'.size', $variant->size) }}">
+                                    </div>
+                                    <div class="variant-cell">
+                                        <label class="variant-cell-label">Số Kg quy đổi</label>
+                                        <input type="number" name="variants[{{ $variant->id }}][kg]" class="form-control" min="0.01" step="0.01" value="{{ old('variants.'.$variant->id.'.kg', $variant->kg ?? 1) }}" required>
+                                    </div>
+                                    <div class="variant-cell">
+                                        <label class="variant-cell-label">Theo Kg</label>
+                                        <div class="form-check mt-2">
+                                            <input type="checkbox" class="form-check-input" name="variants[{{ $variant->id }}][is_priced_by_kg]" value="1" {{ old('variants.'.$variant->id.'.is_priced_by_kg', $variant->is_priced_by_kg ?? true) ? 'checked' : '' }}>
+                                        </div>
+                                    </div>
+                                    <div class="variant-cell variant-cell-image">
+                                        <label class="variant-cell-label">Hình ảnh</label>
+                                        <div class="variant-image-preview mb-1">
+                                            @if($variant->media)
+                                                <img src="{{ asset('storage/' . $variant->media->file_path) }}" width="50" class="rounded">
+                                            @endif
+                                        </div>
                                         <input type="hidden" name="variants[{{ $variant->id }}][media_id]" id="variant-media-id-{{ $variant->id }}" value="{{ old('variants.'.$variant->id.'.media_id', $variant->media_id ?? '') }}">
-                                        <button type="button" class="btn btn-sm btn-secondary select-variant-image" data-variant-id="{{ $variant->id }}">Chọn ảnh</button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary variant-select-image-btn select-variant-image" data-variant-id="{{ $variant->id }}">Chọn hình ảnh</button>
                                     </div>
-                                </td>
-                                <td>
-                                    <button type="button" class="btn btn-danger btn-sm remove-variant">X</button>
-                                    {{-- nút điều chỉnh giá --}}
-                                    <a href="{{ route('variants.edit-price', $variant->id) }}" class="btn btn-sm btn-warning mt-1">Điều chỉnh giá</a>
-                                    <button type="button" class="btn btn-info btn-sm mt-1 clone-variant" title="Nhân bản biến thể" data-variant-id="{{ $variant->id }}">Nhân bản</button>
-                                    <button type="button" class="btn btn-success btn-sm mt-1 quick-edit-variant" title="Sửa nhanh" data-variant-id="{{ $variant->id }}">Sửa nhanh</button>
-                                </td>
-                            </tr>
+                                    <div class="variant-cell variant-cell-actions">
+                                        <label class="variant-cell-label">Thao tác</label>
+                                        <div class="variant-actions">
+                                            <button type="button" class="btn btn-danger btn-sm remove-variant">Xóa</button>
+                                            <a href="{{ route('variants.edit-price', $variant->id) }}" class="btn btn-sm btn-warning">Điều chỉnh giá</a>
+                                            <button type="button" class="btn btn-info btn-sm clone-variant" title="Nhân bản biến thể" data-variant-id="{{ $variant->id }}">Nhân bản</button>
+                                            <button type="button" class="btn btn-success btn-sm quick-edit-variant" title="Sửa nhanh" data-variant-id="{{ $variant->id }}">Sửa nhanh</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                             @endforeach
-                        </tbody>
-
-                    </table>
-                    <button type="button" class="btn btn-primary btn-sm" id="addVariant">+ Thêm biến thể</button>
+                        </div>
+                        <div class="variant-toolbar">
+                            <button type="button" class="btn btn-primary btn-sm" id="addVariant">+ Thêm biến thể</button>
+                        </div>
+                    </div>
                                 <!-- Modal riêng cho chọn ảnh biến thể -->
                                 <div class="modal fade" id="variantImageModal" tabindex="-1" aria-labelledby="variantImageModalLabel" aria-hidden="true">
                                                         <div class="modal-dialog modal-lg">
                                                             <div class="modal-content">
                                                                 <div class="modal-header">
-                                                                    <h5 class="modal-title" id="variantImageModalLabel">Quản trị hình ảnh biến thể</h5>
+                                                                    <h5 class="modal-title" id="variantImageModalLabel">Chọn hình ảnh biến thể</h5>
                                                                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                                                                 </div>
                                                                 <div class="modal-body">
                                                                     <div id="variant-image-manager" class="mb-3 text-center">
                                                                         <div id="variant-image-preview-modal" class="mb-2"></div>
-                                                                        <button type="button" class="btn btn-primary" id="btnSelectVariantImageFromLibrary">Chọn ảnh từ thư viện</button>
+                                                                            <button type="button" class="btn btn-outline-secondary" id="btnSelectVariantImageFromLibrary">Hiển thị thư viện hình ảnh</button>
                                                                         <input type="hidden" id="variant-image-modal-media-id">
                                                                     </div>
-                                                                    <div id="variant-image-library-container" style="display:none">
+                                                                        <div id="variant-image-library-container">
                                                                           <iframe id="variantImageIframe" src="{{ route('variants.image-library') }}" frameborder="0" style="width:100%; height:400px;"></iframe>
                                                                     </div>
                                                                 </div>
@@ -215,29 +438,14 @@
                                                     </div>
                 </div>
 
-                {{-- Mô tả --}}
-                <div class="mb-3">
-                    <label for="description" class="form-label">Mô tả</label>
-                    <textarea name="description" 
-                              id="description" 
-                              rows="3" 
-                              class="form-control @error('description') is-invalid @enderror">{{ old('description', $product->description) }}</textarea>
-                    @error('description')
-                        <div class="invalid-feedback">{{ $message }}</div>
-                    @enderror
-                </div>
-
                 {{-- Nút submit --}}
-                <div class="d-flex justify-content-end">
+                <div class="action-bar">
                     <button type="submit" class="btn btn-primary me-2">Cập nhật sản phẩm</button> 
                     <a href="{{ route('products.index') }}" class="btn btn-secondary me-2">Hủy</a>  
                 </div>
             </form>
-        </div>
     </div>
 </div>
-
-{{-- Modal Avatar --}}
 <div class="modal fade" id="mediaModal" tabindex="-1" role="dialog">
   <div class="modal-dialog modal-xl" role="document">
     <div class="modal-content">
@@ -350,37 +558,68 @@ document.addEventListener('DOMContentLoaded', function () {
     var addVariantBtn = document.getElementById('addVariant');
     if (addVariantBtn) {
         addVariantBtn.addEventListener('click', function () {
-            let tbody = document.querySelector('#variant-table tbody');
+            let variantList = document.getElementById('variant-list');
             let index = Date.now();
-            let row = `
-                <tr>
-                    <td><input type="text" name="variants[new_${index}][sku]" class="form-control"></td>
-                    <td><input type="text" name="variants[new_${index}][size]" class="form-control"></td>
-                    <td><input type="number" name="variants[new_${index}][kg]" class="form-control" min="0.01" step="0.01" value="1" required></td>
-                    <td class="text-center"><input type="checkbox" name="variants[new_${index}][is_priced_by_kg]" value="1" checked></td>
-                    <td><input type="text" name="variants[new_${index}][quality]" class="form-control"></td>
-                    <td><input type="date" name="variants[new_${index}][production_date]" class="form-control"></td>
-                    <td>
-                        <div class="variant-image-preview mb-1"></div>
-                        <div>
-                            <input type="hidden" name="variants[new_${index}][media_id]" id="variant-media-id-new_${index}">
-                            <button type="button" class="btn btn-sm btn-secondary select-variant-image" data-variant-id="new_${index}">Chọn ảnh</button>
+            let item = `
+                <div class="variant-item" data-variant-id="new_${index}">
+                    <div class="variant-grid">
+                        <div class="variant-cell">
+                            <label class="variant-cell-label">SKU</label>
+                            <input type="text" name="variants[new_${index}][sku]" class="form-control">
                         </div>
-                    </td>
-                    <td><button type="button" class="btn btn-danger btn-sm remove-variant">X</button></td>
-                </tr>`;
-            tbody.insertAdjacentHTML('beforeend', row);
+                        <div class="variant-cell">
+                            <label class="variant-cell-label">Size</label>
+                            <input type="text" name="variants[new_${index}][size]" class="form-control">
+                        </div>
+                        <div class="variant-cell">
+                            <label class="variant-cell-label">Số Kg quy đổi</label>
+                            <input type="number" name="variants[new_${index}][kg]" class="form-control" min="0.01" step="0.01" value="1" required>
+                        </div>
+                        <div class="variant-cell">
+                            <label class="variant-cell-label">Theo Kg</label>
+                            <div class="form-check mt-2">
+                                <input type="checkbox" class="form-check-input" name="variants[new_${index}][is_priced_by_kg]" value="1" checked>
+                            </div>
+                        </div>
+                        <div class="variant-cell variant-cell-image">
+                            <label class="variant-cell-label">Hình ảnh</label>
+                            <div class="variant-image-preview mb-1"></div>
+                            <input type="hidden" name="variants[new_${index}][media_id]" id="variant-media-id-new_${index}">
+                            <button type="button" class="btn btn-sm btn-outline-secondary variant-select-image-btn select-variant-image" data-variant-id="new_${index}">Chọn hình ảnh</button>
+                        </div>
+                        <div class="variant-cell variant-cell-actions">
+                            <label class="variant-cell-label">Thao tác</label>
+                            <div class="variant-actions">
+                                <button type="button" class="btn btn-danger btn-sm remove-variant">Xóa</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+            variantList.insertAdjacentHTML('beforeend', item);
+            updateVariantCount();
         });
     }
 
     // Xóa biến thể
     document.addEventListener('click', function(e) {
-        if (e.target.classList.contains('remove-variant')) {
-            e.target.closest('tr').remove();
+        const removeBtn = e.target.closest('.remove-variant');
+        if (removeBtn) {
+            removeBtn.closest('tr')?.remove();
+            updateVariantCount();
         }
     });
 
 });
+
+function updateVariantCount() {
+    const countNode = document.getElementById('variant-count');
+    const list = document.getElementById('variant-list');
+    if (!countNode || !list) {
+        return;
+    }
+
+    countNode.textContent = String(list.querySelectorAll('.variant-item').length);
+}
 
 function selectMedia(id, url) {
     document.getElementById('media_id').value = id;
@@ -435,7 +674,7 @@ window.addEventListener("message", function(event) {
         }
 
         if (libraryContainer) {
-            libraryContainer.style.display = 'none';
+              libraryContainer.style.display = '';
         }
     }
 });
@@ -509,7 +748,7 @@ document.addEventListener('click', function(e) {
         currentVariantId = e.target.dataset.variantId;
         window.__productEditCurrentVariantId = currentVariantId;
 
-        let preview = document.querySelector(`tr[data-variant-id="${currentVariantId}"] .variant-image-preview img`);
+        let preview = document.querySelector(`.variant-item[data-variant-id="${currentVariantId}"] .variant-image-preview img`);
         let mediaIdInput = document.getElementById('variant-media-id-' + currentVariantId);
         currentVariantImageUrl = preview ? preview.src : null;
         currentVariantMediaId = mediaIdInput ? mediaIdInput.value : null;
@@ -529,7 +768,7 @@ document.addEventListener('click', function(e) {
         }
 
         if (variantLibraryContainer) {
-            variantLibraryContainer.style.display = 'none';
+            variantLibraryContainer.style.display = '';
         }
 
         if (!window.bootstrap) {
@@ -550,6 +789,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const container = document.getElementById('variant-image-library-container');
             if (container) {
                 container.style.display = '';
+                container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             }
         });
     }
@@ -571,8 +811,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 input.value = mediaId;
             }
 
-            const preview = document.querySelector(`tr[data-variant-id="${currentVariantId}"] .variant-image-preview`)
-                || document.querySelector(`#variant-media-id-${currentVariantId}`)?.closest('td')?.querySelector('.variant-image-preview');
+            const preview = document.querySelector(`.variant-item[data-variant-id="${currentVariantId}"] .variant-image-preview`)
+                || document.querySelector(`#variant-media-id-${currentVariantId}`)?.closest('.variant-cell')?.querySelector('.variant-image-preview');
             if (preview && url) {
                 preview.innerHTML = `<img src="${url}" width="50" class="rounded">`;
             }

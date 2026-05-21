@@ -343,6 +343,13 @@
             <div class="content-inner"> 
                 @yield('content')
             </div>  
+
+            <div class="navbar navbar-sm navbar-footer border-top bg-white">
+                <div class="container-fluid">
+                    <span class="text-muted small">&copy; {{ date('Y') }} {{ config('app.name', 'Auto') }}</span>
+                    <span class="text-muted small">Admin Panel</span>
+                </div>
+            </div>
         </div>
        
         
