@@ -2,7 +2,7 @@
 
 @section('content')
 <div class="container">
-    <h4>Điều chỉnh giá - {{ $variant->product->name }} ({{ $variant->size }}, {{ $variant->quality }})</h4>
+    <h4>Điều chỉnh giá - {{ $variant->product->name }} ({{ $variant->size }},)</h4>
 
     <form action="{{ route('variants.update-price', $variant->id) }}" method="POST">
         @csrf
@@ -46,7 +46,9 @@
                 <th>Ngày</th>
                 <th>Giá cũ</th>
                 <th>Giá mới</th>
-                       <th>Giá Min</th>
+                   <th>Giá Min</th>
+                <th>Size</th>
+                <th>SKU</th>
                 <th>Người thay đổi</th>
                 <th>Lý do</th>
             </tr>
@@ -63,6 +65,8 @@
                 </td>
                 <td>{{ number_format($rule->price, 0, ',', '.') }}</td>
                    <td>{{ number_format((float) ($rule->min_price ?? 0), 0, ',', '.') }}</td>
+                <td>{{ $rule->size }}</td>
+                <td>{{ $rule->sku }}</td>
                 <td>{{ $log && $log->user ? $log->user->name : 'System' }}</td>
                 <td>{{ $rule->reason }}</td>
             </tr>
