@@ -89,17 +89,10 @@ class ProductController extends Controller
             'description' => 'nullable', 
             'category_id' => 'required|numeric',
             'brand_id' => 'nullable|numeric',
-            'stock' => 'required|numeric',
             'unit' => ['required', Rule::in(ProductUnit::values())],
             'media_id' => 'nullable|integer|exists:media,id',
         ]);
         $data['user_id'] = Auth::id();
-        
-        if (isset($data['price'])) {
-            $data['price'] = str_replace(',', '', $data['price']);
-        }else{
-            $data['price'] = 0;
-        }
 
         $product = Product::create($data);
 

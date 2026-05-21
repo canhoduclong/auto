@@ -139,35 +139,6 @@
                             @enderror
                         </div>
 
-                        {{-- Giá --}}
-                        <div class="mb-3">
-                            <label for="price" class="form-label">Giá <span class="text-danger">*</span></label>
-                            <input type="number" 
-                                   name="price" 
-                                   id="price" 
-                                   class="form-control @error('price') is-invalid @enderror" 
-                                   value="{{ old('price') }}" 
-                                   step="0.01" 
-                                   required>
-                            @error('price')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
-
-                        {{-- Giá --}}
-                        <div class="mb-3">
-                            <label for="price" class="form-label">Stock</label>
-                            <input type="number" 
-                                   name="stock" 
-                                   id="stock" 
-                                   class="form-control @error('stock') is-invalid @enderror" 
-                                   value="{{ old('stock') }}" 
-                                   step="0.01" >
-                            @error('stock')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
-
                         {{-- Nút submit --}}
                         <div class="d-flex justify-content-end">
                             <a href="{{ route('products.index') }}" class="btn btn-secondary me-2">Hủy</a>

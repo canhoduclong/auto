@@ -33,16 +33,30 @@ class ProductVariant extends Model
         });
     }
 
-    protected static function boot()
+    protected static function booted(): void
     {
-        parent::boot();
-
-        static::creating(function ($variant) {
-            if (empty($variant->slug)) {
-                $productName = $variant->product->name;
-                $attributes = $variant->values->pluck('value')->implode('-');
-                $variant->slug = Str::slug($productName . '-' . $attributes . '-' . time());
+        static::creating(function (ProductVariant $variant) {
+            if (!empty($variant->slug)) {
+                return;
             }
+
+            $productName = $variant->product?->name ?? 'variant';
+            $sku = $variant->sku ?? '';
+            $size = $variant->size ?? '';
+            $attributes = [$productName, $sku, $size];
+
+            $baseSlug = Str::slug(implode('-', array_filter($attributes, fn ($value) => filled($value))));
+            $baseSlug = $baseSlug !== '' ? $baseSlug : 'variant';
+
+            $slug = $baseSlug;
+            $suffix = 2;
+
+            while (static::where('slug', $slug)->exists()) {
+                $slug = $baseSlug . '-' . $suffix;
+                $suffix++;
+            }
+
+            $variant->slug = $slug;
         });
     }
  
