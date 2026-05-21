@@ -249,6 +249,9 @@
             <a href="{{ route('warehouse.returns') }}" class="wh-nav-link {{ request()->routeIs('warehouse.returns') ? 'active' : '' }}">
                 <i class="bi bi-arrow-return-left"></i> Đơn trả về
             </a>
+            <a href="{{ route('warehouse.transfers.incoming') }}" class="wh-nav-link {{ request()->routeIs('warehouse.transfers.incoming') ? 'active' : '' }}">
+                <i class="bi bi-box-arrow-in-down"></i> Tiếp nhận hàng
+            </a>
 
             <div class="wh-nav-section">Báo cáo</div>
             <a href="{{ route('warehouse.reports') }}" class="wh-nav-link {{ request()->routeIs('warehouse.reports') ? 'active' : '' }}">

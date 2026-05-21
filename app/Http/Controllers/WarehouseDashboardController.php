@@ -14,7 +14,10 @@ use App\Models\ProductVariant;
 use App\Models\Product;
 use App\Models\ReturnItem;
 use App\Models\Setting;
+use App\Models\User;
 use App\Models\Warehouse;
+use App\Models\WarehouseTransfer;
+use App\Notifications\WarehouseOrderAdjustmentRequested;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -216,7 +219,285 @@ class WarehouseDashboardController extends Controller
             ]);
         });
 
-        return view('warehouse.orders.index', compact('orders', 'selectedDate', 'status', 'quickDates', 'fifoRemainingStock', 'variantStock', 'stockPanelVariants'));
+        $orderIds = $orders->pluck('id')->all();
+        $activeTransfersByOrder = WarehouseTransfer::query()
+            ->with(['targetWarehouse:id,name', 'shipper:id,name'])
+            ->whereIn('order_id', $orderIds)
+            ->whereIn('status', [
+                WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
+                WarehouseTransfer::STATUS_IN_TRANSIT,
+                WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
+            ])
+            ->orderByDesc('id')
+            ->get()
+            ->unique('order_id')
+            ->keyBy('order_id');
+
+        $warehouses = Warehouse::query()->orderBy('name')->get(['id', 'name']);
+        $shippers = User::query()
+            ->whereHas('roles', function ($query) {
+                $query->whereIn('name', ['shipper', 'manager_shipper']);
+            })
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        return view('warehouse.orders.index', compact('orders', 'selectedDate', 'status', 'quickDates', 'fifoRemainingStock', 'variantStock', 'stockPanelVariants', 'activeTransfersByOrder', 'warehouses', 'shippers'));
+    }
+
+    public function createTransferRequest(Request $request, Order $order)
+    {
+        $request->validate([
+            'target_warehouse_id' => ['required', 'integer', 'exists:warehouses,id'],
+            'shipper_id' => ['required', 'integer', 'exists:users,id'],
+            'note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        if (!in_array($order->status, self::PACKED_STATUSES, true)) {
+            return back()->with('error', 'Chỉ có thể điều chuyển đơn đã đóng gói xong.');
+        }
+
+        $managedWarehouseId = Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
+
+        // Lấy kho nguồn từ order, nếu không có thì tìm từ lịch sử đóng gói
+        $sourceWarehouseId = (int) ($order->warehouse_id ?? 0);
+        if ($sourceWarehouseId <= 0) {
+            $order->loadMissing('histories.user');
+            $packingHistory = $order->histories
+                ->whereIn('action', ['complete_packing', 'warehouse_complete_packing'])
+                ->sortByDesc('id')
+                ->first();
+            $sourceWarehouseId = (int) ($packingHistory?->user?->warehouse_id ?? 0);
+        }
+        // Nếu vẫn không xác định được kho nguồn thì fallback vào kho của user hiện tại
+        if ($sourceWarehouseId <= 0 && $managedWarehouseId) {
+            $sourceWarehouseId = $managedWarehouseId;
+        }
+        if ($sourceWarehouseId <= 0) {
+            return back()->with('error', 'Không xác định được kho nguồn của đơn. Vui lòng kiểm tra lại thông tin đơn hàng.');
+        }
+        // Nếu đơn chưa có warehouse_id thì cập nhật luôn
+        if ((int) ($order->warehouse_id ?? 0) <= 0) {
+            $order->update(['warehouse_id' => $sourceWarehouseId]);
+        }
+
+        if ($managedWarehouseId && $managedWarehouseId !== $sourceWarehouseId) {
+            return back()->with('error', 'Bạn chỉ có thể tạo điều chuyển cho đơn thuộc kho mình quản lý.');
+        }
+
+        $targetWarehouseId = (int) $request->input('target_warehouse_id');
+        if ($targetWarehouseId === $sourceWarehouseId) {
+            return back()->with('error', 'Kho nhận phải khác kho gửi.');
+        }
+
+        $shipperId = (int) $request->input('shipper_id');
+        $shipper = User::query()
+            ->where('id', $shipperId)
+            ->whereHas('roles', function ($query) {
+                $query->whereIn('name', ['shipper', 'manager_shipper']);
+            })
+            ->first();
+
+        if (!$shipper) {
+            return back()->with('error', 'Người nhận vận chuyển không phải shipper hợp lệ.');
+        }
+
+        $activeTransfer = WarehouseTransfer::query()
+            ->where('order_id', $order->id)
+            ->whereIn('status', [
+                WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
+                WarehouseTransfer::STATUS_IN_TRANSIT,
+                WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
+            ])
+            ->exists();
+
+        if ($activeTransfer) {
+            return back()->with('error', 'Đơn này đang có phiếu điều chuyển chưa hoàn tất.');
+        }
+
+        $order->loadMissing('items');
+        $packedTotalWeight = (float) $order->items->sum(function ($item) {
+            return (float) ($item->packed_weight ?? $item->total_weight ?? 0);
+        });
+
+        $transfer = WarehouseTransfer::create([
+            'order_id' => $order->id,
+            'source_warehouse_id' => $sourceWarehouseId,
+            'target_warehouse_id' => $targetWarehouseId,
+            'shipper_id' => $shipperId,
+            'status' => WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
+            'note' => trim((string) $request->input('note', '')) ?: null,
+            'packed_total_weight' => $packedTotalWeight,
+        ]);
+
+        $targetWarehouse = Warehouse::query()->find($targetWarehouseId);
+
+        OrderHistory::create([
+            'order_id' => $order->id,
+            'action' => 'warehouse_transfer_requested',
+            'user_id' => Auth::id(),
+            'role' => 'warehouse',
+            'status_before' => $order->status,
+            'status_after' => $order->status,
+            'note' => 'Tạo phiếu điều chuyển #' . $transfer->id
+                . ' đến kho ' . ($targetWarehouse?->name ?? ('ID ' . $targetWarehouseId))
+                . ' và giao shipper ' . $shipper->name,
+        ]);
+
+        return back()->with('success', 'Đã tạo phiếu điều chuyển và chờ shipper nhận hàng.');
+    }
+
+    public function incomingTransfers()
+    {
+        $managedWarehouseId = Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
+
+        $transfers = WarehouseTransfer::query()
+            ->with([
+                'order.customer',
+                'order.items.variant.product',
+                'sourceWarehouse',
+                'targetWarehouse',
+                'shipper',
+            ])
+            ->when($managedWarehouseId, fn ($query) => $query->where('target_warehouse_id', $managedWarehouseId))
+            ->whereIn('status', [
+                WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
+                WarehouseTransfer::STATUS_RECEIVED_COMPLETED,
+            ])
+            ->orderByRaw("CASE WHEN status = 'delivered_waiting_receive' THEN 0 ELSE 1 END")
+            ->orderByDesc('delivered_at')
+            ->orderByDesc('id')
+            ->get();
+
+        return view('warehouse.transfers.incoming', compact('transfers', 'managedWarehouseId'));
+    }
+
+    public function confirmTransferReceipt(Request $request, WarehouseTransfer $transfer)
+    {
+        if ($transfer->status !== WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE) {
+            return back()->with('error', 'Phiếu điều chuyển không ở trạng thái chờ tiếp nhận.');
+        }
+
+        $managedWarehouseId = Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
+        if ($managedWarehouseId && (int) $transfer->target_warehouse_id !== $managedWarehouseId) {
+            return back()->with('error', 'Bạn chỉ có thể tiếp nhận hàng cho kho mình quản lý.');
+        }
+
+        $validated = $request->validate([
+            'item_weights' => ['required', 'array', 'min:1'],
+            'item_weights.*.order_item_id' => ['required', 'integer'],
+            'item_weights.*.received_weight' => ['required', 'numeric', 'min:0'],
+            'receive_note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $transfer->loadMissing(['order.items']);
+        $order = $transfer->order;
+        if (!$order) {
+            return back()->with('error', 'Không tìm thấy đơn hàng của phiếu điều chuyển.');
+        }
+
+        $orderItemsById = $order->items->keyBy('id');
+        $requiredIds = $order->items->pluck('id')->map(fn ($id) => (int) $id)->sort()->values();
+        $submittedIds = collect($validated['item_weights'])
+            ->pluck('order_item_id')
+            ->map(fn ($id) => (int) $id)
+            ->sort()
+            ->values();
+
+        if ($requiredIds->all() !== $submittedIds->all()) {
+            return back()->with('error', 'Vui lòng nhập đủ cân nặng tiếp nhận cho tất cả sản phẩm.')->withInput();
+        }
+
+        $receivedWeights = [];
+        $receivedTotalWeight = 0.0;
+
+        DB::transaction(function () use ($transfer, $order, $validated, $orderItemsById, &$receivedWeights, &$receivedTotalWeight): void {
+            $document = InventoryDocument::create([
+                'type' => 'import',
+                'document_date' => now()->toDateString(),
+                'warehouse_id' => $transfer->target_warehouse_id,
+                'notes' => 'Nhap kho dieu chuyen don #' . $order->code . ' [WHT#' . $transfer->id . ']',
+                'shipping_fee' => 0,
+                'user_id' => Auth::id(),
+            ]);
+
+            foreach ($validated['item_weights'] as $weightData) {
+                $orderItemId = (int) $weightData['order_item_id'];
+                $receivedWeight = round((float) $weightData['received_weight'], 3);
+                $orderItem = $orderItemsById->get($orderItemId);
+                if (!$orderItem) {
+                    continue;
+                }
+
+                $qty = (int) ($orderItem->quantity ?? 0);
+                if ($qty > 0) {
+                    $document->items()->create([
+                        'product_variant_id' => $orderItem->product_variant_id,
+                        'quantity' => $qty,
+                        'unit_cost' => (float) ($orderItem->price ?? 0),
+                    ]);
+
+                    $inventory = Inventory::firstOrCreate(
+                        [
+                            'product_variant_id' => $orderItem->product_variant_id,
+                            'warehouse_id' => $transfer->target_warehouse_id,
+                        ],
+                        ['quantity' => 0, 'reserved_quantity' => 0]
+                    );
+
+                    InventoryMovement::create([
+                        'inventory_id' => $inventory->id,
+                        'quantity' => $qty,
+                        'type' => 'import',
+                        'reference_id' => $document->id,
+                        'reference_type' => InventoryDocument::class,
+                        'user_id' => Auth::id(),
+                    ]);
+
+                    $inventory->increment('quantity', $qty);
+
+                    $totalStock = (int) Inventory::query()
+                        ->where('product_variant_id', $orderItem->product_variant_id)
+                        ->sum('quantity');
+
+                    ProductVariant::query()
+                        ->where('id', $orderItem->product_variant_id)
+                        ->update(['stock' => $totalStock]);
+                }
+
+                $receivedWeights[] = [
+                    'order_item_id' => $orderItemId,
+                    'product_variant_id' => (int) $orderItem->product_variant_id,
+                    'received_weight' => $receivedWeight,
+                ];
+                $receivedTotalWeight += $receivedWeight;
+            }
+
+            $packedTotalWeight = (float) ($transfer->packed_total_weight ?? 0);
+            $weightLoss = round($packedTotalWeight - $receivedTotalWeight, 3);
+
+            $transfer->update([
+                'status' => WarehouseTransfer::STATUS_RECEIVED_COMPLETED,
+                'import_document_id' => $document->id,
+                'received_by' => Auth::id(),
+                'received_at' => now(),
+                'received_weights' => $receivedWeights,
+                'received_total_weight' => round($receivedTotalWeight, 3),
+                'weight_loss' => $weightLoss,
+                'note' => trim((string) ($validated['receive_note'] ?? '')) ?: $transfer->note,
+            ]);
+
+            OrderHistory::create([
+                'order_id' => $order->id,
+                'action' => 'warehouse_transfer_received',
+                'user_id' => Auth::id(),
+                'role' => 'warehouse',
+                'status_before' => $order->status,
+                'status_after' => $order->status,
+                'note' => 'Kho da tiep nhan dieu chuyen #' . $transfer->id . ' | Hao hụt KL: ' . $weightLoss . ' kg',
+            ]);
+        });
+
+        return back()->with('success', 'Đã tiếp nhận hàng điều chuyển, tạo phiếu nhập kho và cập nhật tồn kho thành công.');
     }
 
     /**
@@ -224,6 +505,32 @@ class WarehouseDashboardController extends Controller
      */
     public function startPacking(Request $request, Order $order)
     {
+        if ($order->warehouse_adjustment_status === Order::WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION) {
+            $message = 'Đơn đang chờ sale xác nhận thay đổi từ kho. Tạm thời chưa thể đóng hàng.';
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => $message,
+                ], 422);
+            }
+
+            return back()->with('error', $message);
+        }
+
+        if ($order->warehouse_adjustment_status === Order::WAREHOUSE_ADJUSTMENT_STATUS_SALE_REJECTED) {
+            $message = 'Sale đã từ chối yêu cầu điều chỉnh. Vui lòng cập nhật lại và gửi yêu cầu mới trước khi đóng hàng.';
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => $message,
+                ], 422);
+            }
+
+            return back()->with('error', $message);
+        }
+
         if (!$order->created_at || !$order->created_at->isToday()) {
             $message = 'Chỉ được xử lý đơn có ngày hôm nay.';
 
@@ -907,11 +1214,194 @@ class WarehouseDashboardController extends Controller
         return back()->with('success', 'Đã cập nhật phí ship/thùng xốp cho đơn #' . $order->code);
     }
 
+    public function requestAdjustment(Request $request, Order $order)
+    {
+        if (!$order->created_at || !$order->created_at->isToday()) {
+            return back()->with('error', 'Chỉ được điều chỉnh đơn có ngày hôm nay.');
+        }
+
+        if ($order->status === Order::STATUS_PACKING) {
+            return back()->with('error', 'Đơn đang đóng hàng. Hãy đưa đơn về Chờ đóng gói trước khi gửi điều chỉnh.');
+        }
+
+        if (in_array($order->status, self::PACKED_STATUSES, true)) {
+            return back()->with('error', 'Đơn đã đóng gói xong, không thể điều chỉnh lại sản phẩm.');
+        }
+
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'max:2000'],
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.order_item_id' => ['required', 'integer'],
+            'items.*.quantity' => ['required', 'integer', 'min:0'],
+            'new_items' => ['nullable', 'array'],
+            'new_items.*.product_variant_id' => ['nullable', 'integer', 'exists:product_variants,id'],
+            'new_items.*.quantity' => ['nullable', 'integer', 'min:0'],
+        ]);
+
+        $order->loadMissing(['items.variant.product', 'user']);
+        $orderItemsById = $order->items->keyBy('id');
+        $newVariantIds = collect($validated['new_items'] ?? [])
+            ->pluck('product_variant_id')
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+        $variantsById = ProductVariant::query()
+            ->with('product')
+            ->whereIn('id', $newVariantIds->all())
+            ->get()
+            ->keyBy('id');
+
+        $changes = [];
+        $proposedQuantities = $order->items
+            ->mapWithKeys(fn ($item) => [(int) $item->product_variant_id => (int) ($item->quantity ?? 0)])
+            ->all();
+
+        foreach ($validated['items'] as $itemData) {
+            $orderItemId = (int) ($itemData['order_item_id'] ?? 0);
+            $newQuantity = (int) ($itemData['quantity'] ?? 0);
+
+            $orderItem = $orderItemsById->get($orderItemId);
+            if (!$orderItem) {
+                continue;
+            }
+
+            $variantId = (int) ($orderItem->product_variant_id ?? 0);
+            $oldQuantity = (int) ($orderItem->quantity ?? 0);
+            $proposedQuantities[$variantId] = $newQuantity;
+
+            if ($oldQuantity === $newQuantity) {
+                continue;
+            }
+
+            $changes[] = [
+                'order_item_id' => $orderItem->id,
+                'product_variant_id' => $variantId,
+                'product_name' => $orderItem->variant?->name ?? $orderItem->product?->name ?? 'San pham',
+                'sku' => $orderItem->variant?->sku,
+                'size' => $orderItem->variant?->size,
+                'old_quantity' => $oldQuantity,
+                'new_quantity' => $newQuantity,
+                'price' => (float) ($orderItem->price ?? 0),
+                'unit_weight' => (float) ($orderItem->unit_weight ?? 1),
+                'is_priced_by_kg' => (bool) ($orderItem->is_priced_by_kg ?? true),
+            ];
+        }
+
+        foreach (($validated['new_items'] ?? []) as $itemData) {
+            $variantId = (int) ($itemData['product_variant_id'] ?? 0);
+            $addQuantity = (int) ($itemData['quantity'] ?? 0);
+
+            if ($variantId <= 0 || $addQuantity <= 0) {
+                continue;
+            }
+
+            $variant = $variantsById->get($variantId);
+            if (!$variant) {
+                continue;
+            }
+
+            $oldQuantity = (int) ($proposedQuantities[$variantId] ?? 0);
+            $newQuantity = $oldQuantity + $addQuantity;
+            $proposedQuantities[$variantId] = $newQuantity;
+
+            $changes[] = [
+                'order_item_id' => null,
+                'product_variant_id' => $variant->id,
+                'product_name' => $variant->name ?? $variant->product?->name ?? 'San pham',
+                'sku' => $variant->sku,
+                'size' => $variant->size,
+                'old_quantity' => $oldQuantity,
+                'new_quantity' => $newQuantity,
+                'change_type' => $oldQuantity > 0 ? 'increase_existing' : 'added',
+                'price' => (float) ($variant->final_price ?? 0),
+                'unit_weight' => (float) ($variant->effective_kg ?? 1),
+                'is_priced_by_kg' => (bool) ($variant->effective_priced_by_kg ?? true),
+                'product_id' => (int) ($variant->product_id ?? 0),
+            ];
+        }
+
+        $remainingItems = collect($proposedQuantities)->filter(fn ($qty) => (int) $qty > 0)->count();
+        if ($remainingItems <= 0) {
+            return back()->with('error', 'Đơn hàng phải còn ít nhất 1 sản phẩm sau khi điều chỉnh.');
+        }
+
+        if (empty($changes)) {
+            return back()->with('error', 'Không có thay đổi nào về số lượng sản phẩm.');
+        }
+
+        $order->update([
+            'warehouse_adjustment_status' => Order::WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION,
+            'warehouse_adjustment_note' => trim((string) $validated['reason']),
+            'warehouse_adjustment_changes' => $changes,
+            'warehouse_adjustment_requested_by' => Auth::id(),
+            'warehouse_adjustment_requested_at' => now(),
+            'warehouse_adjustment_confirmed_by' => null,
+            'warehouse_adjustment_confirmed_at' => null,
+            'warehouse_adjustment_rejected_by' => null,
+            'warehouse_adjustment_rejected_at' => null,
+            'warehouse_adjustment_rejected_reason' => null,
+        ]);
+
+        OrderHistory::create([
+            'order_id' => $order->id,
+            'action' => 'warehouse_request_adjustment',
+            'user_id' => Auth::id(),
+            'role' => 'warehouse',
+            'status_before' => $order->status,
+            'status_after' => $order->status,
+            'note' => 'Kho yeu cau sale xac nhan thay doi don (snapshot): ' . trim((string) $validated['reason']),
+        ]);
+
+        $order->refresh();
+
+        if ($order->user) {
+            $order->user->notify(new WarehouseOrderAdjustmentRequested($order));
+        }
+
+        return back()->with('success', 'Đã lưu snapshot thay đổi và gửi yêu cầu xác nhận cho sale.');
+    }
+
+    public function returnToReadyToPack(Request $request, Order $order)
+    {
+        if (!$order->created_at || !$order->created_at->isToday()) {
+            return back()->with('error', 'Chỉ được xử lý đơn có ngày hôm nay.');
+        }
+
+        if ($order->status !== Order::STATUS_PACKING) {
+            return back()->with('error', 'Chỉ có thể đưa về Chờ đóng gói với đơn đang đóng hàng.');
+        }
+
+        $order->update([
+            'status' => Order::STATUS_READY_TO_PACK,
+        ]);
+
+        OrderHistory::create([
+            'order_id' => $order->id,
+            'action' => 'warehouse_return_to_ready_to_pack',
+            'user_id' => Auth::id(),
+            'role' => 'warehouse',
+            'status_before' => Order::STATUS_PACKING,
+            'status_after' => Order::STATUS_READY_TO_PACK,
+            'note' => 'Warehouse đưa đơn quay lại bước Chờ đóng gói để điều chỉnh hàng hóa.',
+        ]);
+
+        return back()->with('success', 'Đã đưa đơn #' . $order->code . ' về Chờ đóng gói để tiếp tục điều chỉnh.');
+    }
+
     /**
      * Complete packing: packing → packed_waiting_pickup (ready to ship)
      */
     public function completePacking(Request $request, Order $order)
     {
+        if ($order->warehouse_adjustment_status === Order::WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION) {
+            return back()->with('error', 'Đơn đang chờ sale xác nhận thay đổi từ kho.');
+        }
+
+        if ($order->warehouse_adjustment_status === Order::WAREHOUSE_ADJUSTMENT_STATUS_SALE_REJECTED) {
+            return back()->with('error', 'Sale đã từ chối yêu cầu điều chỉnh. Vui lòng xử lý lại thay đổi trước khi hoàn tất đóng gói.');
+        }
+
         if (!$order->created_at || !$order->created_at->isToday()) {
             return back()->with('error', 'Chỉ được xử lý đơn có ngày hôm nay.');
         }
@@ -937,6 +1427,73 @@ class WarehouseDashboardController extends Controller
         ]);
 
         return back()->with('success', 'Đơn #' . $order->code . ' đã đóng gói xong, sẵn sàng giao!');
+    }
+
+    private function recalculateOrderTotalsAfterWarehouseAdjustment(Order $order): void
+    {
+        $order->loadMissing('items');
+
+        $subtotalAmount = (float) $order->items->sum(function ($item) {
+            $kg = max(0.01, (float) ($item->unit_weight ?? 1));
+            $factor = (bool) ($item->is_priced_by_kg ?? true) ? $kg : 1;
+
+            return (float) ($item->base_price ?? $item->price ?? 0) * (int) $item->quantity * $factor;
+        });
+
+        $itemDiscountTotal = (float) $order->items->sum(function ($item) {
+            if ($item->discount_total !== null) {
+                return (float) $item->discount_total;
+            }
+
+            $kg = max(0.01, (float) ($item->unit_weight ?? 1));
+            $factor = (bool) ($item->is_priced_by_kg ?? true) ? $kg : 1;
+            $amount = (float) ($item->unit_discount ?? 0) * (int) $item->quantity * $factor;
+            $type = strtolower((string) ($item->discount_type ?? 'decrease'));
+
+            return $type === 'increase' ? -1 * $amount : $amount;
+        });
+
+        $subtotalAfterItemDiscount = (float) $order->items->sum(function ($item) {
+            if ($item->total !== null) {
+                return (float) $item->total;
+            }
+
+            $kg = max(0.01, (float) ($item->unit_weight ?? 1));
+            $factor = (bool) ($item->is_priced_by_kg ?? true) ? $kg : 1;
+
+            return (float) $item->price * (int) $item->quantity * $factor;
+        });
+
+        $orderLevelDiscountAmount = (float) ($order->order_discount ?? 0);
+        $orderLevelDiscountType = strtolower((string) ($order->order_discount_type ?? 'decrease'));
+        if (!in_array($orderLevelDiscountType, ['decrease', 'increase'], true)) {
+            $orderLevelDiscountType = 'decrease';
+        }
+
+        $orderLevelDiscount = $orderLevelDiscountType === 'increase'
+            ? -1 * $orderLevelDiscountAmount
+            : $orderLevelDiscountAmount;
+
+        if ($orderLevelDiscountAmount <= 0 && $order->extra_discount_total !== null) {
+            $orderLevelDiscount = (float) $order->extra_discount_total;
+            $orderLevelDiscountType = $orderLevelDiscount < 0 ? 'increase' : 'decrease';
+            $orderLevelDiscountAmount = abs($orderLevelDiscount);
+        }
+
+        $totalWeight = (float) $order->items->sum(function ($item) {
+            return (float) ($item->total_weight ?? 0);
+        });
+
+        $order->update([
+            'subtotal_amount' => $subtotalAmount,
+            'item_discount_total' => $itemDiscountTotal,
+            'extra_discount_total' => $orderLevelDiscount,
+            'order_discount' => $orderLevelDiscountAmount,
+            'order_discount_type' => $orderLevelDiscountType,
+            'total_discount' => $itemDiscountTotal + $orderLevelDiscount,
+            'total_weight' => round($totalWeight, 3),
+            'total' => max($subtotalAfterItemDiscount - $orderLevelDiscount, 0),
+        ]);
     }
 
     /**

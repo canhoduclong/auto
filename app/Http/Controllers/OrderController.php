@@ -321,6 +321,17 @@ class OrderController extends Controller
             $query->whereNotIn('id', $request->input('exclude_ids'));
         }
 
+        $sortBy = (string) $request->input('sort_by', 'id');
+        $sortDir = strtolower((string) $request->input('sort_dir', 'desc')) === 'asc' ? 'asc' : 'desc';
+
+        if ($sortBy === 'sku') {
+            $query->orderBy('sku', $sortDir)->orderBy('id', 'desc');
+        } elseif ($sortBy === 'stock') {
+            $query->orderBy('available_stock', $sortDir)->orderBy('id', 'desc');
+        } else {
+            $query->orderBy('id', $sortDir);
+        }
+
         $variants = $query->paginate($perPage);
 
         return response()->json([

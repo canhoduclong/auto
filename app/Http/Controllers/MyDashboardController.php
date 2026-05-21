@@ -6,8 +6,13 @@ use App\Models\Order;
 use App\Models\TaskAssignment;
 use App\Models\User;
 use App\Models\Customer;
+use App\Models\OrderHistory;
+use App\Models\ProductVariant;
+use App\Notifications\WarehouseOrderAdjustmentConfirmed;
+use App\Notifications\WarehouseOrderAdjustmentRejected;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -77,6 +82,239 @@ class MyDashboardController extends Controller
             'success' => true,
             'message' => 'Đã nhận khách hàng: ' . $customer->name,
         ]);
+    }
+
+    public function confirmWarehouseAdjustment(Order $order)
+    {
+        $user = auth()->user();
+        abort_unless($user, 403);
+
+        $memberIds = $this->resolveScopedUserIds($user);
+        if (!in_array((int) $order->user_id, array_map('intval', $memberIds), true)) {
+            abort(403);
+        }
+
+        if ($order->warehouse_adjustment_status !== Order::WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION) {
+            return back()->with('error', 'Yêu cầu điều chỉnh không còn ở trạng thái chờ xác nhận.');
+        }
+
+        $changes = collect($order->warehouse_adjustment_changes ?? []);
+        if ($changes->isEmpty()) {
+            return back()->with('error', 'Không có dữ liệu snapshot để áp dụng thay đổi.');
+        }
+
+        DB::transaction(function () use ($order, $user, $changes): void {
+            $order->loadMissing(['items']);
+            $itemsById = $order->items->keyBy('id');
+            $variantsToLoad = $changes
+                ->pluck('product_variant_id')
+                ->filter()
+                ->map(fn ($id) => (int) $id)
+                ->unique()
+                ->values();
+
+            $variantsById = ProductVariant::query()
+                ->with('product')
+                ->whereIn('id', $variantsToLoad->all())
+                ->get()
+                ->keyBy('id');
+
+            foreach ($changes as $change) {
+                $orderItemId = (int) ($change['order_item_id'] ?? 0);
+                $variantId = (int) ($change['product_variant_id'] ?? 0);
+                $newQty = (int) ($change['new_quantity'] ?? 0);
+                $oldQty = (int) ($change['old_quantity'] ?? 0);
+
+                $existingItem = $orderItemId > 0 ? $itemsById->get($orderItemId) : null;
+                if (!$existingItem && $variantId > 0) {
+                    $existingItem = $order->items()->where('product_variant_id', $variantId)->first();
+                }
+
+                if ($existingItem) {
+                    if ($newQty <= 0) {
+                        $existingItem->delete();
+                        continue;
+                    }
+
+                    $unitWeight = (float) ($existingItem->unit_weight ?? 1);
+                    $isPricedByKg = (bool) ($existingItem->is_priced_by_kg ?? true);
+                    $factor = $isPricedByKg ? max(0.01, $unitWeight) : 1;
+
+                    $existingItem->update([
+                        'quantity' => $newQty,
+                        'total_weight' => round($newQty * $unitWeight, 3),
+                        'total' => round((float) ($existingItem->price ?? 0) * $newQty * $factor, 2),
+                    ]);
+
+                    continue;
+                }
+
+                if ($variantId <= 0 || $newQty <= 0 || $oldQty > 0) {
+                    continue;
+                }
+
+                $variant = $variantsById->get($variantId);
+                if (!$variant) {
+                    continue;
+                }
+
+                $unitWeight = (float) ($variant->effective_kg ?? 1);
+                $isPricedByKg = (bool) ($variant->effective_priced_by_kg ?? true);
+                $price = (float) ($variant->final_price ?? 0);
+                $factor = $isPricedByKg ? max(0.01, $unitWeight) : 1;
+
+                $order->items()->create([
+                    'product_id' => $variant->product_id,
+                    'product_variant_id' => $variant->id,
+                    'quantity' => $newQty,
+                    'price' => $price,
+                    'base_price' => $price,
+                    'unit_discount' => 0,
+                    'discount_type' => 'decrease',
+                    'discount_total' => 0,
+                    'unit_weight' => $unitWeight,
+                    'is_priced_by_kg' => $isPricedByKg,
+                    'total_weight' => round($newQty * $unitWeight, 3),
+                    'total' => round($price * $newQty * $factor, 2),
+                ]);
+            }
+
+            $this->recalculateOrderTotalsAfterWarehouseAdjustment($order->fresh('items'));
+
+            $order->update([
+                'warehouse_adjustment_status' => Order::WAREHOUSE_ADJUSTMENT_STATUS_SALE_CONFIRMED,
+                'warehouse_adjustment_confirmed_by' => $user->id,
+                'warehouse_adjustment_confirmed_at' => now(),
+                'warehouse_adjustment_rejected_by' => null,
+                'warehouse_adjustment_rejected_at' => null,
+                'warehouse_adjustment_rejected_reason' => null,
+            ]);
+
+            OrderHistory::create([
+                'order_id' => $order->id,
+                'action' => 'sale_confirm_warehouse_adjustment',
+                'user_id' => $user->id,
+                'role' => 'sale',
+                'status_before' => $order->status,
+                'status_after' => $order->status,
+                'note' => 'Sale đã xác nhận và áp dụng thay đổi đơn từ kho.',
+            ]);
+        });
+
+        $warehouseReceivers = User::query()
+            ->when($order->warehouse_id, fn ($query) => $query->where('warehouse_id', $order->warehouse_id))
+            ->whereHas('roles', function ($query) {
+                $query->whereIn('name', ['warehouse', 'admin']);
+            })
+            ->get();
+
+        if ($warehouseReceivers->isNotEmpty()) {
+            foreach ($warehouseReceivers as $receiver) {
+                $receiver->notify(new WarehouseOrderAdjustmentConfirmed($order));
+            }
+        }
+
+        return back()->with('success', 'Đã xác nhận thay đổi đơn. Kho có thể tiếp tục đóng hàng.');
+    }
+
+    private function recalculateOrderTotalsAfterWarehouseAdjustment(Order $order): void
+    {
+        $subtotalAmount = (float) $order->items->sum(function ($item) {
+            $kg = max(0.01, (float) ($item->unit_weight ?? 1));
+            $factor = (bool) ($item->is_priced_by_kg ?? true) ? $kg : 1;
+
+            return (float) ($item->base_price ?? $item->price ?? 0) * (int) $item->quantity * $factor;
+        });
+
+        $itemDiscountTotal = (float) $order->items->sum(function ($item) {
+            if ($item->discount_total !== null) {
+                return (float) $item->discount_total;
+            }
+
+            return (float) (($item->unit_discount ?? 0) * ($item->quantity ?? 0));
+        });
+
+        $extraDiscount = (float) ($order->extra_discount_total ?? 0);
+        $totalDiscount = $itemDiscountTotal + $extraDiscount;
+
+        $shippingFee = (bool) ($order->charge_shipping_fee ?? true)
+            ? (float) ($order->shipping_fee ?? 0)
+            : 0;
+
+        $foamBoxFee = (bool) ($order->charge_foam_box_fee ?? false)
+            ? (float) ($order->foam_box_price ?? 0)
+            : 0;
+
+        $totalWeight = (float) $order->items->sum(function ($item) {
+            return (float) ($item->total_weight ?? ((float) ($item->quantity ?? 0) * (float) ($item->unit_weight ?? 0)));
+        });
+
+        $newTotal = max(0, round($subtotalAmount - $totalDiscount + $shippingFee + $foamBoxFee, 2));
+        $amountPaid = (float) ($order->amount_paid ?? 0);
+
+        $order->update([
+            'subtotal_amount' => round($subtotalAmount, 2),
+            'item_discount_total' => round($itemDiscountTotal, 2),
+            'total_discount' => round($totalDiscount, 2),
+            'total_weight' => round($totalWeight, 3),
+            'total' => $newTotal,
+            'amount_due' => max(0, round($newTotal - $amountPaid, 2)),
+        ]);
+    }
+
+    public function rejectWarehouseAdjustment(Request $request, Order $order)
+    {
+        $user = auth()->user();
+        abort_unless($user, 403);
+
+        $memberIds = $this->resolveScopedUserIds($user);
+        if (!in_array((int) $order->user_id, array_map('intval', $memberIds), true)) {
+            abort(403);
+        }
+
+        if ($order->warehouse_adjustment_status !== Order::WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION) {
+            return back()->with('error', 'Yêu cầu điều chỉnh không còn ở trạng thái chờ xác nhận.');
+        }
+
+        $validated = $request->validate([
+            'reject_reason' => ['required', 'string', 'max:2000'],
+        ]);
+
+        $rejectReason = trim((string) ($validated['reject_reason'] ?? ''));
+
+        $order->update([
+            'warehouse_adjustment_status' => Order::WAREHOUSE_ADJUSTMENT_STATUS_SALE_REJECTED,
+            'warehouse_adjustment_rejected_by' => $user->id,
+            'warehouse_adjustment_rejected_at' => now(),
+            'warehouse_adjustment_rejected_reason' => $rejectReason,
+            'warehouse_adjustment_confirmed_by' => null,
+            'warehouse_adjustment_confirmed_at' => null,
+        ]);
+
+        OrderHistory::create([
+            'order_id' => $order->id,
+            'action' => 'sale_reject_warehouse_adjustment',
+            'user_id' => $user->id,
+            'role' => 'sale',
+            'status_before' => $order->status,
+            'status_after' => $order->status,
+            'note' => 'Sale từ chối thay đổi đơn từ kho. Lý do: ' . $rejectReason,
+        ]);
+
+        $warehouseReceivers = User::query()
+            ->when($order->warehouse_id, fn ($query) => $query->where('warehouse_id', $order->warehouse_id))
+            ->whereHas('roles', function ($query) {
+                $query->whereIn('name', ['warehouse', 'admin']);
+            })
+            ->get();
+
+        if ($warehouseReceivers->isNotEmpty()) {
+            foreach ($warehouseReceivers as $receiver) {
+                $receiver->notify(new WarehouseOrderAdjustmentRejected($order));
+            }
+        }
+
+        return back()->with('success', 'Đã từ chối yêu cầu điều chỉnh và gửi thông báo cho kho xử lý lại.');
     }
 
     private function buildPayload(User $user): array
@@ -151,6 +389,14 @@ class MyDashboardController extends Controller
 
         $salesChart = $this->buildSalesChart($memberIds, $monthStart, $now);
 
+        $pendingWarehouseAdjustments = Order::query()
+            ->with(['customer', 'warehouse', 'items.variant.product'])
+            ->whereIn('user_id', $memberIds)
+            ->where('warehouse_adjustment_status', Order::WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION)
+            ->orderByDesc('warehouse_adjustment_requested_at')
+            ->limit(10)
+            ->get();
+
         $timeline = DB::table('task_status_logs as l')
             ->join('task_assignments as t', 't.id', '=', 'l.task_id')
             ->leftJoin('users as u', 'u.id', '=', 'l.changed_by')
@@ -180,6 +426,10 @@ class MyDashboardController extends Controller
         if ($user->isSalesFlowRole()) {
             $assignedCustomers = Customer::query()
                 ->where('assigned_to', $user->id)
+                ->where(function ($query) use ($user) {
+                    $query->whereNull('current_owner_sale_id')
+                        ->orWhere('current_owner_sale_id', '!=', $user->id);
+                })
                 ->orderByDesc('assigned_at')
                 ->limit(10)
                 ->select('id', 'name', 'phone', 'address', 'assigned_at', 'current_owner_sale_id')
@@ -210,6 +460,7 @@ class MyDashboardController extends Controller
             'salesChart' => $salesChart,
             'timeline' => $timeline,
             'assignedCustomers' => $assignedCustomers,
+            'pendingWarehouseAdjustments' => $pendingWarehouseAdjustments,
         ];
     }
 

@@ -12,6 +12,7 @@ use App\Models\ProductVariant;
 use App\Models\ReturnItem;
 use App\Models\User;
 use App\Models\Warehouse;
+use App\Models\WarehouseTransfer;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -334,6 +335,277 @@ class ShipperDashboardController extends Controller
             ->get();
 
         return view('shipper.delivering', compact('orders'));
+    }
+
+    public function warehouseTransfers()
+    {
+        $user = Auth::user();
+
+        $transfers = WarehouseTransfer::query()
+            ->with([
+                'order.customer',
+                'order.items.variant.product',
+                'sourceWarehouse',
+                'targetWarehouse',
+                'shipper',
+            ])
+            ->when(!$user->hasRole('admin') && !$user->hasRole('manager_shipper'), function ($query) {
+                $query->where('shipper_id', Auth::id());
+            })
+            ->whereIn('status', [
+                WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
+                WarehouseTransfer::STATUS_IN_TRANSIT,
+                WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
+                WarehouseTransfer::STATUS_RECEIVED_COMPLETED,
+            ])
+            ->orderByRaw("CASE WHEN status = 'pending_shipper_pickup' THEN 0 WHEN status = 'in_transit' THEN 1 WHEN status = 'delivered_waiting_receive' THEN 2 ELSE 3 END")
+            ->orderByDesc('id')
+            ->get();
+
+        return view('shipper.warehouse-transfers', compact('transfers'));
+    }
+
+    public function pickupWarehouseTransfer(Request $request, WarehouseTransfer $transfer)
+    {
+        $this->authorizeWarehouseTransferShipper($transfer);
+
+        if ($transfer->status !== WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP) {
+            return back()->with('error', 'Phiếu điều chuyển không ở trạng thái chờ shipper nhận hàng.');
+        }
+
+        $validated = $request->validate([
+            'pickup_note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $transfer->loadMissing(['order.items']);
+        $order = $transfer->order;
+        if (!$order) {
+            return back()->with('error', 'Không tìm thấy đơn hàng của phiếu điều chuyển.');
+        }
+
+        try {
+            DB::transaction(function () use ($transfer, $order, $validated): void {
+                $document = InventoryDocument::create([
+                    'type' => 'export',
+                    'document_date' => now()->toDateString(),
+                    'warehouse_id' => $transfer->source_warehouse_id,
+                    'notes' => 'Xuat kho dieu chuyen don #' . $order->code . ' [WHT#' . $transfer->id . ']',
+                    'shipping_fee' => 0,
+                    'user_id' => Auth::id(),
+                ]);
+
+                foreach ($order->items as $item) {
+                    $document->items()->create([
+                        'product_variant_id' => $item->product_variant_id,
+                        'quantity' => (int) ($item->quantity ?? 0),
+                        'unit_cost' => (float) ($item->price ?? 0),
+                    ]);
+
+                    $this->deductStockForWarehouseTransferItem($order, $document, $item, (int) $transfer->source_warehouse_id);
+                }
+
+                $transfer->update([
+                    'status' => WarehouseTransfer::STATUS_IN_TRANSIT,
+                    'export_document_id' => $document->id,
+                    'picked_up_by' => Auth::id(),
+                    'picked_up_at' => now(),
+                    'shipper_pickup_note' => trim((string) ($validated['pickup_note'] ?? '')) ?: null,
+                ]);
+
+                OrderHistory::create([
+                    'order_id' => $order->id,
+                    'action' => 'shipper_pickup_warehouse_transfer',
+                    'user_id' => Auth::id(),
+                    'role' => 'shipper',
+                    'status_before' => $order->status,
+                    'status_after' => $order->status,
+                    'note' => 'Shipper da nhan hang dieu chuyen #' . $transfer->id,
+                ]);
+            });
+        } catch (\RuntimeException $exception) {
+            return back()->with('error', $exception->getMessage());
+        }
+
+        return back()->with('success', 'Đã nhận hàng điều chuyển và xuất kho nguồn thành công.');
+    }
+
+    public function deliverWarehouseTransfer(Request $request, WarehouseTransfer $transfer)
+    {
+        $this->authorizeWarehouseTransferShipper($transfer);
+
+        if ($transfer->status !== WarehouseTransfer::STATUS_IN_TRANSIT) {
+            return back()->with('error', 'Phiếu điều chuyển không ở trạng thái đang vận chuyển.');
+        }
+
+        $validated = $request->validate([
+            'delivery_note' => ['nullable', 'string', 'max:1000'],
+            'delivery_proof_image' => ['nullable', 'image', 'max:5120'],
+        ]);
+
+        $proofImagePath = $transfer->delivery_proof_image;
+        if ($request->hasFile('delivery_proof_image')) {
+            $proofImagePath = $request->file('delivery_proof_image')->store('shipper/warehouse-transfers', 'public');
+        }
+
+        $transfer->loadMissing('order');
+
+        $transfer->update([
+            'status' => WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
+            'delivered_by' => Auth::id(),
+            'delivered_at' => now(),
+            'shipper_delivery_note' => trim((string) ($validated['delivery_note'] ?? '')) ?: null,
+            'delivery_proof_image' => $proofImagePath,
+        ]);
+
+        if ($transfer->order) {
+            OrderHistory::create([
+                'order_id' => $transfer->order->id,
+                'action' => 'shipper_deliver_warehouse_transfer',
+                'user_id' => Auth::id(),
+                'role' => 'shipper',
+                'status_before' => $transfer->order->status,
+                'status_after' => $transfer->order->status,
+                'note' => 'Shipper da giao hang dieu chuyen #' . $transfer->id . ' cho kho nhan.',
+            ]);
+        }
+
+        return back()->with('success', 'Đã cập nhật giao hàng thành công. Kho nhận có thể tiếp nhận hàng.');
+    }
+
+    public function bulkPickupWarehouseTransfers(Request $request)
+    {
+        $this->authorizeManagerShipper();
+
+        $validated = $request->validate([
+            'transfer_ids' => ['required', 'array', 'min:1'],
+            'transfer_ids.*' => ['required', 'integer', 'exists:warehouse_transfers,id'],
+            'pickup_note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $transfers = WarehouseTransfer::query()
+            ->with(['order.items'])
+            ->whereIn('id', $validated['transfer_ids'])
+            ->where('status', WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP)
+            ->get();
+
+        if ($transfers->isEmpty()) {
+            return back()->with('error', 'Không có phiếu điều chuyển nào ở trạng thái chờ nhận hàng.');
+        }
+
+        $processed = 0;
+        $errors = [];
+
+        foreach ($transfers as $transfer) {
+            try {
+                DB::transaction(function () use ($transfer, $validated): void {
+                    $order = $transfer->order;
+                    if (!$order) {
+                        throw new \RuntimeException('Không tìm thấy đơn hàng của phiếu #' . $transfer->id);
+                    }
+
+                    $document = InventoryDocument::create([
+                        'type' => 'export',
+                        'document_date' => now()->toDateString(),
+                        'warehouse_id' => $transfer->source_warehouse_id,
+                        'notes' => 'Xuat kho dieu chuyen don #' . $order->code . ' [WHT#' . $transfer->id . ']',
+                        'shipping_fee' => 0,
+                        'user_id' => Auth::id(),
+                    ]);
+
+                    foreach ($order->items as $item) {
+                        $document->items()->create([
+                            'product_variant_id' => $item->product_variant_id,
+                            'quantity' => (int) ($item->quantity ?? 0),
+                            'unit_cost' => (float) ($item->price ?? 0),
+                        ]);
+                        $this->deductStockForWarehouseTransferItem($order, $document, $item, (int) $transfer->source_warehouse_id);
+                    }
+
+                    $transfer->update([
+                        'status' => WarehouseTransfer::STATUS_IN_TRANSIT,
+                        'export_document_id' => $document->id,
+                        'picked_up_by' => Auth::id(),
+                        'picked_up_at' => now(),
+                        'shipper_pickup_note' => trim((string) ($validated['pickup_note'] ?? '')) ?: null,
+                    ]);
+
+                    OrderHistory::create([
+                        'order_id' => $order->id,
+                        'action' => 'shipper_pickup_warehouse_transfer',
+                        'user_id' => Auth::id(),
+                        'role' => 'manager_shipper',
+                        'status_before' => $order->status,
+                        'status_after' => $order->status,
+                        'note' => 'Shipper nhận hàng điều chuyển (bulk) #' . $transfer->id,
+                    ]);
+                });
+                $processed++;
+            } catch (\Throwable $e) {
+                $errors[] = 'Phiếu #' . $transfer->id . ': ' . $e->getMessage();
+            }
+        }
+
+        $message = "Đã nhận hàng {$processed}/{$transfers->count()} phiếu điều chuyển.";
+        if (!empty($errors)) {
+            return back()->with('warning', $message . ' Lỗi: ' . implode('; ', $errors));
+        }
+        return back()->with('success', $message);
+    }
+
+    public function bulkDeliverWarehouseTransfers(Request $request)
+    {
+        $this->authorizeManagerShipper();
+
+        $validated = $request->validate([
+            'transfer_ids' => ['required', 'array', 'min:1'],
+            'transfer_ids.*' => ['required', 'integer', 'exists:warehouse_transfers,id'],
+            'delivery_note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $transfers = WarehouseTransfer::query()
+            ->with(['order'])
+            ->whereIn('id', $validated['transfer_ids'])
+            ->where('status', WarehouseTransfer::STATUS_IN_TRANSIT)
+            ->get();
+
+        if ($transfers->isEmpty()) {
+            return back()->with('error', 'Không có phiếu điều chuyển nào ở trạng thái đang vận chuyển.');
+        }
+
+        $processed = 0;
+        $errors = [];
+
+        foreach ($transfers as $transfer) {
+            try {
+                $transfer->update([
+                    'status' => WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
+                    'delivered_by' => Auth::id(),
+                    'delivered_at' => now(),
+                    'shipper_delivery_note' => trim((string) ($validated['delivery_note'] ?? '')) ?: null,
+                ]);
+
+                if ($transfer->order) {
+                    OrderHistory::create([
+                        'order_id' => $transfer->order->id,
+                        'action' => 'shipper_deliver_warehouse_transfer',
+                        'user_id' => Auth::id(),
+                        'role' => 'manager_shipper',
+                        'status_before' => $transfer->order->status,
+                        'status_after' => $transfer->order->status,
+                        'note' => 'Shipper giao hàng điều chuyển (bulk) #' . $transfer->id . ' cho kho nhận.',
+                    ]);
+                }
+                $processed++;
+            } catch (\Throwable $e) {
+                $errors[] = 'Phiếu #' . $transfer->id . ': ' . $e->getMessage();
+            }
+        }
+
+        $message = "Đã giao hàng {$processed}/{$transfers->count()} phiếu điều chuyển cho kho nhận.";
+        if (!empty($errors)) {
+            return back()->with('warning', $message . ' Lỗi: ' . implode('; ', $errors));
+        }
+        return back()->with('success', $message);
     }
 
     /**
@@ -859,6 +1131,67 @@ class ShipperDashboardController extends Controller
         }
 
         $this->syncVariantStockFromInventories((int) $item->product_variant_id);
+    }
+
+    private function deductStockForWarehouseTransferItem(Order $order, InventoryDocument $document, $item, int $warehouseId): void
+    {
+        $remaining = (int) ($item->quantity ?? 0);
+
+        $inventories = Inventory::query()
+            ->where('product_variant_id', $item->product_variant_id)
+            ->where('warehouse_id', $warehouseId)
+            ->orderByDesc('quantity')
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($inventories as $inventory) {
+            if ($remaining <= 0) {
+                break;
+            }
+
+            $available = (int) $inventory->quantity - (int) ($inventory->reserved_quantity ?? 0);
+            if ($available <= 0) {
+                continue;
+            }
+
+            $deductQty = min($remaining, $available);
+
+            $inventory->quantity -= $deductQty;
+            $inventory->save();
+
+            InventoryMovement::create([
+                'inventory_id' => $inventory->id,
+                'quantity' => -$deductQty,
+                'type' => 'export',
+                'reference_id' => $document->id,
+                'reference_type' => InventoryDocument::class,
+                'user_id' => Auth::id(),
+            ]);
+
+            $remaining -= $deductQty;
+        }
+
+        if ($remaining > 0) {
+            throw new \RuntimeException('Không đủ tồn kho khả dụng để điều chuyển cho đơn #' . ($order->code ?: $order->id));
+        }
+
+        $this->syncVariantStockFromInventories((int) $item->product_variant_id);
+    }
+
+    private function authorizeWarehouseTransferShipper(WarehouseTransfer $transfer): void
+    {
+        $user = Auth::user();
+        if (!$user) {
+            abort(403);
+        }
+
+        if ($user->hasRole('admin') || $user->hasRole('manager_shipper')) {
+            return;
+        }
+
+        if ((int) $transfer->shipper_id !== (int) $user->id) {
+            abort(403, 'Bạn không có quyền thao tác phiếu điều chuyển này.');
+        }
     }
 
     private function syncVariantStockFromInventories(int $variantId): void

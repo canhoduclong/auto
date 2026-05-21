@@ -23,6 +23,10 @@ class Order extends Model
         'collected_amount', 'delivered_at', 'return_reason', 'proof_images', 'shipper_note', 'delivery_time',
         'daily_sequence', 'stock_sufficient', 'stock_shortage_detail',
         'stock_alert_status',
+        'warehouse_adjustment_status', 'warehouse_adjustment_note', 'warehouse_adjustment_changes',
+        'warehouse_adjustment_requested_by', 'warehouse_adjustment_requested_at',
+        'warehouse_adjustment_confirmed_by', 'warehouse_adjustment_confirmed_at',
+        'warehouse_adjustment_rejected_by', 'warehouse_adjustment_rejected_at', 'warehouse_adjustment_rejected_reason',
         'cancelled_by', 'cancelled_at', 'cancel_reason', 'cancel_images', 'trash_at',
     ];
 
@@ -40,6 +44,10 @@ class Order extends Model
         'foam_box_price' => 'decimal:2',
         'stock_shortage_detail' => 'array',
         'stock_alert_status' => 'string',
+        'warehouse_adjustment_changes' => 'array',
+        'warehouse_adjustment_requested_at' => 'datetime',
+        'warehouse_adjustment_confirmed_at' => 'datetime',
+        'warehouse_adjustment_rejected_at' => 'datetime',
         'commission_percent_snapshot' => 'decimal:2',
         'commission_amount_snapshot' => 'decimal:2',
         'commission_created_at' => 'datetime',
@@ -92,6 +100,11 @@ class Order extends Model
     const STATUS_RETURNING        = 'returning';
     const STATUS_RETURNED_COMPLETED = 'returned_completed';
 
+    const WAREHOUSE_ADJUSTMENT_STATUS_NONE = 'none';
+    const WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION = 'pending_sale_confirmation';
+    const WAREHOUSE_ADJUSTMENT_STATUS_SALE_CONFIRMED = 'sale_confirmed';
+    const WAREHOUSE_ADJUSTMENT_STATUS_SALE_REJECTED = 'sale_rejected';
+
     public function customer() { return $this->belongsTo(Customer::class); }
     public function user() { return $this->belongsTo(User::class); }
     public function shipper() { return $this->belongsTo(User::class, 'shipper_id'); }
@@ -100,6 +113,7 @@ class Order extends Model
     public function items() { return $this->hasMany(OrderItem::class); }
     public function schedule() { return $this->hasOne(OrderSchedule::class, 'generated_order_id'); }
     public function adjustments() { return $this->hasMany(OrderAdjustment::class); }
+    public function warehouseTransfers() { return $this->hasMany(WarehouseTransfer::class); }
 
     public function getPaymentStatusTextAttribute()
     {

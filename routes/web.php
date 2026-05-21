@@ -132,6 +132,12 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::post('/my-dashboard/accept-customer/{customer}', [MyDashboardController::class, 'acceptCustomer'])
         ->name('pages.my_dashboard.accept_customer')
         ->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
+    Route::post('/my-dashboard/order-adjustments/{order}/confirm', [MyDashboardController::class, 'confirmWarehouseAdjustment'])
+        ->name('pages.my_dashboard.order_adjustments.confirm')
+        ->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
+    Route::post('/my-dashboard/order-adjustments/{order}/reject', [MyDashboardController::class, 'rejectWarehouseAdjustment'])
+        ->name('pages.my_dashboard.order_adjustments.reject')
+        ->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
 
     Route::prefix('accounting')->name('accounting.')->middleware('role:accountant,accounting,admin')->group(function () {
         Route::get('/', [AccountingDashboardController::class, 'index'])->name('dashboard');
@@ -215,8 +221,13 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/orders/{order}/logistics',        [WarehouseDashboardController::class, 'updateLogistics'])->name('orders.logistics');
         Route::post('/orders/{order}/start-packing',    [WarehouseDashboardController::class, 'startPacking'])->name('orders.start-packing');
         Route::post('/orders/{order}/complete-packing', [WarehouseDashboardController::class, 'completePacking'])->name('orders.complete-packing');
+        Route::post('/orders/{order}/request-adjustment', [WarehouseDashboardController::class, 'requestAdjustment'])->name('orders.request-adjustment');
+        Route::post('/orders/{order}/transfer-request', [WarehouseDashboardController::class, 'createTransferRequest'])->name('orders.transfer-request');
+        Route::post('/orders/{order}/return-to-ready', [WarehouseDashboardController::class, 'returnToReadyToPack'])->name('orders.return-to-ready');
         Route::post('/orders/{order}/reopen-packing',   [WarehouseDashboardController::class, 'reopenPacking'])->name('orders.reopen-packing');
         Route::post('/orders/rap-don-hang',              [WarehouseDashboardController::class, 'rapDonHang'])->name('orders.rap-don-hang');
+        Route::get('/transfers/incoming', [WarehouseDashboardController::class, 'incomingTransfers'])->name('transfers.incoming');
+        Route::post('/transfers/{transfer}/confirm-receipt', [WarehouseDashboardController::class, 'confirmTransferReceipt'])->name('transfers.confirm-receipt');
         Route::get('/returns',     [WarehouseDashboardController::class, 'returns'])->name('returns');
         Route::get('/returns/{order}/weight-entry', [WarehouseDashboardController::class, 'showWeightEntry'])->name('returns.weight-entry');
         Route::post('/returns/{order}/save-weights', [WarehouseDashboardController::class, 'saveWeights'])->name('returns.save-weights');
@@ -250,6 +261,11 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/orders/{order}/store-return',    [ShipperDashboardController::class, 'storeReturn'])->name('store-return');
         Route::get('/history',                         [ShipperDashboardController::class, 'history'])->name('history');
         Route::get('/history/{order}',                 [ShipperDashboardController::class, 'historyDetail'])->name('history-detail');
+        Route::get('/warehouse-transfers',             [ShipperDashboardController::class, 'warehouseTransfers'])->name('warehouse-transfers');
+        Route::post('/warehouse-transfers/{transfer}/pickup', [ShipperDashboardController::class, 'pickupWarehouseTransfer'])->name('warehouse-transfers.pickup');
+        Route::post('/warehouse-transfers/{transfer}/deliver', [ShipperDashboardController::class, 'deliverWarehouseTransfer'])->name('warehouse-transfers.deliver');
+        Route::post('/warehouse-transfers/bulk-pickup', [ShipperDashboardController::class, 'bulkPickupWarehouseTransfers'])->name('warehouse-transfers.bulk-pickup')->middleware('role:manager_shipper,admin');
+        Route::post('/warehouse-transfers/bulk-deliver', [ShipperDashboardController::class, 'bulkDeliverWarehouseTransfers'])->name('warehouse-transfers.bulk-deliver')->middleware('role:manager_shipper,admin');
 
         // Manager Shipper routes
         Route::middleware('role:manager_shipper,admin')->group(function () {

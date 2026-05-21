@@ -169,7 +169,7 @@
                                 </div>
                             </div>
 
-                            <div class="wh-section border-top-0">
+                            <div class="wh-section border-top-0 border-bottom-0">
                                 @php
                                     $defaultAddress = $order->customer?->addresses?->firstWhere('is_default', 1) ?? $order->customer?->addresses?->first();
                                     $addressLine = $defaultAddress?->note ?: ($order->customer?->address ?: 'Chưa có địa chỉ');
@@ -186,12 +186,12 @@
                                 @endphp
 
                                 <div class="customer-info g-3">
-                                    <div class="customer-info-logistics mt-2">
+                                    <div class="customer-info-logistics">
                                         <a class="w-100 d-flex justify-content-between align-items-center customer-collapse-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#{{ $deliveryCollapseId }}" aria-expanded="true" aria-controls="{{ $deliveryCollapseId }}">
                                             <span class="logistics-title mb-0">Giao hàng</span>
                                             <span class="customer-collapse-action" data-collapse-label="1">Hide</span>
                                         </a>
-                                        <div id="{{ $deliveryCollapseId }}" class="collapse show logistics-body pt-2">
+                                        <div id="{{ $deliveryCollapseId }}" class="collapse show logistics-body">
                                             <div class="small text-muted mb-1">
                                                 <i class="bi bi-geo-alt me-1"></i>
                                                 Địa chỉ nhận hàng: {{ $addressLine }}
@@ -343,6 +343,13 @@
                                         <a href="{{ route('site.orders.show', $order) }}" class="btn btn-outline-primary btn-sm">
                                             <i class="fa fa-eye me-1"></i>Chi tiết
                                         </a>
+                                        @if(!$isTrashView && !$isCopiedOrder)
+                                            <a href="{{ route('site.orders.copy', $order->id) }}"
+                                               class="btn btn-outline-secondary btn-sm"
+                                               onclick="return confirm('Copy đơn #{{ $order->code }} để tạo đơn mới?')">
+                                                <i class="fa fa-copy me-1"></i>Copy Đơn
+                                            </a>
+                                        @endif
                                                                                 @if(!$isTrashView && $canMoveToTrash)
                                             <form action="{{ route('site.orders.trash', $order) }}" method="POST" class="d-inline"
                                                   onsubmit="return confirm('Đưa đơn #{{ $order->code }} vào thùng rác?')">

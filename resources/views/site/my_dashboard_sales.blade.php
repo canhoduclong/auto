@@ -104,6 +104,90 @@
         padding: 4px 8px;
     }
 
+    .warehouse-adjustment-card {
+        border-left: 3px solid #f59e0b !important;
+        background: #fffbeb;
+    }
+    .warehouse-adjustment-header {
+        border-bottom: 1px dashed #fcd34d;
+        padding-bottom: 6px;
+        margin-bottom: 8px;
+    }
+    .warehouse-adjustment-index {
+        width: 28px;
+        height: 28px;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        color: #92400e;
+        background: #fde68a;
+        font-size: .78rem;
+        flex-shrink: 0;
+    }
+    .warehouse-adjustment-list {
+        border: 1px solid #fde68a;
+        border-radius: 10px;
+        background: #fff;
+        padding: 8px;
+    }
+    .warehouse-adjustment-row {
+        border-bottom: 1px dashed #f1f5f9;
+        padding: 6px 0;
+    }
+    .warehouse-adjustment-row:last-child {
+        border-bottom: 0;
+    }
+    .warehouse-contact-strip {
+        margin-top: 10px;
+        padding: 10px 12px;
+        border-radius: 12px;
+        background: linear-gradient(90deg, #fff7ed 0%, #fffbeb 100%);
+        border: 1px dashed #f59e0b;
+    }
+    .warehouse-contact-title {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+        color: #b45309;
+        margin-bottom: 4px;
+    }
+    .warehouse-contact-name {
+        font-size: 13px;
+        font-weight: 700;
+        color: #1f2937;
+    }
+    .warehouse-contact-phone {
+        font-size: 13px;
+        color: #374151;
+    }
+    .warehouse-contact-actions {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .warehouse-contact-action {
+        width: 26px;
+        height: 26px;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        text-decoration: none;
+        color: #fff;
+    }
+    .warehouse-contact-action.phone {
+        background: #0ea5e9;
+    }
+    .warehouse-contact-action.zalo {
+        background: #2563eb;
+    }
+    .warehouse-contact-action:hover {
+        opacity: .9;
+    }
+
     @media (max-width: 1200px) {
         .stats-grid {
             grid-template-columns: repeat(3, minmax(120px, 1fr));
@@ -194,6 +278,212 @@
             </div>
 
             <div class="col-lg-5">
+                @if(($pendingWarehouseAdjustments ?? collect())->isNotEmpty())
+                    <h6 class="mx-1 mb-3 text-uppercase fs-5" style="color:#b45309;">Yêu cầu thay đổi đơn từ kho</h6>
+                    <div class="pb-3 mb-3">
+                        @foreach($pendingWarehouseAdjustments as $idx => $pendingOrder)
+                            <div class="warehouse-adjustment-card p-2 mb-2 border rounded">
+                                <div class="warehouse-adjustment-header d-flex align-items-start justify-content-between gap-2">
+                                    <div class="d-flex align-items-start gap-2 flex-grow-1">
+                                        <span class="warehouse-adjustment-index">{{ $idx + 1 }}</span>
+                                        <div class="flex-grow-1">
+                                            <div class="small fw-semibold text-dark">{{ $pendingOrder->customer?->name ?: 'Khách hàng' }}</div>
+                                            <div class="small text-muted">
+                                                {{ optional($pendingOrder->warehouse_adjustment_requested_at)->format('d/m/Y H:i') ?: 'Chưa có thời gian gửi' }}
+                                                , {{ $pendingOrder->code }}
+                                                , {{ $pendingOrder->customer?->customer_code ?: ('#' . ($pendingOrder->customer?->id ?? '---')) }}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-1 flex-shrink-0">
+                                        <form method="POST" action="{{ route('pages.my_dashboard.order_adjustments.confirm', $pendingOrder) }}">
+                                            @csrf
+                                            <button type="submit" class="btn btn-sm btn-warning">
+                                                <i class="bi bi-check2-circle"></i> Xác nhận
+                                            </button>
+                                        </form>
+                                        <button type="button"
+                                                class="btn btn-sm btn-outline-danger"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#rejectAdjustmentModal-{{ $pendingOrder->id }}">
+                                            <i class="bi bi-x-circle"></i> Từ chối
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="d-flex align-items-start gap-2">
+                                    <div class="flex-grow-1">
+                                        <div class="small text-muted">Lý do: {{ $pendingOrder->warehouse_adjustment_note ?: 'Chưa cập nhật' }}</div>
+
+                                        @php
+                                            $changeRows = collect($pendingOrder->warehouse_adjustment_changes ?? []);
+                                            $changeMap = $changeRows->mapWithKeys(function ($change) {
+                                                $variantId = (int) (($change['product_variant_id'] ?? 0) ?: ($change['variant_id'] ?? 0));
+                                                if ($variantId <= 0) {
+                                                    return [];
+                                                }
+
+                                                $oldQty = (int) ($change['old_quantity'] ?? 0);
+                                                $newQty = (int) ($change['new_quantity'] ?? 0);
+                                                $delta = $newQty - $oldQty;
+
+                                                if ($oldQty <= 0 && $newQty > 0) {
+                                                    $note = 'Thêm +' . $newQty;
+                                                } elseif ($newQty <= 0 && $oldQty > 0) {
+                                                    $note = 'Xóa -' . $oldQty;
+                                                } elseif ($delta > 0) {
+                                                    $note = 'Tăng +' . $delta;
+                                                } elseif ($delta < 0) {
+                                                    $note = 'Giảm ' . $delta;
+                                                } else {
+                                                    $note = 'Không đổi';
+                                                }
+
+                                                return [$variantId => $note];
+                                            });
+
+                                            $proposedItems = $pendingOrder->items
+                                                ->mapWithKeys(function ($item) {
+                                                    $variantId = (int) ($item->product_variant_id ?? 0);
+                                                    if ($variantId <= 0) {
+                                                        return [];
+                                                    }
+
+                                                    return [
+                                                        $variantId => [
+                                                            'product_name' => $item->variant?->name ?? $item->product?->name ?? 'Sản phẩm',
+                                                            'sku' => $item->variant?->sku,
+                                                            'size' => $item->variant?->size,
+                                                            'quantity' => (int) ($item->quantity ?? 0),
+                                                            'price' => (float) ($item->price ?? 0),
+                                                        ],
+                                                    ];
+                                                });
+
+                                            foreach ($changeRows as $change) {
+                                                $variantId = (int) (($change['product_variant_id'] ?? 0) ?: ($change['variant_id'] ?? 0));
+                                                if ($variantId <= 0) {
+                                                    continue;
+                                                }
+
+                                                $newQty = (int) ($change['new_quantity'] ?? 0);
+                                                if ($newQty <= 0) {
+                                                    $proposedItems->forget($variantId);
+                                                    continue;
+                                                }
+
+                                                $existing = $proposedItems->get($variantId, []);
+                                                $proposedItems->put($variantId, [
+                                                    'product_name' => $change['product_name'] ?? ($existing['product_name'] ?? 'Sản phẩm'),
+                                                    'sku' => $change['sku'] ?? ($existing['sku'] ?? null),
+                                                    'size' => $change['size'] ?? ($existing['size'] ?? null),
+                                                    'quantity' => $newQty,
+                                                    'price' => (float) (($change['price'] ?? null) ?: ($existing['price'] ?? 0)),
+                                                ]);
+                                            }
+                                        @endphp
+
+                                        <div class="mt-2">
+                                            <div class="small fw-semibold mb-1 text-dark">Danh sách sản phẩm sau khi thay đổi</div>
+                                            <div class="warehouse-adjustment-list">
+                                                @forelse($proposedItems as $variantId => $finalItem)
+                                                    @php
+                                                        $finalSize = $finalItem['size'] ?? null;
+                                                        $finalSizeLabel = (is_numeric($finalSize) && (float) $finalSize > 0)
+                                                            ? rtrim(rtrim(number_format((float) $finalSize, 2, '.', ''), '0'), '.')
+                                                            : null;
+                                                        $finalVariantId = (int) $variantId;
+                                                        $finalChangeNote = $changeMap->get($finalVariantId);
+                                                    @endphp
+                                                    <div class="warehouse-adjustment-row small">
+                                                        <div class="fw-semibold">
+                                                            {{ $finalItem['product_name'] ?? 'Sản phẩm' }}
+                                                            @if($finalChangeNote)
+                                                                <span class="text-warning-emphasis">({{ $finalChangeNote }})</span>
+                                                            @endif
+                                                        </div>
+                                                        <div class="text-muted">
+                                                            SKU: {{ $finalItem['sku'] ?? '---' }}
+                                                            @if($finalSizeLabel)
+                                                                | Size: {{ $finalSizeLabel }}
+                                                            @endif
+                                                            | SL mới: {{ number_format((float) ($finalItem['quantity'] ?? 0), 0, ',', '.') }}
+                                                            | Đơn giá: {{ number_format((float) ($finalItem['price'] ?? 0), 0, ',', '.') }}đ
+                                                        </div>
+                                                    </div>
+                                                @empty
+                                                    <div class="small text-muted">Không có sản phẩm trong đơn sau khi thay đổi.</div>
+                                                @endforelse
+                                            </div>
+                                        </div>
+
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="modal fade" id="rejectAdjustmentModal-{{ $pendingOrder->id }}" tabindex="-1" aria-hidden="true">
+                                <div class="modal-dialog modal-dialog-centered">
+                                    <div class="modal-content">
+                                        <form method="POST" action="{{ route('pages.my_dashboard.order_adjustments.reject', $pendingOrder) }}">
+                                            @csrf
+                                            <div class="modal-header">
+                                                <h6 class="modal-title mb-0">Từ chối yêu cầu điều chỉnh</h6>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                            </div>
+                                            <div class="modal-body">
+                                                <div class="small text-muted mb-2">
+                                                    Đơn {{ $pendingOrder->code }} - {{ $pendingOrder->customer?->name ?: 'Khách hàng' }}
+                                                </div>
+                                                <label class="form-label small fw-semibold">Lý do từ chối</label>
+                                                <textarea name="reject_reason"
+                                                          class="form-control"
+                                                          rows="3"
+                                                          maxlength="2000"
+                                                          placeholder="Nhập lý do để kho xử lý lại"
+                                                          required></textarea>
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-sm btn-light" data-bs-dismiss="modal">Hủy</button>
+                                                <button type="submit" class="btn btn-sm btn-danger">
+                                                    <i class="bi bi-x-circle me-1"></i>Từ chối
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        @endforeach
+
+                        @php
+                            $contactWarehouse = collect($pendingWarehouseAdjustments ?? [])->first()?->warehouse;
+                            $warehouseName = $contactWarehouse?->name ?: 'Kho chưa cập nhật';
+                            $warehousePhone = trim((string) ($contactWarehouse?->phone ?? ''));
+                            $warehousePhoneDigits = preg_replace('/\D+/', '', $warehousePhone);
+                        @endphp
+                        <div class="warehouse-contact-strip">
+                            <div class="warehouse-contact-title">Liên hệ kho</div>
+                            <div class="d-flex flex-wrap align-items-center gap-2">
+                                <span class="warehouse-contact-name">{{ $warehouseName }}</span>
+                                @if($warehousePhone !== '')
+                                    <span class="warehouse-contact-phone">{{ $warehousePhone }}</span>
+                                    @if(!empty($warehousePhoneDigits))
+                                        <span class="warehouse-contact-actions">
+                                            <a href="tel:{{ $warehousePhoneDigits }}" class="warehouse-contact-action phone" title="Gọi điện">
+                                                <i class="bi bi-telephone-fill"></i>
+                                            </a>
+                                            <a href="https://zalo.me/{{ $warehousePhoneDigits }}" target="_blank" rel="noopener" class="warehouse-contact-action zalo" title="Nhắn Zalo">
+                                                <i class="bi bi-chat-dots-fill"></i>
+                                            </a>
+                                        </span>
+                                    @endif
+                                @else
+                                    <span class="warehouse-contact-phone">Chưa có số điện thoại</span>
+                                @endif
+                            </div>
+                        </div>
+                    </div>
+                @endif
+
                 @if(($assignedCustomers ?? collect())->isNotEmpty())
                     {{-- Assigned Customers Section --}}
                     <h6 class="mx-1 mb-3 text-uppercase fs-5 newcus">Khách hàng mới</h6>

@@ -248,7 +248,7 @@
         padding: 0 0 0 14px;
     }
     .logistics-body {  
-        padding: 0 0 0 14px;
+         
     }
     .transport-body {  
         padding: 0 0 0 14px;
@@ -273,7 +273,7 @@
         color: #0f172a;
     }
     .wh-section {
-        padding: 12px 0;
+        padding: 0 0 9px 0;
         border-top: 1px dashed #e2e8f0;
     }
     .transport-info {
