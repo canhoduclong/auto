@@ -188,7 +188,18 @@
             </div>
         @else
             @if(($showAssignmentButtons ?? false) === false && $order->shipper_id)
-                {{-- X button moved to top right corner --}}
+                {{-- Chuyển tới kho khác --}}
+                <form action="{{ route('shipper.transfer-to-warehouse', [$order->id]) }}" method="POST" class="d-flex align-items-center gap-2 mt-2">
+                    @csrf
+                    <label for="warehouse_id_{{ $order->id }}" class="form-label mb-0" style="font-size:0.85em;">Chuyển tới kho:</label>
+                    <select name="warehouse_id" id="warehouse_id_{{ $order->id }}" class="form-select form-select-sm" style="width:auto; min-width:160px;" required>
+                        <option value="">-- Chọn kho --</option>
+                        @foreach($warehouses as $wh)
+                            <option value="{{ $wh->id }}" @if($order->warehouse_id == $wh->id) selected @endif>{{ $wh->name }}</option>
+                        @endforeach
+                    </select>
+                    <button type="submit" class="btn btn-sm btn-outline-info">Chuyển tới kho</button>
+                </form>
             @endif
         @endif
     </div>

@@ -144,38 +144,7 @@
         </div>
 
         <div class="row g-3">
-            <div class="col-xl-8">
-                <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h6 class="mb-0">{{ __('dashboard.admin.trend_7_days') }}</h6>
-                    </div>
-                    <div class="card-body p-0">
-                        <div class="table-responsive">
-                            <table class="table table-striped mb-0">
-                                <thead>
-                                    <tr>
-                                        <th>{{ __('dashboard.admin.date') }}</th>
-                                        <th>{{ __('dashboard.admin.order_count') }}</th>
-                                        <th>{{ __('dashboard.admin.order_value') }}</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @forelse($dailyStats as $row)
-                                        <tr>
-                                            <td>{{ $row['label'] }}</td>
-                                            <td>{{ number_format($row['orders']) }}</td>
-                                            <td>{{ number_format($row['amount'], 0, ',', '.') }} đ</td>
-                                        </tr>
-                                    @empty
-                                        <tr>
-                                            <td colspan="3" class="text-center text-muted">{{ __('dashboard.admin.no_data') }}</td>
-                                        </tr>
-                                    @endforelse
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
+            <div class="col-xl-8"> 
 
                 <div class="card">
                     <div class="card-header d-flex justify-content-between align-items-center">

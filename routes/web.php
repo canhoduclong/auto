@@ -260,6 +260,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
             Route::post('/move-order-up/{order}',            [ShipperDashboardController::class, 'moveOrderUp'])->name('move-order-up');
             Route::post('/move-order-down/{order}',          [ShipperDashboardController::class, 'moveOrderDown'])->name('move-order-down');
             Route::post('/create-delivery-schedule',         [ShipperDashboardController::class, 'createDeliverySchedule'])->name('create-delivery-schedule');
+            Route::post('/transfer-to-warehouse/{order}',    [ShipperDashboardController::class, 'transferToWarehouse'])->name('transfer-to-warehouse');
             Route::get('/manage-fees',                       [ShipperDashboardController::class, 'manageFees'])->name('manage-fees');
             Route::post('/update-fee/{order}',               [ShipperDashboardController::class, 'updateFee'])->name('update-fee');
             Route::post('/bulk-update-fees',                 [ShipperDashboardController::class, 'bulkUpdateFees'])->name('bulk-update-fees');

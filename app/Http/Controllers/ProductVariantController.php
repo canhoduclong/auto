@@ -68,6 +68,11 @@ class ProductVariantController extends Controller
             $data['size'] = str_replace(',', '.', $data['size']);
         }
         $data['is_priced_by_kg'] = $request->boolean('is_priced_by_kg');
+        // Ensure SKU is updated correctly
+        if (isset($data['sku'])) {
+            $variant->sku = $data['sku'];
+            $variant->save();
+        }
         $variant->update($data);
         // Cập nhật giá nếu có thay đổi
         if (isset($data['price'])) {

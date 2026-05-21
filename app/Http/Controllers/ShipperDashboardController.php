@@ -1,8 +1,5 @@
 <?php
-
-
 namespace App\Http\Controllers;
-
 use App\Models\Inventory;
 use App\Models\InventoryDocument;
 use App\Models\InventoryMovement;
@@ -13,7 +10,6 @@ use App\Models\OrderHistory;
 use App\Models\OrderReturn;
 use App\Models\ProductVariant;
 use App\Models\ReturnItem;
-use App\Models\Transaction;
 use App\Models\User;
 use App\Models\Warehouse;
 use Carbon\Carbon;
@@ -29,7 +25,38 @@ class ShipperDashboardController extends Controller
     {
         $this->middleware(['auth', 'role:shipper,manager_shipper,admin']);
     }
+    /**
+     * Chuyển đơn sang kho khác (cập nhật warehouse_id)
+     */
+    public function transferToWarehouse(Request $request, Order $order)
+    {
+        $this->authorizeManagerShipper();
 
+        $request->validate([
+            'warehouse_id' => 'required|exists:warehouses,id',
+        ]);
+
+        $warehouseId = (int) $request->input('warehouse_id');
+        $warehouse = Warehouse::findOrFail($warehouseId);
+
+        // Cập nhật kho đích cho đơn
+        $order->update([
+            'warehouse_id' => $warehouse->id,
+        ]);
+
+        // Ghi lịch sử
+        OrderHistory::create([
+            'order_id'      => $order->id,
+            'action'        => 'transfer_to_warehouse',
+            'user_id'       => Auth::id(),
+            'role'          => 'manager_shipper',
+            'status_before' => $order->status,
+            'status_after'  => $order->status,
+            'note'          => 'Chuyển tới kho: ' . $warehouse->name,
+        ]);
+
+        return back()->with('success', 'Đã chuyển đơn #' . $order->code . ' tới kho ' . $warehouse->name . ' thành công!');
+    }
     private function assignmentOrderingDate(Request $request): string
     {
         return $request->filled('date')
@@ -300,36 +327,10 @@ class ShipperDashboardController extends Controller
      */
     public function myOrders()
     {
-        $responsibilityStatuses = [
-            Order::STATUS_APPROVED,
-            Order::STATUS_READY_TO_PACK,
-            Order::STATUS_PACKING,
-            Order::STATUS_READY_TO_SHIP,
-            Order::STATUS_DELIVERING,
-            Order::STATUS_COMPLETED,
-        ];
-
         $orders = Order::with(['customer.addresses', 'items.variant.product', 'warehouse', 'histories.user.warehouse'])
             ->where('shipper_id', Auth::id())
-            ->whereIn('status', $responsibilityStatuses)
-            ->orderByRaw("CASE
-                WHEN status = ? THEN 1
-                WHEN status = ? THEN 2
-                WHEN status = ? THEN 3
-                WHEN status = ? THEN 4
-                WHEN status = ? THEN 5
-                WHEN status = ? THEN 6
-                ELSE 99 END", [
-                Order::STATUS_READY_TO_SHIP,
-                Order::STATUS_DELIVERING,
-                Order::STATUS_PACKING,
-                Order::STATUS_READY_TO_PACK,
-                Order::STATUS_APPROVED,
-                Order::STATUS_COMPLETED,
-            ])
-            ->orderByRaw("CASE WHEN delivery_time IS NULL OR delivery_time = '' THEN 1 ELSE 0 END")
-            ->orderBy('delivery_time', 'asc')
-            ->orderByDesc('updated_at')
+            ->whereIn('status', [Order::STATUS_DELIVERING, Order::STATUS_COMPLETED])
+            ->orderBy('created_at', 'asc')
             ->get();
 
         return view('shipper.delivering', compact('orders'));
@@ -358,41 +359,6 @@ class ShipperDashboardController extends Controller
         abort_if($order->status !== Order::STATUS_DELIVERING, 422, 'Đơn không đang giao.');
 
         $order->loadMissing('customer.truckStation');
-        $order->loadMissing('items', 'warehouse', 'histories.user.warehouse');
-
-        $deliveredQtysInput = $request->input('delivered_qty', []);
-        $partialWeightsInput = $request->input('partial_weight', []);
-        $hasPartialReturnFlag = (bool) $request->input('has_partial_return', false);
-
-        // Auto-detect partial return from payload to avoid missing return tickets
-        // when delivered quantity is lower than original quantity.
-        $detectedPartialReturn = false;
-        foreach ($order->items as $item) {
-            if (!array_key_exists($item->id, $deliveredQtysInput)) {
-                continue;
-            }
-
-            $originalQty = (int) $item->quantity;
-            $deliveredQty = max(0, min((int) $deliveredQtysInput[$item->id], $originalQty));
-
-            if ($deliveredQty < $originalQty) {
-                $detectedPartialReturn = true;
-                break;
-            }
-        }
-
-        $hasPartialReturn = $hasPartialReturnFlag || $detectedPartialReturn;
-
-        $sourceWarehouse = $this->resolveOrderWarehouse($order);
-        $returnWarehouseId = $hasPartialReturn ? (int) $request->input('return_warehouse_id', 0) : null;
-        if ($hasPartialReturn && (!$returnWarehouseId || $returnWarehouseId <= 0)) {
-            $returnWarehouseId = $sourceWarehouse?->id;
-        }
-
-        $partialReturnReason = $hasPartialReturn
-            ? (string) $request->input('partial_return_reason', 'other')
-            : null;
-
         $isTruckStationDelivery = (bool) ($order->customer?->use_truck_station ?? false)
             && !empty($order->customer?->truck_station_id);
 
@@ -407,8 +373,8 @@ class ShipperDashboardController extends Controller
             'delivered_qty.*'       => 'nullable|integer|min:0',
             'partial_weight'        => 'nullable|array',
             'partial_weight.*'      => 'nullable|numeric|min:0',
-            'return_warehouse_id'   => 'nullable|exists:warehouses,id',
-            'partial_return_reason' => 'nullable|string',
+            'return_warehouse_id'   => 'required_if:has_partial_return,1|nullable|exists:warehouses,id',
+            'partial_return_reason' => 'required_if:has_partial_return,1|nullable|string',
         ];
 
         $request->validate($validationRules);
@@ -418,7 +384,8 @@ class ShipperDashboardController extends Controller
             : null;
 
         // Validate partial_weight against each item's max weight (qty × unit_weight)
-        if ($hasPartialReturn) {
+        if ($request->filled('has_partial_return') && $request->input('has_partial_return') == '1') {
+            $order->loadMissing('items');
             $partialWeightInput = $request->input('partial_weight', []);
             $actualWeightInput = $request->input('actual_weight', []);
             $weightErrors = [];
@@ -450,12 +417,6 @@ class ShipperDashboardController extends Controller
             }
         }
 
-        if ($hasPartialReturn && (!$returnWarehouseId || $returnWarehouseId <= 0)) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
-                'return_warehouse_id' => 'Không xác định được kho trả về. Vui lòng chọn kho trả hàng.',
-            ]);
-        }
-
         $imagePath = $request->file('proof_image')->store('order-proofs', 'public');
         $proofImages = [$imagePath];
 
@@ -467,9 +428,14 @@ class ShipperDashboardController extends Controller
             $proofImages[] = $request->file('weight_image')->store('order-proofs', 'public');
         }
 
+        $order->loadMissing('items');
+
         $actualWeights = $request->input('actual_weight', []);
-        $deliveredQtys = $deliveredQtysInput;
-        $partialWeights = $partialWeightsInput;
+        $deliveredQtys = $request->input('delivered_qty', []);
+        $partialWeights = $request->input('partial_weight', []);
+        $hasPartialReturn = (bool) $request->input('has_partial_return', false);
+        $returnWarehouseId = $hasPartialReturn ? (int) $request->input('return_warehouse_id') : null;
+        $partialReturnReason = $hasPartialReturn ? (string) $request->input('partial_return_reason', 'other') : null;
 
         $partialReturnNotes = [];
         $returnedItems = []; // [order_item_id => ['variant_id' => int, 'returned_qty' => int]]
@@ -525,7 +491,7 @@ class ShipperDashboardController extends Controller
             }
 
             // Tạo phiếu OrderReturn cho hàng chưa giao – kho sẽ xác nhận nhập sau
-            if (!empty($returnedItems)) {
+            if (!empty($returnedItems) && $returnWarehouseId) {
                 $orderReturn = OrderReturn::create([
                     'order_id'     => $order->id,
                     'customer_id'  => $order->customer_id,
@@ -577,67 +543,14 @@ class ShipperDashboardController extends Controller
         $foamBoxFee  = (float) (($order->charge_foam_box_fee ?? false) ? ($order->foam_box_price ?? 0) : 0);
         $newTotal    = $newSubtotal + $shippingFee + $foamBoxFee;
 
-        $collectedNow = max(0, (float) ($collectedAmount ?? 0));
-        $approvedPaidBefore = (float) $order->transactions()
-            ->where('status', Transaction::STATUS_APPROVED)
-            ->where('type', 'payment')
-            ->sum('amount')
-            - (float) $order->transactions()
-                ->where('status', Transaction::STATUS_APPROVED)
-                ->where('type', 'refund')
-                ->sum('amount');
-
-        $maxCollectableNow = max(0, round($newTotal - $approvedPaidBefore, 2));
-        if ($collectedNow > $maxCollectableNow + 0.0001) {
-            return back()->withErrors([
-                'collected_amount' => 'Số tiền thu vượt quá phần còn lại cần thu của đơn (' . number_format($maxCollectableNow, 0, ',', '.') . 'đ).',
-            ])->withInput();
-        }
-
-        $newAmountPaid = round($approvedPaidBefore + $collectedNow, 2);
-        $newAmountDue = max(0, round($newTotal - $newAmountPaid, 2));
-        $newPaymentStatus = match (true) {
-            $newAmountPaid >= $newTotal && $newTotal > 0 => 'paid',
-            $newAmountPaid > 0 => 'partially_paid',
-            default => 'unpaid',
-        };
-
-        if ($newAmountDue > 0) {
-            $noteText .= ' | Còn công nợ: ' . number_format($newAmountDue, 0, ',', '.') . 'đ.';
-        }
-
-        DB::transaction(function () use ($order, $collectedNow, $collectedAmount, $proofImages, $newSubtotal, $newTotal, $newAmountPaid, $newAmountDue, $newPaymentStatus, $returnedItems) {
-            if ($collectedNow > 0) {
-                Transaction::create([
-                    'order_id' => $order->id,
-                    'customer_id' => $order->customer_id,
-                    'amount' => $collectedNow,
-                    'type' => 'payment',
-                    'method' => 'shipper_collection',
-                    'note' => 'Shipper thu tiền khi xác nhận giao hàng',
-                    'status' => Transaction::STATUS_APPROVED,
-                    'submitted_by' => Auth::id(),
-                    'approved_by' => Auth::id(),
-                    'approved_at' => now(),
-                ]);
-            }
-
-            // Nếu có hàng trả về (partial delivery), đơn chuyển sang trạng thái returning
-            // để warehouse xác nhận nhập hàng trả
-            $orderStatus = !empty($returnedItems) ? Order::STATUS_RETURNING : 'delivered';
-
-            $order->update([
-                'status'           => $orderStatus,
-                'collected_amount' => $collectedAmount,
-                'delivered_at'     => now(),
-                'proof_images'     => $proofImages,
-                'subtotal_amount'  => $newSubtotal,
-                'total'            => $newTotal,
-                'amount_paid'      => $newAmountPaid,
-                'amount_due'       => $newAmountDue,
-                'payment_status'   => $newPaymentStatus,
-            ]);
-        });
+        $order->update([
+            'status'           => 'delivered',
+            'collected_amount' => $collectedAmount,
+            'delivered_at'     => now(),
+            'proof_images'     => $proofImages,
+            'subtotal_amount'  => $newSubtotal,
+            'total'            => $newTotal,
+        ]);
 
         OrderHistory::create([
             'order_id'      => $order->id,
@@ -645,7 +558,7 @@ class ShipperDashboardController extends Controller
             'user_id'       => Auth::id(),
             'role'          => 'shipper',
             'status_before' => Order::STATUS_DELIVERING,
-            'status_after'  => !empty($returnedItems) ? Order::STATUS_RETURNING : 'delivered',
+            'status_after'  => 'delivered',
             'note'          => $noteText,
         ]);
 
@@ -709,41 +622,17 @@ class ShipperDashboardController extends Controller
             $updateData['warehouse_id'] = $returnWarehouse->id;
         }
 
-        DB::transaction(function () use ($order, $updateData, $request, $warehouseNote, $returnWarehouse, $imagePath, $shipperNote) {
-            $order->update($updateData);
+        $order->update($updateData);
 
-            $orderReturn = OrderReturn::create([
-                'order_id' => $order->id,
-                'customer_id' => $order->customer_id,
-                'warehouse_id' => $returnWarehouse->id,
-                'created_by' => Auth::id(),
-                'status' => 'pending_warehouse',
-                'reason' => (string) $request->input('return_reason'),
-                'evidence_image_path' => $imagePath,
-                'note' => $shipperNote,
-                'return_scope' => 'full',
-            ]);
-
-            $order->loadMissing('items');
-            foreach ($order->items as $orderItem) {
-                ReturnItem::create([
-                    'order_return_id' => $orderReturn->id,
-                    'product_variant_id' => $orderItem->product_variant_id,
-                    'quantity' => (int) $orderItem->quantity,
-                    'condition' => null,
-                ]);
-            }
-
-            OrderHistory::create([
-                'order_id'      => $order->id,
-                'action'        => 'return_request',
-                'user_id'       => Auth::id(),
-                'role'          => 'shipper',
-                'status_before' => Order::STATUS_DELIVERING,
-                'status_after'  => Order::STATUS_RETURNING,
-                'note'          => 'Shipper gửi trả hàng: ' . $request->return_reason . ' | ' . $warehouseNote,
-            ]);
-        });
+        OrderHistory::create([
+            'order_id'      => $order->id,
+            'action'        => 'return_request',
+            'user_id'       => Auth::id(),
+            'role'          => 'shipper',
+            'status_before' => Order::STATUS_DELIVERING,
+            'status_after'  => Order::STATUS_RETURNING,
+            'note'          => 'Shipper gửi trả hàng: ' . $request->return_reason . ' | ' . $warehouseNote,
+        ]);
 
         return redirect()->route('shipper.my-orders')->with('success', 'Đã gửi yêu cầu trả hàng về kho.');
     }
@@ -834,7 +723,6 @@ class ShipperDashboardController extends Controller
         );
 
         $order->load([
-            'user',
             'customer.addresses',
             'customer.truckStation',
             'items.variant.product',
@@ -1043,6 +931,7 @@ class ShipperDashboardController extends Controller
 
         $shipperScheduleStatuses = $this->resolveShipperScheduleStatuses($selectedDate);
 
+        $warehouses = Warehouse::query()->orderBy('name')->get();
         return view('shipper.manage-assignments', compact(
             'unassignedOrders',
             'assignedOrders',
@@ -1051,7 +940,8 @@ class ShipperDashboardController extends Controller
             'assignedOrdersCount',
             'unassignedOrdersCount',
             'totalOrdersCount',
-            'shipperScheduleStatuses'
+            'shipperScheduleStatuses',
+            'warehouses'
         ));
     }
 
@@ -1523,16 +1413,7 @@ class ShipperDashboardController extends Controller
             ->orderBy('created_at', 'asc')
             ->paginate(15);
 
-        $orderReturns = OrderReturn::query()
-            ->with(['order.customer', 'order.shipper', 'warehouse'])
-            ->where(function ($query) use ($selectedDate) {
-                $query->whereDate('created_at', $selectedDate)
-                    ->orWhereDate('updated_at', $selectedDate);
-            })
-            ->orderByDesc('created_at')
-            ->get();
-
-        return view('shipper.manage-fees', compact('orders', 'selectedDate', 'orderReturns'));
+        return view('shipper.manage-fees', compact('orders', 'selectedDate'));
     }
 
     /**
@@ -1578,40 +1459,6 @@ class ShipperDashboardController extends Controller
         $this->syncCustomerShippingFeeHistory($order, $oldFee, $newFee, $request->input('notes'));
 
         return back()->with('success', 'Cập nhật phí ship cho đơn #' . $order->code . ' thành công!');
-    }
-
-    /**
-     * Update return shipping fee for single return ticket
-     */
-    public function updateReturnFee(Request $request, OrderReturn $orderReturn)
-    {
-        $this->authorizeManagerShipper();
-
-        $request->validate([
-            'return_shipping_fee' => 'required|numeric|min:0',
-            'notes' => 'nullable|string|max:500',
-        ]);
-
-        $oldFee = (float) ($orderReturn->return_shipping_fee ?? 0);
-        $newFee = (float) $request->input('return_shipping_fee');
-
-        $orderReturn->update([
-            'return_shipping_fee' => $newFee,
-        ]);
-
-        if ($orderReturn->order) {
-            OrderHistory::create([
-                'order_id'      => $orderReturn->order_id,
-                'action'        => 'return_shipping_fee_updated',
-                'user_id'       => Auth::id(),
-                'role'          => 'manager_shipper',
-                'note'          => 'Cập nhật phí ship trả về từ ' . number_format($oldFee, 0, ',', '.') . ' đ thành '
-                    . number_format($newFee, 0, ',', '.') . ' đ'
-                    . ($request->filled('notes') ? ' - ' . $request->input('notes') : ''),
-            ]);
-        }
-
-        return back()->with('success', 'Cập nhật phí ship trả về cho phiếu #' . $orderReturn->id . ' thành công!');
     }
 
     /**
