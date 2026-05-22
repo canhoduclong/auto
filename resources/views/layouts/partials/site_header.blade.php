@@ -26,8 +26,10 @@
 .hdr-account-btn {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 8px;
-    padding: 4px 12px 4px 4px;
+    min-height: 42px;
+    padding: 4px 12px 4px 5px;
     border-radius: 9px;
     border: 1.5px solid rgba(15,118,110,0.35);
     background: rgba(15,118,110,0.06);
@@ -199,7 +201,8 @@
 .hdr-notify-item {
     display: flex;
     gap: 10px;
-    padding: 10px 14px;
+    align-items: center;
+    padding: 9px 14px;
     text-decoration: none;
     color: #334155;
     border-bottom: 1px solid #f1f5f9;
@@ -220,6 +223,12 @@
     justify-content: center;
     flex-shrink: 0;
 }
+.hdr-notify-content {
+    min-width: 0;
+    flex: 1;
+    display: flex;
+    align-items: center;
+}
 .hdr-notify-icon.warehouse {
     background: #fef3c7;
     color: #b45309;
@@ -231,17 +240,65 @@
 .hdr-notify-title {
     font-size: 13px;
     font-weight: 700;
-    line-height: 1.25;
-}
-.hdr-notify-meta {
-    font-size: 12px;
-    color: #64748b;
-    line-height: 1.25;
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 .hdr-notify-empty {
     padding: 14px;
     color: #64748b;
     font-size: 13px;
+}
+
+.header__nav__widget__btn {
+    gap: 10px;
+}
+
+.header__nav__widget__btn .js-cart-widget {
+    margin-right: 0 !important;
+}
+
+.header__nav__widget__btn .js-cart-widget .btn {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    border-color: rgba(15,118,110,0.22);
+    color: #0f766e;
+    background: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+}
+
+.header__nav__widget__btn .js-cart-widget .btn:hover {
+    background: rgba(15,118,110,0.08);
+    border-color: rgba(15,118,110,0.45);
+    color: #0f766e;
+}
+
+.header__nav__widget__btn .js-cart-widget .btn i {
+    font-size: 18px;
+}
+
+.header__nav__widget__btn .dropdown {
+    margin-right: 0 !important;
+}
+
+@media (max-width: 991.98px) {
+    .header__nav__widget__btn {
+        gap: 8px;
+    }
+
+    .hdr-account-btn {
+        padding-right: 8px;
+        max-width: 150px;
+    }
+
+    .hdr-account-name {
+        max-width: 72px;
+    }
 }
 </style>
 
@@ -371,7 +428,7 @@
     </div> 
      <div class="container">
         <div class="row">
-            <div class="col-lg-4">
+            <div class="col-lg-3">
                 <div class="header__logo"> 
                     <a href="{{ route('home') }}">
                         @if(isset($settings['logo']) && $settings['logo']->value)
@@ -387,7 +444,7 @@
                     </a>
                 </div>
             </div>
-            <div class="col-lg-8 d-flex justify-content-end align-items-center">
+            <div class="col-lg-9 d-flex justify-content-end align-items-center">
                 <div class="header__nav ">
                     <nav class="header__menu "> 
                         <ul class="mb-0 ml-0 pb-0 pl-0">
@@ -406,7 +463,7 @@
                     <div class="header__nav__widget">
                         <div class="header__nav__widget__btn  d-flex justify-content-end align-items-center">
 
-                            <x-cart-widget :cartCount="count(session('cart', []))" class="me-3" />
+                            <x-cart-widget :cartCount="count(session('cart', []))" />
                             @auth
                                 @php
                                     $hdrSalesNotifications = collect();
@@ -459,7 +516,7 @@
                                 @endphp
 
                                 @if(Auth::user()->isSalesFlowRole())
-                                    <div class="dropdown me-3">
+                                    <div class="dropdown">
                                         <button type="button"
                                             class="hdr-notify-btn dropdown-toggle"
                                             id="hdrNotifyBtn"
@@ -483,9 +540,8 @@
                                                                 <i class="bi bi-person-check"></i>
                                                             @endif
                                                         </span>
-                                                        <span>
-                                                            <div class="hdr-notify-title">{{ $notify['title'] }}</div>
-                                                            <div class="hdr-notify-meta">{{ $notify['meta'] }}</div>
+                                                        <span class="hdr-notify-content">
+                                                            <span class="hdr-notify-title">{{ $notify['title'] }}: {{ $notify['meta'] }}</span>
                                                         </span>
                                                     </a>
                                                 @empty
