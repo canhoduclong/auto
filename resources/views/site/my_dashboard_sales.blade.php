@@ -279,6 +279,7 @@
 
             <div class="col-lg-5">
                 @if(($pendingWarehouseAdjustments ?? collect())->isNotEmpty())
+                    <div id="pending-warehouse-adjustments"></div>
                     <h6 class="mx-1 mb-3 text-uppercase fs-5" style="color:#b45309;">Yêu cầu thay đổi đơn từ kho</h6>
                     <div class="pb-3 mb-3">
                         @foreach($pendingWarehouseAdjustments as $idx => $pendingOrder)

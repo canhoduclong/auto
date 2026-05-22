@@ -134,6 +134,115 @@
 .hdr-account-logout { color: #ef4444 !important; }
 .hdr-account-logout i { color: #ef4444 !important; }
 .hdr-account-logout:hover { background: rgba(239,68,68,0.07) !important; color: #dc2626 !important; }
+
+.hdr-notify-btn {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    border: 1px solid rgba(15,118,110,0.22);
+    background: #fff;
+    color: #0f766e;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    transition: all 0.18s ease;
+}
+.hdr-notify-btn:hover,
+.hdr-notify-btn.show {
+    background: rgba(15,118,110,0.08);
+    border-color: rgba(15,118,110,0.45);
+    color: #0f766e;
+}
+.hdr-notify-btn i {
+    font-size: 18px;
+}
+.hdr-notify-badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    min-width: 20px;
+    height: 20px;
+    border-radius: 999px;
+    background: #dc2626;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 6px;
+    border: 2px solid #fff;
+}
+.hdr-notify-menu {
+    width: 340px;
+    max-width: calc(100vw - 24px);
+    border-radius: 14px;
+    border: 1px solid rgba(148,163,184,0.22);
+    box-shadow: 0 16px 40px rgba(15,23,42,0.12);
+    padding: 0;
+    overflow: hidden;
+}
+.hdr-notify-header {
+    padding: 10px 14px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: #475569;
+    background: #f8fafc;
+}
+.hdr-notify-list {
+    max-height: 320px;
+    overflow-y: auto;
+}
+.hdr-notify-item {
+    display: flex;
+    gap: 10px;
+    padding: 10px 14px;
+    text-decoration: none;
+    color: #334155;
+    border-bottom: 1px solid #f1f5f9;
+}
+.hdr-notify-item:hover {
+    background: #f8fafc;
+    color: #0f766e;
+}
+.hdr-notify-item:last-child {
+    border-bottom: 0;
+}
+.hdr-notify-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.hdr-notify-icon.warehouse {
+    background: #fef3c7;
+    color: #b45309;
+}
+.hdr-notify-icon.customer {
+    background: #dcfce7;
+    color: #15803d;
+}
+.hdr-notify-title {
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.25;
+}
+.hdr-notify-meta {
+    font-size: 12px;
+    color: #64748b;
+    line-height: 1.25;
+}
+.hdr-notify-empty {
+    padding: 14px;
+    color: #64748b;
+    font-size: 13px;
+}
 </style>
 
 <div class="offcanvas-menu-overlay"></div>
@@ -299,6 +408,94 @@
 
                             <x-cart-widget :cartCount="count(session('cart', []))" class="me-3" />
                             @auth
+                                @php
+                                    $hdrSalesNotifications = collect();
+                                    $hdrPendingAdjustmentsCount = 0;
+                                    $hdrAssignedCustomersCount = 0;
+
+                                    if (Auth::user()->isSalesFlowRole()) {
+                                        $hdrPendingAdjustments = App\Models\Order::query()
+                                            ->with('customer')
+                                            ->where('user_id', Auth::id())
+                                            ->where('warehouse_adjustment_status', App\Models\Order::WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION)
+                                            ->orderByDesc('warehouse_adjustment_requested_at')
+                                            ->limit(5)
+                                            ->get();
+
+                                        $hdrPendingAdjustmentsCount = $hdrPendingAdjustments->count();
+
+                                        $hdrPendingAdjustments->each(function ($order) use (&$hdrSalesNotifications) {
+                                            $hdrSalesNotifications->push([
+                                                'type' => 'warehouse',
+                                                'title' => 'Yêu cầu thay đổi đơn hàng từ Kho',
+                                                'meta' => ($order->code ?: ('#' . $order->id)) . ' - ' . ($order->customer?->name ?: 'Khách hàng'),
+                                                'link' => route('pages.my_dashboard') . '#pending-warehouse-adjustments',
+                                            ]);
+                                        });
+
+                                        $hdrAssignedCustomers = App\Models\Customer::query()
+                                            ->where('assigned_to', Auth::id())
+                                            ->where(function ($query) {
+                                                $query->whereNull('current_owner_sale_id')
+                                                    ->orWhere('current_owner_sale_id', '!=', Auth::id());
+                                            })
+                                            ->orderByDesc('assigned_at')
+                                            ->limit(5)
+                                            ->get();
+
+                                        $hdrAssignedCustomersCount = $hdrAssignedCustomers->count();
+
+                                        $hdrAssignedCustomers->each(function ($customer) use (&$hdrSalesNotifications) {
+                                            $hdrSalesNotifications->push([
+                                                'type' => 'customer',
+                                                'title' => 'Được gán khách hàng từ Admin',
+                                                'meta' => ($customer->name ?: 'Khách hàng') . ' - ' . ($customer->phone ?: 'Chưa có SĐT'),
+                                                'link' => route('pages.my_dashboard') . '#assigned-customers',
+                                            ]);
+                                        });
+                                    }
+
+                                    $hdrSalesNotificationCount = $hdrPendingAdjustmentsCount + $hdrAssignedCustomersCount;
+                                @endphp
+
+                                @if(Auth::user()->isSalesFlowRole())
+                                    <div class="dropdown me-3">
+                                        <button type="button"
+                                            class="hdr-notify-btn dropdown-toggle"
+                                            id="hdrNotifyBtn"
+                                            data-bs-toggle="dropdown"
+                                            aria-expanded="false"
+                                            aria-label="Thông báo">
+                                            <i class="bi bi-bell"></i>
+                                            @if($hdrSalesNotificationCount > 0)
+                                                <span class="hdr-notify-badge">{{ $hdrSalesNotificationCount > 99 ? '99+' : $hdrSalesNotificationCount }}</span>
+                                            @endif
+                                        </button>
+                                        <div class="dropdown-menu dropdown-menu-end hdr-notify-menu" aria-labelledby="hdrNotifyBtn">
+                                            <div class="hdr-notify-header">Thông báo Sale</div>
+                                            <div class="hdr-notify-list">
+                                                @forelse($hdrSalesNotifications as $notify)
+                                                    <a href="{{ $notify['link'] }}" class="hdr-notify-item">
+                                                        <span class="hdr-notify-icon {{ $notify['type'] }}">
+                                                            @if($notify['type'] === 'warehouse')
+                                                                <i class="bi bi-box-seam"></i>
+                                                            @else
+                                                                <i class="bi bi-person-check"></i>
+                                                            @endif
+                                                        </span>
+                                                        <span>
+                                                            <div class="hdr-notify-title">{{ $notify['title'] }}</div>
+                                                            <div class="hdr-notify-meta">{{ $notify['meta'] }}</div>
+                                                        </span>
+                                                    </a>
+                                                @empty
+                                                    <div class="hdr-notify-empty">Hiện chưa có thông báo mới.</div>
+                                                @endforelse
+                                            </div>
+                                        </div>
+                                    </div>
+                                @endif
+
                                 @php
                                     $hdrAvatarUrl = Auth::user()->avatar
                                         ? asset(Auth::user()->avatar)
