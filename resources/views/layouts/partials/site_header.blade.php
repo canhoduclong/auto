@@ -201,15 +201,17 @@
 .hdr-notify-item {
     display: flex;
     gap: 10px;
-    align-items: center;
-    padding: 9px 14px;
+    align-items: flex-start;
+    padding: 10px 14px;
     text-decoration: none;
     color: #334155;
     border-bottom: 1px solid #f1f5f9;
+    transition: background 0.16s ease, transform 0.16s ease, border-color 0.16s ease;
 }
 .hdr-notify-item:hover {
-    background: #f8fafc;
+    background: linear-gradient(90deg, rgba(15,118,110,0.09), rgba(15,118,110,0.03));
     color: #0f766e;
+    border-bottom-color: rgba(15,118,110,0.12);
 }
 .hdr-notify-item:last-child {
     border-bottom: 0;
@@ -227,7 +229,9 @@
     min-width: 0;
     flex: 1;
     display: flex;
-    align-items: center;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
 }
 .hdr-notify-icon.warehouse {
     background: #fef3c7;
@@ -238,12 +242,24 @@
     color: #15803d;
 }
 .hdr-notify-title {
-    font-size: 13px;
+    font-size: 12.5px;
     font-weight: 700;
     display: block;
+    line-height: 1.25;
+    width: 100%;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+.hdr-notify-meta {
+    width: 100%;
+    font-size: 12px;
+    color: #64748b;
+    line-height: 1.28;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
 }
 .hdr-notify-empty {
     padding: 14px;
@@ -529,10 +545,10 @@
                                             @endif
                                         </button>
                                         <div class="dropdown-menu dropdown-menu-end hdr-notify-menu" aria-labelledby="hdrNotifyBtn">
-                                            <div class="hdr-notify-header">Thông báo Sale</div>
+                                            <div class="hdr-notify-header">Thông báo</div>
                                             <div class="hdr-notify-list">
                                                 @forelse($hdrSalesNotifications as $notify)
-                                                    <a href="{{ $notify['link'] }}" class="hdr-notify-item">
+                                                    <a href="{{ $notify['link'] }}" class="hdr-notify-item d-flex align-items-center">
                                                         <span class="hdr-notify-icon {{ $notify['type'] }}">
                                                             @if($notify['type'] === 'warehouse')
                                                                 <i class="bi bi-box-seam"></i>
@@ -540,8 +556,9 @@
                                                                 <i class="bi bi-person-check"></i>
                                                             @endif
                                                         </span>
-                                                        <span class="hdr-notify-content">
-                                                            <span class="hdr-notify-title">{{ $notify['title'] }}: {{ $notify['meta'] }}</span>
+                                                        <span class="hdr-notify-content d-flex flex-column align-items-start flex-grow-1">
+                                                            <span class="hdr-notify-title">{{ $notify['title'] }}</span>
+                                                            <span class="hdr-notify-meta">{{ $notify['meta'] }}</span>
                                                         </span>
                                                     </a>
                                                 @empty
