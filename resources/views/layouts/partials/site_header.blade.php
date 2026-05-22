@@ -301,6 +301,9 @@
 .header__nav__widget__btn .dropdown {
     margin-right: 0 !important;
 }
+.dropdown-toggle::after {
+    display: none !important;
+}
 
 @media (max-width: 991.98px) {
     .header__nav__widget__btn {
@@ -315,6 +318,7 @@
     .hdr-account-name {
         max-width: 72px;
     }
+    
 }
 </style>
 

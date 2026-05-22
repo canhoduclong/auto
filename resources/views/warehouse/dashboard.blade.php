@@ -93,6 +93,9 @@
                 <a href="{{ route('warehouse.orders', ['date' => $selectedDate->toDateString()]) }}" class="btn btn-outline-primary wh-btn-sync">
                     <i class="bi bi-box2-fill me-1"></i>Xem tất cả đơn theo ngày
                 </a>
+                <a href="{{ route('warehouse.inventory-transfers.index') }}" class="btn btn-outline-success wh-btn-sync">
+                    <i class="bi bi-arrow-left-right me-1"></i>Tạo phiếu điều chuyển kho
+                </a>
             </div>
         </form>
         <div class="small text-muted mt-2">

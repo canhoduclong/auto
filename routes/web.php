@@ -245,6 +245,10 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/stock-out/orders',  [WarehouseDashboardController::class, 'exportedOrders'])->name('stock-out.orders');
         Route::post('/stock-out',        [WarehouseDashboardController::class, 'storeStockOut'])->name('stock-out.store');
         Route::get('/stock-out/{document}', [WarehouseDashboardController::class, 'showDocument'])->name('stock-out.show');
+        Route::get('/inventory-transfers', [WarehouseDashboardController::class, 'inventoryTransfers'])->name('inventory-transfers.index');
+        Route::post('/inventory-transfers', [WarehouseDashboardController::class, 'storeInventoryTransfer'])->name('inventory-transfers.store');
+        Route::get('/inventory-transfers/incoming', [WarehouseDashboardController::class, 'incomingInventoryTransfers'])->name('inventory-transfers.incoming');
+        Route::post('/inventory-transfers/{transfer}/confirm', [WarehouseDashboardController::class, 'confirmIncomingInventoryTransfer'])->name('inventory-transfers.confirm');
         Route::get('/inventory',   [WarehouseDashboardController::class, 'inventory'])->name('inventory');
         Route::post('/inventory/cancel-overdue', [WarehouseDashboardController::class, 'cancelOverdueOrders'])->name('inventory.cancel-overdue');
         Route::get('/products',    [WarehouseDashboardController::class, 'products'])->name('products');

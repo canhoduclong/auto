@@ -16,6 +16,8 @@ use App\Models\ReturnItem;
 use App\Models\Setting;
 use App\Models\User;
 use App\Models\Warehouse;
+use App\Models\WarehouseInventoryTransfer;
+use App\Models\WarehouseInventoryTransferItem;
 use App\Models\WarehouseTransfer;
 use App\Notifications\WarehouseOrderAdjustmentRequested;
 use Carbon\Carbon;
@@ -2441,6 +2443,319 @@ class WarehouseDashboardController extends Controller
     public function storeStockOut(Request $request)
     {
         return $this->storeDocument($request, 'export');
+    }
+
+    /**
+     * Transfer between warehouses (outgoing).
+     */
+    public function inventoryTransfers(Request $request)
+    {
+        $managedWarehouseId = Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
+        if (!$managedWarehouseId) {
+            return redirect()->route('warehouse.dashboard')
+                ->with('error', 'Bạn chưa được gán kho quản lý để tạo phiếu điều chuyển.');
+        }
+
+        $sourceWarehouse = Warehouse::query()->find($managedWarehouseId);
+        $targetWarehouses = Warehouse::query()
+            ->where('id', '!=', $managedWarehouseId)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        $availableVariants = Inventory::query()
+            ->with(['productVariant.product'])
+            ->where('warehouse_id', $managedWarehouseId)
+            ->whereRaw('(quantity - reserved_quantity) > 0')
+            ->orderByRaw('(quantity - reserved_quantity) DESC')
+            ->get()
+            ->map(function (Inventory $inventory) {
+                $variant = $inventory->productVariant;
+                if (!$variant || !$variant->product) {
+                    return null;
+                }
+
+                return [
+                    'variant_id' => (int) $variant->id,
+                    'label' => ($variant->product->name ?? 'Sản phẩm')
+                        . ' - ' . ($variant->name ?? 'Biến thể')
+                        . ($variant->sku ? ' (' . $variant->sku . ')' : ''),
+                    'unit_label' => $variant->product->unit_label ?? 'Cái',
+                    'available' => max(0, (int) $inventory->quantity - (int) $inventory->reserved_quantity),
+                ];
+            })
+            ->filter()
+            ->values();
+
+        $outgoingTransfers = WarehouseInventoryTransfer::query()
+            ->with([
+                'targetWarehouse:id,name',
+                'requester:id,name',
+                'items.variant.product',
+            ])
+            ->where('source_warehouse_id', $managedWarehouseId)
+            ->latest('id')
+            ->paginate(10);
+
+        $incomingPendingCount = WarehouseInventoryTransfer::query()
+            ->where('target_warehouse_id', $managedWarehouseId)
+            ->where('status', WarehouseInventoryTransfer::STATUS_PENDING_RECEIVE)
+            ->count();
+
+        return view('warehouse.transfers.inventory', compact(
+            'sourceWarehouse',
+            'targetWarehouses',
+            'availableVariants',
+            'outgoingTransfers',
+            'incomingPendingCount'
+        ));
+    }
+
+    /**
+     * Create a stock transfer request from managed warehouse to another warehouse.
+     */
+    public function storeInventoryTransfer(Request $request)
+    {
+        $managedWarehouseId = Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
+        if (!$managedWarehouseId) {
+            return back()->with('error', 'Bạn chưa được gán kho quản lý để tạo phiếu điều chuyển.');
+        }
+
+        $validated = $request->validate([
+            'target_warehouse_id' => ['required', 'integer', 'exists:warehouses,id'],
+            'note' => ['nullable', 'string', 'max:1000'],
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.product_variant_id' => ['required', 'integer', 'exists:product_variants,id'],
+            'items.*.quantity' => ['required', 'integer', 'min:1'],
+            'items.*.unit_cost' => ['nullable', 'numeric', 'min:0'],
+        ]);
+
+        $targetWarehouseId = (int) $validated['target_warehouse_id'];
+        if ($targetWarehouseId === $managedWarehouseId) {
+            return back()->withErrors([
+                'target_warehouse_id' => 'Kho nhận phải khác kho nguồn.',
+            ])->withInput();
+        }
+
+        $normalizedItems = collect($validated['items'])
+            ->map(function (array $row) {
+                return [
+                    'product_variant_id' => (int) $row['product_variant_id'],
+                    'quantity' => (int) $row['quantity'],
+                    'unit_cost' => (float) ($row['unit_cost'] ?? 0),
+                ];
+            })
+            ->groupBy('product_variant_id')
+            ->map(function (Collection $rows, int $variantId) {
+                return [
+                    'product_variant_id' => $variantId,
+                    'quantity' => (int) $rows->sum('quantity'),
+                    'unit_cost' => (float) $rows->last()['unit_cost'],
+                ];
+            })
+            ->values();
+
+        try {
+            DB::transaction(function () use ($normalizedItems, $managedWarehouseId, $targetWarehouseId, $validated): void {
+                $targetWarehouse = Warehouse::query()->find($targetWarehouseId);
+
+                $transfer = WarehouseInventoryTransfer::create([
+                    'source_warehouse_id' => $managedWarehouseId,
+                    'target_warehouse_id' => $targetWarehouseId,
+                    'requested_by' => Auth::id(),
+                    'status' => WarehouseInventoryTransfer::STATUS_PENDING_RECEIVE,
+                    'note' => trim((string) ($validated['note'] ?? '')) ?: null,
+                    'requested_at' => now(),
+                ]);
+
+                $exportDocument = InventoryDocument::create([
+                    'type' => 'export',
+                    'document_date' => now()->toDateString(),
+                    'warehouse_id' => $managedWarehouseId,
+                    'supplier_id' => null,
+                    'shipping_fee' => 0,
+                    'notes' => 'Điều chuyển kho #' . ($transfer->transfer_code ?? $transfer->id)
+                        . ' sang ' . ($targetWarehouse?->name ?? ('Kho #' . $targetWarehouseId)),
+                    'user_id' => Auth::id(),
+                ]);
+
+                foreach ($normalizedItems as $item) {
+                    $variantId = (int) $item['product_variant_id'];
+                    $qty = (int) $item['quantity'];
+                    $unitCost = (float) $item['unit_cost'];
+
+                    $inventory = Inventory::query()->where([
+                        'warehouse_id' => $managedWarehouseId,
+                        'product_variant_id' => $variantId,
+                    ])->lockForUpdate()->first();
+
+                    $available = $inventory
+                        ? max(0, (int) $inventory->quantity - (int) $inventory->reserved_quantity)
+                        : 0;
+
+                    if ($available < $qty) {
+                        $variant = ProductVariant::query()->find($variantId);
+                        throw new \RuntimeException(
+                            'Không đủ tồn để điều chuyển cho ' . ($variant?->name ?? ('biến thể #' . $variantId))
+                            . '. Tồn khả dụng: ' . $available . ', yêu cầu: ' . $qty . '.'
+                        );
+                    }
+
+                    WarehouseInventoryTransferItem::create([
+                        'transfer_id' => $transfer->id,
+                        'product_variant_id' => $variantId,
+                        'quantity' => $qty,
+                        'unit_cost' => $unitCost,
+                    ]);
+
+                    $exportDocument->items()->create([
+                        'product_variant_id' => $variantId,
+                        'quantity' => $qty,
+                        'unit_cost' => $unitCost,
+                    ]);
+
+                    InventoryMovement::create([
+                        'inventory_id' => $inventory->id,
+                        'quantity' => -$qty,
+                        'type' => 'transfer_out',
+                        'reference_id' => $transfer->id,
+                        'reference_type' => WarehouseInventoryTransfer::class,
+                        'user_id' => Auth::id(),
+                    ]);
+
+                    $inventory->decrement('quantity', $qty);
+
+                    $totalStock = (int) Inventory::query()
+                        ->where('product_variant_id', $variantId)
+                        ->sum('quantity');
+                    ProductVariant::query()->where('id', $variantId)->update(['stock' => $totalStock]);
+                }
+
+                $transfer->update([
+                    'export_document_id' => $exportDocument->id,
+                ]);
+            });
+        } catch (\RuntimeException $e) {
+            return back()->withErrors([
+                'items' => $e->getMessage(),
+            ])->withInput();
+        }
+
+        return redirect()->route('warehouse.inventory-transfers.index')
+            ->with('success', 'Đã tạo phiếu điều chuyển kho thành công. Kho đích có thể vào phần tiếp nhận để nhập kho.');
+    }
+
+    /**
+     * Incoming stock transfers waiting to be received.
+     */
+    public function incomingInventoryTransfers()
+    {
+        $managedWarehouseId = Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
+        if (!$managedWarehouseId) {
+            return redirect()->route('warehouse.dashboard')
+                ->with('error', 'Bạn chưa được gán kho quản lý để tiếp nhận điều chuyển.');
+        }
+
+        $transfers = WarehouseInventoryTransfer::query()
+            ->with([
+                'sourceWarehouse:id,name',
+                'targetWarehouse:id,name',
+                'requester:id,name',
+                'receiver:id,name',
+                'items.variant.product',
+            ])
+            ->where('target_warehouse_id', $managedWarehouseId)
+            ->whereIn('status', [
+                WarehouseInventoryTransfer::STATUS_PENDING_RECEIVE,
+                WarehouseInventoryTransfer::STATUS_RECEIVED_COMPLETED,
+            ])
+            ->orderByRaw("CASE WHEN status = 'pending_receive' THEN 0 ELSE 1 END")
+            ->latest('id')
+            ->paginate(12);
+
+        $pendingCount = $transfers->getCollection()
+            ->where('status', WarehouseInventoryTransfer::STATUS_PENDING_RECEIVE)
+            ->count();
+
+        return view('warehouse.transfers.inventory-incoming', compact('transfers', 'pendingCount'));
+    }
+
+    /**
+     * Confirm receipt of a stock transfer at destination warehouse.
+     */
+    public function confirmIncomingInventoryTransfer(WarehouseInventoryTransfer $transfer)
+    {
+        $managedWarehouseId = Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
+        if (!$managedWarehouseId || (int) $transfer->target_warehouse_id !== $managedWarehouseId) {
+            abort(403, 'Bạn không có quyền tiếp nhận phiếu điều chuyển này.');
+        }
+
+        if ($transfer->status !== WarehouseInventoryTransfer::STATUS_PENDING_RECEIVE) {
+            return back()->with('error', 'Phiếu điều chuyển này không còn ở trạng thái chờ tiếp nhận.');
+        }
+
+        $transfer->loadMissing(['items.variant.product', 'sourceWarehouse', 'targetWarehouse']);
+
+        DB::transaction(function () use ($transfer): void {
+            $importDocument = InventoryDocument::create([
+                'type' => 'import',
+                'document_date' => now()->toDateString(),
+                'warehouse_id' => (int) $transfer->target_warehouse_id,
+                'supplier_id' => null,
+                'shipping_fee' => 0,
+                'notes' => 'Tiếp nhận điều chuyển kho #' . ($transfer->transfer_code ?? $transfer->id)
+                    . ' từ ' . ($transfer->sourceWarehouse?->name ?? ('Kho #' . $transfer->source_warehouse_id)),
+                'user_id' => Auth::id(),
+            ]);
+
+            foreach ($transfer->items as $item) {
+                $variantId = (int) $item->product_variant_id;
+                $qty = (int) $item->quantity;
+                $unitCost = (float) $item->unit_cost;
+
+                $importDocument->items()->create([
+                    'product_variant_id' => $variantId,
+                    'quantity' => $qty,
+                    'unit_cost' => $unitCost,
+                ]);
+
+                $inventory = Inventory::query()->firstOrCreate(
+                    [
+                        'warehouse_id' => (int) $transfer->target_warehouse_id,
+                        'product_variant_id' => $variantId,
+                    ],
+                    [
+                        'quantity' => 0,
+                        'reserved_quantity' => 0,
+                        'low_stock_threshold' => 5,
+                    ]
+                );
+
+                InventoryMovement::create([
+                    'inventory_id' => $inventory->id,
+                    'quantity' => $qty,
+                    'type' => 'transfer_in',
+                    'reference_id' => $transfer->id,
+                    'reference_type' => WarehouseInventoryTransfer::class,
+                    'user_id' => Auth::id(),
+                ]);
+
+                $inventory->increment('quantity', $qty);
+
+                $totalStock = (int) Inventory::query()
+                    ->where('product_variant_id', $variantId)
+                    ->sum('quantity');
+                ProductVariant::query()->where('id', $variantId)->update(['stock' => $totalStock]);
+            }
+
+            $transfer->update([
+                'status' => WarehouseInventoryTransfer::STATUS_RECEIVED_COMPLETED,
+                'received_by' => Auth::id(),
+                'received_at' => now(),
+                'import_document_id' => $importDocument->id,
+            ]);
+        });
+
+        return back()->with('success', 'Đã tiếp nhận phiếu điều chuyển và cập nhật nhập kho thành công.');
     }
 
     /**
