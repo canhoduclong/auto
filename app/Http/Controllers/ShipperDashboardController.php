@@ -1820,7 +1820,16 @@ class ShipperDashboardController extends Controller
             ->orderBy('created_at', 'asc')
             ->paginate(15);
 
-        return view('shipper.manage-fees', compact('orders', 'selectedDate'));
+        $orderReturns = OrderReturn::query()
+            ->with(['order.customer', 'warehouse'])
+            ->where(function ($query) use ($selectedDate) {
+                $query->whereDate('created_at', $selectedDate)
+                    ->orWhereDate('updated_at', $selectedDate);
+            })
+            ->orderByDesc('id')
+            ->get();
+
+        return view('shipper.manage-fees', compact('orders', 'selectedDate', 'orderReturns'));
     }
 
     /**

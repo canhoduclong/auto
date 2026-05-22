@@ -48,14 +48,33 @@ class WarehouseDashboardController extends Controller
 
     public function index(Request $request)
     {
+        $currentUser = Auth::user();
+        $managedWarehouseId = $currentUser?->warehouse_id ? (int) $currentUser->warehouse_id : null;
+
         $selectedDate = $request->filled('date')
             ? Carbon::parse($request->input('date'))->startOfDay()
             : Carbon::today();
 
         $dateString = $selectedDate->toDateString();
 
+        $applyWarehouseScope = function ($query) use ($managedWarehouseId, $currentUser) {
+            if ($managedWarehouseId && $currentUser?->hasRole('warehouse')) {
+                $query->where(function ($warehouseScope) use ($managedWarehouseId) {
+                    $warehouseScope->where('warehouse_id', $managedWarehouseId)
+                        ->orWhere(function ($sharedScope) {
+                            $sharedScope->whereNull('warehouse_id')
+                                ->whereIn('status', array_merge(self::READY_TO_PACK_STATUSES, [Order::STATUS_PACKING]));
+                        });
+                });
+            }
+
+            return $query;
+        };
+
         $dailyOrdersQuery = Order::with('customer')
             ->whereDate('created_at', $dateString);
+
+        $applyWarehouseScope($dailyOrdersQuery);
 
         $dailyOrders = (clone $dailyOrdersQuery)
             ->latest('created_at')
@@ -75,17 +94,28 @@ class WarehouseDashboardController extends Controller
         ];
 
         $stats = [
-            'ready_to_pack' => Order::whereIn('status', self::READY_TO_PACK_STATUSES)->count(),
-            'packing'       => Order::where('status', Order::STATUS_PACKING)->count(),
-            'packed_today'  => Order::whereIn('status', self::PACKED_STATUSES)
+            'ready_to_pack' => $applyWarehouseScope(Order::query())
+                ->whereIn('status', self::READY_TO_PACK_STATUSES)
+                ->whereDate('created_at', $dateString)
+                ->count(),
+            'packing'       => $applyWarehouseScope(Order::query())
+                ->where('status', Order::STATUS_PACKING)
+                ->whereDate('created_at', $dateString)
+                ->count(),
+            'packed_today'  => $applyWarehouseScope(Order::query())
+                ->whereIn('status', self::PACKED_STATUSES)
                 ->whereDate('updated_at', $dateString)->count(),
-            'returning'     => Order::where('status', Order::STATUS_RETURNING)->count(),
-            'done_today'    => Order::whereIn('status', self::PACKED_STATUSES)
+            'returning'     => $applyWarehouseScope(Order::query())
+                ->where('status', Order::STATUS_RETURNING)
+                ->whereDate('created_at', $dateString)
+                ->count(),
+            'done_today'    => $applyWarehouseScope(Order::query())
+                ->whereIn('status', self::PACKED_STATUSES)
                 ->whereDate('updated_at', $dateString)->count(),
             'orders_in_day' => (clone $dailyOrdersQuery)->count(),
         ];
 
-        $recentPacked = Order::with('customer')
+        $recentPacked = $applyWarehouseScope(Order::with('customer'))
             ->whereIn('status', self::PACKED_STATUSES)
             ->whereDate('updated_at', $dateString)
             ->orderByDesc('updated_at')
@@ -111,6 +141,7 @@ class WarehouseDashboardController extends Controller
 
         $currentUser = Auth::user();
         $managedWarehouseId = $currentUser?->warehouse_id ? (int) $currentUser->warehouse_id : null;
+        $sharedQueueStatuses = array_merge(self::READY_TO_PACK_STATUSES, [Order::STATUS_PACKING]);
 
         $selectedDate = $request->filled('date')
             ? Carbon::parse($request->input('date'))->toDateString()
@@ -124,6 +155,16 @@ class WarehouseDashboardController extends Controller
             ->selectRaw('DATE(created_at) as day_key, COUNT(*) as total')
             ->whereDate('created_at', '>=', $startDate)
             ->whereDate('created_at', '<=', $today->toDateString());
+
+        if ($managedWarehouseId && $currentUser?->hasRole('warehouse')) {
+            $dailyCountsQuery->where(function ($warehouseScope) use ($managedWarehouseId, $sharedQueueStatuses) {
+                $warehouseScope->where('warehouse_id', $managedWarehouseId)
+                    ->orWhere(function ($sharedScope) use ($sharedQueueStatuses) {
+                        $sharedScope->whereNull('warehouse_id')
+                            ->whereIn('status', $sharedQueueStatuses);
+                    });
+            });
+        }
 
         if (!empty($status)) {
             $dailyCountsQuery->where('status', $status);
@@ -160,7 +201,13 @@ class WarehouseDashboardController extends Controller
             ->whereDate('created_at', $selectedDate);
 
         if ($managedWarehouseId && $currentUser?->hasRole('warehouse')) {
-            $ordersQuery->where('warehouse_id', $managedWarehouseId);
+            $ordersQuery->where(function ($warehouseScope) use ($managedWarehouseId, $sharedQueueStatuses) {
+                $warehouseScope->where('warehouse_id', $managedWarehouseId)
+                    ->orWhere(function ($sharedScope) use ($sharedQueueStatuses) {
+                        $sharedScope->whereNull('warehouse_id')
+                            ->whereIn('status', $sharedQueueStatuses);
+                    });
+            });
         }
 
         if (!empty($status)) {
@@ -619,7 +666,25 @@ class WarehouseDashboardController extends Controller
             return back()->with('error', 'Đơn hàng không ở trạng thái Chờ đóng gói.');
         }
 
-        $managedWarehouseId = Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
+        $currentUser = Auth::user();
+        $managedWarehouseId = $currentUser?->warehouse_id ? (int) $currentUser->warehouse_id : null;
+        $currentOrderWarehouseId = (int) ($order->warehouse_id ?? 0);
+
+        if ($managedWarehouseId && $currentUser?->hasRole('warehouse')) {
+            if ($currentOrderWarehouseId > 0 && $currentOrderWarehouseId !== $managedWarehouseId) {
+                $message = 'Đơn hàng này thuộc kho khác, bạn không thể bắt đầu đóng gói.';
+
+                if ($request->expectsJson()) {
+                    return response()->json([
+                        'ok' => false,
+                        'message' => $message,
+                    ], 403);
+                }
+
+                return back()->with('error', $message);
+            }
+        }
+
         $stockCheck = $this->evaluateSingleOrderStock($order, $managedWarehouseId);
 
         if (!($stockCheck['can_start_packing'] ?? false)) {
@@ -644,7 +709,11 @@ class WarehouseDashboardController extends Controller
 
         $statusBefore = $order->status;
 
-        $order->update(['status' => Order::STATUS_PACKING]);
+        $updatePayload = ['status' => Order::STATUS_PACKING];
+        if ($managedWarehouseId && $currentOrderWarehouseId <= 0) {
+            $updatePayload['warehouse_id'] = $managedWarehouseId;
+        }
+        $order->update($updatePayload);
 
         OrderHistory::create([
             'order_id'      => $order->id,
