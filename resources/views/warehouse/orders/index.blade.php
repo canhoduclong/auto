@@ -703,7 +703,7 @@
     @else
     @php
         $packedOrders = $orders->filter(fn($o) => in_array((string)$o->status, $packedLikeStatuses, true));
-        $unpackedOrders = $orders->reject(fn($o) => in_array((string)$o->status, $packedLikeStatuses, true));
+        $unpackedOrders = $orders->reject(fn($o) => in_array((string)$o->status, $packedLikeStatuses, true))->sortBy('daily_sequence');
     @endphp
 
     <div class="wh-order-nav-area mb-4">

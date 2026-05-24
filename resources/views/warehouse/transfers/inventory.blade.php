@@ -85,8 +85,8 @@
 
             <div class="d-flex justify-content-between align-items-center mb-2">
                 <h6 class="mb-0">Sản phẩm điều chuyển từ tồn kho hiện có</h6>
-                <button class="btn btn-outline-primary btn-sm" type="button" id="addTransferItemBtn">
-                    <i class="bi bi-plus-circle me-1"></i>Thêm sản phẩm
+                <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#productSelectionModal">
+                    <i class="bi bi-search me-1"></i>Chọn sản phẩm
                 </button>
             </div>
 
@@ -102,36 +102,36 @@
                         </tr>
                     </thead>
                     <tbody id="transferItemsBody">
-                        <tr class="transfer-item-row" data-row-index="0">
-                            <td>
-                                <select name="items[0][product_variant_id]" class="form-select variant-select" required>
-                                    <option value="">-- Chọn sản phẩm tồn kho --</option>
-                                    @foreach($availableVariants as $variant)
-                                        <option
-                                            value="{{ $variant['variant_id'] }}"
-                                            data-available="{{ $variant['available'] }}"
-                                            data-unit-label="{{ $variant['unit_label'] }}"
-                                            {{ (string) old('items.0.product_variant_id') === (string) $variant['variant_id'] ? 'selected' : '' }}>
-                                            {{ $variant['label'] }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                            </td>
-                            <td class="text-center">
-                                <span class="badge bg-light text-dark border available-badge">0</span>
-                            </td>
-                            <td>
-                                <input type="number" min="1" name="items[0][quantity]" class="form-control text-center qty-input" value="{{ old('items.0.quantity', 1) }}" required>
-                            </td>
-                            <td>
-                                <input type="number" min="0" step="1000" name="items[0][unit_cost]" class="form-control text-end" value="{{ old('items.0.unit_cost', 0) }}">
-                            </td>
-                            <td class="text-center">
-                                <button type="button" class="btn btn-link text-danger p-0 remove-row-btn" title="Xóa dòng">
-                                    <i class="bi bi-x-circle-fill"></i>
-                                </button>
-                            </td>
-                        </tr>
+                        @php
+                            $oldItems = old('items', []);
+                        @endphp
+                        @foreach($oldItems as $index => $item)
+                            @php
+                                $vid = $item['product_variant_id'] ?? '';
+                                $variant = collect($availableVariants)->firstWhere('variant_id', $vid);
+                                if (!$variant) continue;
+                            @endphp
+                            <tr class="transfer-item-row" data-row-index="{{ $index }}" data-variant-id="{{ $vid }}">
+                                <td>
+                                    <div class="fw-semibold">{{ $variant['label'] }}</div>
+                                    <input type="hidden" name="items[{{ $index }}][product_variant_id]" class="variant-input" value="{{ $vid }}">
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge bg-light text-dark border available-badge" data-available="{{ $variant['available'] }}">{{ number_format($variant['available']) }}</span>
+                                </td>
+                                <td>
+                                    <input type="number" min="1" max="{{ max(1, $variant['available']) }}" name="items[{{ $index }}][quantity]" class="form-control text-center qty-input" value="{{ $item['quantity'] ?? 1 }}" required>
+                                </td>
+                                <td>
+                                    <input type="number" min="0" step="1000" name="items[{{ $index }}][unit_cost]" class="form-control text-end" value="{{ $item['unit_cost'] ?? 0 }}">
+                                </td>
+                                <td class="text-center">
+                                    <button type="button" class="btn btn-link text-danger p-0 remove-row-btn" title="Xóa dòng">
+                                        <i class="bi bi-x-circle-fill"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        @endforeach
                     </tbody>
                 </table>
             </div>
@@ -200,44 +200,73 @@
     @endif
 </div>
 
+<div class="modal fade" id="productSelectionModal" tabindex="-1" aria-labelledby="productSelectionModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title" id="productSelectionModalLabel">
+                    <i class="bi bi-box-seam me-2"></i>Chọn sản phẩm tồn kho
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div class="p-3 border-bottom sticky-top bg-white">
+                    <div class="input-group">
+                        <span class="input-group-text bg-light border-end-0"><i class="bi bi-search"></i></span>
+                        <input type="text" id="productSearchInput" class="form-control border-start-0 ps-0" placeholder="Tìm kiếm theo tên sản phẩm hoặc biến thể...">
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light" style="position: sticky; top: 70px; z-index: 1;">
+                            <tr>
+                                <th class="ps-3">Sản phẩm - Biến thể</th>
+                                <th class="text-center">ĐVT</th>
+                                <th class="text-center">Tồn khả dụng</th>
+                                <th class="text-end pe-3">Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="productSelectionList">
+                            @foreach($availableVariants as $variant)
+                                <tr class="product-selection-row" data-search="{{ mb_strtolower($variant['label']) }}">
+                                    <td class="ps-3 fw-medium">{{ $variant['label'] }}</td>
+                                    <td class="text-center">{{ $variant['unit_label'] }}</td>
+                                    <td class="text-center">
+                                        <span class="badge bg-primary rounded-pill">{{ number_format($variant['available']) }}</span>
+                                    </td>
+                                    <td class="text-end pe-3">
+                                        <button type="button" class="btn btn-sm btn-outline-success js-select-product" 
+                                            data-id="{{ $variant['variant_id'] }}"
+                                            data-label="{{ $variant['label'] }}"
+                                            data-available="{{ $variant['available'] }}">
+                                            <i class="bi bi-plus-circle me-1"></i>Chọn
+                                        </button>
+                                    </td>
+                                </tr>
+                            @endforeach
+                            <tr id="noProductsFound" style="display: none;">
+                                <td colspan="4" class="text-center text-muted py-4">Không tìm thấy sản phẩm phù hợp.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 (function () {
     const tableBody = document.getElementById('transferItemsBody');
-    const addBtn = document.getElementById('addTransferItemBtn');
     const form = document.getElementById('inventoryTransferForm');
-    let rowIndex = 1;
-
-    function updateAvailableBadge(row) {
-        const select = row.querySelector('.variant-select');
-        const badge = row.querySelector('.available-badge');
-        if (!select || !badge) {
-            return;
-        }
-
-        const option = select.options[select.selectedIndex];
-        const available = option ? parseInt(option.dataset.available || '0', 10) : 0;
-        badge.textContent = Number.isFinite(available) ? available.toLocaleString('vi-VN') : '0';
-
-        const qtyInput = row.querySelector('.qty-input');
-        if (qtyInput) {
-            qtyInput.max = String(Math.max(available, 1));
-            if (Number(qtyInput.value) > available && available > 0) {
-                qtyInput.value = String(available);
-            }
-        }
-    }
+    const searchInput = document.getElementById('productSearchInput');
+    const productRows = document.querySelectorAll('.product-selection-row');
+    const noProductsFound = document.getElementById('noProductsFound');
+    let rowIndex = tableBody.querySelectorAll('.transfer-item-row').length || 0;
 
     function attachRowHandlers(row) {
-        const variantSelect = row.querySelector('.variant-select');
         const qtyInput = row.querySelector('.qty-input');
         const removeBtn = row.querySelector('.remove-row-btn');
-
-        if (variantSelect) {
-            variantSelect.addEventListener('change', function () {
-                updateAvailableBadge(row);
-            });
-            updateAvailableBadge(row);
-        }
 
         if (qtyInput) {
             qtyInput.addEventListener('input', function () {
@@ -251,56 +280,125 @@
 
         if (removeBtn) {
             removeBtn.addEventListener('click', function () {
-                const rows = tableBody.querySelectorAll('.transfer-item-row');
-                if (rows.length <= 1) {
-                    alert('Phiếu điều chuyển cần ít nhất 1 sản phẩm.');
-                    return;
-                }
                 row.remove();
             });
         }
     }
 
-    addBtn.addEventListener('click', function () {
-        const firstRow = tableBody.querySelector('.transfer-item-row');
-        if (!firstRow) {
-            return;
-        }
+    tableBody.querySelectorAll('.transfer-item-row').forEach(attachRowHandlers);
 
-        const newRow = firstRow.cloneNode(true);
-        newRow.setAttribute('data-row-index', String(rowIndex));
+    // Filter products
+    if (searchInput) {
+        searchInput.addEventListener('input', function () {
+            const term = this.value.toLowerCase().trim();
+            let hasVisible = false;
 
-        newRow.querySelectorAll('select, input').forEach(function (input) {
-            const currentName = input.getAttribute('name') || '';
-            input.setAttribute('name', currentName.replace(/\[\d+\]/, '[' + rowIndex + ']'));
+            productRows.forEach(function (row) {
+                const searchData = row.getAttribute('data-search') || '';
+                if (searchData.includes(term)) {
+                    row.style.display = '';
+                    hasVisible = true;
+                } else {
+                    row.style.display = 'none';
+                }
+            });
 
-            if (input.tagName === 'SELECT') {
-                input.value = '';
-            }
-            if (input.classList.contains('qty-input')) {
-                input.value = '1';
-            }
-            if (input.type === 'number' && !input.classList.contains('qty-input')) {
-                input.value = '0';
+            if (noProductsFound) {
+                noProductsFound.style.display = hasVisible ? 'none' : '';
             }
         });
+    }
 
-        tableBody.appendChild(newRow);
-        attachRowHandlers(newRow);
-        rowIndex += 1;
+    // Select product
+    document.querySelectorAll('.js-select-product').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            const variantId = this.getAttribute('data-id');
+            const label = this.getAttribute('data-label');
+            const available = parseInt(this.getAttribute('data-available') || '0', 10);
+
+            // Check if already in table
+            let exists = false;
+            tableBody.querySelectorAll('.transfer-item-row').forEach(function (row) {
+                const input = row.querySelector('.variant-input');
+                if (input && input.value === variantId) {
+                    exists = true;
+                    const qtyInput = row.querySelector('.qty-input');
+                    if (qtyInput) {
+                        const currentVal = parseInt(qtyInput.value || '0', 10);
+                        if (currentVal < available) {
+                            qtyInput.value = String(currentVal + 1);
+                        } else {
+                            alert('Đã đạt số lượng tồn khả dụng cho sản phẩm này.');
+                        }
+                        // highlight row
+                        row.classList.add('table-warning');
+                        setTimeout(() => row.classList.remove('table-warning'), 500);
+                    }
+                }
+            });
+
+            if (!exists) {
+                const tr = document.createElement('tr');
+                tr.className = 'transfer-item-row';
+                tr.setAttribute('data-row-index', rowIndex);
+                tr.setAttribute('data-variant-id', variantId);
+
+                tr.innerHTML = `
+                    <td>
+                        <div class="fw-semibold">${label}</div>
+                        <input type="hidden" name="items[${rowIndex}][product_variant_id]" class="variant-input" value="${variantId}">
+                    </td>
+                    <td class="text-center">
+                        <span class="badge bg-light text-dark border available-badge" data-available="${available}">${available.toLocaleString('vi-VN')}</span>
+                    </td>
+                    <td>
+                        <input type="number" min="1" max="${Math.max(1, available)}" name="items[${rowIndex}][quantity]" class="form-control text-center qty-input" value="1" required>
+                    </td>
+                    <td>
+                        <input type="number" min="0" step="1000" name="items[${rowIndex}][unit_cost]" class="form-control text-end" value="0">
+                    </td>
+                    <td class="text-center">
+                        <button type="button" class="btn btn-link text-danger p-0 remove-row-btn" title="Xóa dòng">
+                            <i class="bi bi-x-circle-fill"></i>
+                        </button>
+                    </td>
+                `;
+
+                tableBody.appendChild(tr);
+                attachRowHandlers(tr);
+                rowIndex++;
+            }
+
+            // Close modal using Bootstrap instance
+            const modalEl = document.getElementById('productSelectionModal');
+            if (modalEl) {
+                const bsModal = bootstrap.Modal.getInstance(modalEl);
+                if (bsModal) {
+                    bsModal.hide();
+                }
+            }
+        });
     });
-
-    tableBody.querySelectorAll('.transfer-item-row').forEach(attachRowHandlers);
 
     form.addEventListener('submit', function (event) {
         const rows = tableBody.querySelectorAll('.transfer-item-row');
+        
+        if (rows.length === 0) {
+            event.preventDefault();
+            alert('Phiếu điều chuyển cần ít nhất 1 sản phẩm.');
+            return;
+        }
+
         const selected = new Set();
 
         for (const row of rows) {
-            const select = row.querySelector('.variant-select');
+            const input = row.querySelector('.variant-input');
             const qty = row.querySelector('.qty-input');
-            const variantId = select ? String(select.value || '') : '';
+            const badge = row.querySelector('.available-badge');
+            
+            const variantId = input ? String(input.value || '') : '';
             const qtyValue = qty ? parseInt(qty.value || '0', 10) : 0;
+            const available = badge ? parseInt(badge.getAttribute('data-available') || '0', 10) : 0;
 
             if (!variantId) {
                 continue;
@@ -314,8 +412,6 @@
 
             selected.add(variantId);
 
-            const selectedOption = select.options[select.selectedIndex];
-            const available = selectedOption ? parseInt(selectedOption.dataset.available || '0', 10) : 0;
             if (available > 0 && qtyValue > available) {
                 event.preventDefault();
                 alert('Số lượng điều chuyển vượt quá tồn khả dụng. Vui lòng kiểm tra lại.');

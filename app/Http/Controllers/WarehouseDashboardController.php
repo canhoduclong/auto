@@ -146,12 +146,44 @@ class WarehouseDashboardController extends Controller
             ->take(5)
             ->get();
 
+        $variantStock = \App\Models\Inventory::with([
+            'productVariant',
+            'movements' => function($q) use ($dateString) {
+                $q->whereDate('created_at', $dateString);
+            }
+        ])
+            ->when($managedWarehouseId, function($q) use ($managedWarehouseId) {
+                $q->where('warehouse_id', $managedWarehouseId);
+            })
+            ->whereHas('movements', function($q) use ($dateString) {
+                $q->whereDate('created_at', $dateString);
+            })
+            ->get()
+            ->map(function ($inventory) {
+                $in = (int) $inventory->movements->where('quantity', '>', 0)->sum('quantity');
+                $out = (int) abs($inventory->movements->where('quantity', '<', 0)->sum('quantity'));
+                
+                return [
+                    'name' => $inventory->productVariant->name ?? 'N/A',
+                    'before' => (int) $inventory->quantity - $in + $out,
+                    'in' => $in,
+                    'out' => $out,
+                    'after' => (int) $inventory->quantity,
+                ];
+            })
+            ->sortByDesc(function ($item) {
+                return $item['in'] + $item['out'];
+            })
+            ->take(10)
+            ->values();
+
         return view('warehouse.dashboard', compact(
             'stats',
             'recentPacked',
             'selectedDate',
             'dailyOrders',
-            'approvalStats'
+            'approvalStats',
+            'variantStock'
         ));
     }
 
