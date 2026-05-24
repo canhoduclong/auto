@@ -20,6 +20,7 @@
         border-radius: 12px;
         box-shadow: 0 10px 24px rgba(15, 23, 42, 0.07);
         height: 100%;
+        scroll-margin-top: 140px;
     }
     .wh-order-index {
         border-radius: 50px;
@@ -449,6 +450,47 @@
         gap: 10px;
         align-items: center;
     }
+
+    [id^="order-card-"] {
+        scroll-margin-top: 150px;
+    }
+    
+    /* ── Order Sequence Navigation ───────────────────────── */
+    .wh-order-nav-area {
+        position: sticky;
+        top: 75px;
+        z-index: 95;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 12px 16px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+    }
+    .wh-order-nav-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 36px;
+        height: 36px;
+        padding: 0 8px;
+        border-radius: 50px;
+        font-weight: 700;
+        font-size: 0.9rem;
+        text-decoration: none;
+        color: #fff !important;
+        transition: all 0.2s ease;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .wh-order-nav-pill:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+    .wh-order-nav-pill.is-packed {
+        background-color: #6c757d;
+    }
+    .wh-order-nav-pill.is-unpacked {
+        background-color: #198754;
+    }
 </style>
 @endpush
 
@@ -663,6 +705,24 @@
         $packedOrders = $orders->filter(fn($o) => in_array((string)$o->status, $packedLikeStatuses, true));
         $unpackedOrders = $orders->reject(fn($o) => in_array((string)$o->status, $packedLikeStatuses, true));
     @endphp
+
+    <div class="wh-order-nav-area mb-4">
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+            <span class="fw-bold text-muted me-1"><i class="bi bi-list-ol me-1"></i>Điều hướng nhanh:</span>
+            @foreach($orders->sortBy('daily_sequence') as $navOrder)
+                @php
+                    $isPackedNav = in_array((string)$navOrder->status, $packedLikeStatuses, true);
+                    $sequenceNumber = $navOrder->daily_sequence ?? $loop->iteration;
+                @endphp
+                <a href="javascript:void(0);"
+                   onclick="document.getElementById('order-card-{{ $navOrder->id }}')?.scrollIntoView({ behavior: 'smooth', block: 'start' });"
+                   class="wh-order-nav-pill {{ $isPackedNav ? 'is-packed' : 'is-unpacked' }}"
+                   title="{{ $navOrder->customer?->name ?? 'Đơn hàng' }}">
+                    {{ $sequenceNumber }}
+                </a>
+            @endforeach
+        </div>
+    </div>
 
     <div class="row g-4">
         <!-- Cột trái: Đơn chưa đóng -->

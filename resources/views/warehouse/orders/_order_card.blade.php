@@ -34,7 +34,7 @@
                     };
                 }
             @endphp
-            <div class="col-12">
+            <div class="col-12" id="order-card-{{ $order->id }}">
                 <div class="card wh-order-card js-order-card" data-order-id="{{ $order->id }}">
                     <div class="d-flex align-items-center card-header bg-white">
                         <div class="wh-order-index  text-center">{{ $order->daily_sequence ?? '—' }}</div>

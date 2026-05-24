@@ -150,31 +150,31 @@
             $tasks = [
                 [
                     'label' => 'Đơn cần đóng gói',
-                    'total' => $stats['ready_to_pack'] ?? 0,
+                    'total' => ($stats['ready_to_pack'] ?? 0) + ($stats['packing'] ?? 0) + ($stats['packed'] ?? 0),
                     'done' => $stats['packed'] ?? 0,
                     'route' => route('warehouse.orders'),
                 ],
                 [
                     'label' => 'Đơn điều chuyển đến',
-                    'total' => $stats['transfers_incoming'] ?? 0,
+                    'total' => ($stats['transfers_incoming'] ?? 0) + ($stats['transfers_completed'] ?? 0),
                     'done' => $stats['transfers_completed'] ?? 0,
                     'route' => route('warehouse.transfers.incoming'),
                 ],
                 [
                     'label' => 'Tiếp nhận hàng',
-                    'total' => $stats['receiving'] ?? 0,
+                    'total' => ($stats['receiving'] ?? 0) + ($stats['received'] ?? 0),
                     'done' => $stats['received'] ?? 0,
                     'route' => route('warehouse.inventory-transfers.incoming'),
                 ],
                 [
                     'label' => 'Tiếp nhận đơn hoàn trả',
-                    'total' => $stats['returning'] ?? 0,
+                    'total' => ($stats['returning'] ?? 0) + ($stats['returned'] ?? 0),
                     'done' => $stats['returned'] ?? 0,
                     'route' => route('warehouse.returns'),
                 ],
                 [
                     'label' => 'Nhiệm vụ được giao',
-                    'total' => $stats['assigned_tasks'] ?? 0,
+                    'total' => ($stats['assigned_tasks'] ?? 0) + ($stats['completed_tasks'] ?? 0),
                     'done' => $stats['completed_tasks'] ?? 0,
                     'route' => route('tasks.my-tasks'),
                 ],

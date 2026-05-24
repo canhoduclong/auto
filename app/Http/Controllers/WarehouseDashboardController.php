@@ -114,21 +114,28 @@ class WarehouseDashboardController extends Controller
             'returned' => 0, // Nếu có logic tính thực tế thì thay thế
             'assigned_tasks' => 0, // Nếu có logic tính thực tế thì thay thế
             'completed_tasks' => 0, // Nếu có logic tính thực tế thì thay thế
-            'transfers_incoming' => 0, // Nếu có logic tính thực tế thì thay thế
-            'transfers_completed' => 0, // Nếu có logic tính thực tế thì thay thế
+            'transfers_incoming' => \App\Models\WarehouseTransfer::query()
+                ->where('target_warehouse_id', $managedWarehouseId)
+                ->where('status', \App\Models\WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE)
+                ->count(),
+            'transfers_completed' => \App\Models\WarehouseTransfer::query()
+                ->where('target_warehouse_id', $managedWarehouseId)
+                ->where('status', \App\Models\WarehouseTransfer::STATUS_RECEIVED_COMPLETED)
+                ->whereDate('updated_at', $dateString)
+                ->count(),
             'done_today'    => $applyWarehouseScope(Order::query())
                 ->whereIn('status', self::PACKED_STATUSES)
                 ->whereDate('updated_at', $dateString)->count(),
             'orders_in_day' => (clone $dailyOrdersQuery)->count(),
-            // Thêm thống kê tiếp nhận hàng chuyển kho
-            // Không lọc ngày cho tiếp nhận hàng, luôn lấy tổng số phiếu cần tiếp nhận và đã tiếp nhận
-            'receiving' => \App\Models\WarehouseTransfer::query()
+            // Thống kê tiếp nhận hàng chuyển kho nội bộ (WarehouseInventoryTransfer)
+            'receiving' => \App\Models\WarehouseInventoryTransfer::query()
                 ->where('target_warehouse_id', $managedWarehouseId)
-                ->where('status', \App\Models\WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE)
+                ->where('status', \App\Models\WarehouseInventoryTransfer::STATUS_PENDING_RECEIVE)
                 ->count(),
-            'received' => \App\Models\WarehouseTransfer::query()
+            'received' => \App\Models\WarehouseInventoryTransfer::query()
                 ->where('target_warehouse_id', $managedWarehouseId)
-                ->where('status', \App\Models\WarehouseTransfer::STATUS_RECEIVED_COMPLETED)
+                ->where('status', \App\Models\WarehouseInventoryTransfer::STATUS_RECEIVED_COMPLETED)
+                ->whereDate('updated_at', $dateString)
                 ->count(),
         ];
 
