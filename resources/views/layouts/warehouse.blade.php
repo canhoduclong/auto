@@ -217,8 +217,17 @@
             <a href="{{ route('warehouse.dashboard') }}" class="wh-nav-link {{ request()->routeIs('warehouse.dashboard') ? 'active' : '' }}">
                 <i class="bi bi-speedometer2"></i> Dashboard
             </a>
+            <a href="{{ route('warehouse.orders') }}" class="wh-nav-link {{ request()->routeIs('warehouse.orders') ? 'active' : '' }}">
+                <i class="bi bi-box2-fill"></i> Đơn cần đóng gói
+            </a>
+            <a href="{{ route('warehouse.transfers.incoming') }}" class="wh-nav-link {{ request()->routeIs('warehouse.transfers.incoming') ? 'active' : '' }}">
+                <i class="bi bi-arrow-left-right"></i> Đơn điều chuyển đến
+            </a>
+            <a href="{{ route('warehouse.inventory-transfers.incoming') }}" class="wh-nav-link {{ request()->routeIs('warehouse.inventory-transfers.incoming') ? 'active' : '' }}">
+                <i class="bi bi-box-arrow-in-down"></i> Tiếp nhận hàng
+            </a>
 
-            <div class="wh-nav-section">Quản lý tồn kho</div>
+            <div class="wh-nav-section">Quản lý kho</div>
             <a href="{{ route('warehouse.stock-in') }}" class="wh-nav-link {{ request()->routeIs('warehouse.stock-in') ? 'active' : '' }}">
                 <i class="bi bi-box-seam"></i> Nhập Kho
             </a>
@@ -238,28 +247,15 @@
                 <i class="bi bi-box"></i> Sản Phẩm
             </a>
 
-            <div class="wh-nav-section">Đóng gói</div>
-            <a href="{{ route('warehouse.orders') }}" class="wh-nav-link {{ request()->routeIs('warehouse.orders') ? 'active' : '' }}">
-                <i class="bi bi-boxes"></i> Đơn cần xử lý
-            </a>
-
-            <div class="wh-nav-section">Nhiệm vụ kho</div>
+            <div class="wh-nav-section">Nhiệm vụ & Trả hàng</div>
             <a href="{{ route('tasks.my-tasks') }}" class="wh-nav-link {{ request()->routeIs('tasks.my-tasks') || request()->routeIs('task-assignments.assigned-to-me') ? 'active' : '' }}">
                 <i class="bi bi-list-task"></i> Nhiệm vụ
             </a>
             <a href="{{ route('task-assignments.in-progress') }}" class="wh-nav-link {{ request()->routeIs('task-assignments.in-progress') || request()->routeIs('task-assignments.complete-form') ? 'active' : '' }}">
                 <i class="bi bi-check2-circle"></i> Thực hiện
             </a>
-
-            <div class="wh-nav-section">Trả hàng</div>
             <a href="{{ route('warehouse.returns') }}" class="wh-nav-link {{ request()->routeIs('warehouse.returns') ? 'active' : '' }}">
                 <i class="bi bi-arrow-return-left"></i> Đơn trả về
-            </a>
-            <a href="{{ route('warehouse.transfers.incoming') }}" class="wh-nav-link {{ request()->routeIs('warehouse.transfers.incoming') ? 'active' : '' }}">
-                <i class="bi bi-box-arrow-in-down"></i> Tiếp nhận đơn
-            </a>
-            <a href="{{ route('warehouse.inventory-transfers.incoming') }}" class="wh-nav-link {{ request()->routeIs('warehouse.inventory-transfers.incoming') ? 'active' : '' }}">
-                <i class="bi bi-box-arrow-in-down"></i> Tiếp nhận hàng
             </a>
 
             <div class="wh-nav-section">Báo cáo</div>
@@ -267,7 +263,8 @@
                 <i class="bi bi-graph-up"></i> Thống Kê
             </a>
         </nav>
-        <div class="p-3 border-top border-secondary">
+        <!-- Account info moved to header -->
+        <div class="p-3 border-top border-secondary d-none d-md-block" style="opacity:0.3;pointer-events:none;">
             <div class="d-flex align-items-center gap-2 mb-2">
                 <i class="bi bi-person-circle text-secondary"></i>
                 <div class="small">
@@ -276,8 +273,6 @@
                     <div class="email" style="color:#ffffff;font-size:.72rem;">{{ auth()->user()->email }}</div>
                 </div> 
             </div>
-            
-             
             <form method="POST" action="{{ route('logout') }}">
                 @csrf
                 <button type="submit" class="btn btn-outline-secondary btn-sm w-100" style="font-size:.9rem;">
@@ -340,6 +335,43 @@
                 </div>
             </div>
             <div class="d-flex align-items-center gap-3">
+                <!-- Chuông thông báo động (giả lập) -->
+                <div class="dropdown me-2">
+                    <a href="#" class="position-relative" id="dropdownNotification" data-bs-toggle="dropdown" aria-expanded="false" title="Thông báo">
+                        <i class="bi bi-bell fs-4"></i>
+                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size:0.7rem;" id="notification-badge">3</span>
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-end shadow-sm" aria-labelledby="dropdownNotification" style="min-width:320px;">
+                        <li class="dropdown-header">Thông báo gần đây</li>
+                        <li><a class="dropdown-item" href="{{ route('warehouse.orders') }}"><i class="bi bi-info-circle text-primary me-1"></i> Đơn #1234 cần đóng gói</a></li>
+                        <li><a class="dropdown-item" href="{{ route('warehouse.transfers.incoming') }}"><i class="bi bi-arrow-left-right text-warning me-1"></i> Có 2 đơn điều chuyển mới</a></li>
+                        <li><a class="dropdown-item" href="{{ route('warehouse.inventory-transfers.incoming') }}"><i class="bi bi-box-arrow-in-down text-success me-1"></i> Đã nhập kho thành công</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item text-center text-primary" href="{{ route('warehouse.dashboard') }}">Xem tất cả thông báo</a></li>
+                    </ul>
+                </div>
+                <!-- Dropdown tài khoản -->
+                <div class="dropdown">
+                    <a href="#" class="d-flex align-items-center gap-2 text-decoration-none" id="dropdownAccount" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bi bi-person-circle fs-5 text-secondary"></i>
+                        <div class="small text-end d-none d-md-block">
+                            <div class="fw-semibold">{{ auth()->user()->name }}</div>
+                            <div style="font-size:.85rem; color:#64748b;">{{ auth()->user()->warehouse?->name ?? 'Chưa gán kho' }}</div>
+                        </div>
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-end shadow-sm" aria-labelledby="dropdownAccount">
+                        <li class="dropdown-header">Tài khoản</li>
+                        <li><a class="dropdown-item" href="#"><i class="bi bi-person-lines-fill me-2"></i> Thông tin cá nhân</a></li>
+                        <li><a class="dropdown-item" href="#"><i class="bi bi-key me-2"></i> Đổi mật khẩu</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <form method="POST" action="{{ route('logout') }}">
+                                @csrf
+                                <button type="submit" class="dropdown-item"><i class="bi bi-box-arrow-right me-2"></i> Đăng xuất</button>
+                            </form>
+                        </li>
+                    </ul>
+                </div>
                 <!-- Role Switcher Dropdown -->
                 @if($currentUser->roles->count() > 1)
                     <div class="dropdown">

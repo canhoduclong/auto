@@ -100,21 +100,36 @@ class WarehouseDashboardController extends Controller
                 ->whereIn('status', self::READY_TO_PACK_STATUSES)
                 ->whereDate('created_at', $dateString)
                 ->count(),
+            'packed' => $applyWarehouseScope(Order::query())
+                ->whereIn('status', self::PACKED_STATUSES)
+                ->whereDate('updated_at', $dateString)->count(),
             'packing'       => $applyWarehouseScope(Order::query())
                 ->where('status', Order::STATUS_PACKING)
                 ->whereDate('created_at', $dateString)
                 ->count(),
-            'packed_today'  => $applyWarehouseScope(Order::query())
-                ->whereIn('status', self::PACKED_STATUSES)
-                ->whereDate('updated_at', $dateString)->count(),
             'returning'     => $applyWarehouseScope(Order::query())
                 ->where('status', Order::STATUS_RETURNING)
                 ->whereDate('created_at', $dateString)
                 ->count(),
+            'returned' => 0, // Nếu có logic tính thực tế thì thay thế
+            'assigned_tasks' => 0, // Nếu có logic tính thực tế thì thay thế
+            'completed_tasks' => 0, // Nếu có logic tính thực tế thì thay thế
+            'transfers_incoming' => 0, // Nếu có logic tính thực tế thì thay thế
+            'transfers_completed' => 0, // Nếu có logic tính thực tế thì thay thế
             'done_today'    => $applyWarehouseScope(Order::query())
                 ->whereIn('status', self::PACKED_STATUSES)
                 ->whereDate('updated_at', $dateString)->count(),
             'orders_in_day' => (clone $dailyOrdersQuery)->count(),
+            // Thêm thống kê tiếp nhận hàng chuyển kho
+            // Không lọc ngày cho tiếp nhận hàng, luôn lấy tổng số phiếu cần tiếp nhận và đã tiếp nhận
+            'receiving' => \App\Models\WarehouseTransfer::query()
+                ->where('target_warehouse_id', $managedWarehouseId)
+                ->where('status', \App\Models\WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE)
+                ->count(),
+            'received' => \App\Models\WarehouseTransfer::query()
+                ->where('target_warehouse_id', $managedWarehouseId)
+                ->where('status', \App\Models\WarehouseTransfer::STATUS_RECEIVED_COMPLETED)
+                ->count(),
         ];
 
         $recentPacked = $applyWarehouseScope(Order::with('customer'))
