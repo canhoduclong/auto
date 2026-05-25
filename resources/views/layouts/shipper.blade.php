@@ -251,7 +251,7 @@
             @if(auth()->user()->hasRole('manager_shipper'))
                 <div class="sp-nav-section">Quản lý ship</div>
                 <a href="{{ route('shipper.manage-assignments') }}" class="sp-nav-link {{ request()->routeIs('shipper.manage-assignments') ? 'active' : '' }}">
-                    <i class="bi bi-person-badge"></i> Giao đơn cho ship
+                    <i class="bi bi-person-badge"></i> Điều phối đơn hàng
                 </a>
                 <a href="{{ route('shipper.manage-fees') }}" class="sp-nav-link {{ request()->routeIs('shipper.manage-fees') ? 'active' : '' }}">
                     <i class="bi bi-cash-coin"></i> Quản lý phí ship
