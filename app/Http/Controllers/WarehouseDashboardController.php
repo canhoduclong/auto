@@ -146,36 +146,73 @@ class WarehouseDashboardController extends Controller
             ->take(5)
             ->get();
 
-        $variantStock = \App\Models\Inventory::with([
-            'productVariant',
-            'movements' => function($q) use ($dateString) {
-                $q->whereDate('created_at', $dateString);
-            }
-        ])
-            ->when($managedWarehouseId, function($q) use ($managedWarehouseId) {
+
+        // Lấy danh sách sản phẩm và biến thể, tính tồn kho tổng hợp giống trang inventory
+        $products = \App\Models\Product::with(['variants.inventories' => function ($q) use ($managedWarehouseId) {
+            if ($managedWarehouseId) {
                 $q->where('warehouse_id', $managedWarehouseId);
-            })
-            ->whereHas('movements', function($q) use ($dateString) {
-                $q->whereDate('created_at', $dateString);
-            })
-            ->get()
-            ->map(function ($inventory) {
-                $in = (int) $inventory->movements->where('quantity', '>', 0)->sum('quantity');
-                $out = (int) abs($inventory->movements->where('quantity', '<', 0)->sum('quantity'));
-                
+            }
+        }, 'variants.product'])
+        ->orderBy('name')
+        ->get();
+
+        $summaryRows = $products->map(function ($product) {
+            $variants = $product->variants
+                ->filter(fn ($variant) => $variant->inventories->isNotEmpty())
+                ->sortBy(fn ($variant) => mb_strtolower((string) ($variant->name ?? '')))
+                ->values();
+
+            $closing = (int) $variants->sum(fn ($variant) => (int) ($variant->snapshot_quantity ?? $variant->inventories->sum('quantity')));
+            $import = (int) $variants->sum(fn ($variant) => (int) $variant->inventories->sum(fn ($inv) => $inv->movements->where('quantity', '>', 0)->sum('quantity')));
+            $reserved = (int) $variants->sum(fn ($variant) => (int) ($variant->snapshot_reserved ?? $variant->inventories->sum('reserved_quantity')));
+            $export = (int) $variants->sum(fn ($variant) => (int) abs($variant->inventories->sum(fn ($inv) => $inv->movements->where('quantity', '<', 0)->sum('quantity'))));
+            $opening = (int) ($closing - $import + $export);
+
+            $variantRows = $variants->map(function ($variant) {
+                $vClosing = (int) ($variant->snapshot_quantity ?? $variant->inventories->sum('quantity'));
+                $vImport = (int) $variant->inventories->sum(fn ($inv) => $inv->movements->where('quantity', '>', 0)->sum('quantity'));
+                $vReserved = (int) ($variant->snapshot_reserved ?? $variant->inventories->sum('reserved_quantity'));
+                $vExport = (int) abs($variant->inventories->sum(fn ($inv) => $inv->movements->where('quantity', '<', 0)->sum('quantity')));
+                $vOpening = (int) ($vClosing - $vImport + $vExport);
                 return [
-                    'name' => $inventory->productVariant->name ?? 'N/A',
-                    'before' => (int) $inventory->quantity - $in + $out,
-                    'in' => $in,
-                    'out' => $out,
-                    'after' => (int) $inventory->quantity,
+                    'name' => (string) ($variant->name ?: ($variant->product?->name ?? 'Biến thể')),
+                    'unit' => (string) ($variant->product?->unit_label ?? '—'),
+                    'opening' => $vOpening,
+                    'import' => $vImport,
+                    'reserved' => $vReserved,
+                    'export' => $vExport,
+                    'closing' => $vClosing,
                 ];
-            })
-            ->sortByDesc(function ($item) {
-                return $item['in'] + $item['out'];
-            })
-            ->take(10)
-            ->values();
+            })->values();
+
+            $unitLabels = $variantRows
+                ->pluck('unit')
+                ->filter(fn ($unit) => $unit !== '—' && $unit !== '')
+                ->unique()
+                ->values();
+            $productUnit = $unitLabels->count() === 1 ? (string) $unitLabels->first() : ($unitLabels->count() > 1 ? 'Nhiều DVT' : '—');
+
+            return [
+                'product_id' => (int) $product->id,
+                'name' => (string) $product->name,
+                'unit' => $productUnit,
+                'variant_count' => (int) $variants->count(),
+                'opening' => $opening,
+                'import' => $import,
+                'reserved' => $reserved,
+                'export' => $export,
+                'closing' => $closing,
+                'variants' => $variantRows,
+            ];
+        })->sortBy(fn ($row) => mb_strtolower((string) $row['name']))->values();
+
+        $summaryTotals = [
+            'opening' => (int) $summaryRows->sum('opening'),
+            'import' => (int) $summaryRows->sum('import'),
+            'reserved' => (int) $summaryRows->sum('reserved'),
+            'export' => (int) $summaryRows->sum('export'),
+            'closing' => (int) $summaryRows->sum('closing'),
+        ];
 
         return view('warehouse.dashboard', compact(
             'stats',
@@ -183,7 +220,8 @@ class WarehouseDashboardController extends Controller
             'selectedDate',
             'dailyOrders',
             'approvalStats',
-            'variantStock'
+            'summaryRows',
+            'summaryTotals'
         ));
     }
 

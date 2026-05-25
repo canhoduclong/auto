@@ -120,6 +120,30 @@
         margin-left: .1rem;
     }
     
+    .inv-summary-table tr.product-row {
+        border-bottom: 2px solid #000 !important;
+        background: #fffbe7 !important;
+        transition: background 0.2s;
+    }
+    .inv-summary-table tr.product-row:hover {
+        background: #fde68a !important;
+    }
+    .inv-summary-table tr.variant-row {
+        /*border-bottom: 1.5px solid #6b3f19 !important;*/
+    }
+    .inv-variant-block {
+        border: 1.5px solid #6b3f19; 
+        background: #fcfcfd;
+        margin-bottom: 2px;
+    }
+    .inv-summary-table thead th {
+        background: #6b3f19 !important;
+        color: #fff !important;
+        font-weight: 700;
+        font-size: 1rem;
+        border-bottom: 3px solid #eab308 !important;
+        letter-spacing: 0.04em;
+    }
 </style>
 @endpush
 
@@ -262,6 +286,16 @@
             </div>
         </div>
 
+        <!-- Listchanges chuyển sang cột trái phía dưới -->
+        <div class="listchanges mb-4">
+            <ul class="list-unstyled mb-0">
+                <li class="mb-3"><i class="bi bi-pencil-square text-primary me-2"></i>Yêu cầu thay đổi đơn hàng từ sale <span class="badge bg-info text-dark">Mới</span></li>
+                <li class="mb-3"><i class="bi bi-chat-dots text-success me-2"></i>Sale trả lời khách hàng <span class="badge bg-success">Đã trả lời</span></li>
+                <li class="mb-3"><i class="bi bi-truck text-warning me-2"></i>Phiếu điều chuyển kho chờ ship nhận <span class="badge bg-warning text-dark">Chờ ship</span></li>
+                <!-- Thêm các nghiệp vụ thực tế tại đây -->
+            </ul>
+        </div>
+
     </div>
     <!-- Cột phải: Nghiệp vụ mới nhất -->
     <div class="col-md-6">
@@ -269,50 +303,109 @@
          <div class="underline">
             <span class="fs-5 fw-semibold progress-title-underline d-flex align-items-center text-uppercase">Thống kê tồn kho</span>
         </div>
-        <div class="table-list mb-4">
-            
-            <div class="table-body p-2">
-                <table class="table table-sm mb-0">
+        <div class="inv-summary-list mb-4">
+            <div class="inv-summary-head my-2">Danh sách thống kê tồn kho (sản phẩm và biến thể cùng một cấu trúc cột)</div>
+            <div class="table-responsive">
+                <table class="inv-summary-table">
                     <thead>
                         <tr>
-                            <th>STT</th>
-                            <th>Tên SP</th>
-                            <th>Tồn trước</th>
-                            <th>Nhập</th>
-                            <th>Xuất</th>
-                            <th>Tồn cuối</th>
+                            <th style="min-width: 280px;">Tên sản phẩm / biến thể</th>
+                            <th style="min-width: 100px;">DVT</th>
+                            <th class="num" style="min-width: 110px;">Tồn đầu</th>
+                            <th class="num" style="min-width: 90px;">Nhập</th>
+                            <th class="num" style="min-width: 100px;">Book</th>
+                            <th class="num" style="min-width: 90px;">Xuất</th>
+                            <th class="num" style="min-width: 120px;">Tồn cuối</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach($variantStock ?? [] as $i => $row)
-                        <tr>
-                            <td>{{ $i+1 }}</td>
-                            <td>{{ $row['name'] ?? '' }}</td>
-                            <td>{{ $row['before'] ?? 0 }}</td>
-                            <td>{{ $row['in'] ?? 0 }}</td>
-                            <td>{{ $row['out'] ?? 0 }}</td>
-                            <td>{{ $row['after'] ?? 0 }}</td>
-                        </tr>
-                        @endforeach
+                        @php
+                            $filteredRows = $summaryRows->filter(function($row) {
+                                return $row['closing'] > 0;
+                            });
+                        @endphp
+                        @forelse($filteredRows as $row)
+                                <tr class="product-row">
+                                    <td style="background: none !important;">
+                                        <button type="button" class="inv-toggle js-inv-toggle border-0" style="background: none !important;" data-target="inv-child-{{ $row['product_id'] }}">
+                                            <span class="icon-plus" style="display:inline;">+</span>
+                                            <span class="icon-minus" style="display:none;">&minus;</span>
+                                            <span class="inv-product-name">{{ $row['name'] }}</span>
+                                        </button>
+                                    </td>
+                                <td>{{ $row['unit'] }}</td>
+                                <td class="num"><strong>{{ number_format($row['opening']) }}</strong></td>
+                                <td class="num">{{ number_format($row['import']) }}</td>
+                                <td class="num" style="color:#1d4ed8;">{{ number_format($row['reserved']) }}</td>
+                                <td class="num">{{ number_format($row['export']) }}</td>
+                                <td class="num">{{ number_format($row['closing']) }}</td>
+                            </tr>
+                            <tr id="inv-child-{{ $row['product_id'] }}" class="inv-child-row">
+                                <td colspan="7" class="p-0">
+                                    <table class="table table-sm mb-0 w-100">
+                                        <tbody>
+                                        @foreach($row['variants'] as $variantRow)
+                                            @if($variantRow['closing'] > 0)
+                                                <tr class="variant-row">
+                                                    <td colspan="7" class="p-0">
+                                                        <div class="inv-variant-block d-flex align-items-center px-2 py-1">
+                                                            <div class="inv-indent flex-grow-1">{{ $variantRow['name'] }}</div>
+                                                            <div style="min-width:80px">{{ $variantRow['unit'] }}</div>
+                                                            <div class="num" style="min-width:90px">{{ number_format($variantRow['opening']) }}</div>
+                                                            <div class="num" style="min-width:70px">{{ number_format($variantRow['import']) }}</div>
+                                                            <div class="num" style="min-width:90px;color:#1d4ed8;">{{ number_format($variantRow['reserved']) }}</div>
+                                                            <div class="num" style="min-width:70px">{{ number_format($variantRow['export']) }}</div>
+                                                            <div class="num" style="min-width:100px">{{ number_format($variantRow['closing']) }}</div>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            @endif
+                                        @endforeach
+                                        </tbody>
+                                    </table>
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="7" class="text-center text-muted py-3">Không có dữ liệu sản phẩm trong danh sách hiện tại.</td>
+                            </tr>
+                        @endforelse
                     </tbody>
                 </table>
             </div>
-        </div> 
-
-        <h5 class="fw-bold mb-3 d-flex align-items-center" style="font-size:1.25rem;"><i class="bi bi-lightning-charge me-2 fs-4 text-warning"></i>Nghiệp vụ mới nhất</h5>
-        <div class="card mb-4">
-              
-            <div class="card-body">
-                <ul class="list-unstyled mb-0">
-                    <li class="mb-3"><i class="bi bi-pencil-square text-primary me-2"></i>Yêu cầu thay đổi đơn hàng từ sale <span class="badge bg-info text-dark">Mới</span></li>
-                    <li class="mb-3"><i class="bi bi-chat-dots text-success me-2"></i>Sale trả lời khách hàng <span class="badge bg-success">Đã trả lời</span></li>
-                    <li class="mb-3"><i class="bi bi-truck text-warning me-2"></i>Phiếu điều chuyển kho chờ ship nhận <span class="badge bg-warning text-dark">Chờ ship</span></li>
-                    <!-- Thêm các nghiệp vụ thực tế tại đây -->
-                </ul>
-            </div>
         </div>
+        @push('scripts')
+        <script>
+        document.querySelectorAll('.js-inv-toggle').forEach(function (button) {
+            button.addEventListener('click', function () {
+                const targetId = button.getAttribute('data-target');
+                const headerRow = document.getElementById(targetId);
+                if (!headerRow) return;
+                const productId = targetId.replace('inv-child-', '');
+                const childRows = document.querySelectorAll('.inv-child-of-' + productId);
+                const isOpen = headerRow.style.display === 'table-row';
+                const nextDisplay = isOpen ? 'none' : 'table-row';
+                headerRow.style.display = nextDisplay;
+                childRows.forEach(function (row) { row.style.display = nextDisplay; });
+                // Toggle icons
+                const plus = button.querySelector('.icon-plus');
+                const minus = button.querySelector('.icon-minus');
+                if (!isOpen) {
+                    plus.style.display = 'none';
+                    minus.style.display = 'inline';
+                } else {
+                    plus.style.display = 'inline';
+                    minus.style.display = 'none';
+                }
+            });
+        });
+        // Mặc định ẩn hết các dòng biến thể
+        document.querySelectorAll('.inv-child-row').forEach(function(row) {
+            row.style.display = 'none';
+        });
+        </script>
+        @endpush
 
-         
     </div> 
 </div>
                     
