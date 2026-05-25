@@ -165,9 +165,14 @@
 <div class="row g-3 mb-4">
     <!-- Cột trái: Nhiệm vụ hàng ngày và Thống kê tồn kho -->
     <div class="col-md-6">
-         
-        <div class="underline">
-            <span class="fs-5 fw-semibold progress-title-underline d-flex align-items-center text-uppercase">Tiến độ công việc hôm nay</span>
+        <div class="mb-3 toolsdaily">
+            <a href="{{ route('warehouse.stock-in.create') }}" class="btn btn-success fw-700" >
+                <i class="bi bi-plus-circle me-1"></i> Tạo phiếu nhập kho
+            </a>
+
+        </div>
+        <div class="underline mb-4">
+            <span class="fw-semibold progress-title-underline d-flex align-items-center text-uppercase">Tiến độ công việc hôm nay</span>
         </div>
         <div class="mb-4">
             @php
@@ -300,8 +305,8 @@
     <!-- Cột phải: Nghiệp vụ mới nhất -->
     <div class="col-md-6">
                 <!-- Thống kê tồn kho -->
-         <div class="underline">
-            <span class="fs-5 fw-semibold progress-title-underline d-flex align-items-center text-uppercase">Thống kê tồn kho</span>
+         <div class="underline mb-4">
+            <span class="fw-semibold progress-title-underline d-flex align-items-center text-uppercase">Thống kê tồn kho</span>
         </div>
         <div class="inv-summary-list mb-4">
             <div class="inv-summary-head my-2">Danh sách thống kê tồn kho (sản phẩm và biến thể cùng một cấu trúc cột)</div>

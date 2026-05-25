@@ -61,9 +61,9 @@
             <h1><i class="bi bi-box-seam me-2"></i>Phiếu Nhập Kho</h1>
             <p>Ghi nhận hàng hoá nhập vào kho — theo dõi người nhập, số lượng, đơn giá</p>
         </div>
-        <button type="button" class="btn btn-light btn-sm fw-700" data-bs-toggle="modal" data-bs-target="#modalCreateStockIn">
+        <a href="{{ route('warehouse.stock-in.create') }}" class="btn btn-light btn-sm fw-700" >
             <i class="bi bi-plus-circle me-1"></i> Tạo phiếu nhập
-        </button>
+        </a>
     </div>
 </div>
 

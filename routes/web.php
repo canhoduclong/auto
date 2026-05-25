@@ -216,6 +216,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
 
     // ─── Warehouse module ───────────────────────────────────────────────────
     Route::prefix('warehouse')->name('warehouse.')->middleware('role:warehouse,admin')->group(function () {
+            Route::get('/order-transfers', [WarehouseDashboardController::class, 'orderTransfers'])->name('order-transfers');
         Route::get('/',            [WarehouseDashboardController::class, 'index'])->name('dashboard');
         Route::get('/orders',      [WarehouseDashboardController::class, 'orders'])->name('orders');
         Route::post('/orders/{order}/logistics',        [WarehouseDashboardController::class, 'updateLogistics'])->name('orders.logistics');
@@ -237,6 +238,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         
         // Warehouse Management Features
         Route::get('/stock-in',          [WarehouseDashboardController::class, 'stockIn'])->name('stock-in');
+        Route::get('/stock-in/create',   [WarehouseDashboardController::class, 'createStockIn'])->name('stock-in.create');
         Route::post('/stock-in',         [WarehouseDashboardController::class, 'storeStockIn'])->name('stock-in.store');
         Route::get('/stock-in/{document}', [WarehouseDashboardController::class, 'showDocument'])->name('stock-in.show');
         Route::get('/stock-in/{document}/edit', [WarehouseDashboardController::class, 'editStockIn'])->name('stock-in.edit');

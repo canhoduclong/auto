@@ -29,6 +29,14 @@ use Illuminate\Support\Collection;
 
 class WarehouseDashboardController extends Controller
 {
+    /**
+     * Trang điều chuyển đơn hàng (batch order transfer)
+     */
+    public function orderTransfers(Request $request)
+    {
+        // Tạm thời chỉ render view trống
+        return view('warehouse.order-transfers');
+    }
     private const READY_TO_PACK_STATUSES = [
         'approved',
         Order::STATUS_READY_TO_PACK,
@@ -224,7 +232,36 @@ class WarehouseDashboardController extends Controller
             'summaryTotals'
         ));
     }
+    /**
+     * Show the form for creating a new stock-in document.
+     */
+    public function createStockIn(Request $request)
+    {
+        $warehouses = Warehouse::all();
+        $suppliers = \App\Models\Supplier::all();
+        
+        $managedWarehouseId = Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
+        
+        $productVariants = ProductVariant::with(['product', 'inventories' => function ($query) use ($managedWarehouseId) {
+            if ($managedWarehouseId) {
+                $query->where('warehouse_id', $managedWarehouseId);
+            }
+        }])->get();
 
+        $availableVariants = $productVariants->map(function ($variant) {
+            $inventory = $variant->inventories->first();
+            return [
+                'variant_id' => (int) $variant->id,
+                'label' => ($variant->product->name ?? 'Sản phẩm')
+                    . ' - ' . ($variant->name ?? 'Biến thể')
+                    . ($variant->sku ? ' (' . $variant->sku . ')' : ''),
+                'unit_label' => $variant->product->unit_label ?? 'Cái',
+                'available' => $inventory ? max(0, (int) $inventory->quantity - (int) $inventory->reserved_quantity) : 0,
+            ];
+        })->values();
+
+        return view('warehouse.stock-in.create', compact('warehouses', 'suppliers', 'productVariants', 'availableVariants'));
+    }
     /**
      * List orders awaiting packing or currently being packed.
      */

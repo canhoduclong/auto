@@ -216,9 +216,9 @@
                         <input type="text" id="productSearchInput" class="form-control border-start-0 ps-0" placeholder="Tìm kiếm theo tên sản phẩm hoặc biến thể...">
                     </div>
                 </div>
-                <div class="table-responsive">
+                <div class="table-responsive" style="max-height: 60%; overflow-y: auto;">
                     <table class="table table-hover align-middle mb-0">
-                        <thead class="table-light" style="position: sticky; top: 70px; z-index: 1;">
+                        <thead class="table-light" style="">
                             <tr>
                                 <th class="ps-3">Sản phẩm - Biến thể</th>
                                 <th class="text-center">ĐVT</th>
