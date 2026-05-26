@@ -369,7 +369,7 @@
                                     <button type="button" class="inv-toggle js-inv-toggle border-0 bg-transparent p-0" data-target="inv-child-{{ $row['product_id'] }}">
                                         <span class="icon-plus" style="display:inline;">+</span>
                                         <span class="icon-minus" style="display:none;">&minus;</span>
-                                        <span class="inv-product-name">{{ $row['name'] }}</span>
+                                        <span class="inv-product-name text-capitalize">{{ $row['name'] }}</span>
                                     </button>
                                 </div>
                                 <div class="inv-col-unit" style="min-width:80px">{{ $row['unit'] }}</div>

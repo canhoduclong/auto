@@ -387,19 +387,32 @@ class WarehouseDashboardController extends Controller
         
         $managedWarehouseId = Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
         
-        $productVariants = ProductVariant::with(['product', 'inventories' => function ($query) use ($managedWarehouseId) {
-            if ($managedWarehouseId) {
-                $query->where('warehouse_id', $managedWarehouseId);
-            }
-        }])->get();
+
+        $productVariants = ProductVariant::with([
+            'product',
+            'inventories' => function ($query) use ($managedWarehouseId) {
+                if ($managedWarehouseId) {
+                    $query->where('warehouse_id', $managedWarehouseId);
+                }
+            },
+            'values.attribute' // lấy thuộc tính variant nếu có
+        ])
+        ->where('status', true)
+        ->get();
 
         $availableVariants = $productVariants->map(function ($variant) {
             $inventory = $variant->inventories->first();
+            // Thuộc tính dạng: Size: M, Màu: Đỏ...
+            $attributes = $variant->values->map(function($val) {
+                return $val->attribute->name . ': ' . $val->value;
+            })->implode(', ');
+            $label = ($variant->product->name ?? 'Sản phẩm')
+                . ' - ' . ($variant->name ?? 'Biến thể')
+                . ($variant->sku ? ' (' . $variant->sku . ')' : '')
+                . ($attributes ? ' [' . $attributes . ']' : '');
             return [
                 'variant_id' => (int) $variant->id,
-                'label' => ($variant->product->name ?? 'Sản phẩm')
-                    . ' - ' . ($variant->name ?? 'Biến thể')
-                    . ($variant->sku ? ' (' . $variant->sku . ')' : ''),
+                'label' => $label,
                 'unit_label' => $variant->product->unit_label ?? 'Cái',
                 'available' => $inventory ? max(0, (int) $inventory->quantity - (int) $inventory->reserved_quantity) : 0,
             ];

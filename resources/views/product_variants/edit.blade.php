@@ -6,6 +6,10 @@
         @csrf
         @method('PUT')
         <div class="mb-3">
+                    <div class="mb-3">
+                        <label class="form-label">Tên biến thể <span class="text-danger">*</span></label>
+                        <input type="text" name="name" class="form-control" value="{{ old('name', $variant->name) }}" required>
+                    </div>
             <label class="form-label">Sản phẩm</label>
             <select name="product_id" class="form-select" required>
                 <option value="">-- Chọn sản phẩm --</option>
