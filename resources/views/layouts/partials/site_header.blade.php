@@ -477,7 +477,7 @@
                             </li>
                             <li><a href="{{ route('posts.list') }}" class="nav-link px-2 link-dark">{{ __('site.posts') }}</a></li>
                             <li><a href="{{ route('pages.contact') }}" class="nav-link px-2 link-dark">{{ __('site.contact') }}</a></li>
-                        </ul> có
+                        </ul> 
  
                     </nav>
                     <div class="header__nav__widget">

@@ -153,7 +153,7 @@
                             {{ number_format($item->quantity) }}
                         </td>
                         <td class="text-center">{{ $unitLabel }}</td>
-                        <td class="text-center">{{ number_format($lineWeight, 3) }} {{ $weightUnitLabel }}</td>
+                        <td class="text-center">{{ format_kg($lineWeight) }}</td>
                         <td class="text-end">{{ number_format($item->unit_cost) }}đ</td>
                         <td class="text-end fw-700">{{ number_format($item->quantity * $item->unit_cost) }}đ</td>
                     </tr>

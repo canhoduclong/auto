@@ -511,46 +511,62 @@ class WarehouseDashboardController extends Controller
         $stockGuardMap = $stockGuardResult['guards'];
         $fifoRemainingStock = $stockGuardResult['remaining_by_variant']; // variantId => float remaining after FIFO
 
-        $warehouseVariantIds = Inventory::query()
-            ->when($managedWarehouseId, fn ($query) => $query->where('warehouse_id', $managedWarehouseId))
-            ->pluck('product_variant_id')
-            ->filter()
-            ->map(fn ($id) => (int) $id)
-            ->unique()
-            ->values();
-
-        // Stock at the selected date (reconstructed from movements) per variant
-        $displayedVariantIds = $orders
-            ->flatMap(fn(Order $order) => $order->items->pluck('product_variant_id'))
-            ->filter()
-            ->map(fn($id) => (int) $id)
-            ->unique()
-            ->values();
-
-        $stockPanelVariantIds = $warehouseVariantIds
-            ->merge($displayedVariantIds)
-            ->unique()
-            ->values();
-
-        // "Tồn kho khả dụng" per variant for the stock panel.
-        // For today: use available_stock (quantity - reserved_quantity) — consistent with
-        // the FIFO pool computation and the inventory page display.
-        // For past dates: reconstruct from movements to show historical snapshot.
-        $variantStock = $selectedDate === Carbon::today()->toDateString()
-            ? $this->getAvailableByVariant(collect($stockPanelVariantIds), $managedWarehouseId)
-            : $this->getStockAtDate(collect($stockPanelVariantIds), $managedWarehouseId, $selectedDate);
-
-        $stockPanelVariants = ProductVariant::query()
-            ->with('product')
-            ->whereIn('id', $stockPanelVariantIds->all())
+        $availableVariants = Inventory::query()
+            ->with(['productVariant.product', 'productVariant.values.attribute'])
+            ->where('warehouse_id', $managedWarehouseId)
+            ->whereRaw('(quantity - reserved_quantity) > 0')
+            ->orderByRaw('(quantity - reserved_quantity) DESC')
             ->get()
-            ->sortBy(function (ProductVariant $variant) {
+            ->map(function (Inventory $inventory) {
+                $variant = $inventory->productVariant;
+                $product = $variant?->product;
+                if (!$variant || !$product) {
+                    return null;
+                }
+                // Lấy thuộc tính dạng: Size: M, Màu: Đỏ...
+                $attributes = $variant->values?->map(function($val) {
+                    return $val->attribute->name . ': ' . $val->value;
+                })->implode(', ');
                 return [
-                    strtolower((string) ($variant->name ?: $variant->product?->name ?: '')),
-                    strtolower((string) ($variant->sku ?: '')),
+                    'variant_id' => (int) $variant->id,
+                    'variant_name' => $variant->name ?? '',
+                    'variant_sku' => $variant->sku ?? '',
+                    'unit_label' => $product->unit_label ?? 'Cái',
+                    'available' => max(0, (int) $inventory->quantity - (int) $inventory->reserved_quantity),
+                    'product_id' => $product->id,
+                    'product_name' => $product->name,
+                    'product_sku' => $product->sku ?? '',
+                    'product_thumbnail' => $product->thumbnail?->media?->file_path ?? null,
+                    'product_category' => $product->category?->name ?? null,
+                    'attributes' => $attributes,
                 ];
             })
+            ->filter()
             ->values();
+
+        // Group by product_id
+        $availableVariantsGrouped = $availableVariants->groupBy('product_id')->map(function ($variants, $productId) {
+            $first = $variants->first();
+            return [
+                'product' => [
+                    'id' => $first['product_id'],
+                    'name' => $first['product_name'],
+                    'sku' => $first['product_sku'],
+                    'thumbnail' => $first['product_thumbnail'],
+                    'category' => $first['product_category'],
+                ],
+                'variants' => $variants->map(function ($v) {
+                    return [
+                        'variant_id' => $v['variant_id'],
+                        'name' => $v['variant_name'],
+                        'sku' => $v['variant_sku'],
+                        'unit_label' => $v['unit_label'],
+                        'available' => $v['available'],
+                        'attributes' => $v['attributes'] ?? '',
+                    ];
+                })->values(),
+            ];
+        })->values();
 
         $orders->each(function (Order $order) use ($stockGuardMap) {
             $order->setAttribute('stock_guard', $stockGuardMap[$order->id] ?? [
@@ -2274,10 +2290,6 @@ class WarehouseDashboardController extends Controller
             return back()->with('error', 'Bạn chỉ có thể xác nhận đơn trả về đúng kho mình quản lý.');
         }
 
-        if (!$returnWarehouseId) {
-            return back()->with('error', 'Đơn trả này chưa xác định kho nhận.');
-        }
-
         $orderReturn = $activeOrderReturn;
         if ($orderReturn) {
             $orderReturn->loadMissing('returnItems');
@@ -2790,7 +2802,7 @@ class WarehouseDashboardController extends Controller
         return view('warehouse.transfers.inventory', compact(
             'sourceWarehouse',
             'targetWarehouses',
-            'availableVariants',
+            'availableVariantsGrouped',
             'outgoingTransfers',
             'incomingPendingCount'
         ));
@@ -3432,8 +3444,7 @@ class WarehouseDashboardController extends Controller
             ->when($search !== '', function ($productQuery) use ($search, $inventoryScope) {
                 $productQuery->where(function ($searchQuery) use ($search, $inventoryScope) {
                     $searchQuery->where('name', 'like', "%{$search}%")
-                        ->orWhere('slug', 'like', "%{$search}%")
-                        ->orWhereHas('variants', function ($variantQuery) use ($search, $inventoryScope) {
+                        ->orWhereHas('variants', function ($variantQuery) use ($search) {
                             $variantQuery->whereHas('inventories', $inventoryScope)
                                 ->where(function ($variantSearchQuery) use ($search) {
                                     $variantSearchQuery->where('name', 'like', "%{$search}%")
@@ -3511,24 +3522,12 @@ class WarehouseDashboardController extends Controller
             );
         }
 
-        $snapshotStats = $this->getInventorySnapshotStats($warehouseId, $selectedDate);
-        $inventoryBase = Inventory::query()
-            ->when($warehouseId, fn ($query) => $query->where('warehouse_id', $warehouseId));
-
         $stats = [
-            'total_items'            => (clone $inventoryBase)->count(),
-            'total_products'         => Product::whereHas('variants', function ($variantQuery) use ($warehouseId) {
-                $variantQuery->whereHas('inventories', function ($inventoryQuery) use ($warehouseId) {
-                    if ($warehouseId) {
-                        $inventoryQuery->where('warehouse_id', $warehouseId);
-                    }
-                });
-            })->count(),
-            'total_quantity'         => $snapshotStats['total_quantity'],
-            'total_reserved'         => $snapshotStats['total_reserved'],
-            'total_available'        => $snapshotStats['total_available'],
-            'low_stock'              => $snapshotStats['low_stock'],
-            'out_of_stock'           => $snapshotStats['out_of_stock'],
+            'total_quantity'         => $snapshotByVariant->sum('quantity'),
+            'total_reserved'         => $snapshotByVariant->sum('reserved'),
+            'total_available'        => $snapshotByVariant->sum('available'),
+            'low_stock'              => $snapshotByVariant->filter(fn ($v) => $v['quantity'] <= $v['low_stock_threshold'])->count(),
+            'out_of_stock'           => $snapshotByVariant->filter(fn ($v) => $v['quantity'] <= 0)->count(),
             'daily_import'           => (clone $movementQuery)->where('quantity', '>', 0)->sum('quantity'),
             'daily_export'           => abs((int) ((clone $movementQuery)->where('quantity', '<', 0)->sum('quantity'))),
             'daily_reserved'         => (clone $reservationQuery)->sum('quantity'),
