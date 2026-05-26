@@ -27,7 +27,7 @@
             <div class="col-md-4">
                 <label class="form-label fw-600 small">Ngày nhập <span class="text-danger">*</span></label>
                 <input type="date" name="document_date" class="form-control" value="{{ old('document_date', date('Y-m-d')) }}" required>
-            </div> 
+            </div>
             <div class="col-md-4">
                 <label class="form-label fw-600 small">Nhà cung cấp <span class="text-danger">*</span></label>
                 <select name="supplier_id" class="form-select" {{ $suppliers->isEmpty() ? 'disabled' : 'required' }}>

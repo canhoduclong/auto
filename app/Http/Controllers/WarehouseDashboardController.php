@@ -382,7 +382,6 @@ class WarehouseDashboardController extends Controller
      */
     public function createStockIn(Request $request)
     {
-        $warehouses = Warehouse::all();
         $suppliers = \App\Models\Supplier::all();
         
         $managedWarehouseId = Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
@@ -418,7 +417,7 @@ class WarehouseDashboardController extends Controller
             ];
         })->values();
 
-        return view('warehouse.stock-in.create', compact('warehouses', 'suppliers', 'productVariants', 'availableVariants'));
+        return view('warehouse.stock-in.create', compact('suppliers', 'productVariants', 'availableVariants'));
     }
     /**
      * List orders awaiting packing or currently being packed.
@@ -3280,11 +3279,17 @@ class WarehouseDashboardController extends Controller
      */
     private function storeDocument(Request $request, string $type)
     {
+
         $isImport = $type === 'import';
+
+        $userWarehouseId = Auth::user()->warehouse_id;
+        if (!$userWarehouseId) {
+            return back()->withErrors(['warehouse_id' => 'Bạn chưa được gán kho quản lý, không thể tạo phiếu nhập kho.'])->withInput();
+        }
 
         $validated = $request->validate([
             'document_date' => 'required|date',
-            'warehouse_id'  => 'required|exists:warehouses,id',
+            // 'warehouse_id'  => 'required|exists:warehouses,id', // bỏ không nhận từ request
             'supplier_id'   => $isImport ? 'required|exists:suppliers,id' : 'nullable|exists:suppliers,id',
             'shipping_fee'  => 'nullable|numeric|min:0',
             'notes'         => 'nullable|string|max:1000',
@@ -3294,18 +3299,13 @@ class WarehouseDashboardController extends Controller
             'items.*.unit_cost'          => 'required|numeric|min:0',
         ]);
 
-        // Warehouse users can only create documents for their own warehouse
-        $userWarehouseId = Auth::user()->warehouse_id;
-        if ($userWarehouseId && (int) $validated['warehouse_id'] !== (int) $userWarehouseId) {
-            return back()->withErrors(['warehouse_id' => 'Bạn chỉ được tạo phiếu cho kho của mình.'])->withInput();
-        }
 
         try {
-            DB::transaction(function () use ($validated, $type) {
+            DB::transaction(function () use ($validated, $type, $userWarehouseId) {
                 $document = InventoryDocument::create([
                     'type'          => $type,
                     'document_date' => $validated['document_date'],
-                    'warehouse_id'  => $validated['warehouse_id'],
+                    'warehouse_id'  => $userWarehouseId,
                     'supplier_id'   => $validated['supplier_id'] ?? null,
                     'shipping_fee'  => $validated['shipping_fee'] ?? 0,
                     'notes'         => $validated['notes'] ?? null,
@@ -3322,7 +3322,7 @@ class WarehouseDashboardController extends Controller
                     $inventory = Inventory::firstOrCreate(
                         [
                             'product_variant_id' => $itemData['product_variant_id'],
-                            'warehouse_id'       => $validated['warehouse_id'],
+                            'warehouse_id'       => $userWarehouseId,
                         ],
                         ['quantity' => 0]
                     );

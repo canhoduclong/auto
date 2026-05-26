@@ -253,17 +253,6 @@
                                    value="{{ old('document_date', date('Y-m-d')) }}" required>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label fw-600 small">Kho nhập <span class="text-danger">*</span></label>
-                            <select name="warehouse_id" class="form-select" required>
-                                <option value="">-- Chọn kho --</option>
-                                @foreach($warehouses as $wh)
-                                    <option value="{{ $wh->id }}" {{ old('warehouse_id', $warehouses->count() === 1 ? $wh->id : '') == $wh->id ? 'selected' : '' }}>
-                                        {{ $wh->name }}
-                                    </option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div class="col-md-4">
                             <label class="form-label fw-600 small">Nhà cung cấp <span class="text-danger">*</span></label>
                             <select name="supplier_id" class="form-select" {{ $suppliers->isEmpty() ? 'disabled' : 'required' }}>
                                 <option value="">-- Chọn nhà cung cấp --</option>
