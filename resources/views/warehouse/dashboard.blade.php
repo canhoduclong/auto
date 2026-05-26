@@ -119,9 +119,15 @@
         line-height: 1;
         margin-left: .1rem;
     }
-    
+    .inv-summary-table{
+        width: 100%;
+        /*
+        border-collapse: separate;
+        border-spacing: 0;
+        */
+    }
     .inv-summary-table tr.product-row {
-        border-bottom: 2px solid #000 !important;
+        border-bottom: 1px solid #d9c3a8 !important;
         background: #fffbe7 !important;
         transition: background 0.2s;
     }
@@ -164,13 +170,7 @@
 
 <div class="row g-3 mb-4">
     <!-- Cột trái: Nhiệm vụ hàng ngày và Thống kê tồn kho -->
-    <div class="col-md-6">
-        <div class="mb-3 toolsdaily">
-            <a href="{{ route('warehouse.stock-in.create') }}" class="btn btn-success fw-700" >
-                <i class="bi bi-plus-circle me-1"></i> Tạo phiếu nhập kho
-            </a>
-
-        </div>
+    <div class="col-md-12 col-lg-6"> 
         <div class="underline mb-4">
             <span class="fw-semibold progress-title-underline d-flex align-items-center text-uppercase">Tiến độ công việc hôm nay</span>
         </div>
@@ -303,9 +303,14 @@
 
     </div>
     <!-- Cột phải: Nghiệp vụ mới nhất -->
-    <div class="col-md-6">
-                <!-- Thống kê tồn kho -->
-         <div class="underline mb-4">
+    <div class="col-md-12 col-lg-6">
+        <div class="mb-3 toolsdaily">
+            <a href="{{ route('warehouse.stock-in.create') }}" class="btn btn-success fw-700" >
+                <i class="bi bi-plus-circle me-1"></i> Tạo phiếu nhập kho
+            </a> 
+        </div>
+        <!-- Thống kê tồn kho -->
+        <div class="underline mb-4">
             <span class="fw-semibold progress-title-underline d-flex align-items-center text-uppercase">Thống kê tồn kho</span>
         </div>
         <div class="inv-summary-list mb-4">
@@ -314,13 +319,13 @@
                 <table class="inv-summary-table">
                     <thead>
                         <tr>
-                            <th style="min-width: 280px;">Tên sản phẩm / biến thể</th>
-                            <th style="min-width: 100px;">DVT</th>
-                            <th class="num" style="min-width: 110px;">Tồn đầu</th>
-                            <th class="num" style="min-width: 90px;">Nhập</th>
-                            <th class="num" style="min-width: 100px;">Book</th>
-                            <th class="num" style="min-width: 90px;">Xuất</th>
-                            <th class="num" style="min-width: 120px;">Tồn cuối</th>
+                            <th>Tên sản phẩm / biến thể</th>
+                            <th>DVT</th>
+                            <th class="num">Tồn đầu</th>
+                            <th class="num">Nhập</th>
+                            <th class="num">Book</th>
+                            <th class="num">Xuất</th>
+                            <th class="num" >Tồn cuối</th>
                         </tr>
                     </thead>
                     <tbody>
