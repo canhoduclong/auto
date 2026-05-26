@@ -691,6 +691,13 @@
                                             </a>
                                             <form id="switch-role-accounting" action="{{ route('role.switch', 'accounting') }}" method="POST" class="d-none">@csrf</form>
                                         @endif
+                                        @if(Auth::user()->hasRole('warehouse'))
+                                            <div class="dropdown-divider my-0"></div>
+                                            <a class="dropdown-item" href="#" onclick="event.preventDefault(); document.getElementById('switch-role-warehouse').submit();">
+                                                <i class="bi bi-briefcase"></i> Dashboard Kho
+                                            </a>
+                                            <form id="switch-role-warehouse" action="{{ route('role.switch', 'warehouse') }}" method="POST" class="d-none">@csrf</form>
+                                        @endif
                                         @if(Auth::user()->hasRole('ceo'))
                                             <div class="dropdown-divider my-0"></div>
                                             <a class="dropdown-item" href="#" onclick="event.preventDefault(); document.getElementById('switch-role-ceo').submit();">
