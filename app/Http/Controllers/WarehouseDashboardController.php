@@ -32,6 +32,151 @@ class WarehouseDashboardController extends Controller
     /**
      * Trang điều chuyển đơn hàng (batch order transfer)
      */
+    /**
+     * Trang xem tất cả thông báo công việc của kho
+     */
+    public function allNotifications(Request $request)
+    {
+        $user = Auth::user();
+        $warehouseId = $user->warehouse_id;
+        $notifications = collect();
+
+        // Đơn đã đóng gói, chờ shipper nhận
+        $packedOrders = \App\Models\Order::query()
+            ->with('customer')
+            ->where('warehouse_id', $warehouseId)
+            ->where('status', \App\Models\Order::STATUS_READY_TO_SHIP)
+            ->orderByDesc('updated_at')
+            ->limit(30)
+            ->get();
+        foreach ($packedOrders as $order) {
+            $notifications->push([
+                'type' => 'warehouse',
+                'title' => 'Đơn ' . ($order->code ? '#' . $order->code : '#' . $order->id) . ' : đã hoàn thành đóng gói, chờ Shipper nhận',
+                'meta' => $order->customer?->name ?: 'Khách hàng',
+                'link' => route('pages.my_dashboard') . '#packed-orders',
+                'time' => optional($order->updated_at)->format('d/m/Y H:i'),
+            ]);
+        }
+
+        // Sale: Phản hồi yêu cầu thay đổi đơn hàng từ Nhà máy
+        $saleConfirmOrders = \App\Models\Order::query()
+            ->with('customer')
+            ->where('warehouse_id', $warehouseId)
+            ->where('warehouse_adjustment_status', \App\Models\Order::WAREHOUSE_ADJUSTMENT_STATUS_SALE_CONFIRMED)
+            ->orderByDesc('warehouse_adjustment_confirmed_at')
+            ->limit(30)
+            ->get();
+        foreach ($saleConfirmOrders as $order) {
+            $notifications->push([
+                'type' => 'sale',
+                'title' => 'Sale: Phản hồi yêu cầu thay đổi đơn hàng từ Nhà máy',
+                'meta' => ($order->code ? '#' . $order->code : '#' . $order->id) . ' - ' . ($order->customer?->name ?: 'Khách hàng'),
+                'link' => route('pages.my_dashboard') . '#sale-confirm-orders',
+                'time' => optional($order->warehouse_adjustment_confirmed_at)->format('d/m/Y H:i'),
+            ]);
+        }
+
+        // Sale: Gửi yêu cầu thay đổi đơn hàng tới kho, cần phê duyệt
+        $pendingSaleConfirmOrders = \App\Models\Order::query()
+            ->with('customer')
+            ->where('warehouse_id', $warehouseId)
+            ->where('warehouse_adjustment_status', \App\Models\Order::WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION)
+            ->orderByDesc('warehouse_adjustment_requested_at')
+            ->limit(30)
+            ->get();
+        foreach ($pendingSaleConfirmOrders as $order) {
+            $notifications->push([
+                'type' => 'sale',
+                'title' => 'Sale: Gửi yêu cầu thay đổi đơn hàng tới kho, cần phê duyệt',
+                'meta' => ($order->code ? '#' . $order->code : '#' . $order->id) . ' - ' . ($order->customer?->name ?: 'Khách hàng'),
+                'link' => route('pages.my_dashboard') . '#pending-sale-confirm-orders',
+                'time' => optional($order->warehouse_adjustment_requested_at)->format('d/m/Y H:i'),
+            ]);
+        }
+
+        // Shipper: khách trả hàng cần nhận hàng
+        $returnOrders = \App\Models\Order::query()
+            ->with('customer')
+            ->where('warehouse_id', $warehouseId)
+            ->where('status', \App\Models\Order::STATUS_RETURNED)
+            ->orderByDesc('updated_at')
+            ->limit(30)
+            ->get();
+        foreach ($returnOrders as $order) {
+            $notifications->push([
+                'type' => 'shipper',
+                'title' => 'Shipper : ' . ($order->customer?->name ?: 'Khách') . ' trả hàng cần nhận hàng',
+                'meta' => ($order->code ? '#' . $order->code : '#' . $order->id),
+                'link' => route('pages.my_dashboard') . '#return-orders',
+                'time' => optional($order->updated_at)->format('d/m/Y H:i'),
+            ]);
+        }
+
+        // Shipper: Đã nhận đơn
+        $shipperOrders = \App\Models\Order::query()
+            ->with(['customer', 'shipper'])
+            ->where('warehouse_id', $warehouseId)
+            ->where('status', \App\Models\Order::STATUS_IN_DELIVERY)
+            ->orderByDesc('updated_at')
+            ->limit(30)
+            ->get();
+        foreach ($shipperOrders as $order) {
+            $shipperName = $order->shipper?->name ?: 'Shipper';
+            $customerName = $order->customer?->name ?: '';
+            $notifications->push([
+                'type' => 'shipper',
+                'title' => 'Shipper: Đã nhận đơn ' . ($order->code ? '#' . $order->code : '#' . $order->id) . ($customerName ? ' - ' . $customerName : ''),
+                'meta' => $shipperName,
+                'link' => route('pages.my_dashboard') . '#shipper-orders',
+                'time' => optional($order->updated_at)->format('d/m/Y H:i'),
+            ]);
+        }
+
+        // Shipper: Kho chuyển hàng tới, cần tiếp nhận
+        $transferToWarehouse = \App\Models\WarehouseTransfer::query()
+            ->with(['order', 'sourceWarehouse'])
+            ->where('target_warehouse_id', $warehouseId)
+            ->where('status', \App\Models\WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE)
+            ->orderByDesc('delivered_at')
+            ->limit(30)
+            ->get();
+        foreach ($transferToWarehouse as $transfer) {
+            $order = $transfer->order;
+            $sourceWarehouse = $transfer->sourceWarehouse?->name ?: 'Kho khác';
+            $notifications->push([
+                'type' => 'shipper',
+                'title' => 'Shipper : ' . $sourceWarehouse . ' chuyển hàng tới, Cần tiếp nhận',
+                'meta' => $order ? (($order->code ? '#' . $order->code : '#' . $order->id) . ' - ' . ($order->customer?->name ?: '')) : '',
+                'link' => route('pages.my_dashboard') . '#warehouse-transfer-in',
+                'time' => optional($transfer->delivered_at)->format('d/m/Y H:i'),
+            ]);
+        }
+
+        // Shipper: Kho chuyển tiếp đơn hàng, cần kiểm tra và xác nhận
+        $transferCheck = \App\Models\WarehouseTransfer::query()
+            ->with(['order', 'sourceWarehouse', 'targetWarehouse'])
+            ->where('source_warehouse_id', $warehouseId)
+            ->where('status', \App\Models\WarehouseTransfer::STATUS_IN_TRANSIT)
+            ->orderByDesc('delivered_at')
+            ->limit(30)
+            ->get();
+        foreach ($transferCheck as $transfer) {
+            $order = $transfer->order;
+            $targetWarehouse = $transfer->targetWarehouse?->name ?: 'Kho khác';
+            $notifications->push([
+                'type' => 'shipper',
+                'title' => 'Shipper : ' . $targetWarehouse . ' Chuyển tiếp đơn hàng, cần kiểm tra và Xác nhận',
+                'meta' => $order ? (($order->code ? '#' . $order->code : '#' . $order->id) . ' - ' . ($order->customer?->name ?: '')) : '',
+                'link' => route('pages.my_dashboard') . '#warehouse-transfer-out',
+                'time' => optional($transfer->delivered_at)->format('d/m/Y H:i'),
+            ]);
+        }
+
+        return view('warehouse.notifications', [
+            'notifications' => $notifications,
+        ]);
+    }
     public function orderTransfers(Request $request)
     {
         // Tạm thời chỉ render view trống

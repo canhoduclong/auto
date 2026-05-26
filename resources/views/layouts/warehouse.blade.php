@@ -340,17 +340,43 @@
             <div class="d-flex align-items-center gap-3">
                 <!-- Chuông thông báo động (giả lập) -->
                 <div class="dropdown me-2">
+                    @php
+                        $user = auth()->user();
+                        $recentWarehouseNotifications = $user ? getWarehouseNotifications($user, 7) : collect();
+                    @endphp
                     <a href="#" class="position-relative" id="dropdownNotification" data-bs-toggle="dropdown" aria-expanded="false" title="Thông báo">
                         <i class="bi bi-bell fs-4"></i>
-                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size:0.7rem;" id="notification-badge">3</span>
+                        @if($recentWarehouseNotifications->count())
+                            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size:0.7rem;" id="notification-badge">{{ $recentWarehouseNotifications->count() }}</span>
+                        @endif
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end shadow-sm" aria-labelledby="dropdownNotification" style="min-width:320px;">
                         <li class="dropdown-header">Thông báo gần đây</li>
-                        <li><a class="dropdown-item" href="{{ route('warehouse.orders') }}"><i class="bi bi-info-circle text-primary me-1"></i> Đơn #1234 cần đóng gói</a></li>
-                        <li><a class="dropdown-item" href="{{ route('warehouse.transfers.incoming') }}"><i class="bi bi-arrow-left-right text-warning me-1"></i> Có 2 đơn điều chuyển mới</a></li>
-                        <li><a class="dropdown-item" href="{{ route('warehouse.inventory-transfers.incoming') }}"><i class="bi bi-box-arrow-in-down text-success me-1"></i> Đã nhập kho thành công</a></li>
+                        @if($recentWarehouseNotifications->count())
+                            @foreach($recentWarehouseNotifications as $noti)
+                                <li>
+                                    <a class="dropdown-item d-flex align-items-start gap-2" href="{{ $noti['link'] ?? '#' }}">
+                                        @php
+                                            $icon = match($noti['type']) {
+                                                'warehouse' => 'bi-box-seam text-primary',
+                                                'sale' => 'bi-person-badge text-warning',
+                                                'shipper' => 'bi-truck text-success',
+                                                default => 'bi-info-circle text-secondary',
+                                            };
+                                        @endphp
+                                        <i class="bi {{ $icon }} flex-shrink-0 mt-1"></i>
+                                        <div>
+                                            <div class="fw-semibold small">{!! $noti['title'] !!}</div>
+                                            <div class="text-muted small">{{ $noti['meta'] ?? '' }} &middot; <span>{{ $noti['time'] ?? '' }}</span></div>
+                                        </div>
+                                    </a>
+                                </li>
+                            @endforeach
+                        @else
+                            <li><span class="dropdown-item text-muted">Không có thông báo nào</span></li>
+                        @endif
                         <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item text-center text-primary" href="{{ route('warehouse.dashboard') }}">Xem tất cả thông báo</a></li>
+                        <li><a class="dropdown-item text-center text-primary" href="{{ route('warehouse.notifications') }}">Xem tất cả thông báo</a></li>
                     </ul>
                 </div>
                 <!-- Dropdown tài khoản -->

@@ -778,3 +778,7 @@ Route::get('/test-variant', function () {
 });
 
 Route::get('/{slug}', [PageController::class, 'show'])->name('page.show');
+
+// Xem tất cả thông báo công việc của kho
+Route::middleware(['auth', 'role:warehouse,admin'])->get('/warehouse/notifications', [WarehouseDashboardController::class, 'allNotifications'])->name('warehouse.notifications');
+

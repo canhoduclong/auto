@@ -477,7 +477,7 @@
                             </li>
                             <li><a href="{{ route('posts.list') }}" class="nav-link px-2 link-dark">{{ __('site.posts') }}</a></li>
                             <li><a href="{{ route('pages.contact') }}" class="nav-link px-2 link-dark">{{ __('site.contact') }}</a></li>
-                        </ul> 
+                        </ul> có
  
                     </nav>
                     <div class="header__nav__widget">
@@ -486,53 +486,9 @@
                             <x-cart-widget :cartCount="count(session('cart', []))" />
                             @auth
                                 @php
-                                    $hdrSalesNotifications = collect();
-                                    $hdrPendingAdjustmentsCount = 0;
-                                    $hdrAssignedCustomersCount = 0;
-
-                                    if (Auth::user()->isSalesFlowRole()) {
-                                        $hdrPendingAdjustments = App\Models\Order::query()
-                                            ->with('customer')
-                                            ->where('user_id', Auth::id())
-                                            ->where('warehouse_adjustment_status', App\Models\Order::WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION)
-                                            ->orderByDesc('warehouse_adjustment_requested_at')
-                                            ->limit(5)
-                                            ->get();
-
-                                        $hdrPendingAdjustmentsCount = $hdrPendingAdjustments->count();
-
-                                        $hdrPendingAdjustments->each(function ($order) use (&$hdrSalesNotifications) {
-                                            $hdrSalesNotifications->push([
-                                                'type' => 'warehouse',
-                                                'title' => 'Yêu cầu thay đổi đơn hàng từ Kho',
-                                                'meta' => ($order->code ?: ('#' . $order->id)) . ' - ' . ($order->customer?->name ?: 'Khách hàng'),
-                                                'link' => route('pages.my_dashboard') . '#pending-warehouse-adjustments',
-                                            ]);
-                                        });
-
-                                        $hdrAssignedCustomers = App\Models\Customer::query()
-                                            ->where('assigned_to', Auth::id())
-                                            ->where(function ($query) {
-                                                $query->whereNull('current_owner_sale_id')
-                                                    ->orWhere('current_owner_sale_id', '!=', Auth::id());
-                                            })
-                                            ->orderByDesc('assigned_at')
-                                            ->limit(5)
-                                            ->get();
-
-                                        $hdrAssignedCustomersCount = $hdrAssignedCustomers->count();
-
-                                        $hdrAssignedCustomers->each(function ($customer) use (&$hdrSalesNotifications) {
-                                            $hdrSalesNotifications->push([
-                                                'type' => 'customer',
-                                                'title' => 'Được gán khách hàng từ Admin',
-                                                'meta' => ($customer->name ?: 'Khách hàng') . ' - ' . ($customer->phone ?: 'Chưa có SĐT'),
-                                                'link' => route('pages.my_dashboard') . '#assigned-customers',
-                                            ]);
-                                        });
-                                    }
-
-                                    $hdrSalesNotificationCount = $hdrPendingAdjustmentsCount + $hdrAssignedCustomersCount;
+                                    $user = Auth::user();
+                                    $hdrSalesNotifications = $user ? getWarehouseNotifications($user, 7) : collect();
+                                    $hdrSalesNotificationCount = $hdrSalesNotifications->count();
                                 @endphp
 
                                 @if(Auth::user()->isSalesFlowRole())
@@ -554,20 +510,27 @@
                                                 @forelse($hdrSalesNotifications as $notify)
                                                     <a href="{{ $notify['link'] }}" class="hdr-notify-item d-flex align-items-center">
                                                         <span class="hdr-notify-icon {{ $notify['type'] }}">
-                                                            @if($notify['type'] === 'warehouse')
-                                                                <i class="bi bi-box-seam"></i>
-                                                            @else
-                                                                <i class="bi bi-person-check"></i>
-                                                            @endif
+                                                            @php
+                                                                $icon = match($notify['type']) {
+                                                                    'warehouse' => 'bi-box-seam',
+                                                                    'sale' => 'bi-person-badge',
+                                                                    'shipper' => 'bi-truck',
+                                                                    default => 'bi-info-circle',
+                                                                };
+                                                            @endphp
+                                                            <i class="bi {{ $icon }}"></i>
                                                         </span>
                                                         <span class="hdr-notify-content d-flex flex-column align-items-start flex-grow-1">
-                                                            <span class="hdr-notify-title">{{ $notify['title'] }}</span>
-                                                            <span class="hdr-notify-meta">{{ $notify['meta'] }}</span>
+                                                            <span class="hdr-notify-title">{!! $notify['title'] !!}</span>
+                                                            <span class="hdr-notify-meta">{{ $notify['meta'] }}<span class="ms-2 text-muted small">{{ $notify['time'] ?? '' }}</span></span>
                                                         </span>
                                                     </a>
                                                 @empty
                                                     <div class="hdr-notify-empty">Hiện chưa có thông báo mới.</div>
                                                 @endforelse
+                                            </div>
+                                            <div class="text-center py-2 border-top">
+                                                <a href="{{ route('warehouse.notifications') }}" class="btn btn-link p-0 small">Xem tất cả thông báo</a>
                                             </div>
                                         </div>
                                     </div>

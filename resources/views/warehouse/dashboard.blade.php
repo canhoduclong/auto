@@ -5,6 +5,35 @@
 
 @push('styles')
 <style>
+/* Responsive cho thống kê tồn kho layout div */
+.inv-summary-list {
+    overflow-x: auto;
+}
+.inv-summary-table-div {
+    min-width: 550px;
+}
+@media (max-width: 767.98px) {
+    .inv-summary-header,
+    .product-row-div > .d-flex,
+    .variant-row-div > .d-flex {
+        font-size: 0.92rem;
+        padding-left: 0.2rem;
+        padding-right: 0.2rem;
+    }
+    .inv-summary-header > div,
+    .product-row-div > .d-flex > div,
+    .variant-row-div > .d-flex > div {
+        padding-left: 0.2rem !important;
+        padding-right: 0.2rem !important;
+    }
+    .inv-col-name { min-width: 120px; }
+    .inv-col-unit, .inv-col-opening, .inv-col-import, .inv-col-reserved, .inv-col-export, .inv-col-closing {
+        min-width: 60px !important;
+        font-size: 0.92rem;
+    }
+    .inv-product-name, .inv-indent { font-size: 0.95rem; }
+    .inv-variant-block { flex-wrap: wrap; }
+}
     .task-status-badge {
         width: 36px;
         height: 36px;
@@ -137,10 +166,9 @@
     .inv-summary-table tr.variant-row {
         /*border-bottom: 1.5px solid #6b3f19 !important;*/
     }
-    .inv-variant-block {
-        border: 1.5px solid #6b3f19; 
+    .inv-variant-block { 
         background: #fcfcfd;
-        margin-bottom: 2px;
+        margin-bottom: 1px;
     }
     .inv-summary-table thead th {
         background: #6b3f19 !important;
@@ -149,6 +177,9 @@
         font-size: 1rem;
         border-bottom: 3px solid #eab308 !important;
         letter-spacing: 0.04em;
+    }
+    .subname{
+        padding-left: 20px;
     }
 </style>
 @endpush
@@ -172,7 +203,7 @@
     <!-- Cột trái: Nhiệm vụ hàng ngày và Thống kê tồn kho -->
     <div class="col-md-12 col-lg-6"> 
         <div class="underline mb-4">
-            <span class="fw-semibold progress-title-underline d-flex align-items-center text-uppercase">Tiến độ công việc hôm nay</span>
+            <span class="fw-semibold progress-title-underline d-flex align-items-center text-uppercase">Tiến độ công việc</span>
         </div>
         <div class="mb-4">
             @php
@@ -316,72 +347,60 @@
         <div class="inv-summary-list mb-4">
             <div class="inv-summary-head my-2">Danh sách thống kê tồn kho (sản phẩm và biến thể cùng một cấu trúc cột)</div>
             <div class="table-responsive">
-                <table class="inv-summary-table">
-                    <thead>
-                        <tr>
-                            <th>Tên sản phẩm / biến thể</th>
-                            <th>DVT</th>
-                            <th class="num">Tồn đầu</th>
-                            <th class="num">Nhập</th>
-                            <th class="num">Book</th>
-                            <th class="num">Xuất</th>
-                            <th class="num" >Tồn cuối</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @php
-                            $filteredRows = $summaryRows->filter(function($row) {
-                                return $row['closing'] > 0;
-                            });
-                        @endphp
-                        @forelse($filteredRows as $row)
-                                <tr class="product-row">
-                                    <td style="background: none !important;">
-                                        <button type="button" class="inv-toggle js-inv-toggle border-0" style="background: none !important;" data-target="inv-child-{{ $row['product_id'] }}">
-                                            <span class="icon-plus" style="display:inline;">+</span>
-                                            <span class="icon-minus" style="display:none;">&minus;</span>
-                                            <span class="inv-product-name">{{ $row['name'] }}</span>
-                                        </button>
-                                    </td>
-                                <td>{{ $row['unit'] }}</td>
-                                <td class="num"><strong>{{ number_format($row['opening']) }}</strong></td>
-                                <td class="num">{{ number_format($row['import']) }}</td>
-                                <td class="num" style="color:#1d4ed8;">{{ number_format($row['reserved']) }}</td>
-                                <td class="num">{{ number_format($row['export']) }}</td>
-                                <td class="num">{{ number_format($row['closing']) }}</td>
-                            </tr>
-                            <tr id="inv-child-{{ $row['product_id'] }}" class="inv-child-row">
-                                <td colspan="7" class="p-0">
-                                    <table class="table table-sm mb-0 w-100">
-                                        <tbody>
-                                        @foreach($row['variants'] as $variantRow)
-                                            @if($variantRow['closing'] > 0)
-                                                <tr class="variant-row">
-                                                    <td colspan="7" class="p-0">
-                                                        <div class="inv-variant-block d-flex align-items-center px-2 py-1">
-                                                            <div class="inv-indent flex-grow-1">{{ $variantRow['name'] }}</div>
-                                                            <div style="min-width:80px">{{ $variantRow['unit'] }}</div>
-                                                            <div class="num" style="min-width:90px">{{ number_format($variantRow['opening']) }}</div>
-                                                            <div class="num" style="min-width:70px">{{ number_format($variantRow['import']) }}</div>
-                                                            <div class="num" style="min-width:90px;color:#1d4ed8;">{{ number_format($variantRow['reserved']) }}</div>
-                                                            <div class="num" style="min-width:70px">{{ number_format($variantRow['export']) }}</div>
-                                                            <div class="num" style="min-width:100px">{{ number_format($variantRow['closing']) }}</div>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            @endif
-                                        @endforeach
-                                        </tbody>
-                                    </table>
-                                </td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="7" class="text-center text-muted py-3">Không có dữ liệu sản phẩm trong danh sách hiện tại.</td>
-                            </tr>
-                        @endforelse
-                    </tbody>
-                </table>
+                <div class="inv-summary-table-div">
+                    <div class="inv-summary-header d-flex fw-bold" style="background:#6b3f19;color:#fff;">
+                        <div class="inv-col-name flex-grow-1 px-2 py-2">Tên sản phẩm / biến thể</div>
+                        <div class="inv-col-unit px-2 py-2" style="min-width:80px">DVT</div>
+                        <div class="inv-col-opening px-2 py-2 num" style="min-width:90px">Tồn đầu</div>
+                        <div class="inv-col-import px-2 py-2 num" style="min-width:70px">Nhập</div>
+                        <div class="inv-col-reserved px-2 py-2 num" style="min-width:90px">Book</div>
+                        <div class="inv-col-export px-2 py-2 num" style="min-width:70px">Xuất</div>
+                        <div class="inv-col-closing px-2 py-2 num" style="min-width:80px">Tồn cuối</div>
+                    </div>
+                    @php
+                        $filteredRows = $summaryRows->filter(function($row) {
+                            return $row['closing'] > 0;
+                        });
+                    @endphp
+                    @forelse($filteredRows as $row)
+                        <div class="product-row-div border-bottom" style="background:#fffbe7;">
+                            <div class="d-flex align-items-center px-2 py-2">
+                                <div class="inv-col-name flex-grow-1">
+                                    <button type="button" class="inv-toggle js-inv-toggle border-0 bg-transparent p-0" data-target="inv-child-{{ $row['product_id'] }}">
+                                        <span class="icon-plus" style="display:inline;">+</span>
+                                        <span class="icon-minus" style="display:none;">&minus;</span>
+                                        <span class="inv-product-name">{{ $row['name'] }}</span>
+                                    </button>
+                                </div>
+                                <div class="inv-col-unit" style="min-width:80px">{{ $row['unit'] }}</div>
+                                <div class="inv-col-opening num" style="min-width:90px"><strong>{{ number_format($row['opening']) }}</strong></div>
+                                <div class="inv-col-import num" style="min-width:70px">{{ number_format($row['import']) }}</div>
+                                <div class="inv-col-reserved num" style="min-width:90px;color:#1d4ed8;">{{ number_format($row['reserved']) }}</div>
+                                <div class="inv-col-export num" style="min-width:70px">{{ number_format($row['export']) }}</div>
+                                <div class="inv-col-closing num" style="min-width:80px">{{ number_format($row['closing']) }}</div>
+                            </div>
+                        </div>
+                        <div id="inv-child-{{ $row['product_id'] }}" class="inv-child-row-div" style="display:none;">
+                            @foreach($row['variants'] as $variantRow)
+                                @if($variantRow['closing'] > 0)
+                                    <div class="variant-row-div px-2 py-1 border-bottom">
+                                        <div class="d-flex align-items-center inv-variant-block">
+                                            <div class="inv-indent flex-grow-1 subname">{{ $variantRow['name'] }}</div>
+                                            <div class="inv-col-unit" style="min-width:80px">{{ $variantRow['unit'] }}</div>
+                                            <div class="inv-col-opening num" style="min-width:90px">{{ number_format($variantRow['opening']) }}</div>
+                                            <div class="inv-col-import num" style="min-width:70px">{{ number_format($variantRow['import']) }}</div>
+                                            <div class="inv-col-reserved num" style="min-width:90px;color:#1d4ed8;">{{ number_format($variantRow['reserved']) }}</div>
+                                            <div class="inv-col-export num" style="min-width:70px">{{ number_format($variantRow['export']) }}</div>
+                                            <div class="inv-col-closing num" style="min-width:80px">{{ number_format($variantRow['closing']) }}</div>
+                                        </div>
+                                    </div>
+                                @endif
+                            @endforeach
+                        </div>
+                    @empty
+                        <div class="text-center text-muted py-3">Không có dữ liệu sản phẩm trong danh sách hiện tại.</div>
+                    @endforelse
+                </div>
             </div>
         </div>
         @push('scripts')
@@ -391,12 +410,9 @@
                 const targetId = button.getAttribute('data-target');
                 const headerRow = document.getElementById(targetId);
                 if (!headerRow) return;
-                const productId = targetId.replace('inv-child-', '');
-                const childRows = document.querySelectorAll('.inv-child-of-' + productId);
-                const isOpen = headerRow.style.display === 'table-row';
-                const nextDisplay = isOpen ? 'none' : 'table-row';
+                const isOpen = headerRow.style.display !== 'none';
+                const nextDisplay = isOpen ? 'none' : 'block';
                 headerRow.style.display = nextDisplay;
-                childRows.forEach(function (row) { row.style.display = nextDisplay; });
                 // Toggle icons
                 const plus = button.querySelector('.icon-plus');
                 const minus = button.querySelector('.icon-minus');
@@ -409,8 +425,8 @@
                 }
             });
         });
-        // Mặc định ẩn hết các dòng biến thể
-        document.querySelectorAll('.inv-child-row').forEach(function(row) {
+        // Mặc định ẩn hết các dòng biến thể (dùng layout div)
+        document.querySelectorAll('.inv-child-row-div').forEach(function(row) {
             row.style.display = 'none';
         });
         </script>
