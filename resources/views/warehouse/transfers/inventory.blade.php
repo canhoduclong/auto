@@ -282,7 +282,6 @@
     const tableBody = document.getElementById('transferItemsBody');
     const form = document.getElementById('inventoryTransferForm');
     const searchInput = document.getElementById('productSearchInput');
-    const productRows = document.querySelectorAll('.product-selection-row');
     const noProductsFound = document.getElementById('noProductsFound');
     let rowIndex = tableBody.querySelectorAll('.transfer-item-row').length || 0;
 
@@ -295,98 +294,62 @@
                 const max = parseInt(qtyInput.max || '0', 10);
                 const value = parseInt(qtyInput.value || '0', 10);
                 if (max > 0 && value > max) {
-                    (() => {
-                        const tableBody = document.getElementById('transferItemsBody');
-                        const form = document.getElementById('inventoryTransferForm');
-                        const searchInput = document.getElementById('productSearchInput');
-                        const noProductsFound = document.getElementById('noProductsFound');
-                        let rowIndex = tableBody.querySelectorAll('.transfer-item-row').length || 0;
+                    qtyInput.value = String(max);
+                }
+            });
+        }
 
-                        // Expand/collapse group
-                        document.querySelectorAll('.toggle-group').forEach(function (toggle) {
-                            toggle.addEventListener('click', function (e) {
-                                const groupId = this.getAttribute('data-group-id');
-                                const rows = document.querySelectorAll('.group-' + groupId);
-                                const isOpen = this.textContent.trim() === '▼';
-                                rows.forEach(row => row.style.display = isOpen ? 'none' : '');
-                                this.textContent = isOpen ? '►' : '▼';
-                            });
-                        });
+        if (removeBtn) {
+            removeBtn.addEventListener('click', function () {
+                row.remove();
+            });
+        }
+    }
 
-                        // Filter products/variants by search, keep group structure
-                        if (searchInput) {
-                            searchInput.addEventListener('input', function () {
-                                const term = this.value.toLowerCase().trim();
-                                let hasVisible = false;
-                                // Ẩn/hiện từng group và variant
-                                document.querySelectorAll('.product-group-row').forEach(function (groupRow) {
-                                    const groupId = groupRow.getAttribute('data-group-id');
-                                    let groupHasVisible = false;
-                                    document.querySelectorAll('.group-' + groupId).forEach(function (variantRow) {
-                                        const searchData = variantRow.getAttribute('data-search') || '';
-                                        if (!term || searchData.includes(term)) {
-                                            variantRow.style.display = '';
-                                            groupHasVisible = true;
-                                        } else {
-                                            variantRow.style.display = 'none';
-                                        }
-                                    });
-                                    groupRow.style.display = groupHasVisible ? '' : 'none';
-                                    // Nếu group collapse thì giữ collapse
-                                    const toggle = groupRow.querySelector('.toggle-group');
-                                    if (toggle && toggle.textContent.trim() === '►') {
-                                        document.querySelectorAll('.group-' + groupId).forEach(row => row.style.display = 'none');
-                                    }
-                                    if (groupHasVisible) hasVisible = true;
-                                });
-                                if (noProductsFound) {
-                                    noProductsFound.style.display = hasVisible ? 'none' : '';
-                                }
-                            });
-                        }
+    // Xử lý chọn biến thể sản phẩm trong popup
+    document.querySelectorAll('.js-select-product').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            const variantId = this.getAttribute('data-id');
+            const label = this.getAttribute('data-label');
+            const available = parseInt(this.getAttribute('data-available') || '0', 10);
+            // Check if already in table
+            let exists = false;
+            tableBody.querySelectorAll('.transfer-item-row').forEach(function (row) {
+                const input = row.querySelector('.variant-input');
+                if (input && input.value === variantId) {
+                    exists = true;
+                }
+            });
+            if (exists) return;
 
-                        // Select product (giữ nguyên logic cũ)
-                        document.querySelectorAll('.js-select-product').forEach(function (btn) {
-                            btn.addEventListener('click', function () {
-                                const variantId = this.getAttribute('data-id');
-                                const label = this.getAttribute('data-label');
-                                const available = parseInt(this.getAttribute('data-available') || '0', 10);
-                                // Check if already in table
-                                let exists = false;
-                                tableBody.querySelectorAll('.transfer-item-row').forEach(function (row) {
-                                    const input = row.querySelector('.variant-input');
-                                    if (input && input.value === variantId) {
-                                        exists = true;
-                                    }
-                                });
-                                if (exists) return;
-                                // ...existing code to add row...
-                            });
-                        });
-                    })();
-                    </td>
-                    <td class="text-center">
-                        <span class="badge bg-light text-dark border available-badge" data-available="${available}">${available.toLocaleString('vi-VN')}</span>
-                    </td>
-                    <td>
-                        <input type="number" min="1" max="${Math.max(1, available)}" name="items[${rowIndex}][quantity]" class="form-control text-center qty-input" value="1" required>
-                    </td>
-                    <td>
-                        <input type="number" min="0" step="1000" name="items[${rowIndex}][unit_cost]" class="form-control text-end" value="0">
-                    </td>
-                    <td class="text-center">
-                        <button type="button" class="btn btn-link text-danger p-0 remove-row-btn" title="Xóa dòng">
-                            <i class="bi bi-x-circle-fill"></i>
-                        </button>
-                    </td>
-                `;
+            // Tạo dòng mới
+            const tr = document.createElement('tr');
+            tr.className = 'transfer-item-row';
+            tr.innerHTML = `
+                <td>
+                    <div class="fw-semibold">${label}</div>
+                    <input type="hidden" name="items[${rowIndex}][product_variant_id]" class="variant-input" value="${variantId}">
+                </td>
+                <td class="text-center">
+                    <span class="badge bg-light text-dark border available-badge" data-available="${available}">${available.toLocaleString('vi-VN')}</span>
+                </td>
+                <td>
+                    <input type="number" min="1" max="${Math.max(1, available)}" name="items[${rowIndex}][quantity]" class="form-control text-center qty-input" value="1" required>
+                </td>
+                <td>
+                    <input type="number" min="0" step="1000" name="items[${rowIndex}][unit_cost]" class="form-control text-end" value="0">
+                </td>
+                <td class="text-center">
+                    <button type="button" class="btn btn-link text-danger p-0 remove-row-btn" title="Xóa dòng">
+                        <i class="bi bi-x-circle-fill"></i>
+                    </button>
+                </td>
+            `;
+            tableBody.appendChild(tr);
+            attachRowHandlers(tr);
+            rowIndex++;
 
-                tableBody.appendChild(tr);
-                attachRowHandlers(tr);
-                rowIndex++;
-            }
-
-            // Close modal using Bootstrap instance
+            // Đóng modal
             const modalEl = document.getElementById('productSelectionModal');
             if (modalEl) {
                 const bsModal = bootstrap.Modal.getInstance(modalEl);
@@ -397,38 +360,29 @@
         });
     });
 
+    // Giữ lại các logic kiểm tra submit form
     form.addEventListener('submit', function (event) {
         const rows = tableBody.querySelectorAll('.transfer-item-row');
-        
         if (rows.length === 0) {
             event.preventDefault();
             alert('Phiếu điều chuyển cần ít nhất 1 sản phẩm.');
             return;
         }
-
         const selected = new Set();
-
         for (const row of rows) {
             const input = row.querySelector('.variant-input');
             const qty = row.querySelector('.qty-input');
             const badge = row.querySelector('.available-badge');
-            
             const variantId = input ? String(input.value || '') : '';
             const qtyValue = qty ? parseInt(qty.value || '0', 10) : 0;
             const available = badge ? parseInt(badge.getAttribute('data-available') || '0', 10) : 0;
-
-            if (!variantId) {
-                continue;
-            }
-
+            if (!variantId) continue;
             if (selected.has(variantId)) {
                 event.preventDefault();
                 alert('Một sản phẩm đang bị chọn lặp. Vui lòng gộp số lượng vào một dòng.');
                 return;
             }
-
             selected.add(variantId);
-
             if (available > 0 && qtyValue > available) {
                 event.preventDefault();
                 alert('Số lượng điều chuyển vượt quá tồn khả dụng. Vui lòng kiểm tra lại.');

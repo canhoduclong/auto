@@ -599,7 +599,7 @@ class WarehouseDashboardController extends Controller
             ->orderBy('name')
             ->get(['id', 'name']);
 
-        return view('warehouse.orders.index', compact('orders', 'selectedDate', 'status', 'quickDates', 'fifoRemainingStock', 'variantStock', 'stockPanelVariants', 'activeTransfersByOrder', 'warehouses', 'shippers'));
+        return view('warehouse.orders.index', compact('orders', 'selectedDate', 'status', 'quickDates', 'fifoRemainingStock', 'activeTransfersByOrder', 'warehouses', 'shippers'));
     }
 
     public function createTransferRequest(Request $request, Order $order)
@@ -2760,29 +2760,61 @@ class WarehouseDashboardController extends Controller
             ->orderBy('name')
             ->get(['id', 'name']);
 
+
         $availableVariants = Inventory::query()
-            ->with(['productVariant.product'])
+            ->with(['productVariant.product', 'productVariant.values.attribute'])
             ->where('warehouse_id', $managedWarehouseId)
             ->whereRaw('(quantity - reserved_quantity) > 0')
             ->orderByRaw('(quantity - reserved_quantity) DESC')
             ->get()
             ->map(function (Inventory $inventory) {
                 $variant = $inventory->productVariant;
-                if (!$variant || !$variant->product) {
+                $product = $variant?->product;
+                if (!$variant || !$product) {
                     return null;
                 }
-
+                $attributes = $variant->values?->map(function($val) {
+                    return $val->attribute->name . ': ' . $val->value;
+                })->implode(', ');
                 return [
                     'variant_id' => (int) $variant->id,
-                    'label' => ($variant->product->name ?? 'Sản phẩm')
-                        . ' - ' . ($variant->name ?? 'Biến thể')
-                        . ($variant->sku ? ' (' . $variant->sku . ')' : ''),
-                    'unit_label' => $variant->product->unit_label ?? 'Cái',
+                    'variant_name' => $variant->name ?? '',
+                    'variant_sku' => $variant->sku ?? '',
+                    'unit_label' => $product->unit_label ?? 'Cái',
                     'available' => max(0, (int) $inventory->quantity - (int) $inventory->reserved_quantity),
+                    'product_id' => $product->id,
+                    'product_name' => $product->name,
+                    'product_sku' => $product->sku ?? '',
+                    'product_thumbnail' => $product->thumbnail?->media?->file_path ?? null,
+                    'product_category' => $product->category?->name ?? null,
+                    'attributes' => $attributes,
                 ];
             })
             ->filter()
             ->values();
+
+        $availableVariantsGrouped = $availableVariants->groupBy('product_id')->map(function ($variants, $productId) {
+            $first = $variants->first();
+            return [
+                'product' => [
+                    'id' => $first['product_id'],
+                    'name' => $first['product_name'],
+                    'sku' => $first['product_sku'],
+                    'thumbnail' => $first['product_thumbnail'],
+                    'category' => $first['product_category'],
+                ],
+                'variants' => $variants->map(function ($v) {
+                    return [
+                        'variant_id' => $v['variant_id'],
+                        'name' => $v['variant_name'],
+                        'sku' => $v['variant_sku'],
+                        'unit_label' => $v['unit_label'],
+                        'available' => $v['available'],
+                        'attributes' => $v['attributes'] ?? '',
+                    ];
+                })->values(),
+            ];
+        })->values();
 
         $outgoingTransfers = WarehouseInventoryTransfer::query()
             ->with([
