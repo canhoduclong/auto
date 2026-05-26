@@ -67,6 +67,7 @@
                         <th width="200">Sản phẩm</th>
                         <th width="60">ID</th>
                         <th width="70">Ảnh</th>
+                        <th width="180">Tên biến thể</th>
                         <th>SKU</th>
                         <th width="90">Size</th>
                         <th width="110">Giá bán</th>
@@ -125,6 +126,7 @@
                                         <span class="text-muted text-center d-block" style="line-height: 72px;">—</span>
                                     @endif
                                 </td>
+                                <td>{{ $variant->name ?: '-' }}</td>
                                 <td class="fw-semibold">{{ $variant->sku }}</td>
                                 <td>{{ $variant->size ?: '-' }}</td>
                                 <td>
