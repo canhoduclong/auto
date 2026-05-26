@@ -12,6 +12,7 @@ class OrderTransfer extends Model
         'shipper_id',
         'warehouse_id',
         'notes',
+        'created_by',
     ];
 
     public function orders()

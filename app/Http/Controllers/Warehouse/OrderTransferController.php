@@ -15,7 +15,7 @@ class OrderTransferController extends Controller
     {
         // Lấy danh sách đơn chưa điều chuyển
         $orders = Order::whereNull('order_transfer_id')
-            ->whereIn('status', ['ready_to_ship', 'packing'])
+            ->whereIn('status', ['ready_to_ship', 'packing', 'packed', 'packed_waiting_pickup'])
             ->with(['customer', 'items.variant'])
             ->paginate(20);
 
@@ -25,31 +25,58 @@ class OrderTransferController extends Controller
         })->orderBy('name')->get();
         $warehouses = Warehouse::orderBy('name')->get();
 
-        return view('warehouse.order-transfers', compact('orders', 'shippers', 'warehouses'));
-    }
+        // Lấy các phiếu điều chuyển mới nhất (kèm đơn)
+        $recentTransfers = \App\Models\OrderTransfer::with(['orders.customer', 'shipper', 'warehouse'])
+            ->orderByDesc('id')
+            ->take(10)
+            ->get();
 
+        return view('warehouse.order-transfers', compact('orders', 'shippers', 'warehouses', 'recentTransfers'));
+    }
+    public function destroy($id)
+    {
+        $transfer = \App\Models\OrderTransfer::with('orders')->findOrFail($id);
+        DB::transaction(function () use ($transfer) {
+            // Gỡ liên kết order_transfer_id khỏi các đơn hàng
+            \App\Models\Order::where('order_transfer_id', $transfer->id)->update(['order_transfer_id' => null]);
+            $transfer->delete();
+        });
+        return redirect()->route('warehouse.order-transfers')->with('success', 'Đã xóa phiếu điều chuyển!');
+    }
     public function store(Request $request)
     {
         $data = $request->validate([
-            'transfers' => 'required|array',
-            'transfers.*.shipper_id' => 'required|exists:users,id',
-            'transfers.*.warehouse_id' => 'required|exists:warehouses,id',
-            'transfers.*.order_ids' => 'required|array|min:1',
-            'transfers.*.order_ids.*' => 'required|exists:orders,id',
-            'transfers.*.notes' => 'nullable|string|max:1000',
+            'shipper_id' => 'required|exists:users,id',
+            'warehouse_id' => 'required|exists:warehouses,id',
+            'order_ids' => 'required|string',
         ]);
 
-        DB::transaction(function () use ($data) {
-            foreach ($data['transfers'] as $transfer) {
-                // Tạo phiếu điều chuyển (giả sử có model OrderTransfer)
-                $orderTransfer = \App\Models\OrderTransfer::create([
-                    'shipper_id' => $transfer['shipper_id'],
-                    'warehouse_id' => $transfer['warehouse_id'],
-                    'notes' => $transfer['notes'] ?? null,
+        $orderIds = array_filter(explode(',', $data['order_ids']));
+        if (empty($orderIds)) {
+            return back()->withErrors(['order_ids' => 'Vui lòng chọn ít nhất một đơn hàng.']);
+        }
+
+
+        DB::transaction(function () use ($data, $orderIds) {
+            $orderTransfer = \App\Models\OrderTransfer::create([
+                'shipper_id' => $data['shipper_id'],
+                'warehouse_id' => $data['warehouse_id'],
+                'notes' => null,
+                'created_by' => auth()->id(),
+            ]);
+            // Gán order_transfer_id cho các đơn hàng
+            $orders = Order::whereIn('id', $orderIds)->get();
+            foreach ($orders as $order) {
+                $order->order_transfer_id = $orderTransfer->id;
+                $order->save();
+                // Tạo WarehouseTransfer cho từng đơn
+                \App\Models\WarehouseTransfer::create([
+                    'order_id' => $order->id,
+                    'source_warehouse_id' => $order->warehouse_id,
+                    'target_warehouse_id' => $data['warehouse_id'],
+                    'shipper_id' => $data['shipper_id'],
+                    'status' => \App\Models\WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
                 ]);
-                // Gán đơn vào phiếu
-                Order::whereIn('id', $transfer['order_ids'])
-                    ->update(['order_transfer_id' => $orderTransfer->id]);
             }
         });
 

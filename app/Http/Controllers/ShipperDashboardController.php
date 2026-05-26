@@ -491,6 +491,51 @@ class ShipperDashboardController extends Controller
         return back()->with('success', 'Đã nhận hàng điều chuyển và xuất kho nguồn thành công.');
     }
 
+    /**
+     * Shipper rollback warehouse transfer (delivered_waiting_receive)
+     */
+    public function rollbackWarehouseTransfer(Request $request, \App\Models\WarehouseTransfer $transfer)
+    {
+        if ($transfer->status !== \App\Models\WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE) {
+            return back()->with('error', 'Phiếu điều chuyển không còn ở trạng thái chờ tiếp nhận.');
+        }
+        // Chỉ cho phép shipper phụ trách phiếu này rollback
+        if ((int) $transfer->shipper_id !== (int) auth()->id()) {
+            return back()->with('error', 'Bạn không có quyền hoàn lại phiếu điều chuyển này.');
+        }
+        $validated = $request->validate([
+            'rollback_note' => ['nullable', 'string', 'max:1000'],
+        ]);
+        $transfer->loadMissing(['order', 'sourceWarehouse', 'targetWarehouse']);
+        $order = $transfer->order;
+        $reason = trim((string) ($validated['rollback_note'] ?? ''));
+        $noteParts = [
+            'Shipper hoàn lại trước khi kho nhận xác nhận.',
+        ];
+        if ($reason !== '') {
+            $noteParts[] = 'Lý do: ' . $reason;
+        }
+        $transfer->update([
+            'status' => \App\Models\WarehouseTransfer::STATUS_CANCELLED,
+            'note' => implode(' | ', $noteParts),
+        ]);
+        if ($order) {
+            \App\Models\OrderHistory::create([
+                'order_id' => $order->id,
+                'action' => 'warehouse_transfer_rolled_back_by_shipper',
+                'user_id' => auth()->id(),
+                'role' => 'shipper',
+                'status_before' => $order->status,
+                'status_after' => $order->status,
+                'note' => 'Shipper hoàn lại phiếu điều chuyển #' . $transfer->id
+                    . ' trước khi kho nhận xác nhận. Kho gửi: ' . ($transfer->sourceWarehouse?->name ?? 'N/A')
+                    . '; Kho nhận: ' . ($transfer->targetWarehouse?->name ?? 'N/A')
+                    . ($reason !== '' ? '; Lý do: ' . $reason : ''),
+            ]);
+        }
+        return back()->with('success', 'Đã hoàn lại phiếu điều chuyển trước khi kho nhận xác nhận.');
+    }
+
     public function deliverWarehouseTransfer(Request $request, WarehouseTransfer $transfer)
     {
         $this->authorizeWarehouseTransferShipper($transfer);

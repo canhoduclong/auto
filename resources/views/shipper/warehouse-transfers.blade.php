@@ -153,7 +153,16 @@
                                 </button>
                             </form>
                         @elseif($transfer->status === 'delivered_waiting_receive')
-                            <span class="badge bg-info text-dark">Đã giao, chờ kho nhận xác nhận tiếp nhận</span>
+                            <div class="d-flex flex-column flex-md-row gap-2 align-items-start">
+                                <span class="badge bg-info text-dark flex-grow-1">Đã giao, chờ kho nhận xác nhận</span>
+                                <form method="POST" action="{{ route('shipper.warehouse-transfers.rollback', $transfer) }}" class="js-rollback-transfer-form">
+                                    @csrf
+                                    <input type="hidden" name="rollback_note" value="">
+                                    <button type="submit" class="btn btn-outline-danger btn-sm">
+                                        <i class="bi bi-arrow-counterclockwise me-1"></i>Hoàn lại
+                                    </button>
+                                </form>
+                            </div>
                         @else
                             <span class="badge bg-success">Phiếu điều chuyển đã hoàn tất</span>
                         @endif
@@ -252,6 +261,19 @@ document.addEventListener('DOMContentLoaded', function () {
     bulkDeliverForm?.addEventListener('submit', function (e) {
         const ids = bulkDeliverIds.querySelectorAll('input');
         if (ids.length === 0) { e.preventDefault(); alert('Vui lòng chọn ít nhất một phiếu ở trạng thái Đang vận chuyển.'); }
+    });
+
+    document.querySelectorAll('.js-rollback-transfer-form').forEach(function (form) {
+        form.addEventListener('submit', function (event) {
+            event.preventDefault();
+            const accepted = window.confirm('Xác nhận hoàn lại phiếu điều chuyển này trước khi kho nhận xác nhận?');
+            if (!accepted) return;
+            const reason = window.prompt('Nhập lý do hoàn lại (không bắt buộc):', '');
+            if (reason === null) return;
+            const noteInput = form.querySelector('input[name="rollback_note"]');
+            if (noteInput) noteInput.value = reason.trim();
+            form.submit();
+        });
     });
 });
 </script>

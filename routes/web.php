@@ -216,8 +216,9 @@ Route::middleware(['auth', 'assigned'])->group(function () {
 
     // ─── Warehouse module ───────────────────────────────────────────────────
     Route::prefix('warehouse')->name('warehouse.')->middleware('role:warehouse,admin')->group(function () {
-            Route::get('/order-transfers', [\App\Http\Controllers\Warehouse\OrderTransferController::class, 'index'])->name('order-transfers');
-            Route::post('/order-transfers', [\App\Http\Controllers\Warehouse\OrderTransferController::class, 'store'])->name('order-transfers.store');
+        Route::get('/order-transfers', [\App\Http\Controllers\Warehouse\OrderTransferController::class, 'index'])->name('order-transfers');
+        Route::post('/order-transfers', [\App\Http\Controllers\Warehouse\OrderTransferController::class, 'store'])->name('order-transfers.store');
+        Route::delete('/order-transfers/{id}', [\App\Http\Controllers\Warehouse\OrderTransferController::class, 'destroy'])->name('order-transfers.destroy');
         Route::get('/',            [WarehouseDashboardController::class, 'index'])->name('dashboard');
         Route::get('/orders',      [WarehouseDashboardController::class, 'orders'])->name('orders');
         Route::post('/orders/{order}/logistics',        [WarehouseDashboardController::class, 'updateLogistics'])->name('orders.logistics');
@@ -260,6 +261,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
 
     // ─── Shipper module ─────────────────────────────────────────────────────
     Route::prefix('shipper')->name('shipper.')->middleware('role:shipper,manager_shipper,admin')->group(function () {
+            Route::post('/warehouse-transfers/{transfer}/rollback', [ShipperDashboardController::class, 'rollbackWarehouseTransfer'])->name('warehouse-transfers.rollback');
         Route::get('/',                                [ShipperDashboardController::class, 'index'])->name('dashboard');
         Route::get('/available',                       [ShipperDashboardController::class, 'available'])->name('available');
         Route::post('/available/{order}/accept',       [ShipperDashboardController::class, 'accept'])->name('accept');
