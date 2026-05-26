@@ -216,7 +216,8 @@ Route::middleware(['auth', 'assigned'])->group(function () {
 
     // ─── Warehouse module ───────────────────────────────────────────────────
     Route::prefix('warehouse')->name('warehouse.')->middleware('role:warehouse,admin')->group(function () {
-            Route::get('/order-transfers', [WarehouseDashboardController::class, 'orderTransfers'])->name('order-transfers');
+            Route::get('/order-transfers', [\App\Http\Controllers\Warehouse\OrderTransferController::class, 'index'])->name('order-transfers');
+            Route::post('/order-transfers', [\App\Http\Controllers\Warehouse\OrderTransferController::class, 'store'])->name('order-transfers.store');
         Route::get('/',            [WarehouseDashboardController::class, 'index'])->name('dashboard');
         Route::get('/orders',      [WarehouseDashboardController::class, 'orders'])->name('orders');
         Route::post('/orders/{order}/logistics',        [WarehouseDashboardController::class, 'updateLogistics'])->name('orders.logistics');
