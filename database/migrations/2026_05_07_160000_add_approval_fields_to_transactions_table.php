@@ -25,7 +25,7 @@ return new class extends Migration
             $table->dropForeign(['submitted_by']);
             $table->dropForeign(['approved_by']);
             $table->dropForeign(['rejected_by']);
-            $table->dropColumns(['status', 'submitted_by', 'approved_by', 'rejected_by', 'approved_at', 'rejected_at', 'reject_reason']);
+            $table->dropColumn(['status', 'submitted_by', 'approved_by', 'rejected_by', 'approved_at', 'rejected_at', 'reject_reason']);
         });
     }
 };

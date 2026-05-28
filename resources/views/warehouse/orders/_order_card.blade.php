@@ -37,7 +37,10 @@
             <div class="col-12" id="order-card-{{ $order->id }}">
                 <div class="card wh-order-card js-order-card" data-order-id="{{ $order->id }}">
                     <div class="d-flex align-items-center card-header bg-white">
-                        <div class="wh-order-index  text-center">{{ $order->daily_sequence ?? '—' }}</div>
+                        @php
+                            $isPacked = in_array($order->status, ['packed', 'packed_waiting_pickup', 'delivering', 'delivered', 'completed'], true);
+                        @endphp
+                        <div class="wh-order-index text-center" style="background:{{ $isPacked ? '#198754' : '#64748b' }};color:#fff;">{{ $order->daily_sequence ?? '—' }}</div>
                         <div class=" border-0 w-100  d-flex justify-content-between align-items-center">
                             <div>
                                 <div class="fw-semibold fs-5 mb-0 pb-0">{{ $order->customer?->name ?? '—' }} </div>

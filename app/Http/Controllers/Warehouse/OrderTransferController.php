@@ -13,10 +13,14 @@ class OrderTransferController extends Controller
 {
     public function index(Request $request)
     {
-        // Lấy danh sách đơn chưa điều chuyển
+        // Lấy user và kho đang quản lý
+        $user = auth()->user();
+        $warehouseId = $user->warehouse_id;
+        // Lấy danh sách đơn chưa điều chuyển, chỉ thuộc kho user quản lý
         $orders = Order::whereNull('order_transfer_id')
+            ->where('warehouse_id', $warehouseId)
             ->whereIn('status', ['ready_to_ship', 'packing', 'packed', 'packed_waiting_pickup'])
-            ->with(['customer', 'items.variant'])
+            ->with(['customer', 'items.variant', 'warehouse'])
             ->paginate(20);
 
         // Lấy danh sách shipper và kho

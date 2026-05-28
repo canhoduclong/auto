@@ -425,7 +425,13 @@
                                             class="dropdown-item d-flex align-items-center gap-2 {{ $isActive ? 'bg-light' : '' }}"
                                             title="Chuyển sang vai trò {{ $role->name }}">
                                             <i class="bi {{ $isActive ? 'bi-check-circle-fill text-primary' : 'bi-circle' }}"></i>
-                                            <span>{{ ucfirst($role->name) }}</span>
+                                            <span>
+                                                @if($roleName === 'package')
+                                                    Đóng hàng
+                                                @else
+                                                    {{ ucfirst($role->name) }}
+                                                @endif
+                                            </span>
                                         </button>
                                     </form>
                                 </li>

@@ -27,6 +27,8 @@
 
                     {{-- Form thêm sản phẩm --}}
                     <form action="{{ route('products.store') }}" method="POST" enctype="multipart/form-data">
+                                                <input type="hidden" name="page" value="{{ request('page', 1) }}">
+                                                <input type="hidden" name="perPage" value="{{ request('perPage', 10) }}">
                         @csrf
 
                         {{-- Tên sản phẩm --}}

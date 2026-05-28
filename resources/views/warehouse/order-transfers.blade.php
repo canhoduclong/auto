@@ -54,8 +54,11 @@
                         <label class="form-label mb-1">Chọn kho nhận</label>
                         <select name="warehouse_id" class="form-select" required>
                             <option value="">-- Chọn kho --</option>
+                            @php $currentWarehouseId = auth()->user()->warehouse_id; @endphp
                             @foreach($warehouses as $warehouse)
-                                <option value="{{ $warehouse->id }}">{{ $warehouse->name }}</option>
+                                @if($warehouse->id != $currentWarehouseId)
+                                    <option value="{{ $warehouse->id }}">{{ $warehouse->name }}</option>
+                                @endif
                             @endforeach
                         </select>
                     </div>

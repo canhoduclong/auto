@@ -40,12 +40,6 @@ return new class extends Migration {
     public function down(): void
     {
         Schema::table('task_assignments', function (Blueprint $table) {
-            // Drop foreign key if exists
-            try {
-                $table->dropForeign('task_assignments_completion_verified_by_foreign');
-            } catch (\Throwable $e) {
-            }
-            
             $table->dropColumn(['completion_content', 'completion_notes', 'completion_verified_at', 'completion_verified_by', 'rejected_reason']);
         });
     }

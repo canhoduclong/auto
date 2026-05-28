@@ -11,6 +11,7 @@
                 <div class="small text-muted">{{ optional($order->created_at)->format('d/m/Y H:i') }}</div>
                 <div class="small text-muted">SĐT: {{ $order->customer?->phone ?? '—' }}</div>
                 <div class="small text-muted">Địa chỉ: {{ $order->customer?->address ?? '—' }}</div>
+                <div class="small text-muted mt-1">Kho quản lý: <span class="fw-semibold text-primary">{{ $order->warehouse?->name ?? '—' }}</span></div>
             </div>
             <div class="text-end">
                 <span class="badge bg-info">{{ $order->status_label ?? $order->status }}</span>

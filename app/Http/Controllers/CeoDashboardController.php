@@ -22,6 +22,25 @@ use Illuminate\Support\Facades\Schema;
 
 class CeoDashboardController extends Controller
 {
+    /**
+     * Báo cáo doanh thu của một khách hàng cho CEO
+     */
+    public function customerRevenueReport(Request $request, Customer $customer)
+    {
+        // Lấy các đơn hàng đã hoàn thành của khách này
+        $orders = Order::query()
+            ->where('customer_id', $customer->id)
+            ->whereIn('status', ['completed', 'delivered'])
+            ->orderByDesc('created_at')
+            ->get();
+
+        $totalRevenue = $orders->sum('total_amount');
+        $orderCount = $orders->count();
+        $firstOrder = $orders->last();
+        $lastOrder = $orders->first();
+
+        return view('ceo.customer_revenue_report', compact('customer', 'orders', 'totalRevenue', 'orderCount', 'firstOrder', 'lastOrder'));
+    }
     public function __construct()
     {
         $this->middleware(['auth', 'role:ceo,admin']);

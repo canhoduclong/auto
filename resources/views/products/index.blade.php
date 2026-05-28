@@ -32,7 +32,7 @@
         </div>
     </form>
     @can('create', App\Models\Product::class)
-        <a href="{{ route('products.create') }}" class="btn btn-success mb-3">{{ __('admin.product.create') }}</a>
+        <a href="{{ route('products.create', ['page' => $page, 'perPage' => $perPage]) }}" class="btn btn-success mb-3">{{ __('admin.product.create') }}</a>
     @endcan
     @can('update', App\Models\Product::class)
         <a href="{{ route('products.price-management.index') }}" class="btn btn-outline-primary mb-3">Quản lý giá sản phẩm</a>
@@ -51,13 +51,25 @@
                     </a>
                 </div>
             </div>
-            
-            @can('create', App\Models\Product::class)
-                <a class="btn btn-outline-success btn-sm" href="{{ route('products.create') }}">
-                    <i class="ph-plus ph-sm me-2"></i>
-                    {{ __('admin.product.create') }}
-                </a> 
-            @endcan
+            <div class="d-flex align-items-center gap-2">
+                <form method="GET" action="{{ route('products.index') }}" id="perPageForm" class="d-flex align-items-center">
+                    @foreach(request()->except('perPage', 'page') as $key => $value)
+                        <input type="hidden" name="{{ $key }}" value="{{ $value }}">
+                    @endforeach
+                    <label for="perPage" class="me-1 mb-0 small text-muted">Hiển thị:</label>
+                    <select name="perPage" id="perPage" class="form-select form-select-sm w-auto" onchange="document.getElementById('perPageForm').submit()">
+                        @foreach([10, 25, 50, 100] as $size)
+                            <option value="{{ $size }}" {{ $perPage == $size ? 'selected' : '' }}>{{ $size }}</option>
+                        @endforeach
+                    </select>
+                </form>
+                @can('create', App\Models\Product::class)
+                    <a class="btn btn-outline-success btn-sm" href="{{ route('products.create', ['page' => $page, 'perPage' => $perPage]) }}">
+                        <i class="ph-plus ph-sm me-2"></i>
+                        {{ __('admin.product.create') }}
+                    </a> 
+                @endcan
+            </div>
 
         </div> 
       
@@ -112,7 +124,7 @@
                     <div class="d-flex justify-content-end list-actions"> 
                         
                         @can('update', $product)
-                            <a href="{{ route('products.edit', ['product' => $product->id, 'page' =>  request()->page, 'perPage' => $perPage] ) }}" class="btn btn-warning btn-sm me-1">
+                            <a href="{{ route('products.edit', ['product' => $product->id, 'page' => $page, 'perPage' => $perPage] ) }}" class="btn btn-warning btn-sm me-1">
                                 <i class="ph ph-pencil-line"></i>
                             </a>
                         @endcan
@@ -127,7 +139,7 @@
 
                         @can('delete', $product)
                         @if(auth()->user()->hasRole('admin') && $product->status)
-                            <form action="{{ route('products.destroy', ['product' => $product->id, 'page' =>  request()->page, 'perPage' => $perPage ]) }}" method="POST" style="display:inline;">
+                            <form action="{{ route('products.destroy', ['product' => $product->id, 'page' => $page, 'perPage' => $perPage ]) }}" method="POST" style="display:inline;">
                                 @csrf
                                 @method('DELETE')
                                 <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Bạn có chắc chắn muốn xóa không?')">
@@ -139,7 +151,7 @@
 
                         @can('update', $product)
                         @if(auth()->user()->hasRole('admin') && !$product->status)
-                            <form action="{{ route('products.restore', ['product' => $product->id]) }}" method="POST" style="display:inline;">
+                            <form action="{{ route('products.restore', ['product' => $product->id, 'page' => $page, 'perPage' => $perPage]) }}" method="POST" style="display:inline;">
                                 @csrf
                                 <button type="submit" class="btn btn-success btn-sm" onclick="return confirm('Bạn có chắc chắn muốn khôi phục sản phẩm này không?')">
                                     <i class="ph ph-arrow-counter-clockwise"></i>

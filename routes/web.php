@@ -1,4 +1,9 @@
 <?php 
+use App\Http\Controllers\Package\PackageDashboardController;
+use App\Http\Controllers\Package\OrderPackingController;
+use App\Http\Controllers\Package\ReturnController;
+use App\Http\Controllers\Package\OrderChangeRequestController; 
+
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductPriceManagementController;
@@ -77,6 +82,16 @@ Route::middleware('guest')->group(function () {
 
 
 Route::middleware(['auth', 'assigned'])->group(function () {
+
+    // ─── Package module (Đóng hàng) ─────────────────────────────
+    Route::prefix('package')->name('package.')->middleware('role:package,admin')->group(function () {
+        Route::get('/', [PackageDashboardController::class, 'index'])->name('dashboard');
+        Route::get('/orders', [OrderPackingController::class, 'index'])->name('orders');
+        Route::get('/orders/{order}', [OrderPackingController::class, 'show'])->name('orders.detail');
+        Route::get('/returns', [ReturnController::class, 'index'])->name('returns');
+        Route::get('/order-changes', [OrderChangeRequestController::class, 'index'])->name('order-changes');
+        Route::get('/inventory', [InventoryController::class, 'index'])->name('inventory');
+    });
 
     // Role switching
     Route::post('/switch-role/{role}', [RoleSwitchController::class, 'switch'])->name('role.switch');
@@ -322,6 +337,9 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/weekly-customer-report', [CeoDashboardController::class, 'weeklyCustomerReport'])->name('weekly-customer-report');
         Route::get('/financial-reports', [CeoDashboardController::class, 'financialReports'])->name('financial-reports');
         Route::get('/daily-sales', [CeoDashboardController::class, 'dailySales'])->name('daily-sales');
+
+            // Báo cáo doanh thu khách hàng riêng CEO
+            Route::get('/customer/{customer}/revenue', [CeoDashboardController::class, 'customerRevenueReport'])->name('customer-revenue-report');
 
         // Quản lý giá (CEO layout)
         Route::get('/price-management', [ProductPriceManagementController::class, 'index'])->name('price-management.index');

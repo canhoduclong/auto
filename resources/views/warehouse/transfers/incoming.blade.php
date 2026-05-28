@@ -88,161 +88,151 @@
             grid-template-columns: 44px minmax(120px, 1fr) 42px 52px 70px 70px;
         }
     }
+    /* --- Order Sequence Navigation --- */
+    .wh-order-nav-area {
+        position: sticky;
+        top: 75px;
+        z-index: 95;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 12px 16px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+    }
+    .wh-order-nav-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 36px;
+        height: 36px;
+        padding: 0 8px;
+        border-radius: 50px;
+        font-weight: 700;
+        font-size: 0.9rem;
+        text-decoration: none;
+        color: #fff !important;
+        background-color: #6c757d;
+        transition: all 0.2s ease;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        border: 2px solid transparent;
+    }
+    .wh-order-nav-pill.is-unpacked {
+        background-color: #38bdf8 !important; /* xanh da trời */
+        color: #fff !important;
+    }
+    .wh-order-nav-pill.is-packed {
+        background-color: var(--theme-primary) !important;
+        color: #fff !important;
+    }
+    .wh-order-index {
+        border-radius: 50px;
+        width: 35px;
+        z-index: 2;
+        font-weight: 700;
+        padding: 3px 8px;
+        background: var(--theme-primary) !important;
+        color: #fff;
+        margin-right: 12px;
+    }
+    .wh-order-nav-pill.active, .wh-order-nav-pill:focus {
+        border: 2px solid #2563eb !important;
+        color: #2563eb !important;
+        background: #e0e7ff !important;
+    }
+    .wh-order-nav-pill:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+    .wh-order-index {
+        border-radius: 50px;
+        width: 35px;
+        z-index: 2;
+        font-weight: 700;
+        padding: 3px 8px;
+        background: #0f172a;
+        color: #fff;
+        margin-right: 12px;
+    }
 </style>
 @endpush
 
 @section('content')
+
 @php
-    $pendingCount = $transfers->where('status', 'delivered_waiting_receive')->count();
-    $doneCount = $transfers->where('status', 'received_completed')->count();
+    $receivedTransfers = $transfers->where('status', 'received_completed');
+    $pendingTransfers = $transfers->where('status', 'delivered_waiting_receive');
 @endphp
 
-<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-    <div class="d-flex gap-2 flex-wrap">
-        <span class="badge bg-warning text-dark rounded-pill">Chờ tiếp nhận: {{ $pendingCount }}</span>
-        <span class="badge bg-success rounded-pill">Đã tiếp nhận: {{ $doneCount }}</span>
-    </div>
-    <a href="{{ route('warehouse.orders') }}" class="btn btn-outline-secondary btn-sm">
-        <i class="bi bi-arrow-left me-1"></i>Quay lại đơn kho
-    </a>
-</div>
-
-@if($transfers->isEmpty())
-    <div class="card border-0 shadow-sm text-center py-5">
-        <i class="bi bi-inbox fs-1 text-muted"></i>
-        <p class="mt-2 text-muted">Không có đơn điều chuyển nào cần tiếp nhận.</p>
-    </div>
-@else
-    <div class="row g-3">
-        @foreach($transfers as $transfer)
+<div class="wh-order-nav-area mb-4">
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+        <span class="fw-bold text-muted me-1"><i class="bi bi-list-ol me-1"></i>Điều hướng nhanh:</span>
+        @foreach($transfers as $navTransfer)
             @php
-                $order = $transfer->order;
-                $canConfirm = $transfer->status === 'delivered_waiting_receive';
-                $statusMeta = $canConfirm
-                    ? ['Chờ tiếp nhận', 'bg-warning text-dark']
-                    : ['Đã tiếp nhận', 'bg-success'];
+                $sequenceNumber = $navTransfer->sequence_number ?? $loop->iteration;
+                $isReceived = $navTransfer->status === 'received_completed';
             @endphp
-            <div class="col-12 col-xl-6">
-                <div class="card border-0 shadow-sm h-100">
-                    <div class="card-header bg-white d-flex justify-content-between align-items-center gap-2">
-                        <div>
-                            <div class="fw-semibold">{{ $order?->customer?->name ?? 'Khách hàng' }}</div>
-                            <div class="small text-muted">{{ $order?->code ?? ('#' . $transfer->order_id) }}, {{ optional($transfer->delivered_at)->format('d/m/Y H:i') ?: '—' }}</div>
-                            
-                        </div>
-                        <span class="badge {{ $statusMeta[1] }}">{{ $statusMeta[0] }}</span>
-                    </div>
-
-                    <div class="card-body">
-                        <div class="row g-2 mb-3 small"> 
-                            <div class="col-12 col-md-6">
-                                <div class="text-muted">KL tiếp nhận</div>
-                                <div class="fw-semibold">{{ $transfer->received_total_weight !== null ? format_kg((float) $transfer->received_total_weight) : '—' }}</div>
-                            </div>
-                            <div class="col-12 col-md-6">
-                                <div class="text-muted">Hao hụt</div>
-                                <div class="fw-semibold {{ (float) ($transfer->weight_loss ?? 0) > 0 ? 'text-danger' : 'text-success' }}">
-                                    {{ $transfer->weight_loss !== null ? format_kg((float) $transfer->weight_loss) : '—' }}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="border-top pt-3 mt-3">
-                            <div class="wh-item-table-wrap">
-                                <div class="wh-item-table-head">
-                                    <div>Ảnh</div>
-                                    <div>Sản phẩm</div>
-                                    <div class="text-center">Size</div>
-                                    <div class="text-center">SL</div>
-                                    <div class="text-center">Tổng</div>
-                                    <div class="text-end">Khối lượng</div>
-                                </div>
-                                <ul class="wh-item-list">
-                                    @foreach($order?->items ?? [] as $item)
-                                        @php
-                                            $variant = $item->variant;
-                                            $orderedQty = (int) ($item->quantity ?? 0);
-                                            $variantSize = $variant?->size;
-                                            $formattedVariantSize = (!is_null($variantSize) && $variantSize !== '')
-                                                ? (string) $variantSize
-                                                : '-';
-                                            $itemWeight = (float) ($item->packed_weight ?? $item->total_weight ?? 0);
-                                            $imagePath = $variant?->avatar?->media?->file_path
-                                                ?? $item->product?->avatar?->media?->file_path
-                                                ?? null;
-                                        @endphp
-                                        <li class="wh-item-row">
-                                            <div class="wh-item-table-row">
-                                                <div>
-                                                    @if($imagePath)
-                                                        <img class="wh-item-thumb" src="{{ asset('storage/' . $imagePath) }}" alt="{{ $variant?->name ?? $item->product?->name ?? 'Sản phẩm' }}">
-                                                    @else
-                                                        <span class="wh-item-thumb-placeholder">
-                                                            <i class="bi bi-image"></i>
-                                                        </span>
-                                                    @endif
-                                                </div>
-                                                <div class="wh-item-name">
-                                                    {{ $variant?->name ?? $item->product?->name ?? 'Sản phẩm' }}
-                                                    @if($variant?->sku)
-                                                        <span class="text-muted small">({{ $variant->sku }})</span>
-                                                    @endif
-                                                </div>
-                                                <div class="wh-item-cell"><strong>{{ $formattedVariantSize }}</strong></div>
-                                                <div class="wh-item-cell"><strong>{{ number_format($orderedQty) }}</strong></div>
-                                                <div class="wh-item-cell"><strong>{{ $item->display_total_label ?? '—' }}</strong></div>
-                                                <div class="wh-item-cell text-end"><strong>{{ format_kg($itemWeight) }}</strong></div>
-                                            </div>
-                                        </li>
-                                    @endforeach
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="card-footer bg-white border-top d-flex justify-content-between align-items-center gap-2">
-                        <div class="byshipper" style="font-size:.8rem;">
-                            Từ kho: <strong>{{ $transfer->sourceWarehouse?->name ?? '—' }}</strong>, bởi :<strong>{{ $transfer->shipper?->name ?? '—' }}</strong>
-                        </div>
-                        <div class="actions">
-                        @if($canConfirm)
-                            <div class="d-flex justify-content-end gap-2">
-                                <form method="POST" action="{{ route('warehouse.transfers.rollback', $transfer) }}" class="js-rollback-transfer-form">
-                                    @csrf
-                                    <input type="hidden" name="rollback_note" value="">
-                                    <button type="submit" class="btn btn-outline-danger btn-sm">
-                                        <i class="bi bi-arrow-counterclockwise me-1"></i>Hoàn lại
-                                    </button>
-                                </form>
-
-                                <form method="POST" action="{{ route('warehouse.transfers.confirm-receipt', $transfer) }}" class="d-flex justify-content-end" onsubmit="return confirm('Xác nhận nhập kho cho đơn này? Hệ thống sẽ tạo phiếu nhập và cập nhật tồn kho.');">
-                                    @csrf
-                                    <input type="hidden" name="receive_note" value="Đã nhận kho qua trang tiếp nhận nhanh">
-                                    @foreach($order?->items ?? [] as $item)
-                                        @php
-                                            $defaultWeight = (float) ($item->packed_weight ?? $item->total_weight ?? 0);
-                                        @endphp
-                                        <input type="hidden" name="item_weights[{{ $loop->index }}][order_item_id]" value="{{ $item->id }}">
-                                        <input type="hidden" name="item_weights[{{ $loop->index }}][received_weight]" value="{{ number_format($defaultWeight, 3, '.', '') }}">
-                                    @endforeach
-                                    <button type="submit" class="btn btn-success btn-sm">
-                                        <i class="bi bi-check2-circle me-1"></i>Xác nhận nhận vào kho
-                                    </button>
-                                </form>
-                            </div>
-                        @else
-                            <div class="text-end text-muted small">Đã xử lý</div>
-                        @endif
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <a href="javascript:void(0);"
+               onclick="scrollToTransferCard({{ $navTransfer->id }}, this)"
+               class="wh-order-nav-pill {{ $isReceived ? 'is-packed' : 'is-unpacked' }}"
+               id="nav-pill-{{ $navTransfer->id }}"
+               title="{{ $navTransfer->order?->customer?->name ?? 'Đơn hàng' }}">
+                {{ $sequenceNumber }}
+            </a>
         @endforeach
     </div>
-@endif
+</div>
+
+<div class="row g-4">
+    <div class="col-12 col-lg-6">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0 fw-bold" style="color: var(--theme-primary) !important;">
+                <i class="bi bi-check-circle me-2"></i>Đã nhận hàng
+            </h5>
+            <span class="badge rounded-pill" style="background: var(--theme-primary) !important; color: #fff;">{{ $receivedTransfers->count() }} đơn</span>
+        </div>
+        <div class="row g-3">
+            @forelse($receivedTransfers as $transfer)
+                @include('warehouse.transfers._transfer_card', ['transfer' => $transfer, 'isReceived' => true])
+            @empty
+                <div class="card border-0 shadow-sm text-center py-5">
+                    <i class="bi bi-inbox fs-1 text-muted"></i>
+                    <p class="mt-2 text-muted">Không có đơn đã nhận.</p>
+                </div>
+            @endforelse
+        </div>
+    </div>
+    <div class="col-12 col-lg-6 border-start">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0 fw-bold" style="color:#38bdf8">
+                <i class="bi bi-truck me-2"></i>Hàng được điều chuyển tới - Cần tiếp nhận
+            </h5>
+            <span class="badge rounded-pill" style="background:#38bdf8; color:#fff;">{{ $pendingTransfers->count() }} đơn</span>
+        </div>
+        <div class="row g-3">
+            @forelse($pendingTransfers as $transfer)
+                @include('warehouse.transfers._transfer_card', ['transfer' => $transfer, 'isReceived' => false])
+            @empty
+                <div class="card border-0 shadow-sm text-center py-5">
+                    <i class="bi bi-inbox fs-1 text-muted"></i>
+                    <p class="mt-2 text-muted">Không có đơn cần tiếp nhận.</p>
+                </div>
+            @endforelse
+        </div>
+    </div>
+</div>
 
 @push('scripts')
 <script>
+function scrollToTransferCard(id, el) {
+    const card = document.getElementById('transfer-card-' + id);
+    if (card) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        setTimeout(() => {
+            document.querySelectorAll('.wh-order-nav-pill').forEach(pill => pill.classList.remove('active'));
+            if (el) el.classList.add('active');
+        }, 100);
+    }
+}
 document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('.js-rollback-transfer-form').forEach(function (form) {
         form.addEventListener('submit', function (event) {

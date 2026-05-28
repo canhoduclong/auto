@@ -726,6 +726,16 @@ class WarehouseDashboardController extends Controller
             ->orderByDesc('id')
             ->get();
 
+        // Đánh số thứ tự cho từng transfer (giống daily_sequence)
+        $sequence = 1;
+        foreach ($transfers as $transfer) {
+            $transfer->sequence_number = $sequence;
+            if ($transfer->order) {
+                $transfer->order->daily_sequence = $sequence;
+            }
+            $sequence++;
+        }
+
         return view('warehouse.transfers.incoming', compact('transfers', 'managedWarehouseId'));
     }
 
@@ -1349,7 +1359,7 @@ class WarehouseDashboardController extends Controller
 
         if ($selectedDate === Carbon::today()->toDateString()) {
             return Inventory::query()
-                ->selectRaw('product_variant_id, COALESCE(SUM(quantity), 0) as total_qty, COALESCE(SUM(reserved_quantity), 0) as total_reserved')
+                ->selectRaw('product_variant_id, COALESCE(SUM(quantity), 0) as total_qty, COALESCE(SUM(reserved_quantity), 0) as total_reserved, COALESCE(MIN(low_stock_threshold), 5) as low_stock_threshold')
                 ->whereIn('product_variant_id', $variantIds->all())
                 ->when($warehouseId, fn ($query) => $query->where('warehouse_id', $warehouseId))
                 ->groupBy('product_variant_id')
@@ -1357,12 +1367,14 @@ class WarehouseDashboardController extends Controller
                 ->mapWithKeys(function ($row) {
                     $quantity = (int) ($row->total_qty ?? 0);
                     $reserved = (int) ($row->total_reserved ?? 0);
+                    $lowStockThreshold = (int) ($row->low_stock_threshold ?? 5);
 
                     return [
                         (int) $row->product_variant_id => [
                             'quantity' => $quantity,
                             'reserved' => $reserved,
                             'available' => max(0, $quantity - $reserved),
+                            'low_stock_threshold' => $lowStockThreshold,
                         ],
                     ];
                 })
@@ -3554,12 +3566,13 @@ class WarehouseDashboardController extends Controller
             );
         }
 
+        $snapshotByVariantColl = collect($snapshotByVariant);
         $stats = [
-            'total_quantity'         => $snapshotByVariant->sum('quantity'),
-            'total_reserved'         => $snapshotByVariant->sum('reserved'),
-            'total_available'        => $snapshotByVariant->sum('available'),
-            'low_stock'              => $snapshotByVariant->filter(fn ($v) => $v['quantity'] <= $v['low_stock_threshold'])->count(),
-            'out_of_stock'           => $snapshotByVariant->filter(fn ($v) => $v['quantity'] <= 0)->count(),
+            'total_quantity'         => $snapshotByVariantColl->sum('quantity'),
+            'total_reserved'         => $snapshotByVariantColl->sum('reserved'),
+            'total_available'        => $snapshotByVariantColl->sum('available'),
+            'low_stock'              => $snapshotByVariantColl->filter(fn ($v) => $v['quantity'] <= $v['low_stock_threshold'])->count(),
+            'out_of_stock'           => $snapshotByVariantColl->filter(fn ($v) => $v['quantity'] <= 0)->count(),
             'daily_import'           => (clone $movementQuery)->where('quantity', '>', 0)->sum('quantity'),
             'daily_export'           => abs((int) ((clone $movementQuery)->where('quantity', '<', 0)->sum('quantity'))),
             'daily_reserved'         => (clone $reservationQuery)->sum('quantity'),

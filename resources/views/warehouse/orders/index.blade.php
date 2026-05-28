@@ -486,10 +486,10 @@
         box-shadow: 0 4px 8px rgba(0,0,0,0.15);
     }
     .wh-order-nav-pill.is-packed {
-        background-color: #6c757d;
+        background-color: #198754;
     }
     .wh-order-nav-pill.is-unpacked {
-        background-color: #198754;
+        background-color: #64748b;
     }
 </style>
 @endpush
@@ -728,10 +728,10 @@
         <!-- Cột trái: Đơn chưa đóng -->
         <div class="col-12 col-lg-6">
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <h5 class="mb-0 fw-bold text-primary">
+                <h5 class="mb-0 fw-bold" style="color:#64748b;">
                     <i class="bi bi-box-seam me-2"></i>Chưa đóng hàng
                 </h5>
-                <span class="badge bg-primary rounded-pill">{{ $unpackedOrders->count() }} đơn</span>
+                <span class="badge" style="background:#64748b;color:#fff;">{{ $unpackedOrders->count() }} đơn</span>
             </div>
             <div class="row g-3">
                 @foreach($unpackedOrders as $order)

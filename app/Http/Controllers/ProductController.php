@@ -110,7 +110,10 @@ class ProductController extends Controller
             ]);
         }
 
-        return redirect()->route('products.index')->with('success', 'Product created successfully!');
+        $page = $request->input('page', 1);
+        $perPage = $request->input('perPage', 10);
+        return redirect()->route('products.index', ['page' => $page, 'perPage' => $perPage])
+            ->with('success', 'Product created successfully!');
     }
 
     public function show(Product $product)
@@ -369,7 +372,10 @@ class ProductController extends Controller
 
             DB::commit();
 
-            return redirect()->route('products.index')->with('success', 'Cập nhật sản phẩm thành công!');
+            $page = $request->input('page', 1);
+            $perPage = $request->input('perPage', 10);
+            return redirect()->route('products.index', ['page' => $page, 'perPage' => $perPage])
+                ->with('success', 'Cập nhật sản phẩm thành công!');
         } catch (\Exception $e) {
             DB::rollBack();
             return back()->with('error', 'Có lỗi xảy ra: ' . $e->getMessage());
@@ -418,8 +424,10 @@ class ProductController extends Controller
                 ]);
             }
 
+            $page = request('page', 1);
+            $perPage = request('perPage', 10);
             return redirect()
-                ->route('products.index')
+                ->route('products.index', ['page' => $page, 'perPage' => $perPage])
                 ->with('success', 'Sản phẩm đã được chuyển sang trạng thái đã xóa.');
         } catch (\Exception $e) {
             if (request()->wantsJson()) {
@@ -451,8 +459,10 @@ class ProductController extends Controller
                 ProductVariant::where('product_id', $product->id)->update(['status' => true]);
             });
 
+            $page = request('page', 1);
+            $perPage = request('perPage', 10);
             return redirect()
-                ->route('products.index')
+                ->route('products.index', ['page' => $page, 'perPage' => $perPage])
                 ->with('success', 'Sản phẩm đã được khôi phục thành công.');
         } catch (\Exception $e) {
             return redirect()

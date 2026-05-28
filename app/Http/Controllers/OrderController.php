@@ -988,6 +988,18 @@ class OrderController extends Controller
         $order->update(['status' => 'packing']);
         $this->logOrderHistory($order, 'warehouse_confirm_pack', $statusBefore, 'packing', 'Kho xac nhan bat dau dong hang');
 
+        // Notify warehouse users
+        if ($order->warehouse_id) {
+            $warehouse = $order->warehouse;
+            if ($warehouse) {
+                foreach ($warehouse->users as $user) {
+                    if ($user->hasRole('warehouse')) {
+                        $user->notify(new \App\Notifications\WarehouseNewOrderApproved($order));
+                    }
+                }
+            }
+        }
+
         return back()->with('success', __('orders.messages.picking_started'));
     }
 

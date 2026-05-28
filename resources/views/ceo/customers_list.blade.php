@@ -241,7 +241,7 @@
                                     <div class="small text-muted">Ngày tạo: {{ optional($customer->created_at)?->format('d/m/Y H:i') ?? '-' }}</div>
                                 </td>
                                 <td>
-                                    <a href="{{ route('customers.show', array_merge(['customer' => $customer->id], request()->query(), ['tab' => 'reports'])) }}" class="btn btn-sm btn-outline-primary">
+                                    <a href="{{ route('ceo.customer-revenue-report', ['customer' => $customer->id]) }}" class="btn btn-sm btn-outline-primary">
                                         <i class="bi bi-bar-chart"></i> Báo cáo
                                     </a>
                                 </td>

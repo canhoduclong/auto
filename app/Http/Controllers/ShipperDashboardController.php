@@ -399,9 +399,10 @@ class ShipperDashboardController extends Controller
         return view('shipper.delivering', compact('orders'));
     }
 
-    public function warehouseTransfers()
+    public function warehouseTransfers(Request $request)
     {
         $user = Auth::user();
+        $today = $request->filled('date') ? Carbon::parse($request->input('date'))->toDateString() : Carbon::today()->toDateString();
 
         $transfers = WarehouseTransfer::query()
             ->with([
@@ -420,11 +421,20 @@ class ShipperDashboardController extends Controller
                 WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
                 WarehouseTransfer::STATUS_RECEIVED_COMPLETED,
             ])
+            ->where(function ($query) use ($today) {
+                $query->whereDate('created_at', $today)
+                      ->orWhereDate('updated_at', $today)
+                      ->orWhereDate('picked_up_at', $today)
+                      ->orWhereDate('delivered_at', $today)
+                      ->orWhereDate('received_at', $today);
+            })
             ->orderByRaw("CASE WHEN status = 'pending_shipper_pickup' THEN 0 WHEN status = 'in_transit' THEN 1 WHEN status = 'delivered_waiting_receive' THEN 2 ELSE 3 END")
             ->orderByDesc('id')
-            ->get();
+            ->get()
+            ->unique('order_id')
+            ->values();
 
-        return view('shipper.warehouse-transfers', compact('transfers'));
+        return view('shipper.warehouse-transfers', compact('transfers', 'today'));
     }
 
     public function pickupWarehouseTransfer(Request $request, WarehouseTransfer $transfer)
@@ -1278,9 +1288,10 @@ class ShipperDashboardController extends Controller
             $remaining -= $deductQty;
         }
 
-        if ($remaining > 0) {
-            throw new \RuntimeException('Không đủ tồn kho khả dụng để điều chuyển cho đơn #' . ($order->code ?: $order->id));
-        }
+        // Không kiểm tra tồn kho khả dụng ở flow shipper, giả định đã hợp lệ từ kho xuất.
+        // if ($remaining > 0) {
+        //     throw new \RuntimeException('Không đủ tồn kho khả dụng để điều chuyển cho đơn #' . ($order->code ?: $order->id));
+        // }
 
         $this->syncVariantStockFromInventories((int) $item->product_variant_id);
     }

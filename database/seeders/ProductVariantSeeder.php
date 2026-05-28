@@ -28,9 +28,10 @@ class ProductVariantSeeder extends Seeder
         }
 
         $productNames = [
-            'Vịt nguyên con làm sạch',
-            'Vịt loại bầm',
-            'Vịt bọng',
+            'Vịt nguyên con',
+            'Vịt loại 2',
+            'Vịt bọng không đầu chân',
+            'Vịt bọng không đầu chân cổ',
             'Đùi góc tư vịt',
             'Ức vịt',
             'Cánh vịt',
@@ -39,9 +40,8 @@ class ProductVariantSeeder extends Seeder
             'Phao câu vịt',
             'Lòng vịt',
             'Mề vịt',
-            'Huyết vịt',
-            'Huyết nếp',
-            'Thùng xốp đóng hàng',
+            'Huyết vịt', 
+            'Thùng xốp',
         ];
 
         $products = DB::table('products')
@@ -51,61 +51,59 @@ class ProductVariantSeeder extends Seeder
 
         $variantMap = [
             'Vịt nguyên con làm sạch' => [
-                ['name' => '2.0 kg',          'sku' => 'MOC - 3.2', 'size' => '3.20', 'kg' => '3.20', 'status' => 1],
-                ['name' => '2.1 kg',          'sku' => 'MOC - 3.1', 'size' => '3.10', 'kg' => '3.10', 'status' => 1],
-                ['name' => '2.2 kg',          'sku' => 'MOC - 3.0', 'size' => '3.00', 'kg' => '3.00', 'status' => 1],
-                ['name' => '2.3 kg',          'sku' => 'MOC - 2.9', 'size' => '2.90', 'kg' => '2.90', 'status' => 1],
-                ['name' => '2.4 kg',          'sku' => 'MOC - 2.8', 'size' => '2.80', 'kg' => '2.80', 'status' => 1],
-                ['name' => '2.5 kg',          'sku' => 'MOC - 2.7', 'size' => '2.70', 'kg' => '2.70', 'status' => 1],
-                ['name' => '2.6 kg',          'sku' => 'MOC - 2.6', 'size' => '2.60', 'kg' => '2.60', 'status' => 1],
-                ['name' => '2.7 kg',          'sku' => 'MOC - 2.5', 'size' => '2.50', 'kg' => '2.50', 'status' => 1],
-                ['name' => '2.8 kg',          'sku' => 'MOC - 2.4', 'size' => '2.40', 'kg' => '2.40', 'status' => 1],
-                ['name' => '2.9 kg',          'sku' => 'MOC - 2.3', 'size' => '2.30', 'kg' => '2.30', 'status' => 1],
-                ['name' => '3.0 kg',          'sku' => 'MOC - 2.2', 'size' => '2.20', 'kg' => '2.20', 'status' => 1],
-                ['name' => 'Lớn hơn 3.0 kg', 'sku' => 'MOC-2.1',   'size' => '2.10', 'kg' => '2.10', 'status' => 1],
+                ['name' => '3.3 kg',          'sku' => 'MOC-3.3',   'size' => '3.30', 'kg' => '3.30', 'status' => 1],
+                ['name' => '3.2 kg',          'sku' => 'MOC-3.2',   'size' => '3.20', 'kg' => '3.20', 'status' => 1],
+                ['name' => '3.1 kg',          'sku' => 'MOC-3.1',   'size' => '3.10', 'kg' => '3.10', 'status' => 1],
+                ['name' => '3.0 kg',          'sku' => 'MOC- 3.0', 'size' => '3.00', 'kg' => '3.00', 'status' => 1],
+                ['name' => '2.9 kg',          'sku' => 'MOC-2.9', 'size' => '2.90', 'kg' => '2.90', 'status' => 1],
+                ['name' => '2.8 kg',          'sku' => 'MOC-2.8', 'size' => '2.80', 'kg' => '2.80', 'status' => 1],
+                ['name' => '2.7 kg',          'sku' => 'MOC-2.7', 'size' => '2.70', 'kg' => '2.70', 'status' => 1],
+                ['name' => '2.6 kg',          'sku' => 'MOC-2.6', 'size' => '2.60', 'kg' => '2.60', 'status' => 1],
+                ['name' => '2.5 kg',          'sku' => 'MOC-2.5', 'size' => '2.50', 'kg' => '2.50', 'status' => 1],
+                ['name' => '2.4 kg',          'sku' => 'MOC-2.4', 'size' => '2.40', 'kg' => '2.40', 'status' => 1],
+                ['name' => '2.3 kg',          'sku' => 'MOC-2.3', 'size' => '2.30', 'kg' => '2.30', 'status' => 1],
+                ['name' => '2.2 kg',          'sku' => 'MOC-2.2', 'size' => '2.20', 'kg' => '2.20', 'status' => 1],
+                ['name' => '2.1 kg',          'sku' => 'MOC-2.1', 'size' => '2.10', 'kg' => '2.10', 'status' => 1],
             ],
-            'Vịt loại bầm' => [
-                ['name' => 'Vịt loại bầm',    'sku' => '9VAHKACWDF', 'size' => null, 'kg' => '1.00', 'status' => 1],
+            'Vịt loại 2' => [
+                ['name' => 'Vịt bầm',       'sku' => 'VITLOAIBAM', 'size' => null, 'kg' => '1.00', 'status' => 1],
+                ['name' => 'Vịt rách da',   'sku' => 'VITLOAIRACHDA', 'size' => null, 'kg' => '1.00', 'status' => 1],
             ],
             'Vịt bọng' => [
-                ['name' => 'Vịt bọng tiêu chuẩn', 'sku' => 'WCSF2K0TPH', 'size' => null, 'kg' => '1.00', 'status' => 1],
+                ['name' => 'Vịt khong đầu chân', 'sku' => 'VITTIEUCHUAN', 'size' => null, 'kg' => '1.00', 'status' => 1],
+                ['name' => 'Vịt không đầu cổ chân', 'sku' => 'VITKHONGDAUCOCHAN', 'size' => null, 'kg' => '1.00', 'status' => 1],
             ],
             'Đùi góc tư vịt' => [
-                ['name' => 'Đùi góc tư vịt',  'sku' => 'PYALNS1IRU', 'size' => null, 'kg' => '1.00', 'status' => 1],
+                ['name' => 'Đùi góc tư vịt',  'sku' => 'DUIGOCTUVIT', 'size' => null, 'kg' => '1.00', 'status' => 1],
             ],
             'Ức vịt' => [
-                ['name' => 'Ức vịt dài',      'sku' => 'IIQ8ALM5PA', 'size' => null, 'kg' => '1.00', 'status' => 1],
+                ['name' => 'Ức vịt dài',      'sku' => 'UCVITDAI', 'size' => null, 'kg' => '1.00', 'status' => 1],
             ],
             'Cánh vịt' => [
-                ['name' => 'Cánh 3 khúc',     'sku' => 'CWVN9PZ56M', 'size' => null, 'kg' => '1.00', 'status' => 1],
+                ['name' => 'Cánh 3 khúc',     'sku' => 'CANG3KHUC', 'size' => null, 'kg' => '1.00', 'status' => 1],
+                ['name' => 'Cánh 2 khúc',     'sku' => 'CANG2KHUC', 'size' => null, 'kg' => '1.00', 'status' => 1],
             ],
             'Đầu vịt' => [
-                ['name' => 'Đầu vịt',         'sku' => 'VGVP4VT2XB', 'size' => null, 'kg' => '1.00', 'status' => 1],
+                ['name' => 'Đầu vịt',         'sku' => 'DAUVIT', 'size' => null, 'kg' => '1.00', 'status' => 1],
             ],
             'Đầu cổ vịt' => [
-                ['name' => 'Đầu cổ vịt',      'sku' => 'GJUT0GFRTY', 'size' => null, 'kg' => '1.00', 'status' => 1],
+                ['name' => 'Đầu cổ vịt',      'sku' => 'DAUCOCVIT', 'size' => null, 'kg' => '1.00', 'status' => 1],
             ],
             'Phao câu vịt' => [
-                ['name' => 'Phao câu vịt',    'sku' => 'EEBTAH6942', 'size' => null, 'kg' => '1.00', 'status' => 1],
+                ['name' => 'Phao câu vịt',    'sku' => 'PHAOCAUVIT', 'size' => null, 'kg' => '1.00', 'status' => 1],
             ],
             'Lòng vịt' => [
-                ['name' => 'Size lớn',        'sku' => 'EVIG5QNPRO', 'size' => null, 'kg' => '1.00', 'status' => 1],
-                ['name' => 'Size vừa',        'sku' => 'RDDSVJKDIM', 'size' => null, 'kg' => '1.00', 'status' => 1],
+                ['name' => 'Lòng vịt làm sạch',  'sku' => 'LONGSACH', 'size' => null, 'kg' => '1.00', 'status' => 1],
             ],
             'Mề vịt' => [
-                ['name' => 'Mề vịt',          'sku' => 'IHP6BHFFUK', 'size' => null, 'kg' => '1.00', 'status' => 1],
+                ['name' => 'Mề vịt',          'sku' => 'MEVIT', 'size' => null, 'kg' => '1.00', 'status' => 1],
             ],
             'Huyết vịt' => [
-                ['name' => 'Huyết vịt',       'sku' => 'MVLCDWRJHD', 'size' => null, 'kg' => '1.00', 'status' => 1],
+                ['name' => 'Huyết vịt',       'sku' => 'HUEVIT', 'size' => null, 'kg' => '1.00', 'status' => 1],
+                ['name' => 'Huyết nếp',       'sku' => 'HUYETNEP', 'size' => null, 'kg' => '1.00', 'status' => 0],
             ],
-            'Huyết nếp' => [
-                ['name' => 'Huyết nếp',       'sku' => 'VIT-00036', 'size' => null, 'kg' => '1.00', 'status' => 0],
-            ],
-            'Thùng xốp đóng hàng' => [
-                ['name' => 'Thùng xốp 50',    'sku' => 'VIT-00037', 'size' => '50', 'kg' => '1.00', 'status' => 0],
-                ['name' => 'Thùng xốp 60',    'sku' => 'VIT-00038', 'size' => '60', 'kg' => '1.00', 'status' => 0],
+            'Thùng xốp' => [
                 ['name' => 'Thùng xốp 70',    'sku' => 'VIT-00039', 'size' => '70', 'kg' => '1.00', 'status' => 0],
-                ['name' => 'Thùng xốp 100',   'sku' => 'VIT-00040', 'size' => '100','kg' => '1.00', 'status' => 0],
             ],
         ];
 

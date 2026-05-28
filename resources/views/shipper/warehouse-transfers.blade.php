@@ -4,174 +4,245 @@
 @section('subtitle', 'Nhận - giao hàng điều chuyển giữa các kho')
 
 @section('content')
+
+
 @php
-    $pendingPickup = $transfers->where('status', 'pending_shipper_pickup')->count();
-    $inTransit = $transfers->where('status', 'in_transit')->count();
-    $waitingReceive = $transfers->where('status', 'delivered_waiting_receive')->count();
+    // $transfers đã được lọc theo ngày và unique ở controller
+    $pendingPickupList = $transfers->where('status', 'pending_shipper_pickup')->values();
+    $inTransitList = $transfers->where('status', 'in_transit')->values();
+    $waitingReceiveList = $transfers->where('status', 'delivered_waiting_receive')->values();
+    $completedList = $transfers->where('status', 'received_completed')->values();
     $isManagerShipper = auth()->user()?->hasRole('manager_shipper') || auth()->user()?->hasRole('admin');
+    $allTransfers = $pendingPickupList->concat($inTransitList)->concat($waitingReceiveList)->concat($completedList);
+    $selectedDate = $today ?? null;
 @endphp
 
-<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-    <div class="d-flex gap-2 flex-wrap">
-        <span class="badge bg-secondary rounded-pill">Chờ nhận: {{ $pendingPickup }}</span>
-        <span class="badge bg-warning text-dark rounded-pill">Đang vận chuyển: {{ $inTransit }}</span>
-        <span class="badge bg-info text-dark rounded-pill">Đã giao kho nhận: {{ $waitingReceive }}</span>
+@if($selectedDate)
+    <div class="alert alert-info py-2 mb-2">
+        <i class="bi bi-calendar-event me-1"></i>
+        Đang hiển thị phiếu điều chuyển ngày <strong>{{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}</strong>
     </div>
-    <div class="d-flex gap-2 flex-wrap">
-        @if($isManagerShipper && ($pendingPickup > 0 || $inTransit > 0))
-            <button type="button" class="btn btn-outline-primary btn-sm" id="btnToggleBulkMode">
-                <i class="bi bi-check2-square me-1"></i>Chọn nhiều
-            </button>
-        @endif
-        <a href="{{ route('shipper.my-orders') }}" class="btn btn-outline-secondary btn-sm">
-            <i class="bi bi-arrow-left me-1"></i>Quay lại đơn giao
-        </a>
+@endif
+
+<style>
+    .sticky-nav-transfer {
+        position: sticky;
+        top: 56px; /* height of .sp-topbar */
+        z-index: 10;
+        background: #fff;
+        border-bottom: 1px solid #e5e7eb;
+        padding: 1rem 0 0 0;
+        margin-bottom: 0;
+    }
+    .column-nav-bar {
+        display: none;
+    }
+    @media (max-width: 991px) {
+        .column-nav-bar {
+            display: flex;
+            position: sticky;
+            top: 56px;
+            z-index: 9;
+            background: #f8fafc;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 0.5rem 0;
+            margin-bottom: 0;
+            gap: 0.5rem;
+            justify-content: flex-start;
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+        .column-nav-bar::-webkit-scrollbar { display: none; }
+    }
+    .column-nav-btn {
+        border: none;
+        color: #334155;
+        font-weight: 600;
+        border-radius: 20px;
+        padding: 0.5rem 1.1rem;
+        font-size: 1rem;
+        transition: background .18s, color .18s;
+        cursor: pointer;
+        outline: none;
+        background: #e2e8f0;
+    }
+    .column-nav-btn[data-col="pending"] {
+        background: #d1fae5;
+        color: var(--theme-primary);
+    }
+    .column-nav-btn[data-col="transit"] {
+        background: #fff7e6;
+        color: #f59e42;
+    }
+    .column-nav-btn[data-col="waiting"] {
+        background: #e0f2fe;
+        color: #38bdf8;
+    }
+    .column-nav-btn[data-col="completed"] {
+        background: #f1f5f9;
+        color: #64748b;
+    }
+    .column-nav-btn.active, .column-nav-btn:focus {
+        background: var(--theme-primary);
+        color: #fff !important;
+    }
+    @media (max-width: 991px) {
+        .column-nav-bar { top: 104px; }
+        .column-nav-btn { font-size: 0.95rem; padding: 0.45rem 0.9rem; }
+    }
+    .transfer-nav-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 2.5rem;
+        height: 2.5rem;
+        border-radius: 50%;
+        font-weight: 600;
+        font-size: 1.1rem;
+        margin-right: .5rem;
+        margin-bottom: .5rem;
+        border: 2px solid transparent;
+        transition: border-color .2s, box-shadow .2s, background .2s;
+        cursor: pointer;
+    }
+    .transfer-nav-pill.active {
+        border-color: #0ea5e9;
+        box-shadow: 0 0 0 2px #bae6fd;
+    }
+    .transfer-nav-pill.status-pending {
+        background: var(--theme-primary) !important; color: #fff;
+    }
+    .transfer-nav-pill.status-transit {
+        background: #f59e42; color: #fff;
+    }
+    .transfer-nav-pill.status-waiting {
+        background: #38bdf8; color: #fff;
+    }
+    .transfer-nav-pill.status-completed {
+        background: #cbd5e1 !important; color: #64748b !important;
+    }
+    @media (max-width: 1200px) {
+        .transfer-board-row { flex-wrap: wrap; }
+        .transfer-board-col { flex: 0 0 100%; max-width: 100%; border-left: none !important; border-top: 1px solid #e5e7eb; }
+    }
+    @media (min-width: 1200px) {
+        .transfer-board-row { display: flex; }
+        .transfer-board-col { flex: 0 0 25%; max-width: 25%; border-left: 1px solid #e5e7eb; }
+        .transfer-board-col:first-child { border-left: none !important; }
+    }
+</style>
+
+<div class="sticky-nav-transfer">
+    <div class="d-flex flex-wrap align-items-center">
+        <span class="fw-bold text-muted me-2"><i class="bi bi-list-ol me-1"></i>Điều hướng nhanh:</span>
+        @foreach($allTransfers as $idx => $transfer)
+            @php
+                $sequence = $transfer->sequence_number ?? ($idx + 1);
+                $statusClass = match($transfer->status) {
+                    'pending_shipper_pickup' => 'status-pending',
+                    'in_transit' => 'status-transit',
+                    'delivered_waiting_receive' => 'status-waiting',
+                    'received_completed' => 'status-completed',
+                    default => 'status-other',
+                };
+            @endphp
+            <a href="#transfer-card-{{ $transfer->id }}"
+               class="transfer-nav-pill {{ $statusClass }}"
+               id="nav-pill-{{ $transfer->id }}"
+               title="{{ $transfer->order?->customer?->name ?? 'Đơn hàng' }}">
+                {{ $sequence }}
+            </a>
+        @endforeach
+    </div>
+    <nav class="column-nav-bar" id="columnNavBar">
+        <button class="column-nav-btn" data-col="pending" type="button">Chờ nhận</button>
+        <button class="column-nav-btn" data-col="transit" type="button">Đang vận chuyển</button>
+        <button class="column-nav-btn" data-col="waiting" type="button">Đã giao chờ xác nhận</button>
+        <button class="column-nav-btn" data-col="completed" type="button">Đã giao & kho xác nhận</button>
+    </nav>
+</div>
+
+<div class="row transfer-board-row g-4">
+    <div class="transfer-board-col" id="col-pending">
+        <div class="d-flex justify-content-between align-items-center mb-3 sticky-top bg-white" style="top:112px;z-index:8;">
+            <h5 class="mb-0 fw-bold text-success"><i class="bi bi-box-arrow-in-down me-2"></i>Đơn hàng cần nhận</h5>
+            <span class="badge bg-success rounded-pill">{{ $pendingPickupList->count() }} đơn</span>
+        </div>
+        <div class="d-flex flex-column gap-3">
+            @forelse($pendingPickupList as $transfer)
+                @include('shipper._transfer_card', ['transfer' => $transfer, 'status' => 'pending'])
+            @empty
+                <div class="card border-0 shadow-sm text-center py-5">
+                    <i class="bi bi-inbox fs-1 text-muted"></i>
+                    <p class="mt-2 text-muted">Không có đơn cần nhận.</p>
+                </div>
+            @endforelse
+        </div>
+    </div>
+    <div class="transfer-board-col border-start" id="col-transit">
+        <div class="d-flex justify-content-between align-items-center mb-3 sticky-top bg-white" style="top:112px;z-index:8;">
+            <h5 class="mb-0 fw-bold text-warning"><i class="bi bi-truck me-2"></i>Đang vận chuyển</h5>
+            <span class="badge bg-warning text-dark rounded-pill">{{ $inTransitList->count() }} đơn</span>
+        </div>
+        <div class="d-flex flex-column gap-3">
+            @forelse($inTransitList as $transfer)
+                @include('shipper._transfer_card', ['transfer' => $transfer, 'status' => 'transit'])
+            @empty
+                <div class="card border-0 shadow-sm text-center py-5">
+                    <i class="bi bi-inbox fs-1 text-muted"></i>
+                    <p class="mt-2 text-muted">Không có đơn đang vận chuyển.</p>
+                </div>
+            @endforelse
+        </div>
+    </div>
+    <div class="transfer-board-col border-start" id="col-waiting">
+        <div class="d-flex justify-content-between align-items-center mb-3 sticky-top bg-white" style="top:112px;z-index:8;">
+            <h5 class="mb-0 fw-bold text-info"><i class="bi bi-clipboard-check me-2"></i>Đã giao (chờ kho xác nhận)</h5>
+            <span class="badge bg-info text-dark rounded-pill">{{ $waitingReceiveList->count() }} đơn</span>
+        </div>
+        <div class="d-flex flex-column gap-3">
+            @forelse($waitingReceiveList as $transfer)
+                @include('shipper._transfer_card', ['transfer' => $transfer, 'status' => 'waiting'])
+            @empty
+                <div class="card border-0 shadow-sm text-center py-5">
+                    <i class="bi bi-inbox fs-1 text-muted"></i>
+                    <p class="mt-2 text-muted">Không có đơn đã giao chờ xác nhận.</p>
+                </div>
+            @endforelse
+        </div>
+    </div>
+    <div class="transfer-board-col border-start" id="col-completed">
+        <div class="d-flex justify-content-between align-items-center mb-3 sticky-top bg-white" style="top:112px;z-index:8;">
+            <h5 class="mb-0 fw-bold text-secondary"><i class="bi bi-clipboard-check me-2"></i>Đã giao &amp; kho đã xác nhận</h5>
+            <span class="badge bg-secondary rounded-pill">{{ $completedList->count() }} đơn</span>
+        </div>
+        <div class="d-flex flex-column gap-3">
+            @forelse($completedList as $transfer)
+                @include('shipper._transfer_card', ['transfer' => $transfer, 'status' => 'completed'])
+            @empty
+                <div class="card border-0 shadow-sm text-center py-5">
+                    <i class="bi bi-inbox fs-1 text-muted"></i>
+                    <p class="mt-2 text-muted">Không có đơn đã giao và kho xác nhận.</p>
+                </div>
+            @endforelse
+        </div>
     </div>
 </div>
 
 {{-- Bulk action bar (chỉ hiện khi ở chế độ chọn nhiều) --}}
-@if($isManagerShipper)
-<div id="bulkActionBar" class="card border-primary shadow-sm mb-3 d-none">
-    <div class="card-body py-2 px-3">
-        <div class="d-flex flex-wrap align-items-center gap-3">
-            <div class="fw-semibold small text-primary">
-                <span id="bulkSelectedCount">0</span> phiếu đã chọn
-            </div>
-            <div class="d-flex gap-2 flex-wrap">
-                <button type="button" class="btn btn-outline-secondary btn-sm" id="btnSelectAllPending">
-                    <i class="bi bi-check-all me-1"></i>Chọn tất cả "Chờ nhận"
-                </button>
-                <button type="button" class="btn btn-outline-warning btn-sm" id="btnSelectAllTransit">
-                    <i class="bi bi-check-all me-1"></i>Chọn tất cả "Đang vận chuyển"
-                </button>
-                <button type="button" class="btn btn-outline-secondary btn-sm btn-sm" id="btnDeselectAll">
-                    <i class="bi bi-x-circle me-1"></i>Bỏ chọn tất cả
-                </button>
-            </div>
-            <div class="ms-auto d-flex gap-2 flex-wrap">
-                {{-- Bulk Pickup form --}}
-                <form id="bulkPickupForm" method="POST" action="{{ route('shipper.warehouse-transfers.bulk-pickup') }}" class="d-inline-flex gap-2 align-items-center">
-                    @csrf
-                    <div id="bulkPickupIds"></div>
-                    <input type="text" name="pickup_note" class="form-control form-control-sm" style="width:200px" placeholder="Ghi chú nhận hàng (tùy chọn)">
-                    <button type="submit" class="btn btn-primary btn-sm" id="btnBulkPickup" disabled>
-                        <i class="bi bi-box-arrow-in-down me-1"></i>Nhận hàng tất cả đã chọn
-                    </button>
-                </form>
-                {{-- Bulk Deliver form --}}
-                <form id="bulkDeliverForm" method="POST" action="{{ route('shipper.warehouse-transfers.bulk-deliver') }}" class="d-inline-flex gap-2 align-items-center">
-                    @csrf
-                    <div id="bulkDeliverIds"></div>
-                    <input type="text" name="delivery_note" class="form-control form-control-sm" style="width:200px" placeholder="Ghi chú giao hàng (tùy chọn)">
-                    <button type="submit" class="btn btn-success btn-sm" id="btnBulkDeliver" disabled>
-                        <i class="bi bi-truck me-1"></i>Giao hàng tất cả đã chọn
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-@endif
-
+{{-- ĐÃ XOÁ HOÀN TOÀN PHẦN DANH SÁCH LẶP LẠI PHÍA DƯỚI --}}
 @if($transfers->isEmpty())
     <div class="card border-0 shadow-sm text-center py-5">
         <i class="bi bi-truck fs-1 text-muted"></i>
         <p class="mt-2 text-muted">Không có phiếu điều chuyển nào.</p>
     </div>
-@else
-    <div class="row g-3" id="transferList">
-        @foreach($transfers as $transfer)
-            @php
-                $order = $transfer->order;
-                $statusMeta = match($transfer->status) {
-                    'pending_shipper_pickup' => ['Chờ nhận hàng', 'bg-secondary'],
-                    'in_transit' => ['Đang vận chuyển', 'bg-warning text-dark'],
-                    'delivered_waiting_receive' => ['Đã giao kho nhận', 'bg-info text-dark'],
-                    'received_completed' => ['Đã tiếp nhận', 'bg-success'],
-                    default => [strtoupper($transfer->status), 'bg-light text-dark'],
-                };
-                $isBulkable = in_array($transfer->status, ['pending_shipper_pickup', 'in_transit']);
-            @endphp
-            <div class="col-12 col-xl-6">
-                <div class="card border-0 shadow-sm h-100 js-transfer-card {{ $isBulkable ? '' : 'opacity-75' }}"
-                     data-transfer-id="{{ $transfer->id }}"
-                     data-status="{{ $transfer->status }}">
-                    <div class="card-header bg-white d-flex justify-content-between align-items-center gap-2">
-                        @if($isManagerShipper && $isBulkable)
-                            <div class="bulk-checkbox-wrap d-none me-1">
-                                <input type="checkbox" class="form-check-input fs-5 js-transfer-checkbox"
-                                       value="{{ $transfer->id }}"
-                                       data-status="{{ $transfer->status }}"
-                                       style="cursor:pointer">
-                            </div>
-                        @endif
-                        <div class="flex-grow-1">
-                            <div class="fw-semibold">{{ $order?->code ?? ('#' . $transfer->order_id) }}</div>
-                            <div class="small text-muted">{{ $order?->customer?->name ?? 'Khách hàng' }}</div>
-                        </div>
-                        <span class="badge {{ $statusMeta[1] }}">{{ $statusMeta[0] }}</span>
-                    </div>
-                    <div class="card-body">
-                        <div class="small text-muted mb-1">Kho gửi: <strong class="text-dark">{{ $transfer->sourceWarehouse?->name ?? '—' }}</strong></div>
-                        <div class="small text-muted mb-1">Kho nhận: <strong class="text-dark">{{ $transfer->targetWarehouse?->name ?? '—' }}</strong></div>
-                        <div class="small text-muted mb-1">Shipper phụ trách: <strong class="text-dark">{{ $transfer->shipper?->name ?? '—' }}</strong></div>
-                        <div class="small text-muted mb-2">KL đóng gói: <strong class="text-dark">{{ $transfer->packed_total_weight !== null ? number_format((float) $transfer->packed_total_weight, 3, ',', '.') . ' kg' : '—' }}</strong></div>
-
-                        <div class="border-top pt-2 mt-2">
-                            <div class="small fw-semibold mb-1">Sản phẩm</div>
-                            @foreach($order?->items ?? [] as $item)
-                                <div class="small text-muted">
-                                    - {{ $item->variant?->name ?? $item->product?->name ?? 'Sản phẩm' }}
-                                    (SL: {{ (int) ($item->quantity ?? 0) }})
-                                </div>
-                            @endforeach
-                        </div>
-
-                        @if($transfer->delivery_proof_image)
-                            <div class="border-top pt-2 mt-2">
-                                <div class="small fw-semibold mb-1">Ảnh giao hàng</div>
-                                <a href="{{ asset('storage/' . $transfer->delivery_proof_image) }}" target="_blank" class="small">Xem ảnh bằng chứng</a>
-                            </div>
-                        @endif
-                    </div>
-                    <div class="card-footer bg-white border-top">
-                        @if($transfer->status === 'pending_shipper_pickup')
-                            <form method="POST" action="{{ route('shipper.warehouse-transfers.pickup', $transfer) }}" class="d-grid gap-2">
-                                @csrf
-                                <textarea name="pickup_note" rows="2" class="form-control form-control-sm" placeholder="Ghi chú khi nhận hàng (nếu có)"></textarea>
-                                <button type="submit" class="btn btn-primary btn-sm">
-                                    <i class="bi bi-box-arrow-in-down me-1"></i>Xác nhận nhận hàng
-                                </button>
-                            </form>
-                        @elseif($transfer->status === 'in_transit')
-                            <form method="POST" action="{{ route('shipper.warehouse-transfers.deliver', $transfer) }}" enctype="multipart/form-data" class="d-grid gap-2">
-                                @csrf
-                                <textarea name="delivery_note" rows="2" class="form-control form-control-sm" placeholder="Ghi chú giao hàng cho kho nhận"></textarea>
-                                <input type="file" class="form-control form-control-sm" name="delivery_proof_image" accept="image/*">
-                                <button type="submit" class="btn btn-success btn-sm">
-                                    <i class="bi bi-truck me-1"></i>Giao hàng cho kho nhận
-                                </button>
-                            </form>
-                        @elseif($transfer->status === 'delivered_waiting_receive')
-                            <div class="d-flex flex-column flex-md-row gap-2 align-items-start">
-                                <span class="badge bg-info text-dark flex-grow-1">Đã giao, chờ kho nhận xác nhận</span>
-                                <form method="POST" action="{{ route('shipper.warehouse-transfers.rollback', $transfer) }}" class="js-rollback-transfer-form">
-                                    @csrf
-                                    <input type="hidden" name="rollback_note" value="">
-                                    <button type="submit" class="btn btn-outline-danger btn-sm">
-                                        <i class="bi bi-arrow-counterclockwise me-1"></i>Hoàn lại
-                                    </button>
-                                </form>
-                            </div>
-                        @else
-                            <span class="badge bg-success">Phiếu điều chuyển đã hoàn tất</span>
-                        @endif
-                    </div>
-                </div>
-            </div>
-        @endforeach
-    </div>
 @endif
+{{-- ĐÃ XOÁ HOÀN TOÀN PHẦN CODE LẶP LẠI PHÍA DƯỚI, KHÔNG CÒN endforeach HOẶC else THỪA --}}
+
+
+{{-- ĐÃ XOÁ HOÀN TOÀN PHẦN CODE LẶP LẠI PHÍA DƯỚI, KHÔNG CÒN endforeach HOẶC else THỪA --}}
+
+{{-- Kết thúc layout, không còn code Blade dư thừa phía dưới --}}
 
 @if($isManagerShipper)
 <script>
@@ -278,4 +349,33 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 @endif
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // Sticky nav fix for mobile/desktop
+    const navBar = document.querySelector('.sticky-nav-transfer');
+    if (navBar) {
+        navBar.style.top = (document.querySelector('.sp-topbar')?.offsetHeight || 56) + 'px';
+    }
+    // Column navigation
+    const colNav = document.getElementById('columnNavBar');
+    if (colNav) {
+        const btns = colNav.querySelectorAll('.column-nav-btn');
+        btns.forEach(btn => {
+            btn.addEventListener('click', function () {
+                btns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const colId = 'col-' + btn.dataset.col;
+                const col = document.getElementById(colId);
+                if (col) {
+                    col.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            });
+        });
+        // Auto activate first tab
+        btns[0].classList.add('active');
+    }
+});
+</script>
+@endpush
 @endsection

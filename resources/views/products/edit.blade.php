@@ -232,6 +232,8 @@
 
             {{-- Form edit sản phẩm --}}
             <form action="{{ route('products.update', $product->id) }}" method="POST" enctype="multipart/form-data">
+                                <input type="hidden" name="page" value="{{ $page ?? request('page', 1) }}">
+                                <input type="hidden" name="perPage" value="{{ $perPage ?? request('perPage', 10) }}">
                 @csrf
                 @method('PUT')
 
