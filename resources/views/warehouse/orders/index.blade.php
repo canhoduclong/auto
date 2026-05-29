@@ -24,10 +24,10 @@
     }
     .wh-order-index {
         border-radius: 50px;
-        width: 35px;
+        width: 40px;
         z-index: 2; 
         font-weight: 700; 
-        padding: 3px 8px;
+        padding: 6px 8px;
         background: #0f172a;
         color: #fff;
         margin-right: 12px;
