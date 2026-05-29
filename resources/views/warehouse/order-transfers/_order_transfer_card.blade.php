@@ -2,7 +2,7 @@
 <div class="order-transfer-card d-flex align-items-start" data-id="{{ $order->id }}">
     <div class="me-3 pt-1">
         <input type="checkbox" class="form-check-input order-select-checkbox" value="{{ $order->id }}">
-        <div class="small text-muted mt-2 order-index">{{ $loop->iteration ?? '' }}</div>
+        <div class="small text-muted mt-2 order-index">{{ $loop->daily_sequence ?? '' }}</div>
     </div>
     <div class="flex-grow-1">
         <div class="d-flex justify-content-between align-items-center">

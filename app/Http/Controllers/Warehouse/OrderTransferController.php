@@ -18,8 +18,11 @@ class OrderTransferController extends Controller
         $warehouseId = $user->warehouse_id;
         // Lấy danh sách đơn chưa điều chuyển, chỉ thuộc kho user quản lý
         $orders = Order::whereNull('order_transfer_id')
-            ->where('warehouse_id', $warehouseId)
             ->whereIn('status', ['ready_to_ship', 'packing', 'packed', 'packed_waiting_pickup'])
+            ->where(function ($query) use ($warehouseId) {
+                $query->where('warehouse_id', $warehouseId)
+                      ->orWhereNull('warehouse_id');
+            })
             ->with(['customer', 'items.variant', 'warehouse'])
             ->paginate(20);
 

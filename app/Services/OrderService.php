@@ -48,6 +48,7 @@ class OrderService
             );
             $order->total = 0;
             $order->note = $orderData['note'] ?? null;
+            $order->warehouse_id = null; // Đảm bảo luôn NULL khi tạo mới/copy
             $order->save();
 
             $total = 0;

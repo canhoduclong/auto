@@ -98,6 +98,21 @@
                 <div class="alert alert-info text-center my-4">Chưa có phiếu điều chuyển nào.</div>
             @else
                 @foreach($recentTransfers as $transfer)
+                    @php
+                        // Disable nếu bất kỳ đơn nào đã có warehouse_transfer trạng thái đã ship nhận hoặc kho nhận xác nhận
+                        $disableDelete = false;
+                        foreach ($transfer->orders as $order) {
+                            $latestTransfer = $order->warehouseTransfers()->latest()->first();
+                            if ($latestTransfer && in_array($latestTransfer->status, [
+                                \App\Models\WarehouseTransfer::STATUS_IN_TRANSIT,
+                                \App\Models\WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
+                                \App\Models\WarehouseTransfer::STATUS_RECEIVED_COMPLETED,
+                            ])) {
+                                $disableDelete = true;
+                                break;
+                            }
+                        }
+                    @endphp
                     <div class="mb-3 border rounded p-2">
                         <div class="d-flex justify-content-between align-items-center mb-1">
                             <div>
@@ -116,7 +131,7 @@
                         <form method="POST" action="{{ route('warehouse.order-transfers.destroy', $transfer->id) }}" onsubmit="return confirm('Bạn có chắc muốn xóa phiếu này?');" class="mt-2">
                             @csrf
                             @method('DELETE')
-                            <button type="submit" class="btn btn-danger btn-sm">Xóa phiếu</button>
+                            <button type="submit" class="btn btn-danger btn-sm" @if($disableDelete) disabled title="Phiếu đã có ship nhận hoặc kho nhận xác nhận, không thể xóa" @endif>Xóa phiếu</button>
                         </form>
                     </div>
                 @endforeach

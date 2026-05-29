@@ -135,9 +135,9 @@
 <div class="sticky-nav-transfer">
     <div class="d-flex flex-wrap align-items-center">
         <span class="fw-bold text-muted me-2"><i class="bi bi-list-ol me-1"></i>Điều hướng nhanh:</span>
-        @foreach($allTransfers as $idx => $transfer)
+        @foreach($allTransfers as $transfer)
             @php
-                $sequence = $transfer->sequence_number ?? ($idx + 1);
+                $sequence = $transfer->order?->daily_sequence ?? '—';
                 $statusClass = match($transfer->status) {
                     'pending_shipper_pickup' => 'status-pending',
                     'in_transit' => 'status-transit',

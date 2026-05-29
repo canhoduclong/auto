@@ -9,6 +9,9 @@
                 <div class="text-muted">Theo dõi, duyệt và xử lý đơn hàng trên một màn hình.</div>
             </div>
             <div class="d-flex flex-wrap gap-2">
+                <a href="{{ url('/admin/sync-daily-sequence') }}" class="btn btn-warning">
+                    <i class="bi bi-arrow-repeat"></i> Đồng bộ số thứ tự ưu tiên
+                </a>
                 <a href="{{ route('approval-workflows.create') }}" class="btn btn-outline-primary">
                     {{ __('orders.buttons.create_workflow') }}
                 </a>

@@ -1,6 +1,6 @@
 @php
     $order = $transfer->order;
-    $sequenceNumber = $transfer->sequence_number ?? ($loop->iteration ?? 1);
+    $sequenceNumber = $order->daily_sequence ?? '—';
     $status = $status ?? match($transfer->status) {
         'pending_shipper_pickup' => 'pending',
         'in_transit' => 'transit',

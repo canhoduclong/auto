@@ -44,7 +44,7 @@
                         <div class=" border-0 w-100  d-flex justify-content-between align-items-center">
                             <div>
                                 <div class="fw-semibold fs-5 mb-0 pb-0">{{ $order->customer?->name ?? '—' }} </div>
-                                <div class="text-muted card-desript">#{{ $loop->iteration }}, {{ $order->created_at->format('d/m/Y H:i') }}, {{ $order->code }}</div>
+                                <div class="text-muted card-desript">#{{ $order->daily_sequence ?? '—' }}, {{ $order->created_at->format('d/m/Y H:i') }}, {{ $order->code }}</div>
                             </div> 
                             <span class="badge {{ $meta['class'] }} js-order-status">{{ $meta['label'] }}</span>
                         </div>
@@ -258,7 +258,7 @@
                                     </details>
                                 </div>
                             @endif
-                            <div class="wh-item-table-wrap">
+                            <div class="wh-item-table-wrap mt-2">
                                 <div class="wh-item-table-head">
                                     <div>Ảnh</div>
                                     <div>Sản phẩm</div>
@@ -365,13 +365,7 @@
                                         </li>
                                     @endforeach
                                 </ul>
-                            </div>
-
-                            @if(!$isPackedReadonly && $canProcessThisOrder)
-                                <div class="small text-muted mt-2 js-ready-only {{ $isReadyToPack ? '' : 'd-none' }}">
-                                    Bấm <strong>Đóng hàng</strong> để bật nhập kg thực tế theo sản phẩm và thông tin phí.
-                                </div>
-                            @endif
+                            </div> 
 
                             @if(!$isPackedReadonly && $canProcessThisOrder)
                                 <form action="{{ route('warehouse.orders.logistics', $order) }}" method="POST" class="mt-2 js-logistics-fee-form js-packing-only {{ $isPacking ? '' : 'd-none' }}">
