@@ -528,7 +528,7 @@ class AccountingDashboardController extends Controller
         $warehouseId = (int) $request->input('warehouse_id', 0);
 
         $orders = Order::query()
-            ->with(['customer:id,name', 'warehouse:id,name'])
+            ->with(['customer:id,name', 'warehouse:id,name', 'user:id,name'])
             ->whereBetween('created_at', [$from, $to])
             ->when($customerId > 0, fn ($q) => $q->where('customer_id', $customerId))
             ->when($paymentStatus !== '', fn ($q) => $q->where('payment_status', $paymentStatus))

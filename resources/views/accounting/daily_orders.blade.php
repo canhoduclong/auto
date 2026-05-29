@@ -36,17 +36,19 @@
 <div class="acc-card">
     <div class="card-body table-responsive">
         <table class="table table-hover align-middle">
-            <thead><tr><th>Ma don</th><th>Khach hang</th><th>Tong tien</th><th>TT thanh toan</th><th>TT giao hang</th><th>Kho xuat</th><th>Ngay tao</th></tr></thead>
+            <thead><tr><th>Ma don</th><th>Khach hang</th><th>Sale</th><th>Tong tien</th><th>TT thanh toan</th><th>TT giao hang</th><th>Kho xuat</th><th>Ngay tao</th><th>Ngay giao hang</th></tr></thead>
             <tbody>
             @forelse($orders as $order)
                 <tr>
                     <td>{{ $order->code }}</td>
                     <td>{{ $order->customer?->name ?? '-' }}</td>
+                    <td>{{ $order->user?->name ?? '-' }}</td>
                     <td class="fw-semibold">{{ number_format($order->total) }} d</td>
                     <td><span class="badge text-bg-light border">{{ $order->payment_status ?? '-' }}</span></td>
                     <td>{{ $order->status }}</td>
                     <td>{{ $order->warehouse?->name ?? '-' }}</td>
                     <td>{{ optional($order->created_at)->format('d/m/Y H:i') }}</td>
+                    <td>{{ optional($order->delivered_at)->format('d/m/Y H:i') ?? '-' }}</td>
                 </tr>
             @empty
                 <tr><td colspan="7" class="text-center text-muted">Khong co don hang.</td></tr>

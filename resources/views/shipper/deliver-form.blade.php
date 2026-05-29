@@ -347,7 +347,7 @@
                 @if($isTruckStationDelivery)
                     <div class="alert alert-warning mt-3 mb-3" style="border:1px solid #fcd34d;background:#fffbeb;">
                         <div class="fw-semibold mb-1"><i class="bi bi-truck me-1"></i>Đơn giao nhà xe</div>
-                        <div class="small mb-1">Bắt buộc upload chứng từ bàn giao cho nhà xe trước khi xác nhận hoàn thành đơn.</div>
+                        <div class="small mb-1">Vui lòng upload chứng từ bàn giao cho nhà xe nếu có.</div>
                         <div class="small text-muted">
                             Trạm xe: {{ $truckStationName ?: 'Chưa cấu hình' }}
                             | Tuyến giao hàng: {{ $truckRouteName ?: 'Chưa cấu hình' }}
@@ -434,7 +434,7 @@
                             {{-- Kho trả về --}}
                             <div class="mb-2">
                                 <label class="form-label fw-semibold mb-1" style="font-size:.85rem;">Kho trả hàng về <span class="text-danger">*</span></label>
-                                <select name="return_warehouse_id" class="form-select form-select-sm" id="returnWarehouseSelect" required>
+                                <select name="return_warehouse_id" class="form-select form-select-sm" id="returnWarehouseSelect">
                                     <option value="">-- Chọn kho --</option>
                                     @foreach($warehouses as $wh)
                                         <option value="{{ $wh->id }}" {{ old('return_warehouse_id') == $wh->id ? 'selected' : '' }}>
@@ -447,7 +447,7 @@
                             {{-- Lý do trả --}}
                             <div class="mb-3">
                                 <label class="form-label fw-semibold mb-1" style="font-size:.85rem;">Lý do trả hàng <span class="text-danger">*</span></label>
-                                <select name="partial_return_reason" class="form-select form-select-sm" required>
+                                <select name="partial_return_reason" class="form-select form-select-sm">
                                     <option value="">-- Chọn lý do --</option>
                                     <option value="customer_refused" {{ old('partial_return_reason') === 'customer_refused' ? 'selected' : '' }}>Khách từ chối nhận</option>
                                     <option value="overstock" {{ old('partial_return_reason') === 'overstock' ? 'selected' : '' }}>Khách nhận dư / đặt nhầm</option>
@@ -621,14 +621,14 @@
                                 </div>
                             </div>
 
-                            <div class="small text-muted mb-3">Hoàn tất bằng cách upload chứng từ và ảnh giao hàng. Nếu chưa thu tiền, có thể để trống số tiền thanh toán.</div>
+                            <div class="small text-muted mb-3">Hoàn tất bằng cách upload chứng từ và ảnh giao hàng (nếu có). Nếu chưa thu tiền, có thể để trống số tiền thanh toán.</div>
 
                             {{-- Ảnh xác nhận giao hàng --}}
                             <div class="mb-3">
                                 <label class="form-label fw-semibold">
-                                    <i class="bi bi-camera-fill me-1 text-success"></i>Ảnh xác nhận giao hàng <span class="text-danger">*</span>
+                                    <i class="bi bi-camera-fill me-1 text-success"></i>Ảnh xác nhận giao hàng <span class="text-muted fw-normal" style="font-size:.8rem;">(Không bắt buộc)</span>
                                 </label>
-                                <input type="file" name="proof_image" class="form-control" accept="image/*" required id="proofPreviewInput">
+                                <input type="file" name="proof_image" class="form-control" accept="image/*" id="proofPreviewInput">
                                 <div class="form-text text-muted">Ảnh chụp khi giao hàng (tối đa 5MB)</div>
                                 <div id="proofPreview" class="mt-2 d-none">
                                     <img id="proofPreviewImg" src="" class="img-fluid rounded" style="max-height:200px;">
@@ -639,13 +639,12 @@
                                 <label class="form-label fw-semibold">
                                     <i class="bi bi-file-earmark-check me-1 text-warning"></i>
                                     @if($isTruckStationDelivery)
-                                        Chứng từ giao nhà xe
+                                        Chứng từ giao nhà xe <span class="text-muted fw-normal" style="font-size:.8rem;">(Không bắt buộc)</span>
                                     @else
-                                        Hóa đơn / chứng từ giao hàng
+                                        Hóa đơn / chứng từ giao hàng <span class="text-muted fw-normal" style="font-size:.8rem;">(Không bắt buộc)</span>
                                     @endif
-                                    <span class="text-danger">*</span>
                                 </label>
-                                <input type="file" name="truck_station_receipt_image" class="form-control" accept="image/*" required id="truckStationReceiptInput">
+                                <input type="file" name="truck_station_receipt_image" class="form-control" accept="image/*" id="truckStationReceiptInput">
                                 <div class="form-text text-muted">
                                     @if($isTruckStationDelivery)
                                         Ảnh biên nhận/phiếu gửi tại trạm xe (tối đa 5MB)
@@ -1141,6 +1140,12 @@
     document.getElementById('btnPaymentOnly').addEventListener('click', function (e) {
         e.preventDefault();
         currentPath = 'payment';
+        
+        const cb = document.getElementById('hasPartialReturn');
+        const hiddenInput = document.getElementById('hasPartialReturnHidden');
+        if (cb) cb.checked = false;
+        if (hiddenInput) hiddenInput.value = '0';
+        
         syncStep3Summary();
         goToStep(3);
     });
@@ -1181,6 +1186,19 @@
             });
             if (!valid) {
                 alert('Vui lòng nhập số kg trả về cho tất cả sản phẩm');
+                return;
+            }
+            
+            const returnWh = document.querySelector('select[name="return_warehouse_id"]');
+            const returnReason = document.querySelector('select[name="partial_return_reason"]');
+            if (returnWh && !returnWh.value) {
+                alert('Vui lòng chọn kho trả hàng về.');
+                returnWh.focus();
+                return;
+            }
+            if (returnReason && !returnReason.value) {
+                alert('Vui lòng chọn lý do trả hàng.');
+                returnReason.focus();
                 return;
             }
         }

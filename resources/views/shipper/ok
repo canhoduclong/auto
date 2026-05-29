@@ -806,8 +806,8 @@ class ShipperDashboardController extends Controller
             }
         }
 
-        $proofImages = []; if ($request->hasFile('proof_image')) { $proofImages[] = $request->file('proof_image')->store('order-proofs', 'public'); }
-        
+        $imagePath = $request->file('proof_image')->store('order-proofs', 'public');
+        $proofImages = [$imagePath];
 
         if ($isTruckStationDelivery && $request->hasFile('truck_station_receipt_image')) {
             $proofImages[] = $request->file('truck_station_receipt_image')->store('order-proofs/truck-station', 'public');
