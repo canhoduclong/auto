@@ -5,6 +5,136 @@
 
 @section('content')
 {{-- KPI Cards --}}
+
+ 
+    <style>
+       
+        
+        /* Bỏ đường viền mặc định của card và tăng độ cong */
+        .order-card {
+            border: none;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05); /* Đổ bóng nhẹ */
+            transition: transform 0.2s ease;
+        }
+        
+        .order-card:active {
+            transform: scale(0.98); /* Hiệu ứng nhấn trên mobile */
+        }
+
+        /* Khung hiển thị số thứ tự và thời gian */
+        .time-block {
+            min-width: 100px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+    </style> 
+
+    
+    <div class="row  mb-4">
+        <div class="col-md-6 col-lg-6 col-xl-6">   
+            <div class="mb-4 px-2"> 
+                <p class="text-muted mb-0">Thống kê hôm nay</p>
+            </div>          
+            <div class="d-flex flex-column gap-3">
+            
+                <div class="card order-card bg-white">
+                    <div class="d-flex">
+                        <div class="time-block p-3" style="background-color: #e6f4ea;">
+                            <h1 class="fw-bold mb-0 text-dark" style="font-size: 2.5rem;">01</h1>
+                            <small class="fw-bold text-dark mt-1">2:15 PM</small>
+                        </div>
+                        <div class="p-3 flex-grow-1">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="fw-bold fs-6"><i class="bi bi-person me-2 text-muted"></i>Chị Mai</span>
+                                <span class="badge rounded-pill bg-secondary bg-opacity-10 text-secondary border">
+                                    <i class="bi bi-clock me-1"></i>Đang chờ
+                                </span>
+                            </div>
+                            <div class="text-muted" style="font-size: 0.9rem;">
+                                <i class="bi bi-geo-alt me-2"></i>45 Lê Văn Quới, Bình Tân
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card order-card bg-white">
+                    <div class="d-flex">
+                        <div class="time-block p-3" style="background-color: #e8f0fe;">
+                            <h1 class="fw-bold mb-0 text-dark" style="font-size: 2.5rem;">02</h1>
+                            <small class="fw-bold text-dark mt-1">2:45 PM</small>
+                        </div>
+                        <div class="p-3 flex-grow-1">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="fw-bold fs-6"><i class="bi bi-person me-2 text-muted"></i>Nguyễn Kiệtss</span>
+                                <span class="badge rounded-pill bg-primary bg-opacity-10 text-primary border-0">
+                                    <i class="bi bi-clock me-1"></i>Đang chờ
+                                </span>
+                            </div>
+                            <div class="text-muted" style="font-size: 0.9rem;">
+                                <i class="bi bi-geo-alt me-2"></i>117 Nguyễn Thị Tú, Bình Hưng Hòa, Bình Tân
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card order-card bg-white">
+                    <div class="d-flex">
+                        <div class="time-block p-3" style="background-color: #fff3e0;">
+                            <h1 class="fw-bold mb-0 text-dark" style="font-size: 2.5rem;">03</h1>
+                            <small class="fw-bold text-dark mt-1">3:30 PM</small>
+                        </div>
+                        <div class="p-3 flex-grow-1">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="fw-bold fs-6"><i class="bi bi-person me-2 text-muted"></i>Anh Hùng</span>
+                                <span class="badge rounded-pill bg-warning bg-opacity-10 text-warning border-0 text-dark">
+                                    <i class="bi bi-clock me-1"></i>Đang chờ
+                                </span>
+                            </div>
+                            <div class="text-muted" style="font-size: 0.9rem;">
+                                <i class="bi bi-geo-alt me-2"></i>Số 3 Đường 22, Bình Hưng Hòa B, Bình Tân
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 col-lg-6 col-xl-6">
+             <div class="mb-4 px-2"> 
+                <p class="text-muted mb-0">Đơn đã nhận</p>
+            </div> 
+            <div class="order-list">
+                <div class="d-flex flex-column gap-3">
+                     <div class="card order-card bg-white">
+                        <div class="d-flex">
+                            <div class="time-block p-3" style="background-color: #fff3e0;">
+                                <h1 class="fw-bold mb-0 text-dark" style="font-size: 2.5rem;">03</h1>
+                                <small class="fw-bold text-dark mt-1">3:30 PM</small>
+                            </div>
+                            <div class="p-3 flex-grow-1">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="fw-bold fs-6"><i class="bi bi-person me-2 text-muted"></i>Anh Hùng</span>
+                                    <span class="badge rounded-pill bg-warning bg-opacity-10 text-warning border-0 text-dark">
+                                        <i class="bi bi-clock me-1"></i>Đang chờ
+                                    </span>
+                                </div>
+                                <div class="text-muted" style="font-size: 0.9rem;">
+                                    <i class="bi bi-geo-alt me-2"></i>Số 3 Đường 22, Bình Hưng Hòa B, Bình Tân
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div> 
+
+
+
 <div class="row g-3 mb-4">
     <div class="col-sm-6 col-xl-4">
         <div class="card stat-card border-0 shadow-sm">

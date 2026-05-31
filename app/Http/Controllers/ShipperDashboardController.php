@@ -65,6 +65,25 @@ class ShipperDashboardController extends Controller
             : Carbon::today()->toDateString();
     }
 
+    private function constrainAvailableReadyOrder($query): void
+    {
+        $query->where('status', Order::STATUS_READY_TO_SHIP)
+            ->where('shipper_id', Auth::id());
+
+        $this->constrainNoActiveWarehouseTransfer($query);
+    }
+
+    private function constrainNoActiveWarehouseTransfer($query): void
+    {
+        $query->whereDoesntHave('warehouseTransfers', function ($transferQuery) {
+            $transferQuery->whereIn('status', [
+                WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
+                WarehouseTransfer::STATUS_IN_TRANSIT,
+                WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
+            ]);
+        });
+    }
+
     private function reorderShipperDailySequences(int $shipperId, string $dateString): void
     {
         $orders = Order::query()
@@ -200,10 +219,8 @@ class ShipperDashboardController extends Controller
                                     ->where('status', 'delivered')
                                     ->whereDate('delivered_at', $today)
                                     ->sum('collected_amount'),
-            'available'      => Order::where('status', Order::STATUS_READY_TO_SHIP)
-                                    ->where(function ($query) {
-                                        $query->whereNull('shipper_id')
-                                            ->orWhere('shipper_id', Auth::id());
+            'available'      => Order::where(function ($query) {
+                                        $this->constrainAvailableReadyOrder($query);
                                     })
                                     ->count(),
         ];
@@ -225,10 +242,14 @@ class ShipperDashboardController extends Controller
 
         $dailyCounts = Order::query()
             ->selectRaw('DATE(updated_at) as day_key, COUNT(*) as total')
-            ->where('status', Order::STATUS_READY_TO_SHIP)
             ->where(function ($query) {
-                $query->whereNull('shipper_id')
-                    ->orWhere('shipper_id', Auth::id());
+                $query->where(function ($readyQuery) {
+                    $this->constrainAvailableReadyOrder($readyQuery);
+                })->orWhere(function ($acceptedQuery) {
+                    $acceptedQuery->where('status', Order::STATUS_DELIVERING)
+                        ->where('shipper_id', Auth::id());
+                    $this->constrainNoActiveWarehouseTransfer($acceptedQuery);
+                });
             })
             ->whereDate('updated_at', '>=', $startDate)
             ->whereDate('updated_at', '<=', $today->toDateString())
@@ -250,10 +271,14 @@ class ShipperDashboardController extends Controller
         });
 
         $orders = Order::with(['customer.addresses', 'items.variant.product', 'warehouse', 'histories.user.warehouse'])
-            ->where('status', Order::STATUS_READY_TO_SHIP)
             ->where(function ($query) {
-                $query->whereNull('shipper_id')
-                    ->orWhere('shipper_id', Auth::id());
+                $query->where(function ($readyQuery) {
+                    $this->constrainAvailableReadyOrder($readyQuery);
+                })->orWhere(function ($acceptedQuery) {
+                    $acceptedQuery->where('status', Order::STATUS_DELIVERING)
+                        ->where('shipper_id', Auth::id());
+                    $this->constrainNoActiveWarehouseTransfer($acceptedQuery);
+                });
             })
             ->where(function ($query) use ($selectedDate) {
                 $query->whereDate('updated_at', $selectedDate)
@@ -294,10 +319,8 @@ class ShipperDashboardController extends Controller
         $accepted = DB::transaction(function () use ($order) {
             $fresh = Order::with('items')
                 ->where('id', $order->id)
-                ->where('status', Order::STATUS_READY_TO_SHIP)
                 ->where(function ($query) {
-                    $query->whereNull('shipper_id')
-                        ->orWhere('shipper_id', Auth::id());
+                    $this->constrainAvailableReadyOrder($query);
                 })
                 ->where(function ($query) {
                     $today = Carbon::today()->toDateString();
@@ -378,7 +401,25 @@ class ShipperDashboardController extends Controller
         });
         
         if (!$accepted) {
+            if (request()->expectsJson()) {
+                return response()->json([
+                    'message' => 'Đơn hàng này không còn khả dụng hoặc không thuộc ngày lên đón hôm nay.',
+                ], 409);
+            }
+
             return back()->with('error', 'Đơn hàng này không còn khả dụng hoặc không thuộc ngày lên đón hôm nay.');
+        }
+
+        if (request()->expectsJson()) {
+            return response()->json([
+                'message' => 'Đã nhận đơn #' . $order->code . ' thành công!',
+                'order' => [
+                    'id' => $order->id,
+                    'code' => $order->code,
+                    'status' => Order::STATUS_DELIVERING,
+                    'shipper_id' => Auth::id(),
+                ],
+            ]);
         }
 
         return redirect()->route('shipper.my-orders')
@@ -2225,4 +2266,3 @@ class ShipperDashboardController extends Controller
         }
     }
 }
-

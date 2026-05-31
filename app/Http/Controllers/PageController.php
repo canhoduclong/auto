@@ -3639,6 +3639,9 @@ public function apiTruckRoutes(Request $request)
             // reset các field quan trọng
             $newOrder->customer_id = $resolvedCustomerId;
             $newOrder->shipper_id = null;
+            if ($this->hasOrderColumn('warehouse_id')) {
+                $newOrder->warehouse_id = null;
+            }
             do {
                 $newCode = 'OD' . time() . rand(10, 99);
             } while (Order::where('code', $newCode)->exists());
