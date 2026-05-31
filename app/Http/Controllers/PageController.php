@@ -3237,7 +3237,7 @@ public function apiTruckRoutes(Request $request)
                 ->with('error', 'Chi duoc sua don cho duyet leader duoc tao trong ngay.');
         }
 
-        $order->load('items.variant.product', 'customer');
+        $order->load('items.variant.product', 'customer', 'parentOrder');
 
         return view('site.orders.edit', [
             'settings' => $this->settings,
@@ -3255,6 +3255,9 @@ public function apiTruckRoutes(Request $request)
 
         $isCopiedOrder = $this->hasOrderColumn('copied_from_order_id')
             && !empty($order->copied_from_order_id);
+        $isReturnOrder = (bool) ($order->is_return_order ?? false)
+            || (string) ($order->order_type ?? '') === 'order_return'
+            || (string) ($order->workflow_code ?? '') === 'order_return';
 
         $isEditable = $isCopiedOrder
             || ($order->status === Order::STATUS_PENDING_LEADER_APPROVAL
@@ -3504,6 +3507,16 @@ public function apiTruckRoutes(Request $request)
                 'amount_due' => max($newTotal - $paid, 0),
             ];
 
+            if ($isReturnOrder) {
+                $orderUpdateData['order_type'] = 'order_return';
+                $orderUpdateData['workflow_code'] = 'order_return';
+                $orderUpdateData['is_return_order'] = true;
+                $orderUpdateData['warehouse_id'] = null;
+                $orderUpdateData['daily_sequence'] = null;
+                $orderUpdateData['stock_sufficient'] = true;
+                $orderUpdateData['stock_shortage_detail'] = null;
+            }
+
             $order->update(array_filter(
                 $orderUpdateData,
                 fn (string $column): bool => $this->hasOrderColumn($column),
@@ -3526,10 +3539,17 @@ public function apiTruckRoutes(Request $request)
 
             // Sau khi sửa đơn, reset lại luồng duyệt tương tự tạo mới.
             $order->approvals()->delete();
-            app(ApprovalService::class)->initOrderApproval($order->fresh());
+            app(ApprovalService::class)->initOrderApproval(
+                $order->fresh(),
+                $isReturnOrder
+                    ? \App\Models\ApprovalWorkflow::ACTIVITY_ORDER_RETURN
+                    : \App\Models\ApprovalWorkflow::ACTIVITY_ORDER_CREATE
+            );
         });
 
-        app(OrderController::class)->syncDailySequenceAndStockSufficiency($order->fresh()->created_at ?: now());
+        if (!$isReturnOrder) {
+            app(OrderController::class)->syncDailySequenceAndStockSufficiency($order->fresh()->created_at ?: now());
+        }
 
         return redirect()->route('site.orders.show', $order)
             ->with('success', 'Da cap nhat don hang thanh cong.');
@@ -3548,7 +3568,11 @@ public function apiTruckRoutes(Request $request)
             return redirect()->route('pages.my_orders')->with('error', 'Đơn hàng này không phải đơn copy.');
         }
 
-        DB::transaction(function () use ($order) {
+        $isReturnOrder = (bool) ($order->is_return_order ?? false)
+            || (string) ($order->order_type ?? '') === 'order_return'
+            || (string) ($order->workflow_code ?? '') === 'order_return';
+
+        DB::transaction(function () use ($order, $isReturnOrder) {
             // Cập nhật giá hiện tại từng item theo variant price rule
             foreach ($order->items as $item) {
                 if ($item->variant) {
@@ -3571,13 +3595,88 @@ public function apiTruckRoutes(Request $request)
 
             // Xoá approval cũ (nếu có) rồi khởi tạo lại
             $order->approvals()->delete();
-            app(ApprovalService::class)->initOrderApproval($order->fresh());
+            app(ApprovalService::class)->initOrderApproval(
+                $order->fresh(),
+                $isReturnOrder
+                    ? \App\Models\ApprovalWorkflow::ACTIVITY_ORDER_RETURN
+                    : \App\Models\ApprovalWorkflow::ACTIVITY_ORDER_CREATE
+            );
         });
 
-        app(OrderController::class)->syncDailySequenceAndStockSufficiency($order->fresh()->created_at ?: now());
+        if (!$isReturnOrder) {
+            app(OrderController::class)->syncDailySequenceAndStockSufficiency($order->fresh()->created_at ?: now());
+        }
 
         return redirect()->route('pages.my_orders')
-            ->with('success', 'Đã xác nhận đơn #' . $order->code . ' và gửi lên leader duyệt.');
+            ->with('success', 'Đã xác nhận đơn #' . $order->code . ' và gửi lên quy trình duyệt.');
+    }
+
+    public function createReturnOrder($id)
+    {
+        $user = auth()->user();
+
+        $oldOrder = Order::with(['items', 'customer'])
+            ->where('user_id', $user->id)
+            ->findOrFail($id);
+
+        if ((string) $oldOrder->status !== Order::STATUS_DELIVERED) {
+            return redirect()->route('pages.my_orders')
+                ->with('error', 'Chỉ tạo đơn hoàn trả từ đơn đã giao hàng.');
+        }
+
+        DB::transaction(function () use ($oldOrder, $user): void {
+            $newOrder = $oldOrder->replicate();
+
+            do {
+                $newCode = 'OD' . time() . rand(10, 99);
+            } while (Order::where('code', $newCode)->exists());
+
+            $newOrder->code = $newCode;
+            $newOrder->user_id = $oldOrder->user_id ?: $user->id;
+            $newOrder->customer_id = $oldOrder->customer_id;
+            $newOrder->shipper_id = null;
+            $newOrder->status = Order::STATUS_ORDER_PLACED;
+            $newOrder->payment_status = 'unpaid';
+            $newOrder->delivery_status = 'not_shipped';
+            $newOrder->delivered_at = null;
+            $newOrder->collected_amount = null;
+            $newOrder->proof_images = null;
+            $newOrder->return_reason = null;
+            $newOrder->created_at = now();
+            $newOrder->updated_at = now();
+
+            foreach ([
+                'copied_from_order_id' => $oldOrder->id,
+                'parent_order_id' => $oldOrder->id,
+                'order_type' => 'order_return',
+                'workflow_code' => 'order_return',
+                'is_return_order' => true,
+                'warehouse_id' => null,
+                'return_warehouse_id' => null,
+                'daily_sequence' => null,
+                'stock_sufficient' => true,
+                'stock_shortage_detail' => null,
+            ] as $column => $value) {
+                if ($this->hasOrderColumn($column)) {
+                    $newOrder->{$column} = $value;
+                }
+            }
+
+            $newOrder->save();
+
+            foreach ($oldOrder->items as $item) {
+                $newItem = $item->replicate();
+                $newItem->order_id = $newOrder->id;
+                $newItem->save();
+            }
+
+            if ($this->hasOrderColumn('has_return_order')) {
+                $oldOrder->update(['has_return_order' => true]);
+            }
+        });
+
+        return redirect()->route('pages.my_orders')
+            ->with('success', 'Đã tạo đơn hoàn trả từ đơn #' . $oldOrder->code . '. Vui lòng kiểm tra số lượng trả và bấm Xác nhận.');
     }
 
     public function copyOrder($id)

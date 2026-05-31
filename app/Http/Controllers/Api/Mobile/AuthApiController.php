@@ -17,14 +17,21 @@ class AuthApiController extends BaseApiController
     public function login(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'email' => ['required', 'email'],
+            'email' => ['required', 'string', 'max:255'],
             'password' => ['required', 'string'],
             'device_name' => ['nullable', 'string', 'max:120'],
             'platform' => ['nullable', 'string', 'max:32'],
             'app_version' => ['nullable', 'string', 'max:32'],
         ]);
 
-        $user = User::query()->with('roles')->where('email', $validated['email'])->first();
+        $login = trim((string) $validated['email']);
+        $user = User::query()
+            ->with('roles')
+            ->where(function ($query) use ($login): void {
+                $query->where('email', $login)
+                    ->orWhere('phone', $login);
+            })
+            ->first();
 
         if (!$user || !Hash::check($validated['password'], (string) $user->password)) {
             return $this->fail('Sai email hoac mat khau.', 401);

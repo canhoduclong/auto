@@ -441,6 +441,10 @@ class WarehouseDashboardController extends Controller
 
         $dailyCountsQuery = Order::query()
             ->selectRaw('DATE(created_at) as day_key, COUNT(*) as total')
+            ->where(function ($query) {
+                $query->whereNull('is_return_order')
+                    ->orWhere('is_return_order', false);
+            })
             ->whereDate('created_at', '>=', $startDate)
             ->whereDate('created_at', '<=', $today->toDateString());
 
@@ -486,6 +490,10 @@ class WarehouseDashboardController extends Controller
                 $query->withAvailableStock()->with('avatar.media');
             },
         ])
+            ->where(function ($query) {
+                $query->whereNull('is_return_order')
+                    ->orWhere('is_return_order', false);
+            })
             ->whereDate('created_at', $selectedDate);
 
         if ($managedWarehouseId && $currentUser?->hasRole('warehouse')) {

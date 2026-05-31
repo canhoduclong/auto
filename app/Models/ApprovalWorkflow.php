@@ -10,12 +10,14 @@ class ApprovalWorkflow extends Model
     use HasFactory;
 
     public const ACTIVITY_ORDER_CREATE = 'order_create';
+    public const ACTIVITY_ORDER_RETURN = 'order_return';
     public const ACTIVITY_TASK_ASSIGNMENT = 'task_assignment';
     public const ACTIVITY_ORDER_ADJUSTMENT_REQUEST = 'order_adjustment_request';
     public const ACTIVITY_TRANSACTION_CREATE = 'transaction_create';
 
     public const ACTIVITY_LABELS = [
         self::ACTIVITY_ORDER_CREATE => 'Tao don hang moi',
+        self::ACTIVITY_ORDER_RETURN => 'Tra hang',
         self::ACTIVITY_TASK_ASSIGNMENT => 'Giao viec',
         self::ACTIVITY_ORDER_ADJUSTMENT_REQUEST => 'Yeu cau dieu chinh don hang',
         self::ACTIVITY_TRANSACTION_CREATE => 'Tao giao dich (thu/chi)',

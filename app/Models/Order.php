@@ -12,7 +12,7 @@ class Order extends Model
     protected $fillable = [
         'customer_id', 'user_id', 'shipper_id', 'code', 'total', 'status',
         'commission_percent_snapshot', 'commission_amount_snapshot', 'commission_created_at',
-        'copied_from_order_id',
+        'copied_from_order_id', 'order_type', 'workflow_code', 'is_return_order', 'parent_order_id',
         'warehouse_id', 'return_warehouse_id',
         'recipient_name', 'recipient_phone', 'recipient_email', 'recipient_address', 'note',
         'subtotal_amount', 'item_discount_total', 'extra_discount_total',
@@ -41,6 +41,7 @@ class Order extends Model
         'charge_shipping_fee' => 'boolean',
         'shipping_fee' => 'decimal:2',
         'charge_foam_box_fee' => 'boolean',
+        'is_return_order' => 'boolean',
         'foam_box_price' => 'decimal:2',
         'stock_shortage_detail' => 'array',
         'stock_alert_status' => 'string',
@@ -107,6 +108,8 @@ class Order extends Model
 
     public function customer() { return $this->belongsTo(Customer::class); }
     public function user() { return $this->belongsTo(User::class); }
+    public function parentOrder() { return $this->belongsTo(Order::class, 'parent_order_id'); }
+    public function returnOrders() { return $this->hasMany(Order::class, 'parent_order_id'); }
     public function shipper() { return $this->belongsTo(User::class, 'shipper_id'); }
     public function warehouse() { return $this->belongsTo(Warehouse::class); }
     public function returnWarehouse() { return $this->belongsTo(Warehouse::class, 'return_warehouse_id'); }

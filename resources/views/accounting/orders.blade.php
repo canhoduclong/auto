@@ -104,14 +104,22 @@
                 $orderQty = rtrim(rtrim(number_format((float) ($order->total_item_quantity ?? 0), 3, '.', ''), '0'), '.');
                 $pendingAdjustments = $order->adjustments->where('status', \App\Models\OrderAdjustment::STATUS_PENDING_APPROVAL);
                 $otherAdjustments = $order->adjustments->whereNotIn('status', [\App\Models\OrderAdjustment::STATUS_PENDING_APPROVAL]);
+                $isReturnOrder = (bool) ($order->is_return_order ?? false)
+                    || (string) ($order->order_type ?? '') === 'order_return'
+                    || (string) ($order->workflow_code ?? '') === 'order_return';
             @endphp
-            <div class="border rounded mb-3 bg-white overflow-hidden">
+            <div class="border rounded mb-3 bg-white overflow-hidden {{ $isReturnOrder ? 'border-danger' : '' }}">
                 <div class="d-flex flex-wrap gap-0">
                     {{-- Order card --}}
                     <div class="flex-grow-1 p-3" style="min-width:280px">
                         <div class="d-flex flex-wrap justify-content-between gap-2 mb-2">
                             <div>
-                                <div class="fw-bold">{{ $order->code ?: ('#' . $order->id) }}</div>
+                                <div class="fw-bold">
+                                    {{ $order->code ?: ('#' . $order->id) }}
+                                    @if($isReturnOrder)
+                                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle ms-1">Đơn hoàn trả</span>
+                                    @endif
+                                </div>
                                 <div class="small text-muted">
                                     {{ optional($order->created_at)->format('d/m/Y H:i') }}
                                     | Khach: {{ $order->customer?->name ?? '-' }}

@@ -15,6 +15,19 @@ class ApprovalService
 {
     private function resolveActiveWorkflowForActivity(string $activity): ?ApprovalWorkflow
     {
+        if ($activity === ApprovalWorkflow::ACTIVITY_ORDER_RETURN) {
+            $workflow = ApprovalWorkflow::query()
+                ->where('is_active', true)
+                ->where('code', ApprovalWorkflow::ACTIVITY_ORDER_RETURN)
+                ->with('steps')
+                ->orderByDesc('id')
+                ->first();
+
+            if ($workflow) {
+                return $workflow;
+            }
+        }
+
         return ApprovalWorkflow::query()
             ->where('is_active', true)
             ->where(function ($query) use ($activity): void {
@@ -154,6 +167,10 @@ class ApprovalService
             ->exists();
         if (!$hasPending) {
             $order->update(['status' => OrderStatus::Approved->value]);
+
+            if ((bool) ($order->is_return_order ?? false)) {
+                return;
+            }
 
             if ($order->warehouse_id) {
                 $warehouse = $order->warehouse;

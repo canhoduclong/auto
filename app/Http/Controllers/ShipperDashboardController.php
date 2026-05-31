@@ -67,8 +67,14 @@ class ShipperDashboardController extends Controller
 
     private function constrainAvailableReadyOrder($query): void
     {
-        $query->where('status', Order::STATUS_READY_TO_SHIP)
-            ->where('shipper_id', Auth::id());
+        $query->where('shipper_id', Auth::id())
+            ->where(function ($statusQuery) {
+                $statusQuery->where('status', Order::STATUS_READY_TO_SHIP)
+                    ->orWhere(function ($returnQuery) {
+                        $returnQuery->where('status', Order::STATUS_APPROVED)
+                            ->where('is_return_order', true);
+                    });
+            });
 
         $this->constrainNoActiveWarehouseTransfer($query);
     }
@@ -352,7 +358,11 @@ class ShipperDashboardController extends Controller
                 ?: $packingHistory?->user?->warehouse_id
                 ?: 0);
 
-            if ($warehouseId > 0 && (int) ($fresh->warehouse_id ?? 0) !== $warehouseId) {
+            $isReturnOrder = (bool) ($fresh->is_return_order ?? false)
+                || (string) ($fresh->order_type ?? '') === 'order_return'
+                || (string) ($fresh->workflow_code ?? '') === 'order_return';
+
+            if (!$isReturnOrder && $warehouseId > 0 && (int) ($fresh->warehouse_id ?? 0) !== $warehouseId) {
                 $fresh->update(['warehouse_id' => $warehouseId]);
             }
 
@@ -366,10 +376,14 @@ class ShipperDashboardController extends Controller
                 'action'        => 'shipper_accepted',
                 'user_id'       => Auth::id(),
                 'role'          => 'shipper',
-                'status_before' => Order::STATUS_READY_TO_SHIP,
+                'status_before' => $isReturnOrder ? Order::STATUS_APPROVED : Order::STATUS_READY_TO_SHIP,
                 'status_after'  => Order::STATUS_DELIVERING,
-                'note'          => 'Shipper nhận đơn để giao',
+                'note'          => $isReturnOrder ? 'Shipper nhận đơn hoàn trả' : 'Shipper nhận đơn để giao',
             ]);
+
+            if ($isReturnOrder) {
+                return true;
+            }
 
             if ($warehouseId <= 0) {
                 throw new \RuntimeException('Không xác định được kho xuất cho đơn hàng này.');
@@ -1053,6 +1067,47 @@ class ShipperDashboardController extends Controller
         }
 
         $order->update($updateData);
+
+        $isReturnOrder = (bool) ($order->is_return_order ?? false)
+            || (string) ($order->order_type ?? '') === 'order_return'
+            || (string) ($order->workflow_code ?? '') === 'order_return';
+
+        if ($isReturnOrder) {
+            $order->loadMissing('items');
+
+            $orderReturn = OrderReturn::firstOrCreate(
+                [
+                    'order_id' => $order->id,
+                    'status' => 'pending_warehouse',
+                ],
+                [
+                    'customer_id' => $order->customer_id,
+                    'warehouse_id' => $returnWarehouse->id,
+                    'created_by' => Auth::id(),
+                    'reason' => $request->return_reason,
+                    'return_scope' => 'full',
+                    'refund_amount' => (float) ($order->total ?? 0),
+                    'note' => trim($shipperNote . ' | Đơn hoàn trả từ sale'),
+                ]
+            );
+
+            $orderReturn->update([
+                'warehouse_id' => $returnWarehouse->id,
+                'reason' => $request->return_reason,
+                'refund_amount' => (float) ($order->total ?? 0),
+            ]);
+
+            if ($orderReturn->returnItems()->count() === 0) {
+                foreach ($order->items as $item) {
+                    ReturnItem::create([
+                        'order_return_id' => $orderReturn->id,
+                        'product_variant_id' => $item->product_variant_id,
+                        'quantity' => (int) $item->quantity,
+                        'condition' => 'good',
+                    ]);
+                }
+            }
+        }
 
         OrderHistory::create([
             'order_id'      => $order->id,

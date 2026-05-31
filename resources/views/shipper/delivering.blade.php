@@ -320,11 +320,18 @@
                 </div>
             @elseif($order->status === 'delivering')
                 <div class="card-footer bg-white border-top d-flex gap-2">
-                    <a href="{{ route('shipper.delivered-form', $order) }}" class="btn btn-success flex-fill btn-sm">
-                        <i class="bi bi-check-circle me-1"></i>Đã giao
-                    </a>
+                    @php
+                        $isReturnOrder = (bool) ($order->is_return_order ?? false)
+                            || (string) ($order->order_type ?? '') === 'order_return'
+                            || (string) ($order->workflow_code ?? '') === 'order_return';
+                    @endphp
+                    @if(!$isReturnOrder)
+                        <a href="{{ route('shipper.delivered-form', $order) }}" class="btn btn-success flex-fill btn-sm">
+                            <i class="bi bi-check-circle me-1"></i>Đã giao
+                        </a>
+                    @endif
                     <a href="{{ route('shipper.return-form', $order) }}" class="btn btn-outline-danger flex-fill btn-sm">
-                        <i class="bi bi-arrow-return-left me-1"></i>Trả hàng
+                        <i class="bi bi-arrow-return-left me-1"></i>{{ $isReturnOrder ? 'Nhận hàng hoàn trả' : 'Trả hàng' }}
                     </a>
                 </div>
             @elseif($order->status === 'packed_waiting_pickup')

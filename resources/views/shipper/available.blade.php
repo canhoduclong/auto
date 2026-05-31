@@ -585,13 +585,17 @@
                             $shippingFee = (float) ($order->shipping_fee ?? 0);
                             $foamBoxFee = (float) (($order->charge_foam_box_fee ?? false) ? ($order->foam_box_price ?? 0) : 0);
                             $codAmount = (float) ($order->total ?? ($itemsSubtotal + $shippingFee + $foamBoxFee));
+                            $isReturnOrder = (bool) ($order->is_return_order ?? false)
+                                || (string) ($order->order_type ?? '') === 'order_return'
+                                || (string) ($order->workflow_code ?? '') === 'order_return';
                         @endphp
 
-                        <div class="card order-card bg-white js-shipper-order-card"
+                        <div class="card order-card bg-white js-shipper-order-card {{ $isReturnOrder ? 'border border-danger border-2' : '' }}"
                              id="order-card-{{ $order->id }}"
                              data-order-id="{{ $order->id }}"
                              data-order-code="{{ $order->code }}"
-                             data-delivery-url="{{ route('shipper.delivered-form', $order) }}"
+                             data-delivery-url="{{ $isReturnOrder ? route('shipper.return-form', $order) : route('shipper.delivered-form', $order) }}"
+                             data-is-return-order="{{ $isReturnOrder ? '1' : '0' }}"
                              data-order-group="{{ $isAccepted ? 'accepted' : 'available' }}"
                              data-order-sequence="{{ $order->daily_sequence ?? $loop->iteration }}">
                             <div class="d-flex">
@@ -604,6 +608,11 @@
                                     <div class="d-flex justify-content-between align-items-start gap-2">
                                         <div>
                                             <div class="fw-bold text-dark"><i class="bi bi-person text-muted me-1"></i>{{ $recipientName }}</div>
+                                            @if($isReturnOrder)
+                                                <div class="badge bg-danger-subtle text-danger border border-danger-subtle mt-1">
+                                                    <i class="bi bi-arrow-return-left me-1"></i>Đơn hoàn trả
+                                                </div>
+                                            @endif
                                             <div class="text-muted mt-1"><i class="bi bi-geo-alt text-muted me-1"></i>{{ $deliveryAddress ?: 'Chưa có địa chỉ' }}</div>
                                             <div class="text-muted"><i class="bi bi-box-seam me-1"></i>Từ kho: {{ $sourceWarehouseName ?: 'Chưa xác định' }}</div>
                                             <div class="text-muted mt-1"># {{ $order->code }}, {{ $order->created_at->format('d/m/Y H:i') }}</div>
@@ -620,8 +629,8 @@
                                                     <span class="badge rounded-pill bg-warning text-dark border px-2 py-1" style="font-size: 0.72rem;">
                                                         <i class="bi bi-check2-circle me-1"></i>Đã nhận
                                                     </span>
-                                                    <a href="{{ route('shipper.delivered-form', $order) }}" class="btn btn-success btn-sm sp-av-delivery-btn d-inline-flex align-items-center gap-1">
-                                                        <i class="bi bi-truck"></i> Giao hàng
+                                                    <a href="{{ $isReturnOrder ? route('shipper.return-form', $order) : route('shipper.delivered-form', $order) }}" class="btn {{ $isReturnOrder ? 'btn-outline-danger' : 'btn-success' }} btn-sm sp-av-delivery-btn d-inline-flex align-items-center gap-1">
+                                                        <i class="bi {{ $isReturnOrder ? 'bi-arrow-return-left' : 'bi-truck' }}"></i> {{ $isReturnOrder ? 'Nhập kho trả' : 'Giao hàng' }}
                                                     </a>
                                                 </div>
                                             @elseif($canAcceptToday && ($order->updated_at->isToday() || $order->created_at->isToday()))
@@ -809,10 +818,11 @@ document.addEventListener('DOMContentLoaded', function () {
         const action = card.querySelector('[data-accept-action]');
         if (action) {
             const deliveryUrl = card.dataset.deliveryUrl || '#';
+            const isReturnOrder = card.dataset.isReturnOrder === '1';
             action.innerHTML = `<div class="d-flex gap-2 flex-wrap align-items-center">
                 <span class="badge rounded-pill bg-warning text-dark border px-2 py-1" style="font-size: 0.72rem;"><i class="bi bi-check2-circle me-1"></i>Đã nhận</span>
-                <a href="${deliveryUrl}" class="btn btn-success btn-sm sp-av-delivery-btn d-inline-flex align-items-center gap-1">
-                    <i class="bi bi-truck"></i> Giao hàng
+                <a href="${deliveryUrl}" class="btn ${isReturnOrder ? 'btn-outline-danger' : 'btn-success'} btn-sm sp-av-delivery-btn d-inline-flex align-items-center gap-1">
+                    <i class="bi ${isReturnOrder ? 'bi-arrow-return-left' : 'bi-truck'}"></i> ${isReturnOrder ? 'Nhập kho trả' : 'Giao hàng'}
                 </a>
             </div>`;
         }

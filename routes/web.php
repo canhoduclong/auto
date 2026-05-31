@@ -760,6 +760,7 @@ Route::middleware(['auth', 'role:sale,leader,leader_sale,sale_manager,manager,ma
     Route::get('/my-orders/{order}/adjustments/create', [\App\Http\Controllers\OrderAdjustmentController::class, 'create'])->name('site.order-adjustments.create');
     Route::post('/my-orders/{order}/adjustments', [\App\Http\Controllers\OrderAdjustmentController::class, 'store'])->name('site.order-adjustments.store');
     Route::get('/my-orders/{id}/copy', [PageController::class, 'copyOrder'])->name('site.orders.copy');
+    Route::get('/my-orders/{id}/return', [PageController::class, 'createReturnOrder'])->name('site.orders.return');
     Route::post('/my-orders/{order}/confirm-copy', [PageController::class, 'confirmCopyOrder'])->name('site.orders.confirm-copy');
 }); // end my-orders role group
 
@@ -804,4 +805,3 @@ Route::get('/{slug}', [PageController::class, 'show'])->name('page.show');
 
 // Xem tất cả thông báo công việc của kho
 Route::middleware(['auth', 'role:warehouse,admin'])->get('/warehouse/notifications', [WarehouseDashboardController::class, 'allNotifications'])->name('warehouse.notifications');
-

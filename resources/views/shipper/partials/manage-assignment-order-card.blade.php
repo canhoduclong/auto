@@ -15,9 +15,12 @@
     $truckStationAddress = $customer?->truckStation?->address
         ?: ($selectedRoute?->stops?->first()?->station?->address);
     $selectedRouteName = $selectedRoute?->name;
+    $isReturnOrder = (bool) ($order->is_return_order ?? false)
+        || (string) ($order->order_type ?? '') === 'order_return'
+        || (string) ($order->workflow_code ?? '') === 'order_return';
 @endphp
 <div class="col-12">
-    <div class="card ma-order-card p-2" style="min-height:unset; position: relative;">
+    <div class="card ma-order-card p-2 {{ $isReturnOrder ? 'border border-danger border-2' : '' }}" style="min-height:unset; position: relative;">
         <style>
             .ma-product-section {
                 border-top: 1px dashed #e2e8f0;
@@ -100,6 +103,11 @@
             </div>
             <div class="col-9 ps-3">
                 <div class="fw-semibold text-dark">{{ $customerName }}</div>
+                @if($isReturnOrder)
+                    <div class="badge bg-danger-subtle text-danger border border-danger-subtle mb-1">
+                        <i class="bi bi-arrow-return-left me-1"></i>Đơn hoàn trả
+                    </div>
+                @endif
                 <div class="text-muted small mb-1">{{ $address ? mb_substr($address, 0, 60) . (mb_strlen($address) > 60 ? '...' : '') : 'Chưa cập nhật' }}</div>
                 @if(!empty($customer?->truck_route_id) || !empty($customer?->truck_station_id))
                     <div class="text-muted small mb-2 d-flex flex-wrap gap-3">

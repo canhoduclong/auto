@@ -104,7 +104,10 @@
                         if ($isWaitingWarehouseAssemble) {
                             $statusClass = 'status-danger';
                         }
-                        $canReturn = in_array($order->status, ['picked_up', 'shipping', 'completed'], true);
+                        $isReturnOrder = (bool) ($order->is_return_order ?? false)
+                            || (string) ($order->order_type ?? '') === 'order_return'
+                            || (string) ($order->workflow_code ?? '') === 'order_return';
+                        $canReturn = !$isReturnOrder && $order->status === \App\Models\Order::STATUS_DELIVERED;
                         $canMoveToTrash = in_array($order->status, [\App\Models\Order::STATUS_REJECTED, \App\Models\Order::STATUS_CANCELLED], true);
                         $isCopiedOrder = !empty($order->copied_from_order_id);
                         $canEdit = $isCopiedOrder
@@ -339,6 +342,11 @@
                                     <span class="status-pill me-2 {{ $statusClass }}">
                                             <i class="fa fa-circle" style="font-size:8px;"></i>{{ $statusLabel }}
                                     </span>
+                                    @if($isReturnOrder)
+                                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle me-2">
+                                            <i class="fa fa-undo me-1"></i>Đơn hoàn trả
+                                        </span>
+                                    @endif
                                     <div class="orders-actions">
                                         <a href="{{ route('site.orders.show', $order) }}" class="btn btn-outline-primary btn-sm">
                                             <i class="fa fa-eye me-1"></i>Chi tiết
@@ -348,6 +356,13 @@
                                                class="btn btn-outline-secondary btn-sm"
                                                onclick="return confirm('Copy đơn #{{ $order->code }} để tạo đơn mới?')">
                                                 <i class="fa fa-copy me-1"></i>Copy Đơn
+                                            </a>
+                                        @endif
+                                        @if(!$isTrashView && $canReturn)
+                                            <a href="{{ route('site.orders.return', $order->id) }}"
+                                               class="btn btn-outline-danger btn-sm"
+                                               onclick="return confirm('Tạo đơn hoàn trả từ đơn #{{ $order->code }}?')">
+                                                <i class="fa fa-undo me-1"></i>Trả hàng
                                             </a>
                                         @endif
                                                                                 @if(!$isTrashView && $canMoveToTrash)
@@ -361,9 +376,9 @@
                                         @endif
                                         @if($isCopiedOrder)
                                             <form action="{{ route('site.orders.confirm-copy', $order) }}" method="POST" class="d-inline"
-                                                  onsubmit="return confirm('Xác nhận đơn copy #{{ $order->code }}? Hệ thống sẽ cập nhật giá và chuyển đơn sang Chờ leader duyệt.')">
+                                                  onsubmit="return confirm('Xác nhận {{ $isReturnOrder ? 'đơn hoàn trả' : 'đơn copy' }} #{{ $order->code }}? Hệ thống sẽ cập nhật giá và chuyển đơn sang quy trình duyệt.')">
                                                 @csrf
-                                                <button type="submit" class="btn btn-warning btn-sm text-dark">
+                                                <button type="submit" class="btn {{ $isReturnOrder ? 'btn-danger' : 'btn-warning text-dark' }} btn-sm">
                                                     <i class="fa fa-check me-1"></i>Xác nhận
                                                 </button>
                                             </form>
