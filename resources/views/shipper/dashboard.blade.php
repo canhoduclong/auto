@@ -119,6 +119,106 @@
     </div>
 </div>
 
+{{-- Delivery schedule confirmation --}}
+@php
+    $scheduleStatusMeta = match ($deliveryScheduleStatus ?? 'none') {
+        'confirmed' => ['label' => 'Đã xác nhận', 'class' => 'bg-success', 'icon' => 'bi-check2-circle'],
+        'rejected' => ['label' => 'Đã từ chối', 'class' => 'bg-danger', 'icon' => 'bi-x-circle'],
+        'changed' => ['label' => 'Có thay đổi cần xác nhận lại', 'class' => 'bg-warning text-dark', 'icon' => 'bi-exclamation-triangle'],
+        'waiting' => ['label' => 'Chờ xác nhận', 'class' => 'bg-primary', 'icon' => 'bi-clock-history'],
+        default => ['label' => 'Chưa có lộ trình', 'class' => 'bg-secondary', 'icon' => 'bi-inbox'],
+    };
+    $needsScheduleDecision = ($deliveryScheduleOrders ?? collect())->isNotEmpty()
+        && !in_array(($deliveryScheduleStatus ?? 'none'), ['confirmed'], true);
+@endphp
+
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+            <div>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <h5 class="mb-0 fw-bold">Xác nhận Lộ trình giao hàng</h5>
+                    <span class="badge {{ $scheduleStatusMeta['class'] }}">
+                        <i class="bi {{ $scheduleStatusMeta['icon'] }} me-1"></i>{{ $scheduleStatusMeta['label'] }}
+                    </span>
+                </div>
+                <div class="text-muted small mt-1">
+                    Lộ trình do Shipper Manager tạo ngày {{ \Carbon\Carbon::parse($selectedDate ?? now())->format('d/m/Y') }}.
+                    Shipper cần xác nhận để đơn hàng được hiển thị trong mục “Có thể nhận” trên app.
+                </div>
+            </div>
+            <a href="{{ route('shipper.delivery-schedules') }}" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-map me-1"></i>Xem chi tiết
+            </a>
+        </div>
+
+        @if(($deliveryScheduleOrders ?? collect())->isEmpty())
+            <div class="text-center text-muted py-4 border rounded-3 bg-light">
+                <i class="bi bi-inbox fs-2 d-block mb-2"></i>
+                Hôm nay chưa có lộ trình giao hàng cần xác nhận.
+            </div>
+        @else
+            <form method="POST" action="{{ route('shipper.confirm-delivery-schedule', ['schedule' => 'bulk']) }}">
+                @csrf
+                <input type="hidden" name="date" value="{{ $selectedDate }}">
+
+                <div class="d-flex flex-column gap-2">
+                    @foreach($deliveryScheduleOrders as $idx => $order)
+                        <input type="hidden" name="order_ids[]" value="{{ $order->id }}">
+                        <div class="d-flex align-items-stretch border rounded-3 overflow-hidden bg-white">
+                            <div class="time-block p-3 bg-light">
+                                <div class="fw-bold text-primary fs-4">{{ str_pad($idx + 1, 2, '0', STR_PAD_LEFT) }}</div>
+                                <small class="fw-semibold">{{ $order->delivery_time ?: '--:--' }}</small>
+                            </div>
+                            <div class="p-3 flex-grow-1">
+                                <div class="d-flex justify-content-between gap-2 flex-wrap">
+                                    <div class="fw-bold">
+                                        <i class="bi bi-person me-1 text-muted"></i>
+                                        {{ $order->customer?->name ?? $order->recipient_name ?? 'Khách hàng' }}
+                                    </div>
+                                    <span class="badge bg-light text-dark border">#{{ $order->code ?: $order->id }}</span>
+                                </div>
+                                <div class="text-muted small mt-1">
+                                    <i class="bi bi-geo-alt me-1"></i>
+                                    {{ $order->recipient_address ?: $order->customer?->address ?: 'Chưa cập nhật địa chỉ' }}
+                                </div>
+                                <div class="small mt-2">
+                                    <span class="badge bg-warning text-dark">{{ $order->items->sum('quantity') }} sp</span>
+                                    <span class="badge bg-secondary ms-1">{{ $order->status }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+
+                <div class="d-flex justify-content-end gap-2 flex-wrap mt-3">
+                    @if(($deliveryScheduleStatus ?? 'none') === 'confirmed')
+                        <a href="{{ route('shipper.available') }}" class="btn btn-success">
+                            <i class="bi bi-collection me-1"></i>Đi tới đơn có thể nhận
+                        </a>
+                    @else
+                        <button type="submit" class="btn btn-primary px-4">
+                            <i class="bi bi-check2-circle me-1"></i>Xác nhận lộ trình
+                        </button>
+                        <button type="submit"
+                            class="btn btn-outline-danger px-4"
+                            formaction="{{ route('shipper.reject-delivery-schedule', ['schedule' => 'bulk']) }}">
+                            <i class="bi bi-x-circle me-1"></i>Từ chối
+                        </button>
+                    @endif
+                </div>
+
+                @if($needsScheduleDecision)
+                    <div class="alert alert-warning mt-3 mb-0">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        Các đơn trong lộ trình này sẽ chưa xuất hiện ở “Có thể nhận” cho đến khi bạn xác nhận.
+                    </div>
+                @endif
+            </form>
+        @endif
+    </div>
+</div>
+
 {{-- Quick action buttons --}}
 <div class="row g-3">
     <div class="col-md-4">
@@ -155,104 +255,5 @@
         </a>
     </div>
 </div>
-
-<div class="row my-4">
-        <div class="col-md-6 col-lg-6 col-xl-6">   
-            <div class="mb-4 px-2"> 
-                <p class="text-muted mb-0">...</p>
-            </div>          
-            <div class="d-flex flex-column gap-3">
-            
-                <div class="card order-card bg-white">
-                    <div class="d-flex">
-                        <div class="time-block p-3" style="background-color: #e6f4ea;">
-                            <h1 class="fw-bold mb-0 text-dark" style="font-size: 2.5rem;">01</h1>
-                            <small class="fw-bold text-dark mt-1">2:15 PM</small>
-                        </div>
-                        <div class="p-3 flex-grow-1">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <span class="fw-bold fs-6"><i class="bi bi-person me-2 text-muted"></i>Chị Mai</span>
-                                <span class="badge rounded-pill bg-secondary bg-opacity-10 text-secondary border">
-                                    <i class="bi bi-clock me-1"></i>Đang chờ
-                                </span>
-                            </div>
-                            <div class="text-muted" style="font-size: 0.9rem;">
-                                <i class="bi bi-geo-alt me-2"></i>45 Lê Văn Quới, Bình Tân
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="card order-card bg-white">
-                    <div class="d-flex">
-                        <div class="time-block p-3" style="background-color: #e8f0fe;">
-                            <h1 class="fw-bold mb-0 text-dark" style="font-size: 2.5rem;">02</h1>
-                            <small class="fw-bold text-dark mt-1">2:45 PM</small>
-                        </div>
-                        <div class="p-3 flex-grow-1">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <span class="fw-bold fs-6"><i class="bi bi-person me-2 text-muted"></i>Nguyễn Kiệtss</span>
-                                <span class="badge rounded-pill bg-primary bg-opacity-10 text-primary border-0">
-                                    <i class="bi bi-clock me-1"></i>Đang chờ
-                                </span>
-                            </div>
-                            <div class="text-muted" style="font-size: 0.9rem;">
-                                <i class="bi bi-geo-alt me-2"></i>117 Nguyễn Thị Tú, Bình Hưng Hòa, Bình Tân
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="card order-card bg-white">
-                    <div class="d-flex">
-                        <div class="time-block p-3" style="background-color: #fff3e0;">
-                            <h1 class="fw-bold mb-0 text-dark" style="font-size: 2.5rem;">03</h1>
-                            <small class="fw-bold text-dark mt-1">3:30 PM</small>
-                        </div>
-                        <div class="p-3 flex-grow-1">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <span class="fw-bold fs-6"><i class="bi bi-person me-2 text-muted"></i>Anh Hùng</span>
-                                <span class="badge rounded-pill bg-warning bg-opacity-10 text-warning border-0 text-dark">
-                                    <i class="bi bi-clock me-1"></i>Đang chờ
-                                </span>
-                            </div>
-                            <div class="text-muted" style="font-size: 0.9rem;">
-                                <i class="bi bi-geo-alt me-2"></i>Số 3 Đường 22, Bình Hưng Hòa B, Bình Tân
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-6 col-lg-6 col-xl-6">
-             <div class="mb-4 px-2"> 
-                <p class="text-muted mb-0">----</p>
-            </div> 
-            <div class="order-list">
-                <div class="d-flex flex-column gap-3">
-                     <div class="card order-card bg-white">
-                        <div class="d-flex">
-                            <div class="time-block p-3" style="background-color: #fff3e0;">
-                                <h1 class="fw-bold mb-0 text-dark" style="font-size: 2.5rem;">03</h1>
-                                <small class="fw-bold text-dark mt-1">3:30 PM</small>
-                            </div>
-                            <div class="p-3 flex-grow-1">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <span class="fw-bold fs-6"><i class="bi bi-person me-2 text-muted"></i>Anh Hùng</span>
-                                    <span class="badge rounded-pill bg-warning bg-opacity-10 text-warning border-0 text-dark">
-                                        <i class="bi bi-clock me-1"></i>Đang chờ
-                                    </span>
-                                </div>
-                                <div class="text-muted" style="font-size: 0.9rem;">
-                                    <i class="bi bi-geo-alt me-2"></i>Số 3 Đường 22, Bình Hưng Hòa B, Bình Tân
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-        </div>
-    </div> 
 
 @endsection

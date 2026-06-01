@@ -20,9 +20,14 @@ class ShipperApiController extends BaseApiController
         $stats = [
             'today_total' => Order::query()->where('shipper_id', $userId)->whereDate('updated_at', $today)->count(),
             'available' => Order::query()->where('status', Order::STATUS_READY_TO_SHIP)
-                ->where(function ($q) use ($userId) {
-                    $q->whereNull('shipper_id')->orWhere('shipper_id', $userId);
-                })->count(),
+                ->where(function ($query) use ($userId) {
+                    $query->whereNull('shipper_id')
+                        ->orWhere(function ($assignedQuery) use ($userId) {
+                            $assignedQuery->where('shipper_id', $userId);
+                            $this->constrainConfirmedDeliverySchedule($assignedQuery);
+                        });
+                })
+                ->count(),
             'delivering' => Order::query()->where('shipper_id', $userId)->where('status', Order::STATUS_DELIVERING)->count(),
             'delivered_today' => Order::query()->where('shipper_id', $userId)->where('status', 'delivered')->whereDate('delivered_at', $today)->count(),
             'returning' => Order::query()->where('shipper_id', $userId)->where('status', Order::STATUS_RETURNING)->count(),
@@ -40,7 +45,11 @@ class ShipperApiController extends BaseApiController
             ->with(['customer:id,name,phone,address'])
             ->where('status', Order::STATUS_READY_TO_SHIP)
             ->where(function ($query) use ($userId) {
-                $query->whereNull('shipper_id')->orWhere('shipper_id', $userId);
+                $query->whereNull('shipper_id')
+                    ->orWhere(function ($assignedQuery) use ($userId) {
+                        $assignedQuery->where('shipper_id', $userId);
+                        $this->constrainConfirmedDeliverySchedule($assignedQuery);
+                    });
             })
             ->latest('updated_at')
             ->paginate(20);
@@ -59,6 +68,10 @@ class ShipperApiController extends BaseApiController
 
         if (!is_null($order->shipper_id) && (int) $order->shipper_id !== (int) $user->id && !$user->hasRole('admin')) {
             return $this->fail('Don da duoc shipper khac nhan.', 422);
+        }
+
+        if ((int) ($order->shipper_id ?? 0) === (int) $user->id && !$this->orderHasConfirmedDeliverySchedule($order)) {
+            return $this->fail('Vui long xac nhan lo trinh giao hang truoc khi nhan don.', 422);
         }
 
         $order->update([
@@ -231,5 +244,35 @@ class ShipperApiController extends BaseApiController
         if (!$user || !($user->hasRole('shipper') || $user->hasRole('ship') || $user->hasRole('manager_shipper') || $user->hasRole('admin'))) {
             abort(403, 'Role khong duoc phep truy cap API shipper');
         }
+    }
+
+    private function constrainConfirmedDeliverySchedule($query): void
+    {
+        $query->whereExists(function ($historyQuery) {
+            $historyQuery->selectRaw('1')
+                ->from('order_histories as latest_schedule_history')
+                ->whereColumn('latest_schedule_history.order_id', 'orders.id')
+                ->where('latest_schedule_history.action', 'schedule_confirmed')
+                ->whereRaw(
+                    'latest_schedule_history.id = (
+                        select oh2.id
+                        from order_histories as oh2
+                        where oh2.order_id = orders.id
+                          and oh2.action in ("schedule_created", "schedule_confirmed", "schedule_rejected")
+                        order by oh2.created_at desc, oh2.id desc
+                        limit 1
+                    )'
+                );
+        });
+    }
+
+    private function orderHasConfirmedDeliverySchedule(Order $order): bool
+    {
+        return OrderHistory::query()
+            ->where('order_id', $order->id)
+            ->whereIn('action', ['schedule_created', 'schedule_confirmed', 'schedule_rejected'])
+            ->latest('created_at')
+            ->latest('id')
+            ->value('action') === 'schedule_confirmed';
     }
 }

@@ -76,7 +76,29 @@ class ShipperDashboardController extends Controller
                     });
             });
 
+        $this->constrainConfirmedDeliverySchedule($query);
+
         $this->constrainNoActiveWarehouseTransfer($query);
+    }
+
+    private function constrainConfirmedDeliverySchedule($query): void
+    {
+        $query->whereExists(function ($historyQuery) {
+            $historyQuery->selectRaw('1')
+                ->from('order_histories as latest_schedule_history')
+                ->whereColumn('latest_schedule_history.order_id', 'orders.id')
+                ->where('latest_schedule_history.action', 'schedule_confirmed')
+                ->whereRaw(
+                    'latest_schedule_history.id = (
+                        select oh2.id
+                        from order_histories as oh2
+                        where oh2.order_id = orders.id
+                          and oh2.action in ("schedule_created", "schedule_confirmed", "schedule_rejected")
+                        order by oh2.created_at desc, oh2.id desc
+                        limit 1
+                    )'
+                );
+        });
     }
 
     private function constrainNoActiveWarehouseTransfer($query): void
@@ -213,6 +235,12 @@ class ShipperDashboardController extends Controller
     {
         $userId = Auth::id();
         $today  = Carbon::today();
+        $selectedDate = $today->toDateString();
+        $deliveryScheduleOrders = $this->deliveryScheduleOrdersForShipper($userId, $selectedDate)->get();
+        $deliveryScheduleSnapshot = $this->buildDeliveryScheduleSnapshot($deliveryScheduleOrders);
+        $deliveryScheduleHash = $this->hashDeliveryScheduleSnapshot($deliveryScheduleSnapshot);
+        $latestScheduleHistory = $this->latestDeliveryScheduleHistoryForShipperOnDate($userId, $selectedDate);
+        $deliveryScheduleStatus = $this->deliveryScheduleStatus($latestScheduleHistory, $deliveryScheduleHash);
 
         $stats = [
             'today_total'    => Order::where('shipper_id', $userId)->whereDate('created_at', $today)->count(),
@@ -231,7 +259,12 @@ class ShipperDashboardController extends Controller
                                     ->count(),
         ];
 
-        return view('shipper.dashboard', compact('stats'));
+        return view('shipper.dashboard', compact(
+            'stats',
+            'selectedDate',
+            'deliveryScheduleOrders',
+            'deliveryScheduleStatus'
+        ));
     }
 
     /**
@@ -1567,6 +1600,43 @@ class ShipperDashboardController extends Controller
             ->first();
     }
 
+    private function deliveryScheduleOrdersForShipper(int $shipperId, string $selectedDate)
+    {
+        return Order::with(['customer', 'items.variant'])
+            ->where('shipper_id', $shipperId)
+            ->whereIn('status', $this->assignmentStatuses())
+            ->where(function ($query) use ($selectedDate) {
+                $query->whereDate('created_at', $selectedDate)
+                    ->orWhereDate('updated_at', $selectedDate);
+            })
+            ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
+            ->orderBy('daily_sequence', 'asc')
+            ->orderBy('delivery_time', 'asc')
+            ->orderBy('created_at', 'asc')
+            ->orderBy('id', 'asc');
+    }
+
+    private function deliveryScheduleStatus(?OrderHistory $latestHistory, string $currentSnapshotHash): string
+    {
+        if (!$latestHistory) {
+            return 'none';
+        }
+
+        if ($latestHistory->action === 'schedule_confirmed' && $latestHistory->schedule_snapshot_hash === $currentSnapshotHash) {
+            return 'confirmed';
+        }
+
+        if ($latestHistory->action === 'schedule_rejected' && $latestHistory->schedule_snapshot_hash === $currentSnapshotHash) {
+            return 'rejected';
+        }
+
+        if ($latestHistory->action === 'schedule_created') {
+            return 'waiting';
+        }
+
+        return 'changed';
+    }
+
     /**
      * Assign order to specific shipper
      */
@@ -1813,27 +1883,13 @@ class ShipperDashboardController extends Controller
             ? Carbon::parse($request->input('date'))->toDateString()
             : Carbon::today()->toDateString();
 
-        $orders = Order::with(['customer', 'items.variant'])
-            ->where('shipper_id', $userId)
-            ->whereIn('status', $this->assignmentStatuses())
-            ->where(function ($query) use ($selectedDate) {
-                $query->whereDate('created_at', $selectedDate)
-                    ->orWhereDate('updated_at', $selectedDate);
-            })
-            ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
-            ->orderBy('daily_sequence', 'asc')
-            ->orderBy('delivery_time', 'asc')
-            ->orderBy('created_at', 'asc')
-            ->orderBy('id', 'asc')
-            ->get();
+        $orders = $this->deliveryScheduleOrdersForShipper($userId, $selectedDate)->get();
 
         $currentSnapshot = $this->buildDeliveryScheduleSnapshot($orders);
         $currentSnapshotHash = $this->hashDeliveryScheduleSnapshot($currentSnapshot);
         $latestHistory = $this->latestDeliveryScheduleHistoryForShipperOnDate($userId, $selectedDate);
 
-        $scheduleAlreadyConfirmed = $latestHistory
-            && $latestHistory->action === 'schedule_confirmed'
-            && $latestHistory->schedule_snapshot_hash === $currentSnapshotHash;
+        $scheduleAlreadyConfirmed = $this->deliveryScheduleStatus($latestHistory, $currentSnapshotHash) === 'confirmed';
 
         return view('shipper.delivery-schedules', compact(
             'orders',
@@ -1843,7 +1899,7 @@ class ShipperDashboardController extends Controller
     }
 
     /**
-     * Xác nhận lịch trình giao hàng (TODO: Cần model DeliverySchedule)
+     * Xác nhận lịch trình giao hàng dựa trên snapshot OrderHistory hiện tại.
      */
     public function confirmDeliverySchedule(Request $request, $schedule)
     {
