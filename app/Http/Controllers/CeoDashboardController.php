@@ -863,70 +863,204 @@ class CeoDashboardController extends Controller
 
     public function weeklyReport(Request $request)
     {
-        // Tính tuần hiện tại (từ thứ 2 đến chủ nhật)
-        $now = Carbon::now();
-        $startOfWeek = $now->copy()->startOfWeek(Carbon::MONDAY);
-        $endOfWeek = $now->copy()->endOfWeek(Carbon::SUNDAY);
-
-        // Dữ liệu mẫu - thay thế bằng logic thực tế
-        $weeklyData = [
-            'Sản phẩm A' => [
-                'T2' => 10,
-                'T3' => 15,
-                'T4' => 8,
-                'T5' => 12,
-                'T6' => 20,
-                'T7' => 18,
-                'CN' => 25,
-                'total' => 108
-            ],
-            'Sản phẩm B' => [
-                'T2' => 5,
-                'T3' => 8,
-                'T4' => 12,
-                'T5' => 15,
-                'T6' => 10,
-                'T7' => 22,
-                'CN' => 18,
-                'total' => 90
-            ],
-            'Sản phẩm C' => [
-                'T2' => 20,
-                'T3' => 25,
-                'T4' => 18,
-                'T5' => 30,
-                'T6' => 35,
-                'T7' => 28,
-                'CN' => 40,
-                'total' => 196
-            ]
-        ];
-
-        // Giá sản phẩm mẫu (VNĐ)
-        $productPrices = [
-            'Sản phẩm A' => 150000, // 150k
-            'Sản phẩm B' => 200000, // 200k
-            'Sản phẩm C' => 100000, // 100k
-        ];
-
-        // Tính doanh thu theo ngày
-        $dailyRevenue = [];
-        $totalRevenue = 0;
-        $days = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
-
-        foreach ($days as $day) {
-            $dailyRevenue[$day] = 0;
-            foreach ($weeklyData as $productName => $productData) {
-                $quantity = $productData[$day] ?? 0;
-                $price = $productPrices[$productName] ?? 0;
-                $dailyRevenue[$day] += $quantity * $price;
-            }
-            $totalRevenue += $dailyRevenue[$day];
+        try {
+            $selectedDate = $request->filled('week')
+                ? Carbon::parse((string) $request->input('week'))
+                : Carbon::today();
+        } catch (\Throwable) {
+            $selectedDate = Carbon::today();
         }
 
-        $totalQuantity = 394; // Tổng số lượng
+        $startOfWeek = $selectedDate->copy()->startOfWeek(Carbon::MONDAY)->startOfDay();
+        $endOfWeek = $selectedDate->copy()->endOfWeek(Carbon::SUNDAY)->endOfDay();
+        $previousStart = $startOfWeek->copy()->subWeek();
+        $previousEnd = $endOfWeek->copy()->subWeek();
 
-        return view('ceo.weekly_report', compact('weeklyData', 'dailyRevenue', 'totalRevenue', 'totalQuantity'));
+        $days = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+        $validOrderStatuses = [
+            Order::STATUS_COMPLETED,
+            Order::STATUS_DELIVERED,
+        ];
+
+        $currentProductRows = $this->weeklyProductRows($startOfWeek, $endOfWeek, $validOrderStatuses);
+        $previousProductRows = $this->weeklyProductRows($previousStart, $previousEnd, $validOrderStatuses);
+        $previousProductTotals = $previousProductRows
+            ->groupBy('product_key')
+            ->map(fn ($rows) => [
+                'quantity' => (float) $rows->sum('quantity'),
+                'revenue' => (float) $rows->sum('revenue'),
+            ]);
+
+        $weeklyData = [];
+        foreach ($currentProductRows->groupBy('product_key') as $productKey => $rows) {
+            $firstRow = $rows->first();
+            $productData = array_fill_keys($days, 0.0);
+
+            foreach ($rows as $row) {
+                $dayLabel = $this->weekdayLabel((string) $row->day_key);
+                $productData[$dayLabel] = (float) $row->quantity;
+            }
+
+            $currentQuantity = (float) $rows->sum('quantity');
+            $currentRevenue = (float) $rows->sum('revenue');
+            $previousQuantity = (float) ($previousProductTotals[$productKey]['quantity'] ?? 0);
+            $previousRevenue = (float) ($previousProductTotals[$productKey]['revenue'] ?? 0);
+
+            $weeklyData[(string) $firstRow->product_name] = array_merge($productData, [
+                'total' => $currentQuantity,
+                'revenue' => $currentRevenue,
+                'previous_total' => $previousQuantity,
+                'previous_revenue' => $previousRevenue,
+                'change_percent' => $this->percentChange($currentQuantity, $previousQuantity),
+                'revenue_change_percent' => $this->percentChange($currentRevenue, $previousRevenue),
+            ]);
+        }
+
+        uasort($weeklyData, fn ($a, $b) => ($b['revenue'] <=> $a['revenue']) ?: ($b['total'] <=> $a['total']));
+        $variantWeeklyData = $weeklyData;
+        uasort($variantWeeklyData, fn ($a, $b) => ($b['total'] <=> $a['total']) ?: ($b['revenue'] <=> $a['revenue']));
+
+        $currentDailyRows = $this->weeklyDailyRows($startOfWeek, $endOfWeek, $validOrderStatuses)->keyBy('day_key');
+        $previousDailyRows = $this->weeklyDailyRows($previousStart, $previousEnd, $validOrderStatuses)->keyBy('day_key');
+
+        $dailyRevenue = [];
+        $dailyQuantity = [];
+        $previousDailyRevenue = [];
+        $previousDailyQuantity = [];
+        foreach ($days as $index => $day) {
+            $currentDateKey = $startOfWeek->copy()->addDays($index)->toDateString();
+            $previousDateKey = $previousStart->copy()->addDays($index)->toDateString();
+
+            $dailyRevenue[$day] = (float) ($currentDailyRows[$currentDateKey]->revenue ?? 0);
+            $dailyQuantity[$day] = (float) ($currentDailyRows[$currentDateKey]->quantity ?? 0);
+            $previousDailyRevenue[$day] = (float) ($previousDailyRows[$previousDateKey]->revenue ?? 0);
+            $previousDailyQuantity[$day] = (float) ($previousDailyRows[$previousDateKey]->quantity ?? 0);
+        }
+
+        $totalRevenue = array_sum($dailyRevenue);
+        $previousRevenue = array_sum($previousDailyRevenue);
+        $totalQuantity = array_sum($dailyQuantity);
+        $previousQuantity = array_sum($previousDailyQuantity);
+
+        $currentOrderStats = $this->weeklyOrderStats($startOfWeek, $endOfWeek, $validOrderStatuses);
+        $previousOrderStats = $this->weeklyOrderStats($previousStart, $previousEnd, $validOrderStatuses);
+
+        $summary = [
+            'revenue' => [
+                'current' => $totalRevenue,
+                'previous' => $previousRevenue,
+                'change_percent' => $this->percentChange($totalRevenue, $previousRevenue),
+            ],
+            'quantity' => [
+                'current' => $totalQuantity,
+                'previous' => $previousQuantity,
+                'change_percent' => $this->percentChange($totalQuantity, $previousQuantity),
+            ],
+            'orders' => [
+                'current' => (int) $currentOrderStats->order_count,
+                'previous' => (int) $previousOrderStats->order_count,
+                'change_percent' => $this->percentChange((float) $currentOrderStats->order_count, (float) $previousOrderStats->order_count),
+            ],
+            'average_order_value' => [
+                'current' => (int) $currentOrderStats->order_count > 0 ? $totalRevenue / (int) $currentOrderStats->order_count : 0,
+                'previous' => (int) $previousOrderStats->order_count > 0 ? $previousRevenue / (int) $previousOrderStats->order_count : 0,
+                'change_percent' => $this->percentChange(
+                    (int) $currentOrderStats->order_count > 0 ? $totalRevenue / (int) $currentOrderStats->order_count : 0,
+                    (int) $previousOrderStats->order_count > 0 ? $previousRevenue / (int) $previousOrderStats->order_count : 0
+                ),
+            ],
+        ];
+
+        $chartData = [
+            'labels' => $days,
+            'revenue' => array_values($dailyRevenue),
+            'previousRevenue' => array_values($previousDailyRevenue),
+            'quantity' => array_values($dailyQuantity),
+            'previousQuantity' => array_values($previousDailyQuantity),
+        ];
+
+        $period = [
+            'selected' => $startOfWeek->toDateString(),
+            'current_label' => $startOfWeek->format('d/m/Y') . ' - ' . $endOfWeek->format('d/m/Y'),
+            'previous_label' => $previousStart->format('d/m/Y') . ' - ' . $previousEnd->format('d/m/Y'),
+        ];
+
+        return view('ceo.weekly_report', compact(
+            'weeklyData',
+            'dailyRevenue',
+            'dailyQuantity',
+            'previousDailyRevenue',
+            'previousDailyQuantity',
+            'totalRevenue',
+            'totalQuantity',
+            'variantWeeklyData',
+            'summary',
+            'chartData',
+            'period'
+        ));
+    }
+
+    private function weeklyProductRows(Carbon $from, Carbon $to, array $statuses)
+    {
+        return OrderItem::query()
+            ->join('orders', 'orders.id', '=', 'order_items.order_id')
+            ->leftJoin('products', 'products.id', '=', 'order_items.product_id')
+            ->leftJoin('product_variants', 'product_variants.id', '=', 'order_items.product_variant_id')
+            ->whereBetween('orders.created_at', [$from, $to])
+            ->whereIn('orders.status', $statuses)
+            ->selectRaw("COALESCE(CONCAT('variant:', order_items.product_variant_id), CONCAT('product:', order_items.product_id), 'unknown') as product_key")
+            ->selectRaw("CONCAT(COALESCE(products.name, 'Sản phẩm không xác định'), COALESCE(CONCAT(' - ', NULLIF(product_variants.name, '')), COALESCE(CONCAT(' - ', NULLIF(product_variants.sku, '')), ''))) as product_name")
+            ->selectRaw('DATE(orders.created_at) as day_key')
+            ->selectRaw('SUM(COALESCE(order_items.quantity, 0)) as quantity')
+            ->selectRaw('SUM(COALESCE(order_items.total, COALESCE(order_items.quantity, 0) * COALESCE(order_items.price, 0), 0)) as revenue')
+            ->groupBy('product_key', 'product_name', 'day_key')
+            ->orderByDesc('revenue')
+            ->get();
+    }
+
+    private function weeklyDailyRows(Carbon $from, Carbon $to, array $statuses)
+    {
+        return OrderItem::query()
+            ->join('orders', 'orders.id', '=', 'order_items.order_id')
+            ->whereBetween('orders.created_at', [$from, $to])
+            ->whereIn('orders.status', $statuses)
+            ->selectRaw('DATE(orders.created_at) as day_key')
+            ->selectRaw('SUM(COALESCE(order_items.quantity, 0)) as quantity')
+            ->selectRaw('SUM(COALESCE(order_items.total, COALESCE(order_items.quantity, 0) * COALESCE(order_items.price, 0), 0)) as revenue')
+            ->groupBy('day_key')
+            ->get();
+    }
+
+    private function weeklyOrderStats(Carbon $from, Carbon $to, array $statuses): object
+    {
+        return Order::query()
+            ->whereBetween('created_at', [$from, $to])
+            ->whereIn('status', $statuses)
+            ->selectRaw('COUNT(*) as order_count')
+            ->selectRaw('SUM(COALESCE(total, 0)) as revenue')
+            ->first() ?? (object) ['order_count' => 0, 'revenue' => 0];
+    }
+
+    private function weekdayLabel(string $date): string
+    {
+        return match (Carbon::parse($date)->dayOfWeekIso) {
+            1 => 'T2',
+            2 => 'T3',
+            3 => 'T4',
+            4 => 'T5',
+            5 => 'T6',
+            6 => 'T7',
+            default => 'CN',
+        };
+    }
+
+    private function percentChange(float $current, float $previous): ?float
+    {
+        if (abs($previous) < 0.00001) {
+            return abs($current) < 0.00001 ? 0.0 : null;
+        }
+
+        return round((($current - $previous) / abs($previous)) * 100, 1);
     }
 
     public function weeklyCustomerReport(Request $request)

@@ -1,6 +1,7 @@
+<?php 
 // Admin tool: đồng bộ số thứ tự ưu tiên đơn trong ngày
 require_once __DIR__.'/admin-orders-tools.php';
-<?php 
+
 use App\Http\Controllers\Package\PackageDashboardController;
 use App\Http\Controllers\Package\OrderPackingController;
 use App\Http\Controllers\Package\ReturnController;

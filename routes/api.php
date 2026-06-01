@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('mobile')->group(function () {
     Route::middleware('throttle:20,1')->group(function () {
         Route::post('/auth/login', [AuthApiController::class, 'login']);
+        Route::post('/auth/google', [AuthApiController::class, 'googleLogin']);
     });
     Route::get('/app-version', [AppVersionController::class, 'show']);
 
