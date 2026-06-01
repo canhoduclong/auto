@@ -8,6 +8,7 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (! Schema::hasTable('task_assignments')) {
         Schema::create('task_assignments', function (Blueprint $table) {
             $table->id();
             $table->string('code')->unique();
@@ -29,6 +30,7 @@ return new class extends Migration
             $table->foreign('approval_flow_id')->references('id')->on('approval_flows')->nullOnDelete();
             $table->foreign('parent_id')->references('id')->on('task_assignments')->nullOnDelete();
         });
+        }
     }
 
     public function down(): void

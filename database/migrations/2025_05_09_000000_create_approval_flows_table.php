@@ -11,13 +11,15 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('approval_flows', function (Blueprint $table) {
-            $table->id();
-            $table->string('code')->unique(); // order_default
-            $table->string('name');
-            $table->boolean('is_active')->default(true);
-            $table->timestamps();
-        });
+        if (! Schema::hasTable('approval_flows')) {
+            Schema::create('approval_flows', function (Blueprint $table) {
+                $table->id();
+                $table->string('code')->unique(); // order_default
+                $table->string('name');
+                $table->boolean('is_active')->default(true);
+                $table->timestamps();
+            });
+        }
     }
 
     /**
