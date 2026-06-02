@@ -3385,7 +3385,7 @@ class WarehouseDashboardController extends Controller
 
 
         try {
-            DB::transaction(function () use ($validated, $type, $userWarehouseId) {
+            DB::transaction(function () use ($validated, $type, $userWarehouseId, $isImport) {
                 $document = InventoryDocument::create([
                     'type'          => $type,
                     'document_date' => $validated['document_date'],

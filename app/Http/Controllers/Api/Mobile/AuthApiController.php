@@ -74,13 +74,22 @@ class AuthApiController extends BaseApiController
     public function googleLogin(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'id_token' => ['required', 'string'],
+            'id_token' => ['nullable', 'string'],
+            'access_token' => ['nullable', 'string'],
+            'server_auth_code' => ['nullable', 'string'],
             'device_name' => ['nullable', 'string', 'max:120'],
             'platform' => ['nullable', 'string', 'max:32'],
             'app_version' => ['nullable', 'string', 'max:32'],
         ]);
 
-        $googlePayload = $this->verifyGoogleIdToken((string) $validated['id_token']);
+        $idToken = trim((string) ($validated['id_token'] ?? ''));
+        $accessToken = trim((string) ($validated['access_token'] ?? ''));
+
+        if ($idToken === '' && $accessToken === '') {
+            return $this->fail('Thieu thong tin xac thuc Google.', 422);
+        }
+
+        $googlePayload = $this->verifyGoogleCredential($idToken, $accessToken);
         if ($googlePayload === null) {
             return $this->fail('Khong the xac thuc tai khoan Google.', 401);
         }
@@ -254,6 +263,22 @@ class AuthApiController extends BaseApiController
         return $this->ok(null, 'Session revoked');
     }
 
+    private function verifyGoogleCredential(string $idToken, string $accessToken): ?array
+    {
+        if ($idToken !== '') {
+            $idTokenPayload = $this->verifyGoogleIdToken($idToken);
+            if ($idTokenPayload !== null) {
+                return $idTokenPayload;
+            }
+        }
+
+        if ($accessToken !== '') {
+            return $this->verifyGoogleAccessToken($accessToken);
+        }
+
+        return null;
+    }
+
     private function verifyGoogleIdToken(string $idToken): ?array
     {
         try {
@@ -285,6 +310,63 @@ class AuthApiController extends BaseApiController
         }
 
         return $payload;
+    }
+
+    private function verifyGoogleAccessToken(string $accessToken): ?array
+    {
+        try {
+            $tokenInfoResponse = Http::timeout(10)
+                ->acceptJson()
+                ->get('https://www.googleapis.com/oauth2/v1/tokeninfo', [
+                    'access_token' => $accessToken,
+                ]);
+        } catch (Throwable) {
+            return null;
+        }
+
+        if (!$tokenInfoResponse->ok()) {
+            return null;
+        }
+
+        $tokenInfo = $tokenInfoResponse->json();
+        if (!is_array($tokenInfo)) {
+            return null;
+        }
+
+        $allowedClientIds = collect(explode(',', (string) env('MOBILE_GOOGLE_CLIENT_IDS', (string) config('services.google.client_id'))))
+            ->map(fn ($clientId) => trim($clientId))
+            ->filter()
+            ->values();
+
+        $audience = trim((string) ($tokenInfo['audience'] ?? ''));
+        $issuedTo = trim((string) ($tokenInfo['issued_to'] ?? ''));
+        if ($allowedClientIds->isEmpty() || (!$allowedClientIds->contains($audience) && !$allowedClientIds->contains($issuedTo))) {
+            return null;
+        }
+
+        try {
+            $userInfoResponse = Http::timeout(10)
+                ->acceptJson()
+                ->withToken($accessToken)
+                ->get('https://www.googleapis.com/oauth2/v3/userinfo');
+        } catch (Throwable) {
+            return null;
+        }
+
+        if (!$userInfoResponse->ok()) {
+            return null;
+        }
+
+        $userInfo = $userInfoResponse->json();
+        if (!is_array($userInfo)) {
+            return null;
+        }
+
+        if ($audience !== '' && !isset($userInfo['aud'])) {
+            $userInfo['aud'] = $audience;
+        }
+
+        return $userInfo;
     }
 
     private function mobileUserPayload(User $user, string $role, string $layout): array

@@ -22,12 +22,10 @@ class ShipperApiController extends BaseApiController
         $stats = [
             'today_total' => Order::query()->where('shipper_id', $userId)->whereDate('updated_at', $today)->count(),
             'available' => Order::query()->where('status', Order::STATUS_READY_TO_SHIP)
-                ->where(function ($query) use ($userId) {
-                    $query->whereNull('shipper_id')
-                        ->orWhere(function ($assignedQuery) use ($userId) {
-                            $assignedQuery->where('shipper_id', $userId);
-                            $this->constrainConfirmedDeliverySchedule($assignedQuery);
-                        });
+                ->where('shipper_id', $userId)
+                ->whereNotIn('status', ['cancelled', 'canceled'])
+                ->where(function ($query) {
+                    $this->constrainConfirmedDeliverySchedule($query);
                 })
                 ->count(),
             'delivering' => Order::query()->where('shipper_id', $userId)->where('status', Order::STATUS_DELIVERING)->count(),
@@ -46,15 +44,15 @@ class ShipperApiController extends BaseApiController
         $orders = Order::query()
             ->with(['customer:id,name,phone,address'])
             ->where('status', Order::STATUS_READY_TO_SHIP)
-            ->where(function ($query) use ($userId) {
-                $query->whereNull('shipper_id')
-                    ->orWhere(function ($assignedQuery) use ($userId) {
-                        $assignedQuery->where('shipper_id', $userId);
-                        $this->constrainConfirmedDeliverySchedule($assignedQuery);
-                    });
+            ->where('shipper_id', $userId)
+            ->whereNotIn('status', ['cancelled', 'canceled'])
+            ->where(function ($query) {
+                $this->constrainConfirmedDeliverySchedule($query);
             })
             ->latest('updated_at')
             ->paginate(20);
+
+        $this->attachDeliveryScheduleMetadata($orders->getCollection());
 
         return $this->paginated($orders);
     }
@@ -69,12 +67,19 @@ class ShipperApiController extends BaseApiController
         $snapshot = $this->buildDeliveryScheduleSnapshot($orders);
         $snapshotHash = $this->hashDeliveryScheduleSnapshot($snapshot);
         $latestHistory = $this->latestDeliveryScheduleHistoryForShipperOnDate($userId, $selectedDate);
+        $status = $this->deliveryScheduleStatus($latestHistory, $snapshotHash);
+        $pendingOrders = in_array($status, ['waiting', 'changed'], true) ? $orders : collect();
 
         return $this->ok([
             'date' => $selectedDate,
-            'status' => $this->deliveryScheduleStatus($latestHistory, $snapshotHash),
-            'orders_count' => $orders->count(),
-            'orders' => $orders,
+            'id' => $latestHistory?->id,
+            'code' => $this->deliveryScheduleCode($userId, $selectedDate, $latestHistory),
+            'status' => $status,
+            'notes' => $latestHistory?->note,
+            'confirmed_at' => $status === 'confirmed' ? optional($latestHistory?->created_at)->toIso8601String() : null,
+            'orders_count' => $pendingOrders->count(),
+            'total_cod' => (float) $pendingOrders->sum('total'),
+            'orders' => $pendingOrders->values(),
         ]);
     }
 
@@ -97,11 +102,11 @@ class ShipperApiController extends BaseApiController
             return $this->fail('Don khong o trang thai co the nhan.', 422);
         }
 
-        if (!is_null($order->shipper_id) && (int) $order->shipper_id !== (int) $user->id && !$user->hasRole('admin')) {
-            return $this->fail('Don da duoc shipper khac nhan.', 422);
+        if ((int) ($order->shipper_id ?? 0) !== (int) $user->id && !$user->hasRole('admin')) {
+            return $this->fail('Don khong thuoc lo trinh cua ban.', 403);
         }
 
-        if ((int) ($order->shipper_id ?? 0) === (int) $user->id && !$this->orderHasConfirmedDeliverySchedule($order)) {
+        if (!$this->orderHasConfirmedDeliverySchedule($order)) {
             return $this->fail('Vui long xac nhan lo trinh giao hang truoc khi nhan don.', 422);
         }
 
@@ -284,10 +289,16 @@ class ShipperApiController extends BaseApiController
         $userId = (int) $user->id;
         $selectedDate = $this->scheduleDate($request);
 
-        $validated = $request->validate([
+        $rules = [
             'order_ids' => ['required', 'array', 'min:1'],
             'order_ids.*' => ['integer', 'exists:orders,id'],
-        ]);
+        ];
+
+        if ($historyAction === 'schedule_rejected') {
+            $rules['reason'] = ['required', 'string', 'max:500'];
+        }
+
+        $validated = $request->validate($rules);
 
         $requestedOrderIds = array_map('intval', $validated['order_ids']);
         $orders = $this->deliveryScheduleOrdersForShipper($userId, $selectedDate)
@@ -301,7 +312,11 @@ class ShipperApiController extends BaseApiController
         $snapshot = $this->buildDeliveryScheduleSnapshot($orders);
         $snapshotHash = $this->hashDeliveryScheduleSnapshot($snapshot);
 
-        DB::transaction(function () use ($orders, $user, $userId, $historyAction, $snapshotHash, $snapshot): void {
+        $decisionNote = $historyAction === 'schedule_rejected'
+            ? 'Shipper ' . $user->name . ' tu choi lo trinh giao hang qua mobile app. Ly do: ' . trim((string) $validated['reason'])
+            : 'Shipper ' . $user->name . ' xac nhan lo trinh giao hang qua mobile app.';
+
+        DB::transaction(function () use ($orders, $userId, $historyAction, $snapshotHash, $snapshot, $decisionNote): void {
             foreach ($orders as $order) {
                 OrderHistory::query()->create([
                     'order_id' => $order->id,
@@ -310,7 +325,7 @@ class ShipperApiController extends BaseApiController
                     'role' => 'shipper',
                     'status_before' => $order->status,
                     'status_after' => $order->status,
-                    'note' => 'Shipper ' . $user->name . ' cap nhat trang thai lo trinh giao hang qua mobile app.',
+                    'note' => $decisionNote,
                     'schedule_snapshot_hash' => $snapshotHash,
                     'schedule_snapshot' => json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
                 ]);
@@ -433,5 +448,52 @@ class ShipperApiController extends BaseApiController
             ->latest('created_at')
             ->latest('id')
             ->value('action') === 'schedule_confirmed';
+    }
+
+    private function deliveryScheduleCode(int $shipperId, string $selectedDate, ?OrderHistory $history): string
+    {
+        $suffix = $history?->schedule_snapshot_hash
+            ? strtoupper(substr((string) $history->schedule_snapshot_hash, 0, 6))
+            : str_pad((string) $shipperId, 3, '0', STR_PAD_LEFT);
+
+        return 'LT-' . Carbon::parse($selectedDate)->format('Ymd') . '-' . $suffix;
+    }
+
+    private function attachDeliveryScheduleMetadata($orders): void
+    {
+        $orderIds = $orders->pluck('id')->map(fn ($id) => (int) $id)->all();
+        if (empty($orderIds)) {
+            return;
+        }
+
+        $histories = OrderHistory::query()
+            ->whereIn('order_id', $orderIds)
+            ->whereIn('action', ['schedule_created', 'schedule_confirmed', 'schedule_rejected'])
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->get()
+            ->groupBy('order_id')
+            ->map(fn ($items) => $items->first());
+
+        foreach ($orders as $order) {
+            $history = $histories->get($order->id);
+            if (!$history) {
+                continue;
+            }
+
+            $scheduleDate = optional($history->created_at)->toDateString() ?: Carbon::today()->toDateString();
+            $order->setAttribute('delivery_schedule', [
+                'id' => (int) $history->id,
+                'code' => $this->deliveryScheduleCode((int) $order->shipper_id, $scheduleDate, $history),
+                'status' => match ($history->action) {
+                    'schedule_confirmed' => 'confirmed',
+                    'schedule_rejected' => 'rejected',
+                    default => 'waiting',
+                },
+                'confirmed_at' => $history->action === 'schedule_confirmed'
+                    ? optional($history->created_at)->toIso8601String()
+                    : null,
+            ]);
+        }
     }
 }
