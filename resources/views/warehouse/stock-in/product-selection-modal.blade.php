@@ -63,7 +63,6 @@
     const searchInput = document.getElementById('productSearchInput');
     const productRows = document.querySelectorAll('.product-selection-row');
     const noProductsFound = document.getElementById('noProductsFound');
-    let rowIdx = tableBody ? tableBody.querySelectorAll('.item-row').length : 0;
 
     // Filter products
     if (searchInput) {
@@ -90,50 +89,27 @@
     document.querySelectorAll('.js-select-product').forEach(function (btn) {
         btn.addEventListener('click', function () {
             const variantId = this.getAttribute('data-id');
-            const label = this.getAttribute('data-label');
             const unitLabel = this.getAttribute('data-unit_label');
             const weightPerUnit = this.getAttribute('data-weight_per_unit') || '1';
             const latestPrice = this.getAttribute('data-latest_price') || '';
             const priceId = this.getAttribute('data-price_id') || '';
-            // Check if already in table
-            let exists = false;
-            tableBody.querySelectorAll('.item-row').forEach(function (row) {
-                const select = row.querySelector('select[name*="product_variant_id"]');
-                if (select && select.value === variantId) {
-                    exists = true;
-                    const qtyInput = row.querySelector('input[name*="quantity"]');
-                    if (qtyInput) {
-                        qtyInput.value = parseInt(qtyInput.value || '0', 10) + 1;
-                        qtyInput.dispatchEvent(new Event('input', {bubbles: true}));
-                        qtyInput.focus();
-                    }
-                    row.classList.add('table-warning');
-                    setTimeout(() => row.classList.remove('table-warning'), 500);
-                }
-            });
-            if (!exists) {
-                if (typeof addRow === 'function') {
-                    addRow({
-                        product_variant_id: variantId,
-                        unit_label: unitLabel,
-                        weight_per_unit: weightPerUnit,
-                        unit_cost: latestPrice || 0,
-                        source_price_id: priceId,
-                        quantity: 1,
-                        note: ''
-                    });
-                    if (!latestPrice) {
-                        alert('Sản phẩm chưa có bảng giá hiện hành. Bạn có thể nhập tay đơn giá hoặc cập nhật bảng giá thu mua.');
-                    }
-                    setTimeout(() => {
-                        const lastRow = tableBody.querySelector('.item-row:last-child');
-                        if (lastRow) {
-                            const qtyInput = lastRow.querySelector('input[name*="quantity"]');
-                            if (qtyInput) qtyInput.focus();
-                        }
-                    }, 100);
+
+            if (typeof window.addOrIncreaseVariantRow === 'function') {
+                const result = window.addOrIncreaseVariantRow({
+                    product_variant_id: variantId,
+                    unit_label: unitLabel,
+                    weight_per_unit: weightPerUnit,
+                    unit_cost: latestPrice || 0,
+                    source_price_id: priceId,
+                    quantity: 1,
+                    note: ''
+                }, 1);
+
+                if (result.status === 'added' && !latestPrice) {
+                    alert('Sản phẩm chưa có bảng giá hiện hành. Bạn có thể nhập tay đơn giá hoặc cập nhật bảng giá thu mua.');
                 }
             }
+
             // Close modal
             const modalEl = document.getElementById('productSelectionModal');
             if (modalEl) {

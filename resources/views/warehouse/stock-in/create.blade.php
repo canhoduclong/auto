@@ -16,6 +16,8 @@
     .btn-add-row:hover { background: #dbeafe; }
     .item-remove { color: #ef4444; background: none; border: 0; font-size: 1.1rem; line-height: 1; padding: 2px 4px; cursor: pointer; }
     .item-remove:hover { color: #b91c1c; }
+    .restock-table td, .restock-table th { vertical-align: middle; }
+    .restock-row-active { background: #f0fdf4; }
 </style>
 @endpush
 
@@ -63,6 +65,68 @@
         </div>
         <div id="supplierPriceNotice" class="alert alert-info py-2 small mb-2 d-none">
             Chỉ hiển thị sản phẩm thuộc nhà cung cấp đã chọn. Sản phẩm chưa có bảng giá hiện hành vẫn có thể nhập tay đơn giá.
+        </div>
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-warning-subtle d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div class="fw-700 text-dark">
+                    <i class="bi bi-exclamation-triangle-fill me-1"></i>Sản phẩm cần nhập bổ sung
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <div class="form-check mb-0">
+                        <input class="form-check-input" type="checkbox" id="restockCheckAll">
+                        <label class="form-check-label small fw-600" for="restockCheckAll">Chọn tất cả</label>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-success" id="btnAddRestockSelected">
+                        <i class="bi bi-plus-circle me-1"></i>Thêm vào phiếu nhập
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                @if(($lowStockVariants ?? collect())->isEmpty())
+                    <div class="p-3 text-muted small">Hiện chưa có sản phẩm thiếu hàng.</div>
+                @else
+                    <div class="table-responsive">
+                        <table class="table table-sm mb-0 restock-table">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width:44px;" class="text-center">#</th>
+                                    <th>Sản phẩm / Biến thể</th>
+                                    <th class="text-center" style="width:140px;">Tồn hiện tại</th>
+                                    <th class="text-center" style="width:180px;">Số lượng thiếu</th>
+                                </tr>
+                            </thead>
+                            <tbody id="restockVariantList">
+                                @foreach(($lowStockVariants ?? collect()) as $variant)
+                                    @php
+                                        $shortageQty = max(0, (int) ($variant['shortage_qty'] ?? 0));
+                                    @endphp
+                                    <tr class="js-restock-row" data-variant-id="{{ $variant['variant_id'] }}" data-label="{{ $variant['label'] }}" data-shortage-qty="{{ $shortageQty }}">
+                                        <td class="text-center">
+                                            <input
+                                                type="checkbox"
+                                                class="form-check-input js-restock-item"
+                                                value="{{ $variant['variant_id'] }}"
+                                                data-label="{{ $variant['label'] }}"
+                                                data-shortage-qty="{{ $shortageQty }}"
+                                            >
+                                        </td>
+                                        <td>
+                                            <div class="fw-600">{{ $variant['label'] }}</div>
+                                            <div class="small text-muted">ĐVT: {{ $variant['unit_label'] }}</div>
+                                        </td>
+                                        <td class="text-center">
+                                            <span class="badge {{ (int) ($variant['available'] ?? 0) <= 0 ? 'bg-danger' : 'bg-warning text-dark' }} rounded-pill">
+                                                {{ number_format((int) ($variant['available'] ?? 0)) }}
+                                            </span>
+                                        </td>
+                                        <td class="text-center fw-700 text-danger">{{ number_format($shortageQty) }}</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @endif
+            </div>
         </div>
         <div id="itemsContainerIn">
             <div class="table-responsive">
@@ -179,6 +243,46 @@ window.addRow = function(data = {}) {
     reindexRows();
 };
 
+window.addOrIncreaseVariantRow = function(data = {}, quantityToAdd = 1) {
+    const container = document.getElementById('stockinRows');
+    const variantId = String(data.product_variant_id ?? data.id ?? data.variant_id ?? '');
+    const safeQuantity = Math.max(1, parseInt(quantityToAdd, 10) || 1);
+
+    if (!variantId) {
+        return {status: 'invalid'};
+    }
+
+    let matchedRow = null;
+    container.querySelectorAll('.item-row').forEach((row) => {
+        const select = row.querySelector('select[name*="product_variant_id"]');
+        if (select && String(select.value) === variantId) {
+            matchedRow = row;
+        }
+    });
+
+    if (matchedRow) {
+        const qtyInput = matchedRow.querySelector('input[name*="[quantity]"]');
+        if (qtyInput) {
+            qtyInput.value = (parseInt(qtyInput.value || '0', 10) || 0) + safeQuantity;
+            qtyInput.dispatchEvent(new Event('input', {bubbles: true}));
+            qtyInput.focus();
+        }
+        matchedRow.classList.add('table-warning');
+        setTimeout(() => matchedRow.classList.remove('table-warning'), 500);
+        return {status: 'incremented', row: matchedRow};
+    }
+
+    window.addRow({...data, product_variant_id: variantId, quantity: safeQuantity});
+    const newRow = container.querySelector('.item-row:last-child');
+    if (newRow) {
+        const qtyInput = newRow.querySelector('input[name*="[quantity]"]');
+        if (qtyInput) {
+            qtyInput.focus();
+        }
+    }
+    return {status: 'added', row: newRow};
+};
+
 function updateSTT() {
     document.querySelectorAll('#stockinRows .item-row').forEach((row, i) => {
         row.querySelector('.stt').textContent = i + 1;
@@ -233,11 +337,15 @@ function supplierSelected() {
 function syncSupplierState() {
     const hasSupplier = supplierSelected();
     const selectButton = document.getElementById('btnSelectProductVariant');
+    const addRestockButton = document.getElementById('btnAddRestockSelected');
     const requiredNotice = document.getElementById('supplierRequiredNotice');
     const priceNotice = document.getElementById('supplierPriceNotice');
 
     if (selectButton) {
         selectButton.disabled = !hasSupplier;
+    }
+    if (addRestockButton) {
+        addRestockButton.disabled = !hasSupplier;
     }
     requiredNotice?.classList.toggle('d-none', hasSupplier);
     priceNotice?.classList.toggle('d-none', !hasSupplier);
@@ -299,6 +407,27 @@ function resetStockInRows() {
 document.addEventListener('DOMContentLoaded', function () {
     const stockinRows = document.getElementById('stockinRows');
     const supplierSelect = document.getElementById('supplierSelect');
+    const restockCheckAll = document.getElementById('restockCheckAll');
+    const btnAddRestockSelected = document.getElementById('btnAddRestockSelected');
+    const getRestockItems = () => Array.from(document.querySelectorAll('.js-restock-item'));
+
+    function syncRestockCheckAllState() {
+        const items = getRestockItems();
+        if (!restockCheckAll || items.length === 0) {
+            return;
+        }
+
+        const checkedCount = items.filter((item) => item.checked).length;
+        restockCheckAll.checked = checkedCount > 0 && checkedCount === items.length;
+        restockCheckAll.indeterminate = checkedCount > 0 && checkedCount < items.length;
+    }
+
+    function markRestockRow(item) {
+        const row = item.closest('.js-restock-row');
+        if (!row) return;
+        row.classList.toggle('restock-row-active', item.checked);
+    }
+
     syncSupplierState();
     if (!supplierSelected()) {
         filterProductModalRows([]);
@@ -330,6 +459,82 @@ document.addEventListener('DOMContentLoaded', function () {
     if (supplierSelect?.value) {
         loadSupplierProducts(supplierSelect.value).then(() => window.addRow()).catch(() => {});
     }
+
+    restockCheckAll?.addEventListener('change', function () {
+        getRestockItems().forEach((item) => {
+            item.checked = this.checked;
+            markRestockRow(item);
+        });
+        syncRestockCheckAllState();
+    });
+
+    getRestockItems().forEach((item) => {
+        item.addEventListener('change', function () {
+            markRestockRow(this);
+            syncRestockCheckAllState();
+        });
+    });
+
+    btnAddRestockSelected?.addEventListener('click', function () {
+        if (!supplierSelected()) {
+            alert('Vui lòng chọn nhà cung cấp trước.');
+            return;
+        }
+
+        if (productVariants.length === 0) {
+            alert('Chưa có sản phẩm khả dụng cho nhà cung cấp đã chọn hoặc dữ liệu đang tải.');
+            return;
+        }
+
+        const selectedItems = getRestockItems().filter((item) => item.checked);
+        if (selectedItems.length === 0) {
+            alert('Vui lòng chọn ít nhất một sản phẩm cần nhập bổ sung.');
+            return;
+        }
+
+        let addedOrUpdated = 0;
+        let skipped = 0;
+
+        selectedItems.forEach((item) => {
+            const variantId = String(item.value);
+            const qty = Math.max(1, parseInt(item.dataset.shortageQty || '1', 10) || 1);
+            const supplierVariant = productVariants.find((variant) => String(variant.id ?? variant.variant_id) === variantId);
+
+            if (!supplierVariant) {
+                skipped++;
+                return;
+            }
+
+            const result = window.addOrIncreaseVariantRow({
+                product_variant_id: variantId,
+                unit_label: supplierVariant.unit_label ?? '',
+                weight_per_unit: supplierVariant.weight_per_unit ?? 1,
+                unit_cost: supplierVariant.latest_price ?? 0,
+                source_price_id: supplierVariant.price_id ?? '',
+                note: 'Bổ sung hàng thiếu'
+            }, qty);
+
+            if (result.status === 'added' || result.status === 'incremented') {
+                addedOrUpdated++;
+                item.checked = false;
+                markRestockRow(item);
+            }
+        });
+
+        syncRestockCheckAllState();
+
+        if (addedOrUpdated === 0) {
+            alert('Không thể thêm sản phẩm đã chọn vào phiếu nhập.');
+            return;
+        }
+
+        if (skipped > 0) {
+            alert(`Đã thêm/cập nhật ${addedOrUpdated} sản phẩm. Bỏ qua ${skipped} sản phẩm không thuộc nhà cung cấp đã chọn.`);
+            return;
+        }
+
+        alert(`Đã thêm/cập nhật ${addedOrUpdated} sản phẩm vào phiếu nhập.`);
+    });
 
     stockinRows.closest('form')?.addEventListener('submit', function (event) {
         if (!supplierSelected()) {

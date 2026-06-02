@@ -400,7 +400,10 @@ class WarehouseDashboardController extends Controller
         ->get();
 
         $availableVariants = $productVariants->map(function ($variant) {
-            $inventory = $variant->inventories->first();
+            $totalQuantity = (int) $variant->inventories->sum('quantity');
+            $totalReserved = (int) $variant->inventories->sum('reserved_quantity');
+            $availableQuantity = max(0, $totalQuantity - $totalReserved);
+            $lowStockThreshold = (int) ($variant->inventories->min('low_stock_threshold') ?? 5);
             $weightPerUnit = (float) ($variant->effective_kg ?? 1);
             // Thuộc tính dạng: Size: M, Màu: Đỏ...
             $attributes = $variant->values->map(function($val) {
@@ -416,9 +419,25 @@ class WarehouseDashboardController extends Controller
                 'label' => $label,
                 'unit_label' => $variant->product->unit_label ?? 'Cái',
                 'weight_per_unit' => $weightPerUnit,
-                'available' => $inventory ? max(0, (int) $inventory->quantity - (int) $inventory->reserved_quantity) : 0,
+                'available' => $availableQuantity,
+                'low_stock_threshold' => $lowStockThreshold,
             ];
         })->values();
+
+        $lowStockVariants = $availableVariants
+            ->filter(function (array $variant) {
+                return (int) ($variant['available'] ?? 0) <= (int) ($variant['low_stock_threshold'] ?? 0);
+            })
+            ->map(function (array $variant) {
+                $available = (int) ($variant['available'] ?? 0);
+                $threshold = (int) ($variant['low_stock_threshold'] ?? 0);
+
+                $variant['shortage_qty'] = max(0, $threshold - $available);
+
+                return $variant;
+            })
+            ->sortBy(fn (array $variant) => mb_strtolower((string) ($variant['label'] ?? '')))
+            ->values();
 
         $productVariants = $productVariants->map(function ($variant) {
             return [
@@ -436,7 +455,7 @@ class WarehouseDashboardController extends Controller
             ];
         })->values();
 
-        return view('warehouse.stock-in.create', compact('suppliers', 'productVariants', 'availableVariants'));
+        return view('warehouse.stock-in.create', compact('suppliers', 'productVariants', 'availableVariants', 'lowStockVariants'));
     }
     /**
      * List orders awaiting packing or currently being packed.
