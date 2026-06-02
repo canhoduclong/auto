@@ -343,7 +343,7 @@
                                                                     inputmode="decimal"
                                                                     data-qty="{{ $orderedQty }}"
                                                                     data-size="{{ is_numeric($variantSize) && (float)$variantSize > 0 ? (float)$variantSize : 0 }}">
-                                                                <button class="btn btn-outline-primary btn-sm js-logistics-submit-btn" type="submit">Lưu</button>
+                                                                <button class="btn btn-sm wh-warning-action-btn js-logistics-submit-btn" type="submit">Lưu</button>
                                                             </form>
                                                         </div>
                                                         <div class="wh-readonly-item js-ready-only {{ $isPacking ? 'd-none' : '' }}">{{ $displayActualWeight }}</div>
@@ -683,7 +683,7 @@
 
                             <form action="{{ route('warehouse.orders.complete-packing', $order) }}" method="POST" class="d-grid js-complete-packing-form {{ $isPacking ? '' : 'd-none' }}">
                                 @csrf
-                                <button class="btn btn-success btn-sm" {{ $isPendingSaleConfirmation ? 'disabled' : '' }}>
+                                <button class="btn btn-sm wh-warning-action-btn" {{ $isPendingSaleConfirmation ? 'disabled' : '' }}>
                                     <i class="bi bi-check2-all me-1"></i>Hoàn thành đóng gói
                                 </button>
                             </form>

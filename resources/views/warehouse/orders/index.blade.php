@@ -138,6 +138,20 @@
     .wh-item-action {
         text-align: right;
     }
+    .wh-warning-action-btn {
+        --bs-bg-opacity: 1;
+        background-color: rgba(var(--bs-warning-rgb), var(--bs-bg-opacity)) !important;
+        border-color: rgba(var(--bs-warning-rgb), var(--bs-bg-opacity)) !important;
+        color: #212529 !important;
+    }
+    .wh-warning-action-btn:hover,
+    .wh-warning-action-btn:focus,
+    .wh-warning-action-btn:active {
+        --bs-bg-opacity: .9;
+        background-color: rgba(var(--bs-warning-rgb), var(--bs-bg-opacity)) !important;
+        border-color: rgba(var(--bs-warning-rgb), var(--bs-bg-opacity)) !important;
+        color: #212529 !important;
+    }
     .wh-compact-form {
         display: flex;
         gap: 6px;
@@ -1172,12 +1186,12 @@
             const submitBtn = input.closest('form')?.querySelector('.js-logistics-submit-btn');
             function setInvalid(msg) {
                 if (errEl) { errEl.textContent = msg; errEl.style.display = ''; }
-                if (submitBtn) { submitBtn.disabled = true; submitBtn.classList.add('btn-secondary'); submitBtn.classList.remove('btn-outline-primary'); }
+                if (submitBtn) { submitBtn.disabled = true; submitBtn.classList.add('btn-secondary'); submitBtn.classList.remove('wh-warning-action-btn'); }
                 return false;
             }
             function setValid() {
                 if (errEl) errEl.style.display = 'none';
-                if (submitBtn) { submitBtn.disabled = false; submitBtn.classList.remove('btn-secondary'); submitBtn.classList.add('btn-outline-primary'); }
+                if (submitBtn) { submitBtn.disabled = false; submitBtn.classList.remove('btn-secondary'); submitBtn.classList.add('wh-warning-action-btn'); }
                 return true;
             }
             if (!errEl) return true;
