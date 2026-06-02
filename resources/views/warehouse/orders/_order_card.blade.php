@@ -39,8 +39,9 @@
                     <div class="d-flex align-items-center card-header bg-white">
                         @php
                             $isPacked = in_array($order->status, ['packed', 'packed_waiting_pickup', 'delivering', 'delivered', 'completed'], true);
+                            $orderIndexClass = $isPacking ? 'is-packing' : ($isPacked ? 'is-packed' : 'is-unpacked');
                         @endphp
-                        <div class="wh-order-index text-center" style="background:{{ $isPacked ? '#198754' : '#64748b' }};color:#fff;">{{ $order->daily_sequence ?? '—' }}</div>
+                        <div class="wh-order-index {{ $orderIndexClass }} text-center">{{ $order->daily_sequence ?? '—' }}</div>
                         <div class=" border-0 w-100  d-flex justify-content-between align-items-center">
                             <div>
                                 <div class="fw-semibold fs-5 mb-0 pb-0">{{ $order->customer?->name ?? '—' }} </div>
@@ -332,6 +333,9 @@
                                                             : number_format((float) $item->actual_weight, 3, '.', '');
                                                     @endphp
                                                     @if($pricedByKg)
+                                                        @php
+                                                            $isItemLogisticsSaved = !is_null($lineTotal);
+                                                        @endphp
                                                         <div class="wh-item-action js-packing-only {{ $isPacking ? '' : 'd-none' }}">
                                                             <form action="{{ route('warehouse.orders.logistics', $order) }}" method="POST" class="js-logistics-item-form wh-compact-form justify-content-end">
                                                                 @csrf
@@ -343,7 +347,7 @@
                                                                     inputmode="decimal"
                                                                     data-qty="{{ $orderedQty }}"
                                                                     data-size="{{ is_numeric($variantSize) && (float)$variantSize > 0 ? (float)$variantSize : 0 }}">
-                                                                <button class="btn btn-sm wh-warning-action-btn js-logistics-submit-btn" type="submit">Lưu</button>
+                                                                <button class="btn btn-sm {{ $isItemLogisticsSaved ? 'btn-secondary' : 'wh-warning-action-btn' }} js-logistics-submit-btn" type="submit">Lưu</button>
                                                             </form>
                                                         </div>
                                                         <div class="wh-readonly-item js-ready-only {{ $isPacking ? 'd-none' : '' }}">{{ $displayActualWeight }}</div>
@@ -406,7 +410,7 @@
                                             </div>
                                         </div>
                                         <div class="col-12 d-grid">
-                                            <button class="btn btn-outline-primary btn-sm js-logistics-submit-btn" type="submit">
+                                            <button class="btn btn-sm wh-warning-action-btn js-logistics-submit-btn" type="submit">
                                                 <i class="bi bi-save2 me-1"></i>Lưu phí giao hàng / thùng xốp
                                             </button>
                                         </div>

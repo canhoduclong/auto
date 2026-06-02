@@ -32,6 +32,19 @@
         color: #fff;
         margin-right: 12px;
     }
+    .wh-order-index.is-packed {
+        background: #198754;
+        color: #fff;
+    }
+    .wh-order-index.is-packing {
+        --bs-bg-opacity: 1;
+        background: rgba(var(--bs-warning-rgb), var(--bs-bg-opacity)) !important;
+        color: #212529;
+    }
+    .wh-order-index.is-unpacked {
+        background: #64748b;
+        color: #fff;
+    }
     .card-desript{
         font-size: .75rem;
         color: #64748b;
@@ -502,6 +515,11 @@
     .wh-order-nav-pill.is-packed {
         background-color: #198754;
     }
+    .wh-order-nav-pill.is-packing {
+        --bs-bg-opacity: 1;
+        background-color: rgba(var(--bs-warning-rgb), var(--bs-bg-opacity)) !important;
+        color: #212529 !important;
+    }
     .wh-order-nav-pill.is-unpacked {
         background-color: #64748b;
     }
@@ -726,11 +744,14 @@
             @foreach($orders->sortBy('daily_sequence') as $navOrder)
                 @php
                     $isPackedNav = in_array((string)$navOrder->status, $packedLikeStatuses, true);
+                    $isPackingNav = (string) $navOrder->status === 'packing';
+                    $navStateClass = $isPackingNav ? 'is-packing' : ($isPackedNav ? 'is-packed' : 'is-unpacked');
                     $sequenceNumber = $navOrder->daily_sequence ?? $loop->iteration;
                 @endphp
                 <a href="javascript:void(0);"
                    onclick="document.getElementById('order-card-{{ $navOrder->id }}')?.scrollIntoView({ behavior: 'smooth', block: 'start' });"
-                   class="wh-order-nav-pill {{ $isPackedNav ? 'is-packed' : 'is-unpacked' }}"
+                   class="wh-order-nav-pill {{ $navStateClass }}"
+                   data-order-id="{{ $navOrder->id }}"
                    title="{{ $navOrder->customer?->name ?? 'Đơn hàng' }}">
                     {{ $sequenceNumber }}
                 </a>
@@ -1165,7 +1186,17 @@
                         if (readonlyKg && !Number.isNaN(actualWeight)) {
                             readonlyKg.textContent = actualWeight > 0 ? (formatCompactDecimal(actualWeight) + ' kg') : '---';
                         }
+
+                        if (submitBtn && amountCell && amountCell.textContent.trim() !== '---') {
+                            submitBtn.classList.remove('wh-warning-action-btn');
+                            submitBtn.classList.add('btn-secondary');
+                        }
                     }
+                }
+
+                if (form.classList.contains('js-logistics-fee-form') && submitBtn) {
+                    submitBtn.classList.remove('wh-warning-action-btn');
+                    submitBtn.classList.add('btn-secondary');
                 }
             } catch (error) {
                 if (typeof showToast === 'function') {
@@ -1206,7 +1237,31 @@
         }
 
         document.querySelectorAll('.js-weight-input').forEach(function (input) {
-            input.addEventListener('input', function () { validateWeightInput(input); });
+            input.addEventListener('input', function () {
+                const submitBtn = input.closest('form')?.querySelector('.js-logistics-submit-btn');
+                if (submitBtn) {
+                    submitBtn.classList.remove('btn-secondary');
+                    submitBtn.classList.add('wh-warning-action-btn');
+                }
+                validateWeightInput(input);
+            });
+        });
+
+        document.querySelectorAll('.js-logistics-fee-form input').forEach(function (input) {
+            input.addEventListener('input', function () {
+                const submitBtn = input.closest('form')?.querySelector('.js-logistics-submit-btn');
+                if (submitBtn) {
+                    submitBtn.classList.remove('btn-secondary');
+                    submitBtn.classList.add('wh-warning-action-btn');
+                }
+            });
+            input.addEventListener('change', function () {
+                const submitBtn = input.closest('form')?.querySelector('.js-logistics-submit-btn');
+                if (submitBtn) {
+                    submitBtn.classList.remove('btn-secondary');
+                    submitBtn.classList.add('wh-warning-action-btn');
+                }
+            });
         });
 
         document.querySelectorAll('.js-logistics-item-form, .js-logistics-fee-form').forEach(function (form) {
@@ -1255,6 +1310,18 @@
                         if (statusEl && payload.order) {
                             statusEl.className = 'badge js-order-status ' + (payload.order.status_class || 'bg-warning text-dark');
                             statusEl.textContent = payload.order.status_label || 'Đang đóng gói';
+                        }
+
+                        const orderIndexEl = card.querySelector('.wh-order-index');
+                        if (orderIndexEl) {
+                            orderIndexEl.classList.remove('is-packed', 'is-unpacked');
+                            orderIndexEl.classList.add('is-packing');
+                        }
+
+                        const navPill = document.querySelector(`.wh-order-nav-pill[data-order-id="${card.dataset.orderId || ''}"]`);
+                        if (navPill) {
+                            navPill.classList.remove('is-packed', 'is-unpacked');
+                            navPill.classList.add('is-packing');
                         }
 
                         card.querySelectorAll('.js-ready-only').forEach(function (el) {
