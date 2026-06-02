@@ -401,6 +401,7 @@ class WarehouseDashboardController extends Controller
 
         $availableVariants = $productVariants->map(function ($variant) {
             $inventory = $variant->inventories->first();
+            $weightPerUnit = (float) ($variant->effective_kg ?? 1);
             // Thuộc tính dạng: Size: M, Màu: Đỏ...
             $attributes = $variant->values->map(function($val) {
                 return $val->attribute->name . ': ' . $val->value;
@@ -411,9 +412,27 @@ class WarehouseDashboardController extends Controller
                 . ($attributes ? ' [' . $attributes . ']' : '');
             return [
                 'variant_id' => (int) $variant->id,
+                'product_id' => (int) $variant->product_id,
                 'label' => $label,
                 'unit_label' => $variant->product->unit_label ?? 'Cái',
+                'weight_per_unit' => $weightPerUnit,
                 'available' => $inventory ? max(0, (int) $inventory->quantity - (int) $inventory->reserved_quantity) : 0,
+            ];
+        })->values();
+
+        $productVariants = $productVariants->map(function ($variant) {
+            return [
+                'id' => (int) $variant->id,
+                'name' => (string) ($variant->name ?? ''),
+                'sku' => (string) ($variant->sku ?? ''),
+                'kg' => (float) ($variant->kg ?? 0),
+                'weight_per_unit' => (float) ($variant->effective_kg ?? 1),
+                'product' => [
+                    'id' => (int) ($variant->product?->id ?? 0),
+                    'name' => (string) ($variant->product?->name ?? ''),
+                    'kg' => (float) ($variant->product?->kg ?? 0),
+                    'unit_label' => (string) ($variant->product?->unit_label ?? 'Cái'),
+                ],
             ];
         })->values();
 
@@ -3361,6 +3380,7 @@ class WarehouseDashboardController extends Controller
             'items.*.product_variant_id' => 'required|exists:product_variants,id',
             'items.*.quantity'           => 'required|integer|min:1',
             'items.*.unit_cost'          => 'required|numeric|min:0',
+            'items.*.source_price_id'    => 'nullable|exists:supplier_product_prices,id',
         ]);
 
 
@@ -3377,10 +3397,27 @@ class WarehouseDashboardController extends Controller
                 ]);
 
                 foreach ($validated['items'] as $itemData) {
+                    $sourcePriceId = $itemData['source_price_id'] ?? null;
+                    if ($isImport && $sourcePriceId) {
+                        $variant = ProductVariant::query()->find($itemData['product_variant_id']);
+                        $price = \App\Models\SupplierProductPrice::query()
+                            ->where('id', $sourcePriceId)
+                            ->where('supplier_id', $validated['supplier_id'])
+                            ->where('product_id', $variant?->product_id)
+                            ->first();
+
+                        if (!$price) {
+                            throw new \RuntimeException('Bảng giá đã chọn không khớp với nhà cung cấp hoặc sản phẩm.');
+                        }
+
+                        $itemData['unit_cost'] = (float) $price->stock_in_unit_cost;
+                    }
+
                     $document->items()->create([
                         'product_variant_id' => $itemData['product_variant_id'],
                         'quantity'           => $itemData['quantity'],
                         'unit_cost'          => $itemData['unit_cost'],
+                        'source_price_id'    => $sourcePriceId,
                     ]);
 
                     $inventory = Inventory::firstOrCreate(

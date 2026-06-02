@@ -35,8 +35,12 @@
                                     <td class="text-end pe-3">
                                         <button type="button" class="btn btn-sm btn-outline-success js-select-product" 
                                             data-id="{{ $variant['variant_id'] }}"
+                                            data-product_id="{{ $variant['product_id'] ?? '' }}"
                                             data-label="{{ $variant['label'] }}"
                                             data-unit_label="{{ $variant['unit_label'] }}"
+                                            data-weight_per_unit="{{ $variant['weight_per_unit'] ?? 1 }}"
+                                            data-latest_price=""
+                                            data-price_id=""
                                             data-available="{{ $variant['available'] ?? 0 }}">
                                             <i class="bi bi-plus-circle me-1"></i>Chọn
                                         </button>
@@ -68,7 +72,8 @@
             let hasVisible = false;
             productRows.forEach(function (row) {
                 const searchData = row.getAttribute('data-search') || '';
-                if (searchData.includes(term)) {
+                const supplierAllowed = row.dataset.supplierAllowed === '1';
+                if (supplierAllowed && searchData.includes(term)) {
                     row.style.display = '';
                     hasVisible = true;
                 } else {
@@ -87,6 +92,9 @@
             const variantId = this.getAttribute('data-id');
             const label = this.getAttribute('data-label');
             const unitLabel = this.getAttribute('data-unit_label');
+            const weightPerUnit = this.getAttribute('data-weight_per_unit') || '1';
+            const latestPrice = this.getAttribute('data-latest_price') || '';
+            const priceId = this.getAttribute('data-price_id') || '';
             // Check if already in table
             let exists = false;
             tableBody.querySelectorAll('.item-row').forEach(function (row) {
@@ -108,9 +116,15 @@
                     addRow({
                         product_variant_id: variantId,
                         unit_label: unitLabel,
+                        weight_per_unit: weightPerUnit,
+                        unit_cost: latestPrice || 0,
+                        source_price_id: priceId,
                         quantity: 1,
                         note: ''
                     });
+                    if (!latestPrice) {
+                        alert('Sản phẩm chưa có bảng giá hiện hành. Bạn có thể nhập tay đơn giá hoặc cập nhật bảng giá thu mua.');
+                    }
                     setTimeout(() => {
                         const lastRow = tableBody.querySelector('.item-row:last-child');
                         if (lastRow) {

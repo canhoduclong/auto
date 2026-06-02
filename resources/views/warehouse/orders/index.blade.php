@@ -71,7 +71,7 @@
     .wh-item-table-head,
     .wh-item-table-row {
         display: grid;
-        grid-template-columns: 48px minmax(50px, 1fr) 42px 52px 45px 90px 61px 76px;
+        grid-template-columns: 48px minmax(50px, 1fr) 42px 52px 90px 90px 61px 76px;
         gap: 8px;
         align-items: center; 
     }

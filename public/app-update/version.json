@@ -1,7 +1,7 @@
 {
-  "version": "1.0.0",
-  "version_code": 1,
+  "version": "1.0.1",
+  "version_code": 2,
   "apk_url": "https://hoanglongtnt.com/app-update/app-release.apk",
   "force_update": false,
-  "message": "Đã cập nhật tính năng mới và sửa lỗi hệ thống."
+  "message": "Ban cap nhat 1.0.1: toi uu hieu nang, cai tien trai nghiem va sua nhieu loi trong ung dung."
 }

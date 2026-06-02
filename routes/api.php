@@ -22,6 +22,9 @@ Route::prefix('mobile')->group(function () {
 
         Route::prefix('shipper')->group(function () {
             Route::get('/dashboard', [ShipperApiController::class, 'dashboard']);
+            Route::get('/delivery-schedules', [ShipperApiController::class, 'deliverySchedules']);
+            Route::post('/delivery-schedules/confirm', [ShipperApiController::class, 'confirmDeliverySchedule']);
+            Route::post('/delivery-schedules/reject', [ShipperApiController::class, 'rejectDeliverySchedule']);
             Route::get('/available-orders', [ShipperApiController::class, 'availableOrders']);
             Route::post('/orders/{order}/accept', [ShipperApiController::class, 'acceptOrder']);
             Route::get('/my-orders', [ShipperApiController::class, 'myOrders']);

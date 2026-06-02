@@ -231,6 +231,9 @@
             <a href="{{ route('warehouse.stock-in') }}" class="wh-nav-link {{ request()->routeIs('warehouse.stock-in') ? 'active' : '' }}">
                 <i class="bi bi-box-seam"></i> Nhập Kho
             </a>
+            <a href="{{ route('warehouse.supplier-prices.index') }}" class="wh-nav-link {{ request()->routeIs('warehouse.supplier-prices.*') ? 'active' : '' }}">
+                <i class="bi bi-cash-coin"></i> Bảng giá thu mua
+            </a>
             <a href="{{ route('warehouse.stock-out') }}" class="wh-nav-link {{ request()->routeIs('warehouse.stock-out') ? 'active' : '' }}">
                 <i class="bi bi-box-arrow-right"></i> Xuất Kho
             </a>

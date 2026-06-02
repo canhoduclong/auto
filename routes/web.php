@@ -140,6 +140,10 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         ->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
     // AJAX lấy tổng tiền đơn hàng
     Route::get('orders/ajax/total', [OrderAjaxController::class, 'total'])->name('orders.ajax.total');
+    Route::get('/api/suppliers/{supplier}/products', [\App\Http\Controllers\WarehouseSupplierPriceController::class, 'supplierProducts'])->name('api.suppliers.products');
+    Route::get('/api/suppliers/{supplier}/products/{product}/latest-price', [\App\Http\Controllers\WarehouseSupplierPriceController::class, 'latestPrice'])->name('api.suppliers.products.latest-price');
+    Route::get('/api/suppliers/{supplier}/products/{product}/price-history', [\App\Http\Controllers\WarehouseSupplierPriceController::class, 'priceHistory'])->name('api.suppliers.products.price-history');
+    Route::post('/api/supplier-prices', [\App\Http\Controllers\WarehouseSupplierPriceController::class, 'store'])->name('api.supplier-prices.store');
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/my-dashboard', [MyDashboardController::class, 'index'])
         ->name('pages.my_dashboard')
@@ -263,6 +267,10 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/stock-in/{document}', [WarehouseDashboardController::class, 'showDocument'])->name('stock-in.show');
         Route::get('/stock-in/{document}/edit', [WarehouseDashboardController::class, 'editStockIn'])->name('stock-in.edit');
         Route::put('/stock-in/{document}', [WarehouseDashboardController::class, 'updateStockIn'])->name('stock-in.update');
+        Route::get('/supplier-prices', [\App\Http\Controllers\WarehouseSupplierPriceController::class, 'index'])->name('supplier-prices.index');
+        Route::post('/supplier-prices', [\App\Http\Controllers\WarehouseSupplierPriceController::class, 'store'])->name('supplier-prices.store');
+        Route::post('/suppliers/{supplier}/products', [\App\Http\Controllers\WarehouseSupplierPriceController::class, 'attachProduct'])->name('suppliers.products.attach');
+        Route::delete('/suppliers/{supplier}/products/{product}', [\App\Http\Controllers\WarehouseSupplierPriceController::class, 'detachProduct'])->name('suppliers.products.detach');
         Route::get('/stock-out',         [WarehouseDashboardController::class, 'stockOut'])->name('stock-out');
         Route::get('/stock-out/orders',  [WarehouseDashboardController::class, 'exportedOrders'])->name('stock-out.orders');
         Route::post('/stock-out',        [WarehouseDashboardController::class, 'storeStockOut'])->name('stock-out.store');

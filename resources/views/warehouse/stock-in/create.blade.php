@@ -10,6 +10,7 @@
     .stockin-items-head, .stockin-item-grid { min-width: 980px; display: grid; grid-template-columns: 4.3fr 1.2fr 1fr 1.7fr 2fr 1.3fr 36px; gap: 8px; align-items: center; }
     .stockin-items-head { font-size: .72rem; text-transform: uppercase; }
     .stockin-item-grid .line-total { text-align: right; white-space: nowrap; }
+    .calculated-weight-input { background: #f8fafc; font-weight: 700; color: #0f766e; }
     .stockin-item-grid .item-remove { justify-self: center; }
     .btn-add-row { border: 2px dashed #93c5fd; background: #eff6ff; color: #1d4ed8; border-radius: 8px; padding: 8px 18px; font-size: .82rem; font-weight: 700; transition: background .15s; }
     .btn-add-row:hover { background: #dbeafe; }
@@ -30,7 +31,7 @@
             </div>
             <div class="col-md-4">
                 <label class="form-label fw-600 small">Nhà cung cấp <span class="text-danger">*</span></label>
-                <select name="supplier_id" class="form-select" {{ $suppliers->isEmpty() ? 'disabled' : 'required' }}>
+                <select name="supplier_id" id="supplierSelect" class="form-select" {{ $suppliers->isEmpty() ? 'disabled' : 'required' }}>
                     <option value="">-- Chọn nhà cung cấp --</option>
                     @foreach($suppliers as $sup)
                         <option value="{{ $sup->id }}" {{ old('supplier_id') == $sup->id ? 'selected' : '' }}>{{ $sup->name }}{{ $sup->is_active ? '' : ' (ngưng hoạt động)' }}</option>
@@ -57,6 +58,12 @@
                 <i class="bi bi-search me-1"></i> Chọn sản phẩm
             </button>
         </div>
+        <div id="supplierRequiredNotice" class="alert alert-warning py-2 small mb-2">
+            Vui lòng chọn nhà cung cấp trước.
+        </div>
+        <div id="supplierPriceNotice" class="alert alert-info py-2 small mb-2 d-none">
+            Chỉ hiển thị sản phẩm thuộc nhà cung cấp đã chọn. Sản phẩm chưa có bảng giá hiện hành vẫn có thể nhập tay đơn giá.
+        </div>
         <div id="itemsContainerIn">
             <div class="table-responsive">
                 <table class="table table-bordered align-middle mb-0" style="min-width:1100px;">
@@ -64,13 +71,13 @@
                         <tr style="text-align:center;vertical-align:middle;">
                             <th style="width:48px;">STT</th>
                             <th style="min-width:260px;">Sản phẩm / Biến thể</th>
-                            <th style="width:90px;">Số lượng</th>
-                            <th style="width:90px;">ĐVT</th>
-                            <th style="width:110px;">Khối lượng</th>
-                            <th style="width:130px;">Đơn giá nhập (đ)</th>
-                            <th style="min-width:120px;">Ghi chú</th>
-                            <th style="width:120px;">Thành tiền</th>
-                            <th style="width:60px;"></th>
+                            <th style="min-width:90px;">Số lượng</th>
+                            <th style="min-width:90px;">ĐVT</th>
+                            <th style="min-width:110px;">Khối lượng</th>
+                            <th style="min-width:130px;">Đơn giá nhập (đ)</th>
+                            <th style="min-min-width:120px;">Ghi chú</th>
+                            <th style="min-width:120px;">Thành tiền</th>
+                            <th style="min-width:60px;"></th>
                         </tr>
                     </thead>
                     <tbody id="stockinRows">
@@ -92,23 +99,55 @@
 
 @push('scripts')
 <script>
-const productVariants = @json($productVariants ?? []);
+let productVariants = [];
 let rowIdx = 0;
+
+function toNumber(value, fallback = 0) {
+    const parsed = parseFloat(String(value ?? '').replace(',', '.'));
+    return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function variantWeightPerUnit(variant) {
+    const variantKg = toNumber(variant?.kg, 0);
+    if (variantKg > 0) return variantKg;
+
+    const productKg = toNumber(variant?.product?.kg, 0);
+    if (productKg > 0) return productKg;
+
+    return 1;
+}
+
+function formatWeight(value) {
+    const rounded = Math.round((toNumber(value, 0) + Number.EPSILON) * 1000) / 1000;
+    return rounded.toLocaleString('vi-VN', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 3
+    });
+}
+
+function findVariant(variantId) {
+    return productVariants.find(v => String(v.id) === String(variantId));
+}
 
 function renderRow(idx, data = {}) {
     let options = '<option value="">-- Chọn sản phẩm --</option>';
     productVariants.forEach(v => {
-        options += `<option value="${v.id}" data-unit="${v.product?.unit_label ?? 'Cái'}"${data.product_variant_id == v.id ? ' selected' : ''}>${v.product?.name || ''} - ${v.name}</option>`;
+        const variantId = v.id ?? v.variant_id;
+        const weightPerUnit = toNumber(v.weight_per_unit, variantWeightPerUnit(v));
+        options += `<option value="${variantId}" data-unit="${v.unit_label ?? v.product?.unit_label ?? 'Cái'}" data-weight-per-unit="${weightPerUnit}"${data.product_variant_id == variantId ? ' selected' : ''}>${v.label || ((v.product?.name || '') + ' - ' + v.name)}</option>`;
     });
     
     // If the data was provided from the modal instead of productVariants array matching
     if (data.product_variant_id && !productVariants.some(v => v.id == data.product_variant_id)) {
-        options += `<option value="${data.product_variant_id}" data-unit="${data.unit_label ?? ''}" selected>${data.label ?? 'Sản phẩm đã chọn'}</option>`;
+        options += `<option value="${data.product_variant_id}" data-unit="${data.unit_label ?? ''}" data-weight-per-unit="${data.weight_per_unit ?? 1}" selected>${data.label ?? 'Sản phẩm đã chọn'}</option>`;
     }
 
     const qty = data.quantity ?? 1;
-    const price = data.unit_cost ?? 0;
+    const price = data.unit_cost ?? data.latest_price ?? 0;
     const lineTotal = (qty * price).toLocaleString('vi-VN');
+    const selectedVariant = findVariant(data.product_variant_id);
+    const weightPerUnit = data.weight_per_unit ?? (selectedVariant ? variantWeightPerUnit(selectedVariant) : 1);
+    const totalWeight = toNumber(data.weight, qty * weightPerUnit);
     return `
     <tr class="item-row" data-item-row data-idx="${idx}">
         <td class="stt text-center align-middle">${idx + 1}</td>
@@ -118,8 +157,12 @@ function renderRow(idx, data = {}) {
             </select>
         </td>
         <td class="align-middle"><input type="number" name="items[${idx}][quantity]" class="form-control form-control-sm text-center" min="1" value="${qty}" required></td>
+        <input type="hidden" name="items[${idx}][source_price_id]" class="source-price-id-input" value="${data.source_price_id ?? data.price_id ?? ''}">
         <td class="align-middle"><input type="text" class="form-control form-control-sm unit-label-input text-center" value="${data.unit_label ?? ''}" readonly tabindex="-1"></td>
-        <td class="align-middle"><input type="number" name="items[${idx}][weight]" class="form-control form-control-sm text-center" min="0" step="0.01" value="${data.weight ?? 0}"></td>
+        <td class="align-middle">
+            <input type="text" class="form-control form-control-sm text-center calculated-weight-input" value="${formatWeight(totalWeight)} Kg"  tabindex="-1" data-weight-per-unit="${weightPerUnit}">
+              
+        </td>
         <td class="align-middle"><input type="number" name="items[${idx}][unit_cost]" class="form-control form-control-sm text-center" min="0" step="1000" value="${price}"></td>
         <td class="align-middle"><input type="text" name="items[${idx}][note]" class="form-control form-control-sm text-center" value="${data.note ?? ''}"></td>
         <td class="line-total text-end align-middle">${lineTotal}</td>
@@ -160,13 +203,146 @@ function updateLineTotal(row) {
     row.querySelector('.line-total').textContent = (qty * price).toLocaleString('vi-VN');
 }
 
+function updateRowWeight(row) {
+    const qty = toNumber(row.querySelector('input[name*="[quantity]"]')?.value, 0);
+    const select = row.querySelector('.variant-select');
+    const selected = select?.selectedOptions?.[0];
+    const weightInput = row.querySelector('.calculated-weight-input');
+    const formula = row.querySelector('.weight-formula');
+
+    if (!weightInput) return;
+
+    const selectedWeight = toNumber(selected?.getAttribute('data-weight-per-unit'), 1);
+    const totalWeight = qty * selectedWeight;
+    weightInput.dataset.weightPerUnit = selectedWeight;
+    weightInput.value = `${formatWeight(totalWeight)} Kg`;
+    if (formula) {
+        formula.textContent = `${formatWeight(selectedWeight)} Kg / đơn vị`;
+    }
+}
+
+function syncRowCalculatedFields(row) {
+    updateRowWeight(row);
+    updateLineTotal(row);
+}
+
+function supplierSelected() {
+    return !!document.getElementById('supplierSelect')?.value;
+}
+
+function syncSupplierState() {
+    const hasSupplier = supplierSelected();
+    const selectButton = document.getElementById('btnSelectProductVariant');
+    const requiredNotice = document.getElementById('supplierRequiredNotice');
+    const priceNotice = document.getElementById('supplierPriceNotice');
+
+    if (selectButton) {
+        selectButton.disabled = !hasSupplier;
+    }
+    requiredNotice?.classList.toggle('d-none', hasSupplier);
+    priceNotice?.classList.toggle('d-none', !hasSupplier);
+}
+
+async function loadSupplierProducts(supplierId) {
+    productVariants = [];
+    if (!supplierId) {
+        filterProductModalRows([]);
+        return;
+    }
+
+    const response = await fetch(`{{ url('/api/suppliers') }}/${supplierId}/products`, {
+        headers: {'Accept': 'application/json'}
+    });
+    const payload = await response.json();
+    const products = payload.data || [];
+    productVariants = products.flatMap(product => product.variants || []).map(variant => ({
+        ...variant,
+        id: variant.id ?? variant.variant_id,
+        source_price_id: variant.source_price_id ?? variant.price_id,
+        unit_cost: variant.unit_cost ?? variant.latest_price ?? 0
+    }));
+    filterProductModalRows(productVariants.map(variant => String(variant.variant_id || variant.id)));
+}
+
+function filterProductModalRows(allowedVariantIds) {
+    const allowed = new Set(allowedVariantIds);
+    const variantMeta = new Map(productVariants.map(variant => [String(variant.variant_id || variant.id), variant]));
+    document.querySelectorAll('.product-selection-row').forEach(row => {
+        const button = row.querySelector('.js-select-product');
+        const variantId = button?.getAttribute('data-id');
+        const isAllowed = allowed.size > 0 && allowed.has(String(variantId));
+        row.dataset.supplierAllowed = isAllowed ? '1' : '0';
+        row.style.display = isAllowed ? '' : 'none';
+
+        const meta = variantMeta.get(String(variantId));
+        if (button && meta) {
+            button.dataset.latest_price = meta.latest_price ?? '';
+            button.dataset.price_id = meta.price_id ?? '';
+            button.dataset.weight_per_unit = meta.weight_per_unit ?? button.dataset.weight_per_unit ?? 1;
+            button.dataset.unit_label = meta.unit_label ?? button.dataset.unit_label ?? '';
+            button.dataset.label = meta.label ?? button.dataset.label ?? '';
+        }
+    });
+    const noProductsFound = document.getElementById('noProductsFound');
+    if (noProductsFound) {
+        noProductsFound.style.display = allowed.size > 0 ? 'none' : '';
+    }
+}
+
+function resetStockInRows() {
+    const rows = document.getElementById('stockinRows');
+    if (!rows) return;
+    rows.innerHTML = '';
+    rowIdx = 0;
+}
+
 document.addEventListener('DOMContentLoaded', function () {
     const stockinRows = document.getElementById('stockinRows');
+    const supplierSelect = document.getElementById('supplierSelect');
+    syncSupplierState();
+    if (!supplierSelected()) {
+        filterProductModalRows([]);
+    }
     
     // Add default row if empty
-    if (stockinRows.querySelectorAll('.item-row').length === 0) {
+    if (supplierSelected() && stockinRows.querySelectorAll('.item-row').length === 0) {
         window.addRow();
     }
+    stockinRows.querySelectorAll('.item-row').forEach(syncRowCalculatedFields);
+
+    supplierSelect?.addEventListener('change', async function () {
+        resetStockInRows();
+        syncSupplierState();
+
+        if (!this.value) {
+            productVariants = [];
+            filterProductModalRows([]);
+            return;
+        }
+
+        try {
+            await loadSupplierProducts(this.value);
+        } catch (error) {
+            alert('Không tải được danh sách sản phẩm theo nhà cung cấp.');
+        }
+    });
+
+    if (supplierSelect?.value) {
+        loadSupplierProducts(supplierSelect.value).then(() => window.addRow()).catch(() => {});
+    }
+
+    stockinRows.closest('form')?.addEventListener('submit', function (event) {
+        if (!supplierSelected()) {
+            event.preventDefault();
+            alert('Vui lòng chọn nhà cung cấp trước.');
+            return;
+        }
+
+        if (stockinRows.querySelectorAll('.item-row').length === 0) {
+            event.preventDefault();
+            alert('Vui lòng chọn ít nhất một sản phẩm của nhà cung cấp.');
+        }
+    });
     
     stockinRows.addEventListener('click', function (e) {
         const row = e.target.closest('.item-row');
@@ -184,9 +360,10 @@ document.addEventListener('DOMContentLoaded', function () {
             const selected = e.target.selectedOptions[0];
             const unit = selected.getAttribute('data-unit') || '';
             row.querySelector('.unit-label-input').value = unit;
+            updateRowWeight(row);
         }
         if (e.target.name && (e.target.name.includes('[quantity]') || e.target.name.includes('[unit_cost]'))) {
-            updateLineTotal(row);
+            syncRowCalculatedFields(row);
         }
     });
     
@@ -194,7 +371,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const row = e.target.closest('.item-row');
         if (!row) return;
         if (e.target.name && (e.target.name.includes('[quantity]') || e.target.name.includes('[unit_cost]'))) {
-            updateLineTotal(row);
+            syncRowCalculatedFields(row);
         }
     });
 });

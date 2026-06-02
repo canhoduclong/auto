@@ -26,6 +26,23 @@ class Supplier extends Model
         return $this->hasMany(InventoryDocument::class);
     }
 
+    public function supplierProducts()
+    {
+        return $this->hasMany(SupplierProduct::class);
+    }
+
+    public function products()
+    {
+        return $this->belongsToMany(Product::class, 'supplier_products')
+            ->withPivot(['active', 'note'])
+            ->withTimestamps();
+    }
+
+    public function prices()
+    {
+        return $this->hasMany(SupplierProductPrice::class);
+    }
+
     public function scopeActive($query)
     {
         return $query->where('is_active', true);

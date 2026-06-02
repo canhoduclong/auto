@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Api\Mobile;
 use App\Models\MobileLocationPing;
 use App\Models\Order;
 use App\Models\OrderHistory;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class ShipperApiController extends BaseApiController
@@ -55,6 +57,35 @@ class ShipperApiController extends BaseApiController
             ->paginate(20);
 
         return $this->paginated($orders);
+    }
+
+    public function deliverySchedules(Request $request): JsonResponse
+    {
+        $this->ensureShipperRole($request);
+        $userId = (int) $request->user()->id;
+        $selectedDate = $this->scheduleDate($request);
+
+        $orders = $this->deliveryScheduleOrdersForShipper($userId, $selectedDate)->get();
+        $snapshot = $this->buildDeliveryScheduleSnapshot($orders);
+        $snapshotHash = $this->hashDeliveryScheduleSnapshot($snapshot);
+        $latestHistory = $this->latestDeliveryScheduleHistoryForShipperOnDate($userId, $selectedDate);
+
+        return $this->ok([
+            'date' => $selectedDate,
+            'status' => $this->deliveryScheduleStatus($latestHistory, $snapshotHash),
+            'orders_count' => $orders->count(),
+            'orders' => $orders,
+        ]);
+    }
+
+    public function confirmDeliverySchedule(Request $request): JsonResponse
+    {
+        return $this->recordDeliveryScheduleDecision($request, 'schedule_confirmed', 'Da xac nhan lo trinh giao hang');
+    }
+
+    public function rejectDeliverySchedule(Request $request): JsonResponse
+    {
+        return $this->recordDeliveryScheduleDecision($request, 'schedule_rejected', 'Da tu choi lo trinh giao hang');
     }
 
     public function acceptOrder(Request $request, Order $order): JsonResponse
@@ -244,6 +275,134 @@ class ShipperApiController extends BaseApiController
         if (!$user || !($user->hasRole('shipper') || $user->hasRole('ship') || $user->hasRole('manager_shipper') || $user->hasRole('admin'))) {
             abort(403, 'Role khong duoc phep truy cap API shipper');
         }
+    }
+
+    private function recordDeliveryScheduleDecision(Request $request, string $historyAction, string $successMessage): JsonResponse
+    {
+        $this->ensureShipperRole($request);
+        $user = $request->user();
+        $userId = (int) $user->id;
+        $selectedDate = $this->scheduleDate($request);
+
+        $validated = $request->validate([
+            'order_ids' => ['required', 'array', 'min:1'],
+            'order_ids.*' => ['integer', 'exists:orders,id'],
+        ]);
+
+        $requestedOrderIds = array_map('intval', $validated['order_ids']);
+        $orders = $this->deliveryScheduleOrdersForShipper($userId, $selectedDate)
+            ->whereIn('id', $requestedOrderIds)
+            ->get();
+
+        if ($orders->count() !== count(array_unique($requestedOrderIds))) {
+            return $this->fail('Co don khong thuoc lo trinh cua ban.', 403);
+        }
+
+        $snapshot = $this->buildDeliveryScheduleSnapshot($orders);
+        $snapshotHash = $this->hashDeliveryScheduleSnapshot($snapshot);
+
+        DB::transaction(function () use ($orders, $user, $userId, $historyAction, $snapshotHash, $snapshot): void {
+            foreach ($orders as $order) {
+                OrderHistory::query()->create([
+                    'order_id' => $order->id,
+                    'action' => $historyAction,
+                    'user_id' => $userId,
+                    'role' => 'shipper',
+                    'status_before' => $order->status,
+                    'status_after' => $order->status,
+                    'note' => 'Shipper ' . $user->name . ' cap nhat trang thai lo trinh giao hang qua mobile app.',
+                    'schedule_snapshot_hash' => $snapshotHash,
+                    'schedule_snapshot' => json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                ]);
+            }
+        });
+
+        return $this->ok(null, $successMessage);
+    }
+
+    private function scheduleDate(Request $request): string
+    {
+        return $request->filled('date')
+            ? Carbon::parse($request->input('date'))->toDateString()
+            : Carbon::today()->toDateString();
+    }
+
+    private function deliveryScheduleOrdersForShipper(int $shipperId, string $selectedDate)
+    {
+        return Order::query()
+            ->with(['customer:id,name,phone,address', 'items.variant'])
+            ->where('shipper_id', $shipperId)
+            ->whereIn('status', $this->assignmentStatuses())
+            ->where(function ($query) use ($selectedDate) {
+                $query->whereDate('created_at', $selectedDate)
+                    ->orWhereDate('updated_at', $selectedDate);
+            })
+            ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
+            ->orderBy('daily_sequence', 'asc')
+            ->orderBy('delivery_time', 'asc')
+            ->orderBy('created_at', 'asc')
+            ->orderBy('id', 'asc');
+    }
+
+    private function assignmentStatuses(): array
+    {
+        return [
+            Order::STATUS_APPROVED,
+            Order::STATUS_READY_TO_PACK,
+            Order::STATUS_PACKING,
+            Order::STATUS_READY_TO_SHIP,
+        ];
+    }
+
+    private function buildDeliveryScheduleSnapshot($orders): array
+    {
+        return $orders->map(function ($order) {
+            return [
+                'order_id' => (int) $order->id,
+                'daily_sequence' => $order->daily_sequence !== null ? (int) $order->daily_sequence : null,
+                'delivery_time' => $order->delivery_time,
+                'updated_at' => optional($order->updated_at)->toDateTimeString(),
+            ];
+        })->values()->all();
+    }
+
+    private function hashDeliveryScheduleSnapshot(array $snapshot): string
+    {
+        return hash('sha256', json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+    }
+
+    private function latestDeliveryScheduleHistoryForShipperOnDate(int $shipperId, string $selectedDate): ?OrderHistory
+    {
+        return OrderHistory::query()
+            ->join('orders', 'orders.id', '=', 'order_histories.order_id')
+            ->where('orders.shipper_id', $shipperId)
+            ->whereDate('order_histories.created_at', $selectedDate)
+            ->whereIn('order_histories.action', ['schedule_created', 'schedule_confirmed', 'schedule_rejected'])
+            ->orderByDesc('order_histories.created_at')
+            ->orderByDesc('order_histories.id')
+            ->select('order_histories.*')
+            ->first();
+    }
+
+    private function deliveryScheduleStatus(?OrderHistory $latestHistory, string $currentSnapshotHash): string
+    {
+        if (!$latestHistory) {
+            return 'none';
+        }
+
+        if ($latestHistory->action === 'schedule_confirmed' && $latestHistory->schedule_snapshot_hash === $currentSnapshotHash) {
+            return 'confirmed';
+        }
+
+        if ($latestHistory->action === 'schedule_rejected' && $latestHistory->schedule_snapshot_hash === $currentSnapshotHash) {
+            return 'rejected';
+        }
+
+        if ($latestHistory->action === 'schedule_created') {
+            return 'waiting';
+        }
+
+        return 'changed';
     }
 
     private function constrainConfirmedDeliverySchedule($query): void

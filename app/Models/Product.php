@@ -108,6 +108,23 @@ class Product extends Model
     {
         return $this->hasMany(ProductVariant::class);
     }
+
+    public function supplierProducts()
+    {
+        return $this->hasMany(SupplierProduct::class);
+    }
+
+    public function suppliers()
+    {
+        return $this->belongsToMany(Supplier::class, 'supplier_products')
+            ->withPivot(['active', 'note'])
+            ->withTimestamps();
+    }
+
+    public function supplierPrices()
+    {
+        return $this->hasMany(SupplierProductPrice::class);
+    }
     
     // lấy biến thể mặc định (nếu chỉ có 1 biến thể)
     public function defaultVariant()

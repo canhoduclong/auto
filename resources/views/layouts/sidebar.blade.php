@@ -271,6 +271,12 @@
 								<span>Nhà cung cấp</span>
 							</a>
 						</li>
+						<li class="nav-item">
+							<a href="{{ route('warehouse.supplier-prices.index') }}" class="nav-link{{ request()->routeIs('warehouse.supplier-prices.*') ? ' active' : '' }}">
+								<i class="ph-currency-circle-dollar"></i>
+								<span>Bảng giá thu mua</span>
+							</a>
+						</li>
 
 						<!-- Kho hàng -->
 						<li class="nav-item-header">

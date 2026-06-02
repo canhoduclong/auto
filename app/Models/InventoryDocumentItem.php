@@ -14,6 +14,7 @@ class InventoryDocumentItem extends Model
         'product_variant_id',
         'quantity',
         'unit_cost',
+        'source_price_id',
     ];
 
     public function document()
@@ -24,5 +25,10 @@ class InventoryDocumentItem extends Model
     public function productVariant()
     {
         return $this->belongsTo(ProductVariant::class);
+    }
+
+    public function sourcePrice()
+    {
+        return $this->belongsTo(SupplierProductPrice::class, 'source_price_id');
     }
 }
