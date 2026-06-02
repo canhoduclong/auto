@@ -273,6 +273,12 @@ class AccountingDashboardController extends Controller
             ->orderByDesc('delivered_at')
             ->paginate(25)
             ->appends($request->query());
+        $orders->getCollection()->transform(function (Order $order) {
+            $order->setAttribute('reconciliation_paid_amount', $this->effectivePaidForOrder($order));
+            $order->setAttribute('reconciliation_due_amount', $this->effectiveDueForOrder($order));
+
+            return $order;
+        });
 
         $allForStats = (clone $baseQuery)->get();
         $confirmedCount = $allForStats->filter(fn (Order $order) => $order->accountingReconciliation?->status === AccountingReconciliation::STATUS_CONFIRMED)->count();
@@ -283,8 +289,8 @@ class AccountingDashboardController extends Controller
             'total_items' => (float) $allForStats->sum('total_item_quantity'),
             'total_goods' => (float) $allForStats->sum(fn (Order $order) => (float) ($order->subtotal_amount ?? $order->total ?? 0)),
             'total_revenue' => (float) $allForStats->sum(fn (Order $order) => $this->recognizedRevenueForOrder($order)),
-            'total_paid' => (float) $allForStats->sum('amount_paid'),
-            'total_due' => (float) $allForStats->sum('amount_due'),
+            'total_paid' => (float) $allForStats->sum(fn (Order $order) => $this->effectivePaidForOrder($order)),
+            'total_due' => (float) $allForStats->sum(fn (Order $order) => $this->effectiveDueForOrder($order)),
             'total_shipping_fee' => (float) $allForStats->sum('shipping_fee'),
             'return_orders' => $returnOrdersCount,
             'confirmed' => $confirmedCount,
@@ -1164,6 +1170,8 @@ class AccountingDashboardController extends Controller
 
         $returnAmount = $this->returnAmountForOrder($order);
         $recognizedRevenue = $this->recognizedRevenueForOrder($order);
+        $effectivePaid = $this->effectivePaidForOrder($order);
+        $effectiveDue = $this->effectiveDueForOrder($order);
         [$canConfirm, $blockReason] = $this->canAccountingConfirmOrder($order);
 
         $approvedHistory = $order->histories
@@ -1193,8 +1201,10 @@ class AccountingDashboardController extends Controller
                 'total' => (float) $order->total,
                 'subtotal_amount' => (float) ($order->subtotal_amount ?? $order->total ?? 0),
                 'total_discount' => (float) ($order->total_discount ?? 0),
-                'amount_paid' => (float) ($order->amount_paid ?? 0),
-                'amount_due' => (float) ($order->amount_due ?? 0),
+                'amount_paid' => $effectivePaid,
+                'amount_due' => $effectiveDue,
+                'accounting_amount_paid' => (float) ($order->amount_paid ?? 0),
+                'shipper_collected_amount' => (float) ($order->collected_amount ?? 0),
                 'shipping_fee' => (float) ($order->shipping_fee ?? 0),
                 'return_amount' => $returnAmount,
                 'recognized_revenue' => $recognizedRevenue,
@@ -1211,10 +1221,14 @@ class AccountingDashboardController extends Controller
                 'shipper_note' => $order->shipper_note,
             ],
             'items' => $order->items->map(fn ($item) => [
+                'product_name' => $item->product?->name ?? 'San pham',
+                'variant_name' => $item->variant?->name ?? '-',
                 'name' => $item->variant?->name ?? $item->product?->name ?? 'San pham',
                 'sku' => $item->variant?->sku,
                 'size' => $item->variant?->size,
                 'quantity' => (float) ($item->quantity ?? 0),
+                'total_label' => $item->display_total_label,
+                'weight' => (float) ($item->actual_weight ?? $item->packed_weight ?? $item->total_weight ?? 0),
                 'unit_price' => (float) ($item->price ?? $item->unit_price ?? 0),
                 'line_total' => (float) ($item->subtotal ?? $item->total ?? ((float) ($item->quantity ?? 0) * (float) ($item->price ?? $item->unit_price ?? 0))),
             ])->values(),
@@ -1239,8 +1253,10 @@ class AccountingDashboardController extends Controller
             ],
             'payment' => [
                 'total_due' => (float) $order->total,
-                'paid_amount' => (float) ($order->amount_paid ?? 0),
-                'amount_due' => (float) ($order->amount_due ?? 0),
+                'paid_amount' => $effectivePaid,
+                'accounting_paid_amount' => (float) ($order->amount_paid ?? 0),
+                'shipper_collected_amount' => (float) ($order->collected_amount ?? 0),
+                'amount_due' => $effectiveDue,
                 'method' => $order->payment_method,
                 'paid_at' => optional($paymentTransaction?->created_at)->format('d/m/Y H:i'),
                 'confirmed_by' => $paymentTransaction?->approver?->name ?? $paymentTransaction?->submitter?->name ?? '-',
@@ -1300,7 +1316,7 @@ class AccountingDashboardController extends Controller
                     'sale_id' => $order->user_id,
                     'shipper_id' => $order->shipper_id,
                     'total_amount' => (float) ($order->total ?? 0),
-                    'paid_amount' => (float) ($order->amount_paid ?? 0),
+                    'paid_amount' => $this->effectivePaidForOrder($order),
                     'shipping_fee' => (float) ($order->shipping_fee ?? 0),
                     'return_amount' => $returnAmount,
                     'recognized_revenue' => $recognizedRevenue,
@@ -1577,7 +1593,7 @@ class AccountingDashboardController extends Controller
             return [false, 'Don chua giao thanh cong.'];
         }
 
-        if ((float) ($order->amount_due ?? 0) > 0 || !in_array((string) $order->payment_status, ['paid'], true)) {
+        if ($this->effectiveDueForOrder($order) > 0) {
             return [false, 'Thanh toan cua don chua hop le hoac con thieu.'];
         }
 
@@ -1602,9 +1618,22 @@ class AccountingDashboardController extends Controller
             ->sum(fn ($return) => (float) ($return->refund_amount ?? 0));
     }
 
+    private function effectivePaidForOrder(Order $order): float
+    {
+        $accountingPaid = (float) ($order->amount_paid ?? 0);
+        $shipperCollected = (float) ($order->collected_amount ?? 0);
+
+        return max($accountingPaid, $shipperCollected);
+    }
+
+    private function effectiveDueForOrder(Order $order): float
+    {
+        return max(0, (float) ($order->total ?? 0) - $this->effectivePaidForOrder($order));
+    }
+
     private function recognizedRevenueForOrder(Order $order): float
     {
-        $paidAmount = (float) ($order->amount_paid ?? 0);
+        $paidAmount = $this->effectivePaidForOrder($order);
         $orderTotal = (float) ($order->total ?? 0);
         $baseAmount = min($paidAmount, $orderTotal);
 

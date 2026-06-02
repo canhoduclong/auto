@@ -85,6 +85,38 @@
     }
     .recon-kv .k { color: #64748b; }
     .recon-kv .v { font-weight: 650; color: #0f172a; }
+    .recon-info-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 10px;
+    }
+    .recon-info-card {
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        background: #f8fafc;
+        padding: 10px 12px;
+    }
+    .recon-info-card .title {
+        font-size: .78rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+        color: #475569;
+        margin-bottom: 8px;
+    }
+    .recon-mini-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        font-size: .86rem;
+        padding: 2px 0;
+    }
+    .recon-mini-row span:first-child { color: #64748b; }
+    .recon-mini-row span:last-child {
+        color: #0f172a;
+        font-weight: 700;
+        text-align: right;
+    }
     @media (max-width: 992px) {
         .recon-grid { grid-template-columns: 1fr; }
     }
@@ -182,6 +214,7 @@
                             <th>Phí ship</th>
                             <th>Kế toán</th>
                             <th>Ngày giao</th>
+                            <th></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -189,13 +222,15 @@
                         @php
                             $recon = $order->accountingReconciliation;
                             $isConfirmed = $recon?->status === \App\Models\AccountingReconciliation::STATUS_CONFIRMED;
+                            $paidAmount = (float) ($order->reconciliation_paid_amount ?? $order->amount_paid ?? 0);
+                            $dueAmount = (float) ($order->reconciliation_due_amount ?? $order->amount_due ?? 0);
                         @endphp
                         <tr class="recon-order-row" data-order-id="{{ $order->id }}" data-detail-url="{{ route('accounting.reconciliation.detail', $order) }}">
                             <td class="fw-bold">{{ $order->code }}</td>
                             <td>{{ $order->customer?->name ?? '-' }}</td>
                             <td><span class="badge text-bg-light border">{{ $order->status }}</span></td>
-                            <td class="text-success fw-semibold">{{ $money($order->amount_paid) }}</td>
-                            <td class="text-danger fw-semibold">{{ $money($order->amount_due) }}</td>
+                            <td class="text-success fw-semibold">{{ $money($paidAmount) }}</td>
+                            <td class="{{ $dueAmount > 0 ? 'text-danger' : 'text-success' }} fw-semibold">{{ $money($dueAmount) }}</td>
                             <td>{{ $order->user?->name ?? '-' }}</td>
                             <td>{{ $order->shipper?->name ?? '-' }}</td>
                             <td>{{ $money($order->shipping_fee) }}</td>
@@ -205,9 +240,14 @@
                                 </span>
                             </td>
                             <td>{{ optional($order->delivered_at)->format('d/m/Y H:i') ?: '-' }}</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary js-recon-toggle" type="button">
+                                    Xem chi tiết
+                                </button>
+                            </td>
                         </tr>
                     @empty
-                        <tr><td colspan="10" class="text-center text-muted py-4">Không có đơn giao hàng cần đối soát.</td></tr>
+                        <tr><td colspan="11" class="text-center text-muted py-4">Không có đơn giao hàng cần đối soát.</td></tr>
                     @endforelse
                     </tbody>
                 </table>
@@ -229,9 +269,17 @@ document.addEventListener('DOMContentLoaded', function () {
     const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     const money = (value) => new Intl.NumberFormat('vi-VN').format(Number(value || 0)) + 'đ';
     const esc = (value) => String(value ?? '-').replace(/[&<>"']/g, (ch) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));
+    let activeOrderId = null;
 
     function section(title, rows) {
         return `<div class="recon-detail-section"><div class="recon-detail-title">${esc(title)}</div><div class="recon-kv">${rows.map(([k, v]) => `<div class="k">${esc(k)}</div><div class="v">${v}</div>`).join('')}</div></div>`;
+    }
+
+    function infoCard(title, rows) {
+        return `<div class="recon-info-card">
+            <div class="title">${esc(title)}</div>
+            ${rows.map(([k, v]) => `<div class="recon-mini-row"><span>${esc(k)}</span><span>${v}</span></div>`).join('')}
+        </div>`;
     }
 
     function renderDetail(data, row) {
@@ -239,9 +287,14 @@ document.addEventListener('DOMContentLoaded', function () {
         const recon = data.reconciliation || {};
         const items = (data.items || []).map(item => `
             <tr>
-                <td>${esc(item.name)} ${item.sku ? `<span class="text-muted small">(${esc(item.sku)})</span>` : ''}</td>
+                <td>
+                    <div class="fw-semibold">${esc(item.product_name || item.name)}</div>
+                    ${item.variant_name ? `<div class="small text-muted">${esc(item.variant_name)} ${item.sku ? `(${esc(item.sku)})` : ''}</div>` : ''}
+                </td>
                 <td>${esc(item.size || '-')}</td>
                 <td class="text-end">${Number(item.quantity || 0).toLocaleString('vi-VN')}</td>
+                <td class="text-end">${esc(item.total_label || '-')}</td>
+                <td class="text-end">${Number(item.weight || 0) > 0 ? Number(item.weight || 0).toLocaleString('vi-VN') + ' kg' : '-'}</td>
                 <td class="text-end">${money(item.unit_price)}</td>
                 <td class="text-end fw-semibold">${money(item.line_total)}</td>
             </tr>
@@ -284,38 +337,62 @@ document.addEventListener('DOMContentLoaded', function () {
                         <div class="recon-detail-title">Danh sách sản phẩm</div>
                         <div class="table-responsive">
                             <table class="table table-sm">
-                                <thead><tr><th>Sản phẩm</th><th>Size</th><th class="text-end">SL</th><th class="text-end">Đơn giá</th><th class="text-end">Thành tiền</th></tr></thead>
-                                <tbody>${items || '<tr><td colspan="5" class="text-muted text-center">Không có sản phẩm.</td></tr>'}</tbody>
+                                <thead>
+                                    <tr>
+                                        <th>Sản phẩm</th>
+                                        <th>Size</th>
+                                        <th class="text-end">SL</th>
+                                        <th class="text-end">Tổng</th>
+                                        <th class="text-end">Khối lượng</th>
+                                        <th class="text-end">Đơn giá</th>
+                                        <th class="text-end">Thành tiền</th>
+                                    </tr>
+                                </thead>
+                                <tbody>${items || '<tr><td colspan="7" class="text-muted text-center">Không có sản phẩm.</td></tr>'}</tbody>
                             </table>
                         </div>
                     </div>
-                    ${section('Thông tin duyệt đơn', [
-                        ['Người tạo/Sale', esc(data.approval?.created_by)],
-                        ['Người duyệt', esc(data.approval?.approved_by)],
-                        ['Thời gian duyệt', esc(data.approval?.approved_at)],
-                        ['Ghi chú duyệt', esc(data.approval?.note)],
-                    ])}
-                    ${section('Thông tin đóng gói', [
-                        ['Người đóng gói', esc(data.packing?.packed_by)],
-                        ['Thời gian đóng gói', esc(data.packing?.packed_at)],
-                        ['Kho xuất hàng', esc(data.packing?.warehouse)],
-                        ['Ghi chú đóng gói', esc(data.packing?.note)],
-                    ])}
-                    ${section('Thông tin giao hàng', [
-                        ['Shipper', esc(data.delivery?.shipper)],
-                        ['Trạng thái', esc(data.delivery?.status)],
-                        ['Thời gian giao', esc(data.delivery?.delivered_at)],
-                        ['Phí ship', money(data.delivery?.shipping_fee)],
-                        ['Ghi chú giao', esc(data.delivery?.note)],
-                    ])}
-                    ${section('Thông tin thanh toán', [
-                        ['Tổng phải thu', money(data.payment?.total_due)],
-                        ['Đã thu', money(data.payment?.paid_amount)],
-                        ['Còn thiếu', money(data.payment?.amount_due)],
-                        ['Phương thức', esc(data.payment?.method)],
-                        ['Thời gian thanh toán', esc(data.payment?.paid_at)],
-                        ['Người xác nhận', esc(data.payment?.confirmed_by)],
-                    ])}
+                    <div class="recon-detail-section">
+                        <div class="recon-detail-title">Luồng xử lý</div>
+                        <div class="recon-info-grid">
+                            ${infoCard('Duyệt đơn', [
+                                ['Người tạo/Sale', esc(data.approval?.created_by)],
+                                ['Người duyệt', esc(data.approval?.approved_by)],
+                                ['Thời gian', esc(data.approval?.approved_at)],
+                                ['Ghi chú', esc(data.approval?.note)],
+                            ])}
+                            ${infoCard('Đóng gói', [
+                                ['Người đóng gói', esc(data.packing?.packed_by)],
+                                ['Thời gian', esc(data.packing?.packed_at)],
+                                ['Kho xuất', esc(data.packing?.warehouse)],
+                                ['Ghi chú', esc(data.packing?.note)],
+                            ])}
+                            ${infoCard('Giao hàng', [
+                                ['Shipper', esc(data.delivery?.shipper)],
+                                ['Trạng thái', esc(data.delivery?.status)],
+                                ['Thời gian giao', esc(data.delivery?.delivered_at)],
+                                ['Phí ship', money(data.delivery?.shipping_fee)],
+                                ['Ghi chú', esc(data.delivery?.note)],
+                            ])}
+                        </div>
+                    </div>
+                    <div class="recon-detail-section">
+                        <div class="recon-detail-title">Thông tin thanh toán</div>
+                        <div class="recon-info-grid">
+                            ${infoCard('Đối soát thu tiền', [
+                                ['Tổng phải thu', money(data.payment?.total_due)],
+                                ['Kế toán ghi nhận', money(data.payment?.accounting_paid_amount)],
+                                ['Shipper đã thu', money(data.payment?.shipper_collected_amount)],
+                                ['Đã thu hiệu lực', `<span class="text-success">${money(data.payment?.paid_amount)}</span>`],
+                                ['Còn thiếu', `<span class="${Number(data.payment?.amount_due || 0) > 0 ? 'text-danger' : 'text-success'}">${money(data.payment?.amount_due)}</span>`],
+                            ])}
+                            ${infoCard('Xác nhận thanh toán', [
+                                ['Phương thức', esc(data.payment?.method)],
+                                ['Thời gian', esc(data.payment?.paid_at)],
+                                ['Người xác nhận', esc(data.payment?.confirmed_by)],
+                            ])}
+                        </div>
+                    </div>
                     <div class="recon-detail-section"><div class="recon-detail-title">Thông tin đơn trả / hoàn hàng</div>${returns}</div>
                     <div class="recon-detail-section"><div class="recon-detail-title">Kế toán xác nhận</div>${confirmButton}</div>
                 </div>
@@ -345,9 +422,46 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    async function loadDetail(row) {
+    function resetToggleButtons() {
+        document.querySelectorAll('.js-recon-toggle').forEach(button => {
+            button.textContent = 'Xem chi tiết';
+            button.classList.remove('btn-primary');
+            button.classList.add('btn-outline-primary');
+        });
+    }
+
+    function collapseDetail() {
         document.querySelectorAll('.recon-order-row').forEach(item => item.classList.remove('active'));
+        resetToggleButtons();
+        activeOrderId = null;
+        detailBox.innerHTML = '<div class="alert alert-info mb-0">Chọn một đơn hàng để xem chi tiết và xác nhận kế toán.</div>';
+    }
+
+    function markOpen(row) {
+        document.querySelectorAll('.recon-order-row').forEach(item => item.classList.remove('active'));
+        resetToggleButtons();
         row.classList.add('active');
+        activeOrderId = row.dataset.orderId;
+
+        const button = row.querySelector('.js-recon-toggle');
+        if (button) {
+            button.textContent = 'Thu gọn';
+            button.classList.remove('btn-outline-primary');
+            button.classList.add('btn-primary');
+        }
+    }
+
+    function toggleDetail(row) {
+        if (activeOrderId === row.dataset.orderId) {
+            collapseDetail();
+            return;
+        }
+
+        loadDetail(row);
+    }
+
+    async function loadDetail(row) {
+        markOpen(row);
         detailBox.innerHTML = '<div class="text-center text-muted py-4">Đang tải chi tiết...</div>';
         try {
             const response = await fetch(row.dataset.detailUrl, {headers: {'Accept': 'application/json'}});
@@ -361,7 +475,17 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.querySelectorAll('.recon-order-row').forEach(row => {
         row.dataset.confirmUrl = row.dataset.detailUrl.replace('/detail', '/confirm');
-        row.addEventListener('click', () => loadDetail(row));
+        row.addEventListener('click', (event) => {
+            if (event.target.closest('.js-recon-toggle')) {
+                return;
+            }
+
+            toggleDetail(row);
+        });
+        row.querySelector('.js-recon-toggle')?.addEventListener('click', (event) => {
+            event.stopPropagation();
+            toggleDetail(row);
+        });
     });
 });
 </script>

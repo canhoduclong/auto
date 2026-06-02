@@ -42,7 +42,7 @@ class ShipperApiController extends BaseApiController
         $userId = (int) $request->user()->id;
 
         $orders = Order::query()
-            ->with(['customer:id,name,phone,address'])
+            ->with(['customer:id,name,phone,address', 'items.product:id,name,unit_label', 'items.variant:id,name,sku,size,product_id'])
             ->where('status', Order::STATUS_READY_TO_SHIP)
             ->where('shipper_id', $userId)
             ->whereNotIn('status', ['cancelled', 'canceled'])
@@ -134,7 +134,7 @@ class ShipperApiController extends BaseApiController
         $userId = (int) $request->user()->id;
 
         $orders = Order::query()
-            ->with(['customer:id,name,phone,address'])
+            ->with(['customer:id,name,phone,address', 'items.product:id,name,unit_label', 'items.variant:id,name,sku,size,product_id'])
             ->where('shipper_id', $userId)
             ->whereIn('status', [Order::STATUS_DELIVERING, 'delivered', Order::STATUS_RETURNING, 'completed'])
             ->latest('updated_at')
@@ -149,7 +149,7 @@ class ShipperApiController extends BaseApiController
         $userId = (int) $request->user()->id;
 
         $orders = Order::query()
-            ->with(['customer:id,name,phone,address'])
+            ->with(['customer:id,name,phone,address', 'items.product:id,name,unit_label', 'items.variant:id,name,sku,size,product_id'])
             ->where('shipper_id', $userId)
             ->whereIn('status', ['delivered', 'completed', Order::STATUS_RETURNING, Order::STATUS_RETURNED_COMPLETED])
             ->latest('updated_at')
@@ -345,7 +345,7 @@ class ShipperApiController extends BaseApiController
     private function deliveryScheduleOrdersForShipper(int $shipperId, string $selectedDate)
     {
         return Order::query()
-            ->with(['customer:id,name,phone,address', 'items.variant'])
+            ->with(['customer:id,name,phone,address', 'items.product:id,name,unit_label', 'items.variant:id,name,sku,size,product_id'])
             ->where('shipper_id', $shipperId)
             ->whereIn('status', $this->assignmentStatuses())
             ->where(function ($query) use ($selectedDate) {
