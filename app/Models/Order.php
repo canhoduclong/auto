@@ -110,6 +110,7 @@ class Order extends Model
     public function user() { return $this->belongsTo(User::class); }
     public function parentOrder() { return $this->belongsTo(Order::class, 'parent_order_id'); }
     public function returnOrders() { return $this->hasMany(Order::class, 'parent_order_id'); }
+    public function returnRecords() { return $this->hasMany(OrderReturn::class); }
     public function shipper() { return $this->belongsTo(User::class, 'shipper_id'); }
     public function warehouse() { return $this->belongsTo(Warehouse::class); }
     public function returnWarehouse() { return $this->belongsTo(Warehouse::class, 'return_warehouse_id'); }
@@ -117,6 +118,7 @@ class Order extends Model
     public function schedule() { return $this->hasOne(OrderSchedule::class, 'generated_order_id'); }
     public function adjustments() { return $this->hasMany(OrderAdjustment::class); }
     public function warehouseTransfers() { return $this->hasMany(WarehouseTransfer::class); }
+    public function accountingReconciliation() { return $this->hasOne(AccountingReconciliation::class); }
 
     public function getPaymentStatusTextAttribute()
     {

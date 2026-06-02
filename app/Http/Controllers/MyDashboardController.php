@@ -324,12 +324,15 @@ class MyDashboardController extends Controller
 
         $memberIds = $this->resolveScopedUserIds($user);
 
-        $completedStatuses = ['completed', Order::STATUS_COMPLETED, Order::STATUS_DELIVERED];
         $ordersBaseQuery = Order::query()->whereIn('user_id', $memberIds);
 
-        $totalRevenue = (float) (clone $ordersBaseQuery)
-            ->whereIn('status', $completedStatuses)
-            ->sum('total');
+        $totalRevenue = 0.0;
+        if (Schema::hasTable('accounting_reconciliations')) {
+            $totalRevenue = (float) DB::table('accounting_reconciliations')
+                ->whereIn('sale_id', $memberIds)
+                ->where('status', 'confirmed')
+                ->sum('recognized_revenue');
+        }
 
         $ordersThisMonth = (int) (clone $ordersBaseQuery)
             ->whereBetween('created_at', [$monthStart, $now])
@@ -493,15 +496,18 @@ class MyDashboardController extends Controller
 
     private function buildSalesChart(array $memberIds, Carbon $from, Carbon $to): array
     {
-        $rows = Order::query()
-            ->selectRaw('DATE(created_at) as day, COALESCE(SUM(total), 0) as total_amount')
-            ->whereIn('user_id', $memberIds)
-            ->whereIn('status', ['completed', Order::STATUS_COMPLETED, Order::STATUS_DELIVERED])
-            ->whereBetween('created_at', [$from, $to])
-            ->groupBy('day')
-            ->orderBy('day')
-            ->get()
-            ->keyBy('day');
+        $rows = collect();
+        if (Schema::hasTable('accounting_reconciliations')) {
+            $rows = DB::table('accounting_reconciliations')
+                ->selectRaw('DATE(confirmed_at) as day, COALESCE(SUM(recognized_revenue), 0) as total_amount')
+                ->whereIn('sale_id', $memberIds)
+                ->where('status', 'confirmed')
+                ->whereBetween('confirmed_at', [$from, $to])
+                ->groupBy('day')
+                ->orderBy('day')
+                ->get()
+                ->keyBy('day');
+        }
 
         $labels = [];
         $values = [];

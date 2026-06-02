@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Company;
 use App\Models\Account;
 use App\Models\AccountBalanceRefreshLog;
+use App\Models\AccountingReconciliation;
 use App\Models\Customer;
 use App\Models\Inventory;
 use App\Models\InventoryDocument;
@@ -15,6 +16,7 @@ use App\Models\Transaction;
 use App\Models\TransactionCategory;
 use App\Models\User;
 use App\Models\Warehouse;
+use App\Notifications\AccountingOrderRevenueConfirmed;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -240,25 +242,67 @@ class AccountingDashboardController extends Controller
 
     public function reconciliation(Request $request)
     {
-        [$from, $to, $rangeLabel] = $this->resolveDateRange($request);
+        $selectedDate = (string) $request->input('date', now()->toDateString());
+        $targetDate = Carbon::parse($selectedDate)->toDateString();
+        $saleId = (int) $request->input('sale_id', 0);
+        $shipperId = (int) $request->input('shipper_id', 0);
+        $status = trim((string) $request->input('status', ''));
+        $paymentStatus = trim((string) $request->input('payment_status', ''));
+        $accountingStatus = trim((string) $request->input('accounting_status', ''));
 
-        $orders = Order::query()
-            ->with(['customer:id,name', 'warehouse:id,name'])
-            ->whereBetween('created_at', [$from, $to])
-            ->latest('created_at')
+        $baseQuery = Order::query()
+            ->with([
+                'customer:id,name,phone,address',
+                'user:id,name',
+                'shipper:id,name',
+                'returnRecords:id,order_id,status,refund_amount',
+                'accountingReconciliation.confirmer:id,name',
+            ])
+            ->withSum('items as total_item_quantity', 'quantity')
+            ->withSum('returnRecords as return_amount_sum', 'refund_amount')
+            ->whereDate('delivered_at', $targetDate)
+            ->when($saleId > 0, fn ($q) => $q->where('user_id', $saleId))
+            ->when($shipperId > 0, fn ($q) => $q->where('shipper_id', $shipperId))
+            ->when($status !== '', fn ($q) => $q->where('status', $status))
+            ->when($paymentStatus !== '', fn ($q) => $q->where('payment_status', $paymentStatus))
+            ->when($accountingStatus === 'confirmed', fn ($q) => $q->whereHas('accountingReconciliation', fn ($r) => $r->where('status', AccountingReconciliation::STATUS_CONFIRMED)))
+            ->when($accountingStatus === 'pending', fn ($q) => $q->whereDoesntHave('accountingReconciliation', fn ($r) => $r->where('status', AccountingReconciliation::STATUS_CONFIRMED)));
+
+        $orders = (clone $baseQuery)
+            ->orderByRaw('CASE WHEN delivered_at IS NULL THEN 1 ELSE 0 END')
+            ->orderByDesc('delivered_at')
             ->paginate(25)
             ->appends($request->query());
 
+        $allForStats = (clone $baseQuery)->get();
+        $confirmedCount = $allForStats->filter(fn (Order $order) => $order->accountingReconciliation?->status === AccountingReconciliation::STATUS_CONFIRMED)->count();
+        $returnOrdersCount = $allForStats->filter(fn (Order $order) => (float) ($order->return_amount_sum ?? 0) > 0 || (bool) ($order->has_return_order ?? false))->count();
+
         $stats = [
-            'paid' => Order::query()->whereBetween('created_at', [$from, $to])->where('payment_status', 'paid')->count(),
-            'unpaid' => Schema::hasColumn('orders', 'amount_due')
-                ? Order::query()->whereBetween('created_at', [$from, $to])->where('amount_due', '>', 0)->count()
-                : Order::query()->whereBetween('created_at', [$from, $to])->where('payment_status', '!=', 'paid')->count(),
-            'partial' => Order::query()->whereBetween('created_at', [$from, $to])->where('payment_status', 'partial')->count(),
-            'verify' => Order::query()->whereBetween('created_at', [$from, $to])->whereNull('payment_status')->count(),
+            'total_orders' => $allForStats->count(),
+            'total_items' => (float) $allForStats->sum('total_item_quantity'),
+            'total_goods' => (float) $allForStats->sum(fn (Order $order) => (float) ($order->subtotal_amount ?? $order->total ?? 0)),
+            'total_revenue' => (float) $allForStats->sum(fn (Order $order) => $this->recognizedRevenueForOrder($order)),
+            'total_paid' => (float) $allForStats->sum('amount_paid'),
+            'total_due' => (float) $allForStats->sum('amount_due'),
+            'total_shipping_fee' => (float) $allForStats->sum('shipping_fee'),
+            'return_orders' => $returnOrdersCount,
+            'confirmed' => $confirmedCount,
+            'pending' => max(0, $allForStats->count() - $confirmedCount),
         ];
 
-        return view('accounting.reconciliation', compact('orders', 'stats', 'from', 'to', 'rangeLabel'));
+        return view('accounting.reconciliation', [
+            'orders' => $orders,
+            'stats' => $stats,
+            'selectedDate' => $targetDate,
+            'sales' => User::query()->whereHas('roles', fn ($q) => $q->whereIn('name', ['sale', 'leader_sale', 'sale_manager', 'manager_sale']))->orderBy('name')->get(['id', 'name']),
+            'shippers' => User::query()->whereHas('roles', fn ($q) => $q->whereIn('name', ['shipper', 'ship']))->orderBy('name')->get(['id', 'name']),
+            'saleId' => $saleId,
+            'shipperId' => $shipperId,
+            'status' => $status,
+            'paymentStatus' => $paymentStatus,
+            'accountingStatus' => $accountingStatus,
+        ]);
     }
 
     public function inventory(Request $request)
@@ -1100,6 +1144,192 @@ class AccountingDashboardController extends Controller
         return back()->with('success', 'Da tu choi giao dich #' . $transaction->id . '.');
     }
 
+    public function reconciliationDetail(Order $order)
+    {
+        $order->load([
+            'customer:id,name,phone,address',
+            'user:id,name',
+            'shipper:id,name',
+            'warehouse:id,name',
+            'items.product:id,name',
+            'items.variant:id,name,sku,size',
+            'histories.user:id,name',
+            'transactions.submitter:id,name',
+            'transactions.approver:id,name',
+            'returnRecords.returnItems.productVariant.product:id,name',
+            'returnRecords.warehouse:id,name',
+            'returnRecords.warehouseConfirmer:id,name',
+            'accountingReconciliation.confirmer:id,name',
+        ]);
+
+        $returnAmount = $this->returnAmountForOrder($order);
+        $recognizedRevenue = $this->recognizedRevenueForOrder($order);
+        [$canConfirm, $blockReason] = $this->canAccountingConfirmOrder($order);
+
+        $approvedHistory = $order->histories
+            ->whereIn('action', ['approve_order', 'order_approved', 'approve'])
+            ->sortByDesc('id')
+            ->first();
+        $packingHistory = $order->histories
+            ->whereIn('action', ['complete_packing', 'warehouse_complete_packing'])
+            ->sortByDesc('id')
+            ->first();
+        $deliveryHistory = $order->histories
+            ->whereIn('action', ['mark_delivered', 'delivered', 'mobile_update_status'])
+            ->sortByDesc('id')
+            ->first();
+        $paymentTransaction = $order->transactions
+            ->where('status', Transaction::STATUS_APPROVED)
+            ->where('type', 'payment')
+            ->sortByDesc('id')
+            ->first();
+
+        return response()->json([
+            'order' => [
+                'id' => $order->id,
+                'code' => $order->code ?: ('#' . $order->id),
+                'status' => $order->status,
+                'payment_status' => $order->payment_status,
+                'total' => (float) $order->total,
+                'subtotal_amount' => (float) ($order->subtotal_amount ?? $order->total ?? 0),
+                'total_discount' => (float) ($order->total_discount ?? 0),
+                'amount_paid' => (float) ($order->amount_paid ?? 0),
+                'amount_due' => (float) ($order->amount_due ?? 0),
+                'shipping_fee' => (float) ($order->shipping_fee ?? 0),
+                'return_amount' => $returnAmount,
+                'recognized_revenue' => $recognizedRevenue,
+                'delivered_at' => optional($order->delivered_at)->format('d/m/Y H:i'),
+                'customer' => [
+                    'name' => $order->customer?->name ?? '-',
+                    'phone' => $order->customer?->phone ?? '-',
+                    'address' => $order->customer?->address ?? '-',
+                ],
+                'sale' => $order->user?->name ?? '-',
+                'shipper' => $order->shipper?->name ?? '-',
+                'warehouse' => $order->warehouse?->name ?? '-',
+                'note' => $order->note,
+                'shipper_note' => $order->shipper_note,
+            ],
+            'items' => $order->items->map(fn ($item) => [
+                'name' => $item->variant?->name ?? $item->product?->name ?? 'San pham',
+                'sku' => $item->variant?->sku,
+                'size' => $item->variant?->size,
+                'quantity' => (float) ($item->quantity ?? 0),
+                'unit_price' => (float) ($item->price ?? $item->unit_price ?? 0),
+                'line_total' => (float) ($item->subtotal ?? $item->total ?? ((float) ($item->quantity ?? 0) * (float) ($item->price ?? $item->unit_price ?? 0))),
+            ])->values(),
+            'approval' => [
+                'created_by' => $order->user?->name ?? '-',
+                'approved_by' => $approvedHistory?->user?->name ?? '-',
+                'approved_at' => optional($approvedHistory?->created_at)->format('d/m/Y H:i'),
+                'note' => $approvedHistory?->note,
+            ],
+            'packing' => [
+                'packed_by' => $packingHistory?->user?->name ?? '-',
+                'packed_at' => optional($packingHistory?->created_at)->format('d/m/Y H:i'),
+                'warehouse' => $order->warehouse?->name ?? '-',
+                'note' => $packingHistory?->note,
+            ],
+            'delivery' => [
+                'shipper' => $order->shipper?->name ?? '-',
+                'status' => $order->status,
+                'delivered_at' => optional($order->delivered_at)->format('d/m/Y H:i'),
+                'shipping_fee' => (float) ($order->shipping_fee ?? 0),
+                'note' => $deliveryHistory?->note ?? $order->shipper_note,
+            ],
+            'payment' => [
+                'total_due' => (float) $order->total,
+                'paid_amount' => (float) ($order->amount_paid ?? 0),
+                'amount_due' => (float) ($order->amount_due ?? 0),
+                'method' => $order->payment_method,
+                'paid_at' => optional($paymentTransaction?->created_at)->format('d/m/Y H:i'),
+                'confirmed_by' => $paymentTransaction?->approver?->name ?? $paymentTransaction?->submitter?->name ?? '-',
+            ],
+            'returns' => $order->returnRecords->map(fn ($return) => [
+                'status' => $return->status,
+                'reason' => $return->reason,
+                'warehouse' => $return->warehouse?->name ?? '-',
+                'confirmed_by' => $return->warehouseConfirmer?->name ?? '-',
+                'confirmed_at' => optional($return->warehouse_confirmed_at)->format('d/m/Y H:i'),
+                'refund_amount' => (float) ($return->refund_amount ?? 0),
+                'items' => $return->returnItems->map(fn ($item) => [
+                    'name' => $item->productVariant?->product?->name ?? $item->productVariant?->name ?? 'San pham',
+                    'quantity' => (float) ($item->quantity ?? 0),
+                    'received_weight' => (float) ($item->received_weight ?? 0),
+                ])->values(),
+            ])->values(),
+            'reconciliation' => [
+                'status' => $order->accountingReconciliation?->status ?? AccountingReconciliation::STATUS_PENDING,
+                'confirmed_by' => $order->accountingReconciliation?->confirmer?->name,
+                'confirmed_at' => optional($order->accountingReconciliation?->confirmed_at)->format('d/m/Y H:i'),
+                'note' => $order->accountingReconciliation?->note,
+                'can_confirm' => $canConfirm,
+                'block_reason' => $blockReason,
+            ],
+        ]);
+    }
+
+    public function confirmReconciliation(Request $request, Order $order)
+    {
+        if (!Schema::hasTable('accounting_reconciliations')) {
+            return response()->json(['message' => 'Bang doi soat ke toan chua duoc tao. Vui long chay migrate.'], 500);
+        }
+
+        $validated = $request->validate([
+            'note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $order->load(['returnRecords.returnItems', 'accountingReconciliation', 'user']);
+        [$canConfirm, $blockReason] = $this->canAccountingConfirmOrder($order);
+        if (!$canConfirm) {
+            return response()->json(['message' => $blockReason], 422);
+        }
+
+        if ($order->accountingReconciliation?->status === AccountingReconciliation::STATUS_CONFIRMED) {
+            return response()->json(['message' => 'Don hang da duoc ke toan xac nhan.'], 422);
+        }
+
+        $reconciliation = null;
+        DB::transaction(function () use ($order, $request, $validated, &$reconciliation): void {
+            $returnAmount = $this->returnAmountForOrder($order);
+            $recognizedRevenue = $this->recognizedRevenueForOrder($order);
+
+            $reconciliation = AccountingReconciliation::query()->updateOrCreate(
+                ['order_id' => $order->id],
+                [
+                    'sale_id' => $order->user_id,
+                    'shipper_id' => $order->shipper_id,
+                    'total_amount' => (float) ($order->total ?? 0),
+                    'paid_amount' => (float) ($order->amount_paid ?? 0),
+                    'shipping_fee' => (float) ($order->shipping_fee ?? 0),
+                    'return_amount' => $returnAmount,
+                    'recognized_revenue' => $recognizedRevenue,
+                    'status' => AccountingReconciliation::STATUS_CONFIRMED,
+                    'confirmed_by' => $request->user()->id,
+                    'confirmed_at' => now(),
+                    'note' => $validated['note'] ?? null,
+                ]
+            );
+
+            $this->createCommissionForCompletedOrder($order, $recognizedRevenue, (int) $request->user()->id);
+        });
+
+        $reconciliation?->load(['order', 'sale']);
+        if ($reconciliation?->sale) {
+            $reconciliation->sale->notify(new AccountingOrderRevenueConfirmed($reconciliation));
+        }
+
+        return response()->json([
+            'message' => 'Da xac nhan doi soat va ghi nhan doanh thu.',
+            'reconciliation' => [
+                'status' => AccountingReconciliation::STATUS_CONFIRMED,
+                'confirmed_by' => $request->user()->name,
+                'confirmed_at' => now()->format('d/m/Y H:i'),
+                'recognized_revenue' => (float) ($reconciliation?->recognized_revenue ?? 0),
+            ],
+        ]);
+    }
+
     public function apiOrdersList(Request $request)
     {
         $perPage = min((int) $request->input('per_page', 15), 100);
@@ -1335,13 +1565,53 @@ class AccountingDashboardController extends Controller
         }
 
         $order->save();
-
-        if ($isFullyPaid) {
-            $this->createCommissionForCompletedOrder($order);
-        }
     }
 
-    private function createCommissionForCompletedOrder(Order $order): void
+    private function canAccountingConfirmOrder(Order $order): array
+    {
+        if (in_array((string) $order->status, ['cancelled', 'canceled', 'rejected'], true)) {
+            return [false, 'Don da huy hoac bi tu choi, khong the xac nhan doanh thu.'];
+        }
+
+        if (!in_array((string) $order->status, ['delivered', 'completed'], true)) {
+            return [false, 'Don chua giao thanh cong.'];
+        }
+
+        if ((float) ($order->amount_due ?? 0) > 0 || !in_array((string) $order->payment_status, ['paid'], true)) {
+            return [false, 'Thanh toan cua don chua hop le hoac con thieu.'];
+        }
+
+        $pendingReturn = $order->returnRecords
+            ->filter(fn ($return) => !in_array((string) $return->status, ['warehouse_confirmed', 'completed', 'cancelled', 'rejected'], true))
+            ->first();
+        if ($pendingReturn) {
+            return [false, 'Don co hang tra chua duoc kho xu ly xong.'];
+        }
+
+        return [true, null];
+    }
+
+    private function returnAmountForOrder(Order $order): float
+    {
+        if (!$order->relationLoaded('returnRecords')) {
+            $order->load('returnRecords');
+        }
+
+        return (float) $order->returnRecords
+            ->whereIn('status', ['warehouse_confirmed', 'completed'])
+            ->sum(fn ($return) => (float) ($return->refund_amount ?? 0));
+    }
+
+    private function recognizedRevenueForOrder(Order $order): float
+    {
+        $paidAmount = (float) ($order->amount_paid ?? 0);
+        $orderTotal = (float) ($order->total ?? 0);
+        $baseAmount = min($paidAmount, $orderTotal);
+
+        return max(0, $baseAmount - $this->returnAmountForOrder($order));
+    }
+
+    private function createCommissionForCompletedOrder(Order $order, ?float $recognizedRevenue = null, ?int $confirmedBy = null): void
     {
         if (!Schema::hasTable('order_commissions')) {
             return;
@@ -1359,7 +1629,7 @@ class AccountingDashboardController extends Controller
                 ->value('commission_percent');
         }
 
-        $orderTotal = (float) ($order->total ?? 0);
+        $orderTotal = (float) ($recognizedRevenue ?? $order->total ?? 0);
         $commissionAmount = round(($orderTotal * $snapshotPercent) / 100, 2);
 
         DB::table('order_commissions')->updateOrInsert(
@@ -1371,7 +1641,7 @@ class AccountingDashboardController extends Controller
                 'commission_percent' => $snapshotPercent,
                 'commission_amount' => $commissionAmount,
                 'status' => 'confirmed',
-                'confirmed_by' => auth()->id(),
+                'confirmed_by' => $confirmedBy ?: auth()->id(),
                 'confirmed_at' => now(),
                 'updated_at' => now(),
                 'created_at' => now(),
@@ -1517,4 +1787,3 @@ class AccountingDashboardController extends Controller
         ]);
     }
 }
-

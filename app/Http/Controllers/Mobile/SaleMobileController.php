@@ -102,7 +102,17 @@ class SaleMobileController extends Controller
         }
 
         $orderCount = (clone $ordersQuery)->count();
-        $revenue = (float) (clone $ordersQuery)->sum('total');
+        $revenueQuery = Schema::hasTable('accounting_reconciliations')
+            ? DB::table('accounting_reconciliations')
+                ->where('status', 'confirmed')
+                ->whereBetween('confirmed_at', [$from, $to])
+            : null;
+
+        if ($revenueQuery && !$user->hasRole('admin')) {
+            $revenueQuery->where('sale_id', $user->id);
+        }
+
+        $revenue = $revenueQuery ? (float) $revenueQuery->sum('recognized_revenue') : 0.0;
         $debt = (float) (clone $ordersQuery)->sum('amount_due');
 
         $commissionRules = 0;

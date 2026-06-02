@@ -171,6 +171,8 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/cashflow/{transaction}/edit', [AccountingDashboardController::class, 'transactionEdit'])->name('transactions.edit');
         Route::get('/cashflow/{transaction}', [AccountingDashboardController::class, 'cashflowShow'])->name('cashflow.show');
         Route::get('/reconciliation', [AccountingDashboardController::class, 'reconciliation'])->name('reconciliation');
+        Route::get('/reconciliation/{order}/detail', [AccountingDashboardController::class, 'reconciliationDetail'])->name('reconciliation.detail');
+        Route::post('/reconciliation/{order}/confirm', [AccountingDashboardController::class, 'confirmReconciliation'])->name('reconciliation.confirm');
         Route::get('/inventory', [AccountingDashboardController::class, 'inventory'])->name('inventory');
         Route::get('/commissions', [AccountingDashboardController::class, 'commissions'])->name('commissions');
         Route::post('/commissions', [AccountingDashboardController::class, 'storeCommission'])->name('commissions.store');
