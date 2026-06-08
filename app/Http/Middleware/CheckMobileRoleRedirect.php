@@ -85,13 +85,24 @@ class CheckMobileRoleRedirect
         }
 
         if ($user->roles->count() === 1) {
-            return $user->roles->first()->layout_mobile_slug;
+            return $this->routeForLayoutSlug($user->roles->first()->layout_mobile_slug);
         }
 
         if ($user->defaultRole && $user->roles->contains($user->defaultRole)) {
-            return $user->defaultRole->layout_mobile_slug;
+            return $this->routeForLayoutSlug($user->defaultRole->layout_mobile_slug);
         }
 
         return null;
+    }
+
+    private function routeForLayoutSlug(?string $layoutSlug): ?string
+    {
+        if (!$layoutSlug) {
+            return null;
+        }
+
+        $route = config('workspaces.catalog.' . $layoutSlug . '.route') ?: $layoutSlug;
+
+        return \Illuminate\Support\Facades\Route::has($route) ? $route : null;
     }
 }

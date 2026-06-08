@@ -89,6 +89,8 @@ Route::middleware(['auth', 'assigned'])->group(function () {
 
     Route::get('/role-selection', [LayoutPreferenceController::class, 'show'])->name('role-selection.show');
     Route::post('/role-selection', [LayoutPreferenceController::class, 'store'])->name('role-selection.store');
+    Route::get('/layout-selection', [LayoutPreferenceController::class, 'show'])->name('layout-selection.show');
+    Route::post('/layout-selection', [LayoutPreferenceController::class, 'store'])->name('layout-selection.store');
 
     // ─── Package module (Đóng hàng) ─────────────────────────────
     Route::prefix('package')->name('package.')->middleware('role:package,admin')->group(function () {

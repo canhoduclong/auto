@@ -30,11 +30,13 @@ trait ResolvesMobileRole
         $workspaces = [];
 
         foreach ($user->roles as $role) {
-            $layout = $role->layout_mobile_slug ?? 'unsupported';
+            $layoutSlug = (string) ($role->layout_mobile_slug ?? '');
+            $layout = $this->mobileLayoutKey($layoutSlug);
             if (!isset($workspaces[$layout]) && $layout !== 'unsupported') {
                 $workspaces[$layout] = [
                     'role' => $role->name,
                     'layout' => $layout,
+                    'layout_slug' => $layoutSlug,
                     'label' => $role->layout_mobile_name ?? $role->name,
                     'menu' => $this->mobileMenuByLayout($layout, $user->hasRole('manager_shipper') || $user->hasRole('admin')),
                 ];
@@ -47,7 +49,31 @@ trait ResolvesMobileRole
     private function resolveLayout(string $roleName): string
     {
         $role = \App\Models\Role::where('name', $roleName)->first();
-        return $role->layout_mobile_slug ?? 'unsupported';
+        return $this->mobileLayoutKey((string) ($role->layout_mobile_slug ?? ''));
+    }
+
+    private function mobileLayoutKey(string $layoutSlug): string
+    {
+        if ($layoutSlug === '') {
+            return 'unsupported';
+        }
+
+        $catalogLayout = config('workspaces.catalog.' . $layoutSlug . '.mobile_layout');
+        if (is_string($catalogLayout) && $catalogLayout !== '') {
+            return $catalogLayout;
+        }
+
+        return match ($layoutSlug) {
+            'my_app_accounting' => 'accounting',
+            'my_app_ceo' => 'ceo',
+            'my_app_manager_shipper' => 'manager_shipper',
+            'my_app_sales' => 'sale',
+            'my_app_shipper' => 'shipper',
+            'my_app_warehouse' => 'warehouse',
+            default => in_array($layoutSlug, ['accounting', 'ceo', 'manager_shipper', 'sale', 'shipper', 'warehouse'], true)
+                ? $layoutSlug
+                : 'unsupported',
+        };
     }
 
     private function mobileMenuByLayout(string $layout, bool $canManageShipper = false): array

@@ -263,6 +263,15 @@ class UserController extends Controller
                 ->withErrors(['default_workspace' => 'Layout mac dinh khong hop le voi cac vai tro duoc chon.']);
         }
 
+        $defaultRoleId = null;
+        if ($requestedDefaultWorkspace !== null) {
+            $defaultRoleId = Role::query()
+                ->whereIn('id', $selectedRoleIds)
+                ->where('layout_web_slug', $requestedDefaultWorkspace)
+                ->orderBy('id')
+                ->value('id');
+        }
+
         $user->update([
             'name'          => $request->name,
             'email'         => $request->email,
@@ -272,6 +281,7 @@ class UserController extends Controller
             'block_id'      => $request->block_id,
             'department_id' => $request->department_id,
             'default_workspace' => $requestedDefaultWorkspace,
+            'default_role_id' => $defaultRoleId,
         ]);
 
         $user->roles()->sync($request->roles ?? []);

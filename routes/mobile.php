@@ -13,7 +13,7 @@ Route::middleware(['auth'])->prefix('m')->name('mobile.')->group(function () {
             return redirect()->route('mobile.warehouse.home');
         }
 
-        if ($user?->hasRole('shipper') || $user?->hasRole('ship')) {
+        if ($user?->hasRole('shipper') || $user?->hasRole('ship') || $user?->hasRole('manager_shipper')) {
             return redirect()->route('mobile.shipper.home');
         }
 
@@ -40,7 +40,7 @@ Route::middleware(['auth'])->prefix('m')->name('mobile.')->group(function () {
         });
     });
 
-    Route::middleware('role:shipper,ship,admin')->group(function () {
+    Route::middleware('role:shipper,ship,manager_shipper,admin')->group(function () {
         Route::get('/shipper', [ShipperMobileController::class, 'index'])->name('shipper.home');
 
         Route::prefix('/api/shipper')->name('api.shipper.')->group(function () {

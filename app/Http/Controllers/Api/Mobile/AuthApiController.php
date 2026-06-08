@@ -201,7 +201,9 @@ class AuthApiController extends BaseApiController
             return $this->fail('Role khong duoc cap quyen cho tai khoan nay.', 403);
         }
 
-        $roleRecord = Role::where('name', $role)->first();
+        $roleRecord = Role::query()
+            ->whereRaw('LOWER(name) = ?', [$role])
+            ->first();
         if ($roleRecord) {
             $user->update(['default_role_id' => $roleRecord->id]);
         } else {

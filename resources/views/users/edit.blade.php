@@ -48,7 +48,12 @@
             <div>
                 @foreach($roles as $role)
                     <label>
-                        <input type="checkbox" name="roles[]" value="{{ $role->id }}" data-role-name="{{ strtolower($role->name) }}"
+                        <input
+                            type="checkbox"
+                            name="roles[]"
+                            value="{{ $role->id }}"
+                            class="js-role-checkbox"
+                            data-role-name="{{ strtolower($role->name) }}"
                         {{ $user->roles->contains($role->id) ? 'checked' : '' }}>
                         {{ $role->name }}
                     </label><br>
@@ -57,37 +62,52 @@
         </div>
 
         <div class="mb-3">
-            <label class="form-label">Layout mặc định</label>
+            <label class="form-label">Layout website mặc định</label>
             @php
                 $selectedWorkspace = old('default_workspace', $user->default_workspace);
+                $layoutCatalog = collect(config('workspaces.catalog', []));
+                $roleLayoutPayload = $roles->mapWithKeys(function ($role) use ($layoutCatalog) {
+                    $webLayout = $layoutCatalog->get($role->layout_web_slug, []);
+                    $mobileLayout = $layoutCatalog->get($role->layout_mobile_slug, []);
+
+                    return [
+                        (string) $role->id => [
+                            'id' => (int) $role->id,
+                            'name' => (string) $role->name,
+                            'web_slug' => (string) ($role->layout_web_slug ?? ''),
+                            'web_label' => (string) ($role->layout_web_name ?: ($webLayout['label'] ?? $role->layout_web_slug ?? '')),
+                            'web_route' => (string) ($webLayout['route'] ?? ''),
+                            'web_description' => (string) ($webLayout['description'] ?? ''),
+                            'mobile_slug' => (string) ($role->layout_mobile_slug ?? ''),
+                            'mobile_label' => (string) ($role->layout_mobile_name ?: ($mobileLayout['label'] ?? $role->layout_mobile_slug ?? '')),
+                            'mobile_route' => (string) ($mobileLayout['route'] ?? ''),
+                            'mobile_description' => (string) ($mobileLayout['description'] ?? ''),
+                        ],
+                    ];
+                });
             @endphp
 
-            <div class="mb-2">
-                <label class="d-block border rounded p-2">
-                    <input type="radio" name="default_workspace" value="" {{ empty($selectedWorkspace) ? 'checked' : '' }}>
-                    <span class="ms-1">Không đặt mặc định (hệ thống sẽ hỏi chọn khi đăng nhập nếu có nhiều layout)</span>
-                </label>
-            </div>
+            <div id="default-workspace-options"></div>
 
-            @if(count($availableWorkspaces) > 0)
-                @foreach($availableWorkspaces as $workspace)
-                    <label class="d-block border rounded p-2 mb-2">
-                        <input type="radio" name="default_workspace" value="{{ $workspace['key'] }}" {{ $selectedWorkspace === $workspace['key'] ? 'checked' : '' }}>
-                        <span class="ms-1 fw-semibold">{{ $workspace['label'] }}</span>
-                        @if($user->default_workspace === $workspace['key'])
-                            <span class="badge bg-success ms-2">Đang là mặc định</span>
-                        @endif
-                        @if(!empty($workspace['description']))
-                            <span class="d-block text-muted small mt-1">{{ $workspace['description'] }}</span>
-                        @endif
-                    </label>
-                @endforeach
-            @else
-                <div class="alert alert-warning mb-0">User hiện chưa có layout hợp lệ theo vai trò đang gán.</div>
-            @endif
-
-            <small class="text-muted">Danh sách này lấy theo vai trò hiện có của user.</small>
+            <small class="text-muted">Danh sách này lấy theo các vai trò đang được tick ở trên.</small>
             @error('default_workspace') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Layout theo vai trò</label>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                    <thead>
+                        <tr>
+                            <th>Role</th>
+                            <th>Website layout</th>
+                            <th>My_app mobile layout</th>
+                        </tr>
+                    </thead>
+                    <tbody id="role-layout-summary"></tbody>
+                </table>
+            </div>
+            <small class="text-muted">Mỗi role cần có đúng 1 website layout và 1 my_app layout. Nếu thiếu, cập nhật tại trang sửa role.</small>
         </div>
 
         <div class="mb-3">
@@ -189,3 +209,108 @@
     </script>
 </div>
 @endsection
+
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const roleLayouts = @json($roleLayoutPayload);
+    const initialSelectedWorkspace = @json($selectedWorkspace);
+    const savedWorkspace = @json($user->default_workspace);
+    const checkboxes = Array.from(document.querySelectorAll('.js-role-checkbox'));
+    const workspaceContainer = document.getElementById('default-workspace-options');
+    const summaryBody = document.getElementById('role-layout-summary');
+
+    function checkedRoleLayouts() {
+        return checkboxes
+            .filter((checkbox) => checkbox.checked)
+            .map((checkbox) => roleLayouts[checkbox.value])
+            .filter(Boolean);
+    }
+
+    function renderDefaultWorkspaceOptions() {
+        const roles = checkedRoleLayouts();
+        const workspaces = new Map();
+        const currentSelection = document.querySelector('input[name="default_workspace"]:checked')?.value;
+        const selectedWorkspace = currentSelection !== undefined ? currentSelection : initialSelectedWorkspace;
+
+        roles.forEach((role) => {
+            if (!role.web_slug) return;
+            if (!workspaces.has(role.web_slug)) {
+                workspaces.set(role.web_slug, {
+                    slug: role.web_slug,
+                    label: role.web_label || role.web_slug,
+                    route: role.web_route,
+                    description: role.web_description,
+                    roles: [],
+                });
+            }
+            workspaces.get(role.web_slug).roles.push(role.name);
+        });
+
+        const selectedStillAvailable = selectedWorkspace && workspaces.has(selectedWorkspace);
+        const noneChecked = !selectedWorkspace || !selectedStillAvailable;
+        let html = `
+            <div class="mb-2">
+                <label class="d-block border rounded p-2">
+                    <input type="radio" name="default_workspace" value="" ${noneChecked ? 'checked' : ''}>
+                    <span class="ms-1">Không đặt mặc định (hệ thống sẽ hỏi chọn khi đăng nhập nếu có nhiều layout)</span>
+                </label>
+            </div>
+        `;
+
+        if (workspaces.size === 0) {
+            html += '<div class="alert alert-warning mb-0">Các role đang chọn chưa có layout website hợp lệ.</div>';
+            workspaceContainer.innerHTML = html;
+            return;
+        }
+
+        workspaces.forEach((workspace) => {
+            const checked = selectedWorkspace === workspace.slug ? 'checked' : '';
+            const badge = savedWorkspace === workspace.slug ? '<span class="badge bg-success ms-2">Đang là mặc định</span>' : '';
+            const description = workspace.description ? `<span class="d-block text-muted small mt-1">${workspace.description}</span>` : '';
+            const rolesText = workspace.roles.length ? `<span class="d-block text-muted small">Roles: ${workspace.roles.join(', ')}</span>` : '';
+            html += `
+                <label class="d-block border rounded p-2 mb-2">
+                    <input type="radio" name="default_workspace" value="${workspace.slug}" ${checked}>
+                    <span class="ms-1 fw-semibold">${workspace.label}</span>
+                    ${badge}
+                    <span class="d-block text-muted small mt-1">${workspace.route || workspace.slug}</span>
+                    ${description}
+                    ${rolesText}
+                </label>
+            `;
+        });
+
+        workspaceContainer.innerHTML = html;
+    }
+
+    function renderRoleLayoutSummary() {
+        const roles = checkedRoleLayouts();
+
+        if (roles.length === 0) {
+            summaryBody.innerHTML = '<tr><td colspan="3" class="text-muted">Chưa chọn role nào.</td></tr>';
+            return;
+        }
+
+        summaryBody.innerHTML = roles.map((role) => {
+            const web = role.web_slug
+                ? `<strong>${role.web_label || role.web_slug}</strong><div class="text-muted small">${role.web_slug}${role.web_route ? ' | ' + role.web_route : ''}</div>`
+                : '<span class="text-danger">Thiếu website layout</span>';
+            const mobile = role.mobile_slug
+                ? `<strong>${role.mobile_label || role.mobile_slug}</strong><div class="text-muted small">${role.mobile_slug}${role.mobile_route ? ' | ' + role.mobile_route : ''}</div>`
+                : '<span class="text-danger">Thiếu my_app layout</span>';
+
+            return `<tr><td>${role.name}</td><td>${web}</td><td>${mobile}</td></tr>`;
+        }).join('');
+    }
+
+    function refreshLayoutUi() {
+        renderDefaultWorkspaceOptions();
+        renderRoleLayoutSummary();
+    }
+
+    checkboxes.forEach((checkbox) => checkbox.addEventListener('change', refreshLayoutUi));
+    refreshLayoutUi();
+});
+</script>
+@endpush

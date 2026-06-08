@@ -155,6 +155,17 @@ class AuthController extends Controller
         }
 
         // Multiple roles
+        if (!$this->isMobileRequest($request)) {
+            $workspaceService = app(UserWorkspaceService::class);
+            $workspace = $workspaceService->resolveAutomaticWorkspace($user);
+
+            if ($workspace !== null) {
+                $workspaceService->syncSession($workspace);
+
+                return redirect()->route($workspace['route']);
+            }
+        }
+
         if ($user->defaultRole && $user->roles->contains($user->defaultRole)) {
             return $this->redirectToRoleLayout($request, $user->defaultRole);
         }
@@ -179,18 +190,27 @@ class AuthController extends Controller
     private function redirectToRoleLayout(Request $request, \App\Models\Role $role)
     {
         if ($this->isMobileRequest($request)) {
-            $route = $role->layout_mobile_slug ?? 'mobile.home';
+            $route = $this->routeForLayoutSlug($role->layout_mobile_slug, 'mobile.home');
             if (\Illuminate\Support\Facades\Route::has($route)) {
                 return redirect()->route($route);
             }
         }
 
-        $route = $role->layout_web_slug ?? 'pages.my_profile';
+        $route = $this->routeForLayoutSlug($role->layout_web_slug, 'pages.my_profile');
         if (\Illuminate\Support\Facades\Route::has($route)) {
             return redirect()->route($route);
         }
 
         return redirect()->route('pages.my_profile');
+    }
+
+    private function routeForLayoutSlug(?string $layoutSlug, string $fallback): string
+    {
+        if (!$layoutSlug) {
+            return $fallback;
+        }
+
+        return config('workspaces.catalog.' . $layoutSlug . '.route') ?: $layoutSlug;
     }
 
     private function isMobileRequest(Request $request): bool

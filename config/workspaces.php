@@ -7,7 +7,7 @@ return [
             'description' => 'Dashboard quan tri tong hop.',
             'platform' => 'website',
             'route' => 'dashboard',
-            'role_hints' => ['admin'],
+            'role_hints' => ['admin', 'factory'],
         ],
         'website_ceo' => [
             'label' => 'Website / CEO',
@@ -30,6 +30,13 @@ return [
             'route' => 'warehouse.dashboard',
             'role_hints' => ['warehouse'],
         ],
+        'website_package' => [
+            'label' => 'Website / Package',
+            'description' => 'Dashboard dong hang.',
+            'platform' => 'website',
+            'route' => 'package.dashboard',
+            'role_hints' => ['package'],
+        ],
         'website_shipper' => [
             'label' => 'Website / Shipper',
             'description' => 'Dashboard shipper va dieu phoi ship.',
@@ -49,7 +56,24 @@ return [
             'description' => 'Dieu huong my_app theo role mobile.',
             'platform' => 'my_app',
             'route' => 'mobile.home',
-            'role_hints' => ['sale', 'leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale', 'warehouse', 'shipper', 'ship', 'admin'],
+            'role_hints' => ['admin', 'factory', 'package'],
+            'mobile_layout' => 'home',
+        ],
+        'my_app_accounting' => [
+            'label' => 'My_app / Accounting',
+            'description' => 'Giao dien my_app cho ke toan.',
+            'platform' => 'my_app',
+            'route' => 'mobile.home',
+            'role_hints' => ['accountant', 'accounting'],
+            'mobile_layout' => 'accounting',
+        ],
+        'my_app_ceo' => [
+            'label' => 'My_app / CEO',
+            'description' => 'Giao dien my_app cho CEO.',
+            'platform' => 'my_app',
+            'route' => 'mobile.home',
+            'role_hints' => ['ceo'],
+            'mobile_layout' => 'ceo',
         ],
         'my_app_warehouse' => [
             'label' => 'My_app / Warehouse',
@@ -57,6 +81,7 @@ return [
             'platform' => 'my_app',
             'route' => 'mobile.warehouse.home',
             'role_hints' => ['warehouse', 'admin'],
+            'mobile_layout' => 'warehouse',
         ],
         'my_app_shipper' => [
             'label' => 'My_app / Shipper',
@@ -64,6 +89,15 @@ return [
             'platform' => 'my_app',
             'route' => 'mobile.shipper.home',
             'role_hints' => ['shipper', 'ship', 'admin'],
+            'mobile_layout' => 'shipper',
+        ],
+        'my_app_manager_shipper' => [
+            'label' => 'My_app / Manager Shipper',
+            'description' => 'Giao dien my_app cho dieu phoi ship.',
+            'platform' => 'my_app',
+            'route' => 'mobile.shipper.home',
+            'role_hints' => ['manager_shipper'],
+            'mobile_layout' => 'manager_shipper',
         ],
         'my_app_sales' => [
             'label' => 'My_app / Sales',
@@ -71,6 +105,7 @@ return [
             'platform' => 'my_app',
             'route' => 'mobile.sale.home',
             'role_hints' => ['sale', 'leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale', 'admin'],
+            'mobile_layout' => 'sale',
         ],
     ],
 ];

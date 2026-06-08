@@ -36,15 +36,16 @@ class RoleController extends Controller
 
     public function store(Request $request)
     {
-        $layoutSlugs = implode(',', array_keys(config('workspaces.catalog', [])));
+        $webLayoutSlugs = implode(',', $this->layoutSlugsForPlatform('website'));
+        $mobileLayoutSlugs = implode(',', $this->layoutSlugsForPlatform('my_app'));
 
         $request->validate([
             'name' => 'required|unique:roles,name',
             'description' => 'nullable|string',
             'layout_web_name' => 'nullable|string|max:255',
-            'layout_web_slug' => 'nullable|string|max:120|in:' . $layoutSlugs,
+            'layout_web_slug' => 'required|string|max:120|in:' . $webLayoutSlugs,
             'layout_mobile_name' => 'nullable|string|max:255',
-            'layout_mobile_slug' => 'nullable|string|max:120|in:' . $layoutSlugs,
+            'layout_mobile_slug' => 'required|string|max:120|in:' . $mobileLayoutSlugs,
         ]);
 
         $catalog = config('workspaces.catalog', []);
@@ -113,7 +114,8 @@ class RoleController extends Controller
     public function update(Request $request, $id)
     {
        $role = Role::findOrFail($id);
-       $layoutSlugs = implode(',', array_keys(config('workspaces.catalog', [])));
+       $webLayoutSlugs = implode(',', $this->layoutSlugsForPlatform('website'));
+       $mobileLayoutSlugs = implode(',', $this->layoutSlugsForPlatform('my_app'));
 
         $request->validate([
             'name' => 'required|string|max:255',
@@ -121,9 +123,9 @@ class RoleController extends Controller
             'group' => 'nullable|string|max:255',
             'permissions' => 'nullable|array',
             'layout_web_name' => 'nullable|string|max:255',
-            'layout_web_slug' => 'nullable|string|max:120|in:' . $layoutSlugs,
+            'layout_web_slug' => 'required|string|max:120|in:' . $webLayoutSlugs,
             'layout_mobile_name' => 'nullable|string|max:255',
-            'layout_mobile_slug' => 'nullable|string|max:120|in:' . $layoutSlugs,
+            'layout_mobile_slug' => 'required|string|max:120|in:' . $mobileLayoutSlugs,
         ]);
 
         $catalog = config('workspaces.catalog', []);
@@ -164,6 +166,14 @@ class RoleController extends Controller
         $role->permissions()->sync($request->permissions ?? []);
 
         return redirect()->route('roles.index')->with('success', __('roles.messages.updated'));
+    }
+
+    private function layoutSlugsForPlatform(string $platform): array
+    {
+        return collect(config('workspaces.catalog', []))
+            ->filter(fn (array $layout) => ($layout['platform'] ?? 'website') === $platform)
+            ->keys()
+            ->all();
     }
 
 

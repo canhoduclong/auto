@@ -641,46 +641,39 @@
                                                 <i class="bi bi-speedometer2"></i> {{ __('site.dashboard') }}
                                             </a>
                                         @endif
-                                        @if(Auth::user()->hasRole('accountant'))
+                                        @if(Auth::user()->roles->count() > 1)
+                                            @php
+                                                $roleSwitchLabels = [
+                                                    'accountant' => ['Dashboard Kế toán', 'bi-cash-stack'],
+                                                    'accounting' => ['Dashboard Kế toán', 'bi-cash-stack'],
+                                                    'admin' => ['Dashboard Admin', 'bi-shield-lock'],
+                                                    'ceo' => ['Dashboard CEO', 'bi-briefcase'],
+                                                    'leader' => ['Dashboard Kinh doanh', 'bi-graph-up-arrow'],
+                                                    'leader_sale' => ['Dashboard Kinh doanh', 'bi-graph-up-arrow'],
+                                                    'manager' => ['Dashboard Kinh doanh', 'bi-graph-up-arrow'],
+                                                    'manager_sale' => ['Dashboard Kinh doanh', 'bi-graph-up-arrow'],
+                                                    'package' => ['Dashboard Đóng hàng', 'bi-box-seam'],
+                                                    'sale' => ['Dashboard Kinh doanh', 'bi-graph-up-arrow'],
+                                                    'sale_manager' => ['Dashboard Kinh doanh', 'bi-graph-up-arrow'],
+                                                    'shipper' => ['Dashboard Shipper', 'bi-truck'],
+                                                    'warehouse' => ['Dashboard Kho', 'bi-briefcase'],
+                                                ];
+                                                $activeRoleName = strtolower((string) session('active_role', Auth::user()->defaultRole?->name ?? ''));
+                                            @endphp
                                             <div class="dropdown-divider my-0"></div>
-                                            <a class="dropdown-item" href="#" onclick="event.preventDefault(); document.getElementById('switch-role-accountant').submit();">
-                                                <i class="bi bi-cash-stack"></i> Dashboard Kế toán
-                                            </a>
-                                            <form id="switch-role-accountant" action="{{ route('role.switch', 'accountant') }}" method="POST" class="d-none">@csrf</form>
-                                        @elseif(Auth::user()->hasRole('accounting'))
-                                            <div class="dropdown-divider my-0"></div>
-                                            <a class="dropdown-item" href="#" onclick="event.preventDefault(); document.getElementById('switch-role-accounting').submit();">
-                                                <i class="bi bi-cash-stack"></i> Dashboard Kế toán
-                                            </a>
-                                            <form id="switch-role-accounting" action="{{ route('role.switch', 'accounting') }}" method="POST" class="d-none">@csrf</form>
-                                        @endif
-                                        @if(Auth::user()->hasRole('warehouse'))
-                                            <div class="dropdown-divider my-0"></div>
-                                            <a class="dropdown-item" href="#" onclick="event.preventDefault(); document.getElementById('switch-role-warehouse').submit();">
-                                                <i class="bi bi-briefcase"></i> Dashboard Kho
-                                            </a>
-                                            <form id="switch-role-warehouse" action="{{ route('role.switch', 'warehouse') }}" method="POST" class="d-none">@csrf</form>
-                                        @endif
-                                        @if(Auth::user()->hasRole('ceo'))
-                                            <div class="dropdown-divider my-0"></div>
-                                            <a class="dropdown-item" href="#" onclick="event.preventDefault(); document.getElementById('switch-role-ceo').submit();">
-                                                <i class="bi bi-briefcase"></i> Dashboard CEO
-                                            </a>
-                                            <form id="switch-role-ceo" action="{{ route('role.switch', 'ceo') }}" method="POST" class="d-none">@csrf</form>
-                                        @endif
-                                        @if(Auth::user()->isAdmin())
-                                            <div class="dropdown-divider my-0"></div>
-                                            <a class="dropdown-item" href="#" onclick="event.preventDefault(); document.getElementById('switch-role-admin').submit();">
-                                                <i class="bi bi-shield-lock"></i> Dashboard Admin
-                                            </a>
-                                            <form id="switch-role-admin" action="{{ route('role.switch', 'admin') }}" method="POST" class="d-none">@csrf</form>
-                                        @endif
-                                        @if(Auth::user()->hasRole('shipper'))
-                                            <div class="dropdown-divider my-0"></div>
-                                            <a class="dropdown-item" href="#" onclick="event.preventDefault(); document.getElementById('switch-role-shipper').submit();">
-                                                <i class="bi bi-truck"></i> Dashboard Shipper
-                                            </a>
-                                            <form id="switch-role-shipper" action="{{ route('role.switch', 'shipper') }}" method="POST" class="d-none">@csrf</form>
+                                            @foreach(Auth::user()->roles as $switchRole)
+                                                @php
+                                                    $switchRoleName = strtolower((string) $switchRole->name);
+                                                    $switchRoleKey = preg_replace('/[^a-z0-9_-]+/', '-', $switchRoleName);
+                                                    [$switchRoleLabel, $switchRoleIcon] = $roleSwitchLabels[$switchRoleName]
+                                                        ?? ['Dashboard ' . ucwords(str_replace('_', ' ', $switchRole->name)), 'bi-person-badge'];
+                                                    $isActiveSwitchRole = $activeRoleName === $switchRoleName;
+                                                @endphp
+                                                <a class="dropdown-item {{ $isActiveSwitchRole ? 'active' : '' }}" href="#" onclick="event.preventDefault(); document.getElementById('switch-role-{{ $switchRoleKey }}').submit();">
+                                                    <i class="bi {{ $isActiveSwitchRole ? 'bi-check-circle' : $switchRoleIcon }}"></i> {{ $switchRoleLabel }}
+                                                </a>
+                                                <form id="switch-role-{{ $switchRoleKey }}" action="{{ route('role.switch', $switchRole->name) }}" method="POST" class="d-none">@csrf</form>
+                                            @endforeach
                                         @endif
                                         @if($canApproveTeamOrders)
                                             <div class="dropdown-divider my-0"></div>

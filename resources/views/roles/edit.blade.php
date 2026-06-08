@@ -34,33 +34,77 @@
                         <input type="text" name="description" id="description" value="{{ old('description', $role->description) }}" class="form-control" placeholder="Ví dụ: Role quản lý kho">
                     </div>
 
+                    @php
+                        $websiteLayouts = collect($layoutCatalog)->filter(fn ($layout) => ($layout['platform'] ?? 'website') === 'website');
+                        $mobileLayouts = collect($layoutCatalog)->filter(fn ($layout) => ($layout['platform'] ?? 'website') === 'my_app');
+                    @endphp
+
                     <div class="col-md-6">
-                        <label for="layout_slug" class="form-label">Layout slug</label>
-                        <select name="layout_slug" id="layout_slug" class="form-select @error('layout_slug') is-invalid @enderror">
-                            <option value="">-- Chưa gán layout --</option>
-                            @foreach($layoutCatalog as $slug => $layout)
-                                <option value="{{ $slug }}" {{ old('layout_slug', $role->layout_slug) === $slug ? 'selected' : '' }}>
-                                    {{ $slug }} | {{ $layout['route'] ?? '' }} | roles: {{ collect($layout['role_hints'] ?? [])->join(', ') }}
+                        <label for="layout_web_slug" class="form-label">Website layout</label>
+                        <select name="layout_web_slug" id="layout_web_slug" class="form-select @error('layout_web_slug') is-invalid @enderror" required>
+                            <option value="">-- Chọn 1 layout website --</option>
+                            @foreach($websiteLayouts as $slug => $layout)
+                                <option
+                                    value="{{ $slug }}"
+                                    data-label="{{ $layout['label'] ?? $slug }}"
+                                    {{ old('layout_web_slug', $role->layout_web_slug) === $slug ? 'selected' : '' }}
+                                >
+                                    {{ $layout['label'] ?? $slug }} | {{ $layout['route'] ?? '' }} | roles: {{ collect($layout['role_hints'] ?? [])->join(', ') }}
                                 </option>
                             @endforeach
                         </select>
-                        @error('layout_slug')
+                        @error('layout_web_slug')
                             <div class="invalid-feedback d-block">{{ $message }}</div>
                         @enderror
-                        <small class="text-muted">Chon slug theo vai tro de redirect dung route sau dang nhap.</small>
+                        <small class="text-muted">Mỗi role có duy nhất 1 layout website để redirect sau đăng nhập.</small>
                     </div>
 
                     <div class="col-md-6">
-                        <label for="layout_name" class="form-label">Layout name</label>
+                        <label for="layout_web_name" class="form-label">Website layout name</label>
                         <input
                             type="text"
-                            name="layout_name"
-                            id="layout_name"
-                            value="{{ old('layout_name', $role->layout_name) }}"
-                            class="form-control @error('layout_name') is-invalid @enderror"
-                            placeholder="Ví dụ: Website"
+                            name="layout_web_name"
+                            id="layout_web_name"
+                            value="{{ old('layout_web_name', $role->layout_web_name) }}"
+                            class="form-control @error('layout_web_name') is-invalid @enderror"
+                            placeholder="Tự lấy theo layout nếu bỏ trống"
                         >
-                        @error('layout_name')
+                        @error('layout_web_name')
+                            <div class="invalid-feedback d-block">{{ $message }}</div>
+                        @enderror
+                    </div>
+
+                    <div class="col-md-6">
+                        <label for="layout_mobile_slug" class="form-label">My_app mobile layout</label>
+                        <select name="layout_mobile_slug" id="layout_mobile_slug" class="form-select @error('layout_mobile_slug') is-invalid @enderror" required>
+                            <option value="">-- Chọn 1 layout mobile --</option>
+                            @foreach($mobileLayouts as $slug => $layout)
+                                <option
+                                    value="{{ $slug }}"
+                                    data-label="{{ $layout['label'] ?? $slug }}"
+                                    {{ old('layout_mobile_slug', $role->layout_mobile_slug) === $slug ? 'selected' : '' }}
+                                >
+                                    {{ $layout['label'] ?? $slug }} | {{ $layout['route'] ?? '' }} | roles: {{ collect($layout['role_hints'] ?? [])->join(', ') }}
+                                </option>
+                            @endforeach
+                        </select>
+                        @error('layout_mobile_slug')
+                            <div class="invalid-feedback d-block">{{ $message }}</div>
+                        @enderror
+                        <small class="text-muted">My_app là app Flutter viết lại các tính năng website trên mobile.</small>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label for="layout_mobile_name" class="form-label">Mobile layout name</label>
+                        <input
+                            type="text"
+                            name="layout_mobile_name"
+                            id="layout_mobile_name"
+                            value="{{ old('layout_mobile_name', $role->layout_mobile_name) }}"
+                            class="form-control @error('layout_mobile_name') is-invalid @enderror"
+                            placeholder="Tự lấy theo layout nếu bỏ trống"
+                        >
+                        @error('layout_mobile_name')
                             <div class="invalid-feedback d-block">{{ $message }}</div>
                         @enderror
                     </div>
@@ -170,6 +214,19 @@ document.addEventListener('DOMContentLoaded', function () {
     const checkAllButton = document.getElementById('checkAllPermissions');
     const resetButton = document.getElementById('resetPermissions');
     const searchInput = document.getElementById('permission-search');
+    const syncLayoutName = function (selectId, inputId) {
+        const select = document.getElementById(selectId);
+        const input = document.getElementById(inputId);
+        if (!select || !input) return;
+
+        select.addEventListener('change', function () {
+            if (input.value.trim() !== '') return;
+            input.value = select.options[select.selectedIndex]?.dataset.label || '';
+        });
+    };
+
+    syncLayoutName('layout_web_slug', 'layout_web_name');
+    syncLayoutName('layout_mobile_slug', 'layout_mobile_name');
 
     if (checkAllButton) {
         checkAllButton.addEventListener('click', function () {
