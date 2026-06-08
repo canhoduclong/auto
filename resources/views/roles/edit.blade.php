@@ -33,6 +33,37 @@
                         <label for="description" class="form-label">Mô tả (tuỳ chọn)</label>
                         <input type="text" name="description" id="description" value="{{ old('description', $role->description) }}" class="form-control" placeholder="Ví dụ: Role quản lý kho">
                     </div>
+
+                    <div class="col-md-6">
+                        <label for="layout_slug" class="form-label">Layout slug</label>
+                        <select name="layout_slug" id="layout_slug" class="form-select @error('layout_slug') is-invalid @enderror">
+                            <option value="">-- Chưa gán layout --</option>
+                            @foreach($layoutCatalog as $slug => $layout)
+                                <option value="{{ $slug }}" {{ old('layout_slug', $role->layout_slug) === $slug ? 'selected' : '' }}>
+                                    {{ $slug }} | {{ $layout['route'] ?? '' }} | roles: {{ collect($layout['role_hints'] ?? [])->join(', ') }}
+                                </option>
+                            @endforeach
+                        </select>
+                        @error('layout_slug')
+                            <div class="invalid-feedback d-block">{{ $message }}</div>
+                        @enderror
+                        <small class="text-muted">Chon slug theo vai tro de redirect dung route sau dang nhap.</small>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label for="layout_name" class="form-label">Layout name</label>
+                        <input
+                            type="text"
+                            name="layout_name"
+                            id="layout_name"
+                            value="{{ old('layout_name', $role->layout_name) }}"
+                            class="form-control @error('layout_name') is-invalid @enderror"
+                            placeholder="Ví dụ: Website"
+                        >
+                        @error('layout_name')
+                            <div class="invalid-feedback d-block">{{ $message }}</div>
+                        @enderror
+                    </div>
                 </div>
             </div>
         </div>

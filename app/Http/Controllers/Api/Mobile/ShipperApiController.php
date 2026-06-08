@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Mobile;
 use App\Models\MobileLocationPing;
 use App\Models\Order;
 use App\Models\OrderHistory;
+use App\Models\WarehouseTransfer;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -40,6 +41,7 @@ class ShipperApiController extends BaseApiController
     {
         $this->ensureShipperRole($request);
         $userId = (int) $request->user()->id;
+        $selectedDate = $this->scheduleDate($request);
 
         $orders = Order::query()
             ->with(['customer:id,name,phone,address', 'items.product:id,name,unit', 'items.variant:id,name,sku,size,product_id'])
@@ -49,7 +51,43 @@ class ShipperApiController extends BaseApiController
             ->where(function ($query) {
                 $this->constrainConfirmedDeliverySchedule($query);
             })
+            ->where(function ($query) use ($selectedDate) {
+                $query->whereDate('updated_at', $selectedDate)
+                    ->orWhereDate('created_at', $selectedDate);
+            })
+            ->tap(function ($query) {
+                $this->constrainNoActiveWarehouseTransfer($query);
+            })
             ->latest('updated_at')
+            ->paginate(20);
+
+        $this->attachDeliveryScheduleMetadata($orders->getCollection());
+
+        return $this->paginated($orders);
+    }
+
+    public function acceptedOrders(Request $request): JsonResponse
+    {
+        $this->ensureShipperRole($request);
+        $userId = (int) $request->user()->id;
+        $selectedDate = $this->scheduleDate($request);
+
+        $orders = Order::query()
+            ->with(['customer:id,name,phone,address', 'items.product:id,name,unit', 'items.variant:id,name,sku,size,product_id'])
+            ->where('shipper_id', $userId)
+            ->where('status', Order::STATUS_DELIVERING)
+            ->where(function ($query) use ($selectedDate) {
+                $query->whereDate('updated_at', $selectedDate)
+                    ->orWhereDate('created_at', $selectedDate);
+            })
+            ->tap(function ($query) {
+                $this->constrainNoActiveWarehouseTransfer($query);
+            })
+            ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
+            ->orderBy('daily_sequence', 'asc')
+            ->orderBy('delivery_time', 'asc')
+            ->orderBy('created_at', 'asc')
+            ->orderBy('id', 'asc')
             ->paginate(20);
 
         $this->attachDeliveryScheduleMetadata($orders->getCollection());
@@ -437,6 +475,17 @@ class ShipperApiController extends BaseApiController
                         limit 1
                     )'
                 );
+        });
+    }
+
+    private function constrainNoActiveWarehouseTransfer($query): void
+    {
+        $query->whereDoesntHave('warehouseTransfers', function ($transferQuery) {
+            $transferQuery->whereIn('status', [
+                WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
+                WarehouseTransfer::STATUS_IN_TRANSIT,
+                WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
+            ]);
         });
     }
 

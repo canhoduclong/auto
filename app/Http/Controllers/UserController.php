@@ -10,6 +10,7 @@ use App\Models\Team;
 use App\Models\Warehouse;
 use App\Models\Block;
 use App\Models\Department;
+use App\Services\UserWorkspaceService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -207,17 +208,27 @@ class UserController extends Controller
         return view('users.show', compact('user', 'activities'));
     }
 
-    public function edit(User $user)
+    public function edit(User $user, UserWorkspaceService $workspaceService)
     {
         $roles = Role::all();
         $teams = Team::orderBy('name')->get();
         $warehouses = Warehouse::orderBy('name')->get();
         $blocks = Block::active()->orderBy('name')->get();
         $departments = Department::active()->with('block')->orderBy('name')->get();
-        return view('users.edit', compact('user','roles', 'teams', 'warehouses', 'blocks', 'departments'));
+        $availableWorkspaces = $workspaceService->availableForUser($user);
+
+        return view('users.edit', compact(
+            'user',
+            'roles',
+            'teams',
+            'warehouses',
+            'blocks',
+            'departments',
+            'availableWorkspaces'
+        ));
     }
 
-    public function update(Request $request, User $user)
+    public function update(Request $request, User $user, UserWorkspaceService $workspaceService)
     {
         $request->validate([
             'name' => 'required|string|max:255',
@@ -228,7 +239,29 @@ class UserController extends Controller
             'team_id' => 'nullable|exists:teams,id',
             'block_id' => 'nullable|exists:blocks,id',
             'department_id' => 'nullable|exists:departments,id',
+            'default_workspace' => 'nullable|string|max:120',
         ]);
+
+        $selectedRoleIds = collect($request->input('roles', []))
+            ->map(fn ($roleId) => (int) $roleId)
+            ->filter()
+            ->values();
+
+        $selectedRoleNames = Role::query()
+            ->whereIn('id', $selectedRoleIds)
+            ->pluck('name')
+            ->all();
+
+        $requestedDefaultWorkspace = $request->filled('default_workspace')
+            ? (string) $request->input('default_workspace')
+            : null;
+
+        if ($requestedDefaultWorkspace !== null
+            && $workspaceService->findForRoleNames($selectedRoleNames, $requestedDefaultWorkspace) === null) {
+            return back()
+                ->withInput()
+                ->withErrors(['default_workspace' => 'Layout mac dinh khong hop le voi cac vai tro duoc chon.']);
+        }
 
         $user->update([
             'name'          => $request->name,
@@ -238,6 +271,7 @@ class UserController extends Controller
             'team_id'       => $request->team_id,
             'block_id'      => $request->block_id,
             'department_id' => $request->department_id,
+            'default_workspace' => $requestedDefaultWorkspace,
         ]);
 
         $user->roles()->sync($request->roles ?? []);

@@ -14,6 +14,7 @@ use App\Http\Controllers\ProductVariantPriceController;
 use App\Http\Controllers\ProductVariantController;
 use App\Http\Controllers\CategoryController; 
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\LayoutPreferenceController;
 use App\Http\Controllers\RoleSwitchController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\RoleController;
@@ -85,6 +86,9 @@ Route::middleware('guest')->group(function () {
 
 
 Route::middleware(['auth', 'assigned'])->group(function () {
+
+    Route::get('/role-selection', [LayoutPreferenceController::class, 'show'])->name('role-selection.show');
+    Route::post('/role-selection', [LayoutPreferenceController::class, 'store'])->name('role-selection.store');
 
     // ─── Package module (Đóng hàng) ─────────────────────────────
     Route::prefix('package')->name('package.')->middleware('role:package,admin')->group(function () {
@@ -271,6 +275,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::put('/stock-in/{document}', [WarehouseDashboardController::class, 'updateStockIn'])->name('stock-in.update');
         Route::get('/supplier-prices', [\App\Http\Controllers\WarehouseSupplierPriceController::class, 'index'])->name('supplier-prices.index');
         Route::post('/supplier-prices', [\App\Http\Controllers\WarehouseSupplierPriceController::class, 'store'])->name('supplier-prices.store');
+        Route::post('/supplier-prices/{supplier}/{product}/apply-today-sale-price', [\App\Http\Controllers\WarehouseSupplierPriceController::class, 'applyTodaySalePrice'])->name('supplier-prices.apply-today-sale-price');
         Route::post('/suppliers/{supplier}/products', [\App\Http\Controllers\WarehouseSupplierPriceController::class, 'attachProduct'])->name('suppliers.products.attach');
         Route::delete('/suppliers/{supplier}/products/{product}', [\App\Http\Controllers\WarehouseSupplierPriceController::class, 'detachProduct'])->name('suppliers.products.detach');
         Route::get('/stock-out',         [WarehouseDashboardController::class, 'stockOut'])->name('stock-out');

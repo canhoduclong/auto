@@ -38,6 +38,23 @@
                             <label for="password_confirmation" class="form-label">Xác nhận mật khẩu mới</label>
                             <input type="password" name="password_confirmation" id="password_confirmation" class="form-control">
                         </div>
+
+                        <div class="mb-3">
+                            <label for="default_workspace" class="form-label">Layout mặc định</label>
+                            <select name="default_workspace" id="default_workspace" class="form-select">
+                                <option value="">-- Chọn khi đăng nhập --</option>
+                                @foreach($workspaceOptions as $workspace)
+                                    <option
+                                        value="{{ $workspace['key'] }}"
+                                        {{ old('default_workspace', $user->default_workspace) === $workspace['key'] ? 'selected' : '' }}
+                                    >
+                                        {{ $workspace['label'] }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            <div class="form-text">Chi hien thi cac layout ma tai khoan hien dang co quyen truy cap.</div>
+                            @error('default_workspace') <div class="text-danger small">{{ $message }}</div> @enderror
+                        </div>
                     </div>
                 </div>
             </div>

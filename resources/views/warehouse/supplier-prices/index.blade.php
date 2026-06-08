@@ -95,6 +95,7 @@
                 @php
                     $latest = $latestPrices->get($row->supplier_id . ':' . $row->product_id);
                     $type = $latest?->price_calculation_type ?? $row->price_calculation_type ?? \App\Models\SupplierProduct::TYPE_COMPONENT_BASED;
+                    $isSaleSynced = (bool) ($saleSyncStatus[$row->supplier_id . ':' . $row->product_id] ?? false);
                 @endphp
                 <tr>
                     <td class="fw-semibold">{{ $row->supplier?->name ?? 'NCC' }}</td>
@@ -138,6 +139,18 @@
                                 data-today-sale-price="{{ $latest?->today_sale_price ?? 0 }}">
                             Điều chỉnh
                         </button>
+                        @if($latest)
+                            <form method="POST" action="{{ route('warehouse.supplier-prices.apply-today-sale-price', [$row->supplier_id, $row->product_id]) }}" class="d-inline">
+                                @csrf
+                                <button
+                                    class="btn btn-sm {{ $isSaleSynced ? 'btn-outline-success' : 'btn-success' }}"
+                                    title="{{ $isSaleSynced ? 'Đã áp dụng giá bán hôm nay cho toàn bộ biến thể.' : 'Áp dụng giá bán hôm nay của NCC cho toàn bộ biến thể.' }}"
+                                    onclick="return confirm('Dùng Giá bán hôm nay này để cập nhật toàn bộ biến thể của sản phẩm?')"
+                                >
+                                    {{ $isSaleSynced ? 'Đã dùng giá này' : 'Dùng giá này' }}
+                                </button>
+                            </form>
+                        @endif
                         <form method="POST" action="{{ route('warehouse.suppliers.products.detach', [$row->supplier_id, $row->product_id]) }}" class="d-inline">
                             @csrf @method('DELETE')
                             <button class="btn btn-sm btn-outline-secondary">Tắt</button>
@@ -201,7 +214,7 @@
             <form method="POST" action="{{ route('warehouse.supplier-prices.store') }}" id="priceForm">
                 @csrf
                 <div class="modal-header">
-                    <h6 class="modal-title fw-bold">Điều chỉnh giá thu mua</h6>
+                    <h6 class="modal-title fw-bold">Điều chỉnh giá thu mua & giá bán</h6>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
@@ -254,7 +267,8 @@
                         </div>
                         <div class="col-md-4">
                             <label class="form-label small fw-semibold">Giá bán hôm nay</label>
-                            <input type="number" name="today_sale_price" class="form-control" min="0" step="1000" readonly>
+                            <input type="number" name="today_sale_price" id="todaySalePrice" class="form-control" min="0" step="1000">
+                            <div class="form-text">Có thể chỉnh tay, nhưng phải lớn hơn hoặc bằng giá min và sẽ được áp dụng cho toàn bộ biến thể.</div>
                             <div class="price-warning text-danger small mt-1" id="saleWarning">Giá bán hôm nay phải lớn hơn hoặc bằng giá min.</div>
                         </div>
                         <div class="col-12">
@@ -310,6 +324,14 @@ function formatMoney(value) {
     return Math.round(value).toLocaleString('vi-VN') + 'đ';
 }
 
+function updateSaleWarning() {
+    const form = document.getElementById('priceForm');
+    const minPrice = numberValue(form.min_price);
+    const salePrice = numberValue(form.today_sale_price);
+
+    document.getElementById('saleWarning').classList.toggle('show', salePrice < minPrice);
+}
+
 function recalcPriceForm() {
     const form = document.getElementById('priceForm');
     const type = form.price_calculation_type.value;
@@ -327,7 +349,7 @@ function recalcPriceForm() {
     document.getElementById('minPreview').textContent = type === 'direct_purchase'
         ? `Giá min = giá thu mua: ${formatMoney(minPrice)}`
         : `Giá min = nguyên liệu + sơ chế + phí khác: ${formatMoney(minPrice)}`;
-    document.getElementById('saleWarning').classList.toggle('show', salePrice < minPrice);
+    updateSaleWarning();
 }
 
 function syncPriceTypeFields() {
@@ -344,6 +366,8 @@ document.querySelectorAll('.price-source, #priceCalculationType').forEach(input 
     input.addEventListener('input', recalcPriceForm);
     input.addEventListener('change', syncPriceTypeFields);
 });
+
+document.getElementById('todaySalePrice')?.addEventListener('input', updateSaleWarning);
 
 document.querySelectorAll('.js-adjust-price').forEach(button => {
     button.addEventListener('click', async function () {
@@ -362,6 +386,7 @@ document.querySelectorAll('.js-adjust-price').forEach(button => {
         form.suggested_margin.value = this.dataset.suggestedMargin || 2000;
         form.today_sale_price.value = this.dataset.todaySalePrice || 0;
         syncPriceTypeFields();
+        updateSaleWarning();
 
         const tbody = document.getElementById('priceHistoryBody');
         tbody.innerHTML = '<tr><td colspan="8" class="text-muted text-center">Đang tải...</td></tr>';

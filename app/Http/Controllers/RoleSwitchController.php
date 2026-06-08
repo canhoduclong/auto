@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\UserWorkspaceService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -18,29 +19,25 @@ class RoleSwitchController extends Controller
         if (!$user->hasRole($role)) {
             return redirect()->route('dashboard')->with('error', 'Bạn không có quyền truy cập vai trò này.');
         }
+
+        $roleModel = \App\Models\Role::where('name', $role)->first();
+        if ($roleModel) {
+            $user->update(['default_role_id' => $roleModel->id]);
+        }
+
+        // Web Redirect based on Role config
+        $route = $roleModel->layout_web_slug ?? 'pages.my_profile';
         
-        // Store the selected role in session (use lowercase for consistency)
-        $roleLower = strtolower($role);
-        session(['active_role' => $roleLower]);
-        
-        // Redirect to appropriate dashboard
-        return match($roleLower) {
-            'admin' => redirect()->route('dashboard'),
-            'ceo' => redirect()->route('ceo.dashboard'),
-            'accountant', 'accounting' => redirect()->route('accounting.dashboard'),
-            'warehouse' => redirect()->route('warehouse.dashboard'),
-            'shipper', 'manager_shipper' => redirect()->route('shipper.dashboard'),
-            'sale', 'leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale' => redirect()->route('pages.my_dashboard'),
-            default => redirect()->route('dashboard')->with('error', 'Vai trò không hợp lệ: ' . $role),
-        };
+        if (\Illuminate\Support\Facades\Route::has($route)) {
+            return redirect()->route($route);
+        }
+
+        return redirect()->route('pages.my_profile');
     }
 
-    /**
-     * Clear the active role (fall back to role priority)
-     */
     public function clear()
     {
-        session()->forget('active_role');
+        session()->forget(['active_role', 'active_workspace']);
         return redirect()->route('dashboard');
     }
 }

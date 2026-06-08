@@ -29,16 +29,58 @@ class RoleController extends Controller
     public function create()
     {
         $permissions = Permission::all();
-        return view('roles.create', compact('permissions'));
+        $layoutCatalog = config('workspaces.catalog', []);
+
+        return view('roles.create', compact('permissions', 'layoutCatalog'));
     }
 
     public function store(Request $request)
     {
+        $layoutSlugs = implode(',', array_keys(config('workspaces.catalog', [])));
+
         $request->validate([
             'name' => 'required|unique:roles,name',
             'description' => 'nullable|string',
+            'layout_web_name' => 'nullable|string|max:255',
+            'layout_web_slug' => 'nullable|string|max:120|in:' . $layoutSlugs,
+            'layout_mobile_name' => 'nullable|string|max:255',
+            'layout_mobile_slug' => 'nullable|string|max:120|in:' . $layoutSlugs,
         ]);
-        $role = Role::create($request->only(['name', 'description']));
+
+        $catalog = config('workspaces.catalog', []);
+        
+        $layoutWebSlug = trim((string) $request->input('layout_web_slug', ''));
+        $layoutWebName = trim((string) $request->input('layout_web_name', ''));
+        
+        $layoutMobileSlug = trim((string) $request->input('layout_mobile_slug', ''));
+        $layoutMobileName = trim((string) $request->input('layout_mobile_name', ''));
+
+        $compatibilityWebError = $this->layoutCompatibilityError((string) $request->input('name'), $layoutWebSlug, $catalog);
+        if ($compatibilityWebError !== null) {
+            return back()->withInput()->withErrors(['layout_web_slug' => $compatibilityWebError]);
+        }
+        
+        $compatibilityMobileError = $this->layoutCompatibilityError((string) $request->input('name'), $layoutMobileSlug, $catalog);
+        if ($compatibilityMobileError !== null) {
+            return back()->withInput()->withErrors(['layout_mobile_slug' => $compatibilityMobileError]);
+        }
+
+        if ($layoutWebSlug !== '' && $layoutWebName === '' && isset($catalog[$layoutWebSlug]['label'])) {
+            $layoutWebName = (string) $catalog[$layoutWebSlug]['label'];
+        }
+        
+        if ($layoutMobileSlug !== '' && $layoutMobileName === '' && isset($catalog[$layoutMobileSlug]['label'])) {
+            $layoutMobileName = (string) $catalog[$layoutMobileSlug]['label'];
+        }
+
+        $role = Role::create([
+            'name' => $request->input('name'),
+            'description' => $request->input('description'),
+            'layout_web_name' => $layoutWebName !== '' ? $layoutWebName : null,
+            'layout_web_slug' => $layoutWebSlug !== '' ? $layoutWebSlug : null,
+            'layout_mobile_name' => $layoutMobileName !== '' ? $layoutMobileName : null,
+            'layout_mobile_slug' => $layoutMobileSlug !== '' ? $layoutMobileSlug : null,
+        ]);
         $role->permissions()->sync($request->permissions ?? []);
         
         return redirect()->route('roles.index')->with('success', __('roles.messages.created'));
@@ -62,24 +104,60 @@ class RoleController extends Controller
         $role = Role::findOrFail($id); 
         $permissions = Permission::all();
         $rolePermissions = $role->permissions->pluck('id')->toArray();  
-        return view('roles.edit', compact('role', 'permissions', 'rolePermissions'));
+        $layoutCatalog = config('workspaces.catalog', []);
+
+        return view('roles.edit', compact('role', 'permissions', 'rolePermissions', 'layoutCatalog'));
 
     }
 
     public function update(Request $request, $id)
     {
        $role = Role::findOrFail($id);
+       $layoutSlugs = implode(',', array_keys(config('workspaces.catalog', [])));
 
         $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string|max:255',
             'group' => 'nullable|string|max:255',
             'permissions' => 'nullable|array',
+            'layout_web_name' => 'nullable|string|max:255',
+            'layout_web_slug' => 'nullable|string|max:120|in:' . $layoutSlugs,
+            'layout_mobile_name' => 'nullable|string|max:255',
+            'layout_mobile_slug' => 'nullable|string|max:120|in:' . $layoutSlugs,
         ]);
+
+        $catalog = config('workspaces.catalog', []);
+        $layoutWebSlug = trim((string) $request->input('layout_web_slug', ''));
+        $layoutWebName = trim((string) $request->input('layout_web_name', ''));
+        
+        $layoutMobileSlug = trim((string) $request->input('layout_mobile_slug', ''));
+        $layoutMobileName = trim((string) $request->input('layout_mobile_name', ''));
+
+        $compatibilityWebError = $this->layoutCompatibilityError((string) $request->input('name'), $layoutWebSlug, $catalog);
+        if ($compatibilityWebError !== null) {
+            return back()->withInput()->withErrors(['layout_web_slug' => $compatibilityWebError]);
+        }
+
+        $compatibilityMobileError = $this->layoutCompatibilityError((string) $request->input('name'), $layoutMobileSlug, $catalog);
+        if ($compatibilityMobileError !== null) {
+            return back()->withInput()->withErrors(['layout_mobile_slug' => $compatibilityMobileError]);
+        }
+
+        if ($layoutWebSlug !== '' && $layoutWebName === '' && isset($catalog[$layoutWebSlug]['label'])) {
+            $layoutWebName = (string) $catalog[$layoutWebSlug]['label'];
+        }
+        
+        if ($layoutMobileSlug !== '' && $layoutMobileName === '' && isset($catalog[$layoutMobileSlug]['label'])) {
+            $layoutMobileName = (string) $catalog[$layoutMobileSlug]['label'];
+        }
 
         $role->update([
             'name' => $request->name,
             'description' => $request->description,
+            'layout_web_name' => $layoutWebName !== '' ? $layoutWebName : null,
+            'layout_web_slug' => $layoutWebSlug !== '' ? $layoutWebSlug : null,
+            'layout_mobile_name' => $layoutMobileName !== '' ? $layoutMobileName : null,
+            'layout_mobile_slug' => $layoutMobileSlug !== '' ? $layoutMobileSlug : null,
         ]);
 
         // gán quyền cho role
@@ -98,5 +176,29 @@ class RoleController extends Controller
         $role->permissions()->detach();
         $role->delete();
         return redirect()->route('roles.index')->with('success', __('roles.messages.deleted'));
+    }
+
+    private function layoutCompatibilityError(string $roleName, string $layoutSlug, array $catalog): ?string
+    {
+        if ($layoutSlug === '' || !isset($catalog[$layoutSlug])) {
+            return null;
+        }
+
+        $hints = collect($catalog[$layoutSlug]['role_hints'] ?? [])
+            ->map(fn ($item) => strtolower(trim((string) $item)))
+            ->filter()
+            ->values()
+            ->all();
+
+        if ($hints === []) {
+            return null;
+        }
+
+        $normalizedRole = strtolower(trim($roleName));
+        if ($normalizedRole !== '' && !in_array($normalizedRole, $hints, true)) {
+            return 'Layout slug khong phu hop voi ten role hien tai. Vui long chon slug dung vai tro.';
+        }
+
+        return null;
     }
 }

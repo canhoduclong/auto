@@ -684,15 +684,15 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (noCustomerPlaceholder) noCustomerPlaceholder.classList.add('d-none');
                 if (clearCustomerBtn)      clearCustomerBtn.classList.remove('d-none');
 
-                // Auto-fill recipient fields if empty
+                // Auto-fill recipient fields
                 const recipientName    = document.getElementById('recipient_name');
                 const recipientPhone   = document.getElementById('recipient_phone');
                 const recipientEmail   = document.getElementById('recipient_email');
                 const recipientAddress = document.getElementById('recipient_address');
-                if (recipientName    && !recipientName.value.trim()    && name)    recipientName.value    = name;
-                if (recipientPhone   && !recipientPhone.value.trim()   && phone)   recipientPhone.value   = phone;
-                if (recipientEmail   && !recipientEmail.value.trim()   && email)   recipientEmail.value   = email;
-                if (recipientAddress && !recipientAddress.value.trim() && address) recipientAddress.value = address;
+                if (recipientName)    recipientName.value    = name;
+                if (recipientPhone)   recipientPhone.value   = phone;
+                if (recipientEmail)   recipientEmail.value   = email;
+                if (recipientAddress) recipientAddress.value = address;
 
                 // Close modal
                 bootstrap.Modal.getInstance(customerPickerModal)?.hide();

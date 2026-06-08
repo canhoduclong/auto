@@ -30,7 +30,7 @@ class AuthApiController extends BaseApiController
 
         $login = trim((string) $validated['email']);
         $user = User::query()
-            ->with('roles')
+            ->with(['roles', 'warehouse:id,name'])
             ->where(function ($query) use ($login): void {
                 $query->where('email', $login)
                     ->orWhere('phone', $login);
@@ -44,7 +44,7 @@ class AuthApiController extends BaseApiController
         $role = $this->resolvePrimaryRole($user);
         $layout = $this->resolveLayout($role);
 
-        if (!in_array($layout, ['shipper', 'warehouse'], true) && !$user->hasRole('admin')) {
+        if ($layout === 'unsupported' && !$user->hasRole('admin')) {
             return $this->fail('Tai khoan nay khong thuoc role mobile duoc ho tro.', 403);
         }
 
@@ -102,10 +102,10 @@ class AuthApiController extends BaseApiController
             return $this->fail('Tai khoan Google chua cung cap email hop le hoac chua xac minh email.', 422);
         }
 
-        $user = User::query()->with('roles')->where('google_id', $googleId)->first();
+            $user = User::query()->with(['roles', 'warehouse:id,name'])->where('google_id', $googleId)->first();
 
         if (!$user) {
-            $user = User::query()->with('roles')->where('email', $email)->first();
+            $user = User::query()->with(['roles', 'warehouse:id,name'])->where('email', $email)->first();
         }
 
         if (!$user) {
@@ -125,7 +125,7 @@ class AuthApiController extends BaseApiController
                 $user->roles()->syncWithoutDetaching([$role->id]);
             }
 
-            $user->load('roles');
+            $user->load(['roles', 'warehouse:id,name']);
         } else {
             $user->forceFill([
                 'google_id' => $user->google_id ?: $googleId,
@@ -133,13 +133,13 @@ class AuthApiController extends BaseApiController
                 'avatar' => $user->avatar ?: (string) ($googlePayload['picture'] ?? ''),
                 'email_verified_at' => $user->email_verified_at ?: now(),
             ])->save();
-            $user->loadMissing('roles');
+            $user->loadMissing(['roles', 'warehouse:id,name']);
         }
 
         $role = $this->resolvePrimaryRole($user);
         $layout = $this->resolveLayout($role);
 
-        if (!in_array($layout, ['shipper', 'warehouse'], true) && !$user->hasRole('admin')) {
+        if ($layout === 'unsupported' && !$user->hasRole('admin')) {
             return $this->fail('Tai khoan Google nay chua duoc gan role mobile duoc ho tro.', 403);
         }
 
@@ -172,13 +172,45 @@ class AuthApiController extends BaseApiController
             return $this->fail('Unauthorized', 401);
         }
 
-        $user->loadMissing('roles');
-        $role = $this->resolvePrimaryRole($user);
+        $user->loadMissing(['roles', 'warehouse:id,name']);
+        $role = $this->resolveSelectedMobileRole($user);
         $layout = $this->resolveLayout($role);
 
         return $this->ok([
             'user' => $this->mobileUserPayload($user, $role, $layout),
         ]);
+    }
+
+    public function switchRole(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user) {
+            return $this->fail('Unauthorized', 401);
+        }
+
+        $validated = $request->validate([
+            'role' => ['required', 'string', 'max:64'],
+        ]);
+
+        $user->loadMissing(['roles', 'warehouse:id,name']);
+        $role = strtolower(trim((string) $validated['role']));
+        $workspace = collect($this->mobileWorkspaces($user))
+            ->first(fn (array $item) => strtolower((string) $item['role']) === $role);
+
+        if (!$workspace) {
+            return $this->fail('Role khong duoc cap quyen cho tai khoan nay.', 403);
+        }
+
+        $roleRecord = Role::where('name', $role)->first();
+        if ($roleRecord) {
+            $user->update(['default_role_id' => $roleRecord->id]);
+        } else {
+            $user->forceFill(['mobile_selected_role' => $role])->save();
+        }
+
+        return $this->ok([
+            'user' => $this->mobileUserPayload($user->fresh(['roles', 'warehouse:id,name']), $role, (string) $workspace['layout']),
+        ], 'Da chuyen vai tro');
     }
 
     public function logout(Request $request): JsonResponse
@@ -371,16 +403,41 @@ class AuthApiController extends BaseApiController
 
     private function mobileUserPayload(User $user, string $role, string $layout): array
     {
+        $workspaces = $this->mobileWorkspaces($user);
+        if (empty($workspaces) && $layout !== 'unsupported') {
+            $workspaces[] = [
+                'role' => $role,
+                'layout' => $layout,
+                'label' => $this->mobileWorkspaceLabel($layout),
+                'menu' => $this->mobileMenuByLayout($layout, $user->hasRole('manager_shipper') || $user->hasRole('admin')),
+            ];
+        }
+
         return [
             'id' => (int) $user->id,
             'name' => (string) $user->name,
             'email' => (string) $user->email,
             'phone' => (string) ($user->phone ?? ''),
             'warehouse_id' => $user->warehouse_id ? (int) $user->warehouse_id : null,
+            'warehouse_name' => (string) ($user->warehouse?->name ?? ''),
             'roles' => $user->roles->pluck('name')->values(),
             'role' => $role,
             'layout' => $layout,
             'menu' => $this->mobileMenuByLayout($layout, $user->hasRole('manager_shipper') || $user->hasRole('admin')),
+            'workspaces' => $workspaces,
         ];
+    }
+
+    private function mobileWorkspaceLabel(string $layout): string
+    {
+        return match ($layout) {
+            'warehouse' => 'Kho',
+            'manager_shipper' => 'Shipper Manager',
+            'shipper' => 'Shipper',
+            'sale' => 'Sale',
+            'accounting' => 'Accounting',
+            'ceo' => 'CEO',
+            default => $layout,
+        };
     }
 }

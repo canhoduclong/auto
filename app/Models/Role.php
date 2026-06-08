@@ -8,7 +8,7 @@ use Illuminate\Support\Str;
 
 class Role extends Model
 {
-    protected $fillable = ['name', 'description'];
+    protected $fillable = ['name', 'description', 'layout_web_name', 'layout_web_slug', 'layout_mobile_name', 'layout_mobile_slug'];
 
     public function users()
     {

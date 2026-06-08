@@ -424,15 +424,45 @@ class WarehouseDashboardController extends Controller
             ];
         })->values();
 
-        $lowStockVariants = $availableVariants
-            ->filter(function (array $variant) {
-                return (int) ($variant['available'] ?? 0) <= (int) ($variant['low_stock_threshold'] ?? 0);
-            })
-            ->map(function (array $variant) {
-                $available = (int) ($variant['available'] ?? 0);
-                $threshold = (int) ($variant['low_stock_threshold'] ?? 0);
+        // Chỉ thống kê thiếu hàng theo các đơn được lên trong ngày (FIFO queue của kho).
+        $queueStatuses = array_merge(self::READY_TO_PACK_STATUSES, [Order::STATUS_PACKING]);
+        $selectedDate = Carbon::today()->toDateString();
 
-                $variant['shortage_qty'] = max(0, $threshold - $available);
+        $todayOrdersQuery = Order::with(['items.product', 'items.variant.product'])
+            ->whereIn('status', $queueStatuses)
+            ->whereDate('created_at', $selectedDate);
+
+        if ($managedWarehouseId && Auth::user()?->hasRole('warehouse')) {
+            $todayOrdersQuery->where(function ($warehouseScope) use ($managedWarehouseId, $queueStatuses) {
+                $warehouseScope->where('warehouse_id', $managedWarehouseId)
+                    ->orWhere(function ($sharedScope) use ($queueStatuses) {
+                        $sharedScope->whereNull('warehouse_id')
+                            ->whereIn('status', $queueStatuses);
+                    });
+            });
+        }
+
+        $todayOrders = $todayOrdersQuery
+            ->orderBy('created_at', 'asc')
+            ->orderBy('id', 'asc')
+            ->get();
+
+        $stockGuardResult = $this->buildPackingQueueStockGuards($todayOrders, $managedWarehouseId, $selectedDate);
+        $shortagesByVariant = collect($stockGuardResult['guards'] ?? [])
+            ->flatMap(fn (array $guard) => $guard['shortages'] ?? [])
+            ->groupBy(fn (array $shortage) => (int) ($shortage['variant_id'] ?? 0))
+            ->map(function (Collection $rows) {
+                $totalShortQty = (float) $rows->sum(fn (array $row) => (float) ($row['short_qty'] ?? 0));
+
+                return max(1, (int) ceil($totalShortQty));
+            });
+
+        $lowStockVariants = $availableVariants
+            ->filter(function (array $variant) use ($shortagesByVariant) {
+                return $shortagesByVariant->has((int) ($variant['variant_id'] ?? 0));
+            })
+            ->map(function (array $variant) use ($shortagesByVariant) {
+                $variant['shortage_qty'] = (int) ($shortagesByVariant->get((int) $variant['variant_id']) ?? 0);
 
                 return $variant;
             })
@@ -1712,14 +1742,23 @@ class WarehouseDashboardController extends Controller
     public function requestAdjustment(Request $request, Order $order)
     {
         if (!$order->created_at || !$order->created_at->isToday()) {
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => 'Chỉ được điều chỉnh đơn có ngày hôm nay.'], 422);
+            }
             return back()->with('error', 'Chỉ được điều chỉnh đơn có ngày hôm nay.');
         }
 
         if ($order->status === Order::STATUS_PACKING) {
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => 'Đơn đang đóng hàng. Hãy đưa đơn về Chờ đóng gói trước khi gửi điều chỉnh.'], 422);
+            }
             return back()->with('error', 'Đơn đang đóng hàng. Hãy đưa đơn về Chờ đóng gói trước khi gửi điều chỉnh.');
         }
 
         if (in_array($order->status, self::PACKED_STATUSES, true)) {
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => 'Đơn đã đóng gói xong, không thể điều chỉnh lại sản phẩm.'], 422);
+            }
             return back()->with('error', 'Đơn đã đóng gói xong, không thể điều chỉnh lại sản phẩm.');
         }
 
@@ -1818,10 +1857,16 @@ class WarehouseDashboardController extends Controller
 
         $remainingItems = collect($proposedQuantities)->filter(fn ($qty) => (int) $qty > 0)->count();
         if ($remainingItems <= 0) {
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => 'Đơn hàng phải còn ít nhất 1 sản phẩm sau khi điều chỉnh.'], 422);
+            }
             return back()->with('error', 'Đơn hàng phải còn ít nhất 1 sản phẩm sau khi điều chỉnh.');
         }
 
         if (empty($changes)) {
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => 'Không có thay đổi nào về số lượng sản phẩm.'], 422);
+            }
             return back()->with('error', 'Không có thay đổi nào về số lượng sản phẩm.');
         }
 
@@ -1852,6 +1897,15 @@ class WarehouseDashboardController extends Controller
 
         if ($order->user) {
             $order->user->notify(new WarehouseOrderAdjustmentRequested($order));
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => true,
+                'message' => 'Đã lưu snapshot thay đổi và gửi yêu cầu xác nhận cho sale.',
+                'order_id' => (int) $order->id,
+                'warehouse_adjustment_status' => Order::WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION,
+            ]);
         }
 
         return back()->with('success', 'Đã lưu snapshot thay đổi và gửi yêu cầu xác nhận cho sale.');
@@ -1890,22 +1944,37 @@ class WarehouseDashboardController extends Controller
     public function completePacking(Request $request, Order $order)
     {
         if ($order->warehouse_adjustment_status === Order::WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION) {
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => 'Đơn đang chờ sale xác nhận thay đổi từ kho.'], 422);
+            }
             return back()->with('error', 'Đơn đang chờ sale xác nhận thay đổi từ kho.');
         }
 
         if ($order->warehouse_adjustment_status === Order::WAREHOUSE_ADJUSTMENT_STATUS_SALE_REJECTED) {
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => 'Sale đã từ chối yêu cầu điều chỉnh. Vui lòng xử lý lại thay đổi trước khi hoàn tất đóng gói.'], 422);
+            }
             return back()->with('error', 'Sale đã từ chối yêu cầu điều chỉnh. Vui lòng xử lý lại thay đổi trước khi hoàn tất đóng gói.');
         }
 
         if (!$order->created_at || !$order->created_at->isToday()) {
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => 'Chỉ được xử lý đơn có ngày hôm nay.'], 422);
+            }
             return back()->with('error', 'Chỉ được xử lý đơn có ngày hôm nay.');
         }
 
         if ($order->status !== Order::STATUS_PACKING) {
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => 'Đơn hàng không đang ở trạng thái Đang đóng gói.'], 422);
+            }
             return back()->with('error', 'Đơn hàng không đang ở trạng thái Đang đóng gói.');
         }
 
         if ($order->actual_weight === null || $order->shipping_fee === null) {
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => 'Vui lòng cập nhật Kg thực tế và phí ship trước khi hoàn thành đóng gói.'], 422);
+            }
             return back()->with('error', 'Vui lòng cập nhật Kg thực tế và phí ship trước khi hoàn thành đóng gói.');
         }
 
@@ -1920,6 +1989,19 @@ class WarehouseDashboardController extends Controller
             'status_after'  => Order::STATUS_READY_TO_SHIP,
             'note'          => 'Hoàn thành đóng gói – Sẵn sàng giao hàng',
         ]);
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => true,
+                'message' => 'Đơn #' . $order->code . ' đã đóng gói xong, sẵn sàng giao!',
+                'order' => [
+                    'id' => (int) $order->id,
+                    'status' => Order::STATUS_READY_TO_SHIP,
+                    'status_label' => 'Chờ shipper nhận',
+                    'status_class' => 'bg-info text-dark',
+                ],
+            ]);
+        }
 
         return back()->with('success', 'Đơn #' . $order->code . ' đã đóng gói xong, sẵn sàng giao!');
     }

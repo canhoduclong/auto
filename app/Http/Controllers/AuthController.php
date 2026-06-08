@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Auth;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Models\Setting;
 use App\Models\User;
+use App\Services\UserWorkspaceService;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Laravel\Socialite\Facades\Socialite;
@@ -139,72 +140,57 @@ class AuthController extends Controller
 
     private function redirectAfterLogin(Request $request, User $user)
     {
+        $user->loadMissing(['roles', 'defaultRole']);
+        $rolesCount = $user->roles->count();
+
+        if ($rolesCount === 0) {
+            // User has no role, maybe just redirect to a default safe page
+            return redirect()->route('pages.my_profile');
+        }
+
+        if ($rolesCount === 1) {
+            $role = $user->roles->first();
+            $this->setDefaultRole($user, $role);
+            return $this->redirectToRoleLayout($request, $role);
+        }
+
+        // Multiple roles
+        if ($user->defaultRole && $user->roles->contains($user->defaultRole)) {
+            return $this->redirectToRoleLayout($request, $user->defaultRole);
+        }
+
+        // Invalid or no default role, redirect to selection
+        $redirect = redirect()->route('role-selection.show');
+        if ($user->default_role_id) {
+            $user->update(['default_role_id' => null]);
+            $redirect->with('warning', 'Role mặc định không còn hợp lệ. Vui lòng chọn lại.');
+        }
+
+        return $redirect;
+    }
+
+    private function setDefaultRole(User $user, \App\Models\Role $role)
+    {
+        if ($user->default_role_id !== $role->id) {
+            $user->update(['default_role_id' => $role->id]);
+        }
+    }
+
+    private function redirectToRoleLayout(Request $request, \App\Models\Role $role)
+    {
         if ($this->isMobileRequest($request)) {
-            $mobileRoute = $this->resolveMobileRoute($user);
-            if ($mobileRoute !== null) {
-                return redirect()->route($mobileRoute);
+            $route = $role->layout_mobile_slug ?? 'mobile.home';
+            if (\Illuminate\Support\Facades\Route::has($route)) {
+                return redirect()->route($route);
             }
         }
 
-        if ($user->hasRole('admin')) {
-            return redirect()->route('dashboard');
-        }
-
-        if ($user->hasRole('ceo')) {
-            return redirect()->route('ceo.dashboard');
-        }
-
-        if ($user->hasRole('warehouse')) {
-            return redirect()->route('warehouse.dashboard');
-        }
-
-        if ($user->hasRole('shipper')) {
-            return redirect()->route('shipper.dashboard');
-        }
-
-        if ($user->hasRole('accountant') || $user->hasRole('accounting')) {
-            return redirect()->route('accounting.dashboard');
-        }
-
-        $isSalesLikeUser = $user->isSalesFlowRole()
-            || $user->hasPermission('pages.my_orders')
-            || $user->hasPermission('orders.monitoring')
-            || $user->hasPermission('work-reports.index')
-            || $user->canAccessSalesDailyFeatures();
-
-        if ($isSalesLikeUser) {
-            return redirect()->route('pages.my_dashboard');
-        }
-
-        // Người dùng chưa được gán team hoặc kho → trang chờ phân công
-        if (empty($user->team_id) && empty($user->warehouse_id)) {
-            return redirect()->route('thankyou');
+        $route = $role->layout_web_slug ?? 'pages.my_profile';
+        if (\Illuminate\Support\Facades\Route::has($route)) {
+            return redirect()->route($route);
         }
 
         return redirect()->route('pages.my_profile');
-    }
-
-    private function resolveMobileRoute($user): ?string
-    {
-        if ($user->hasRole('warehouse')) {
-            return 'mobile.warehouse.home';
-        }
-
-        if ($user->hasRole('shipper') || $user->hasRole('ship')) {
-            return 'mobile.shipper.home';
-        }
-
-        $isSalesLikeUser = $user->isSalesFlowRole()
-            || $user->hasPermission('pages.my_orders')
-            || $user->hasPermission('orders.monitoring')
-            || $user->hasPermission('work-reports.index')
-            || $user->canAccessSalesDailyFeatures();
-
-        if ($isSalesLikeUser) {
-            return 'mobile.sale.home';
-        }
-
-        return null;
     }
 
     private function isMobileRequest(Request $request): bool

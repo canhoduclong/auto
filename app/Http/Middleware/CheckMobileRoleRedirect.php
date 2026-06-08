@@ -78,22 +78,18 @@ class CheckMobileRoleRedirect
 
     private function resolveMobileRoute($user): ?string
     {
-        if ($user->hasRole('warehouse')) {
-            return 'mobile.warehouse.home';
+        $user->loadMissing(['roles', 'defaultRole']);
+        
+        if ($user->roles->isEmpty()) {
+            return null;
         }
 
-        if ($user->hasRole('shipper') || $user->hasRole('ship')) {
-            return 'mobile.shipper.home';
+        if ($user->roles->count() === 1) {
+            return $user->roles->first()->layout_mobile_slug;
         }
 
-        $isSalesLikeUser = $user->isSalesFlowRole()
-            || $user->hasPermission('pages.my_orders')
-            || $user->hasPermission('orders.monitoring')
-            || $user->hasPermission('work-reports.index')
-            || $user->canAccessSalesDailyFeatures();
-
-        if ($isSalesLikeUser) {
-            return 'mobile.sale.home';
+        if ($user->defaultRole && $user->roles->contains($user->defaultRole)) {
+            return $user->defaultRole->layout_mobile_slug;
         }
 
         return null;

@@ -3,13 +3,17 @@
 namespace App\Http\Controllers;
 
 use App\Models\Product;
+use App\Models\ProductPriceLog;
+use App\Models\ProductPriceRule;
 use App\Models\ProductVariant;
 use App\Models\Supplier;
 use App\Models\SupplierProduct;
 use App\Models\SupplierProductPrice;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class WarehouseSupplierPriceController extends Controller
 {
@@ -22,7 +26,7 @@ class WarehouseSupplierPriceController extends Controller
         $to = $request->input('to');
 
         $supplierProducts = SupplierProduct::query()
-            ->with(['supplier', 'product'])
+            ->with(['supplier', 'product.variants.latestPriceRule'])
             ->when($supplierId, fn ($query) => $query->where('supplier_id', $supplierId))
             ->when($productId, fn ($query) => $query->where('product_id', $productId))
             ->when($status === 'active', fn ($query) => $query->where('active', true))
@@ -42,6 +46,29 @@ class WarehouseSupplierPriceController extends Controller
             ->get()
             ->keyBy(fn ($price) => $price->supplier_id . ':' . $price->product_id);
 
+        $saleSyncStatus = $supplierProducts->getCollection()
+            ->mapWithKeys(function (SupplierProduct $row) use ($latestPrices) {
+                $key = $row->supplier_id . ':' . $row->product_id;
+                $latest = $latestPrices->get($key);
+                $variants = $row->product?->variants ?? collect();
+
+                $isSynced = false;
+                if ($latest && $variants->isNotEmpty()) {
+                    $targetPrice = (float) $latest->today_sale_price;
+                    $targetMinPrice = (float) $latest->min_price;
+
+                    $isSynced = $variants->every(function (ProductVariant $variant) use ($targetPrice, $targetMinPrice) {
+                        $latestRule = $variant->latestPriceRule;
+
+                        return $latestRule
+                            && (float) $latestRule->price === $targetPrice
+                            && (float) ($latestRule->min_price ?? 0) === $targetMinPrice;
+                    });
+                }
+
+                return [$key => $isSynced];
+            });
+
         $suppliers = Supplier::query()->orderBy('name')->get();
         $products = Product::query()->where('status', true)->orderBy('name')->get();
 
@@ -54,7 +81,8 @@ class WarehouseSupplierPriceController extends Controller
             'productId',
             'status',
             'from',
-            'to'
+            'to',
+            'saleSyncStatus'
         ));
     }
 
@@ -62,26 +90,61 @@ class WarehouseSupplierPriceController extends Controller
     {
         $validated = $this->validatePricePayload($request);
 
-        SupplierProduct::query()->updateOrCreate(
-            [
-                'supplier_id' => $validated['supplier_id'],
-                'product_id' => $validated['product_id'],
-            ],
-            [
-                'active' => true,
-                'price_calculation_type' => $validated['price_calculation_type'],
-            ]
-        );
+        $product = Product::query()
+            ->with(['variants' => fn ($query) => $query->orderBy('id')])
+            ->findOrFail($validated['product_id']);
 
-        SupplierProductPrice::query()->create($validated + [
-            'created_by' => Auth::id(),
-        ]);
-
-        if ($request->expectsJson()) {
-            return response()->json(['ok' => true, 'message' => 'Đã cập nhật bảng giá.']);
+        if ($product->variants->isEmpty()) {
+            return back()->with('error', 'Sản phẩm chưa có biến thể để cập nhật giá bán.');
         }
 
-        return back()->with('success', 'Đã cập nhật bảng giá thu mua.');
+        $salePriceReason = trim((string) ($validated['note'] ?? ''));
+        if ($salePriceReason === '') {
+            $salePriceReason = 'Cập nhật giá bán từ bảng giá thu mua';
+        }
+
+        $updatedVariants = 0;
+
+        DB::transaction(function () use ($validated, $product, $salePriceReason, &$updatedVariants) {
+            SupplierProduct::query()->updateOrCreate(
+                [
+                    'supplier_id' => $validated['supplier_id'],
+                    'product_id' => $validated['product_id'],
+                ],
+                [
+                    'active' => true,
+                    'price_calculation_type' => $validated['price_calculation_type'],
+                ]
+            );
+
+            SupplierProductPrice::query()->create($validated + [
+                'created_by' => Auth::id(),
+            ]);
+
+            $updatedVariants = $this->applySalePriceToVariants(
+                $product->variants,
+                (float) $validated['today_sale_price'],
+                (float) $validated['min_price'],
+                (string) $validated['effective_date'],
+                $salePriceReason
+            );
+        });
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => true,
+                'message' => $updatedVariants > 0
+                    ? 'Đã cập nhật bảng giá và giá bán hôm nay.'
+                    : 'Đã cập nhật bảng giá. Giá bán hôm nay không thay đổi.',
+                'updated_variants' => $updatedVariants,
+            ]);
+        }
+
+        $message = $updatedVariants > 0
+            ? "Đã cập nhật bảng giá thu mua và giá bán cho {$updatedVariants} biến thể."
+            : 'Đã cập nhật bảng giá thu mua. Giá bán hôm nay không thay đổi.';
+
+        return back()->with('success', $message);
     }
 
     public function supplierProducts(Supplier $supplier): JsonResponse
@@ -193,6 +256,40 @@ class WarehouseSupplierPriceController extends Controller
         return back()->with('success', 'Đã tắt sản phẩm của nhà cung cấp.');
     }
 
+    public function applyTodaySalePrice(int $supplier, int $product)
+    {
+        $productModel = Product::query()->findOrFail($product);
+        $latestPrice = $this->latestPriceFor($supplier, $productModel->id);
+
+        if (!$latestPrice) {
+            return back()->with('error', 'Sản phẩm chưa có bảng giá để áp dụng.');
+        }
+
+        $variants = $productModel->variants()->orderBy('id')->get();
+        if ($variants->isEmpty()) {
+            return back()->with('error', 'Sản phẩm chưa có biến thể để cập nhật giá bán.');
+        }
+
+        $effectiveDate = now()->toDateString();
+        $reason = 'Dùng giá NCC ngày ' . optional($latestPrice->effective_date)->format('d/m/Y');
+
+        $updatedVariants = DB::transaction(function () use ($variants, $latestPrice, $effectiveDate, $reason) {
+            return $this->applySalePriceToVariants(
+                $variants,
+                (float) $latestPrice->today_sale_price,
+                (float) $latestPrice->min_price,
+                $effectiveDate,
+                $reason
+            );
+        });
+
+        if ($updatedVariants === 0) {
+            return back()->with('success', 'Giá bán hiện tại đã trùng với "Giá bán hôm nay" của nhà cung cấp.');
+        }
+
+        return back()->with('success', "Đã dùng giá này và cập nhật {$updatedVariants} biến thể.");
+    }
+
     private function validatePricePayload(Request $request): array
     {
         $validated = $request->validate([
@@ -246,6 +343,86 @@ class WarehouseSupplierPriceController extends Controller
             ->orderByDesc('effective_date')
             ->orderByDesc('id')
             ->first();
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, ProductVariant>  $variants
+     */
+    private function applySalePriceToVariants($variants, float $newPrice, float $newMinPrice, string $effectiveDate, string $reason): int
+    {
+        $updatedCount = 0;
+
+        foreach ($variants as $variant) {
+            $currentRule = $variant->priceRules()
+                ->where(function ($query) use ($effectiveDate) {
+                    $query->whereNull('start_date')
+                        ->orWhereDate('start_date', '<=', $effectiveDate);
+                })
+                ->where(function ($query) use ($effectiveDate) {
+                    $query->whereNull('end_date')
+                        ->orWhereDate('end_date', '>=', $effectiveDate);
+                })
+                ->orderByDesc('start_date')
+                ->orderByDesc('id')
+                ->first();
+
+            $oldPrice = (float) ($currentRule?->price ?? $variant->final_price ?? 0);
+
+            if (
+                $currentRule
+                && (float) $currentRule->price === $newPrice
+                && (float) ($currentRule->min_price ?? 0) === $newMinPrice
+            ) {
+                continue;
+            }
+
+            $variant->priceRules()
+                ->where(function ($query) use ($effectiveDate) {
+                    $query->whereNull('start_date')
+                        ->orWhereDate('start_date', '<=', $effectiveDate);
+                })
+                ->where(function ($query) use ($effectiveDate) {
+                    $query->whereNull('end_date')
+                        ->orWhereDate('end_date', '>=', $effectiveDate);
+                })
+                ->update([
+                    'end_date' => Carbon::parse($effectiveDate)->subDay()->toDateString(),
+                ]);
+
+            $nextRule = $variant->priceRules()
+                ->whereDate('start_date', '>', $effectiveDate)
+                ->orderBy('start_date')
+                ->first();
+
+            $endDate = null;
+            if ($nextRule && !empty($nextRule->start_date)) {
+                $endDate = Carbon::parse($nextRule->start_date)->subDay()->toDateString();
+            }
+
+            $newRule = ProductPriceRule::create([
+                'product_variant_id' => $variant->id,
+                'reason' => $reason,
+                'price' => $newPrice,
+                'min_price' => $newMinPrice,
+                'start_date' => $effectiveDate,
+                'end_date' => $endDate,
+                'created_by' => Auth::id(),
+            ]);
+
+            ProductPriceLog::create([
+                'product_variant_id' => $variant->id,
+                'price_rule_id' => $newRule->id,
+                'old_price' => $oldPrice,
+                'new_price' => $newPrice,
+                'applied_at' => now(),
+                'applied_by' => Auth::id(),
+                'user_id' => Auth::id(),
+            ]);
+
+            $updatedCount++;
+        }
+
+        return $updatedCount;
     }
 
     private function pricePayload(SupplierProductPrice $price): array

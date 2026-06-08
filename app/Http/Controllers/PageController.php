@@ -3366,7 +3366,7 @@ public function apiTruckRoutes(Request $request)
             }
         }
 
-        DB::transaction(function () use ($order, $validated, $itemsInput, $variants, $isCopiedOrder): void {
+        DB::transaction(function () use ($order, $validated, $itemsInput, $variants, $isCopiedOrder, $isReturnOrder): void {
             $order->items()->delete();
 
             $parseWeightToKg = static function ($size): float {

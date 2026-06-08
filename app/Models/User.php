@@ -34,6 +34,9 @@ class User extends Authenticatable
         'team_id',
         'block_id',
         'department_id',
+        'mobile_selected_role',
+        'default_workspace',
+        'default_role_id',
     ];
 
     /**
@@ -58,6 +61,11 @@ class User extends Authenticatable
             'last_seen_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    public function defaultRole()
+    {
+        return $this->belongsTo(Role::class, 'default_role_id');
     }
 
     // có nhiều vai trò

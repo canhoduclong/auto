@@ -9,6 +9,7 @@ use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Transaction;
+use App\Services\UserWorkspaceService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -18,6 +19,30 @@ class DashboardController extends Controller
     public function index()
     {
         $user = Auth::user();
+        $workspaceService = app(UserWorkspaceService::class);
+
+        if ($workspaceService->clearInvalidDefaultWorkspace($user)) {
+            $workspaceService->clearSession();
+        }
+
+        $workspace = $workspaceService->resolveSessionWorkspace(
+            $user,
+            session('active_workspace'),
+            session('active_role')
+        ) ?? $workspaceService->resolveAutomaticWorkspace($user);
+
+        if ($workspace !== null) {
+            $workspaceService->syncSession($workspace);
+        }
+
+        if ($workspace !== null && $workspace['route'] !== 'dashboard') {
+            return redirect()->route($workspace['route']);
+        }
+
+        if ($workspace === null && count($workspaceService->availableForUser($user)) > 1) {
+            return redirect()->route('layout-selection.show')
+                ->with('warning', 'Vui long chon layout de tiep tuc.');
+        }
 
         // Check for selected/active role from session
         $activeRole = strtolower(session('active_role') ?? '');

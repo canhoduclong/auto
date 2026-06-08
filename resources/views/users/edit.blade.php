@@ -48,12 +48,46 @@
             <div>
                 @foreach($roles as $role)
                     <label>
-                        <input type="checkbox" name="roles[]" value="{{ $role->id }}"
+                        <input type="checkbox" name="roles[]" value="{{ $role->id }}" data-role-name="{{ strtolower($role->name) }}"
                         {{ $user->roles->contains($role->id) ? 'checked' : '' }}>
                         {{ $role->name }}
                     </label><br>
                 @endforeach
             </div>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Layout mặc định</label>
+            @php
+                $selectedWorkspace = old('default_workspace', $user->default_workspace);
+            @endphp
+
+            <div class="mb-2">
+                <label class="d-block border rounded p-2">
+                    <input type="radio" name="default_workspace" value="" {{ empty($selectedWorkspace) ? 'checked' : '' }}>
+                    <span class="ms-1">Không đặt mặc định (hệ thống sẽ hỏi chọn khi đăng nhập nếu có nhiều layout)</span>
+                </label>
+            </div>
+
+            @if(count($availableWorkspaces) > 0)
+                @foreach($availableWorkspaces as $workspace)
+                    <label class="d-block border rounded p-2 mb-2">
+                        <input type="radio" name="default_workspace" value="{{ $workspace['key'] }}" {{ $selectedWorkspace === $workspace['key'] ? 'checked' : '' }}>
+                        <span class="ms-1 fw-semibold">{{ $workspace['label'] }}</span>
+                        @if($user->default_workspace === $workspace['key'])
+                            <span class="badge bg-success ms-2">Đang là mặc định</span>
+                        @endif
+                        @if(!empty($workspace['description']))
+                            <span class="d-block text-muted small mt-1">{{ $workspace['description'] }}</span>
+                        @endif
+                    </label>
+                @endforeach
+            @else
+                <div class="alert alert-warning mb-0">User hiện chưa có layout hợp lệ theo vai trò đang gán.</div>
+            @endif
+
+            <small class="text-muted">Danh sách này lấy theo vai trò hiện có của user.</small>
+            @error('default_workspace') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
         </div>
 
         <div class="mb-3">
@@ -153,6 +187,5 @@
         filterDepts();
     })();
     </script>
-    </form>
 </div>
 @endsection
