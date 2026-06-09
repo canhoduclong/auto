@@ -98,8 +98,14 @@
             <a href="{{ route('package.orders') }}" class="pkg-nav-link {{ request()->routeIs('package.orders*') ? 'active' : '' }}">
                 <i class="bi bi-list-ol"></i> Nhận đơn đóng hàng
             </a>
-            <a href="{{ route('package.returns') }}" class="pkg-nav-link {{ request()->routeIs('package.returns') ? 'active' : '' }}">
-                <i class="bi bi-arrow-return-left"></i> Nhận hàng trả về
+            <a href="{{ route('package.incoming-orders') }}" class="pkg-nav-link {{ request()->routeIs('package.incoming-orders*') ? 'active' : '' }}">
+                <i class="bi bi-truck"></i> Tiếp nhận đơn
+            </a>
+            <a href="{{ route('package.incoming-inventory') }}" class="pkg-nav-link {{ request()->routeIs('package.incoming-inventory*') ? 'active' : '' }}">
+                <i class="bi bi-box-arrow-in-down"></i> Tiếp nhận hàng
+            </a>
+            <a href="{{ route('package.incoming-returns') }}" class="pkg-nav-link {{ request()->routeIs('package.incoming-returns*') ? 'active' : '' }}">
+                <i class="bi bi-arrow-return-left"></i> Tiếp nhận đơn trả về
             </a>
             <a href="{{ route('package.order-changes') }}" class="pkg-nav-link {{ request()->routeIs('package.order-changes') ? 'active' : '' }}">
                 <i class="bi bi-pencil-square"></i> Yêu cầu thay đổi đơn

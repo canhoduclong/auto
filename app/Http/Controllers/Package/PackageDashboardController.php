@@ -5,6 +5,9 @@ namespace App\Http\Controllers\Package;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\Product;
+use App\Models\OrderReturn;
+use App\Models\WarehouseInventoryTransfer;
+use App\Models\WarehouseTransfer;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -52,6 +55,18 @@ class PackageDashboardController extends Controller
             'change_requests' => $scopeWarehouse(Order::query())
                 ->whereNotNull('warehouse_adjustment_status')
                 ->whereDate('updated_at', $date)
+                ->count(),
+            'incoming_orders' => WarehouseTransfer::query()
+                ->when($warehouseId, fn ($query) => $query->where('target_warehouse_id', $warehouseId))
+                ->where('status', WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE)
+                ->count(),
+            'incoming_inventory' => WarehouseInventoryTransfer::query()
+                ->when($warehouseId, fn ($query) => $query->where('target_warehouse_id', $warehouseId))
+                ->where('status', WarehouseInventoryTransfer::STATUS_PENDING_RECEIVE)
+                ->count(),
+            'incoming_returns' => OrderReturn::query()
+                ->when($warehouseId, fn ($query) => $query->where('warehouse_id', $warehouseId))
+                ->whereIn('status', ['pending_warehouse', 'requested', 'ship_confirmed'])
                 ->count(),
         ];
 

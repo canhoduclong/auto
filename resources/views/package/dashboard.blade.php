@@ -63,10 +63,22 @@
             'route' => route('package.orders'),
         ],
         [
-            'label' => 'Tiếp nhận hàng trả về',
-            'total' => ($stats['returning'] ?? 0) + ($stats['returned'] ?? 0),
-            'done' => $stats['returned'] ?? 0,
-            'route' => route('package.returns'),
+            'label' => 'Tiếp nhận đơn điều chuyển',
+            'total' => $stats['incoming_orders'] ?? 0,
+            'done' => 0,
+            'route' => route('package.incoming-orders'),
+        ],
+        [
+            'label' => 'Tiếp nhận hàng điều chuyển',
+            'total' => $stats['incoming_inventory'] ?? 0,
+            'done' => 0,
+            'route' => route('package.incoming-inventory'),
+        ],
+        [
+            'label' => 'Tiếp nhận đơn trả về',
+            'total' => $stats['incoming_returns'] ?? 0,
+            'done' => 0,
+            'route' => route('package.incoming-returns'),
         ],
         [
             'label' => 'Yêu cầu thay đổi đơn',
