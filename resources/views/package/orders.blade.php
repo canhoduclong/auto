@@ -19,14 +19,23 @@
 .is-packing { background:#ffc107; color:#212529 !important; }
 .is-packed { background:#198754; }
 .pkg-order-card { border:0; border-radius:14px; box-shadow:0 8px 20px rgba(15,23,42,.08); scroll-margin-top:145px; }
-.pkg-order-items { display:grid; gap:7px; }
-.pkg-order-item {
-    display:grid; grid-template-columns:minmax(150px,1fr) 90px 80px;
-    gap:8px; padding:8px 10px; border:1px solid #e2e8f0; border-radius:9px; background:#f8fafc;
+.pkg-items-scroll { overflow-x:auto; }
+.pkg-items-table { min-width:820px; }
+.pkg-item-head, .pkg-item-row {
+    display:grid; grid-template-columns:52px minmax(170px,1fr) 65px 55px 90px 100px 95px 110px;
+    gap:7px; align-items:center;
 }
+.pkg-item-head {
+    padding:8px; border-radius:9px 9px 0 0; background:#eef2f7;
+    color:#64748b; font-size:.7rem; font-weight:800; text-transform:uppercase;
+}
+.pkg-item-row { padding:9px 8px; border-bottom:1px solid #e2e8f0; background:#f8fafc; font-size:.82rem; }
+.pkg-item-thumb { width:42px; height:42px; border-radius:8px; object-fit:cover; border:1px solid #e2e8f0; }
+.pkg-item-placeholder { width:42px; height:42px; display:inline-flex; align-items:center; justify-content:center; border-radius:8px; background:#e2e8f0; color:#64748b; }
+.pkg-column { min-width:0; }
 .pkg-lock-note { background:#ecfdf5; color:#166534; border:1px solid #bbf7d0; border-radius:9px; padding:9px 11px; }
 @media(max-width:767.98px) {
-    .pkg-order-item { grid-template-columns:1fr; }
+    .pkg-orders-column-packed { border-left:0 !important; }
 }
 </style>
 @endpush
@@ -95,91 +104,35 @@
     </div>
 @endif
 
-@forelse($orders as $order)
-    @php
-        $isReady = in_array($order->status, ['approved', 'ready_to_pack'], true);
-        $isPacking = $order->status === 'packing';
-        $isPacked = in_array($order->status, $packedStatuses, true);
-        $stateClass = $isPacking ? 'is-packing' : ($isPacked ? 'is-packed' : 'is-unpacked');
-        $meta = $statusMeta[$order->status] ?? ['label' => $order->status, 'class' => 'bg-secondary'];
-        $canProcess = \Illuminate\Support\Carbon::parse($selectedDate)->isToday() && $order->created_at?->isToday();
-        $totalQty = (float) $order->items->sum('quantity');
-    @endphp
-    <div class="card pkg-order-card mb-3" id="package-order-{{ $order->id }}">
-        <div class="card-header bg-white d-flex align-items-center gap-3">
-            <span class="pkg-order-sequence {{ $stateClass }}">{{ $order->daily_sequence ?? '—' }}</span>
-            <div class="flex-grow-1">
-                <div class="fw-bold fs-5">{{ $order->customer?->name ?? '—' }}</div>
-                <div class="small text-muted">{{ $order->code }} · {{ $order->created_at?->format('d/m/Y H:i') }}</div>
-            </div>
-            <span class="badge {{ $meta['class'] }}">{{ $meta['label'] }}</span>
-        </div>
-        <div class="card-body">
-            <div class="row g-3 mb-3">
-                <div class="col-6 col-md-3"><div class="small text-muted">Sale</div><div class="fw-semibold">{{ $order->user?->name ?? '—' }}</div></div>
-                <div class="col-6 col-md-3"><div class="small text-muted">Tổng số lượng</div><div class="fw-semibold">{{ rtrim(rtrim(number_format($totalQty, 3, '.', ''), '0'), '.') }}</div></div>
-                <div class="col-6 col-md-3"><div class="small text-muted">Kg thực tế</div><div class="fw-semibold">{{ $order->actual_weight !== null ? number_format((float)$order->actual_weight, 3) : '—' }}</div></div>
-                <div class="col-6 col-md-3"><div class="small text-muted">Phí ship</div><div class="fw-semibold">{{ $order->shipping_fee !== null ? number_format((float)$order->shipping_fee) . 'đ' : '—' }}</div></div>
-            </div>
-
-            <details class="mb-3">
-                <summary class="fw-semibold">Danh sách hàng hóa ({{ $order->items->count() }})</summary>
-                <div class="pkg-order-items mt-2">
-                    @foreach($order->items as $item)
-                        <div class="pkg-order-item">
-                            <div class="fw-semibold">{{ $item->product?->name ?? $item->variant?->name ?? 'Sản phẩm' }}</div>
-                            <div>Size: {{ $item->variant?->size ?: '—' }}</div>
-                            <div>SL: {{ rtrim(rtrim(number_format((float)$item->quantity, 3, '.', ''), '0'), '.') }}</div>
-                        </div>
-                    @endforeach
-                </div>
-            </details>
-
-            @if($isPacking)
-                <form method="POST" action="{{ route('package.orders.logistics', $order) }}" class="row g-2 align-items-end mb-3">
-                    @csrf
-                    <div class="col-md-4">
-                        <label class="form-label small">Kg thực tế</label>
-                        <input type="number" step="0.001" min="0" name="actual_weight" class="form-control" required value="{{ $order->actual_weight }}">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label small">Phí ship</label>
-                        <input type="number" step="1" min="0" name="shipping_fee" class="form-control" required value="{{ $order->shipping_fee }}">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label small">Phí thùng xốp</label>
-                        <input type="number" step="1" min="0" name="foam_box_price" class="form-control" value="{{ $order->foam_box_price }}">
-                    </div>
-                    <div class="col-12"><button class="btn btn-outline-primary btn-sm"><i class="bi bi-save me-1"></i>Lưu thông tin đóng hàng</button></div>
-                </form>
-            @endif
-
-            @if($isPacked)
-                <div class="pkg-lock-note">
-                    <i class="bi bi-lock-fill me-1"></i><strong>Đơn đã đóng hàng và được khóa.</strong>
-                    Package không thể mở khóa hoặc chỉnh sửa lại đơn này.
-                </div>
-            @elseif(!$canProcess)
-                <span class="badge bg-secondary">Chỉ được xử lý đơn hôm nay</span>
-            @elseif($isReady)
-                <form method="POST" action="{{ route('package.orders.start-packing', $order) }}" class="d-grid">
-                    @csrf
-                    <button class="btn btn-primary"><i class="bi bi-box2 me-1"></i>Bắt đầu đóng hàng</button>
-                </form>
-            @elseif($isPacking)
-                <form method="POST" action="{{ route('package.orders.complete-packing', $order) }}" class="d-grid">
-                    @csrf
-                    <button class="btn btn-success"><i class="bi bi-lock-fill me-1"></i>Hoàn tất và khóa đơn</button>
-                </form>
-            @else
-                <span class="badge bg-secondary">Không thể xử lý ở trạng thái hiện tại</span>
-            @endif
-        </div>
-    </div>
-@empty
+@if($orders->isEmpty())
     <div class="card border-0 shadow-sm text-center py-5">
         <i class="bi bi-check2-all fs-1 text-success"></i>
         <p class="mt-2 text-muted">Không có đơn hàng trong bộ lọc này.</p>
     </div>
-@endforelse
+@else
+    @php
+        $packedOrders = $orders->filter(fn ($order) => in_array((string) $order->status, $packedStatuses, true));
+        $unpackedOrders = $orders->reject(fn ($order) => in_array((string) $order->status, $packedStatuses, true));
+    @endphp
+    <div class="row g-4">
+        <div class="col-12 col-lg-6">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="mb-0 fw-bold" style="color:#64748b;"><i class="bi bi-box-seam me-2"></i>Chưa đóng hàng</h5>
+                <span class="badge bg-secondary">{{ $unpackedOrders->count() }} đơn</span>
+            </div>
+            @foreach($unpackedOrders as $order)
+                @include('package.orders._order_card', compact('order', 'packedStatuses', 'statusMeta', 'selectedDate'))
+            @endforeach
+        </div>
+        <div class="col-12 col-lg-6 border-start pkg-orders-column-packed">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="mb-0 fw-bold text-success"><i class="bi bi-check-circle me-2"></i>Đã đóng hàng</h5>
+                <span class="badge bg-success">{{ $packedOrders->count() }} đơn</span>
+            </div>
+            @foreach($packedOrders as $order)
+                @include('package.orders._order_card', compact('order', 'packedStatuses', 'statusMeta', 'selectedDate'))
+            @endforeach
+        </div>
+    </div>
+@endif
 @endsection

@@ -26,8 +26,9 @@ class OrderPackingController extends Controller
             'user',
             'warehouse',
             'histories.user',
-            'items.product',
-            'items.variant',
+            'items.product.avatar.media',
+            'items.variant.product',
+            'items.variant.avatar.media',
         ])
             ->where(function ($orderQuery) {
                 $orderQuery->whereNull('is_return_order')->orWhere('is_return_order', false);
