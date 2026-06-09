@@ -240,6 +240,7 @@ class UserController extends Controller
             'block_id' => 'nullable|exists:blocks,id',
             'department_id' => 'nullable|exists:departments,id',
             'default_workspace' => 'nullable|string|max:120',
+            'default_mobile_role_id' => 'nullable|integer|exists:roles,id',
         ]);
 
         $selectedRoleIds = collect($request->input('roles', []))
@@ -263,13 +264,22 @@ class UserController extends Controller
                 ->withErrors(['default_workspace' => 'Layout mac dinh khong hop le voi cac vai tro duoc chon.']);
         }
 
-        $defaultRoleId = null;
-        if ($requestedDefaultWorkspace !== null) {
-            $defaultRoleId = Role::query()
-                ->whereIn('id', $selectedRoleIds)
-                ->where('layout_web_slug', $requestedDefaultWorkspace)
-                ->orderBy('id')
-                ->value('id');
+        $defaultMobileRoleId = $request->filled('default_mobile_role_id')
+            ? (int) $request->input('default_mobile_role_id')
+            : null;
+        $defaultMobileRole = null;
+
+        if ($defaultMobileRoleId !== null) {
+            $defaultMobileRole = Role::query()->find($defaultMobileRoleId);
+            $mobileLayout = config('workspaces.catalog.' . $defaultMobileRole?->layout_mobile_slug);
+
+            if (!$selectedRoleIds->contains($defaultMobileRoleId)
+                || !is_array($mobileLayout)
+                || ($mobileLayout['platform'] ?? null) !== 'my_app') {
+                return back()
+                    ->withInput()
+                    ->withErrors(['default_mobile_role_id' => 'Layout Mobile mặc định không hợp lệ với các vai trò được chọn.']);
+            }
         }
 
         $user->update([
@@ -281,7 +291,8 @@ class UserController extends Controller
             'block_id'      => $request->block_id,
             'department_id' => $request->department_id,
             'default_workspace' => $requestedDefaultWorkspace,
-            'default_role_id' => $defaultRoleId,
+            'default_role_id' => $defaultMobileRoleId,
+            'mobile_selected_role' => $defaultMobileRole?->name,
         ]);
 
         $user->roles()->sync($request->roles ?? []);

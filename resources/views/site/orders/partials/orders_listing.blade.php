@@ -33,6 +33,18 @@
     ];
 
     $pageOrders = $orders->getCollection();
+    $isTodayOrdersView = !(bool) ($isTrashView ?? (request('trash') === '1'))
+        && request()->filled('from_date')
+        && request()->filled('to_date')
+        && request('from_date') === now()->toDateString()
+        && request('to_date') === now()->toDateString();
+    $sequencePackedStatuses = [
+        \App\Models\Order::STATUS_PACKED,
+        \App\Models\Order::STATUS_READY_TO_SHIP,
+        \App\Models\Order::STATUS_DELIVERING,
+        \App\Models\Order::STATUS_DELIVERED,
+        \App\Models\Order::STATUS_COMPLETED,
+    ];
     $returnableCount = $pageOrders->filter(function ($order) {
         return in_array($order->status, ['picked_up', 'shipping', 'completed'], true);
     })->count();
@@ -74,6 +86,36 @@
         </div>
     </div>
  </div>
+ @if($isTodayOrdersView && $pageOrders->isNotEmpty())
+    <div class="my-orders-sequence-nav">
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+            <span class="fw-bold text-muted me-1">
+                <i class="bi bi-list-ol me-1"></i>Điều hướng nhanh:
+            </span>
+            @foreach($pageOrders->sortBy(fn ($order) => $order->daily_sequence ?? PHP_INT_MAX) as $navOrder)
+                @php
+                    $navStatus = (string) $navOrder->status;
+                    $navStateClass = $navStatus === \App\Models\Order::STATUS_PACKING
+                        ? 'is-packing'
+                        : (in_array($navStatus, $sequencePackedStatuses, true) ? 'is-packed' : 'is-unpacked');
+                @endphp
+                <a
+                    href="#my-order-card-{{ $navOrder->id }}"
+                    class="my-orders-sequence-pill {{ $navStateClass }}"
+                    onclick="event.preventDefault(); document.getElementById('my-order-card-{{ $navOrder->id }}')?.scrollIntoView({ behavior: 'smooth', block: 'start' });"
+                    title="{{ $navOrder->customer?->name ?? 'Đơn hàng' }} - {{ $statusLabels[$navStatus] ?? $navStatus }}"
+                >
+                    {{ $navOrder->daily_sequence ?? '—' }}
+                </a>
+            @endforeach
+        </div>
+        <div class="d-flex flex-wrap gap-3 mt-2 small text-muted">
+            <span><i class="bi bi-circle-fill text-secondary me-1"></i>Chưa đóng hàng</span>
+            <span><i class="bi bi-circle-fill text-warning me-1"></i>Đang đóng hàng</span>
+            <span><i class="bi bi-circle-fill text-success me-1"></i>Đã đóng hàng</span>
+        </div>
+    </div>
+ @endif
   <div class="list-orders mt-4">
     @if($orders->count() > 0)
         <div class="pt-3 pb-3">
@@ -115,7 +157,12 @@
                                 && $order->created_at?->isToday());
                     @endphp
                     <div class="col-12">
-                        <div class="mc-customer-card border rounded p-3 bg-white">
+                        <div
+                            class="mc-customer-card border rounded p-3 bg-white"
+                            id="my-order-card-{{ $order->id }}"
+                            data-order-id="{{ $order->id }}"
+                            data-order-sequence="{{ $order->daily_sequence ?? '' }}"
+                        >
                             @php
                                 $formatSignedMoney = static function (float $amount): string {
                                     $prefix = $amount < 0 ? '+' : '-';
@@ -131,7 +178,16 @@
                             @endphp
 
                             <div class="wh-order-head">
-                                <div>
+                                <div class="d-flex align-items-start gap-3">
+                                    @if($isTodayOrdersView)
+                                        <div class="my-orders-sequence-badge" title="Số thứ tự đơn trong ngày">
+                                            <div class="text-center">
+                                                <small>STT</small>
+                                                {{ $order->daily_sequence ?? '—' }}
+                                            </div>
+                                        </div>
+                                    @endif
+                                    <div>
                                     <div class="orders-code">{{ $order->customer?->name ?? '—' }}</div>
                                     <small class="text-muted">
                                         <i class="bi bi-clock"></i>
@@ -147,6 +203,7 @@
                                     @if(!empty($order->copied_from_order_id))
                                         <div><span class="badge bg-warning text-dark mt-2">Đơn copy mới</span></div>
                                     @endif
+                                    </div>
                                 </div>
                                 <div class="text-end">
 

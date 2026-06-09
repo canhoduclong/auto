@@ -144,6 +144,71 @@
     .orders-section-head {
         padding: 22px 24px 0;
     }
+    .my-orders-sequence-nav {
+        position: sticky;
+        top: 84px;
+        z-index: 90;
+        margin: 16px 18px 0;
+        padding: 12px 16px;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        background: #fff;
+        box-shadow: 0 4px 15px rgba(15, 23, 42, .08);
+    }
+    .my-orders-sequence-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 36px;
+        height: 36px;
+        padding: 0 9px;
+        border: 0;
+        border-radius: 999px;
+        color: #fff;
+        font-size: .9rem;
+        font-weight: 800;
+        text-decoration: none;
+        box-shadow: 0 2px 4px rgba(15, 23, 42, .16);
+        transition: transform .2s ease, box-shadow .2s ease;
+    }
+    .my-orders-sequence-pill:hover,
+    .my-orders-sequence-pill:focus {
+        color: #fff;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 9px rgba(15, 23, 42, .22);
+    }
+    .my-orders-sequence-pill.is-unpacked {
+        background: #64748b;
+    }
+    .my-orders-sequence-pill.is-packing {
+        background: #f59e0b;
+        color: #212529;
+    }
+    .my-orders-sequence-pill.is-packed {
+        background: #198754;
+    }
+    .my-orders-sequence-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 54px;
+        height: 54px;
+        border-radius: 12px;
+        background: #eff6ff;
+        color: #1d4ed8;
+        font-size: 1.5rem;
+        font-weight: 900;
+        line-height: 1;
+    }
+    .my-orders-sequence-badge small {
+        display: block;
+        font-size: .55rem;
+        font-weight: 700;
+        text-transform: uppercase;
+    }
+    [id^="my-order-card-"] {
+        scroll-margin-top: 155px;
+    }
     .orders-table-wrap {
         padding: 0 18px 18px;
     }

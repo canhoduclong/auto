@@ -65,6 +65,7 @@
             <label class="form-label">Layout website mặc định</label>
             @php
                 $selectedWorkspace = old('default_workspace', $user->default_workspace);
+                $selectedMobileRoleId = old('default_mobile_role_id', $user->default_role_id);
                 $layoutCatalog = collect(config('workspaces.catalog', []));
                 $roleLayoutPayload = $roles->mapWithKeys(function ($role) use ($layoutCatalog) {
                     $webLayout = $layoutCatalog->get($role->layout_web_slug, []);
@@ -91,6 +92,13 @@
 
             <small class="text-muted">Danh sách này lấy theo các vai trò đang được tick ở trên.</small>
             @error('default_workspace') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Layout Mobile mặc định</label>
+            <div id="default-mobile-layout-options"></div>
+            <small class="text-muted">Danh sách Mobile layout lấy theo các vai trò đang được tick ở trên.</small>
+            @error('default_mobile_role_id') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
         </div>
 
         <div class="mb-3">
@@ -215,9 +223,12 @@
 document.addEventListener('DOMContentLoaded', function () {
     const roleLayouts = @json($roleLayoutPayload);
     const initialSelectedWorkspace = @json($selectedWorkspace);
+    const initialSelectedMobileRoleId = @json((string) $selectedMobileRoleId);
     const savedWorkspace = @json($user->default_workspace);
+    const savedMobileRoleId = @json((string) $user->default_role_id);
     const checkboxes = Array.from(document.querySelectorAll('.js-role-checkbox'));
     const workspaceContainer = document.getElementById('default-workspace-options');
+    const mobileLayoutContainer = document.getElementById('default-mobile-layout-options');
     const summaryBody = document.getElementById('role-layout-summary');
 
     function checkedRoleLayouts() {
@@ -284,6 +295,47 @@ document.addEventListener('DOMContentLoaded', function () {
         workspaceContainer.innerHTML = html;
     }
 
+    function renderDefaultMobileLayoutOptions() {
+        const roles = checkedRoleLayouts();
+        const currentSelection = document.querySelector('input[name="default_mobile_role_id"]:checked')?.value;
+        const selectedRoleId = currentSelection !== undefined ? currentSelection : initialSelectedMobileRoleId;
+        const selectedStillAvailable = selectedRoleId && roles.some((role) => String(role.id) === String(selectedRoleId) && role.mobile_slug);
+        const noneChecked = !selectedRoleId || !selectedStillAvailable;
+        let html = `
+            <div class="mb-2">
+                <label class="d-block border rounded p-2">
+                    <input type="radio" name="default_mobile_role_id" value="" ${noneChecked ? 'checked' : ''}>
+                    <span class="ms-1">Không đặt Mobile layout mặc định</span>
+                </label>
+            </div>
+        `;
+
+        const mobileRoles = roles.filter((role) => role.mobile_slug);
+        if (mobileRoles.length === 0) {
+            html += '<div class="alert alert-warning mb-0">Các role đang chọn chưa có Mobile layout hợp lệ.</div>';
+            mobileLayoutContainer.innerHTML = html;
+            return;
+        }
+
+        mobileRoles.forEach((role) => {
+            const checked = String(selectedRoleId) === String(role.id) ? 'checked' : '';
+            const badge = String(savedMobileRoleId) === String(role.id) ? '<span class="badge bg-success ms-2">Đang là mặc định</span>' : '';
+            const description = role.mobile_description ? `<span class="d-block text-muted small mt-1">${role.mobile_description}</span>` : '';
+            html += `
+                <label class="d-block border rounded p-2 mb-2">
+                    <input type="radio" name="default_mobile_role_id" value="${role.id}" ${checked}>
+                    <span class="ms-1 fw-semibold">${role.mobile_label || role.mobile_slug}</span>
+                    ${badge}
+                    <span class="badge bg-info text-dark ms-2">Role: ${role.name}</span>
+                    <span class="d-block text-muted small mt-1">${role.mobile_slug}${role.mobile_route ? ' | ' + role.mobile_route : ''}</span>
+                    ${description}
+                </label>
+            `;
+        });
+
+        mobileLayoutContainer.innerHTML = html;
+    }
+
     function renderRoleLayoutSummary() {
         const roles = checkedRoleLayouts();
 
@@ -306,6 +358,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function refreshLayoutUi() {
         renderDefaultWorkspaceOptions();
+        renderDefaultMobileLayoutOptions();
         renderRoleLayoutSummary();
     }
 

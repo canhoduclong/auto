@@ -605,6 +605,12 @@ class PageController extends Controller
             $query->where('status', $request->input('status'));
         }
 
+        $isTodayOrdersView = !$isTrashView
+            && $request->filled('from_date')
+            && $request->filled('to_date')
+            && (string) $request->input('from_date') === now()->toDateString()
+            && (string) $request->input('to_date') === now()->toDateString();
+
         $allowedPerPage = [5, 10, 20, 50, 100];
         $perPage = (int) $request->input('per_page', 10);
         if (!in_array($perPage, $allowedPerPage, true)) {
@@ -620,7 +626,12 @@ class PageController extends Controller
         $sortDir = strtolower((string) $request->input('sort_dir', 'desc'));
         $sortDir = in_array($sortDir, ['asc', 'desc'], true) ? $sortDir : 'desc';
 
-        if ($sortBy === 'customer_name') {
+        if ($isTodayOrdersView) {
+            $query->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
+                ->orderBy('daily_sequence')
+                ->orderBy('created_at')
+                ->orderBy('id');
+        } elseif ($sortBy === 'customer_name') {
             $query->orderBy(
                 Customer::query()
                     ->select('name')
