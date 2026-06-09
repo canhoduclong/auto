@@ -98,18 +98,74 @@ class OrderPackingController extends Controller
             return back()->with('error', 'Đơn đã khóa hoặc không ở trạng thái đang đóng hàng.');
         }
 
-        $validated = $request->validate([
-            'actual_weight' => ['required', 'numeric', 'min:0'],
-            'shipping_fee' => ['required', 'numeric', 'min:0'],
-            'foam_box_price' => ['nullable', 'numeric', 'min:0'],
-        ]);
+        $order->loadMissing('items');
+        $itemIds = $order->items->pluck('id')->all();
+
+        $rules = [
+            'item_id' => ['nullable', 'integer'],
+            'item_actual_weight' => ['nullable', 'numeric', 'min:0'],
+            'charge_shipping_fee' => ['nullable', 'boolean'],
+            'shipping_fee'  => ['nullable', 'numeric', 'min:0', 'required_if:charge_shipping_fee,1'],
+            'charge_foam_box_fee' => ['nullable', 'boolean'],
+            'foam_box_price' => ['nullable', 'numeric', 'min:0', 'required_if:charge_foam_box_fee,1'],
+        ];
+
+        if ($request->filled('item_id')) {
+            $rules['item_actual_weight'] = ['required', 'numeric', 'min:0'];
+        }
+
+        $validated = $request->validate($rules);
+
+        $oldWeight = $order->actual_weight;
+        $oldShippingFee = $order->shipping_fee;
+        $oldChargeShippingFee = $order->charge_shipping_fee;
+        $oldFoamBoxPrice = $order->foam_box_price;
+        $oldChargeFoamBoxFee = $order->charge_foam_box_fee;
+
+        if ($request->filled('item_id')) {
+            $itemId = (int) $validated['item_id'];
+            if (!in_array($itemId, $itemIds, true)) {
+                return back()->with('error', 'Sản phẩm không thuộc đơn hàng này.');
+            }
+
+            $item = $order->items->firstWhere('id', $itemId);
+            if ($item) {
+                $newWeight = round((float) $validated['item_actual_weight'], 3);
+                $item->actual_weight = $newWeight;
+                if ($item->packed_weight === null) {
+                    $item->packed_weight = $newWeight;
+                }
+                $item->save();
+            }
+        }
+
+        $chargeShippingFee = $oldChargeShippingFee;
+        $shippingFee = (float) ($oldShippingFee ?? 0);
+        if ($request->has('charge_shipping_fee')) {
+            $chargeShippingFee = $request->boolean('charge_shipping_fee');
+            $shippingFee = $chargeShippingFee
+                ? round((float) ($validated['shipping_fee'] ?? 0), 2)
+                : 0.0;
+        }
+
+        $chargeFoamBoxFee = $oldChargeFoamBoxFee;
+        $foamBoxPrice = (float) ($oldFoamBoxPrice ?? 0);
+        if ($request->has('charge_foam_box_fee')) {
+            $chargeFoamBoxFee = $request->boolean('charge_foam_box_fee');
+            $foamBoxPrice = $chargeFoamBoxFee
+                ? round((float) ($validated['foam_box_price'] ?? 0), 2)
+                : 0.0;
+        }
+
+        $actualWeight = round((float) $order->items()->sum('actual_weight'), 3);
 
         $order->update([
-            'actual_weight' => $validated['actual_weight'],
-            'shipping_fee' => $validated['shipping_fee'],
-            'charge_shipping_fee' => (float) $validated['shipping_fee'] > 0,
-            'foam_box_price' => $validated['foam_box_price'] ?? 0,
-            'charge_foam_box_fee' => (float) ($validated['foam_box_price'] ?? 0) > 0,
+            'actual_weight' => $actualWeight,
+            'charge_shipping_fee' => $chargeShippingFee,
+            'shipping_fee' => $shippingFee,
+            'charge_foam_box_fee' => $chargeFoamBoxFee,
+            'foam_box_price' => $foamBoxPrice,
+            'total_weight' => $actualWeight,
         ]);
 
         return back()->with('success', 'Đã cập nhật thông tin đóng hàng cho đơn #' . $order->code . '.');
