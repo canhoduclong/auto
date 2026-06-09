@@ -157,6 +157,20 @@ class RoleScreenApiController extends BaseApiController
         }
 
         $today = now()->toDateString();
+        $todayOrders = Order::query()
+            ->with([
+                'customer:id,name,phone,address',
+                'user:id,name,team_id',
+                'user.team:id,name',
+                'items.product:id,name,unit',
+                'items.variant:id,name,sku,size,product_id',
+            ])
+            ->whereDate('created_at', $today)
+            ->whereNotIn('status', [Order::STATUS_CANCELLED, Order::STATUS_REJECTED])
+            ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
+            ->orderBy('daily_sequence')
+            ->orderBy('created_at')
+            ->get();
         $revenue = Schema::hasTable('accounting_reconciliations')
             ? (float) AccountingReconciliation::query()->where('status', AccountingReconciliation::STATUS_CONFIRMED)->sum('recognized_revenue')
             : (float) Order::query()->whereIn('status', [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED])->sum('total');
@@ -168,7 +182,7 @@ class RoleScreenApiController extends BaseApiController
                 ['label' => 'Dang dong goi', 'value' => Order::query()->where('status', Order::STATUS_PACKING)->count()],
                 ['label' => 'Dang giao', 'value' => Order::query()->where('status', Order::STATUS_DELIVERING)->count()],
             ],
-            'items' => $this->latestOrders()->take(20)->values(),
+            'items' => $todayOrders->values(),
         ]);
     }
 
