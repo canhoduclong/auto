@@ -241,7 +241,7 @@
 
                                 <div class="customer-info g-3">
                                     <div class="customer-info-logistics">
-                                        <a class="w-100 d-flex justify-content-between align-items-center customer-collapse-toggle collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#{{ $deliveryCollapseId }}" aria-expanded="true" aria-controls="{{ $deliveryCollapseId }}">
+                                        <a class="w-100 d-flex justify-content-between align-items-center customer-collapse-toggle collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#{{ $deliveryCollapseId }}" aria-expanded="false" aria-controls="{{ $deliveryCollapseId }}">
                                             <span class="logistics-title mb-0">Giao hàng</span>
                                             <span class="customer-collapse-action" data-collapse-label="1">Hide</span>
                                         </a>
