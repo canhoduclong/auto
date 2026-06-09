@@ -181,21 +181,15 @@
                                 <div class="d-flex align-items-start gap-3">
                                     @if($isTodayOrdersView)
                                         <div class="my-orders-sequence-badge" title="Số thứ tự đơn trong ngày">
-                                            <div class="text-center">
-                                                <small>STT</small>
+                                            <div class="text-center"> 
                                                 {{ $order->daily_sequence ?? '—' }}
                                             </div>
                                         </div>
                                     @endif
                                     <div>
                                     <div class="orders-code">{{ $order->customer?->name ?? '—' }}</div>
-                                    <small class="text-muted">
-                                        <i class="bi bi-clock"></i>
-                                        {{ $order->created_at->format('d/m/Y H:i') }},
-                                        @if(!is_null($order->daily_sequence))
-                                            STT ngày: {{ $order->daily_sequence }},
-                                        @endif
-                                        Mã KH: {{ $order->customer->customer_code ?? ('#' . ($order->customer->id ?? '')) }}, 
+                                    <small class="text-muted"> 
+                                        {{ $order->created_at->format('d/m/Y H:i') }},  
                                        @if($order->customer?->phone)
                                            <i class="bi bi-telephone me-1"></i>{{ $order->customer->phone }}
                                             @endif
@@ -212,8 +206,8 @@
                                         <div class="order-total-table-wrap">
                                             <div class="order-total-table-head">
                                                 <div class="order-total=items">
-                                                    <div class="wh-meta-label">Số dòng SP</div>
-                                                    <div class="wh-meta-value">{{ $itemCount }}</div>
+                                                    <div class="wh-meta-label">Mã KH</div>
+                                                    <div class="wh-meta-value">{{ $order->customer->customer_code ?? ('#' . ($order->customer->id ?? '')) }}, </div>
                                                 </div>
                                                 <div class="order-total=items">
                                                     <div class="wh-meta-label">Tổng số lượng</div>
