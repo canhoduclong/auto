@@ -92,17 +92,20 @@
         </div>
         <nav class="mt-1 flex-grow-1 overflow-auto">
             <div class="pkg-nav-section">Đóng hàng</div>
-            <a href="#" class="pkg-nav-link active">
+            <a href="{{ route('package.dashboard') }}" class="pkg-nav-link {{ request()->routeIs('package.dashboard') ? 'active' : '' }}">
+                <i class="bi bi-speedometer2"></i> Dashboard
+            </a>
+            <a href="{{ route('package.orders') }}" class="pkg-nav-link {{ request()->routeIs('package.orders*') ? 'active' : '' }}">
                 <i class="bi bi-list-ol"></i> Nhận đơn đóng hàng
             </a>
-            <a href="#" class="pkg-nav-link">
+            <a href="{{ route('package.returns') }}" class="pkg-nav-link {{ request()->routeIs('package.returns') ? 'active' : '' }}">
                 <i class="bi bi-arrow-return-left"></i> Nhận hàng trả về
             </a>
-            <a href="#" class="pkg-nav-link">
+            <a href="{{ route('package.order-changes') }}" class="pkg-nav-link {{ request()->routeIs('package.order-changes') ? 'active' : '' }}">
                 <i class="bi bi-pencil-square"></i> Yêu cầu thay đổi đơn
             </a>
             <div class="pkg-nav-section">Tồn kho</div>
-            <a href="#" class="pkg-nav-link">
+            <a href="{{ route('package.inventory') }}" class="pkg-nav-link {{ request()->routeIs('package.inventory') ? 'active' : '' }}">
                 <i class="bi bi-stack"></i> Thống kê tồn kho
             </a>
         </nav>
