@@ -285,7 +285,7 @@ class WarehouseApiController extends BaseApiController
 
     public function orders(Request $request): JsonResponse
     {
-        $this->ensureWarehouseRole($request);
+        $this->ensurePackingRole($request);
         $status = (string) $request->query('status', '');
         $date = (string) $request->query('date', now()->toDateString());
         $user = $request->user();
@@ -332,28 +332,28 @@ class WarehouseApiController extends BaseApiController
 
     public function startPacking(Request $request, Order $order): JsonResponse
     {
-        $this->ensureWarehouseRole($request);
+        $this->ensurePackingRole($request);
 
         return $this->callWebWarehouseAction($request, fn () => app(WarehouseDashboardController::class)->startPacking($request, $order));
     }
 
     public function completePacking(Request $request, Order $order): JsonResponse
     {
-        $this->ensureWarehouseRole($request);
+        $this->ensurePackingRole($request);
 
         return $this->callWebWarehouseAction($request, fn () => app(WarehouseDashboardController::class)->completePacking($request, $order));
     }
 
     public function updateLogistics(Request $request, Order $order): JsonResponse
     {
-        $this->ensureWarehouseRole($request);
+        $this->ensurePackingRole($request);
 
         return $this->callWebWarehouseAction($request, fn () => app(WarehouseDashboardController::class)->updateLogistics($request, $order));
     }
 
     public function requestAdjustment(Request $request, Order $order): JsonResponse
     {
-        $this->ensureWarehouseRole($request);
+        $this->ensurePackingRole($request);
 
         return $this->callWebWarehouseAction($request, fn () => app(WarehouseDashboardController::class)->requestAdjustment($request, $order));
     }
@@ -423,7 +423,7 @@ class WarehouseApiController extends BaseApiController
 
     public function products(Request $request): JsonResponse
     {
-        $this->ensureWarehouseRole($request);
+        $this->ensurePackingRole($request);
         $query = ProductVariant::query()->with('product:id,name')->latest('id');
 
         if ($request->filled('keyword')) {
@@ -493,6 +493,14 @@ class WarehouseApiController extends BaseApiController
         $user = $request->user();
         if (!$user || !($user->hasRole('warehouse') || $user->hasRole('admin'))) {
             abort(403, 'Role khong duoc phep truy cap API warehouse');
+        }
+    }
+
+    private function ensurePackingRole(Request $request): void
+    {
+        $user = $request->user();
+        if (!$user || !($user->hasRole('warehouse') || $user->hasRole('package') || $user->hasRole('admin'))) {
+            abort(403, 'Role khong duoc phep truy cap API dong hang');
         }
     }
 

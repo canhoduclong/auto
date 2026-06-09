@@ -56,8 +56,16 @@ return [
             'description' => 'Dieu huong my_app theo role mobile.',
             'platform' => 'my_app',
             'route' => 'mobile.home',
-            'role_hints' => ['admin', 'factory', 'package'],
+            'role_hints' => ['admin', 'factory'],
             'mobile_layout' => 'home',
+        ],
+        'my_app_package' => [
+            'label' => 'My_app / Package',
+            'description' => 'Giao dien my_app cho bo phan dong hang.',
+            'platform' => 'my_app',
+            'route' => 'mobile.home',
+            'role_hints' => ['package'],
+            'mobile_layout' => 'package',
         ],
         'my_app_accounting' => [
             'label' => 'My_app / Accounting',

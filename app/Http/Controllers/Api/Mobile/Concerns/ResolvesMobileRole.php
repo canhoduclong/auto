@@ -67,10 +67,11 @@ trait ResolvesMobileRole
             'my_app_accounting' => 'accounting',
             'my_app_ceo' => 'ceo',
             'my_app_manager_shipper' => 'manager_shipper',
+            'my_app_package' => 'package',
             'my_app_sales' => 'sale',
             'my_app_shipper' => 'shipper',
             'my_app_warehouse' => 'warehouse',
-            default => in_array($layoutSlug, ['accounting', 'ceo', 'manager_shipper', 'sale', 'shipper', 'warehouse'], true)
+            default => in_array($layoutSlug, ['accounting', 'ceo', 'manager_shipper', 'package', 'sale', 'shipper', 'warehouse'], true)
                 ? $layoutSlug
                 : 'unsupported',
         };
@@ -114,6 +115,12 @@ trait ResolvesMobileRole
                 ['group' => 'Điều chuyển / xuất kho', 'key' => 'stock_out', 'label' => 'Xuất kho', 'route' => '/warehouse/stock-out', 'api' => '/screens/warehouse/stock_out', 'icon' => 'outbox'],
                 ['group' => 'Thống kê', 'key' => 'stock_out_orders', 'label' => 'Đơn xuất kho', 'route' => '/warehouse/stock-out/orders', 'api' => '/screens/warehouse/stock_out_orders', 'icon' => 'receipt_long'],
                 ['group' => 'Thống kê', 'key' => 'inventory', 'label' => 'Tồn kho', 'route' => '/warehouse/inventory', 'api' => '/warehouse/inventory', 'icon' => 'inventory'],
+            ];
+        }
+
+        if ($layout === 'package') {
+            return [
+                ['group' => 'Đóng hàng', 'key' => 'orders', 'label' => 'Đơn cần đóng hàng', 'route' => '/package/orders', 'api' => '/warehouse/orders', 'icon' => 'inventory_2'],
             ];
         }
 

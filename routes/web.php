@@ -15,6 +15,7 @@ use App\Http\Controllers\ProductVariantController;
 use App\Http\Controllers\CategoryController; 
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\LayoutPreferenceController;
+use App\Http\Controllers\LayoutController;
 use App\Http\Controllers\RoleSwitchController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\RoleController;
@@ -535,6 +536,9 @@ Route::middleware(['auth', 'assigned'])->group(function () {
 
     // Quản lý vai trò
     Route::resource('roles', RoleController::class)->middleware('permission'); 
+
+    Route::get('layouts', [LayoutController::class, 'index'])->name('layouts.index')->middleware('role:admin');
+    Route::put('layouts', [LayoutController::class, 'update'])->name('layouts.update')->middleware('role:admin');
 
     // Quản lý quyền
     // Route::resource('permissions', PermissionController::class);//->middleware('permission');
