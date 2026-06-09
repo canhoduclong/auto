@@ -97,6 +97,9 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::prefix('package')->name('package.')->middleware('role:package,admin')->group(function () {
         Route::get('/', [PackageDashboardController::class, 'index'])->name('dashboard');
         Route::get('/orders', [OrderPackingController::class, 'index'])->name('orders');
+        Route::post('/orders/{order}/start-packing', [OrderPackingController::class, 'startPacking'])->name('orders.start-packing');
+        Route::post('/orders/{order}/logistics', [OrderPackingController::class, 'updateLogistics'])->name('orders.logistics');
+        Route::post('/orders/{order}/complete-packing', [OrderPackingController::class, 'completePacking'])->name('orders.complete-packing');
         Route::get('/orders/{order}', [OrderPackingController::class, 'show'])->name('orders.detail');
         Route::get('/returns', [ReturnController::class, 'index'])->name('returns');
         Route::get('/order-changes', [OrderChangeRequestController::class, 'index'])->name('order-changes');
