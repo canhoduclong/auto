@@ -1269,6 +1269,8 @@ class CeoDashboardController extends Controller
             'orders.id as order_id_val',
             'orders.created_at as order_date',
             'orders.code as order_code',
+            'orders.daily_sequence',
+            'orders.status as order_status',
             'products.name as product_name',
             'products.unit as product_unit',
             DB::raw("COALESCE(product_variants.size, '') as variant_size"),

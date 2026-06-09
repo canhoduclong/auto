@@ -39,9 +39,31 @@
 .sort-link:hover { color:#3b82f6; }
 .sort-link .bi { font-size:.65rem; opacity:.5; }
 .sort-link.active .bi { opacity:1; color:#3b82f6; }
+.ds-order-anchor { scroll-margin-top:150px; }
+.ds-priority-badge {
+    display:inline-flex; align-items:center; justify-content:center;
+    min-width:32px; height:32px; padding:0 7px; border-radius:999px;
+    background:#64748b; color:#fff; font-weight:800; font-size:.8rem;
+}
 
 /* ── toolbar ── */
 .ds-toolbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:space-between; margin-bottom:10px; }
+.ds-order-nav {
+    position:sticky; top:75px; z-index:95; margin-bottom:14px;
+    padding:11px 13px; border:1px solid #e2e8f0; border-radius:12px;
+    background:#fff; box-shadow:0 4px 15px rgba(15,23,42,.07);
+}
+.ds-order-nav-pill {
+    display:inline-flex; align-items:center; justify-content:center;
+    min-width:36px; height:36px; padding:0 8px; border-radius:999px;
+    color:#fff !important; font-size:.9rem; font-weight:800;
+    text-decoration:none; box-shadow:0 2px 4px rgba(15,23,42,.15);
+    transition:transform .2s ease, box-shadow .2s ease;
+}
+.ds-order-nav-pill:hover { transform:translateY(-2px); box-shadow:0 4px 8px rgba(15,23,42,.2); }
+.ds-order-nav-pill.is-unpacked { background:#64748b; }
+.ds-order-nav-pill.is-packing { background:#ffc107; color:#212529 !important; }
+.ds-order-nav-pill.is-packed { background:#198754; }
 
 /* ── card ── */
 .acc-card {
@@ -148,6 +170,11 @@
 @php
 // Strips trailing decimal zeros: 100,00 → 100 | 320,20 → 320,2 | 321,21 → 321,21
 $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',', '.'), '0'), ',');
+$pageOrders = $items->getCollection()
+    ->unique('order_id_val')
+    ->sortBy(fn ($row) => $row->daily_sequence ?? PHP_INT_MAX)
+    ->values();
+$packedLikeStatuses = ['packed', 'packed_waiting_pickup', 'delivering', 'delivered', 'completed'];
 @endphp
 
 {{-- ── KPI ──────────────────────────────────────────────────────────── --}}
@@ -240,11 +267,41 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                     </div>
                 </div>
 
+                @if($pageOrders->isNotEmpty())
+                    <div class="ds-order-nav">
+                        <div class="d-flex flex-wrap gap-2 align-items-center">
+                            <span class="fw-bold text-muted me-1">
+                                <i class="bi bi-list-ol me-1"></i>Điều hướng ưu tiên:
+                            </span>
+                            @foreach($pageOrders as $navOrder)
+                                @php
+                                    $navStatus = (string) $navOrder->order_status;
+                                    $navStateClass = $navStatus === 'packing'
+                                        ? 'is-packing'
+                                        : (in_array($navStatus, $packedLikeStatuses, true) ? 'is-packed' : 'is-unpacked');
+                                @endphp
+                                <a href="#ceo-order-{{ $navOrder->order_id_val }}"
+                                   class="ds-order-nav-pill {{ $navStateClass }}"
+                                   onclick="event.preventDefault(); document.getElementById('ceo-order-{{ $navOrder->order_id_val }}')?.scrollIntoView({ behavior: 'smooth', block: 'start' });"
+                                   title="{{ $navOrder->customer_name ?? 'Đơn hàng' }} - {{ $navOrder->order_code }}">
+                                    {{ $navOrder->daily_sequence ?? '—' }}
+                                </a>
+                            @endforeach
+                        </div>
+                        <div class="d-flex flex-wrap gap-3 mt-2 small text-muted">
+                            <span><i class="bi bi-circle-fill text-secondary me-1"></i>Chưa đóng hàng</span>
+                            <span><i class="bi bi-circle-fill text-warning me-1"></i>Đang đóng hàng</span>
+                            <span><i class="bi bi-circle-fill text-success me-1"></i>Đã đóng hàng</span>
+                        </div>
+                    </div>
+                @endif
+
                 <div class="table-responsive">
                     <table class="table table-hover align-middle ds-table">
                         <thead class="table-light">
                             <tr>
                                 <th>#</th>
+                                <th class="text-center">Ưu tiên</th>
                                 <th>
                                     <a href="{{ request()->fullUrlWithQuery(['sort' => $sort === 'date_asc' ? 'date_desc' : 'date_asc', 'page' => 1]) }}"
                                     class="sort-link {{ in_array($sort, ['date_asc','date_desc']) ? 'active' : '' }}">
@@ -289,7 +346,10 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                             </tr>
                         </thead>
                         <tbody>
-                        @php $rowNo = ($items->currentPage() - 1) * $items->perPage() + 1; @endphp
+                        @php
+                            $rowNo = ($items->currentPage() - 1) * $items->perPage() + 1;
+                            $anchoredOrderIds = [];
+                        @endphp
                         @forelse($items as $row)
                             @php
                                 $adjFlag   = (bool) $row->has_adj;
@@ -313,9 +373,19 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
 
                                 // Variant label: size + name
                                 $variantLabel = trim(($row->variant_size ?? '') . ' ' . ($row->variant_name ?? ''));
+
+                                $isFirstOrderRow = !in_array((int) $row->order_id_val, $anchoredOrderIds, true);
+                                if ($isFirstOrderRow) {
+                                    $anchoredOrderIds[] = (int) $row->order_id_val;
+                                }
                             @endphp
-                            <tr>
+                            <tr @if($isFirstOrderRow) id="ceo-order-{{ $row->order_id_val }}" class="ds-order-anchor" @endif>
                                 <td class="text-muted">{{ $rowNo++ }}</td>
+                                <td class="text-center">
+                                    <span class="ds-priority-badge" title="Số thứ tự ưu tiên của đơn">
+                                        {{ $row->daily_sequence ?? '—' }}
+                                    </span>
+                                </td>
                                 <td>
                                     <a href="{{ route('orders.show', $row->order_id_val) }}" class="text-decoration-none small" target="_blank">
                                         {{ \Carbon\Carbon::parse($row->order_date)->format('d/m') }}
@@ -351,7 +421,7 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="11" class="text-center text-muted py-4">
+                                <td colspan="12" class="text-center text-muted py-4">
                                     <i class="bi bi-inbox fs-4 d-block mb-2"></i>
                                     Không có dữ liệu cho bộ lọc này.
                                 </td>
@@ -361,7 +431,7 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                         @if($items->isNotEmpty())
                         <tfoot class="table-light fw-semibold">
                             <tr>
-                                <td colspan="6" class="text-end text-muted small">Tổng trang này:</td>
+                                <td colspan="7" class="text-end text-muted small">Tổng trang này:</td>
                                 <td class="text-end">
                                     {{ $fmtN((float)$items->sum('eff_qty')) }}
                                 </td>
