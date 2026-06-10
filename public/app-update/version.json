@@ -1,7 +1,7 @@
 {
-  "version": "1.0.12",
-  "version_code": 13,
+  "version": "1.0.13",
+  "version_code": 14,
   "apk_url": "https://hoanglongtnt.com/app-update/app-release.apk",
   "force_update": false,
-  "message": "Bản cập nhật 1.0.12: thông báo đơn mới hiển thị số ưu tiên, khách hàng, Sale, giờ tạo, chi tiết sản phẩm, tổng tiền và ghi chú trên website và mobile."
+  "message": "Bản cập nhật 1.0.13: hoàn thiện nhận hàng, giao hàng, điều phối đơn cho Shipper và nhận hàng trả kèm tạo phiếu nhập kho."
 }
