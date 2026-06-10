@@ -2,14 +2,21 @@
 
 namespace App\Http\Controllers\Api\Mobile;
 
+use App\Http\Controllers\ShipperDashboardController;
 use App\Models\MobileLocationPing;
 use App\Models\Order;
 use App\Models\OrderHistory;
+use App\Models\OrderReturn;
+use App\Models\ReturnItem;
+use App\Models\User;
+use App\Models\Warehouse;
 use App\Models\WarehouseTransfer;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 
 class ShipperApiController extends BaseApiController
@@ -22,7 +29,12 @@ class ShipperApiController extends BaseApiController
 
         $stats = [
             'today_total' => Order::query()->where('shipper_id', $userId)->whereDate('updated_at', $today)->count(),
-            'available' => Order::query()->where('status', Order::STATUS_READY_TO_SHIP)
+            'available' => Order::query()->where(function ($query) {
+                $query->where('status', Order::STATUS_READY_TO_SHIP)
+                    ->orWhere(function ($returnQuery) {
+                        $returnQuery->where('status', Order::STATUS_APPROVED)->where('is_return_order', true);
+                    });
+            })
                 ->where('shipper_id', $userId)
                 ->whereNotIn('status', ['cancelled', 'canceled'])
                 ->where(function ($query) {
@@ -45,7 +57,12 @@ class ShipperApiController extends BaseApiController
 
         $orders = Order::query()
             ->with(['customer:id,name,phone,address', 'items.product:id,name,unit', 'items.variant:id,name,sku,size,product_id'])
-            ->where('status', Order::STATUS_READY_TO_SHIP)
+            ->where(function ($query) {
+                $query->where('status', Order::STATUS_READY_TO_SHIP)
+                    ->orWhere(function ($returnQuery) {
+                        $returnQuery->where('status', Order::STATUS_APPROVED)->where('is_return_order', true);
+                    });
+            })
             ->where('shipper_id', $userId)
             ->whereNotIn('status', ['cancelled', 'canceled'])
             ->where(function ($query) {
@@ -134,36 +151,190 @@ class ShipperApiController extends BaseApiController
     public function acceptOrder(Request $request, Order $order): JsonResponse
     {
         $this->ensureShipperRole($request);
+        Auth::setUser($request->user());
+        $request->headers->set('Accept', 'application/json');
+        $response = app(ShipperDashboardController::class)->accept($order);
+        $payload = $response instanceof JsonResponse ? $response->getData(true) : [];
+
+        if ($response instanceof JsonResponse && $response->getStatusCode() >= 400) {
+            return $this->fail((string) ($payload['message'] ?? 'Khong the nhan don.'), $response->getStatusCode());
+        }
+
+        return $this->ok($payload['order'] ?? null, (string) ($payload['message'] ?? 'Nhan don thanh cong'));
+    }
+
+    public function warehouses(Request $request): JsonResponse
+    {
+        $this->ensureShipperRole($request);
+
+        return $this->ok(Warehouse::query()->orderBy('name')->get(['id', 'name']));
+    }
+
+    public function returnOrder(Request $request, Order $order): JsonResponse
+    {
+        $this->ensureShipperRole($request);
         $user = $request->user();
-
-        if ($order->status !== Order::STATUS_READY_TO_SHIP) {
-            return $this->fail('Don khong o trang thai co the nhan.', 422);
+        if ((int) $order->shipper_id !== (int) $user->id && !$user->hasRole('admin')) {
+            return $this->fail('Khong co quyen thao tac don nay.', 403);
+        }
+        if ($order->status !== Order::STATUS_DELIVERING) {
+            return $this->fail('Don khong dang giao.', 422);
         }
 
-        if ((int) ($order->shipper_id ?? 0) !== (int) $user->id && !$user->hasRole('admin')) {
-            return $this->fail('Don khong thuoc lo trinh cua ban.', 403);
-        }
-
-        if (!$this->orderHasConfirmedDeliverySchedule($order)) {
-            return $this->fail('Vui long xac nhan lo trinh giao hang truoc khi nhan don.', 422);
-        }
-
-        $order->update([
-            'shipper_id' => $user->id,
-            'status' => Order::STATUS_DELIVERING,
+        $validated = $request->validate([
+            'return_reason' => ['required', 'string', 'max:500'],
+            'return_note' => ['nullable', 'string', 'max:500'],
+            'return_warehouse_id' => ['required', 'exists:warehouses,id'],
         ]);
+        $warehouse = Warehouse::query()->findOrFail((int) $validated['return_warehouse_id']);
+        $note = trim((string) ($validated['return_note'] ?? ''));
+        $note = trim($note . ' | Kho trả về: ' . $warehouse->name, ' |');
 
+        $orderReturn = DB::transaction(function () use ($order, $user, $validated, $warehouse, $note) {
+            $updates = [
+                'status' => Order::STATUS_RETURNING,
+                'return_reason' => $validated['return_reason'],
+                'shipper_note' => $note,
+            ];
+            if (Schema::hasColumn('orders', 'return_warehouse_id')) {
+                $updates['return_warehouse_id'] = $warehouse->id;
+            }
+            if (Schema::hasColumn('orders', 'warehouse_id')) {
+                $updates['warehouse_id'] = $warehouse->id;
+            }
+            $order->update($updates);
+            $order->loadMissing('items');
+
+            $orderReturn = OrderReturn::query()->firstOrCreate(
+                ['order_id' => $order->id, 'status' => 'pending_warehouse'],
+                [
+                    'customer_id' => $order->customer_id,
+                    'warehouse_id' => $warehouse->id,
+                    'created_by' => $user->id,
+                    'reason' => $validated['return_reason'],
+                    'return_scope' => 'full',
+                    'refund_amount' => (float) ($order->total ?? 0),
+                    'note' => $note,
+                ]
+            );
+            $orderReturn->update(['warehouse_id' => $warehouse->id, 'reason' => $validated['return_reason'], 'note' => $note]);
+
+            if ($orderReturn->returnItems()->count() === 0) {
+                foreach ($order->items as $item) {
+                    ReturnItem::query()->create([
+                        'order_return_id' => $orderReturn->id,
+                        'product_variant_id' => $item->product_variant_id,
+                        'quantity' => (int) $item->quantity,
+                        'condition' => 'good',
+                    ]);
+                }
+            }
+
+            OrderHistory::query()->create([
+                'order_id' => $order->id,
+                'action' => 'return_request',
+                'user_id' => $user->id,
+                'role' => 'shipper',
+                'status_before' => Order::STATUS_DELIVERING,
+                'status_after' => Order::STATUS_RETURNING,
+                'note' => 'Shipper gửi trả hàng qua mobile: ' . $validated['return_reason'] . ' | Kho trả về: ' . $warehouse->name,
+            ]);
+
+            return $orderReturn;
+        });
+
+        return $this->ok(['return_id' => (int) $orderReturn->id], 'Da tao phieu tra hang cho kho tiep nhan');
+    }
+
+    public function assignOrder(Request $request, Order $order, User $shipper): JsonResponse
+    {
+        $this->ensureManagerShipperRole($request);
+        if (!in_array($order->status, $this->assignmentStatuses(), true)) {
+            return $this->fail('Don chua o trang thai co the dieu phoi.', 422);
+        }
+        if (!($shipper->hasRole('shipper') || $shipper->hasRole('manager_shipper'))) {
+            return $this->fail('Nguoi dung khong phai shipper.', 422);
+        }
+        $previous = $order->shipper;
+        $order->update(['shipper_id' => $shipper->id]);
         OrderHistory::query()->create([
             'order_id' => $order->id,
-            'action' => 'mobile_accept_order',
-            'user_id' => $user->id,
-            'role' => 'shipper',
-            'status_before' => Order::STATUS_READY_TO_SHIP,
-            'status_after' => Order::STATUS_DELIVERING,
-            'note' => 'Shipper nhan don qua mobile app',
+            'action' => $previous ? 'shipper_reassigned' : 'shipper_assigned',
+            'user_id' => $request->user()->id,
+            'role' => 'manager_shipper',
+            'status_before' => $order->status,
+            'status_after' => $order->status,
+            'note' => 'Điều phối mobile: ' . ($previous?->name ? $previous->name . ' -> ' : '') . $shipper->name,
         ]);
 
-        return $this->ok(null, 'Nhan don thanh cong');
+        return $this->ok(null, 'Da dieu phoi don cho ' . $shipper->name);
+    }
+
+    public function unassignOrder(Request $request, Order $order): JsonResponse
+    {
+        $this->ensureManagerShipperRole($request);
+        if (!in_array($order->status, $this->assignmentStatuses(), true) || !$order->shipper_id) {
+            return $this->fail('Don khong the go dieu phoi.', 422);
+        }
+        $previous = $order->shipper;
+        $order->update(['shipper_id' => null]);
+        OrderHistory::query()->create([
+            'order_id' => $order->id,
+            'action' => 'shipper_unassigned',
+            'user_id' => $request->user()->id,
+            'role' => 'manager_shipper',
+            'status_before' => $order->status,
+            'status_after' => $order->status,
+            'note' => 'Gỡ điều phối mobile khỏi ' . ($previous?->name ?? 'shipper'),
+        ]);
+
+        return $this->ok(null, 'Da go dieu phoi don');
+    }
+
+    public function createDeliverySchedules(Request $request): JsonResponse
+    {
+        $this->ensureManagerShipperRole($request);
+        $date = now()->toDateString();
+        $groups = Order::query()
+            ->whereNotNull('shipper_id')
+            ->whereIn('status', $this->assignmentStatuses())
+            ->where(function ($query) use ($date) {
+                $query->whereDate('created_at', $date)->orWhereDate('updated_at', $date);
+            })
+            ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
+            ->orderBy('daily_sequence')
+            ->orderBy('delivery_time')
+            ->orderBy('created_at')
+            ->get()
+            ->groupBy('shipper_id');
+
+        if ($groups->isEmpty()) {
+            return $this->fail('Khong co don da gan shipper de tao lich trinh.', 422);
+        }
+
+        $count = 0;
+        DB::transaction(function () use ($groups, $request, &$count) {
+            foreach ($groups as $orders) {
+                $snapshot = $this->buildDeliveryScheduleSnapshot($orders);
+                $hash = $this->hashDeliveryScheduleSnapshot($snapshot);
+                foreach ($orders as $order) {
+                    OrderHistory::query()->create([
+                        'order_id' => $order->id,
+                        'action' => 'schedule_created',
+                        'user_id' => $request->user()->id,
+                        'role' => 'manager_shipper',
+                        'status_before' => $order->status,
+                        'status_after' => $order->status,
+                        'note' => 'Lịch trình giao hàng được gửi từ mobile.',
+                        'schedule_snapshot_hash' => $hash,
+                        'schedule_snapshot' => json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                    ]);
+                    $count++;
+                }
+            }
+        });
+
+        return $this->ok(['orders_count' => $count], 'Da gui lich trinh giao hang');
     }
 
     public function myOrders(Request $request): JsonResponse
@@ -317,6 +488,14 @@ class ShipperApiController extends BaseApiController
         $user = $request->user();
         if (!$user || !($user->hasRole('shipper') || $user->hasRole('ship') || $user->hasRole('manager_shipper') || $user->hasRole('admin'))) {
             abort(403, 'Role khong duoc phep truy cap API shipper');
+        }
+    }
+
+    private function ensureManagerShipperRole(Request $request): void
+    {
+        $user = $request->user();
+        if (!$user || !($user->hasRole('manager_shipper') || $user->hasRole('admin'))) {
+            abort(403, 'Role khong duoc phep dieu phoi shipper');
         }
     }
 

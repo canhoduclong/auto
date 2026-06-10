@@ -1,11 +1,12 @@
             @php
+                $orderCardReadonly = (bool) ($orderCardReadonly ?? false);
                 $isTodaySelected = \Illuminate\Support\Carbon::parse($selectedDate ?? now()->toDateString())->isToday();
-                $canProcessThisOrder = $isTodaySelected && $order->created_at->isToday();
+                $canProcessThisOrder = !$orderCardReadonly && $isTodaySelected && $order->created_at->isToday();
                 $meta = $statusMeta[$order->status] ?? ['label' => $order->status, 'class' => 'bg-secondary'];
                 $isReadyToPack = in_array($order->status, ['approved', 'ready_to_pack'], true);
                 $isPacking = $order->status === 'packing';
                 $isPackedReadonly = in_array($order->status, ['packed', 'packed_waiting_pickup', 'delivering', 'delivered', 'completed'], true);
-                $canAdminReopenPacking = auth()->user()?->hasRole('admin') && in_array($order->status, ['packed', 'packed_waiting_pickup'], true);
+                $canAdminReopenPacking = !$orderCardReadonly && auth()->user()?->hasRole('admin') && in_array($order->status, ['packed', 'packed_waiting_pickup'], true);
                 $packingHistory = $order->histories
                     ?->whereIn('action', ['complete_packing', 'warehouse_complete_packing'])
                     ->sortByDesc('id')
@@ -18,6 +19,7 @@
                 $canStartPacking = (bool) ($stockGuard['can_start_packing'] ?? true);
                 $stockShortages = collect($stockGuard['shortages'] ?? []);
                 $isPendingSaleConfirmation = $order->warehouse_adjustment_status === \App\Models\Order::WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION;
+                $isConfirmedBySale = $order->warehouse_adjustment_status === \App\Models\Order::WAREHOUSE_ADJUSTMENT_STATUS_SALE_CONFIRMED;
                 $isRejectedBySale = $order->warehouse_adjustment_status === \App\Models\Order::WAREHOUSE_ADJUSTMENT_STATUS_SALE_REJECTED;
                 $adjustmentChanges = collect($order->warehouse_adjustment_changes ?? []);
                 $activeTransfer = $activeTransfersByOrder[$order->id] ?? null;
@@ -54,9 +56,48 @@
                     <div class="card-body"> 
 
                         <div class="wh-section">
+                            @if($isConfirmedBySale)
+                                <div class="alert alert-success py-2 px-3 mb-2">
+                                    <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
+                                        <div>
+                                            <div class="fw-semibold">Sale đã xác nhận và áp dụng thay đổi</div>
+                                            <div class="small">Phản hồi bởi: {{ $order->warehouseAdjustmentConfirmer?->name ?? $order->user?->name ?? 'Sale' }}</div>
+                                        </div>
+                                        @if($order->warehouse_adjustment_confirmed_at)
+                                            <span class="small text-muted">{{ $order->warehouse_adjustment_confirmed_at->format('d/m/Y H:i') }}</span>
+                                        @endif
+                                    </div>
+                                    <div class="small mt-2"><strong>Yêu cầu từ Package:</strong> {{ $order->warehouse_adjustment_note ?: 'Chưa cập nhật nội dung' }}</div>
+                                    <div class="small text-muted mt-1">
+                                        Gửi bởi {{ $order->warehouseAdjustmentRequester?->name ?? 'Nhân viên Package' }}
+                                        @if($order->warehouse_adjustment_requested_at)
+                                            lúc {{ $order->warehouse_adjustment_requested_at->format('d/m/Y H:i') }}
+                                        @endif
+                                    </div>
+                                    @if($adjustmentChanges->isNotEmpty())
+                                        <div class="d-flex flex-wrap gap-2 mt-2">
+                                            @foreach($adjustmentChanges as $change)
+                                                <span class="badge bg-white text-success border border-success-subtle">
+                                                    {{ $change['product_name'] ?? 'Sản phẩm' }}:
+                                                    {{ (int) ($change['old_quantity'] ?? 0) }} → {{ (int) ($change['new_quantity'] ?? 0) }}
+                                                </span>
+                                            @endforeach
+                                        </div>
+                                    @endif
+                                </div>
+                            @endif
+
                             @if($isRejectedBySale)
                                 <div class="alert alert-danger py-2 px-3 mb-2">
                                     <div class="fw-semibold mb-1">Sale đã từ chối yêu cầu điều chỉnh - cần xử lý lại</div>
+                                    <div class="small mb-1">Yêu cầu từ Package: {{ $order->warehouse_adjustment_note ?: 'Chưa cập nhật nội dung' }}</div>
+                                    <div class="small text-muted mb-1">
+                                        Gửi bởi {{ $order->warehouseAdjustmentRequester?->name ?? 'Nhân viên Package' }}
+                                        @if($order->warehouse_adjustment_requested_at)
+                                            lúc {{ $order->warehouse_adjustment_requested_at->format('d/m/Y H:i') }}
+                                        @endif
+                                    </div>
+                                    <div class="small mb-1">Phản hồi bởi: {{ $order->warehouseAdjustmentRejecter?->name ?? $order->user?->name ?? 'Sale' }}</div>
                                     <div class="small mb-1">Lý do: {{ $order->warehouse_adjustment_rejected_reason ?: 'Chưa cập nhật' }}</div>
                                     @if($order->warehouse_adjustment_rejected_at)
                                         <div class="small text-muted">Từ chối lúc: {{ $order->warehouse_adjustment_rejected_at->format('d/m/Y H:i') }}</div>
@@ -254,7 +295,7 @@
                                             @endforeach
                                         </ul>
                                         <div class="mt-1">
-                                            <a href="{{ route('warehouse.stock-in') }}">Bạn cần Nhập kho để thực hiện công việc tiếp</a>
+                                            <a href="{{ route($packingInventoryRoute ?? 'warehouse.stock-in') }}">Bạn cần Nhập kho để thực hiện công việc tiếp</a>
                                         </div>
                                     </details>
                                 </div>
@@ -337,7 +378,7 @@
                                                             $isItemLogisticsSaved = !is_null($lineTotal);
                                                         @endphp
                                                         <div class="wh-item-action js-packing-only {{ $isPacking ? '' : 'd-none' }}">
-                                                            <form action="{{ route('warehouse.orders.logistics', $order) }}" method="POST" class="js-logistics-item-form wh-compact-form justify-content-end">
+                                                            <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.logistics', $order) }}" method="POST" class="js-logistics-item-form wh-compact-form justify-content-end">
                                                                 @csrf
                                                                 <input type="hidden" name="item_id" value="{{ $item->id }}">
                                                                 <input type="number" name="item_actual_weight" class="form-control form-control-sm actual_weight js-weight-input"
@@ -372,7 +413,7 @@
                             </div> 
 
                             @if(!$isPackedReadonly && $canProcessThisOrder)
-                                <form action="{{ route('warehouse.orders.logistics', $order) }}" method="POST" class="mt-2 js-logistics-fee-form js-packing-only {{ $isPacking ? '' : 'd-none' }}">
+                                <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.logistics', $order) }}" method="POST" class="mt-2 js-logistics-fee-form js-packing-only {{ $isPacking ? '' : 'd-none' }}">
                                     @csrf
                                     <div class="row g-2">
                                         <div class="col-6">
@@ -421,7 +462,7 @@
                             @if(!$isPackedReadonly && $canProcessThisOrder && !$isPacking)
                                 <details class="mt-3 border rounded p-2 bg-light">
                                     <summary class="fw-semibold">Điều chỉnh mặt hàng (gửi sale xác nhận)</summary>
-                                    <form action="{{ route('warehouse.orders.request-adjustment', $order) }}" method="POST" class="mt-2">
+                                    <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.request-adjustment', $order) }}" method="POST" class="mt-2">
                                         @csrf
                                         <div class="small text-muted mb-2">Đặt số lượng = 0 để xóa sản phẩm khỏi đơn.</div>
                                         <div class="d-grid gap-2 mb-2">
@@ -561,7 +602,7 @@
                                                 <span class="small text-muted">Kho nhận: {{ $activeTransfer->targetWarehouse?->name ?? '—' }}</span>
                                                 <span class="small text-muted">Shipper: {{ $activeTransfer->shipper?->name ?? '—' }}</span>
                                             </div>
-                                        @else
+                                        @elseif(!$orderCardReadonly)
                                             @php
                                                 $sourceWarehouseId = (int) ($order->warehouse_id ?? 0);
                                                 $targetWarehouses = collect($warehouses ?? [])->filter(function ($warehouse) use ($sourceWarehouseId) {
@@ -570,7 +611,7 @@
                                             @endphp
                                             <details class="border rounded p-2 bg-light-subtle">
                                                 <summary class="fw-semibold">Tạo điều chuyển kho cho shipper</summary>
-                                                <form action="{{ route('warehouse.orders.transfer-request', $order) }}" method="POST" class="mt-2">
+                                                <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.transfer-request', $order) }}" method="POST" class="mt-2">
                                                     @csrf
                                                     <div class="row g-2">
                                                         <div class="col-12 col-md-6">
@@ -603,11 +644,13 @@
                                                     </div>
                                                 </form>
                                             </details>
+                                        @else
+                                            <div class="small text-muted">Không có điều chuyển kho đang hoạt động.</div>
                                         @endif
                                     </div>
                                     @if($canAdminReopenPacking)
                                         <div class="col-12">
-                                            <form action="{{ route('warehouse.orders.reopen-packing', $order) }}" method="POST" class="d-grid">
+                                            <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.reopen-packing', $order) }}" method="POST" class="d-grid">
                                                 @csrf
                                                 <button class="btn btn-outline-warning btn-sm" type="submit">
                                                     <i class="bi bi-arrow-counterclockwise me-1"></i>Admin bỏ khóa chỉnh sửa
@@ -626,7 +669,7 @@
                         @if($canProcessThisOrder && ($isReadyToPack || $isPacking))
                             @if($isReadyToPack)
                                 @if($canStartPacking && !$isPendingSaleConfirmation)
-                                    <form action="{{ route('warehouse.orders.start-packing', $order) }}" method="POST" class="d-grid js-start-packing-form">
+                                    <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.start-packing', $order) }}" method="POST" class="d-grid js-start-packing-form">
                                         @csrf
                                         <button class="btn btn-primary btn-sm js-start-packing-btn" type="submit">
                                             <i class="bi bi-box2 me-1"></i>Đóng hàng
@@ -664,7 +707,7 @@
                                                         @endforeach
                                                     </ul>
                                                     <div class="mt-1">
-                                                        <a href="{{ route('warehouse.stock-in') }}">Nhập kho để tiếp tục</a>
+                                                        <a href="{{ route($packingInventoryRoute ?? 'warehouse.stock-in') }}">Nhập kho để tiếp tục</a>
                                                     </div>
                                                 </details>
                                             </div>
@@ -674,7 +717,7 @@
                             @endif
 
                             @if($isPacking)
-                                <form action="{{ route('warehouse.orders.return-to-ready', $order) }}" method="POST" class="d-grid mb-2">
+                                <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.return-to-ready', $order) }}" method="POST" class="d-grid mb-2">
                                     @csrf
                                     <button class="btn btn-outline-warning btn-sm" type="submit">
                                         <i class="bi bi-arrow-counterclockwise me-1"></i>Trở lại Chờ đóng gói để điều chỉnh
@@ -685,7 +728,7 @@
                                 </div>
                             @endif
 
-                            <form action="{{ route('warehouse.orders.complete-packing', $order) }}" method="POST" class="d-grid js-complete-packing-form {{ $isPacking ? '' : 'd-none' }}">
+                            <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.complete-packing', $order) }}" method="POST" class="d-grid js-complete-packing-form {{ $isPacking ? '' : 'd-none' }}">
                                 @csrf
                                 <button class="btn btn-sm wh-warning-action-btn" {{ $isPendingSaleConfirmation ? 'disabled' : '' }}>
                                     <i class="bi bi-check2-all me-1"></i>Hoàn thành đóng gói

@@ -35,6 +35,11 @@ Route::prefix('mobile')->group(function () {
             Route::get('/available-orders', [ShipperApiController::class, 'availableOrders']);
             Route::get('/accepted-orders', [ShipperApiController::class, 'acceptedOrders']);
             Route::post('/orders/{order}/accept', [ShipperApiController::class, 'acceptOrder']);
+            Route::get('/warehouses', [ShipperApiController::class, 'warehouses']);
+            Route::post('/orders/{order}/return', [ShipperApiController::class, 'returnOrder']);
+            Route::post('/assignments/{order}/assign/{shipper}', [ShipperApiController::class, 'assignOrder']);
+            Route::post('/assignments/{order}/unassign', [ShipperApiController::class, 'unassignOrder']);
+            Route::post('/assignments/create-schedules', [ShipperApiController::class, 'createDeliverySchedules']);
             Route::get('/my-orders', [ShipperApiController::class, 'myOrders']);
             Route::get('/history', [ShipperApiController::class, 'history']);
             Route::post('/orders/{order}/status', [ShipperApiController::class, 'updateStatus']);
@@ -53,6 +58,7 @@ Route::prefix('mobile')->group(function () {
             Route::get('/inventory', [WarehouseApiController::class, 'inventory']);
             Route::get('/products', [WarehouseApiController::class, 'products']);
             Route::get('/returns', [WarehouseApiController::class, 'returns']);
+            Route::post('/returns/{orderReturn}/receive', [WarehouseApiController::class, 'receiveReturn']);
             Route::get('/tasks', [WarehouseApiController::class, 'tasks']);
             Route::get('/scan-lookup', [WarehouseApiController::class, 'scanLookup']);
             Route::get('/notifications', [WarehouseApiController::class, 'notifications']);

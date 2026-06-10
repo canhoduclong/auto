@@ -101,6 +101,10 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/orders/{order}/start-packing', [OrderPackingController::class, 'startPacking'])->name('orders.start-packing');
         Route::post('/orders/{order}/logistics', [OrderPackingController::class, 'updateLogistics'])->name('orders.logistics');
         Route::post('/orders/{order}/complete-packing', [OrderPackingController::class, 'completePacking'])->name('orders.complete-packing');
+        Route::post('/orders/{order}/request-adjustment', [OrderPackingController::class, 'requestAdjustment'])->name('orders.request-adjustment');
+        Route::post('/orders/{order}/transfer-request', [OrderPackingController::class, 'createTransferRequest'])->name('orders.transfer-request');
+        Route::post('/orders/{order}/return-to-ready', [OrderPackingController::class, 'returnToReadyToPack'])->name('orders.return-to-ready');
+        Route::post('/orders/{order}/reopen-packing', [OrderPackingController::class, 'reopenPacking'])->name('orders.reopen-packing');
         Route::get('/orders/{order}', [OrderPackingController::class, 'show'])->name('orders.detail');
         Route::get('/returns', [ReturnController::class, 'index'])->name('returns');
         Route::get('/incoming-orders', [ReceivingController::class, 'incomingOrders'])->name('incoming-orders');
@@ -360,6 +364,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/debts', [CeoDashboardController::class, 'debts'])->name('debts');
         Route::get('/warehouse', [CeoDashboardController::class, 'warehouse'])->name('warehouse');
         Route::get('/shipper', [CeoDashboardController::class, 'shipper'])->name('shipper');
+        Route::get('/shipper-costs', [CeoDashboardController::class, 'shipperCosts'])->name('shipper-costs');
         Route::get('/customers', [CeoDashboardController::class, 'customers'])->name('customers');
         Route::get('/customers-list', [CeoDashboardController::class, 'customersList'])->name('customers-list');
         Route::get('/users-list', [CeoDashboardController::class, 'usersList'])->name('users-list');

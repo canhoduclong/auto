@@ -1,7 +1,7 @@
-@extends('layouts.warehouse')
+@extends($ordersLayout ?? 'layouts.warehouse')
 
-@section('title', 'Đơn hàng cần xử lý')
-@section('subtitle', 'Xem và xử lý đơn theo ngày')
+@section('title', $ordersPageTitle ?? 'Đơn hàng cần xử lý')
+@section('subtitle', $ordersPageSubtitle ?? 'Xem và xử lý đơn theo ngày')
 
 @push('styles')
 <style>
@@ -527,6 +527,9 @@
 @endpush
 
 @section('content')
+@if($orderChangesMode ?? false)
+    @include('package.order_changes')
+@else
 @php
     $formatCompactDecimal = static function (float|int|string $value, int $decimals = 2): string {
         $num = (float) $value;
@@ -651,7 +654,7 @@
 <div class="wh-orders-shell">
     <div class="card border-0 shadow-sm mb-3">
         <div class="card-body">
-            <form method="GET" action="{{ route('warehouse.orders') }}" class="row g-2 align-items-end">
+            <form method="GET" action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders') }}" class="row g-2 align-items-end">
                 <div class="col-md-2">
                     <label class="form-label small text-muted mb-1">Ngày</label>
                     <input type="date" name="date" class="form-control" value="{{ $selectedDate ?? now()->toDateString() }}">
@@ -671,7 +674,7 @@
                     <button class="btn btn-primary" type="submit">
                         <i class="bi bi-funnel me-1"></i>Lọc
                     </button>
-                    <a href="{{ route('warehouse.orders') }}" class="btn btn-outline-secondary">
+                    <a href="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders') }}" class="btn btn-outline-secondary">
                         <i class="bi bi-arrow-clockwise me-1"></i>Hôm nay
                     </a>
                     <div class="mx-3">
@@ -679,7 +682,7 @@
                         <div class="wh-quick-wrap">
                             @foreach($quickDates as $quickDate)
                                 @if($quickDate['available'])
-                                    <a href="{{ route('warehouse.orders', array_filter(['date' => $quickDate['date'], 'status' => $status ?: null])) }}"
+                                    <a href="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders', array_filter(['date' => $quickDate['date'], 'status' => $status ?: null])) }}"
                                     class="wh-quick-pill {{ $quickDate['active'] ? 'active' : '' }}">
                                         {{ $quickDate['label'] }}
                                         <span class="wh-quick-count">{{ $quickDate['count'] }}</span>
@@ -719,7 +722,7 @@
                     <span class="badge bg-info text-dark ms-1">{{ $inventoryStats->count() }}</span>
                 @endif
             </button>
-            <a href="{{ route('warehouse.dashboard') }}" class="btn btn-outline-secondary btn-sm">
+            <a href="{{ route($packingDashboardRoute ?? 'warehouse.dashboard') }}" class="btn btn-outline-secondary btn-sm">
                 <i class="bi bi-arrow-left me-1"></i>Dashboard
             </a>
         </div>
@@ -895,6 +898,7 @@
         </div>
     </div>
 </div>
+@endif
 @endsection
 
 @push('scripts')

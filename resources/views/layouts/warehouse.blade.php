@@ -361,6 +361,7 @@
                                     <a class="dropdown-item d-flex align-items-start gap-2" href="{{ $noti['link'] ?? '#' }}">
                                         @php
                                             $icon = match($noti['type']) {
+                                                'new_order' => 'bi-receipt-cutoff text-danger',
                                                 'warehouse' => 'bi-box-seam text-primary',
                                                 'sale' => 'bi-person-badge text-warning',
                                                 'shipper' => 'bi-truck text-success',
@@ -371,6 +372,15 @@
                                         <div>
                                             <div class="fw-semibold small">{!! $noti['title'] !!}</div>
                                             <div class="text-muted small">{{ $noti['meta'] ?? '' }} &middot; <span>{{ $noti['time'] ?? '' }}</span></div>
+                                            @if(!empty($noti['details']))
+                                                <div class="mt-1 small">
+                                                    @foreach($noti['details'] as $detail)
+                                                        <div>{{ $detail['name'] }}: {{ rtrim(rtrim(number_format($detail['quantity'], 2, ',', '.'), '0'), ',') }} × {{ number_format($detail['price']) }}đ = {{ number_format($detail['line_total']) }}đ</div>
+                                                    @endforeach
+                                                    <div class="fw-semibold mt-1">Tổng tiền: {{ number_format($noti['total'] ?? 0) }}đ</div>
+                                                    <div>Ghi chú: {{ $noti['note'] ?: 'Không có' }}</div>
+                                                </div>
+                                            @endif
                                         </div>
                                     </a>
                                 </li>

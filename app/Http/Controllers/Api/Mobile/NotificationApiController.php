@@ -26,6 +26,13 @@ class NotificationApiController extends BaseApiController
                 'priority' => (string) ($n->data['priority'] ?? 'info'),
                 'route_key' => (string) ($n->data['route_key'] ?? ''),
                 'order_id' => isset($n->data['order_id']) ? (int) $n->data['order_id'] : null,
+                'daily_sequence' => isset($n->data['daily_sequence']) ? (int) $n->data['daily_sequence'] : null,
+                'customer_name' => (string) ($n->data['customer_name'] ?? ''),
+                'sale_name' => (string) ($n->data['sale_name'] ?? ''),
+                'order_created_at' => (string) ($n->data['order_created_at'] ?? ''),
+                'products' => is_array($n->data['products'] ?? null) ? $n->data['products'] : [],
+                'total' => (float) ($n->data['total'] ?? 0),
+                'note' => (string) ($n->data['note'] ?? ''),
                 'read_at' => optional($n->read_at)->toIso8601String(),
                 'created_at' => optional($n->created_at)->toIso8601String(),
             ])

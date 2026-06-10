@@ -11,9 +11,39 @@ if (!function_exists('getWarehouseNotifications')) {
         $warehouseId = $user->warehouse_id;
         $notifications = collect();
         $isWarehouse = $user->hasRole('warehouse');
+        $isPackage = $user->hasRole('package');
         $isSale = $user->hasRole('sale');
         $isShipper = $user->hasRole('shipper');
         $isAdmin = method_exists($user, 'isAdmin') ? $user->isAdmin() : false;
+
+        // Đơn mới đã duyệt, chờ kho xử lý
+        $newOrders = \App\Models\Order::query()
+            ->with(['customer', 'user', 'items.product', 'items.variant'])
+            ->when($warehouseId, fn ($query) => $query->where(function ($scope) use ($warehouseId) {
+                $scope->where('warehouse_id', $warehouseId)->orWhereNull('warehouse_id');
+            }))
+            ->whereIn('status', [\App\Models\Order::STATUS_APPROVED, \App\Models\Order::STATUS_READY_TO_PACK])
+            ->orderByDesc('created_at')
+            ->limit(3)
+            ->get();
+        foreach ($newOrders as $order) {
+            $sequence = $order->daily_sequence ?: $order->id;
+            $notifications->push([
+                'type' => 'new_order',
+                'title' => 'Đơn mới: #' . $sequence . ' - ' . ($order->customer?->name ?: 'Khách hàng'),
+                'meta' => 'Sale: ' . ($order->user?->name ?: 'Chưa xác định') . ' • Giờ tạo: ' . optional($order->created_at)->format('H:i d/m/Y'),
+                'details' => $order->items->map(fn ($item) => [
+                    'name' => $item->variant?->name ?? $item->product?->name ?? 'Sản phẩm',
+                    'quantity' => (float) ($item->quantity ?? 0),
+                    'price' => (float) ($item->price ?? 0),
+                    'line_total' => (float) ($item->total ?? ((float) ($item->quantity ?? 0) * (float) ($item->price ?? 0))),
+                ])->values()->all(),
+                'total' => (float) ($order->total ?? 0),
+                'note' => (string) ($order->note ?? ''),
+                'link' => route($isPackage ? 'package.orders' : 'warehouse.orders', ['date' => optional($order->created_at)->toDateString(), 'highlight' => $order->id]),
+                'time' => optional($order->created_at)->format('d/m/Y H:i'),
+            ]);
+        }
 
         // Đơn đã đóng gói, chờ shipper nhận
         $packedOrders = \App\Models\Order::query()

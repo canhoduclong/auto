@@ -41,6 +41,34 @@ class WarehouseDashboardController extends Controller
         $warehouseId = $user->warehouse_id;
         $notifications = collect();
 
+        // Đơn mới đã duyệt, chờ kho xử lý
+        $newOrders = Order::query()
+            ->with(['customer', 'user', 'items.product', 'items.variant'])
+            ->when($warehouseId, fn ($query) => $query->where(function ($scope) use ($warehouseId) {
+                $scope->where('warehouse_id', $warehouseId)->orWhereNull('warehouse_id');
+            }))
+            ->whereIn('status', [Order::STATUS_APPROVED, Order::STATUS_READY_TO_PACK])
+            ->orderByDesc('created_at')
+            ->limit(30)
+            ->get();
+        foreach ($newOrders as $order) {
+            $notifications->push([
+                'type' => 'new_order',
+                'title' => 'Đơn mới: #' . ($order->daily_sequence ?: $order->id) . ' - ' . ($order->customer?->name ?: 'Khách hàng'),
+                'meta' => 'Sale: ' . ($order->user?->name ?: 'Chưa xác định') . ' • Giờ tạo: ' . optional($order->created_at)->format('H:i d/m/Y'),
+                'details' => $order->items->map(fn ($item) => [
+                    'name' => $item->variant?->name ?? $item->product?->name ?? 'Sản phẩm',
+                    'quantity' => (float) ($item->quantity ?? 0),
+                    'price' => (float) ($item->price ?? 0),
+                    'line_total' => (float) ($item->total ?? ((float) ($item->quantity ?? 0) * (float) ($item->price ?? 0))),
+                ])->values()->all(),
+                'total' => (float) ($order->total ?? 0),
+                'note' => (string) ($order->note ?? ''),
+                'link' => route('warehouse.orders', ['date' => optional($order->created_at)->toDateString(), 'highlight' => $order->id]),
+                'time' => optional($order->created_at)->format('d/m/Y H:i'),
+            ]);
+        }
+
         // Đơn đã đóng gói, chờ shipper nhận
         $packedOrders = \App\Models\Order::query()
             ->with('customer')
@@ -516,7 +544,7 @@ class WarehouseDashboardController extends Controller
             ->whereDate('created_at', '>=', $startDate)
             ->whereDate('created_at', '<=', $today->toDateString());
 
-        if ($managedWarehouseId && $currentUser?->hasRole('warehouse')) {
+        if ($managedWarehouseId && ($currentUser?->hasRole('warehouse') || $currentUser?->hasRole('package'))) {
             $dailyCountsQuery->where(function ($warehouseScope) use ($managedWarehouseId, $sharedQueueStatuses) {
                 $warehouseScope->where('warehouse_id', $managedWarehouseId)
                     ->orWhere(function ($sharedScope) use ($sharedQueueStatuses) {
@@ -564,7 +592,7 @@ class WarehouseDashboardController extends Controller
             })
             ->whereDate('created_at', $selectedDate);
 
-        if ($managedWarehouseId && $currentUser?->hasRole('warehouse')) {
+        if ($managedWarehouseId && ($currentUser?->hasRole('warehouse') || $currentUser?->hasRole('package'))) {
             $ordersQuery->where(function ($warehouseScope) use ($managedWarehouseId, $sharedQueueStatuses) {
                 $warehouseScope->where('warehouse_id', $managedWarehouseId)
                     ->orWhere(function ($sharedScope) use ($sharedQueueStatuses) {
@@ -675,11 +703,32 @@ class WarehouseDashboardController extends Controller
             ->orderBy('name')
             ->get(['id', 'name']);
 
-        return view('warehouse.orders.index', compact('orders', 'selectedDate', 'status', 'quickDates', 'fifoRemainingStock', 'activeTransfersByOrder', 'warehouses', 'shippers'));
+        $isPackageModule = $request->routeIs('package.*');
+        $ordersLayout = $isPackageModule ? 'layouts.package' : 'layouts.warehouse';
+        $orderRoutePrefix = $isPackageModule ? 'package' : 'warehouse';
+        $packingInventoryRoute = $isPackageModule ? 'package.inventory' : 'warehouse.stock-in';
+        $packingDashboardRoute = $isPackageModule ? 'package.dashboard' : 'warehouse.dashboard';
+
+        return view('warehouse.orders.index', compact(
+            'orders',
+            'selectedDate',
+            'status',
+            'quickDates',
+            'fifoRemainingStock',
+            'activeTransfersByOrder',
+            'warehouses',
+            'shippers',
+            'ordersLayout',
+            'orderRoutePrefix',
+            'packingInventoryRoute',
+            'packingDashboardRoute'
+        ));
     }
 
     public function createTransferRequest(Request $request, Order $order)
     {
+        $this->authorizePackingOrderAccess($order);
+
         $request->validate([
             'target_warehouse_id' => ['required', 'integer', 'exists:warehouses,id'],
             'shipper_id' => ['required', 'integer', 'exists:users,id'],
@@ -769,7 +818,7 @@ class WarehouseDashboardController extends Controller
             'order_id' => $order->id,
             'action' => 'warehouse_transfer_requested',
             'user_id' => Auth::id(),
-            'role' => 'warehouse',
+            'role' => $this->packingActorRole(),
             'status_before' => $order->status,
             'status_after' => $order->status,
             'note' => 'Tạo phiếu điều chuyển #' . $transfer->id
@@ -1006,6 +1055,8 @@ class WarehouseDashboardController extends Controller
      */
     public function startPacking(Request $request, Order $order)
     {
+        $this->authorizePackingOrderAccess($order);
+
         if ($order->warehouse_adjustment_status === Order::WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION) {
             $message = 'Đơn đang chờ sale xác nhận thay đổi từ kho. Tạm thời chưa thể đóng hàng.';
 
@@ -1060,7 +1111,7 @@ class WarehouseDashboardController extends Controller
         $managedWarehouseId = $currentUser?->warehouse_id ? (int) $currentUser->warehouse_id : null;
         $currentOrderWarehouseId = (int) ($order->warehouse_id ?? 0);
 
-        if ($managedWarehouseId && $currentUser?->hasRole('warehouse')) {
+        if ($managedWarehouseId && ($currentUser?->hasRole('warehouse') || $currentUser?->hasRole('package'))) {
             if ($currentOrderWarehouseId > 0 && $currentOrderWarehouseId !== $managedWarehouseId) {
                 $message = 'Đơn hàng này thuộc kho khác, bạn không thể bắt đầu đóng gói.';
 
@@ -1088,7 +1139,7 @@ class WarehouseDashboardController extends Controller
                         'has_shortage' => true,
                         'can_start_packing' => false,
                         'shortages' => $stockCheck['shortages'] ?? [],
-                        'import_url' => route('warehouse.stock-in'),
+                        'import_url' => route($request->routeIs('package.*') ? 'package.inventory' : 'warehouse.stock-in'),
                         'import_hint' => 'Bạn cần Nhập kho để thực hiện công việc tiếp',
                     ],
                 ], 422);
@@ -1109,7 +1160,7 @@ class WarehouseDashboardController extends Controller
             'order_id'      => $order->id,
             'action'        => 'start_packing',
             'user_id'       => Auth::id(),
-            'role'          => 'warehouse',
+            'role'          => $this->packingActorRole(),
             'status_before' => $statusBefore,
             'status_after'  => Order::STATUS_PACKING,
             'note'          => 'Bắt đầu đóng gói đơn hàng',
@@ -1578,6 +1629,8 @@ class WarehouseDashboardController extends Controller
      */
     public function updateLogistics(Request $request, Order $order)
     {
+        $this->authorizePackingOrderAccess($order);
+
         $expectsJson = $request->expectsJson();
 
         if (!$order->created_at || !$order->created_at->isToday()) {
@@ -1688,7 +1741,7 @@ class WarehouseDashboardController extends Controller
             'order_id'      => $order->id,
             'action'        => 'warehouse_update_logistics',
             'user_id'       => Auth::id(),
-            'role'          => 'warehouse',
+            'role'          => $this->packingActorRole(),
             'status_before' => $order->status,
             'status_after'  => $order->status,
             'note'          => sprintf(
@@ -1741,6 +1794,8 @@ class WarehouseDashboardController extends Controller
 
     public function requestAdjustment(Request $request, Order $order)
     {
+        $this->authorizePackingOrderAccess($order);
+
         if (!$order->created_at || !$order->created_at->isToday()) {
             if ($request->expectsJson()) {
                 return response()->json(['ok' => false, 'message' => 'Chỉ được điều chỉnh đơn có ngày hôm nay.'], 422);
@@ -1887,7 +1942,7 @@ class WarehouseDashboardController extends Controller
             'order_id' => $order->id,
             'action' => 'warehouse_request_adjustment',
             'user_id' => Auth::id(),
-            'role' => 'warehouse',
+            'role' => $this->packingActorRole(),
             'status_before' => $order->status,
             'status_after' => $order->status,
             'note' => 'Kho yeu cau sale xac nhan thay doi don (snapshot): ' . trim((string) $validated['reason']),
@@ -1913,6 +1968,8 @@ class WarehouseDashboardController extends Controller
 
     public function returnToReadyToPack(Request $request, Order $order)
     {
+        $this->authorizePackingOrderAccess($order);
+
         if (!$order->created_at || !$order->created_at->isToday()) {
             return back()->with('error', 'Chỉ được xử lý đơn có ngày hôm nay.');
         }
@@ -1929,7 +1986,7 @@ class WarehouseDashboardController extends Controller
             'order_id' => $order->id,
             'action' => 'warehouse_return_to_ready_to_pack',
             'user_id' => Auth::id(),
-            'role' => 'warehouse',
+            'role' => $this->packingActorRole(),
             'status_before' => Order::STATUS_PACKING,
             'status_after' => Order::STATUS_READY_TO_PACK,
             'note' => 'Warehouse đưa đơn quay lại bước Chờ đóng gói để điều chỉnh hàng hóa.',
@@ -1943,6 +2000,8 @@ class WarehouseDashboardController extends Controller
      */
     public function completePacking(Request $request, Order $order)
     {
+        $this->authorizePackingOrderAccess($order);
+
         if ($order->warehouse_adjustment_status === Order::WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION) {
             if ($request->expectsJson()) {
                 return response()->json(['ok' => false, 'message' => 'Đơn đang chờ sale xác nhận thay đổi từ kho.'], 422);
@@ -1984,7 +2043,7 @@ class WarehouseDashboardController extends Controller
             'order_id'      => $order->id,
             'action'        => 'complete_packing',
             'user_id'       => Auth::id(),
-            'role'          => 'warehouse',
+            'role'          => $this->packingActorRole(),
             'status_before' => Order::STATUS_PACKING,
             'status_after'  => Order::STATUS_READY_TO_SHIP,
             'note'          => 'Hoàn thành đóng gói – Sẵn sàng giao hàng',
@@ -3994,5 +4053,22 @@ class WarehouseDashboardController extends Controller
                 'to' => $date->toDateString(),
             ],
         };
+    }
+
+    private function authorizePackingOrderAccess(Order $order): void
+    {
+        $user = Auth::user();
+        $managedWarehouseId = $user?->warehouse_id ? (int) $user->warehouse_id : null;
+        $orderWarehouseId = $order->warehouse_id ? (int) $order->warehouse_id : null;
+        $isPackingOperator = $user?->hasRole('warehouse') || $user?->hasRole('package');
+
+        if (!$user?->hasRole('admin') && $isPackingOperator && $managedWarehouseId && $orderWarehouseId && $managedWarehouseId !== $orderWarehouseId) {
+            abort(403, 'Đơn hàng thuộc kho khác.');
+        }
+    }
+
+    private function packingActorRole(): string
+    {
+        return request()->routeIs('package.*') ? 'package' : 'warehouse';
     }
 }

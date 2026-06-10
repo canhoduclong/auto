@@ -9,6 +9,7 @@ use App\Models\Inventory;
 use App\Models\Order;
 use App\Models\OrderAdjustment;
 use App\Models\OrderItem;
+use App\Models\OrderReturn;
 use App\Models\ProductPriceLog;
 use App\Models\Role;
 use App\Models\Team;
@@ -315,6 +316,74 @@ class CeoDashboardController extends Controller
                     $rate . '%',
                 ];
             })->all(),
+        ]);
+    }
+
+    public function shipperCosts(Request $request)
+    {
+        [$from, $to, $rangeLabel] = $this->resolveRange($request);
+
+        $deliveryRows = Order::query()
+            ->select('shipper_id')
+            ->selectRaw('COUNT(*) as delivered_orders')
+            ->selectRaw('SUM(CASE WHEN charge_shipping_fee = 0 THEN 0 ELSE COALESCE(shipping_fee, 0) END) as delivery_fee')
+            ->whereNotNull('shipper_id')
+            ->whereBetween('updated_at', [$from, $to])
+            ->whereIn('status', [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED])
+            ->groupBy('shipper_id')
+            ->with('shipper:id,name')
+            ->get()
+            ->keyBy('shipper_id');
+
+        $returnRows = OrderReturn::query()
+            ->join('orders', 'orders.id', '=', 'order_returns.order_id')
+            ->select('orders.shipper_id')
+            ->selectRaw('COUNT(order_returns.id) as return_orders')
+            ->selectRaw('SUM(COALESCE(order_returns.return_shipping_fee, 0)) as return_fee')
+            ->whereNotNull('orders.shipper_id')
+            ->whereBetween('order_returns.updated_at', [$from, $to])
+            ->groupBy('orders.shipper_id')
+            ->get()
+            ->keyBy('shipper_id');
+
+        $shipperIds = $deliveryRows->keys()->merge($returnRows->keys())->unique();
+        $rows = $shipperIds->map(function ($shipperId) use ($deliveryRows, $returnRows) {
+            $delivery = $deliveryRows->get($shipperId);
+            $return = $returnRows->get($shipperId);
+            $deliveryFee = (float) ($delivery->delivery_fee ?? 0);
+            $returnFee = (float) ($return->return_fee ?? 0);
+
+            return [
+                'name' => (string) ($delivery?->shipper?->name ?? User::find($shipperId)?->name ?? 'N/A'),
+                'delivered_orders' => (int) ($delivery->delivered_orders ?? 0),
+                'delivery_fee' => $deliveryFee,
+                'return_orders' => (int) ($return->return_orders ?? 0),
+                'return_fee' => $returnFee,
+                'total_fee' => $deliveryFee + $returnFee,
+            ];
+        })->sortByDesc('total_fee')->values();
+
+        return view('ceo.section', [
+            'pageTitle' => 'Chi Phí Shipper',
+            'pageSubtitle' => 'Theo dõi chi phí giao hàng và chi phí vận chuyển đơn hoàn trả.',
+            'rangeLabel' => $rangeLabel,
+            'from' => $from,
+            'to' => $to,
+            'cards' => [
+                ['label' => 'Phí giao hàng', 'value' => number_format((float) $rows->sum('delivery_fee')) . ' đ'],
+                ['label' => 'Phí hoàn trả', 'value' => number_format((float) $rows->sum('return_fee')) . ' đ'],
+                ['label' => 'Tổng chi phí Shipper', 'value' => number_format((float) $rows->sum('total_fee')) . ' đ'],
+            ],
+            'tableTitle' => 'Chi phí theo shipper',
+            'columns' => ['Shipper', 'Đơn giao', 'Phí giao', 'Đơn hoàn', 'Phí hoàn', 'Tổng chi phí'],
+            'rows' => $rows->map(fn ($row) => [
+                $row['name'],
+                number_format($row['delivered_orders']),
+                number_format($row['delivery_fee']) . ' đ',
+                number_format($row['return_orders']),
+                number_format($row['return_fee']) . ' đ',
+                number_format($row['total_fee']) . ' đ',
+            ])->all(),
         ]);
     }
 

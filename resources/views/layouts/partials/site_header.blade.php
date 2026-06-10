@@ -512,6 +512,7 @@
                                                         <span class="hdr-notify-icon {{ $notify['type'] }}">
                                                             @php
                                                                 $icon = match($notify['type']) {
+                                                                    'new_order' => 'bi-receipt-cutoff',
                                                                     'warehouse' => 'bi-box-seam',
                                                                     'sale' => 'bi-person-badge',
                                                                     'shipper' => 'bi-truck',
@@ -523,6 +524,15 @@
                                                         <span class="hdr-notify-content d-flex flex-column align-items-start flex-grow-1">
                                                             <span class="hdr-notify-title">{!! $notify['title'] !!}</span>
                                                             <span class="hdr-notify-meta">{{ $notify['meta'] }}<span class="ms-2 text-muted small">{{ $notify['time'] ?? '' }}</span></span>
+                                                            @if(!empty($notify['details']))
+                                                                <span class="small text-start mt-1">
+                                                                    @foreach($notify['details'] as $detail)
+                                                                        <span class="d-block">{{ $detail['name'] }}: {{ rtrim(rtrim(number_format($detail['quantity'], 2, ',', '.'), '0'), ',') }} × {{ number_format($detail['price']) }}đ = {{ number_format($detail['line_total']) }}đ</span>
+                                                                    @endforeach
+                                                                    <span class="d-block fw-semibold">Tổng tiền: {{ number_format($notify['total'] ?? 0) }}đ</span>
+                                                                    <span class="d-block">Ghi chú: {{ $notify['note'] ?: 'Không có' }}</span>
+                                                                </span>
+                                                            @endif
                                                         </span>
                                                     </a>
                                                 @empty

@@ -110,10 +110,7 @@
             <a href="{{ route('package.order-changes') }}" class="pkg-nav-link {{ request()->routeIs('package.order-changes') ? 'active' : '' }}">
                 <i class="bi bi-pencil-square"></i> Yêu cầu thay đổi đơn
             </a>
-            <div class="pkg-nav-section">Tồn kho</div>
-            <a href="{{ route('package.inventory') }}" class="pkg-nav-link {{ request()->routeIs('package.inventory') ? 'active' : '' }}">
-                <i class="bi bi-stack"></i> Thống kê tồn kho
-            </a>
+
         </nav>
     </aside>
     <div class="pkg-main">
@@ -127,6 +124,37 @@
                 </div>
             </div>
             <div class="d-flex align-items-center gap-3">
+                @php
+                    $packageNotifications = getWarehouseNotifications(auth()->user(), 7);
+                @endphp
+                <div class="dropdown">
+                    <a href="#" class="position-relative text-dark" data-bs-toggle="dropdown" aria-expanded="false" title="Thông báo">
+                        <i class="bi bi-bell fs-5"></i>
+                        @if($packageNotifications->count())
+                            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size:.65rem;">{{ $packageNotifications->count() }}</span>
+                        @endif
+                    </a>
+                    <div class="dropdown-menu dropdown-menu-end shadow-sm p-0" style="width:min(92vw,440px);max-height:70vh;overflow-y:auto;">
+                        <div class="dropdown-header border-bottom">Thông báo gần đây</div>
+                        @forelse($packageNotifications as $noti)
+                            <a href="{{ $noti['link'] ?? '#' }}" class="dropdown-item border-bottom py-2 text-wrap">
+                                <div class="fw-semibold small">{{ $noti['title'] }}</div>
+                                <div class="text-muted small">{{ $noti['meta'] ?? '' }}</div>
+                                @if(!empty($noti['details']))
+                                    <div class="small mt-1">
+                                        @foreach($noti['details'] as $detail)
+                                            <div>{{ $detail['name'] }}: {{ rtrim(rtrim(number_format($detail['quantity'], 2, ',', '.'), '0'), ',') }} × {{ number_format($detail['price']) }}đ = {{ number_format($detail['line_total']) }}đ</div>
+                                        @endforeach
+                                        <div class="fw-semibold">Tổng tiền: {{ number_format($noti['total'] ?? 0) }}đ</div>
+                                        <div>Ghi chú: {{ $noti['note'] ?: 'Không có' }}</div>
+                                    </div>
+                                @endif
+                            </a>
+                        @empty
+                            <div class="p-3 text-center text-muted small">Không có thông báo.</div>
+                        @endforelse
+                    </div>
+                </div>
                 <div class="dropdown">
                     <a href="#" class="d-flex align-items-center gap-2 text-decoration-none" id="dropdownAccount" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="bi bi-person-circle fs-5 text-secondary"></i>

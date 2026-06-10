@@ -1,7 +1,7 @@
 {
-  "version": "1.0.10",
-  "version_code": 11,
+  "version": "1.0.12",
+  "version_code": 13,
   "apk_url": "https://hoanglongtnt.com/app-update/app-release.apk",
   "force_update": false,
-  "message": "Bản cập nhật 1.0.10: dashboard CEO có điều hướng nhanh theo số thứ tự và danh sách đơn chỉ xem nhanh."
+  "message": "Bản cập nhật 1.0.12: thông báo đơn mới hiển thị số ưu tiên, khách hàng, Sale, giờ tạo, chi tiết sản phẩm, tổng tiền và ghi chú trên website và mobile."
 }

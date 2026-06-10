@@ -138,7 +138,14 @@ trait ResolvesMobileRole
 
         if ($layout === 'ceo') {
             return [
-                ['key' => 'dashboard', 'label' => 'CEO', 'route' => '/ceo', 'api' => '/screens/ceo/dashboard', 'icon' => 'query_stats'],
+                ['group' => 'Tổng quan', 'key' => 'dashboard', 'label' => 'CEO', 'route' => '/ceo', 'api' => '/screens/ceo/dashboard', 'icon' => 'query_stats'],
+                ['group' => 'Bán hàng', 'key' => 'daily_sales', 'label' => 'Thống kê bán hàng', 'route' => '/ceo/daily-sales', 'api' => '/screens/ceo/daily_sales', 'icon' => 'receipt_long'],
+                ['group' => 'Tài chính', 'key' => 'cashflow', 'label' => 'Thu chi', 'route' => '/ceo/cashflow', 'api' => '/screens/ceo/cashflow', 'icon' => 'payments'],
+                ['group' => 'Tài chính', 'key' => 'financial_reports', 'label' => 'Báo cáo tài chính', 'route' => '/ceo/financial-reports', 'api' => '/screens/ceo/financial_reports', 'icon' => 'account_balance'],
+                ['group' => 'Tài chính', 'key' => 'shipper_costs', 'label' => 'Chi phí Shipper', 'route' => '/ceo/shipper-costs', 'api' => '/screens/ceo/shipper_costs', 'icon' => 'payments'],
+                ['group' => 'Khách hàng', 'key' => 'customers_list', 'label' => 'Danh sách khách hàng', 'route' => '/ceo/customers-list', 'api' => '/screens/ceo/customers_list', 'icon' => 'people'],
+                ['group' => 'Hoạt động', 'key' => 'debts', 'label' => 'Công nợ', 'route' => '/ceo/debts', 'api' => '/screens/ceo/debts', 'icon' => 'money_off'],
+                ['group' => 'Hoạt động', 'key' => 'inventory', 'label' => 'Tồn kho', 'route' => '/ceo/warehouse', 'api' => '/screens/ceo/inventory', 'icon' => 'inventory'],
             ];
         }
 

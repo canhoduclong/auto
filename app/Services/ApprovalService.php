@@ -176,13 +176,13 @@ class ApprovalService
                 $warehouse = $order->warehouse;
                 if ($warehouse) {
                     foreach ($warehouse->users as $wUser) {
-                        if ($wUser->hasRole('warehouse')) {
+                        if ($wUser->hasRole('warehouse') || $wUser->hasRole('package')) {
                             $wUser->notify(new \App\Notifications\WarehouseNewOrderApproved($order));
                         }
                     }
                 }
             } else {
-                $wUsers = \App\Models\User::whereHas('roles', function($q) { $q->where('name', 'warehouse'); })->get();
+                $wUsers = \App\Models\User::whereHas('roles', function($q) { $q->whereIn('name', ['warehouse', 'package']); })->get();
                 foreach ($wUsers as $wUser) {
                     $wUser->notify(new \App\Notifications\WarehouseNewOrderApproved($order));
                 }

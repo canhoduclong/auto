@@ -325,6 +325,9 @@
             <a href="{{ route('ceo.shipper') }}" class="ceo-nav-link {{ request()->routeIs('ceo.shipper') ? 'active' : '' }}">
                 <i class="bi bi-truck"></i> Shipper
             </a>
+            <a href="{{ route('ceo.shipper-costs') }}" class="ceo-nav-link {{ request()->routeIs('ceo.shipper-costs') ? 'active' : '' }}">
+                <i class="bi bi-cash-stack"></i> Chi phí Shipper
+            </a>
 
             <div style="padding: 12px 16px; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.06em; margin-top: 8px;">Báo Cáo</div>
             <a href="{{ route('ceo.reports') }}" class="ceo-nav-link {{ request()->routeIs('ceo.reports') ? 'active' : '' }}">

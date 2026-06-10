@@ -108,6 +108,9 @@ class Order extends Model
 
     public function customer() { return $this->belongsTo(Customer::class); }
     public function user() { return $this->belongsTo(User::class); }
+    public function warehouseAdjustmentRequester() { return $this->belongsTo(User::class, 'warehouse_adjustment_requested_by'); }
+    public function warehouseAdjustmentConfirmer() { return $this->belongsTo(User::class, 'warehouse_adjustment_confirmed_by'); }
+    public function warehouseAdjustmentRejecter() { return $this->belongsTo(User::class, 'warehouse_adjustment_rejected_by'); }
     public function parentOrder() { return $this->belongsTo(Order::class, 'parent_order_id'); }
     public function returnOrders() { return $this->hasMany(Order::class, 'parent_order_id'); }
     public function returnRecords() { return $this->hasMany(OrderReturn::class); }

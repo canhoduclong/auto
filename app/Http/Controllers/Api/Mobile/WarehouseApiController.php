@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api\Mobile;
 
 use App\Http\Controllers\WarehouseDashboardController;
 use App\Models\Inventory;
+use App\Models\InventoryDocument;
+use App\Models\InventoryDocumentItem;
 use App\Models\Order;
 use App\Models\OrderHistory;
 use App\Models\OrderReturn;
@@ -16,6 +18,7 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class WarehouseApiController extends BaseApiController
 {
@@ -402,6 +405,85 @@ class WarehouseApiController extends BaseApiController
         }
 
         return $this->paginated($query->paginate(20));
+    }
+
+    public function receiveReturn(Request $request, OrderReturn $orderReturn): JsonResponse
+    {
+        $this->ensureWarehouseRole($request);
+        $user = $request->user();
+        $warehouseId = (int) ($orderReturn->warehouse_id ?? 0);
+        if ($user->warehouse_id && (int) $user->warehouse_id !== $warehouseId) {
+            return $this->fail('Phieu tra khong thuoc kho ban quan ly.', 403);
+        }
+        $orderReturn->loadMissing(['order.items', 'returnItems']);
+        if (!$orderReturn->order || $orderReturn->returnItems->isEmpty() || $warehouseId <= 0) {
+            return $this->fail('Phieu tra thieu thong tin don hang, san pham hoac kho nhan.', 422);
+        }
+
+        $document = DB::transaction(function () use ($orderReturn, $user, $warehouseId) {
+            $lockedReturn = OrderReturn::query()->lockForUpdate()->findOrFail($orderReturn->id);
+            if ($lockedReturn->status === 'warehouse_received') {
+                abort(422, 'Phieu tra da duoc nhap kho.');
+            }
+
+            $orderReturn->update([
+                'status' => 'warehouse_received',
+                'warehouse_confirmed_by' => $user->id,
+                'warehouse_confirmed_at' => now(),
+            ]);
+            $orderReturn->order->update(['status' => Order::STATUS_RETURNED_COMPLETED]);
+
+            $marker = '[return_receipt:' . $orderReturn->id . ']';
+            $document = InventoryDocument::query()->firstOrCreate(
+                [
+                    'type' => 'import',
+                    'warehouse_id' => $warehouseId,
+                    'notes' => 'Đơn nhập hàng từ trả hàng #' . $orderReturn->id . ' ' . $marker,
+                ],
+                [
+                    'document_date' => now()->toDateString(),
+                    'shipping_fee' => 0,
+                    'user_id' => $user->id,
+                ]
+            );
+
+            foreach ($orderReturn->returnItems as $returnItem) {
+                $quantity = (int) $returnItem->quantity;
+                $orderItem = $orderReturn->order->items->firstWhere('product_variant_id', $returnItem->product_variant_id);
+                InventoryDocumentItem::query()->updateOrCreate(
+                    [
+                        'inventory_document_id' => $document->id,
+                        'product_variant_id' => $returnItem->product_variant_id,
+                    ],
+                    [
+                        'quantity' => $quantity,
+                        'unit_cost' => (float) ($orderItem?->price ?? 0),
+                    ]
+                );
+                $inventory = Inventory::query()->firstOrCreate(
+                    ['product_variant_id' => $returnItem->product_variant_id, 'warehouse_id' => $warehouseId],
+                    ['quantity' => 0, 'reserved_quantity' => 0]
+                );
+                $inventory->increment('quantity', $quantity);
+            }
+
+            OrderHistory::query()->create([
+                'order_id' => $orderReturn->order_id,
+                'action' => 'confirm_return',
+                'user_id' => $user->id,
+                'role' => 'warehouse',
+                'status_before' => Order::STATUS_RETURNING,
+                'status_after' => Order::STATUS_RETURNED_COMPLETED,
+                'note' => 'Kho nhận hàng trả qua mobile, cập nhật tồn kho và tạo phiếu nhập #' . $document->id,
+            ]);
+
+            return $document;
+        });
+
+        return $this->ok([
+            'return_id' => (int) $orderReturn->id,
+            'inventory_document_id' => (int) $document->id,
+        ], 'Da nhan hang tra va tao phieu nhap kho');
     }
 
     public function tasks(Request $request): JsonResponse
