@@ -294,6 +294,9 @@
                                 <h2 class="h6 fw-bold mb-0">Sản phẩm trong đơn</h2>
                                 <span class="text-muted small">Thêm hoặc bỏ sản phẩm trước khi lưu.</span>
                             </div>
+                            <div class="alert alert-warning py-2 px-3 small">
+                                Có thể lưu số lượng lớn hơn tồn kho hiện tại. Đơn thiếu hàng sẽ được hệ thống đánh dấu để kho xử lý.
+                            </div>
 
                             <div class="table-responsive">
                                 <table class="table checkout-table">
@@ -965,7 +968,6 @@ document.addEventListener('DOMContentLoaded', function () {
         const variantSku = addBtn.dataset.variantSku || 'N/A';
         const variantSize = addBtn.dataset.variantSize || '';
         const variantPrice = parseFloat(addBtn.dataset.variantPrice || '0');
-        const variantStock = parseInt(addBtn.dataset.variantStock || '0', 10);
         const variantImage = addBtn.dataset.variantImage || 'https://via.placeholder.com/48';
         const variantUnitLabel = addBtn.dataset.variantUnitLabel || 'Cái';
         const variantWeight = parseFloat(addBtn.dataset.variantWeight || '0');
@@ -1007,7 +1009,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 <div class="selling-price-feedback"></div>
             </td>
             <td>
-                <input type="number" name="items[${itemIndex}][quantity]" class="form-control form-control-sm quantity-input" min="1" max="${variantStock > 0 ? variantStock : ''}" value="1" required>
+                <input type="number" name="items[${itemIndex}][quantity]" class="form-control form-control-sm quantity-input" min="1" value="1" required>
             </td>
             <td class="text-end">
                 <span class="line-weight" data-unit-weight="${variantWeight.toFixed(3)}" data-weight-unit="${variantUnitLabel}" data-display-mode="${variantIsPricedByKg ? 'kg' : 'unit'}">

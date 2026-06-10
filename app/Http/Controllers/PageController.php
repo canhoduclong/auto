@@ -3356,12 +3356,6 @@ public function apiTruckRoutes(Request $request)
                 ])->withInput();
             }
 
-            if ($variant->available_stock < $item['quantity']) {
-                return back()->withErrors([
-                    'items' => 'Ton kho khong du cho SKU ' . ($variant->sku ?: $variant->id) . '.',
-                ])->withInput();
-            }
-
             $basePrice = (float) ($variant->latestPriceRule?->price ?? $variant->final_price ?? 0);
             $minPrice = max(0, (float) ($variant->latestPriceRule?->min_price ?? 0));
             $requestedUnitDiscount = max(0, (float) (($validated['item_discount'][(string) $variant->id] ?? 0)));

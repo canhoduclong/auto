@@ -7,6 +7,12 @@
                 $isPacking = $order->status === 'packing';
                 $isPackedReadonly = in_array($order->status, ['packed', 'packed_waiting_pickup', 'delivering', 'delivered', 'completed'], true);
                 $canAdminReopenPacking = !$orderCardReadonly && auth()->user()?->hasRole('admin') && in_array($order->status, ['packed', 'packed_waiting_pickup'], true);
+                $activePackingHistory = $order->histories
+                    ?->where('action', 'start_packing')
+                    ->sortByDesc('id')
+                    ->first();
+                $canUndoStartPacking = $isPacking
+                    && (int) ($activePackingHistory?->user_id ?? 0) === (int) auth()->id();
                 $packingHistory = $order->histories
                     ?->whereIn('action', ['complete_packing', 'warehouse_complete_packing'])
                     ->sortByDesc('id')
@@ -716,15 +722,16 @@
                                 @endif
                             @endif
 
+                            <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.return-to-ready', $order) }}" method="POST" class="d-grid mb-2 js-undo-packing-form {{ $canUndoStartPacking ? '' : 'd-none' }}">
+                                @csrf
+                                <button class="btn btn-outline-warning btn-sm js-undo-packing-btn" type="submit">
+                                    <i class="bi bi-arrow-counterclockwise me-1"></i>Undo nhận đơn
+                                </button>
+                            </form>
+
                             @if($isPacking)
-                                <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.return-to-ready', $order) }}" method="POST" class="d-grid mb-2">
-                                    @csrf
-                                    <button class="btn btn-outline-warning btn-sm" type="submit">
-                                        <i class="bi bi-arrow-counterclockwise me-1"></i>Trở lại Chờ đóng gói để điều chỉnh
-                                    </button>
-                                </form>
                                 <div class="small text-muted mb-2">
-                                    Đơn đang đóng hàng nên chưa thể điều chỉnh trực tiếp. Hãy đưa đơn về Chờ đóng gói trước.
+                                    {{ $canUndoStartPacking ? 'Bạn có thể Undo để trả đơn về hàng chờ.' : 'Đơn đang được user khác nhận đóng hàng.' }}
                                 </div>
                             @endif
 

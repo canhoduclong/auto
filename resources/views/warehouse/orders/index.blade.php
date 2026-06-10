@@ -1335,6 +1335,7 @@
                             el.classList.remove('d-none');
                         });
                         card.querySelector('.js-start-packing-form')?.classList.add('d-none');
+                        card.querySelector('.js-undo-packing-form')?.classList.remove('d-none');
                         card.querySelector('.js-complete-packing-form')?.classList.remove('d-none');
                     }
 
@@ -1344,6 +1345,77 @@
                 } catch (error) {
                     if (typeof showToast === 'function') {
                         showToast(error.message || 'Có lỗi xảy ra khi đóng hàng.', 'error');
+                    }
+                } finally {
+                    if (submitBtn) {
+                        submitBtn.disabled = false;
+                    }
+                }
+            });
+        });
+
+        document.querySelectorAll('.js-undo-packing-form').forEach(function (form) {
+            form.addEventListener('submit', async function (event) {
+                event.preventDefault();
+
+                const submitBtn = form.querySelector('.js-undo-packing-btn');
+                if (submitBtn) {
+                    submitBtn.disabled = true;
+                }
+
+                try {
+                    const response = await fetch(form.action, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                        body: new FormData(form),
+                    });
+
+                    const payload = await response.json();
+                    if (!response.ok || payload.ok === false) {
+                        throw new Error(payload.message || 'Không thể hoàn tác nhận đơn.');
+                    }
+
+                    const card = form.closest('.js-order-card');
+                    if (card) {
+                        const statusEl = card.querySelector('.js-order-status');
+                        if (statusEl && payload.order) {
+                            statusEl.className = 'badge js-order-status ' + (payload.order.status_class || 'bg-secondary');
+                            statusEl.textContent = payload.order.status_label || 'Chờ đóng gói';
+                        }
+
+                        const orderIndexEl = card.querySelector('.wh-order-index');
+                        if (orderIndexEl) {
+                            orderIndexEl.classList.remove('is-packed', 'is-packing');
+                            orderIndexEl.classList.add('is-unpacked');
+                        }
+
+                        const navPill = document.querySelector(`.wh-order-nav-pill[data-order-id="${card.dataset.orderId || ''}"]`);
+                        if (navPill) {
+                            navPill.classList.remove('is-packed', 'is-packing');
+                            navPill.classList.add('is-unpacked');
+                        }
+
+                        card.querySelectorAll('.js-ready-only').forEach(function (el) {
+                            el.classList.remove('d-none');
+                        });
+                        card.querySelectorAll('.js-packing-only').forEach(function (el) {
+                            el.classList.add('d-none');
+                        });
+                        card.querySelector('.js-start-packing-form')?.classList.remove('d-none');
+                        card.querySelector('.js-undo-packing-form')?.classList.add('d-none');
+                        card.querySelector('.js-complete-packing-form')?.classList.add('d-none');
+                    }
+
+                    if (typeof showToast === 'function') {
+                        showToast(payload.message || 'Đã hoàn tác nhận đơn.', 'success');
+                    }
+                } catch (error) {
+                    if (typeof showToast === 'function') {
+                        showToast(error.message || 'Có lỗi xảy ra khi hoàn tác nhận đơn.', 'error');
                     }
                 } finally {
                     if (submitBtn) {

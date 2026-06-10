@@ -1151,8 +1151,10 @@ class WarehouseDashboardController extends Controller
         $statusBefore = $order->status;
 
         $updatePayload = ['status' => Order::STATUS_PACKING];
+        $assignedWarehouseOnStart = false;
         if ($managedWarehouseId && $currentOrderWarehouseId <= 0) {
             $updatePayload['warehouse_id'] = $managedWarehouseId;
+            $assignedWarehouseOnStart = true;
         }
         $order->update($updatePayload);
 
@@ -1163,7 +1165,8 @@ class WarehouseDashboardController extends Controller
             'role'          => $this->packingActorRole(),
             'status_before' => $statusBefore,
             'status_after'  => Order::STATUS_PACKING,
-            'note'          => 'Bắt đầu đóng gói đơn hàng',
+            'note'          => 'Bắt đầu đóng gói đơn hàng'
+                . ($assignedWarehouseOnStart ? ' [assigned_warehouse_on_start]' : ''),
         ]);
 
         if ($request->expectsJson()) {
@@ -1971,28 +1974,68 @@ class WarehouseDashboardController extends Controller
         $this->authorizePackingOrderAccess($order);
 
         if (!$order->created_at || !$order->created_at->isToday()) {
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => 'Chỉ được xử lý đơn có ngày hôm nay.'], 422);
+            }
+
             return back()->with('error', 'Chỉ được xử lý đơn có ngày hôm nay.');
         }
 
         if ($order->status !== Order::STATUS_PACKING) {
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => 'Chỉ có thể hoàn tác đơn đang đóng hàng.'], 422);
+            }
+
             return back()->with('error', 'Chỉ có thể đưa về Chờ đóng gói với đơn đang đóng hàng.');
         }
 
-        $order->update([
-            'status' => Order::STATUS_READY_TO_PACK,
-        ]);
+        $activePackingHistory = $order->histories()
+            ->where('action', 'start_packing')
+            ->latest('id')
+            ->first();
+
+        if (!$activePackingHistory || (int) $activePackingHistory->user_id !== (int) Auth::id()) {
+            $message = 'Bạn chỉ có thể hoàn tác đơn do chính mình vừa nhận.';
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $message], 403);
+            }
+
+            return back()->with('error', $message);
+        }
+
+        $updatePayload = ['status' => Order::STATUS_READY_TO_PACK];
+        if (str_contains((string) $activePackingHistory->note, '[assigned_warehouse_on_start]')) {
+            $updatePayload['warehouse_id'] = null;
+        }
+        $order->update($updatePayload);
 
         OrderHistory::create([
             'order_id' => $order->id,
-            'action' => 'warehouse_return_to_ready_to_pack',
+            'action' => 'undo_start_packing',
             'user_id' => Auth::id(),
             'role' => $this->packingActorRole(),
             'status_before' => Order::STATUS_PACKING,
             'status_after' => Order::STATUS_READY_TO_PACK,
-            'note' => 'Warehouse đưa đơn quay lại bước Chờ đóng gói để điều chỉnh hàng hóa.',
+            'note' => 'Hoàn tác hoạt động nhận đơn đóng hàng của user hiện tại.',
         ]);
 
-        return back()->with('success', 'Đã đưa đơn #' . $order->code . ' về Chờ đóng gói để tiếp tục điều chỉnh.');
+        $message = 'Đã hoàn tác nhận đơn #' . $order->code;
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => true,
+                'message' => $message,
+                'order' => [
+                    'id' => (int) $order->id,
+                    'status' => Order::STATUS_READY_TO_PACK,
+                    'status_label' => 'Chờ đóng gói',
+                    'status_class' => 'bg-secondary',
+                ],
+            ]);
+        }
+
+        return back()->with('success', $message);
     }
 
     /**
