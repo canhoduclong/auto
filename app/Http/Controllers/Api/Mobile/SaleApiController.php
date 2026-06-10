@@ -311,7 +311,7 @@ class SaleApiController extends BaseApiController
         }
 
         $roles = $user->roles->pluck('name')->map(fn ($role) => strtolower((string) $role))->values();
-        $query = Order::query()->with(['customer', 'user.team', 'items.variant', 'approvals.step', 'approvals.approver', 'histories.user']);
+        $query = Order::query()->with(['customer', 'user.team', 'items.product:id,name', 'items.variant:id,name,sku,size,product_id', 'approvals.step', 'approvals.approver', 'histories.user']);
         if ($isLeader && !$user->hasRole('admin')) {
             $query->whereHas('user', fn ($sale) => $sale->where(fn ($owner) => $owner
                 ->where(fn ($teamSale) => $teamSale

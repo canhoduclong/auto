@@ -1,7 +1,7 @@
 {
-  "version": "1.0.14",
-  "version_code": 15,
+  "version": "1.0.15",
+  "version_code": 16,
   "apk_url": "https://hoanglongtnt.com/app-update/app-release.apk",
   "force_update": false,
-  "message": "Bản cập nhật 1.0.14: hoàn thiện Sale Mobile gồm quản lý khách hàng, tạo và quản lý đơn hàng, copy đơn, hủy đơn, thùng rác và duyệt đơn Team/Phòng Kinh Doanh."
+  "message": "Bản cập nhật 1.0.15: bổ sung số thứ tự ưu tiên, làm nổi bật tên khách hàng và hiển thị chi tiết tên, size, số lượng, giá sản phẩm trên danh sách đơn Sale Mobile."
 }
