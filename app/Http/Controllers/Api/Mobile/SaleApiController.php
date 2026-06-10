@@ -1,0 +1,541 @@
+<?php
+
+namespace App\Http\Controllers\Api\Mobile;
+
+use App\Http\Controllers\OrderApprovalController;
+use App\Http\Controllers\OrderController;
+use App\Http\Controllers\PageController;
+use App\Models\Customer;
+use App\Models\Order;
+use App\Models\ProductVariant;
+use App\Models\Province;
+use App\Models\Team;
+use App\Models\TruckRoute;
+use App\Models\TruckStation;
+use App\Models\Ward;
+use App\Services\ApprovalService;
+use App\Services\CustomerPriorityService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
+
+class SaleApiController extends BaseApiController
+{
+    public function customers(Request $request): JsonResponse
+    {
+        $this->ensureSaleRole($request);
+        $userId = (int) $request->user()->id;
+        $tab = in_array($request->query('tab'), ['all', 'processing', 'trash'], true)
+            ? (string) $request->query('tab')
+            : 'all';
+
+        $query = Customer::query()
+            ->where(function ($scope) use ($userId) {
+                $scope->where('user_id', $userId)
+                    ->orWhere('assigned_to', $userId)
+                    ->orWhere('current_owner_sale_id', $userId)
+                    ->orWhereHas('priorities', fn ($priority) => $priority->where('sale_id', $userId)->where('is_active', true));
+            })
+            ->where(fn ($scope) => $scope->where('is_employee', '<>', 1)->orWhereNull('is_employee'));
+
+        if ($tab === 'trash') {
+            $query->onlyTrashed();
+        } else {
+            $query->whereNull('deleted_at');
+            if ($tab === 'processing') {
+                $query->whereIn('status', ['active', 'processing']);
+            }
+        }
+
+        if ($request->filled('search')) {
+            $search = trim((string) $request->query('search'));
+            $query->where(fn ($scope) => $scope
+                ->where('name', 'like', "%{$search}%")
+                ->orWhere('phone', 'like', "%{$search}%")
+                ->orWhere('email', 'like', "%{$search}%"));
+        }
+        foreach (['city', 'ward', 'street'] as $field) {
+            if ($request->filled($field)) {
+                $value = (string) $request->query($field);
+                $query->whereHas('addresses', fn ($address) => $address->where($field, $value));
+            }
+        }
+
+        $sortBy = in_array($request->query('sort_by'), ['production', 'size', 'delivery_time', 'name', 'created_at'], true)
+            ? (string) $request->query('sort_by')
+            : 'id';
+        $sortDir = strtolower((string) $request->query('sort_dir')) === 'asc' ? 'asc' : 'desc';
+
+        $customers = $query
+            ->with(['addresses', 'currentOwner:id,name', 'truckStation:id,name', 'truckRoute:id,name'])
+            ->withCount('orders')
+            ->withSum('orders as total_debt', 'amount_due')
+            ->orderBy($sortBy, $sortDir)
+            ->paginate(min(50, max(10, (int) $request->query('per_page', 20))));
+
+        $customers->getCollection()->transform(fn (Customer $customer) => $this->customerPayload($customer));
+
+        return $this->salePaginated($customers, [
+            'tab' => $tab,
+            'tab_counts' => $this->customerTabCounts($userId),
+        ]);
+    }
+
+    public function customer(Request $request, int $customerId): JsonResponse
+    {
+        $this->ensureSaleRole($request);
+        $customer = Customer::withTrashed()
+            ->with(['addresses', 'currentOwner:id,name', 'truckStation:id,name', 'truckRoute:id,name', 'orders.items.variant', 'careLogs', 'reminders'])
+            ->findOrFail($customerId);
+        $this->ensureManagedCustomer($request, $customer);
+
+        return $this->ok($this->customerPayload($customer, true));
+    }
+
+    public function customerFormOptions(Request $request): JsonResponse
+    {
+        $this->ensureSaleRole($request);
+
+        return $this->ok([
+            'provinces' => Province::query()->orderBy('name')->get(['id', 'name']),
+            'wards' => Ward::query()
+                ->when($request->filled('province_id'), fn ($query) => $query->where('province_id', (int) $request->query('province_id')))
+                ->orderBy('name')->limit(1000)->get(['id', 'province_id', 'name']),
+            'truck_stations' => TruckStation::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'truck_routes' => TruckRoute::query()->orderBy('name')->get(['id', 'name']),
+        ]);
+    }
+
+    public function checkCustomerDuplicate(Request $request): JsonResponse
+    {
+        $this->ensureSaleRole($request);
+        $this->bindWebAuth($request);
+
+        return app(PageController::class)->myCustomerCheckDuplicate($request);
+    }
+
+    public function storeCustomer(Request $request, CustomerPriorityService $priorityService): JsonResponse
+    {
+        $this->ensureSaleRole($request);
+        $this->bindWebAuth($request);
+        $before = Customer::withTrashed()->max('id') ?? 0;
+        $response = app(PageController::class)->myCustomerStore($request, $priorityService);
+        $customer = Customer::withTrashed()->where('id', '>', $before)->latest('id')->first();
+
+        return $this->webActionResult($response, 'Da them khach hang', $customer ? ['customer_id' => (int) $customer->id] : null);
+    }
+
+    public function updateCustomer(Request $request, Customer $customer): JsonResponse
+    {
+        $this->ensureSaleRole($request);
+        $this->bindWebAuth($request);
+        $response = app(PageController::class)->myCustomerUpdate($request, $customer);
+
+        return $this->webActionResult($response, 'Da cap nhat khach hang', ['customer_id' => (int) $customer->id]);
+    }
+
+    public function deleteCustomer(Request $request, Customer $customer): JsonResponse
+    {
+        $this->ensureSaleRole($request);
+        $this->bindWebAuth($request);
+
+        return $this->webActionResult(app(PageController::class)->myCustomerDestroy($customer), 'Da dua khach hang vao thung rac');
+    }
+
+    public function restoreCustomer(Request $request, int $customerId): JsonResponse
+    {
+        $this->ensureSaleRole($request);
+        $this->bindWebAuth($request);
+
+        return $this->webActionResult(app(PageController::class)->myCustomerRestore($customerId), 'Da khoi phuc khach hang');
+    }
+
+    public function products(Request $request): JsonResponse
+    {
+        $this->ensureSaleRole($request);
+        $search = trim((string) $request->query('search', ''));
+        $variants = ProductVariant::query()
+            ->with(['product:id,name,unit,is_priced_by_kg', 'latestPriceRule'])
+            ->withAvailableStock()
+            ->when($search !== '', fn ($query) => $query->where(fn ($scope) => $scope
+                ->where('sku', 'like', "%{$search}%")
+                ->orWhere('name', 'like', "%{$search}%")
+                ->orWhereHas('product', fn ($product) => $product->where('name', 'like', "%{$search}%"))))
+            ->orderByDesc('id')
+            ->paginate(30);
+
+        $variants->getCollection()->transform(fn ($variant) => [
+            'id' => (int) $variant->id,
+            'name' => (string) ($variant->name ?: $variant->product?->name ?: 'Sản phẩm'),
+            'product_name' => (string) ($variant->product?->name ?? ''),
+            'sku' => (string) ($variant->sku ?? ''),
+            'size' => (string) ($variant->size ?? ''),
+            'price' => (float) ($variant->latestPriceRule?->price ?? $variant->final_price ?? 0),
+            'min_price' => (float) ($variant->latestPriceRule?->min_price ?? 0),
+            'available_stock' => (int) ($variant->available_stock ?? 0),
+            'is_priced_by_kg' => (bool) ($variant->effective_priced_by_kg ?? false),
+            'kg' => (float) ($variant->effective_kg ?? 0),
+        ]);
+
+        return $this->paginated($variants);
+    }
+
+    public function storeOrder(Request $request, Customer $customer, ApprovalService $approvalService): JsonResponse
+    {
+        $this->ensureSaleRole($request);
+        $this->ensureManagedCustomer($request, $customer);
+        $this->bindWebAuth($request);
+        $before = Order::query()->max('id') ?? 0;
+        $response = app(PageController::class)->myCustomerOrderStore($request, $customer, $approvalService);
+        $order = Order::query()->where('id', '>', $before)->where('user_id', $request->user()->id)->latest('id')->first();
+        if (!$order) {
+            return $this->fail('Khong the tao don hang. Vui long kiem tra ton kho va du lieu san pham.', 422);
+        }
+
+        return $this->webActionResult($response, 'Da tao don hang', ['order_id' => (int) $order->id]);
+    }
+
+    public function orders(Request $request): JsonResponse
+    {
+        $this->ensureSaleRole($request);
+        $userId = (int) $request->user()->id;
+        $trash = $request->boolean('trash');
+        $query = Order::query()
+            ->with(['customer:id,name,phone,address', 'items.product:id,name', 'items.variant:id,name,sku,size,product_id', 'approvals.step', 'histories.user:id,name'])
+            ->where('user_id', $userId);
+        if (Schema::hasColumn('orders', 'trash_at')) {
+            $trash ? $query->whereNotNull('trash_at') : $query->whereNull('trash_at');
+        }
+        $this->applyOrderFilters($request, $query);
+
+        $orders = $query->paginate(min(50, max(10, (int) $request->query('per_page', 20))));
+        $orders->getCollection()->transform(fn (Order $order) => $this->orderPayload($order, true));
+
+        return $this->salePaginated($orders, ['trash' => $trash]);
+    }
+
+    public function order(Request $request, Order $order): JsonResponse
+    {
+        $this->ensureSaleRole($request);
+        $user = $request->user();
+        $isOwner = (int) $order->user_id === (int) $user->id;
+        $isLeaderInTeam = ($user->hasRole('leader') || $user->hasRole('leader_sale') || $user->hasRole('sale_manager'))
+            && (int) $order->user?->team_id === (int) $user->team_id;
+        $isManager = $user->hasRole('manager') || $user->hasRole('manager_sale') || $user->hasRole('director');
+        if (!$isOwner && !$isLeaderInTeam && !$isManager && !$user->hasRole('admin')) {
+            abort(403);
+        }
+        $order->load(['customer', 'items.product', 'items.variant', 'approvals.step', 'approvals.approver', 'histories.user']);
+
+        return $this->ok($this->orderPayload($order, true));
+    }
+
+    public function updateOrder(Request $request, Order $order): JsonResponse
+    {
+        $this->ensureSaleRole($request);
+        $this->bindWebAuth($request);
+        $this->ensureEditableOrder($request, $order);
+
+        return $this->webActionResult(app(PageController::class)->myOrderUpdate($request, $order), 'Da cap nhat don hang', ['order_id' => (int) $order->id]);
+    }
+
+    public function copyOrder(Request $request, int $orderId): JsonResponse
+    {
+        $this->ensureSaleRole($request);
+        $this->bindWebAuth($request);
+        $before = Order::query()->max('id') ?? 0;
+        $response = app(PageController::class)->copyOrder($orderId);
+        $copy = Order::query()->where('id', '>', $before)->where('user_id', $request->user()->id)->latest('id')->first();
+        if (!$copy) {
+            return $this->fail('Khong the copy don hang.', 422);
+        }
+
+        return $this->webActionResult($response, 'Da copy don hang', ['order_id' => (int) $copy->id]);
+    }
+
+    public function confirmCopy(Request $request, Order $order): JsonResponse
+    {
+        $this->ensureSaleRole($request);
+        $this->bindWebAuth($request);
+        if ((int) $order->user_id !== (int) $request->user()->id || empty($order->getAttribute('copied_from_order_id'))) {
+            throw ValidationException::withMessages(['order' => 'Don hang khong du dieu kien xac nhan copy.']);
+        }
+
+        return $this->webActionResult(app(PageController::class)->confirmCopyOrder($order), 'Da xac nhan don copy');
+    }
+
+    public function cancelOrder(Request $request, Order $order): JsonResponse
+    {
+        $this->ensureSaleRole($request);
+        $this->bindWebAuth($request);
+        $user = $request->user();
+        if (!$user->hasRole('admin') && (int) $order->user_id !== (int) $user->id) {
+            abort(403);
+        }
+        if (!$order->created_at?->isToday()) {
+            throw ValidationException::withMessages([
+                'order' => 'Chi duoc huy don duoc tao trong ngay.',
+            ]);
+        }
+
+        return $this->webActionResult(app(OrderController::class)->cancel($order), 'Da huy don hang');
+    }
+
+    public function trashOrder(Request $request, Order $order): JsonResponse
+    {
+        $this->ensureSaleRole($request);
+        $this->bindWebAuth($request);
+        if (!$request->user()->hasRole('admin') && (int) $order->user_id !== (int) $request->user()->id) {
+            abort(403);
+        }
+        if (!in_array((string) $order->status, [Order::STATUS_REJECTED, Order::STATUS_CANCELLED], true)) {
+            throw ValidationException::withMessages(['order' => 'Chi duoc dua vao thung rac don bi tu choi hoac da huy.']);
+        }
+
+        return $this->webActionResult(app(PageController::class)->moveOrderToTrash($order), 'Da dua don hang vao thung rac');
+    }
+
+    public function approvals(Request $request, string $scope): JsonResponse
+    {
+        $this->ensureSaleRole($request);
+        $user = $request->user();
+        $isLeader = $scope === 'leader';
+        if ($isLeader && !($user->hasRole('leader') || $user->hasRole('leader_sale') || $user->hasRole('sale_manager') || $user->hasRole('admin'))) {
+            abort(403);
+        }
+        if (!$isLeader && !($user->hasRole('manager') || $user->hasRole('manager_sale') || $user->hasRole('director') || $user->hasRole('admin'))) {
+            abort(403);
+        }
+
+        $roles = $user->roles->pluck('name')->map(fn ($role) => strtolower((string) $role))->values();
+        $query = Order::query()->with(['customer', 'user.team', 'items.variant', 'approvals.step', 'approvals.approver', 'histories.user']);
+        if ($isLeader && !$user->hasRole('admin')) {
+            $query->whereHas('user', fn ($sale) => $sale->where(fn ($owner) => $owner
+                ->where(fn ($teamSale) => $teamSale
+                    ->where('team_id', $user->team_id)
+                    ->whereHas('roles', fn ($role) => $role->whereRaw('LOWER(name) = ?', ['sale'])))
+                ->orWhere('id', $user->id)));
+        }
+        if (!$isLeader) {
+            $query->whereHas('user.roles', fn ($role) => $role->whereIn(DB::raw('LOWER(name)'), ['sale', 'leader', 'leader_sale', 'sale_manager']));
+            if ($request->filled('team_id')) {
+                $query->whereHas('user', fn ($sale) => $sale->where('team_id', (int) $request->query('team_id')));
+            }
+        }
+        if (!$request->filled('from_date') && !$request->filled('to_date')) {
+            $query->whereDate('created_at', today());
+        }
+        $this->applyOrderFilters($request, $query);
+        $orders = $query->paginate(20);
+        $orders->getCollection()->transform(function (Order $order) use ($roles) {
+            $payload = $this->orderPayload($order, true);
+            $current = $order->approvals->where('status', 'pending')->sortBy(fn ($approval) => $approval->step?->step_order ?? PHP_INT_MAX)->first();
+            $payload['can_approve'] = $current?->step ? $roles->contains(strtolower((string) $current->step->role_slug)) : false;
+            $payload['current_approval_step'] = $current?->step?->name ?? $current?->step?->role_slug;
+            return $payload;
+        });
+
+        return $this->salePaginated($orders, ['teams' => Team::query()->orderBy('name')->get(['id', 'name'])]);
+    }
+
+    public function approve(Request $request, Order $order, ApprovalService $approvalService): JsonResponse
+    {
+        $this->ensureSaleRole($request);
+        $this->bindWebAuth($request);
+        $response = app(OrderApprovalController::class)->approve($request, $order, $approvalService);
+
+        return $this->webActionResult($response, 'Da duyet don hang');
+    }
+
+    public function reject(Request $request, Order $order, ApprovalService $approvalService): JsonResponse
+    {
+        $this->ensureSaleRole($request);
+        $this->bindWebAuth($request);
+        $response = app(OrderApprovalController::class)->reject($request, $order, $approvalService);
+
+        return $this->webActionResult($response, 'Da tu choi don hang');
+    }
+
+    private function applyOrderFilters(Request $request, $query): void
+    {
+        if ($request->filled('search')) {
+            $search = trim((string) $request->query('search'));
+            $query->where(fn ($scope) => $scope->where('code', 'like', "%{$search}%")
+                ->orWhereHas('customer', fn ($customer) => $customer->where('name', 'like', "%{$search}%")->orWhere('phone', 'like', "%{$search}%")));
+        }
+        foreach (['status', 'payment_status'] as $field) {
+            if ($request->filled($field)) {
+                $query->where($field, $request->query($field));
+            }
+        }
+        if ($request->filled('from_date')) $query->whereDate('created_at', '>=', $request->query('from_date'));
+        if ($request->filled('to_date')) $query->whereDate('created_at', '<=', $request->query('to_date'));
+        $sortBy = in_array($request->query('sort_by'), ['code', 'total', 'status', 'payment_status', 'created_at'], true) ? $request->query('sort_by') : 'created_at';
+        $query->orderBy($sortBy, strtolower((string) $request->query('sort_dir')) === 'asc' ? 'asc' : 'desc');
+    }
+
+    private function customerPayload(Customer $customer, bool $details = false): array
+    {
+        $address = $customer->addresses->firstWhere('is_default', true) ?: $customer->addresses->first();
+        $payload = [
+            'id' => (int) $customer->id,
+            'name' => (string) $customer->name,
+            'phone' => (string) ($customer->phone ?? ''),
+            'email' => (string) ($customer->email ?? ''),
+            'address' => (string) ($address?->note ?: $customer->address ?: ''),
+            'province_id' => $address?->province_id,
+            'ward_id' => $address?->ward_id,
+            'status' => (string) ($customer->status ?? ''),
+            'customer_status' => (string) ($customer->customer_status ?? ''),
+            'delivery_time' => (string) ($customer->delivery_time ?? ''),
+            'size' => (string) ($customer->size ?? ''),
+            'production' => (string) ($customer->production ?? ''),
+            'company_name' => (string) ($customer->company_name ?? ''),
+            'tax_code' => (string) ($customer->tax_code ?? ''),
+            'company_address' => (string) ($customer->company_address ?? ''),
+            'company_email' => (string) ($customer->company_email ?? ''),
+            'use_truck_station' => (bool) ($customer->use_truck_station ?? false),
+            'truck_station_id' => $customer->truck_station_id,
+            'truck_route_id' => $customer->truck_route_id,
+            'truck_station_address' => (string) ($customer->truck_station_address ?? ''),
+            'truck_station_phone' => (string) ($customer->truck_station_phone ?? ''),
+            'truck_receive_time' => (string) ($customer->truck_receive_time ?? ''),
+            'truck_return_time' => (string) ($customer->truck_return_time ?? ''),
+            'truck_fee' => (float) ($customer->truck_fee ?? 0),
+            'orders_count' => (int) ($customer->orders_count ?? $customer->orders?->count() ?? 0),
+            'total_debt' => (float) ($customer->total_debt ?? 0),
+            'deleted_at' => optional($customer->deleted_at)->toIso8601String(),
+            'updated_at' => optional($customer->updated_at)->toIso8601String(),
+        ];
+        if ($details) {
+            $payload['orders'] = $customer->orders?->map(fn (Order $order) => $this->orderPayload($order))->values() ?? [];
+            $payload['care_logs'] = $customer->careLogs ?? [];
+            $payload['reminders'] = $customer->reminders ?? [];
+        }
+        return $payload;
+    }
+
+    private function orderPayload(Order $order, bool $details = false): array
+    {
+        $payload = [
+            'id' => (int) $order->id,
+            'code' => (string) ($order->code ?: '#' . $order->id),
+            'daily_sequence' => $order->daily_sequence ? (int) $order->daily_sequence : null,
+            'status' => (string) $order->status,
+            'payment_status' => (string) ($order->payment_status ?? ''),
+            'total' => (float) ($order->total ?? 0),
+            'amount_due' => (float) ($order->amount_due ?? 0),
+            'trash_at' => optional($order->getAttribute('trash_at'))->toIso8601String(),
+            'copied_from_order_id' => $order->getAttribute('copied_from_order_id'),
+            'customer' => $order->customer,
+            'created_at' => optional($order->created_at)->toIso8601String(),
+            'updated_at' => optional($order->updated_at)->toIso8601String(),
+            'can_edit' => $this->isEditableOrder($order),
+            'can_cancel' => $order->created_at?->isToday() === true
+                && in_array((string) $order->status, ['pending_leader_approval', 'pending_manager_approval', 'approved', 'packing', 'pending', 'confirmed', 'picking', Order::STATUS_ORDER_PLACED], true),
+            'can_trash' => in_array((string) $order->status, [Order::STATUS_REJECTED, Order::STATUS_CANCELLED], true)
+                && empty($order->getAttribute('trash_at')),
+        ];
+        if ($details) {
+            $payload['items'] = $order->items;
+            $payload['approvals'] = $order->approvals;
+            $payload['histories'] = $order->histories;
+            $payload['recipient_name'] = (string) ($order->recipient_name ?? $order->customer?->name ?? '');
+            $payload['recipient_phone'] = (string) ($order->recipient_phone ?? $order->customer?->phone ?? '');
+            $payload['recipient_email'] = (string) ($order->recipient_email ?? $order->customer?->email ?? '');
+            $payload['recipient_address'] = (string) ($order->recipient_address ?? $order->customer?->address ?? '');
+            $payload['delivery_time'] = (string) ($order->delivery_time ?? '');
+            $payload['note'] = (string) ($order->note ?? '');
+            $payload['shipper_note'] = (string) ($order->shipper_note ?? '');
+            $payload['order_discount'] = (float) ($order->order_discount ?? 0);
+            $payload['order_discount_type'] = (string) ($order->order_discount_type ?? 'decrease');
+        }
+        return $payload;
+    }
+
+    private function customerTabCounts(int $userId): array
+    {
+        $base = Customer::query()->where(fn ($scope) => $scope->where('user_id', $userId)->orWhere('assigned_to', $userId)->orWhere('current_owner_sale_id', $userId));
+        return [
+            'all' => (clone $base)->whereNull('deleted_at')->count(),
+            'processing' => (clone $base)->whereNull('deleted_at')->whereIn('status', ['active', 'processing'])->count(),
+            'trash' => (clone $base)->onlyTrashed()->count(),
+        ];
+    }
+
+    private function ensureManagedCustomer(Request $request, Customer $customer): void
+    {
+        $user = $request->user();
+        $isPrioritySale = $customer->priorities()
+            ->where('sale_id', (int) $user->id)
+            ->where('is_active', true)
+            ->exists();
+        if (!$user->hasRole('admin')
+            && !$isPrioritySale
+            && !in_array((int) $user->id, [(int) $customer->user_id, (int) $customer->assigned_to, (int) $customer->current_owner_sale_id], true)) {
+            abort(403, 'Ban khong co quyen thao tac khach hang nay.');
+        }
+    }
+
+    private function ensureEditableOrder(Request $request, Order $order): void
+    {
+        if ((int) $order->user_id !== (int) $request->user()->id) {
+            abort(403);
+        }
+        if (!$this->isEditableOrder($order)) {
+            throw ValidationException::withMessages(['order' => 'Don hang khong con du dieu kien de sua.']);
+        }
+    }
+
+    private function isEditableOrder(Order $order): bool
+    {
+        return !empty($order->getAttribute('copied_from_order_id'))
+            || ((string) $order->status === Order::STATUS_PENDING_LEADER_APPROVAL && $order->created_at?->isToday());
+    }
+
+    private function ensureSaleRole(Request $request): void
+    {
+        $user = $request->user();
+        if (!$user || !$user->roles->pluck('name')->map(fn ($role) => strtolower((string) $role))->intersect(['sale', 'leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale', 'director', 'admin'])->isNotEmpty()) {
+            abort(403, 'Role khong duoc phep truy cap Sale mobile.');
+        }
+    }
+
+    private function bindWebAuth(Request $request): void
+    {
+        Auth::setUser($request->user());
+        $request->headers->set('Accept', 'application/json');
+        $request->headers->set('X-Requested-With', 'XMLHttpRequest');
+    }
+
+    private function webActionResult($response, string $fallback, ?array $data = null): JsonResponse
+    {
+        if ($response instanceof JsonResponse) {
+            $payload = $response->getData(true);
+            if (($payload['success'] ?? true) === false) {
+                return $this->fail((string) ($payload['message'] ?? $fallback), $response->getStatusCode(), $payload);
+            }
+            return $this->ok($data ?? $payload, (string) ($payload['message'] ?? $fallback));
+        }
+
+        return $this->ok($data, $fallback);
+    }
+
+    private function salePaginated($paginator, array $extraMeta = []): JsonResponse
+    {
+        return response()->json([
+            'success' => true,
+            'message' => 'OK',
+            'data' => $paginator->items(),
+            'meta' => array_merge([
+                'current_page' => $paginator->currentPage(),
+                'last_page' => $paginator->lastPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+            ], $extraMeta),
+        ]);
+    }
+}

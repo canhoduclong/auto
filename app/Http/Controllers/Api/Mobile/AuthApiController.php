@@ -411,7 +411,7 @@ class AuthApiController extends BaseApiController
                 'role' => $role,
                 'layout' => $layout,
                 'label' => $this->mobileWorkspaceLabel($layout),
-                'menu' => $this->mobileMenuByLayout($layout, $user->hasRole('manager_shipper') || $user->hasRole('admin')),
+                'menu' => $this->mobileMenuByLayout($layout, $user->hasRole('manager_shipper') || $user->hasRole('admin'), $user->roles->pluck('name')->all()),
             ];
         }
 
@@ -425,7 +425,7 @@ class AuthApiController extends BaseApiController
             'roles' => $user->roles->pluck('name')->values(),
             'role' => $role,
             'layout' => $layout,
-            'menu' => $this->mobileMenuByLayout($layout, $user->hasRole('manager_shipper') || $user->hasRole('admin')),
+            'menu' => $this->mobileMenuByLayout($layout, $user->hasRole('manager_shipper') || $user->hasRole('admin'), $user->roles->pluck('name')->all()),
             'workspaces' => $workspaces,
         ];
     }

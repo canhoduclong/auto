@@ -38,7 +38,7 @@ trait ResolvesMobileRole
                     'layout' => $layout,
                     'layout_slug' => $layoutSlug,
                     'label' => $role->layout_mobile_name ?? $role->name,
-                    'menu' => $this->mobileMenuByLayout($layout, $user->hasRole('manager_shipper') || $user->hasRole('admin')),
+                    'menu' => $this->mobileMenuByLayout($layout, $user->hasRole('manager_shipper') || $user->hasRole('admin'), $user->roles->pluck('name')->all()),
                 ];
             }
         }
@@ -77,7 +77,7 @@ trait ResolvesMobileRole
         };
     }
 
-    private function mobileMenuByLayout(string $layout, bool $canManageShipper = false): array
+    private function mobileMenuByLayout(string $layout, bool $canManageShipper = false, array $roleNames = []): array
     {
         if ($layout === 'shipper') {
             return [
@@ -125,9 +125,18 @@ trait ResolvesMobileRole
         }
 
         if ($layout === 'sale') {
-            return [
-                ['key' => 'my_orders', 'label' => 'Đơn hàng của tôi', 'route' => '/my-orders', 'api' => '/screens/sale/my_orders', 'icon' => 'receipt_long'],
+            $normalizedRoles = array_map(fn ($role) => strtolower((string) $role), $roleNames);
+            $menu = [
+                ['group' => 'Khách hàng', 'key' => 'customers', 'label' => 'Khách hàng', 'route' => '/my-customer', 'api' => '/sale/customers', 'icon' => 'people'],
+                ['group' => 'Đơn hàng', 'key' => 'my_orders', 'label' => 'Đơn hàng của tôi', 'route' => '/my-orders', 'api' => '/sale/orders', 'icon' => 'receipt_long'],
             ];
+            if (array_intersect($normalizedRoles, ['leader', 'leader_sale', 'sale_manager', 'admin'])) {
+                $menu[] = ['group' => 'Duyệt đơn', 'key' => 'team_approvals', 'label' => 'Duyệt đơn Team', 'route' => '/my-team-orders', 'api' => '/sale/approvals/leader', 'icon' => 'check_circle'];
+            }
+            if (array_intersect($normalizedRoles, ['manager', 'manager_sale', 'director', 'admin'])) {
+                $menu[] = ['group' => 'Duyệt đơn', 'key' => 'department_approvals', 'label' => 'Duyệt đơn PKD', 'route' => '/all-team-orders', 'api' => '/sale/approvals/manager', 'icon' => 'approval'];
+            }
+            return $menu;
         }
 
         if ($layout === 'accounting') {

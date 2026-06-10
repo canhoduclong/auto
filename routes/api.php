@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\Mobile\AuthApiController;
 use App\Http\Controllers\Api\Mobile\NotificationApiController;
 use App\Http\Controllers\Api\Mobile\RoleScreenApiController;
 use App\Http\Controllers\Api\Mobile\ShipperApiController;
+use App\Http\Controllers\Api\Mobile\SaleApiController;
 use App\Http\Controllers\Api\Mobile\WarehouseApiController;
 use Illuminate\Support\Facades\Route;
 
@@ -62,6 +63,29 @@ Route::prefix('mobile')->group(function () {
             Route::get('/tasks', [WarehouseApiController::class, 'tasks']);
             Route::get('/scan-lookup', [WarehouseApiController::class, 'scanLookup']);
             Route::get('/notifications', [WarehouseApiController::class, 'notifications']);
+        });
+
+        Route::prefix('sale')->group(function () {
+            Route::get('/customers', [SaleApiController::class, 'customers']);
+            Route::get('/customers/form-options', [SaleApiController::class, 'customerFormOptions']);
+            Route::get('/customers/check-duplicate', [SaleApiController::class, 'checkCustomerDuplicate']);
+            Route::post('/customers', [SaleApiController::class, 'storeCustomer']);
+            Route::get('/customers/{customerId}', [SaleApiController::class, 'customer']);
+            Route::put('/customers/{customer}', [SaleApiController::class, 'updateCustomer']);
+            Route::delete('/customers/{customer}', [SaleApiController::class, 'deleteCustomer']);
+            Route::post('/customers/{customerId}/restore', [SaleApiController::class, 'restoreCustomer']);
+            Route::get('/products', [SaleApiController::class, 'products']);
+            Route::post('/customers/{customer}/orders', [SaleApiController::class, 'storeOrder']);
+            Route::get('/orders', [SaleApiController::class, 'orders']);
+            Route::get('/orders/{order}', [SaleApiController::class, 'order']);
+            Route::put('/orders/{order}', [SaleApiController::class, 'updateOrder']);
+            Route::post('/orders/{orderId}/copy', [SaleApiController::class, 'copyOrder']);
+            Route::post('/orders/{order}/confirm-copy', [SaleApiController::class, 'confirmCopy']);
+            Route::post('/orders/{order}/cancel', [SaleApiController::class, 'cancelOrder']);
+            Route::post('/orders/{order}/trash', [SaleApiController::class, 'trashOrder']);
+            Route::get('/approvals/{scope}', [SaleApiController::class, 'approvals']);
+            Route::post('/approvals/{order}/approve', [SaleApiController::class, 'approve']);
+            Route::post('/approvals/{order}/reject', [SaleApiController::class, 'reject']);
         });
     });
 });
