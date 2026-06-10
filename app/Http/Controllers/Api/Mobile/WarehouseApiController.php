@@ -299,6 +299,7 @@ class WarehouseApiController extends BaseApiController
             ->with([
                 'customer:id,name,phone,address,delivery_time',
                 'warehouse:id,name',
+                'histories:id,order_id,action,user_id',
                 'items.product:id,name,unit',
                 'items.variant' => fn ($q) => $q->withAvailableStock()->with('product:id,name,unit'),
             ])
@@ -345,6 +346,13 @@ class WarehouseApiController extends BaseApiController
         $this->ensurePackingRole($request);
 
         return $this->callWebWarehouseAction($request, fn () => app(WarehouseDashboardController::class)->completePacking($request, $order));
+    }
+
+    public function undoStartPacking(Request $request, Order $order): JsonResponse
+    {
+        $this->ensurePackingRole($request);
+
+        return $this->callWebWarehouseAction($request, fn () => app(WarehouseDashboardController::class)->returnToReadyToPack($request, $order));
     }
 
     public function updateLogistics(Request $request, Order $order): JsonResponse
@@ -607,6 +615,10 @@ class WarehouseApiController extends BaseApiController
     {
         $statusMeta = $this->warehouseStatusMeta((string) $order->status);
         $items = $order->items->map(fn ($item) => $this->warehouseOrderItemPayload($item))->values();
+        $activePackingHistory = $order->histories
+            ->where('action', 'start_packing')
+            ->sortByDesc('id')
+            ->first();
 
         return [
             'id' => (int) $order->id,
@@ -641,6 +653,8 @@ class WarehouseApiController extends BaseApiController
             'can_complete_packing' => (string) $order->status === Order::STATUS_PACKING
                 && $order->warehouse_adjustment_status !== Order::WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION
                 && $order->warehouse_adjustment_status !== Order::WAREHOUSE_ADJUSTMENT_STATUS_SALE_REJECTED,
+            'can_undo_start_packing' => (string) $order->status === Order::STATUS_PACKING
+                && (int) ($activePackingHistory?->user_id ?? 0) === (int) Auth::id(),
             'can_request_adjustment' => in_array((string) $order->status, ['approved', Order::STATUS_READY_TO_PACK], true)
                 && $order->created_at?->isToday(),
             'items' => $items,

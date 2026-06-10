@@ -53,6 +53,7 @@ Route::prefix('mobile')->group(function () {
             Route::get('/dashboard', [WarehouseApiController::class, 'dashboard']);
             Route::get('/orders', [WarehouseApiController::class, 'orders']);
             Route::post('/orders/{order}/start-packing', [WarehouseApiController::class, 'startPacking']);
+            Route::post('/orders/{order}/undo-start-packing', [WarehouseApiController::class, 'undoStartPacking']);
             Route::post('/orders/{order}/complete-packing', [WarehouseApiController::class, 'completePacking']);
             Route::post('/orders/{order}/logistics', [WarehouseApiController::class, 'updateLogistics']);
             Route::post('/orders/{order}/request-adjustment', [WarehouseApiController::class, 'requestAdjustment']);

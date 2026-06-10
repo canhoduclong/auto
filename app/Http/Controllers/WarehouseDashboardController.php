@@ -395,6 +395,69 @@ class WarehouseDashboardController extends Controller
             'closing' => (int) $summaryRows->sum('closing'),
         ];
 
+        $dailyInventoryFrom = $request->filled('inventory_from')
+            ? Carbon::parse($request->input('inventory_from'))->startOfDay()
+            : Carbon::today()->subDays(6)->startOfDay();
+        $dailyInventoryTo = $request->filled('inventory_to')
+            ? Carbon::parse($request->input('inventory_to'))->endOfDay()
+            : Carbon::today()->endOfDay();
+
+        if ($dailyInventoryFrom->gt($dailyInventoryTo)) {
+            [$dailyInventoryFrom, $dailyInventoryTo] = [
+                $dailyInventoryTo->copy()->startOfDay(),
+                $dailyInventoryFrom->copy()->endOfDay(),
+            ];
+        }
+
+        $inventoryMovementScope = function ($query) use ($managedWarehouseId) {
+            if ($managedWarehouseId) {
+                $query->whereHas('inventory', fn ($inventoryQuery) => $inventoryQuery->where('warehouse_id', $managedWarehouseId));
+            }
+
+            return $query;
+        };
+
+        $currentInventoryTotal = (int) Inventory::query()
+            ->when($managedWarehouseId, fn ($query) => $query->where('warehouse_id', $managedWarehouseId))
+            ->sum('quantity');
+
+        $movementAfterRange = (int) $inventoryMovementScope(
+            InventoryMovement::query()->where('created_at', '>', $dailyInventoryTo)
+        )->sum('quantity');
+
+        $dailyMovements = $inventoryMovementScope(
+            InventoryMovement::query()
+                ->whereBetween('created_at', [$dailyInventoryFrom, $dailyInventoryTo])
+                ->selectRaw('DATE(created_at) as movement_date')
+                ->selectRaw('COALESCE(SUM(CASE WHEN quantity > 0 THEN quantity ELSE 0 END), 0) as import_qty')
+                ->selectRaw('COALESCE(ABS(SUM(CASE WHEN quantity < 0 THEN quantity ELSE 0 END)), 0) as export_qty')
+                ->groupBy('movement_date')
+        )->get()->keyBy('movement_date');
+
+        $dailyInventoryReport = collect();
+        $closingStock = $currentInventoryTotal - $movementAfterRange;
+        $cursor = $dailyInventoryTo->copy()->startOfDay();
+
+        while ($cursor->gte($dailyInventoryFrom)) {
+            $dateKey = $cursor->toDateString();
+            $movement = $dailyMovements->get($dateKey);
+            $importQty = (int) ($movement?->import_qty ?? 0);
+            $exportQty = (int) ($movement?->export_qty ?? 0);
+            $openingStock = $closingStock - $importQty + $exportQty;
+
+            $dailyInventoryReport->prepend([
+                'date' => $dateKey,
+                'label' => $cursor->format('d/m/Y'),
+                'opening' => $openingStock,
+                'import' => $importQty,
+                'export' => $exportQty,
+                'closing' => $closingStock,
+            ]);
+
+            $closingStock = $openingStock;
+            $cursor->subDay();
+        }
+
         return view('warehouse.dashboard', compact(
             'stats',
             'recentPacked',
@@ -402,7 +465,10 @@ class WarehouseDashboardController extends Controller
             'dailyOrders',
             'approvalStats',
             'summaryRows',
-            'summaryTotals'
+            'summaryTotals',
+            'dailyInventoryFrom',
+            'dailyInventoryTo',
+            'dailyInventoryReport'
         ));
     }
     /**

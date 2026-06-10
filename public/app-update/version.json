@@ -1,7 +1,7 @@
 {
-  "version": "1.0.15",
-  "version_code": 16,
+  "version": "1.0.16",
+  "version_code": 17,
   "apk_url": "https://hoanglongtnt.com/app-update/app-release.apk",
   "force_update": false,
-  "message": "Bản cập nhật 1.0.15: bổ sung số thứ tự ưu tiên, làm nổi bật tên khách hàng và hiển thị chi tiết tên, size, số lượng, giá sản phẩm trên danh sách đơn Sale Mobile."
+  "message": "Bản cập nhật 1.0.16: bổ sung Undo nhận đơn cho layout kho và đóng hàng mobile; chỉ user đã nhận đơn mới có thể hoàn tác."
 }

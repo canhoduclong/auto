@@ -181,6 +181,28 @@
     .subname{
         padding-left: 20px;
     }
+    .daily-inventory-report th,
+    .daily-inventory-report td {
+        min-width: 105px;
+        text-align: right;
+        white-space: nowrap;
+    }
+    .daily-inventory-report th:first-child,
+    .daily-inventory-report td:first-child {
+        min-width: 150px;
+        position: sticky;
+        left: 0;
+        z-index: 2;
+        text-align: left;
+    }
+    .daily-inventory-report thead th:first-child {
+        z-index: 3;
+    }
+    .daily-inventory-date {
+        background: #6b3f19 !important;
+        color: #fff !important;
+        text-align: center !important;
+    }
 </style>
 @endpush
 
@@ -435,7 +457,64 @@
     </div> 
 </div>
                     
-     
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-header bg-white">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+            <div>
+                <h2 class="h5 fw-bold mb-1">Báo cáo tồn kho Daily</h2>
+                <div class="small text-muted">Tổng hợp tồn đầu, nhập, xuất và tồn cuối theo từng ngày.</div>
+            </div>
+            <form method="GET" action="{{ route('warehouse.dashboard') }}" class="row g-2 align-items-end">
+                <div class="col-auto">
+                    <label for="inventory_from" class="form-label small fw-semibold mb-1">Từ ngày</label>
+                    <input type="date" id="inventory_from" name="inventory_from" class="form-control form-control-sm"
+                           value="{{ $dailyInventoryFrom->format('Y-m-d') }}">
+                </div>
+                <div class="col-auto">
+                    <label for="inventory_to" class="form-label small fw-semibold mb-1">Đến ngày</label>
+                    <input type="date" id="inventory_to" name="inventory_to" class="form-control form-control-sm"
+                           value="{{ $dailyInventoryTo->format('Y-m-d') }}">
+                </div>
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-primary btn-sm">Xem báo cáo</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover align-middle mb-0 daily-inventory-report">
+                <thead>
+                    <tr>
+                        <th rowspan="2" class="bg-light align-middle">Chỉ tiêu</th>
+                        @foreach($dailyInventoryReport as $dailyRow)
+                            <th colspan="4" class="daily-inventory-date">{{ $dailyRow['label'] }}</th>
+                        @endforeach
+                    </tr>
+                    <tr class="table-light">
+                        @foreach($dailyInventoryReport as $dailyRow)
+                            <th>Tồn đầu</th>
+                            <th>Nhập</th>
+                            <th>Xuất</th>
+                            <th>Tồn cuối</th>
+                        @endforeach
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <th class="bg-light">Tổng tồn kho</th>
+                        @foreach($dailyInventoryReport as $dailyRow)
+                            <td>{{ number_format($dailyRow['opening']) }}</td>
+                            <td class="text-success">{{ number_format($dailyRow['import']) }}</td>
+                            <td class="text-danger">{{ number_format($dailyRow['export']) }}</td>
+                            <td class="fw-bold">{{ number_format($dailyRow['closing']) }}</td>
+                        @endforeach
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
  
      
     
