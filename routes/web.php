@@ -288,6 +288,8 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/stock-in',          [WarehouseDashboardController::class, 'stockIn'])->name('stock-in');
         Route::get('/stock-in/create',   [WarehouseDashboardController::class, 'createStockIn'])->name('stock-in.create');
         Route::post('/stock-in',         [WarehouseDashboardController::class, 'storeStockIn'])->name('stock-in.store');
+        Route::post('/stock-in-templates', [\App\Http\Controllers\InventoryDocumentTemplateController::class, 'store'])->name('stock-in-templates.store');
+        Route::delete('/stock-in-templates/{template}', [\App\Http\Controllers\InventoryDocumentTemplateController::class, 'destroy'])->name('stock-in-templates.destroy');
         Route::get('/stock-in/{document}', [WarehouseDashboardController::class, 'showDocument'])->name('stock-in.show');
         Route::get('/stock-in/{document}/edit', [WarehouseDashboardController::class, 'editStockIn'])->name('stock-in.edit');
         Route::put('/stock-in/{document}', [WarehouseDashboardController::class, 'updateStockIn'])->name('stock-in.update');

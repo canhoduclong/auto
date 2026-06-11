@@ -8,6 +8,7 @@ use App\Models\OrderHistory;
 use App\Models\OrderReturn;
 use App\Models\InventoryDocument;
 use App\Models\InventoryDocumentItem;
+use App\Models\InventoryDocumentTemplate;
 use App\Models\InventoryMovement;
 use App\Models\InventoryReservation;
 use App\Models\ProductVariant;
@@ -479,6 +480,27 @@ class WarehouseDashboardController extends Controller
         $suppliers = \App\Models\Supplier::all();
         
         $managedWarehouseId = Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
+        $stockInTemplates = InventoryDocumentTemplate::query()
+            ->with(['supplier', 'items.productVariant.product'])
+            ->where('warehouse_id', $managedWarehouseId ?? 0)
+            ->orderBy('name')
+            ->get()
+            ->map(fn (InventoryDocumentTemplate $template) => [
+                'id' => (int) $template->id,
+                'name' => (string) $template->name,
+                'supplier_id' => (int) $template->supplier_id,
+                'supplier_name' => (string) ($template->supplier?->name ?? ''),
+                'items' => $template->items->map(fn ($item) => [
+                    'product_variant_id' => (int) $item->product_variant_id,
+                    'quantity' => (int) $item->quantity,
+                    'label' => trim(
+                        ($item->productVariant?->product?->name ?? 'Sản phẩm')
+                        . ' - '
+                        . ($item->productVariant?->name ?? 'Biến thể')
+                    ),
+                ])->values()->all(),
+            ])
+            ->values();
         
 
         $productVariants = ProductVariant::with([
@@ -579,7 +601,7 @@ class WarehouseDashboardController extends Controller
             ];
         })->values();
 
-        return view('warehouse.stock-in.create', compact('suppliers', 'productVariants', 'availableVariants', 'lowStockVariants'));
+        return view('warehouse.stock-in.create', compact('suppliers', 'productVariants', 'availableVariants', 'lowStockVariants', 'stockInTemplates'));
     }
     /**
      * List orders awaiting packing or currently being packed.

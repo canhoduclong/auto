@@ -60,6 +60,37 @@
                 <i class="bi bi-search me-1"></i> Chọn sản phẩm
             </button>
         </div>
+        <div class="card border-primary-subtle bg-primary-subtle mb-3">
+            <div class="card-body py-3">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                    <div>
+                        <div class="fw-700 text-primary-emphasis">
+                            <i class="bi bi-bookmark-star me-1"></i>Mẫu sản phẩm nhập kho
+                        </div>
+                        <div class="small text-muted">Áp dụng nhanh danh sách sản phẩm và số lượng thường nhập.</div>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-primary" id="btnOpenSaveTemplate" data-bs-toggle="modal" data-bs-target="#saveStockInTemplateModal">
+                        <i class="bi bi-bookmark-plus me-1"></i>Lưu danh sách hiện tại thành mẫu
+                    </button>
+                </div>
+                <div class="row g-2">
+                    <div class="col-md-8">
+                        <select class="form-select form-select-sm" id="stockInTemplateSelect">
+                            <option value="">-- Chọn mẫu sản phẩm --</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4 d-flex gap-2">
+                        <button type="button" class="btn btn-sm btn-success flex-grow-1" id="btnApplyStockInTemplate">
+                            <i class="bi bi-lightning-charge me-1"></i>Áp dụng mẫu
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-danger" id="btnDeleteStockInTemplate" title="Xóa mẫu đang chọn">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+                <div id="stockInTemplateSummary" class="small text-muted mt-2"></div>
+            </div>
+        </div>
         <div id="supplierRequiredNotice" class="alert alert-warning py-2 small mb-2">
             Vui lòng chọn nhà cung cấp trước.
         </div>
@@ -175,10 +206,36 @@
 
 @include('warehouse.stock-in.product-selection-modal', ['availableVariants' => $availableVariants ?? []])
 
+<div class="modal fade" id="saveStockInTemplateModal" tabindex="-1" aria-labelledby="saveStockInTemplateModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="saveStockInTemplateModalLabel">
+                    <i class="bi bi-bookmark-plus me-2"></i>Lưu mẫu sản phẩm nhập kho
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+            </div>
+            <div class="modal-body">
+                <label for="stockInTemplateName" class="form-label fw-semibold">Tên mẫu <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="stockInTemplateName" maxlength="150" placeholder="Ví dụ: Nhập hàng sáng hằng ngày">
+                <div class="form-text">Mẫu sẽ lưu nhà cung cấp, sản phẩm và số lượng hiện tại. Đơn giá sẽ lấy theo bảng giá mới nhất khi áp dụng.</div>
+                <div id="stockInTemplateError" class="alert alert-danger py-2 small mt-3 d-none"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+                <button type="button" class="btn btn-primary" id="btnSaveStockInTemplate">
+                    <i class="bi bi-check2 me-1"></i>Lưu mẫu
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 @push('scripts')
 <script>
 let productVariants = [];
 let rowIdx = 0;
+let stockInTemplates = @json($stockInTemplates ?? []);
 
 const restockVariantsCollapse = document.getElementById('restockVariantsCollapse');
 const restockToggleIcon = document.getElementById('restockToggleIcon');
@@ -435,11 +492,63 @@ function resetStockInRows() {
     rowIdx = 0;
 }
 
+function selectedStockInTemplate() {
+    const templateId = document.getElementById('stockInTemplateSelect')?.value;
+    return stockInTemplates.find(template => String(template.id) === String(templateId));
+}
+
+function renderStockInTemplateOptions(selectedId = '') {
+    const select = document.getElementById('stockInTemplateSelect');
+    if (!select) return;
+
+    select.innerHTML = '<option value="">-- Chọn mẫu sản phẩm --</option>';
+    stockInTemplates.forEach(template => {
+        const option = document.createElement('option');
+        option.value = template.id;
+        option.textContent = `${template.name} - ${template.supplier_name} (${template.items.length} sản phẩm)`;
+        option.selected = String(template.id) === String(selectedId);
+        select.appendChild(option);
+    });
+    updateStockInTemplateSummary();
+}
+
+function updateStockInTemplateSummary() {
+    const summary = document.getElementById('stockInTemplateSummary');
+    const template = selectedStockInTemplate();
+    if (!summary) return;
+
+    summary.textContent = template
+        ? `Nhà cung cấp: ${template.supplier_name}. ${template.items.map(item => `${item.label}: ${item.quantity}`).join('; ')}`
+        : stockInTemplates.length > 0
+            ? `Hiện có ${stockInTemplates.length} mẫu cho kho này.`
+            : 'Chưa có mẫu nào. Hãy chọn sản phẩm rồi lưu thành mẫu để dùng lại.';
+}
+
+function currentRowsForTemplate() {
+    const itemsByVariant = new Map();
+    document.querySelectorAll('#stockinRows .item-row').forEach(row => {
+        const variantId = row.querySelector('select[name*="[product_variant_id]"]')?.value;
+        const quantity = Math.max(1, parseInt(row.querySelector('input[name*="[quantity]"]')?.value || '1', 10) || 1);
+        if (!variantId) return;
+
+        const existing = itemsByVariant.get(String(variantId));
+        itemsByVariant.set(String(variantId), {
+            product_variant_id: Number(variantId),
+            quantity: quantity + (existing?.quantity || 0)
+        });
+    });
+    return Array.from(itemsByVariant.values());
+}
+
 document.addEventListener('DOMContentLoaded', function () {
     const stockinRows = document.getElementById('stockinRows');
     const supplierSelect = document.getElementById('supplierSelect');
     const restockCheckAll = document.getElementById('restockCheckAll');
     const btnAddRestockSelected = document.getElementById('btnAddRestockSelected');
+    const templateSelect = document.getElementById('stockInTemplateSelect');
+    const btnApplyTemplate = document.getElementById('btnApplyStockInTemplate');
+    const btnDeleteTemplate = document.getElementById('btnDeleteStockInTemplate');
+    const btnSaveTemplate = document.getElementById('btnSaveStockInTemplate');
     const getRestockItems = () => Array.from(document.querySelectorAll('.js-restock-item'));
 
     function syncRestockCheckAllState() {
@@ -460,6 +569,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     syncSupplierState();
+    renderStockInTemplateOptions();
     if (!supplierSelected()) {
         filterProductModalRows([]);
     }
@@ -490,6 +600,129 @@ document.addEventListener('DOMContentLoaded', function () {
     if (supplierSelect?.value) {
         loadSupplierProducts(supplierSelect.value).then(() => window.addRow()).catch(() => {});
     }
+
+    templateSelect?.addEventListener('change', updateStockInTemplateSummary);
+
+    btnApplyTemplate?.addEventListener('click', async function () {
+        const template = selectedStockInTemplate();
+        if (!template) {
+            alert('Vui lòng chọn một mẫu sản phẩm.');
+            return;
+        }
+
+        if (stockinRows.querySelectorAll('.item-row').length > 0
+            && !confirm('Áp dụng mẫu sẽ thay thế danh sách sản phẩm hiện tại. Tiếp tục?')) {
+            return;
+        }
+
+        supplierSelect.value = String(template.supplier_id);
+        resetStockInRows();
+        syncSupplierState();
+
+        try {
+            await loadSupplierProducts(template.supplier_id);
+            let skipped = 0;
+            template.items.forEach(item => {
+                const supplierVariant = productVariants.find(variant => String(variant.id ?? variant.variant_id) === String(item.product_variant_id));
+                if (!supplierVariant) {
+                    skipped++;
+                    return;
+                }
+                window.addRow({
+                    product_variant_id: item.product_variant_id,
+                    quantity: item.quantity,
+                    unit_label: supplierVariant.unit_label ?? '',
+                    weight_per_unit: supplierVariant.weight_per_unit ?? 1,
+                    unit_cost: supplierVariant.latest_price ?? 0,
+                    source_price_id: supplierVariant.price_id ?? ''
+                });
+            });
+
+            alert(skipped > 0
+                ? `Đã áp dụng mẫu. Bỏ qua ${skipped} sản phẩm không còn thuộc nhà cung cấp.`
+                : 'Đã áp dụng mẫu sản phẩm vào phiếu nhập.');
+        } catch (error) {
+            alert('Không thể tải sản phẩm để áp dụng mẫu.');
+        }
+    });
+
+    btnSaveTemplate?.addEventListener('click', async function () {
+        const errorBox = document.getElementById('stockInTemplateError');
+        const nameInput = document.getElementById('stockInTemplateName');
+        const items = currentRowsForTemplate();
+        errorBox?.classList.add('d-none');
+
+        if (!nameInput?.value.trim() || !supplierSelected() || items.length === 0) {
+            if (errorBox) {
+                errorBox.textContent = 'Vui lòng nhập tên mẫu, chọn nhà cung cấp và có ít nhất một sản phẩm.';
+                errorBox.classList.remove('d-none');
+            }
+            return;
+        }
+
+        this.disabled = true;
+        try {
+            const response = await fetch(@json(route('warehouse.stock-in-templates.store')), {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': @json(csrf_token())
+                },
+                body: JSON.stringify({
+                    name: nameInput.value.trim(),
+                    supplier_id: Number(supplierSelect.value),
+                    items
+                })
+            });
+            const payload = await response.json();
+            if (!response.ok) {
+                throw new Error(payload.message || Object.values(payload.errors || {}).flat().join(' ') || 'Không thể lưu mẫu.');
+            }
+
+            stockInTemplates.push(payload.template);
+            stockInTemplates.sort((a, b) => a.name.localeCompare(b.name, 'vi'));
+            renderStockInTemplateOptions(payload.template.id);
+            nameInput.value = '';
+            bootstrap.Modal.getInstance(document.getElementById('saveStockInTemplateModal'))?.hide();
+            alert(payload.message);
+        } catch (error) {
+            if (errorBox) {
+                errorBox.textContent = error.message;
+                errorBox.classList.remove('d-none');
+            }
+        } finally {
+            this.disabled = false;
+        }
+    });
+
+    btnDeleteTemplate?.addEventListener('click', async function () {
+        const template = selectedStockInTemplate();
+        if (!template) {
+            alert('Vui lòng chọn mẫu cần xóa.');
+            return;
+        }
+        if (!confirm(`Xóa mẫu "${template.name}"?`)) return;
+
+        const deleteUrl = @json(route('warehouse.stock-in-templates.destroy', ['template' => '__ID__'])).replace('__ID__', template.id);
+        try {
+            const response = await fetch(deleteUrl, {
+                method: 'DELETE',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': @json(csrf_token())
+                }
+            });
+            const payload = await response.json();
+            if (!response.ok) throw new Error(payload.message || 'Không thể xóa mẫu.');
+
+            stockInTemplates = stockInTemplates.filter(item => String(item.id) !== String(template.id));
+            renderStockInTemplateOptions();
+            alert(payload.message);
+        } catch (error) {
+            alert(error.message);
+        }
+    });
 
     restockCheckAll?.addEventListener('change', function () {
         getRestockItems().forEach((item) => {
