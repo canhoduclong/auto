@@ -1,7 +1,7 @@
 {
-  "version": "1.0.16",
-  "version_code": 17,
+  "version": "1.0.17",
+  "version_code": 18,
   "apk_url": "https://hoanglongtnt.com/app-update/app-release.apk",
   "force_update": false,
-  "message": "Bản cập nhật 1.0.16: bổ sung Undo nhận đơn cho layout kho và đóng hàng mobile; chỉ user đã nhận đơn mới có thể hoàn tác."
+  "message": "Bản cập nhật 1.0.17: tối ưu giao diện Shipper với 3 menu chính, hợp nhất danh sách đơn và bổ sung quy trình giao/trả hàng, thanh toán, chứng từ trên mobile."
 }

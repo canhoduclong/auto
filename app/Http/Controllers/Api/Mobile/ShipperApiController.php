@@ -411,6 +411,38 @@ class ShipperApiController extends BaseApiController
             ], 'Cap nhat trang thai thanh cong');
     }
 
+    public function completeDelivery(Request $request, Order $order): JsonResponse
+    {
+        $this->ensureShipperRole($request);
+        $user = $request->user();
+        if ((int) $order->shipper_id !== (int) $user->id && !$user->hasRole('admin')) {
+            return $this->fail('Khong co quyen thao tac don nay', 403);
+        }
+
+        Auth::setUser($user);
+        $request->headers->set('Accept', 'application/json');
+        app(ShipperDashboardController::class)->markDelivered($request, $order);
+
+        $order->refresh();
+        $statusBefore = (string) $order->status;
+        $order->update(['status' => Order::STATUS_COMPLETED]);
+
+        OrderHistory::query()->create([
+            'order_id' => $order->id,
+            'action' => 'mobile_complete_delivery',
+            'user_id' => $user->id,
+            'role' => 'shipper',
+            'status_before' => $statusBefore,
+            'status_after' => Order::STATUS_COMPLETED,
+            'note' => 'Shipper hoàn tất giao hàng trên ứng dụng mobile.',
+        ]);
+
+        return $this->ok([
+            'order_id' => (int) $order->id,
+            'status' => Order::STATUS_COMPLETED,
+        ], 'Hoan tat giao hang thanh cong');
+    }
+
     public function uploadProof(Request $request, Order $order): JsonResponse
     {
         $this->ensureShipperRole($request);
