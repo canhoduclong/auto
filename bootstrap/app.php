@@ -3,6 +3,9 @@
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Http\Request;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -34,5 +37,22 @@ return Application::configure(basePath: dirname(__DIR__))
         //
     //})
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        $exceptions->render(function (\Throwable $exception, Request $request) {
+            $isForbidden = $exception instanceof AuthorizationException
+                || ($exception instanceof HttpExceptionInterface && $exception->getStatusCode() === 403);
+
+            if (!$isForbidden || $request->expectsJson() || $request->is('api/*')) {
+                return null;
+            }
+
+            if (!$request->user()) {
+                return redirect()->route('login');
+            }
+
+            $message = trim((string) $exception->getMessage());
+
+            return redirect()
+                ->route('home')
+                ->with('error', $message !== '' ? $message : 'Bạn không có quyền truy cập chức năng này.');
+        });
     })->create();

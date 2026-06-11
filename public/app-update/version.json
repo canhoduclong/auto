@@ -1,7 +1,7 @@
 {
-  "version": "1.0.17",
-  "version_code": 18,
+  "version": "1.0.18",
+  "version_code": 19,
   "apk_url": "https://hoanglongtnt.com/app-update/app-release.apk",
   "force_update": false,
-  "message": "Bản cập nhật 1.0.17: tối ưu giao diện Shipper với 3 menu chính, hợp nhất danh sách đơn và bổ sung quy trình giao/trả hàng, thanh toán, chứng từ trên mobile."
+  "message": "Bản cập nhật 1.0.18: bổ sung footer địa chỉ và khoảng an toàn phía dưới cho giao diện Shipper mobile."
 }
