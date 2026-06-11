@@ -106,6 +106,24 @@ class Order extends Model
     const WAREHOUSE_ADJUSTMENT_STATUS_SALE_CONFIRMED = 'sale_confirmed';
     const WAREHOUSE_ADJUSTMENT_STATUS_SALE_REJECTED = 'sale_rejected';
 
+    public function clearWarehouseAdjustmentState(): self
+    {
+        $this->forceFill([
+            'warehouse_adjustment_status' => self::WAREHOUSE_ADJUSTMENT_STATUS_NONE,
+            'warehouse_adjustment_note' => null,
+            'warehouse_adjustment_changes' => null,
+            'warehouse_adjustment_requested_by' => null,
+            'warehouse_adjustment_requested_at' => null,
+            'warehouse_adjustment_confirmed_by' => null,
+            'warehouse_adjustment_confirmed_at' => null,
+            'warehouse_adjustment_rejected_by' => null,
+            'warehouse_adjustment_rejected_at' => null,
+            'warehouse_adjustment_rejected_reason' => null,
+        ]);
+
+        return $this;
+    }
+
     public function customer() { return $this->belongsTo(Customer::class); }
     public function user() { return $this->belongsTo(User::class); }
     public function warehouseAdjustmentRequester() { return $this->belongsTo(User::class, 'warehouse_adjustment_requested_by'); }

@@ -3649,6 +3649,7 @@ public function apiTruckRoutes(Request $request)
             $newOrder->return_reason = null;
             $newOrder->created_at = now();
             $newOrder->updated_at = now();
+            $newOrder->clearWarehouseAdjustmentState();
 
             foreach ([
                 'copied_from_order_id' => $oldOrder->id,
@@ -3771,6 +3772,7 @@ public function apiTruckRoutes(Request $request)
             if ($this->hasOrderColumn('stock_shortage_detail')) {
                 $newOrder->stock_shortage_detail = null;
             }
+            $newOrder->clearWarehouseAdjustmentState();
             $newOrder->save();
 
             $copiedOrderDate = $newOrder->created_at ?: now();
