@@ -53,8 +53,7 @@
     $canEdit = $isCopiedOrder
         || ($order->status === \App\Models\Order::STATUS_PENDING_LEADER_APPROVAL
             && $order->created_at?->isToday());
-    $canCancelToday = $order->created_at?->isToday()
-        && !in_array((string) $order->status, ['cancelled', 'completed', 'returned', 'returned_completed'], true);
+    $canCancelToday = $order->created_at?->isToday() && $order->canBeCancelled();
     $canRequestAdjustment = !in_array((string) $order->status, ['cancelled', 'rejected'], true);
 
     $statusText = \App\Models\Order::statusOptions()[$order->status] ?? ucfirst(str_replace('_', ' ', (string) $order->status));

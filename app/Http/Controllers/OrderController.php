@@ -1203,7 +1203,7 @@ class OrderController extends Controller
             'cancel_images.*' => 'image|max:5120',
         ]);
 
-        $this->assertValidTransition($order, ['pending_leader_approval', 'pending_manager_approval', 'approved', 'packing', 'pending', 'confirmed', 'picking', Order::STATUS_ORDER_PLACED], 'cancelled');
+        $this->assertValidTransition($order, Order::CANCELLABLE_STATUSES, Order::STATUS_CANCELLED);
         $statusBefore = (string) $order->status;
         $reason = trim((string) ($validated['cancel_reason'] ?? ''));
 

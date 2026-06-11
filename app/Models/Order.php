@@ -101,6 +101,24 @@ class Order extends Model
     const STATUS_RETURNING        = 'returning';
     const STATUS_RETURNED_COMPLETED = 'returned_completed';
 
+    public const CANCELLABLE_STATUSES = [
+        'draft',
+        'pending',
+        self::STATUS_PENDING_LEADER_APPROVAL,
+        self::STATUS_PENDING_MANAGER_APPROVAL,
+        'pending_warehouse_approval',
+        self::STATUS_APPROVED,
+        self::STATUS_PACKING,
+        'confirmed',
+        'picking',
+        self::STATUS_ORDER_PLACED,
+    ];
+
+    public function canBeCancelled(): bool
+    {
+        return in_array((string) $this->status, self::CANCELLABLE_STATUSES, true);
+    }
+
     const WAREHOUSE_ADJUSTMENT_STATUS_NONE = 'none';
     const WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION = 'pending_sale_confirmation';
     const WAREHOUSE_ADJUSTMENT_STATUS_SALE_CONFIRMED = 'sale_confirmed';
