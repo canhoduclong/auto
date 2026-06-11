@@ -1,7 +1,7 @@
 {
-  "version": "1.0.18",
-  "version_code": 19,
+  "version": "1.0.19",
+  "version_code": 20,
   "apk_url": "https://hoanglongtnt.com/app-update/app-release.apk",
   "force_update": false,
-  "message": "Bản cập nhật 1.0.18: bổ sung footer địa chỉ và khoảng an toàn phía dưới cho giao diện Shipper mobile."
+  "message": "Bản cập nhật 1.0.19: hoàn thiện Dashboard Sale với thông báo và thao tác duyệt hoặc từ chối yêu cầu điều chỉnh đơn từ kho."
 }

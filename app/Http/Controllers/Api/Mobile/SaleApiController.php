@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Mobile;
 use App\Http\Controllers\OrderApprovalController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\PageController;
+use App\Http\Controllers\MyDashboardController;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\ProductVariant;
@@ -24,6 +25,85 @@ use Illuminate\Validation\ValidationException;
 
 class SaleApiController extends BaseApiController
 {
+    public function dashboard(Request $request): JsonResponse
+    {
+        $this->ensureSaleRole($request);
+        $this->bindWebAuth($request);
+
+        $payload = app(MyDashboardController::class)->stats()->getData(true);
+        $adjustments = collect($payload['pendingWarehouseAdjustments'] ?? [])
+            ->map(function ($order) {
+                $changes = collect($order['warehouse_adjustment_changes'] ?? [])
+                    ->map(function ($change) {
+                        $oldQty = (int) ($change['old_quantity'] ?? 0);
+                        $newQty = (int) ($change['new_quantity'] ?? 0);
+                        $delta = $newQty - $oldQty;
+                        $changeLabel = $oldQty <= 0 && $newQty > 0
+                            ? 'Thêm +' . $newQty
+                            : ($newQty <= 0 && $oldQty > 0
+                                ? 'Xóa -' . $oldQty
+                                : ($delta > 0 ? 'Tăng +' . $delta : ($delta < 0 ? 'Giảm ' . $delta : 'Không đổi')));
+
+                        return [
+                            'product_name' => (string) ($change['product_name'] ?? 'Sản phẩm'),
+                            'sku' => (string) ($change['sku'] ?? ''),
+                            'size' => $change['size'] ?? null,
+                            'old_quantity' => $oldQty,
+                            'new_quantity' => $newQty,
+                            'change_label' => $changeLabel,
+                        ];
+                    })
+                    ->values();
+
+                return [
+                    'id' => (int) ($order['id'] ?? 0),
+                    'code' => (string) ($order['code'] ?? ('#' . ($order['id'] ?? ''))),
+                    'customer_name' => (string) data_get($order, 'customer.name', 'Khách hàng'),
+                    'warehouse_name' => (string) data_get($order, 'warehouse.name', 'Kho'),
+                    'note' => (string) ($order['warehouse_adjustment_note'] ?? ''),
+                    'requested_at' => $order['warehouse_adjustment_requested_at'] ?? null,
+                    'changes' => $changes,
+                ];
+            })
+            ->values();
+
+        return $this->ok([
+            'stats' => $payload['dashboardStats'] ?? [],
+            'pending_adjustments' => $adjustments,
+        ]);
+    }
+
+    public function confirmWarehouseAdjustment(Request $request, Order $order): JsonResponse
+    {
+        $this->ensureSaleRole($request);
+        $this->bindWebAuth($request);
+
+        if ($order->warehouse_adjustment_status !== Order::WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION) {
+            return $this->fail('Yêu cầu điều chỉnh không còn ở trạng thái chờ xác nhận.', 422);
+        }
+        if (collect($order->warehouse_adjustment_changes ?? [])->isEmpty()) {
+            return $this->fail('Không có dữ liệu thay đổi để áp dụng.', 422);
+        }
+
+        app(MyDashboardController::class)->confirmWarehouseAdjustment($order);
+
+        return $this->ok(null, 'Đã duyệt và áp dụng yêu cầu điều chỉnh từ kho.');
+    }
+
+    public function rejectWarehouseAdjustment(Request $request, Order $order): JsonResponse
+    {
+        $this->ensureSaleRole($request);
+        $this->bindWebAuth($request);
+
+        if ($order->warehouse_adjustment_status !== Order::WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION) {
+            return $this->fail('Yêu cầu điều chỉnh không còn ở trạng thái chờ xác nhận.', 422);
+        }
+
+        app(MyDashboardController::class)->rejectWarehouseAdjustment($request, $order);
+
+        return $this->ok(null, 'Đã từ chối yêu cầu điều chỉnh và thông báo cho kho.');
+    }
+
     public function customers(Request $request): JsonResponse
     {
         $this->ensureSaleRole($request);

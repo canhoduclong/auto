@@ -127,6 +127,7 @@ trait ResolvesMobileRole
         if ($layout === 'sale') {
             $normalizedRoles = array_map(fn ($role) => strtolower((string) $role), $roleNames);
             $menu = [
+                ['group' => 'Tổng quan', 'key' => 'dashboard', 'label' => 'Dashboard', 'route' => '/my-dashboard', 'api' => '/sale/dashboard', 'icon' => 'dashboard'],
                 ['group' => 'Khách hàng', 'key' => 'customers', 'label' => 'Khách hàng', 'route' => '/my-customer', 'api' => '/sale/customers', 'icon' => 'people'],
                 ['group' => 'Đơn hàng', 'key' => 'my_orders', 'label' => 'Đơn hàng của tôi', 'route' => '/my-orders', 'api' => '/sale/orders', 'icon' => 'receipt_long'],
             ];

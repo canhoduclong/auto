@@ -68,6 +68,9 @@ Route::prefix('mobile')->group(function () {
         });
 
         Route::prefix('sale')->group(function () {
+            Route::get('/dashboard', [SaleApiController::class, 'dashboard']);
+            Route::post('/order-adjustments/{order}/confirm', [SaleApiController::class, 'confirmWarehouseAdjustment']);
+            Route::post('/order-adjustments/{order}/reject', [SaleApiController::class, 'rejectWarehouseAdjustment']);
             Route::get('/customers', [SaleApiController::class, 'customers']);
             Route::get('/customers/form-options', [SaleApiController::class, 'customerFormOptions']);
             Route::get('/customers/check-duplicate', [SaleApiController::class, 'checkCustomerDuplicate']);
