@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Customer;
 use App\Models\Order;
+use App\Models\OrderReturn;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -12,6 +13,50 @@ use Tests\TestCase;
 class ShipperAssignmentWorkflowTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_partial_return_order_resumes_at_payment_completion(): void
+    {
+        $shipperRole = Role::create(['name' => 'shipper']);
+        $shipper = User::factory()->create(['name' => 'Shipper Partial']);
+        $shipper->roles()->attach($shipperRole->id);
+
+        $customer = Customer::create([
+            'name' => 'Customer Partial',
+            'phone' => '0922222222',
+            'status' => 'active',
+        ]);
+
+        $order = Order::create([
+            'customer_id' => $customer->id,
+            'user_id' => $shipper->id,
+            'shipper_id' => $shipper->id,
+            'code' => 'ORD-PARTIAL-RETURN',
+            'total' => 100000,
+            'status' => Order::STATUS_DELIVERING,
+        ]);
+
+        OrderReturn::create([
+            'order_id' => $order->id,
+            'customer_id' => $customer->id,
+            'created_by' => $shipper->id,
+            'status' => 'pending_warehouse',
+            'reason' => 'customer_refused',
+            'return_scope' => 'partial',
+        ]);
+
+        $this->actingAs($shipper)
+            ->get(route('shipper.my-orders'))
+            ->assertOk()
+            ->assertSee('Chờ thu tiền &amp; hoàn tất', false)
+            ->assertSee('Thu tiền &amp; hoàn tất', false)
+            ->assertDontSee('>Trả hàng<', false);
+
+        $this->actingAs($shipper)
+            ->get(route('shipper.delivered-form', $order))
+            ->assertOk()
+            ->assertSee('Phần hàng trả lại đã được ghi nhận')
+            ->assertSee('id="step-3-content" style="display:block;"', false);
+    }
 
     public function test_manager_can_preassign_order_without_changing_warehouse_status(): void
     {

@@ -124,7 +124,12 @@
 @php
     $waitingCount = $orders->whereIn('status', ['approved', 'ready_to_pack', 'packing'])->count();
     $readyToShipCount = $orders->where('status', 'packed_waiting_pickup')->count();
-    $deliveringCount = $orders->where('status', 'delivering')->count();
+    $awaitingCompletionCount = $orders
+        ->filter(fn ($order) => $order->status === 'delivering' && $order->returnRecords->isNotEmpty())
+        ->count();
+    $deliveringCount = $orders
+        ->filter(fn ($order) => $order->status === 'delivering' && $order->returnRecords->isEmpty())
+        ->count();
     $completedCount = $orders->where('status', 'completed')->count();
 @endphp
 
@@ -133,6 +138,7 @@
         <span class="badge bg-secondary rounded-pill">Chờ kho: {{ $waitingCount }}</span>
         <span class="badge bg-primary rounded-pill">Chờ nhận: {{ $readyToShipCount }}</span>
         <span class="badge bg-warning text-dark rounded-pill">Đang giao: {{ $deliveringCount }}</span>
+        <span class="badge bg-info text-dark rounded-pill">Chờ thu tiền & hoàn tất: {{ $awaitingCompletionCount }}</span>
         <span class="badge bg-success rounded-pill">Hoàn thành: {{ $completedCount }}</span>
     </div>
     <a href="{{ route('shipper.available') }}" class="btn btn-outline-info btn-sm">
@@ -152,6 +158,8 @@
 <div class="row g-3">
     @foreach($orders as $order)
     @php
+        $isAwaitingPaymentCompletion = $order->status === 'delivering'
+            && $order->returnRecords->isNotEmpty();
         $recipientName = $order->recipient_name ?: ($order->customer?->name ?? '—');
         $recipientPhone = $order->recipient_phone ?: ($order->customer?->phone ?? null);
         $deliveryAddress = $order->recipient_address ?: ($order->customer?->address ?? null);
@@ -220,6 +228,9 @@
                             'completed' => ['Hoàn thành', 'bg-success'],
                         ];
                         [$statusLabel, $statusClass] = $statusMap[$order->status] ?? [strtoupper((string) $order->status), 'bg-light text-dark border'];
+                        if ($isAwaitingPaymentCompletion) {
+                            [$statusLabel, $statusClass] = ['Chờ thu tiền & hoàn tất', 'bg-info text-dark'];
+                        }
                     @endphp
                     <span class="badge {{ $statusClass }}">{{ $statusLabel }}</span>
                 </div>
@@ -327,12 +338,14 @@
                     @endphp
                     @if(!$isReturnOrder)
                         <a href="{{ route('shipper.delivered-form', $order) }}" class="btn btn-success flex-fill btn-sm">
-                            <i class="bi bi-check-circle me-1"></i>Đã giao
+                            <i class="bi bi-check-circle me-1"></i>{{ $isAwaitingPaymentCompletion ? 'Thu tiền & hoàn tất' : 'Đã giao' }}
                         </a>
                     @endif
-                    <a href="{{ route('shipper.return-form', $order) }}" class="btn btn-outline-danger flex-fill btn-sm">
-                        <i class="bi bi-arrow-return-left me-1"></i>{{ $isReturnOrder ? 'Nhận hàng hoàn trả' : 'Trả hàng' }}
-                    </a>
+                    @if(!$isAwaitingPaymentCompletion)
+                        <a href="{{ route('shipper.return-form', $order) }}" class="btn btn-outline-danger flex-fill btn-sm">
+                            <i class="bi bi-arrow-return-left me-1"></i>{{ $isReturnOrder ? 'Nhận hàng hoàn trả' : 'Trả hàng' }}
+                        </a>
+                    @endif
                 </div>
             @elseif($order->status === 'packed_waiting_pickup')
                 <div class="card-footer bg-white border-top d-flex gap-2">

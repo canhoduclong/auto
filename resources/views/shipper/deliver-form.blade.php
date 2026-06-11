@@ -361,8 +361,14 @@
                 <form action="{{ route('shipper.mark-delivered', $order) }}" method="POST" enctype="multipart/form-data" id="deliveryForm">
                     @csrf
 
+                    @if($resumePaymentOnly ?? false)
+                        <div class="alert alert-info">
+                            Phần hàng trả lại đã được ghi nhận. Vui lòng thu tiền và hoàn tất giao hàng cho phần khách đã nhận.
+                        </div>
+                    @endif
+
                     {{-- ── STEP 0: CHỌN HÀNH ĐỘNG ── --}}
-                    <div id="step-0-content" style="display:block;">
+                    <div id="step-0-content" style="display:{{ ($resumePaymentOnly ?? false) ? 'none' : 'block' }};">
                         <div style="text-align:center;padding:2rem 1rem;">
                             <div style="font-size:1.25rem;font-weight:700;color:#0f172a;margin-bottom:1rem;">
                                 <i class="bi bi-question-circle me-2 text-primary"></i>Bạn muốn làm gì?
@@ -383,7 +389,7 @@
                     </div>
 
                     {{-- ── STEPPER ── --}}
-                    <div class="mb-4" id="stepperContainer" style="display:none;">
+                    <div class="mb-4" id="stepperContainer" style="display:{{ ($resumePaymentOnly ?? false) ? 'block' : 'none' }};">
                         <div style="display:flex;align-items:center;">
                             {{-- Step 1: Trả hàng (chỉ hiện khi path=return) --}}
                             <div id="step-1-indicator" style="flex:0 0 auto;text-align:center;display:none;">
@@ -589,7 +595,7 @@
                     </div>
 
                     {{-- ── STEP 3: THANH TOÁN ── --}}
-                    <div id="step-3-content" style="display:none;">
+                    <div id="step-3-content" style="display:{{ ($resumePaymentOnly ?? false) ? 'block' : 'none' }};">
                         <div class="mb-3 p-3 rounded" style="background:#f0fdf4;border:1px solid #bbf7d0;">
                             <div class="fw-semibold mb-3" style="color:#15803d;font-size:1rem;">
                                 @if($isTruckStationDelivery)
@@ -658,7 +664,7 @@
                             </div>
 
                             <div class="mt-4 d-flex gap-2">
-                                <button type="button" id="step3BackBtn" class="btn btn-outline-secondary">
+                                <button type="button" id="step3BackBtn" class="btn btn-outline-secondary {{ ($resumePaymentOnly ?? false) ? 'd-none' : '' }}">
                                     <i class="bi bi-arrow-left me-1"></i>Quay lại
                                 </button>
                                 <button type="submit" class="btn btn-success flex-fill btn-lg">
@@ -679,6 +685,7 @@
 (function () {
     const shippingFee = {{ (int) $shippingFee }};
     const foamBoxFee  = {{ (int) $foamBoxFee }};
+    const resumePaymentOnly = {{ ($resumePaymentOnly ?? false) ? 'true' : 'false' }};
     const itemData    = {
         @foreach($order->items as $item)
         {{ $item->id }}: {
@@ -1234,6 +1241,12 @@
             goToStep(2);
         }
     });
+
+    if (resumePaymentOnly) {
+        currentPath = 'payment';
+        syncStep3Summary();
+        updateStepperIndicator(3);
+    }
 
     recalc();
 })();

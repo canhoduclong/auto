@@ -478,7 +478,13 @@ class ShipperDashboardController extends Controller
      */
     public function myOrders()
     {
-        $orders = Order::with(['customer.addresses', 'items.variant.product', 'warehouse', 'histories.user.warehouse'])
+        $orders = Order::with([
+                'customer.addresses',
+                'items.variant.product',
+                'warehouse',
+                'histories.user.warehouse',
+                'returnRecords' => fn ($query) => $query->where('return_scope', 'partial'),
+            ])
             ->where('shipper_id', Auth::id())
             ->whereIn('status', [Order::STATUS_DELIVERING, Order::STATUS_COMPLETED])
             ->orderBy('created_at', 'asc')
@@ -821,10 +827,17 @@ class ShipperDashboardController extends Controller
         $this->authorizeShipper($order);
         abort_if($order->status !== Order::STATUS_DELIVERING, 403, 'Đơn không đang giao.');
 
-        $order->load(['customer.addresses', 'customer.truckStation', 'customer.truckRoute', 'items.variant.product']);
+        $order->load([
+            'customer.addresses',
+            'customer.truckStation',
+            'customer.truckRoute',
+            'items.variant.product',
+            'returnRecords' => fn ($query) => $query->where('return_scope', 'partial'),
+        ]);
         $warehouses = Warehouse::query()->orderBy('name')->get();
+        $resumePaymentOnly = $order->returnRecords->isNotEmpty();
 
-        return view('shipper.deliver-form', compact('order', 'warehouses'));
+        return view('shipper.deliver-form', compact('order', 'warehouses', 'resumePaymentOnly'));
     }
 
     /**
@@ -834,6 +847,18 @@ class ShipperDashboardController extends Controller
     {
         $this->authorizeShipper($order);
         abort_if($order->status !== Order::STATUS_DELIVERING, 422, 'Đơn không đang giao.');
+
+        $resumePaymentOnly = $order->returnRecords()
+            ->where('return_scope', 'partial')
+            ->exists();
+
+        if ($resumePaymentOnly) {
+            $request->merge([
+                'has_partial_return' => '0',
+                'delivered_qty' => [],
+                'partial_weight' => [],
+            ]);
+        }
 
         $order->loadMissing('customer.truckStation');
         $isTruckStationDelivery = (bool) ($order->customer?->use_truck_station ?? false)
