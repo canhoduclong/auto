@@ -72,6 +72,18 @@
                     <i class="bi bi-exclamation-triangle-fill me-1"></i>Sản phẩm cần nhập bổ sung
                 </div>
                 <div class="d-flex align-items-center gap-2">
+                    <button
+                        type="button"
+                        class="btn btn-sm btn-outline-dark"
+                        id="btnToggleRestockVariants"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#restockVariantsCollapse"
+                        aria-expanded="true"
+                        aria-controls="restockVariantsCollapse"
+                    >
+                        <i class="bi bi-chevron-up me-1" id="restockToggleIcon"></i>
+                        <span id="restockToggleLabel">Thu gọn</span>
+                    </button>
                     <div class="form-check mb-0">
                         <input class="form-check-input" type="checkbox" id="restockCheckAll">
                         <label class="form-check-label small fw-600" for="restockCheckAll">Chọn tất cả</label>
@@ -81,6 +93,7 @@
                     </button>
                 </div>
             </div>
+            <div class="collapse show" id="restockVariantsCollapse">
             <div class="card-body p-0">
                 @if(($lowStockVariants ?? collect())->isEmpty())
                     <div class="p-3 text-muted small">Hiện chưa có sản phẩm thiếu hàng.</div>
@@ -127,6 +140,7 @@
                     </div>
                 @endif
             </div>
+            </div>
         </div>
         <div id="itemsContainerIn">
             <div class="table-responsive">
@@ -165,6 +179,23 @@
 <script>
 let productVariants = [];
 let rowIdx = 0;
+
+const restockVariantsCollapse = document.getElementById('restockVariantsCollapse');
+const restockToggleIcon = document.getElementById('restockToggleIcon');
+const restockToggleLabel = document.getElementById('restockToggleLabel');
+
+function updateRestockToggle(isOpen) {
+    if (restockToggleLabel) {
+        restockToggleLabel.textContent = isOpen ? 'Thu gọn' : 'Mở ra';
+    }
+    if (restockToggleIcon) {
+        restockToggleIcon.classList.toggle('bi-chevron-up', isOpen);
+        restockToggleIcon.classList.toggle('bi-chevron-down', !isOpen);
+    }
+}
+
+restockVariantsCollapse?.addEventListener('shown.bs.collapse', () => updateRestockToggle(true));
+restockVariantsCollapse?.addEventListener('hidden.bs.collapse', () => updateRestockToggle(false));
 
 function toNumber(value, fallback = 0) {
     const parsed = parseFloat(String(value ?? '').replace(',', '.'));
