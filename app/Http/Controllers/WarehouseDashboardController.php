@@ -1600,9 +1600,17 @@ class WarehouseDashboardController extends Controller
         }
 
         $historicalQuantity = $this->getStockAtDate($variantIds, $warehouseId, $selectedDate);
+        $lowStockThresholds = Inventory::query()
+            ->selectRaw('product_variant_id, COALESCE(MIN(low_stock_threshold), 5) as low_stock_threshold')
+            ->whereIn('product_variant_id', $variantIds->all())
+            ->when($warehouseId, fn ($query) => $query->where('warehouse_id', $warehouseId))
+            ->groupBy('product_variant_id')
+            ->pluck('low_stock_threshold', 'product_variant_id')
+            ->map(fn ($value) => (int) $value)
+            ->all();
 
         return collect($variantIds)
-            ->mapWithKeys(function ($variantId) use ($historicalQuantity) {
+            ->mapWithKeys(function ($variantId) use ($historicalQuantity, $lowStockThresholds) {
                 $quantity = (int) ($historicalQuantity[(int) $variantId] ?? 0);
 
                 return [
@@ -1610,6 +1618,7 @@ class WarehouseDashboardController extends Controller
                         'quantity' => $quantity,
                         'reserved' => 0,
                         'available' => $quantity,
+                        'low_stock_threshold' => (int) ($lowStockThresholds[(int) $variantId] ?? 5),
                     ],
                 ];
             })
@@ -3907,7 +3916,7 @@ class WarehouseDashboardController extends Controller
             'total_quantity'         => $snapshotByVariantColl->sum('quantity'),
             'total_reserved'         => $snapshotByVariantColl->sum('reserved'),
             'total_available'        => $snapshotByVariantColl->sum('available'),
-            'low_stock'              => $snapshotByVariantColl->filter(fn ($v) => $v['quantity'] <= $v['low_stock_threshold'])->count(),
+            'low_stock'              => $snapshotByVariantColl->filter(fn ($v) => $v['quantity'] <= ($v['low_stock_threshold'] ?? 5))->count(),
             'out_of_stock'           => $snapshotByVariantColl->filter(fn ($v) => $v['quantity'] <= 0)->count(),
             'daily_import'           => (clone $movementQuery)->where('quantity', '>', 0)->sum('quantity'),
             'daily_export'           => abs((int) ((clone $movementQuery)->where('quantity', '<', 0)->sum('quantity'))),
