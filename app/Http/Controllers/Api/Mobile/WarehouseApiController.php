@@ -626,6 +626,7 @@ class WarehouseApiController extends BaseApiController
             'warehouse_adjustment_note' => (string) ($order->warehouse_adjustment_note ?? ''),
             'warehouse_adjustment_rejected_reason' => (string) ($order->warehouse_adjustment_rejected_reason ?? ''),
             'warehouse_adjustment_changes' => $order->warehouse_adjustment_changes ?? [],
+            'warehouse_can_adjust' => (bool) ($order->warehouse_can_adjust ?? false),
             'can_start_packing' => in_array((string) $order->status, ['approved', Order::STATUS_READY_TO_PACK], true)
                 && $order->warehouse_adjustment_status !== Order::WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION
                 && $order->warehouse_adjustment_status !== Order::WAREHOUSE_ADJUSTMENT_STATUS_SALE_REJECTED,

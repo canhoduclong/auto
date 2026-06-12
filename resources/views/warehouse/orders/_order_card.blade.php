@@ -27,6 +27,7 @@
                 $isPendingSaleConfirmation = $order->warehouse_adjustment_status === \App\Models\Order::WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION;
                 $isConfirmedBySale = $order->warehouse_adjustment_status === \App\Models\Order::WAREHOUSE_ADJUSTMENT_STATUS_SALE_CONFIRMED;
                 $isRejectedBySale = $order->warehouse_adjustment_status === \App\Models\Order::WAREHOUSE_ADJUSTMENT_STATUS_SALE_REJECTED;
+                $warehouseCanAdjust = (bool) ($order->warehouse_can_adjust ?? false);
                 $adjustmentChanges = collect($order->warehouse_adjustment_changes ?? []);
                 $activeTransfer = $activeTransfersByOrder[$order->id] ?? null;
                 $shipPickupWarehouseName = $sourceWarehouseName;
@@ -55,7 +56,14 @@
                                 <div class="fw-semibold fs-5 mb-0 pb-0">{{ $order->customer?->name ?? '—' }} </div>
                                 <div class="text-muted card-desript">#{{ $order->daily_sequence ?? '—' }}, {{ $order->created_at->format('d/m/Y H:i') }}, {{ $order->code }}</div>
                             </div> 
-                            <span class="badge {{ $meta['class'] }} js-order-status">{{ $meta['label'] }}</span>
+                            <div class="d-flex align-items-center gap-2">
+                                @if($warehouseCanAdjust)
+                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle" title="Kho được phép trực tiếp điều chỉnh đơn">
+                                        <i class="bi bi-pencil-square me-1"></i>Kho được sửa
+                                    </span>
+                                @endif
+                                <span class="badge {{ $meta['class'] }} js-order-status">{{ $meta['label'] }}</span>
+                            </div>
                         </div>
                     </div>
 
@@ -467,7 +475,9 @@
 
                             @if(!$isPackedReadonly && $canProcessThisOrder && !$isPacking)
                                 <details class="mt-3 border rounded p-2 bg-light">
-                                    <summary class="fw-semibold">Điều chỉnh mặt hàng (gửi sale xác nhận)</summary>
+                                    <summary class="fw-semibold">
+                                        {{ $warehouseCanAdjust ? 'Điều chỉnh mặt hàng' : 'Điều chỉnh mặt hàng (gửi sale xác nhận)' }}
+                                    </summary>
                                     <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.request-adjustment', $order) }}" method="POST" class="mt-2">
                                         @csrf
                                         <div class="small text-muted mb-2">Đặt số lượng = 0 để xóa sản phẩm khỏi đơn.</div>
@@ -529,7 +539,8 @@
                                             <textarea class="form-control form-control-sm" name="reason" rows="2" required>{{ old('reason') }}</textarea>
                                         </div>
                                         <button class="btn btn-outline-warning btn-sm" type="submit">
-                                            <i class="bi bi-send me-1"></i>Lưu thay đổi và gửi sale xác nhận
+                                            <i class="bi {{ $warehouseCanAdjust ? 'bi-save2' : 'bi-send' }} me-1"></i>
+                                            {{ $warehouseCanAdjust ? 'Lưu điều chỉnh' : 'Lưu thay đổi và gửi sale xác nhận' }}
                                         </button>
                                     </form>
                                 </details>

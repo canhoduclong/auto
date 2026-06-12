@@ -22,6 +22,7 @@ use App\Models\WarehouseInventoryTransferItem;
 use App\Models\WarehouseTransfer;
 use App\Notifications\WarehouseOrderAdjustmentRequested;
 use App\Services\WarehouseInventorySummaryService;
+use App\Services\WarehouseOrderAdjustmentService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -1916,6 +1917,36 @@ class WarehouseDashboardController extends Controller
                 return response()->json(['ok' => false, 'message' => 'Không có thay đổi nào về số lượng sản phẩm.'], 422);
             }
             return back()->with('error', 'Không có thay đổi nào về số lượng sản phẩm.');
+        }
+
+        if ($order->warehouse_can_adjust) {
+            DB::transaction(function () use ($order, $changes, $validated): void {
+                app(WarehouseOrderAdjustmentService::class)->apply($order, collect($changes));
+                $order->clearWarehouseAdjustmentState()->save();
+
+                OrderHistory::create([
+                    'order_id' => $order->id,
+                    'action' => 'warehouse_direct_adjustment',
+                    'user_id' => Auth::id(),
+                    'role' => $this->packingActorRole(),
+                    'status_before' => $order->status,
+                    'status_after' => $order->status,
+                    'note' => 'Kho đã trực tiếp điều chỉnh đơn: ' . trim((string) $validated['reason']),
+                ]);
+            });
+
+            app(OrderController::class)->syncDailySequenceAndStockSufficiency($order->created_at ?: now());
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'ok' => true,
+                    'message' => 'Đã áp dụng điều chỉnh đơn hàng.',
+                    'order_id' => (int) $order->id,
+                    'warehouse_adjustment_status' => Order::WAREHOUSE_ADJUSTMENT_STATUS_NONE,
+                ]);
+            }
+
+            return back()->with('success', 'Đã áp dụng điều chỉnh đơn hàng.');
         }
 
         $order->update([

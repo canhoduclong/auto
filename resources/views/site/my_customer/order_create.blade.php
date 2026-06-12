@@ -283,6 +283,15 @@
                                     <label class="form-label fw-bold">Ghi chú đơn hàng</label>
                                     <textarea name="note" rows="3" class="form-control" placeholder="Ghi chú cho đơn hàng">{{ old('note', $customer->note) }}</textarea>
                                 </div>
+                                <div class="col-12 mb-3">
+                                    <input type="hidden" name="warehouse_can_adjust" value="0">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" role="switch" name="warehouse_can_adjust" value="1"
+                                               id="warehouse_can_adjust" {{ old('warehouse_can_adjust') ? 'checked' : '' }}>
+                                        <label class="form-check-label fw-bold" for="warehouse_can_adjust">Cho phép kho điều chỉnh</label>
+                                    </div>
+                                    <div class="form-text">Kho có thể thay đổi số lượng sản phẩm mà không cần sale xác nhận.</div>
+                                </div>
                             </div>
                         </div>
                     </div>

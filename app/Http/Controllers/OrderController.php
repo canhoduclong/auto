@@ -355,6 +355,7 @@ class OrderController extends Controller
             'item_weight.*' => 'nullable|numeric|min:0',
             'order_discount' => 'nullable|numeric|min:0',
             'order_discount_type' => 'nullable|in:decrease,increase',
+            'warehouse_can_adjust' => 'nullable|boolean',
         ]);
 
         $customerId = (int) $request->input('customer_id');
@@ -390,6 +391,7 @@ class OrderController extends Controller
                     'allow_backorder' => $request->boolean('allow_backorder'),
                     'order_discount' => max(0, (float) $request->input('order_discount', 0)),
                     'order_discount_type' => $this->normalizeDiscountType($request->input('order_discount_type')),
+                    'warehouse_can_adjust' => $request->boolean('warehouse_can_adjust'),
                 ],
                 approvalService: $approvalService
             );
@@ -1436,6 +1438,7 @@ class OrderController extends Controller
             $orderInsert = $this->filterExistingColumns('orders', [
                 'customer_id' => $orderData['customer_id'] ?? null,
                 'user_id' => $orderData['user_id'] ?? auth()->id(),
+                'warehouse_can_adjust' => (bool) ($orderData['warehouse_can_adjust'] ?? false),
                 'recipient_name' => $orderData['recipient_name'] ?? null,
                 'recipient_phone' => $orderData['recipient_phone'] ?? null,
                 'recipient_address' => $orderData['recipient_address'] ?? null,
