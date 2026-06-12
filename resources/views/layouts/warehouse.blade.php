@@ -249,6 +249,9 @@
             <a href="{{ route('warehouse.inventory') }}" class="wh-nav-link {{ request()->routeIs('warehouse.inventory') ? 'active' : '' }}">
                 <i class="bi bi-stack"></i> Tồn Kho
             </a>
+            <a href="{{ route('warehouse.inventory-daily') }}" class="wh-nav-link {{ request()->routeIs('warehouse.inventory-daily') ? 'active' : '' }}">
+                <i class="bi bi-calendar3"></i> Tồn kho Daily
+            </a>
             <a href="{{ route('warehouse.products') }}" class="wh-nav-link {{ request()->routeIs('warehouse.products') ? 'active' : '' }}">
                 <i class="bi bi-box"></i> Sản Phẩm
             </a>

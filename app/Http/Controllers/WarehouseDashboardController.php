@@ -3928,6 +3928,147 @@ class WarehouseDashboardController extends Controller
     }
 
     /**
+     * Daily inventory ledger grouped by product variant and date.
+     */
+    public function inventoryDaily(Request $request)
+    {
+        $request->validate([
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date'],
+            'search' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $warehouseId = Auth::user()->warehouse_id ? (int) Auth::user()->warehouse_id : null;
+        $search = trim((string) $request->input('search', ''));
+        $from = $request->filled('from')
+            ? Carbon::parse($request->input('from'))->startOfDay()
+            : Carbon::today()->subDays(6)->startOfDay();
+        $to = $request->filled('to')
+            ? Carbon::parse($request->input('to'))->endOfDay()
+            : Carbon::today()->endOfDay();
+
+        if ($from->gt($to)) {
+            [$from, $to] = [$to->copy()->startOfDay(), $from->copy()->endOfDay()];
+        }
+
+        if ($from->diffInDays($to) > 30) {
+            $from = $to->copy()->subDays(30)->startOfDay();
+        }
+
+        $inventoryScope = fn ($query) => $query->when(
+            $warehouseId,
+            fn ($inventoryQuery) => $inventoryQuery->where('warehouse_id', $warehouseId)
+        );
+
+        $variants = ProductVariant::query()
+            ->with('product:id,name,unit')
+            ->whereHas('inventories', $inventoryScope)
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where(function ($searchQuery) use ($search) {
+                    $searchQuery->where('name', 'like', "%{$search}%")
+                        ->orWhere('sku', 'like', "%{$search}%")
+                        ->orWhereHas('product', fn ($productQuery) => $productQuery->where('name', 'like', "%{$search}%"));
+                });
+            })
+            ->orderBy('product_id')
+            ->orderBy('name')
+            ->paginate(20)
+            ->withQueryString();
+
+        $variantIds = $variants->getCollection()->pluck('id')->map(fn ($id) => (int) $id)->values();
+        $dates = collect();
+        $cursor = $from->copy()->startOfDay();
+        while ($cursor->lte($to)) {
+            $dates->push([
+                'date' => $cursor->toDateString(),
+                'label' => $cursor->format('d/m/Y'),
+            ]);
+            $cursor->addDay();
+        }
+
+        $currentByVariant = Inventory::query()
+            ->selectRaw('product_variant_id, COALESCE(SUM(quantity), 0) as quantity')
+            ->whereIn('product_variant_id', $variantIds->all())
+            ->when($warehouseId, fn ($query) => $query->where('warehouse_id', $warehouseId))
+            ->groupBy('product_variant_id')
+            ->pluck('quantity', 'product_variant_id');
+
+        $movementBase = InventoryMovement::query()
+            ->join('inventories', 'inventories.id', '=', 'inventory_movements.inventory_id')
+            ->whereIn('inventories.product_variant_id', $variantIds->all())
+            ->when($warehouseId, fn ($query) => $query->where('inventories.warehouse_id', $warehouseId));
+
+        $movementAfterTo = (clone $movementBase)
+            ->where('inventory_movements.created_at', '>', $to)
+            ->selectRaw('inventories.product_variant_id, COALESCE(SUM(inventory_movements.quantity), 0) as quantity')
+            ->groupBy('inventories.product_variant_id')
+            ->pluck('quantity', 'inventories.product_variant_id');
+
+        $movementsByVariantAndDate = (clone $movementBase)
+            ->whereBetween('inventory_movements.created_at', [$from, $to])
+            ->selectRaw('inventories.product_variant_id, DATE(inventory_movements.created_at) as movement_date')
+            ->selectRaw('COALESCE(SUM(CASE WHEN inventory_movements.quantity > 0 THEN inventory_movements.quantity ELSE 0 END), 0) as import_qty')
+            ->selectRaw('COALESCE(ABS(SUM(CASE WHEN inventory_movements.quantity < 0 THEN inventory_movements.quantity ELSE 0 END)), 0) as export_qty')
+            ->groupBy('inventories.product_variant_id', 'movement_date')
+            ->get()
+            ->groupBy('product_variant_id')
+            ->map(fn ($rows) => $rows->keyBy('movement_date'));
+
+        $dailyRows = $variants->getCollection()->map(function (ProductVariant $variant) use ($dates, $currentByVariant, $movementAfterTo, $movementsByVariantAndDate) {
+            $variantId = (int) $variant->id;
+            $closing = (int) ($currentByVariant[$variantId] ?? 0) - (int) ($movementAfterTo[$variantId] ?? 0);
+            $variantMovements = $movementsByVariantAndDate->get($variantId, collect());
+            $days = collect();
+
+            foreach ($dates->reverse() as $date) {
+                $movement = $variantMovements->get($date['date']);
+                $import = (int) ($movement?->import_qty ?? 0);
+                $export = (int) ($movement?->export_qty ?? 0);
+                $opening = $closing - $import + $export;
+
+                $days->prepend([
+                    'opening' => $opening,
+                    'import' => $import,
+                    'total' => $opening + $import,
+                    'export' => $export,
+                    'closing' => $closing,
+                ], $date['date']);
+                $closing = $opening;
+            }
+
+            return [
+                'product' => (string) ($variant->product?->name ?? 'Sản phẩm'),
+                'variant' => (string) ($variant->name ?: 'Mặc định'),
+                'sku' => (string) ($variant->sku ?: '—'),
+                'unit' => (string) ($variant->product?->unit_label ?? '—'),
+                'days' => $days,
+            ];
+        });
+
+        $pageTotals = $dates->mapWithKeys(function ($date) use ($dailyRows) {
+            $dateKey = $date['date'];
+
+            return [$dateKey => [
+                'opening' => (int) $dailyRows->sum(fn ($row) => $row['days'][$dateKey]['opening']),
+                'import' => (int) $dailyRows->sum(fn ($row) => $row['days'][$dateKey]['import']),
+                'total' => (int) $dailyRows->sum(fn ($row) => $row['days'][$dateKey]['total']),
+                'export' => (int) $dailyRows->sum(fn ($row) => $row['days'][$dateKey]['export']),
+                'closing' => (int) $dailyRows->sum(fn ($row) => $row['days'][$dateKey]['closing']),
+            ]];
+        });
+
+        return view('warehouse.inventory.daily', compact(
+            'variants',
+            'dailyRows',
+            'dates',
+            'pageTotals',
+            'from',
+            'to',
+            'search'
+        ));
+    }
+
+    /**
      * Manually trigger auto-cancel of overdue orders to restore accurate stock.
      */
     public function cancelOverdueOrders(Request $request)

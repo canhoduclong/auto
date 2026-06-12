@@ -307,6 +307,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/inventory-transfers/incoming', [WarehouseDashboardController::class, 'incomingInventoryTransfers'])->name('inventory-transfers.incoming');
         Route::post('/inventory-transfers/{transfer}/confirm', [WarehouseDashboardController::class, 'confirmIncomingInventoryTransfer'])->name('inventory-transfers.confirm');
         Route::get('/inventory',   [WarehouseDashboardController::class, 'inventory'])->name('inventory');
+        Route::get('/inventory-daily', [WarehouseDashboardController::class, 'inventoryDaily'])->name('inventory-daily');
         Route::post('/inventory/cancel-overdue', [WarehouseDashboardController::class, 'cancelOverdueOrders'])->name('inventory.cancel-overdue');
         Route::get('/products',    [WarehouseDashboardController::class, 'products'])->name('products');
         Route::get('/reports',     [WarehouseDashboardController::class, 'reports'])->name('reports');
