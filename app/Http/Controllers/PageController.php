@@ -3578,15 +3578,7 @@ public function apiTruckRoutes(Request $request)
             || (string) ($order->workflow_code ?? '') === 'order_return';
 
         DB::transaction(function () use ($order, $isReturnOrder) {
-            // Cập nhật giá hiện tại từng item theo variant price rule
-            foreach ($order->items as $item) {
-                if ($item->variant) {
-                    $currentPrice = $item->variant->final_price ?? $item->price;
-                    if ($currentPrice > 0) {
-                        $item->update(['price' => $currentPrice, 'base_price' => $currentPrice]);
-                    }
-                }
-            }
+            $this->refreshCopiedOrderPrices($order);
 
             // Xoá label "Đơn copy mới"
             if ($this->hasOrderColumn('copied_from_order_id')) {
@@ -3777,12 +3769,15 @@ public function apiTruckRoutes(Request $request)
 
             $copiedOrderDate = $newOrder->created_at ?: now();
 
-            // clone items (giữ nguyên giá cũ, confirmCopyOrder sẽ refresh giá)
+            // Clone items, then immediately refresh them to the current selling price.
             foreach ($oldOrder->items as $item) {
                 $newItem = $item->replicate();
                 $newItem->order_id = $newOrder->id;
                 $newItem->save();
             }
+
+            $this->refreshCopiedOrderPrices($newOrder);
+
             // Nếu đơn gốc là order_placed → kích hoạt luồng duyệt ngay, không cần bước "Xác nhận copy"
             if ($oldOrder->status === Order::STATUS_ORDER_PLACED) {
                 app(\App\Services\ApprovalService::class)->initOrderApproval($newOrder->fresh());
@@ -3797,6 +3792,74 @@ public function apiTruckRoutes(Request $request)
 
         return redirect()->route('pages.my_orders')
             ->with('success', $successMsg);
+    }
+
+    private function refreshCopiedOrderPrices(Order $order): void
+    {
+        $order->loadMissing(['items.variant.product']);
+
+        $subtotalAmount = 0.0;
+        $itemDiscountTotal = 0.0;
+        $itemsTotal = 0.0;
+
+        foreach ($order->items as $item) {
+            if (!$item->variant) {
+                $subtotalAmount += (float) ($item->total ?? 0);
+                $itemsTotal += (float) ($item->total ?? 0);
+                continue;
+            }
+
+            $currentBasePrice = (float) $item->variant->final_price;
+            if ($currentBasePrice <= 0) {
+                $currentBasePrice = (float) ($item->base_price ?? $item->price ?? 0);
+            }
+
+            $quantity = max(0, (float) ($item->quantity ?? 0));
+            $pricingFactor = $item->effective_priced_by_kg ? $item->effective_unit_weight : 1;
+            $discountType = strtolower((string) ($item->discount_type ?? 'decrease')) === 'increase'
+                ? 'increase'
+                : 'decrease';
+            $unitDiscount = max(0, (float) ($item->unit_discount ?? 0));
+            $finalUnitPrice = $discountType === 'increase'
+                ? $currentBasePrice + $unitDiscount
+                : max($currentBasePrice - $unitDiscount, 0);
+            $lineSubtotal = round($currentBasePrice * $quantity * $pricingFactor, 2);
+            $lineAdjustment = round(($discountType === 'increase' ? -1 : 1) * $unitDiscount * $quantity * $pricingFactor, 2);
+            $lineTotal = max(round($finalUnitPrice * $quantity * $pricingFactor, 2), 0);
+
+            $item->update([
+                'price' => $finalUnitPrice,
+                'base_price' => $currentBasePrice,
+                'discount_total' => $lineAdjustment,
+                'total' => $lineTotal,
+            ]);
+
+            $subtotalAmount += $lineSubtotal;
+            $itemDiscountTotal += $lineAdjustment;
+            $itemsTotal += $lineTotal;
+        }
+
+        $orderDiscount = max(0, (float) ($order->order_discount ?? 0));
+        $orderDiscountType = strtolower((string) ($order->order_discount_type ?? 'decrease')) === 'increase'
+            ? 'increase'
+            : 'decrease';
+        $orderDiscount = $orderDiscountType === 'decrease'
+            ? min($orderDiscount, $itemsTotal)
+            : $orderDiscount;
+        $orderAdjustment = $orderDiscountType === 'increase' ? -$orderDiscount : $orderDiscount;
+        $total = max(round($itemsTotal - $orderAdjustment, 2), 0);
+        $paid = (float) $order->transactions()->where('type', 'payment')->sum('amount')
+            - (float) $order->transactions()->where('type', 'refund')->sum('amount');
+
+        $order->update(array_filter([
+            'subtotal_amount' => round($subtotalAmount, 2),
+            'item_discount_total' => round($itemDiscountTotal, 2),
+            'extra_discount_total' => round($orderAdjustment, 2),
+            'order_discount' => round($orderDiscount, 2),
+            'total_discount' => round($itemDiscountTotal + $orderAdjustment, 2),
+            'total' => $total,
+            'amount_due' => max(round($total - $paid, 2), 0),
+        ], fn (string $column): bool => $this->hasOrderColumn($column), ARRAY_FILTER_USE_KEY));
     }
 
     private function resolveMyCustomerDateRange(string $period, ?string $fromDateInput, ?string $toDateInput): array

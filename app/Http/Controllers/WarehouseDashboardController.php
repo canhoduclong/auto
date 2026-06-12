@@ -21,6 +21,7 @@ use App\Models\WarehouseInventoryTransfer;
 use App\Models\WarehouseInventoryTransferItem;
 use App\Models\WarehouseTransfer;
 use App\Notifications\WarehouseOrderAdjustmentRequested;
+use App\Services\WarehouseInventorySummaryService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -329,135 +330,29 @@ class WarehouseDashboardController extends Controller
             ->get();
 
 
-        // Lấy danh sách sản phẩm và biến thể, tính tồn kho tổng hợp giống trang inventory
-        $products = \App\Models\Product::with(['variants.inventories' => function ($q) use ($managedWarehouseId) {
-            if ($managedWarehouseId) {
-                $q->where('warehouse_id', $managedWarehouseId);
-            }
-        }, 'variants.product'])
-        ->orderBy('name')
-        ->get();
+        $inventorySummaryService = app(WarehouseInventorySummaryService::class);
+        $currentInventorySummary = $inventorySummaryService->build($managedWarehouseId);
+        $summaryRows = $currentInventorySummary['rows'];
+        $summaryTotals = $currentInventorySummary['totals'];
+        $otherWarehouseSummaries = $managedWarehouseId
+            ? Warehouse::query()
+                ->whereKeyNot($managedWarehouseId)
+                ->where('status', true)
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->map(function (Warehouse $warehouse) use ($inventorySummaryService) {
+                    $summary = $inventorySummaryService->build((int) $warehouse->id);
 
-        $summaryRows = $products->map(function ($product) {
-            $variants = $product->variants
-                ->filter(fn ($variant) => $variant->inventories->isNotEmpty())
-                ->sortBy(fn ($variant) => mb_strtolower((string) ($variant->name ?? '')))
-                ->values();
-
-            $closing = (int) $variants->sum(fn ($variant) => (int) ($variant->snapshot_quantity ?? $variant->inventories->sum('quantity')));
-            $import = (int) $variants->sum(fn ($variant) => (int) $variant->inventories->sum(fn ($inv) => $inv->movements->where('quantity', '>', 0)->sum('quantity')));
-            $reserved = (int) $variants->sum(fn ($variant) => (int) ($variant->snapshot_reserved ?? $variant->inventories->sum('reserved_quantity')));
-            $export = (int) $variants->sum(fn ($variant) => (int) abs($variant->inventories->sum(fn ($inv) => $inv->movements->where('quantity', '<', 0)->sum('quantity'))));
-            $opening = (int) ($closing - $import + $export);
-
-            $variantRows = $variants->map(function ($variant) {
-                $vClosing = (int) ($variant->snapshot_quantity ?? $variant->inventories->sum('quantity'));
-                $vImport = (int) $variant->inventories->sum(fn ($inv) => $inv->movements->where('quantity', '>', 0)->sum('quantity'));
-                $vReserved = (int) ($variant->snapshot_reserved ?? $variant->inventories->sum('reserved_quantity'));
-                $vExport = (int) abs($variant->inventories->sum(fn ($inv) => $inv->movements->where('quantity', '<', 0)->sum('quantity')));
-                $vOpening = (int) ($vClosing - $vImport + $vExport);
-                return [
-                    'name' => (string) ($variant->name ?: ($variant->product?->name ?? 'Biến thể')),
-                    'unit' => (string) ($variant->product?->unit_label ?? '—'),
-                    'opening' => $vOpening,
-                    'import' => $vImport,
-                    'reserved' => $vReserved,
-                    'export' => $vExport,
-                    'closing' => $vClosing,
-                ];
-            })->values();
-
-            $unitLabels = $variantRows
-                ->pluck('unit')
-                ->filter(fn ($unit) => $unit !== '—' && $unit !== '')
-                ->unique()
-                ->values();
-            $productUnit = $unitLabels->count() === 1 ? (string) $unitLabels->first() : ($unitLabels->count() > 1 ? 'Nhiều DVT' : '—');
-
-            return [
-                'product_id' => (int) $product->id,
-                'name' => (string) $product->name,
-                'unit' => $productUnit,
-                'variant_count' => (int) $variants->count(),
-                'opening' => $opening,
-                'import' => $import,
-                'reserved' => $reserved,
-                'export' => $export,
-                'closing' => $closing,
-                'variants' => $variantRows,
-            ];
-        })->sortBy(fn ($row) => mb_strtolower((string) $row['name']))->values();
-
-        $summaryTotals = [
-            'opening' => (int) $summaryRows->sum('opening'),
-            'import' => (int) $summaryRows->sum('import'),
-            'reserved' => (int) $summaryRows->sum('reserved'),
-            'export' => (int) $summaryRows->sum('export'),
-            'closing' => (int) $summaryRows->sum('closing'),
-        ];
-
-        $dailyInventoryFrom = $request->filled('inventory_from')
-            ? Carbon::parse($request->input('inventory_from'))->startOfDay()
-            : Carbon::today()->subDays(6)->startOfDay();
-        $dailyInventoryTo = $request->filled('inventory_to')
-            ? Carbon::parse($request->input('inventory_to'))->endOfDay()
-            : Carbon::today()->endOfDay();
-
-        if ($dailyInventoryFrom->gt($dailyInventoryTo)) {
-            [$dailyInventoryFrom, $dailyInventoryTo] = [
-                $dailyInventoryTo->copy()->startOfDay(),
-                $dailyInventoryFrom->copy()->endOfDay(),
-            ];
-        }
-
-        $inventoryMovementScope = function ($query) use ($managedWarehouseId) {
-            if ($managedWarehouseId) {
-                $query->whereHas('inventory', fn ($inventoryQuery) => $inventoryQuery->where('warehouse_id', $managedWarehouseId));
-            }
-
-            return $query;
-        };
-
-        $currentInventoryTotal = (int) Inventory::query()
-            ->when($managedWarehouseId, fn ($query) => $query->where('warehouse_id', $managedWarehouseId))
-            ->sum('quantity');
-
-        $movementAfterRange = (int) $inventoryMovementScope(
-            InventoryMovement::query()->where('created_at', '>', $dailyInventoryTo)
-        )->sum('quantity');
-
-        $dailyMovements = $inventoryMovementScope(
-            InventoryMovement::query()
-                ->whereBetween('created_at', [$dailyInventoryFrom, $dailyInventoryTo])
-                ->selectRaw('DATE(created_at) as movement_date')
-                ->selectRaw('COALESCE(SUM(CASE WHEN quantity > 0 THEN quantity ELSE 0 END), 0) as import_qty')
-                ->selectRaw('COALESCE(ABS(SUM(CASE WHEN quantity < 0 THEN quantity ELSE 0 END)), 0) as export_qty')
-                ->groupBy('movement_date')
-        )->get()->keyBy('movement_date');
-
-        $dailyInventoryReport = collect();
-        $closingStock = $currentInventoryTotal - $movementAfterRange;
-        $cursor = $dailyInventoryTo->copy()->startOfDay();
-
-        while ($cursor->gte($dailyInventoryFrom)) {
-            $dateKey = $cursor->toDateString();
-            $movement = $dailyMovements->get($dateKey);
-            $importQty = (int) ($movement?->import_qty ?? 0);
-            $exportQty = (int) ($movement?->export_qty ?? 0);
-            $openingStock = $closingStock - $importQty + $exportQty;
-
-            $dailyInventoryReport->prepend([
-                'date' => $dateKey,
-                'label' => $cursor->format('d/m/Y'),
-                'opening' => $openingStock,
-                'import' => $importQty,
-                'export' => $exportQty,
-                'closing' => $closingStock,
-            ]);
-
-            $closingStock = $openingStock;
-            $cursor->subDay();
-        }
+                    return [
+                        'warehouse_id' => (int) $warehouse->id,
+                        'warehouse_name' => (string) $warehouse->name,
+                        'rows' => $summary['rows'],
+                        'totals' => $summary['totals'],
+                    ];
+                })
+                ->filter(fn ($summary) => $summary['rows']->contains(fn ($row) => (int) $row['closing'] > 0))
+                ->values()
+            : collect();
 
         return view('warehouse.dashboard', compact(
             'stats',
@@ -467,9 +362,7 @@ class WarehouseDashboardController extends Controller
             'approvalStats',
             'summaryRows',
             'summaryTotals',
-            'dailyInventoryFrom',
-            'dailyInventoryTo',
-            'dailyInventoryReport'
+            'otherWarehouseSummaries'
         ));
     }
     /**

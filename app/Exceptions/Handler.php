@@ -67,11 +67,9 @@ class Handler extends ExceptionHandler
                 ], 419);
             }
 
-            if ($request->is('logout') || $request->routeIs('logout')) {
-                return redirect()
-                    ->route('login')
-                    ->with('error', 'Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.');
-            }
+            return redirect()
+                ->route('login')
+                ->with('error', 'Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.');
         }
 
         $isForbidden = $exception instanceof AuthorizationException

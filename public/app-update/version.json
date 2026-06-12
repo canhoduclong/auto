@@ -1,7 +1,8 @@
 {
-  "version": "1.0.19",
-  "version_code": 20,
+  "version": "1.0.20",
+  "version_code": 21,
   "apk_url": "https://hoanglongtnt.com/app-update/app-release.apk",
+  "ios_url": "",
   "force_update": false,
-  "message": "Bản cập nhật 1.0.19: hoàn thiện Dashboard Sale với thông báo và thao tác duyệt hoặc từ chối yêu cầu điều chỉnh đơn từ kho."
+  "message": "Bản cập nhật 1.0.20: cải thiện dashboard kho, điều hướng đơn hàng, cập nhật tồn kho nhiều kho và hỗ trợ cập nhật phiên bản trên iOS."
 }

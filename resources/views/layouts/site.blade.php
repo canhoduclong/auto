@@ -204,6 +204,7 @@ use App\Models\Setting;
         });
     </script>
     @include('site._cart_scripts')
+    @include('layouts.partials.session_expiry_redirect')
     @stack('scripts')
 
  

@@ -181,28 +181,6 @@
     .subname{
         padding-left: 20px;
     }
-    .daily-inventory-report th,
-    .daily-inventory-report td {
-        min-width: 105px;
-        text-align: right;
-        white-space: nowrap;
-    }
-    .daily-inventory-report th:first-child,
-    .daily-inventory-report td:first-child {
-        min-width: 150px;
-        position: sticky;
-        left: 0;
-        z-index: 2;
-        text-align: left;
-    }
-    .daily-inventory-report thead th:first-child {
-        z-index: 3;
-    }
-    .daily-inventory-date {
-        background: #6b3f19 !important;
-        color: #fff !important;
-        text-align: center !important;
-    }
 </style>
 @endpush
 
@@ -366,65 +344,18 @@
         <div class="underline mb-4">
             <span class="fw-semibold progress-title-underline d-flex align-items-center text-uppercase">Thống kê tồn kho</span>
         </div>
-        <div class="inv-summary-list mb-4">
-            <div class="inv-summary-head my-2">Danh sách thống kê tồn kho (sản phẩm và biến thể cùng một cấu trúc cột)</div>
-            <div class="table-responsive">
-                <div class="inv-summary-table-div">
-                    <div class="inv-summary-header d-flex fw-bold" style="background:#6b3f19;color:#fff;">
-                        <div class="inv-col-name flex-grow-1 px-2 py-2">Tên sản phẩm / biến thể</div>
-                        <div class="inv-col-unit px-2 py-2" style="min-width:80px">DVT</div>
-                        <div class="inv-col-opening px-2 py-2 num" style="min-width:90px">Tồn đầu</div>
-                        <div class="inv-col-import px-2 py-2 num" style="min-width:70px">Nhập</div>
-                        <div class="inv-col-reserved px-2 py-2 num" style="min-width:90px">Book</div>
-                        <div class="inv-col-export px-2 py-2 num" style="min-width:70px">Xuất</div>
-                        <div class="inv-col-closing px-2 py-2 num" style="min-width:80px">Tồn cuối</div>
-                    </div>
-                    @php
-                        $filteredRows = $summaryRows->filter(function($row) {
-                            return $row['closing'] > 0;
-                        });
-                    @endphp
-                    @forelse($filteredRows as $row)
-                        <div class="product-row-div border-bottom" style="background:#fffbe7;">
-                            <div class="d-flex align-items-center px-2 py-2">
-                                <div class="inv-col-name flex-grow-1">
-                                    <button type="button" class="inv-toggle js-inv-toggle border-0 bg-transparent p-0" data-target="inv-child-{{ $row['product_id'] }}">
-                                        <span class="icon-plus" style="display:inline;">+</span>
-                                        <span class="icon-minus" style="display:none;">&minus;</span>
-                                        <span class="inv-product-name text-capitalize">{{ $row['name'] }}</span>
-                                    </button>
-                                </div>
-                                <div class="inv-col-unit" style="min-width:80px">{{ $row['unit'] }}</div>
-                                <div class="inv-col-opening num" style="min-width:90px"><strong>{{ number_format($row['opening']) }}</strong></div>
-                                <div class="inv-col-import num" style="min-width:70px">{{ number_format($row['import']) }}</div>
-                                <div class="inv-col-reserved num" style="min-width:90px;color:#1d4ed8;">{{ number_format($row['reserved']) }}</div>
-                                <div class="inv-col-export num" style="min-width:70px">{{ number_format($row['export']) }}</div>
-                                <div class="inv-col-closing num" style="min-width:80px">{{ number_format($row['closing']) }}</div>
-                            </div>
-                        </div>
-                        <div id="inv-child-{{ $row['product_id'] }}" class="inv-child-row-div" style="display:none;">
-                            @foreach($row['variants'] as $variantRow)
-                                @if($variantRow['closing'] > 0)
-                                    <div class="variant-row-div px-2 py-1 border-bottom">
-                                        <div class="d-flex align-items-center inv-variant-block">
-                                            <div class="inv-indent flex-grow-1 subname">{{ $variantRow['name'] }}</div>
-                                            <div class="inv-col-unit" style="min-width:80px">{{ $variantRow['unit'] }}</div>
-                                            <div class="inv-col-opening num" style="min-width:90px">{{ number_format($variantRow['opening']) }}</div>
-                                            <div class="inv-col-import num" style="min-width:70px">{{ number_format($variantRow['import']) }}</div>
-                                            <div class="inv-col-reserved num" style="min-width:90px;color:#1d4ed8;">{{ number_format($variantRow['reserved']) }}</div>
-                                            <div class="inv-col-export num" style="min-width:70px">{{ number_format($variantRow['export']) }}</div>
-                                            <div class="inv-col-closing num" style="min-width:80px">{{ number_format($variantRow['closing']) }}</div>
-                                        </div>
-                                    </div>
-                                @endif
-                            @endforeach
-                        </div>
-                    @empty
-                        <div class="text-center text-muted py-3">Không có dữ liệu sản phẩm trong danh sách hiện tại.</div>
-                    @endforelse
-                </div>
-            </div>
-        </div>
+        @include('warehouse._inventory_summary', [
+            'title' => 'Danh sách thống kê tồn kho (sản phẩm và biến thể cùng một cấu trúc cột)',
+            'rows' => $summaryRows,
+            'targetPrefix' => 'current',
+        ])
+        @foreach($otherWarehouseSummaries as $otherWarehouseSummary)
+            @include('warehouse._inventory_summary', [
+                'title' => 'Tồn kho của kho khác (' . $otherWarehouseSummary['warehouse_name'] . ')',
+                'rows' => $otherWarehouseSummary['rows'],
+                'targetPrefix' => 'warehouse-' . $otherWarehouseSummary['warehouse_id'],
+            ])
+        @endforeach
         @push('scripts')
         <script>
         document.querySelectorAll('.js-inv-toggle').forEach(function (button) {
@@ -457,70 +388,6 @@
     </div> 
 </div>
                     
-<div class="card shadow-sm border-0 mb-4">
-    <div class="card-header bg-white">
-        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
-            <div>
-                <h2 class="h5 fw-bold mb-1">Báo cáo tồn kho Daily</h2>
-                <div class="small text-muted">Tổng hợp tồn đầu, nhập, xuất và tồn cuối theo từng ngày.</div>
-            </div>
-            <form method="GET" action="{{ route('warehouse.dashboard') }}" class="row g-2 align-items-end">
-                <div class="col-auto">
-                    <label for="inventory_from" class="form-label small fw-semibold mb-1">Từ ngày</label>
-                    <input type="date" id="inventory_from" name="inventory_from" class="form-control form-control-sm"
-                           value="{{ $dailyInventoryFrom->format('Y-m-d') }}">
-                </div>
-                <div class="col-auto">
-                    <label for="inventory_to" class="form-label small fw-semibold mb-1">Đến ngày</label>
-                    <input type="date" id="inventory_to" name="inventory_to" class="form-control form-control-sm"
-                           value="{{ $dailyInventoryTo->format('Y-m-d') }}">
-                </div>
-                <div class="col-auto">
-                    <button type="submit" class="btn btn-primary btn-sm">Xem báo cáo</button>
-                </div>
-            </form>
-        </div>
-    </div>
-    <div class="card-body p-0">
-        <div class="table-responsive">
-            <table class="table table-bordered table-hover align-middle mb-0 daily-inventory-report">
-                <thead>
-                    <tr>
-                        <th rowspan="2" class="bg-light align-middle">Chỉ tiêu</th>
-                        @foreach($dailyInventoryReport as $dailyRow)
-                            <th colspan="4" class="daily-inventory-date">{{ $dailyRow['label'] }}</th>
-                        @endforeach
-                    </tr>
-                    <tr class="table-light">
-                        @foreach($dailyInventoryReport as $dailyRow)
-                            <th>Tồn đầu</th>
-                            <th>Nhập</th>
-                            <th>Xuất</th>
-                            <th>Tồn cuối</th>
-                        @endforeach
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <th class="bg-light">Tổng tồn kho</th>
-                        @foreach($dailyInventoryReport as $dailyRow)
-                            <td>{{ number_format($dailyRow['opening']) }}</td>
-                            <td class="text-success">{{ number_format($dailyRow['import']) }}</td>
-                            <td class="text-danger">{{ number_format($dailyRow['export']) }}</td>
-                            <td class="fw-bold">{{ number_format($dailyRow['closing']) }}</td>
-                        @endforeach
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
- 
-     
-    
-
-
-
 {{-- Recent packed orders --}}
 @if($recentPacked->isNotEmpty())
 <div class="card shadow-sm border-0">

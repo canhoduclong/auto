@@ -5,6 +5,7 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\Request;
+use Illuminate\Session\TokenMismatchException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -38,6 +39,18 @@ return Application::configure(basePath: dirname(__DIR__))
     //})
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->render(function (\Throwable $exception, Request $request) {
+            if ($exception instanceof TokenMismatchException) {
+                if ($request->expectsJson()) {
+                    return response()->json([
+                        'message' => 'Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.',
+                    ], 419);
+                }
+
+                return redirect()
+                    ->route('login')
+                    ->with('error', 'Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.');
+            }
+
             $isForbidden = $exception instanceof AuthorizationException
                 || ($exception instanceof HttpExceptionInterface && $exception->getStatusCode() === 403);
 

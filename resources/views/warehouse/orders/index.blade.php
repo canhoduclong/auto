@@ -743,7 +743,6 @@
 
     <div class="wh-order-nav-area mb-4">
         <div class="d-flex flex-wrap gap-2 align-items-center">
-            <span class="fw-bold text-muted me-1"><i class="bi bi-list-ol me-1"></i>Điều hướng nhanh:</span>
             @foreach($orders->sortBy('daily_sequence') as $navOrder)
                 @php
                     $isPackedNav = in_array((string)$navOrder->status, $packedLikeStatuses, true);

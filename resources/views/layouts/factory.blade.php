@@ -55,7 +55,7 @@ use App\Models\Setting;
 
     @include('layouts.partials.site_footer')
 
-     
+
 
     <script src="{{ asset('js/jquery-3.3.1.min.js') }}"></script>
     <script src="{{ asset('js/bootstrap.min.js') }}"></script>
@@ -68,7 +68,7 @@ use App\Models\Setting;
     
     <script src="{{ asset('js/main.js') }}"></script>
 
- 
+    @include('layouts.partials.session_expiry_redirect')
 </body>
 </html>
 
@@ -79,4 +79,3 @@ use App\Models\Setting;
     
 </head>
 <body>
-     

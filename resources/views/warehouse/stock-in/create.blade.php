@@ -6,7 +6,8 @@
 <style>
     .form-section { background: #fff; border-radius: 12px; box-shadow: 0 4px 14px rgba(15,23,42,.07); padding: 24px 28px; margin-bottom: 24px; }
     .form-section h5 { font-weight: 700; color: #0f172a; border-bottom: 2px solid #e0f2fe; padding-bottom: 10px; margin-bottom: 18px; }
-    .stockin-items-scroll { max-height: 340px; overflow-y: auto; overflow-x: auto; padding-right: 4px; }
+    .stockin-items-scroll { max-height: 420px; overflow-y: auto; overflow-x: auto; padding-right: 4px; scrollbar-gutter: stable; }
+    .stockin-items-scroll thead th { position: sticky; top: 0; z-index: 2; }
     .stockin-items-head, .stockin-item-grid { min-width: 980px; display: grid; grid-template-columns: 4.3fr 1.2fr 1fr 1.7fr 2fr 1.3fr 36px; gap: 8px; align-items: center; }
     .stockin-items-head { font-size: .72rem; text-transform: uppercase; }
     .stockin-item-grid .line-total { text-align: right; white-space: nowrap; }
@@ -174,7 +175,7 @@
             </div>
         </div>
         <div id="itemsContainerIn">
-            <div class="table-responsive">
+            <div class="table-responsive stockin-items-scroll">
                 <table class="table table-bordered align-middle mb-0" style="min-width:1100px;">
                     <thead class="table-light align-middle">
                         <tr style="text-align:center;vertical-align:middle;">

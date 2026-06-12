@@ -88,6 +88,8 @@ Route::middleware('guest')->group(function () {
 
 
 Route::middleware(['auth', 'assigned'])->group(function () {
+    Route::get('/session/check', fn () => response()->json(['authenticated' => true]))
+        ->name('session.check');
 
     Route::get('/role-selection', [LayoutPreferenceController::class, 'show'])->name('role-selection.show');
     Route::post('/role-selection', [LayoutPreferenceController::class, 'store'])->name('role-selection.store');

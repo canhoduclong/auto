@@ -50,12 +50,12 @@
         {{-- <script src="{{ asset('assets/js/plugins/forms/styling/uniform.min.js') }}"></script> --}}
         {{-- <script> $('.form-input-styled').uniform(); </script> --}}
 
+        @include('layouts.partials.session_expiry_redirect')
         @stack('scripts')
 
     </div>
 
 </body>
 </html>
-
 
 

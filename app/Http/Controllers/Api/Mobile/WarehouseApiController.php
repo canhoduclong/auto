@@ -9,11 +9,12 @@ use App\Models\InventoryDocumentItem;
 use App\Models\Order;
 use App\Models\OrderHistory;
 use App\Models\OrderReturn;
-use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\TaskAssignment;
 use App\Models\WarehouseInventoryTransfer;
 use App\Models\WarehouseTransfer;
+use App\Models\Warehouse;
+use App\Services\WarehouseInventorySummaryService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -161,67 +162,44 @@ class WarehouseApiController extends BaseApiController
             ]);
         })->values();
 
-        $products = Product::with(['variants.inventories' => function ($q) use ($warehouseId) {
-            if ($warehouseId) {
-                $q->where('warehouse_id', $warehouseId);
-            }
-        }, 'variants.inventories.movements', 'variants.product'])
-            ->orderBy('name')
-            ->get();
-
-        $summaryRows = $products->map(function ($product) {
-            $variants = $product->variants
-                ->filter(fn ($variant) => $variant->inventories->isNotEmpty())
-                ->sortBy(fn ($variant) => mb_strtolower((string) ($variant->name ?? '')))
-                ->values();
-
-            $closing = (int) $variants->sum(fn ($variant) => (int) ($variant->snapshot_quantity ?? $variant->inventories->sum('quantity')));
-            $import = (int) $variants->sum(fn ($variant) => (int) $variant->inventories->sum(fn ($inv) => $inv->movements->where('quantity', '>', 0)->sum('quantity')));
-            $reserved = (int) $variants->sum(fn ($variant) => (int) ($variant->snapshot_reserved ?? $variant->inventories->sum('reserved_quantity')));
-            $export = (int) $variants->sum(fn ($variant) => (int) abs($variant->inventories->sum(fn ($inv) => $inv->movements->where('quantity', '<', 0)->sum('quantity'))));
-            $opening = (int) ($closing - $import + $export);
-
-            $variantRows = $variants->map(function ($variant) {
-                $vClosing = (int) ($variant->snapshot_quantity ?? $variant->inventories->sum('quantity'));
-                $vImport = (int) $variant->inventories->sum(fn ($inv) => $inv->movements->where('quantity', '>', 0)->sum('quantity'));
-                $vReserved = (int) ($variant->snapshot_reserved ?? $variant->inventories->sum('reserved_quantity'));
-                $vExport = (int) abs($variant->inventories->sum(fn ($inv) => $inv->movements->where('quantity', '<', 0)->sum('quantity')));
-                $vOpening = (int) ($vClosing - $vImport + $vExport);
-
-                return [
-                    'name' => (string) ($variant->name ?: ($variant->product?->name ?? 'Biến thể')),
-                    'unit' => (string) ($variant->product?->unit_label ?? '—'),
-                    'opening' => $vOpening,
-                    'import' => $vImport,
-                    'reserved' => $vReserved,
-                    'export' => $vExport,
-                    'closing' => $vClosing,
-                ];
-            })->filter(fn ($row) => (int) $row['closing'] > 0)->values();
-
-            $unitLabels = $variantRows
-                ->pluck('unit')
-                ->filter(fn ($unit) => $unit !== '—' && $unit !== '')
-                ->unique()
-                ->values();
-            $productUnit = $unitLabels->count() === 1 ? (string) $unitLabels->first() : ($unitLabels->count() > 1 ? 'Nhiều DVT' : '—');
-
-            return [
-                'product_id' => (int) $product->id,
-                'name' => (string) $product->name,
-                'unit' => $productUnit,
-                'variant_count' => (int) $variants->count(),
-                'opening' => $opening,
-                'import' => $import,
-                'reserved' => $reserved,
-                'export' => $export,
-                'closing' => $closing,
-                'variants' => $variantRows,
-            ];
-        })
+        $inventorySummaryService = app(WarehouseInventorySummaryService::class);
+        $currentInventorySummary = $inventorySummaryService->build($warehouseId);
+        $summaryRows = $currentInventorySummary['rows']
             ->filter(fn ($row) => (int) $row['closing'] > 0)
-            ->sortBy(fn ($row) => mb_strtolower((string) $row['name']))
+            ->map(function ($row) {
+                $row['variants'] = $row['variants']->filter(fn ($variant) => (int) $variant['closing'] > 0)->values();
+
+                return $row;
+            })
             ->values();
+        $otherWarehouseSummaries = $warehouseId
+            ? Warehouse::query()
+                ->whereKeyNot($warehouseId)
+                ->where('status', true)
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->map(function (Warehouse $warehouse) use ($inventorySummaryService) {
+                    $summary = $inventorySummaryService->build((int) $warehouse->id);
+                    $rows = $summary['rows']
+                        ->filter(fn ($row) => (int) $row['closing'] > 0)
+                        ->map(function ($row) {
+                            $row['variants'] = $row['variants']->filter(fn ($variant) => (int) $variant['closing'] > 0)->values();
+
+                            return $row;
+                        })
+                        ->values();
+
+                    return [
+                        'warehouse_id' => (int) $warehouse->id,
+                        'warehouse_name' => (string) $warehouse->name,
+                        'title' => 'Tồn kho của kho khác (' . $warehouse->name . ')',
+                        'totals' => $summary['totals'],
+                        'rows' => $rows,
+                    ];
+                })
+                ->filter(fn ($summary) => $summary['rows']->isNotEmpty())
+                ->values()
+            : collect();
 
         $recentPacked = $applyWarehouseScope(Order::with('customer:id,name'))
             ->whereIn('status', $packedStatuses)
@@ -282,6 +260,7 @@ class WarehouseApiController extends BaseApiController
                 ],
                 'rows' => $summaryRows,
             ],
+            'other_warehouse_summaries' => $otherWarehouseSummaries,
             'recent_packed' => $recentPacked,
         ]);
     }

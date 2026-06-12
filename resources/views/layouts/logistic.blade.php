@@ -68,7 +68,7 @@ use App\Models\Setting;
     
     <script src="{{ asset('js/main.js') }}"></script>
 
- 
+    @include('layouts.partials.session_expiry_redirect')
 </body>
 </html>
 
@@ -79,4 +79,3 @@ use App\Models\Setting;
     
 </head>
 <body>
-     

@@ -441,6 +441,7 @@
             }
         });
     </script>
+    @include('layouts.partials.session_expiry_redirect')
     @stack('scripts')
 </body>
 </html>
