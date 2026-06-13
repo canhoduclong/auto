@@ -1438,11 +1438,13 @@ class OrderController extends Controller
             $orderInsert = $this->filterExistingColumns('orders', [
                 'customer_id' => $orderData['customer_id'] ?? null,
                 'user_id' => $orderData['user_id'] ?? auth()->id(),
+                'shipper_id' => $orderData['shipper_id'] ?? $customer?->default_shipper_id,
                 'warehouse_can_adjust' => (bool) ($orderData['warehouse_can_adjust'] ?? false),
                 'recipient_name' => $orderData['recipient_name'] ?? null,
                 'recipient_phone' => $orderData['recipient_phone'] ?? null,
                 'recipient_address' => $orderData['recipient_address'] ?? null,
                 'delivery_time' => $orderData['delivery_time'] ?? null,
+                'delivery_date' => $orderData['delivery_date'] ?? now()->addDay()->toDateString(),
                 'note' => $orderData['note'] ?? null,
                 'status' => $orderData['status'] ?? OrderStatus::Pending->value,
                 'payment_status' => $orderData['payment_status'] ?? PaymentStatus::Unpaid->value,
@@ -1495,6 +1497,16 @@ class OrderController extends Controller
 
             $order->refresh();
             $this->logOrderHistory($order, 'create_order', null, (string) $order->status, 'Sale tao don hang');
+
+            if ($order->shipper_id) {
+                $this->logOrderHistory(
+                    $order,
+                    'shipper_auto_assigned',
+                    (string) $order->status,
+                    (string) $order->status,
+                    'Tự động gán shipper cố định của khách hàng'
+                );
+            }
 
             if ($customer && auth()->check()) {
                 app(CustomerPriorityService::class)->onOrderCreated($customer, $order, (int) auth()->id());

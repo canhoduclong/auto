@@ -77,6 +77,12 @@ class ApprovalService
 
             if (!$workflow || $workflow->steps->isEmpty()) {
                 $order->update(['status' => OrderStatus::Approved->value]);
+                if ($order->shipper_id) {
+                    app(ShipperAssignmentService::class)->publishDailySchedule(
+                        (int) $order->shipper_id,
+                        $order->delivery_date ?? now()->addDay(),
+                    );
+                }
                 return;
             }
 
@@ -92,6 +98,12 @@ class ApprovalService
 
             if ($approverSteps->isEmpty()) {
                 $order->update(['status' => OrderStatus::Approved->value]);
+                if ($order->shipper_id) {
+                    app(ShipperAssignmentService::class)->publishDailySchedule(
+                        (int) $order->shipper_id,
+                        $order->delivery_date ?? now()->addDay(),
+                    );
+                }
                 return;
             }
 
@@ -170,6 +182,15 @@ class ApprovalService
 
             if ((bool) ($order->is_return_order ?? false)) {
                 return;
+            }
+
+            if ($order->shipper_id) {
+                app(ShipperAssignmentService::class)->publishDailySchedule(
+                    (int) $order->shipper_id,
+                    $order->delivery_date ?? now()->addDay(),
+                    (int) $user->id,
+                    'approval',
+                );
             }
 
             if ($order->warehouse_id) {

@@ -98,6 +98,32 @@
         border-radius: 12px;
         padding: 12px 16px;
         box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+        overflow-x: auto;
+    }
+    .wh-order-nav-track {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        width: max-content;
+        min-width: 100%;
+    }
+    .wh-order-nav-group {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex: 0 0 auto;
+    }
+    .wh-order-nav-time {
+        width: 64px;
+        min-width: 64px;
+        min-height: 40px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid #6366f1;
+        font-weight: 700;
+        color: #4338ca;
+        background: #fff;
     }
     .wh-order-nav-pill {
         display: inline-flex;
@@ -161,24 +187,57 @@
 @php
     $receivedTransfers = $transfers->where('status', 'received_completed');
     $pendingTransfers = $transfers->where('status', 'delivered_waiting_receive');
+    $extractDeliveryHour = static function ($deliveryTime): ?int {
+        if (!preg_match('/^\s*(\d{1,2})(?=\D|$)/u', trim((string) $deliveryTime), $matches)) {
+            return null;
+        }
+
+        $hour = (int) $matches[1];
+        return $hour >= 0 && $hour <= 23 ? $hour : null;
+    };
+    $timelineTransfers = $transfers->groupBy(function ($transfer) use ($extractDeliveryHour) {
+        $deliveryTime = $transfer->order?->delivery_time ?: $transfer->order?->customer?->delivery_time;
+        return $extractDeliveryHour($deliveryTime);
+    })->forget(null)->sortKeys();
+    $timelineHours = $timelineTransfers->keys();
 @endphp
 
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 alert alert-info py-2 mb-3">
+    <span>
+        <i class="bi bi-calendar-event me-1"></i>
+        Ngày giao <strong>{{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}</strong>
+    </span>
+    <form method="GET" class="d-flex gap-2">
+        <input type="date" name="date" value="{{ $selectedDate }}" class="form-control form-control-sm">
+        <button class="btn btn-sm btn-primary" type="submit">Xem</button>
+    </form>
+</div>
+
 <div class="wh-order-nav-area mb-4">
-    <div class="d-flex flex-wrap gap-2 align-items-center">
-        <span class="fw-bold text-muted me-1"><i class="bi bi-list-ol me-1"></i>Điều hướng nhanh:</span>
-        @foreach($transfers as $navTransfer)
-            @php
-                $sequenceNumber = $navTransfer->sequence_number ?? $loop->iteration;
-                $isReceived = $navTransfer->status === 'received_completed';
-            @endphp
-            <a href="javascript:void(0);"
-               onclick="scrollToTransferCard({{ $navTransfer->id }}, this)"
-               class="wh-order-nav-pill {{ $isReceived ? 'is-packed' : 'is-unpacked' }}"
-               id="nav-pill-{{ $navTransfer->id }}"
-               title="{{ $navTransfer->order?->customer?->name ?? 'Đơn hàng' }}">
-                {{ $sequenceNumber }}
-            </a>
-        @endforeach
+    <div class="fw-bold text-muted mb-2"><i class="bi bi-clock-history me-1"></i>Điều hướng theo giờ giao</div>
+    <div class="wh-order-nav-track">
+        @forelse($timelineHours as $hour)
+            <div class="wh-order-nav-group">
+                <span class="wh-order-nav-time">{{ $hour }}:00</span>
+                <div class="d-flex flex-nowrap gap-2">
+                    @foreach($timelineTransfers->get($hour, collect()) as $navTransfer)
+                        @php
+                            $sequenceNumber = $navTransfer->sequence_number ?? $loop->iteration;
+                            $isReceived = $navTransfer->status === 'received_completed';
+                        @endphp
+                        <a href="javascript:void(0);"
+                           onclick="scrollToTransferCard({{ $navTransfer->id }}, this)"
+                           class="wh-order-nav-pill {{ $isReceived ? 'is-packed' : 'is-unpacked' }}"
+                           id="nav-pill-{{ $navTransfer->id }}"
+                           title="{{ $navTransfer->order?->customer?->name ?? 'Đơn hàng' }}">
+                            {{ $sequenceNumber }}
+                        </a>
+                    @endforeach
+                </div>
+            </div>
+        @empty
+            <span class="text-muted small">Không có đơn có giờ giao.</span>
+        @endforelse
     </div>
 </div>
 
@@ -238,12 +297,12 @@ document.addEventListener('DOMContentLoaded', function () {
         form.addEventListener('submit', function (event) {
             event.preventDefault();
 
-            const accepted = window.confirm('Xác nhận hoàn lại phiếu điều chuyển này trước khi nhập kho?');
+            const accepted = window.confirm('Từ chối tiếp nhận phiếu điều chuyển này? Phiếu sẽ bị hủy và không nhập hàng vào kho.');
             if (!accepted) {
                 return;
             }
 
-            const reason = window.prompt('Nhập lý do hoàn lại (không bắt buộc):', '');
+            const reason = window.prompt('Nhập lý do từ chối (không bắt buộc):', '');
             if (reason === null) {
                 return;
             }

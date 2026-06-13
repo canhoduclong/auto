@@ -109,7 +109,7 @@ class WarehouseApiController extends BaseApiController
             ],
             [
                 'key' => 'incoming_transfers',
-                'label' => 'Đơn điều chuyển đến',
+                'label' => 'Tiếp nhận Đơn',
                 'total' => ($stats['transfers_incoming'] ?? 0) + ($stats['transfers_completed'] ?? 0),
                 'done' => $stats['transfers_completed'] ?? 0,
                 'route_key' => 'incoming_transfers',
@@ -607,6 +607,7 @@ class WarehouseApiController extends BaseApiController
             ],
             'shipping_address' => (string) ($order->recipient_address ?: $order->customer?->address ?: ''),
             'delivery_time' => (string) ($order->delivery_time ?: $order->customer?->delivery_time ?: ''),
+            'delivery_date' => optional($order->delivery_date)->toDateString(),
             'created_at' => optional($order->created_at)->toIso8601String(),
             'updated_at' => optional($order->updated_at)->toIso8601String(),
             'total' => (float) ($order->total ?? 0),

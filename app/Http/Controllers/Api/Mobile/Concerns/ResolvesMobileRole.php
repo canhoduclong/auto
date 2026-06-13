@@ -84,6 +84,7 @@ trait ResolvesMobileRole
                 ['key' => 'dashboard', 'label' => 'Dashboard', 'route' => '/shipper', 'api' => '/shipper/delivery-schedules', 'icon' => 'dashboard'],
                 ['key' => 'my_orders', 'label' => 'Đơn hàng', 'route' => '/shipper/my-orders', 'api' => '/shipper/my-orders', 'icon' => 'local_shipping'],
                 ['key' => 'available_orders', 'label' => 'Đơn có thể nhận', 'route' => '/shipper/available', 'api' => '/shipper/available-orders', 'icon' => 'inventory_2'],
+                ['key' => 'warehouse_transfers', 'label' => 'Điều chuyển kho', 'route' => '/shipper/warehouse-transfers', 'api' => '/screens/shipper/warehouse_transfers', 'icon' => 'swap_horiz'],
                 ['key' => 'delivery_schedules', 'label' => 'Thống kê', 'route' => '/shipper/delivery-schedules', 'api' => '/shipper/delivery-schedules', 'icon' => 'route'],
             ];
         }
@@ -92,6 +93,7 @@ trait ResolvesMobileRole
             return [
                 ['key' => 'dashboard', 'label' => 'Dashboard Giao hàng', 'route' => '/shipper', 'api' => '/shipper/delivery-schedules', 'icon' => 'dashboard'],
                 ['key' => 'manage_assignments', 'label' => 'Điều phối đơn hàng', 'route' => '/shipper/manage-assignments', 'api' => '/screens/manager_shipper/manage_assignments', 'icon' => 'route'],
+                ['key' => 'warehouse_transfers', 'label' => 'Điều chuyển kho', 'route' => '/shipper/warehouse-transfers', 'api' => '/screens/manager_shipper/warehouse_transfers', 'icon' => 'swap_horiz'],
                 ['key' => 'shipper_team', 'label' => 'Quản lý Ship', 'route' => '/shipper/team-report', 'api' => '/screens/manager_shipper/shipper_team', 'icon' => 'local_shipping'],
                 ['key' => 'manage_fees', 'label' => 'Quản lý phí ship', 'route' => '/shipper/manage-fees', 'api' => '/screens/manager_shipper/manage_fees', 'icon' => 'payments'],
                 ['key' => 'shipping_fee_report', 'label' => 'Báo cáo chi phí ship', 'route' => '/shipper/shipping-fee-report', 'api' => '/screens/manager_shipper/shipping_fee_report', 'icon' => 'receipt_long'],
@@ -106,7 +108,7 @@ trait ResolvesMobileRole
                 ['group' => 'Xử lý chính', 'key' => 'dashboard', 'label' => 'Dashboard', 'route' => '/warehouse', 'api' => '/warehouse/dashboard', 'icon' => 'dashboard'],
                 ['group' => 'Xử lý chính', 'key' => 'orders', 'label' => 'Đơn cần đóng gói', 'route' => '/warehouse/orders', 'api' => '/warehouse/orders', 'icon' => 'inventory_2'],
                 ['group' => 'Xử lý chính', 'key' => 'supplier_prices', 'label' => 'Giá thu mua', 'route' => '/warehouse/supplier-prices', 'api' => '/screens/warehouse/supplier_prices', 'icon' => 'payments'],
-                ['group' => 'Xử lý chính', 'key' => 'incoming_transfers', 'label' => 'Nhận đơn chuyển tới', 'route' => '/warehouse/transfers/incoming', 'api' => '/screens/warehouse/incoming_transfers', 'icon' => 'assignment_returned'],
+                ['group' => 'Xử lý chính', 'key' => 'incoming_transfers', 'label' => 'Tiếp nhận Đơn', 'route' => '/warehouse/transfers/incoming', 'api' => '/screens/warehouse/incoming_transfers', 'icon' => 'assignment_returned'],
                 ['group' => 'Xử lý chính', 'key' => 'incoming_inventory_transfers', 'label' => 'Nhận hàng chuyển tới', 'route' => '/warehouse/inventory-transfers/incoming', 'api' => '/screens/warehouse/incoming_inventory_transfers', 'icon' => 'move_to_inbox'],
                 ['group' => 'Xử lý chính', 'key' => 'stock_in_create', 'label' => 'Nhập kho', 'route' => '/warehouse/stock-in/create', 'api' => '/screens/warehouse/stock_in_create', 'icon' => 'add_box'],
                 ['group' => 'Xử lý chính', 'key' => 'returns', 'label' => 'Đơn trả về', 'route' => '/warehouse/returns', 'api' => '/warehouse/returns', 'icon' => 'assignment_return'],

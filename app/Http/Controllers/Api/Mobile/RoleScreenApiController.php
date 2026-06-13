@@ -29,6 +29,7 @@ class RoleScreenApiController extends BaseApiController
         return match ($layout) {
             'warehouse' => $this->warehouse($request, $key),
             'manager_shipper' => $this->managerShipper($request, $key),
+            'shipper' => $this->shipper($request, $key),
             'sale' => $this->sale($request, $key),
             'accounting' => $this->accounting($request, $key),
             'ceo' => $this->ceo($request, $key),
@@ -49,7 +50,7 @@ class RoleScreenApiController extends BaseApiController
                 Order::STATUS_READY_TO_SHIP,
             ], $warehouseId, $date),
             'supplier_prices' => $this->supplierPrices(),
-            'incoming_transfers' => $this->incomingOrderTransfers($warehouseId),
+            'incoming_transfers' => $this->incomingOrderTransfers($warehouseId, $date),
             'incoming_inventory_transfers' => $this->incomingInventoryTransfers($warehouseId),
             'stock_in_create' => $this->documents('import', $warehouseId),
             'order_transfers' => $this->orderTransfers($warehouseId),
@@ -64,9 +65,11 @@ class RoleScreenApiController extends BaseApiController
     private function managerShipper(Request $request, string $key): JsonResponse
     {
         $today = now()->toDateString();
+        $deliveryDate = (string) $request->query('date', now()->addDay()->toDateString());
 
         return match ($key) {
-            'manage_assignments' => $this->managerAssignments($today),
+            'manage_assignments' => $this->managerAssignments($deliveryDate),
+            'warehouse_transfers' => $this->shipperWarehouseTransfers($request, (string) $request->query('date', $today)),
             'shipper_team', 'team_report' => $this->ok([
                 'cards' => [
                     ['label' => 'Tổng shipper', 'value' => User::query()->whereHas('roles', fn ($q) => $q->whereIn('name', ['shipper', 'manager_shipper']))->count()],
@@ -109,6 +112,14 @@ class RoleScreenApiController extends BaseApiController
                 'items' => $this->latestOrders()->take(20)->values(),
             ]),
             default => $this->fail('Man hinh Shipper Manager khong duoc ho tro.', 404),
+        };
+    }
+
+    private function shipper(Request $request, string $key): JsonResponse
+    {
+        return match ($key) {
+            'warehouse_transfers' => $this->shipperWarehouseTransfers($request, (string) $request->query('date', now()->toDateString())),
+            default => $this->fail('Man hinh shipper khong duoc ho tro.', 404),
         };
     }
 
@@ -556,15 +567,76 @@ class RoleScreenApiController extends BaseApiController
         return $this->paginated($items);
     }
 
-    private function incomingOrderTransfers(?int $warehouseId): JsonResponse
+    private function incomingOrderTransfers(?int $warehouseId, string $date): JsonResponse
     {
-        $query = WarehouseTransfer::query()
+        $transfers = WarehouseTransfer::query()
             ->with(['order.customer', 'sourceWarehouse', 'targetWarehouse', 'shipper'])
             ->when($warehouseId, fn ($q) => $q->where('target_warehouse_id', $warehouseId))
-            ->where('status', WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE)
-            ->latest('delivered_at');
+            ->whereHas('order', fn ($q) => $q->forDeliveryDate($date))
+            ->whereIn('status', [WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE, WarehouseTransfer::STATUS_RECEIVED_COMPLETED])
+            ->latest('delivered_at')
+            ->get();
 
-        return $this->paginated($query->paginate(20));
+        return $this->transferScreenResponse($transfers, $date);
+    }
+
+    private function shipperWarehouseTransfers(Request $request, string $date): JsonResponse
+    {
+        $user = $request->user();
+        $transfers = WarehouseTransfer::query()
+            ->with(['order.customer', 'sourceWarehouse', 'targetWarehouse', 'shipper'])
+            ->when(!$user->hasRole('admin') && !$user->hasRole('manager_shipper'), fn ($q) => $q->where('shipper_id', $user->id))
+            ->whereIn('status', [
+                WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
+                WarehouseTransfer::STATUS_IN_TRANSIT,
+                WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
+                WarehouseTransfer::STATUS_RECEIVED_COMPLETED,
+            ])
+            ->whereHas('order', fn ($q) => $q->forDeliveryDate($date))
+            ->latest('id')
+            ->get()
+            ->unique('order_id')
+            ->values();
+
+        return $this->transferScreenResponse($transfers, $date);
+    }
+
+    private function transferScreenResponse($transfers, string $date): JsonResponse
+    {
+        $items = $transfers->values()->map(function (WarehouseTransfer $transfer, int $index) {
+            $deliveryTime = $transfer->order?->delivery_time ?: $transfer->order?->customer?->delivery_time;
+
+            return [
+                'id' => (int) $transfer->id,
+                'title' => (string) ($transfer->order?->customer?->name ?? 'Khách hàng'),
+                'subtitle' => trim(implode(' -> ', array_filter([$transfer->sourceWarehouse?->name, $transfer->targetWarehouse?->name]))),
+                'status' => (string) $transfer->status,
+                'sequence' => $index + 1,
+                'delivery_time' => (string) ($deliveryTime ?? ''),
+                'delivery_hour' => $this->extractDeliveryHour($deliveryTime),
+                'order_code' => (string) ($transfer->order?->code ?? ''),
+                'shipper_name' => (string) ($transfer->shipper?->name ?? ''),
+                'updated_at' => optional($transfer->updated_at)->toIso8601String(),
+            ];
+        });
+
+        return $this->ok([
+            'selected_date' => $date,
+            'items' => $items,
+            'timeline' => $items->whereNotNull('delivery_hour')->groupBy('delivery_hour')->sortKeys()->map(
+                fn ($group, $hour) => ['hour' => (int) $hour, 'orders' => $group->values()]
+            )->values(),
+        ]);
+    }
+
+    private function extractDeliveryHour($deliveryTime): ?int
+    {
+        if (!preg_match('/^\s*(\d{1,2})(?=\D|$)/u', trim((string) $deliveryTime), $matches)) {
+            return null;
+        }
+
+        $hour = (int) $matches[1];
+        return $hour >= 0 && $hour <= 23 ? $hour : null;
     }
 
     private function orderTransfers(?int $warehouseId): JsonResponse
@@ -623,11 +695,9 @@ class RoleScreenApiController extends BaseApiController
             ->map(fn (User $shipper) => ['id' => (int) $shipper->id, 'name' => (string) $shipper->name])
             ->values();
         $orders = Order::query()
-            ->with(['customer:id,name,phone,address', 'shipper:id,name'])
+            ->with(['customer:id,name,phone,address,default_shipper_id', 'customer.defaultShipper:id,name', 'shipper:id,name'])
             ->whereIn('status', $statuses)
-            ->where(function ($query) use ($date) {
-                $query->whereDate('created_at', $date)->orWhereDate('updated_at', $date);
-            })
+            ->forDeliveryDate($date)
             ->orderByRaw('CASE WHEN shipper_id IS NULL THEN 0 ELSE 1 END')
             ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
             ->orderBy('daily_sequence')
@@ -649,7 +719,13 @@ class RoleScreenApiController extends BaseApiController
                 'total' => (float) ($order->total ?? 0),
                 'shipper_id' => $order->shipper_id ? (int) $order->shipper_id : null,
                 'shipper_name' => (string) ($order->shipper?->name ?? ''),
+                'customer_id' => $order->customer_id ? (int) $order->customer_id : null,
+                'customer_address' => (string) ($order->customer?->address ?? ''),
+                'daily_sequence' => $order->daily_sequence ? (int) $order->daily_sequence : null,
+                'default_shipper_id' => $order->customer?->default_shipper_id ? (int) $order->customer->default_shipper_id : null,
+                'default_shipper_name' => (string) ($order->customer?->defaultShipper?->name ?? ''),
                 'delivery_time' => (string) ($order->delivery_time ?? ''),
+                'delivery_date' => optional($order->delivery_date)->toDateString(),
                 'available_shippers' => $shippers,
                 'updated_at' => optional($order->updated_at)->toIso8601String(),
             ])->values(),
@@ -717,6 +793,7 @@ class RoleScreenApiController extends BaseApiController
             'accounting' => $user->hasRole('accounting') || $user->hasRole('accountant') || $user->hasRole('admin'),
             'ceo' => $user->hasRole('ceo') || $user->hasRole('admin'),
             'manager_shipper' => $user->hasRole('manager_shipper') || $user->hasRole('admin'),
+            'shipper' => $user->hasRole('shipper') || $user->hasRole('ship') || $user->hasRole('manager_shipper') || $user->hasRole('admin'),
             default => false,
         };
 

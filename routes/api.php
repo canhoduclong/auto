@@ -40,6 +40,7 @@ Route::prefix('mobile')->group(function () {
             Route::post('/orders/{order}/return', [ShipperApiController::class, 'returnOrder']);
             Route::post('/assignments/{order}/assign/{shipper}', [ShipperApiController::class, 'assignOrder']);
             Route::post('/assignments/{order}/unassign', [ShipperApiController::class, 'unassignOrder']);
+            Route::post('/customers/{customer}/default-shipper', [ShipperApiController::class, 'updateCustomerDefaultShipper']);
             Route::post('/assignments/create-schedules', [ShipperApiController::class, 'createDeliverySchedules']);
             Route::get('/my-orders', [ShipperApiController::class, 'myOrders']);
             Route::get('/history', [ShipperApiController::class, 'history']);

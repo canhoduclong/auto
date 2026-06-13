@@ -1,6 +1,9 @@
 @php
     $order = $transfer->order;
-    $sequenceNumber = $order->daily_sequence ?? '—';
+    $sequenceNumber = $transfer->sequence_number ?? $order->daily_sequence ?? '—';
+    $deliveryTime = $order?->delivery_time ?: $order?->customer?->delivery_time ?: '—';
+    $deliveryDate = optional($order?->delivery_date)->format('d/m/Y') ?: '—';
+    $saleName = $order?->user?->name ?: $order?->customer?->currentOwner?->name ?: '—';
     $status = $status ?? match($transfer->status) {
         'pending_shipper_pickup' => 'pending',
         'in_transit' => 'transit',
@@ -9,37 +12,25 @@
         default => 'other',
     };
 @endphp
-<div class="card border-0 shadow-sm h-100 js-transfer-card" id="transfer-card-{{ $transfer->id }}">
+<div class="card border border-2 shadow-sm js-transfer-card wh-transfer-{{ $status }}" id="transfer-card-{{ $transfer->id }}">
     <div class="card-header bg-white d-flex justify-content-between align-items-center gap-2">
         <div class="d-flex align-items-center">
-            <div class="transfer-nav-pill {{
-                $status === 'pending' ? 'status-pending' :
-                ($status === 'transit' ? 'status-transit' :
-                ($status === 'waiting' ? 'status-waiting' :
-                ($status === 'completed' ? 'status-completed' : 'status-other')))
-            }} me-2" style="width:2rem;height:2rem;font-size:1rem;">{{ $sequenceNumber }}</div>
+            <div class="transfer-nav-pill wh-transfer-{{ $status }} me-2" style="width:2rem;height:2rem;font-size:1rem;">{{ $sequenceNumber }}</div>
             <div>
-                <div class="fw-semibold">{{ $order?->code ?? ('#' . $transfer->order_id) }}</div>
-                <div class="small text-muted">{{ $order?->customer?->name ?? 'Khách hàng' }}</div>
+                <div class="fw-semibold">{{ $order?->customer?->name ?? 'Khách hàng' }}</div>
+                <div class="small text-muted">Sale: <strong class="text-dark">{{ $saleName }}</strong></div>
             </div>
         </div>
-        <span class="badge {{
-            $status === 'pending' ? 'bg-success' :
-            ($status === 'transit' ? 'bg-warning text-dark' :
-            ($status === 'waiting' ? 'bg-info text-dark' : 'bg-light text-dark'))
-        }}">
-            {{
-                $status === 'pending' ? 'Cần nhận' :
-                ($status === 'transit' ? 'Đang vận chuyển' :
-                ($status === 'waiting' ? 'Đã giao, chờ xác nhận' : ''))
-            }}
-        </span>
+        <div class="fw-bold text-primary text-nowrap">
+            <i class="bi bi-clock me-1"></i>{{ $deliveryTime }}
+        </div>
     </div>
     <div class="card-body">
         <div class="small text-muted mb-1">Kho gửi: <strong class="text-dark">{{ $transfer->sourceWarehouse?->name ?? '—' }}</strong></div>
         <div class="small text-muted mb-1">Kho nhận: <strong class="text-dark">{{ $transfer->targetWarehouse?->name ?? '—' }}</strong></div>
         <div class="small text-muted mb-1">Shipper phụ trách: <strong class="text-dark">{{ $transfer->shipper?->name ?? '—' }}</strong></div>
         <div class="small text-muted mb-2">KL đóng gói: <strong class="text-dark">{{ $transfer->packed_total_weight !== null ? number_format((float) $transfer->packed_total_weight, 3, ',', '.') . ' kg' : '—' }}</strong></div>
+        <div class="small text-muted mb-2">Ngày lên đơn: <strong class="text-dark">{{ optional($order?->created_at)->format('d/m/Y') ?: '—' }}</strong> · Ngày giao: <strong class="text-primary">{{ $deliveryDate }}</strong></div>
         <div class="border-top pt-2 mt-2">
             <div class="small fw-semibold mb-1">Sản phẩm</div>
             @foreach($order?->items ?? [] as $item)
@@ -47,6 +38,9 @@
                     - {{ $item->variant?->name ?? $item->product?->name ?? 'Sản phẩm' }} (SL: {{ (int) ($item->quantity ?? 0) }})
                 </div>
             @endforeach
+        </div>
+        <div class="small text-muted border-top pt-2 mt-2">
+            Mã đơn: <strong class="text-dark">{{ $order?->code ?? ('#' . $transfer->order_id) }}</strong>
         </div>
         @if($transfer->delivery_proof_image)
             <div class="border-top pt-2 mt-2">
@@ -56,6 +50,15 @@
         @endif
     </div>
     <div class="card-footer bg-white border-top">
+        <div class="mb-2">
+            <span class="wh-transfer-status-badge wh-transfer-{{ $status }}">
+                {{
+                    $status === 'pending' ? 'Cần nhận' :
+                    ($status === 'transit' ? 'Đang vận chuyển' :
+                    ($status === 'waiting' ? 'Giao kho' : 'Kho đã nhận'))
+                }}
+            </span>
+        </div>
         @if($status === 'pending')
             <form method="POST" action="{{ route('shipper.warehouse-transfers.pickup', $transfer) }}" class="d-grid gap-2 js-pickup-form">
                 @csrf

@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers\Api\Mobile;
 
+use App\Services\ShipperAssignmentService;
 use App\Http\Controllers\ShipperDashboardController;
 use App\Models\MobileLocationPing;
+use App\Models\Customer;
 use App\Models\Order;
 use App\Models\OrderHistory;
 use App\Models\OrderReturn;
@@ -68,10 +70,7 @@ class ShipperApiController extends BaseApiController
             ->where(function ($query) {
                 $this->constrainConfirmedDeliverySchedule($query);
             })
-            ->where(function ($query) use ($selectedDate) {
-                $query->whereDate('updated_at', $selectedDate)
-                    ->orWhereDate('created_at', $selectedDate);
-            })
+            ->forDeliveryDate($selectedDate)
             ->tap(function ($query) {
                 $this->constrainNoActiveWarehouseTransfer($query);
             })
@@ -93,10 +92,7 @@ class ShipperApiController extends BaseApiController
             ->with(['customer:id,name,phone,address', 'items.product:id,name,unit', 'items.variant:id,name,sku,size,product_id'])
             ->where('shipper_id', $userId)
             ->where('status', Order::STATUS_DELIVERING)
-            ->where(function ($query) use ($selectedDate) {
-                $query->whereDate('updated_at', $selectedDate)
-                    ->orWhereDate('created_at', $selectedDate);
-            })
+            ->forDeliveryDate($selectedDate)
             ->tap(function ($query) {
                 $this->constrainNoActiveWarehouseTransfer($query);
             })
@@ -257,6 +253,9 @@ class ShipperApiController extends BaseApiController
         }
         $previous = $order->shipper;
         $order->update(['shipper_id' => $shipper->id]);
+        if ($order->customer && !$order->customer->default_shipper_id) {
+            $order->customer->update(['default_shipper_id' => $shipper->id]);
+        }
         OrderHistory::query()->create([
             'order_id' => $order->id,
             'action' => $previous ? 'shipper_reassigned' : 'shipper_assigned',
@@ -266,6 +265,12 @@ class ShipperApiController extends BaseApiController
             'status_after' => $order->status,
             'note' => 'Điều phối mobile: ' . ($previous?->name ? $previous->name . ' -> ' : '') . $shipper->name,
         ]);
+        app(ShipperAssignmentService::class)->publishDailySchedule(
+            (int) $shipper->id,
+            $order->delivery_date ?? now()->addDay(),
+            (int) $request->user()->id,
+            'manager_shipper',
+        );
 
         return $this->ok(null, 'Da dieu phoi don cho ' . $shipper->name);
     }
@@ -287,20 +292,54 @@ class ShipperApiController extends BaseApiController
             'status_after' => $order->status,
             'note' => 'Gỡ điều phối mobile khỏi ' . ($previous?->name ?? 'shipper'),
         ]);
+        if ($previous) {
+            app(ShipperAssignmentService::class)->publishDailySchedule(
+                (int) $previous->id,
+                $order->delivery_date ?? now()->addDay(),
+                (int) $request->user()->id,
+                'manager_shipper',
+            );
+        }
 
         return $this->ok(null, 'Da go dieu phoi don');
+    }
+
+    public function updateCustomerDefaultShipper(Request $request, Customer $customer): JsonResponse
+    {
+        $this->ensureManagerShipperRole($request);
+        $validated = $request->validate([
+            'shipper_id' => ['required', 'integer', 'exists:users,id'],
+            'transfer_pending_orders' => ['nullable', 'boolean'],
+        ]);
+        $shipper = User::query()->findOrFail((int) $validated['shipper_id']);
+        if (!($shipper->hasRole('shipper') || $shipper->hasRole('manager_shipper'))) {
+            return $this->fail('Nguoi dung khong phai shipper.', 422);
+        }
+
+        $previousId = $customer->default_shipper_id ? (int) $customer->default_shipper_id : null;
+        DB::transaction(function () use ($request, $customer, $shipper, $previousId): void {
+            $customer->update(['default_shipper_id' => $shipper->id]);
+            if (!$request->boolean('transfer_pending_orders') || !$previousId || $previousId === (int) $shipper->id) {
+                return;
+            }
+            Order::query()
+                ->where('customer_id', $customer->id)
+                ->where('shipper_id', $previousId)
+                ->whereIn('status', $this->assignmentStatuses())
+                ->update(['shipper_id' => $shipper->id]);
+        });
+
+        return $this->ok(null, 'Da cap nhat shipper co dinh cho khach hang');
     }
 
     public function createDeliverySchedules(Request $request): JsonResponse
     {
         $this->ensureManagerShipperRole($request);
-        $date = now()->toDateString();
+        $date = (string) $request->input('date', now()->addDay()->toDateString());
         $groups = Order::query()
             ->whereNotNull('shipper_id')
             ->whereIn('status', $this->assignmentStatuses())
-            ->where(function ($query) use ($date) {
-                $query->whereDate('created_at', $date)->orWhereDate('updated_at', $date);
-            })
+            ->forDeliveryDate($date)
             ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
             ->orderBy('daily_sequence')
             ->orderBy('delivery_time')
@@ -601,10 +640,7 @@ class ShipperApiController extends BaseApiController
             ->with(['customer:id,name,phone,address', 'items.product:id,name,unit', 'items.variant:id,name,sku,size,product_id'])
             ->where('shipper_id', $shipperId)
             ->whereIn('status', $this->assignmentStatuses())
-            ->where(function ($query) use ($selectedDate) {
-                $query->whereDate('created_at', $selectedDate)
-                    ->orWhereDate('updated_at', $selectedDate);
-            })
+            ->forDeliveryDate($selectedDate)
             ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
             ->orderBy('daily_sequence', 'asc')
             ->orderBy('delivery_time', 'asc')
@@ -628,6 +664,7 @@ class ShipperApiController extends BaseApiController
             return [
                 'order_id' => (int) $order->id,
                 'daily_sequence' => $order->daily_sequence !== null ? (int) $order->daily_sequence : null,
+                'delivery_date' => optional($order->delivery_date)->toDateString(),
                 'delivery_time' => $order->delivery_time,
                 'updated_at' => optional($order->updated_at)->toDateTimeString(),
             ];
@@ -644,7 +681,7 @@ class ShipperApiController extends BaseApiController
         return OrderHistory::query()
             ->join('orders', 'orders.id', '=', 'order_histories.order_id')
             ->where('orders.shipper_id', $shipperId)
-            ->whereDate('order_histories.created_at', $selectedDate)
+            ->whereDate('orders.delivery_date', $selectedDate)
             ->whereIn('order_histories.action', ['schedule_created', 'schedule_confirmed', 'schedule_rejected'])
             ->orderByDesc('order_histories.created_at')
             ->orderByDesc('order_histories.id')

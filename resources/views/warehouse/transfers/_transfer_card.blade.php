@@ -16,7 +16,7 @@
             @endif
             <div>
                 <div class="fw-semibold">{{ $order?->customer?->name ?? 'Khách hàng' }}</div>
-                <div class="small text-muted">{{ $order?->code ?? ('#' . $transfer->order_id) }}, {{ optional($transfer->delivered_at)->format('d/m/Y H:i') ?: '—' }}</div>
+                <div class="small text-muted">{{ $order?->code ?? ('#' . $transfer->order_id) }} · Lên đơn {{ optional($order?->created_at)->format('d/m/Y') ?: '—' }} · Giao {{ optional($order?->delivery_date)->format('d/m/Y') ?: '—' }}</div>
             </div>
         </div>
         <span class="badge {{ $statusMeta[1] }}">{{ $statusMeta[0] }}</span>
@@ -97,10 +97,10 @@
                     @csrf
                     <input type="hidden" name="rollback_note" value="">
                     <button type="submit" class="btn btn-outline-danger btn-sm">
-                        <i class="bi bi-arrow-counterclockwise me-1"></i>Hoàn lại
+                        <i class="bi bi-x-circle me-1"></i>Từ chối
                     </button>
                 </form>
-                <form method="POST" action="{{ route('warehouse.transfers.confirm-receipt', $transfer) }}" class="d-flex justify-content-end" onsubmit="return confirm('Xác nhận nhập kho cho đơn này? Hệ thống sẽ tạo phiếu nhập và cập nhật tồn kho.');">
+                <form method="POST" action="{{ route('warehouse.transfers.confirm-receipt', $transfer) }}" class="d-flex justify-content-end" onsubmit="return confirm('Xác nhận nhập hàng điều chuyển vào kho? Hệ thống sẽ tạo phiếu nhập và cập nhật tồn kho.');">
                     @csrf
                     <input type="hidden" name="receive_note" value="Đã nhận kho qua trang tiếp nhận nhanh">
                     @foreach($order?->items ?? [] as $item)
@@ -111,7 +111,7 @@
                         <input type="hidden" name="item_weights[{{ $loop->index }}][received_weight]" value="{{ number_format($defaultWeight, 3, '.', '') }}">
                     @endforeach
                     <button type="submit" class="btn btn-success btn-sm">
-                        <i class="bi bi-check2-circle me-1"></i>Xác nhận nhận vào kho
+                        <i class="bi bi-check2-circle me-1"></i>Xác nhận nhập vào kho
                     </button>
                 </form>
             </div>

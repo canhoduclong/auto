@@ -34,11 +34,6 @@
         font-weight: 600;
         margin-top: 4px;
     }
-    .ma-shipper-btn {
-        font-size: 0.8rem;
-        padding: 6px 12px;
-        white-space: nowrap;
-    }
     .ma-shipper-meta {
         display: flex;
         flex-wrap: wrap;
@@ -134,7 +129,7 @@
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <div>
                         <div class="fw-bold text-dark">Đơn hàng chưa gán</div>
-                        <div class="text-muted small">Đơn sẽ biến mất khỏi đây sau khi gán shipper.</div>
+                        <div class="text-muted small">Cột trái chỉ gồm đơn chưa gán. Có thể đổi shipper cố định ngay trên thẻ khách hàng.</div>
                     </div>
                     <span class="badge bg-primary rounded-pill">{{ $unassignedOrders->total() }}</span>
                 </div>
@@ -165,7 +160,7 @@
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <div>
                         <div class="fw-bold text-dark">Shipper và đơn đã gán</div>
-                        <div class="text-muted small">Mỗi shipper hiển thị các đơn đang thuộc về họ trong ngày.</div>
+                        <div class="text-muted small">Đơn tự động gán và lộ trình mới sẽ xuất hiện tại đây để shipper xác nhận.</div>
                     </div>
                     <span class="badge bg-success rounded-pill">{{ $assignedOrdersCount }}</span>
                 </div>
@@ -227,23 +222,13 @@
                                     </div>
                                     <div class="d-grid gap-2">
                                         @foreach($shipperOrders as $idx => $order)
-                                            <div class="d-flex align-items-center gap-2">
-                                                <div class="flex-fill">
-                                                    @include('shipper.partials.manage-assignment-order-card', ['order' => $order, 'shippers' => $shippers, 'showAssignmentButtons' => false])
-                                                </div>
-                                                <div class="d-flex flex-column align-items-center" style="min-width:32px;">
-                                                    <form action="{{ route('shipper.move-order-up', [$order->id]) }}" method="POST" style="margin-bottom:2px;">
-                                                        @csrf
-                                                        <input type="hidden" name="date" value="{{ $selectedDate }}">
-                                                        <button type="submit" class="btn btn-light btn-sm px-1 py-0" title="Lên trên" {{ $idx === 0 ? 'disabled' : '' }}><i class="bi bi-arrow-up"></i></button>
-                                                    </form>
-                                                    <form action="{{ route('shipper.move-order-down', [$order->id]) }}" method="POST">
-                                                        @csrf
-                                                        <input type="hidden" name="date" value="{{ $selectedDate }}">
-                                                        <button type="submit" class="btn btn-light btn-sm px-1 py-0" title="Xuống dưới" {{ $idx === $shipperOrders->count()-1 ? 'disabled' : '' }}><i class="bi bi-arrow-down"></i></button>
-                                                    </form>
-                                                </div>
-                                            </div>
+                                            @include('shipper.partials.manage-assignment-order-card', [
+                                                'order' => $order,
+                                                'shippers' => $shippers,
+                                                'showAssignmentButtons' => false,
+                                                'canMoveUp' => $idx > 0,
+                                                'canMoveDown' => $idx < $shipperOrders->count() - 1,
+                                            ])
                                         @endforeach
                                     </div>
                                 </div>
@@ -255,4 +240,132 @@
         </div>
     </div>
 </div>
+
+<div class="modal fade" id="shipperPickerModal" tabindex="-1" aria-labelledby="shipperPickerModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title" id="shipperPickerModalLabel">Chọn shipper</h5>
+                    <div class="small text-muted" id="shipperPickerOrderInfo"></div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+            </div>
+            <div class="modal-body">
+                <form id="shipperPickerForm" method="POST">
+                    @csrf
+                    <input type="hidden" name="date" value="{{ $selectedDate }}">
+                    <input type="hidden" name="shipper_id" id="shipperPickerShipperId">
+                    <input type="hidden" name="set_default_shipper" id="shipperPickerSetDefault" value="0">
+                    <div class="d-grid gap-2">
+                        @foreach($shippers as $pickerShipper)
+                            <button type="submit" class="btn btn-outline-primary text-start js-pick-shipper" data-shipper-id="{{ $pickerShipper->id }}">
+                                <i class="bi bi-person me-2"></i>{{ $pickerShipper->name }}
+                                @if($pickerShipper->phone)
+                                    <span class="text-muted small ms-1">{{ $pickerShipper->phone }}</span>
+                                @endif
+                            </button>
+                        @endforeach
+                        @php $currentManager = auth()->user(); @endphp
+                        @if($currentManager && !$shippers->contains('id', $currentManager->id))
+                            <button type="submit" class="btn btn-outline-danger text-start js-pick-shipper" data-shipper-id="{{ $currentManager->id }}">
+                                <i class="bi bi-person-check me-2"></i>{{ $currentManager->name }} (Tôi)
+                            </button>
+                        @endif
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="defaultShipperPickerModal" tabindex="-1" aria-labelledby="defaultShipperPickerModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title" id="defaultShipperPickerModalLabel">Đổi shipper cố định</h5>
+                    <div class="small text-muted" id="defaultShipperPickerCustomerInfo"></div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+            </div>
+            <div class="modal-body">
+                <form id="defaultShipperPickerForm" method="POST">
+                    @csrf
+                    <input type="hidden" name="date" value="{{ $selectedDate }}">
+                    <input type="hidden" name="shipper_id" id="defaultShipperPickerShipperId">
+                    <input type="hidden" name="transfer_pending_orders" value="0">
+                    <label class="form-check mb-3">
+                        <input type="checkbox" name="transfer_pending_orders" value="1" class="form-check-input" checked>
+                        <span class="form-check-label">Chuyển các đơn đang chờ sang shipper mới</span>
+                    </label>
+                    <div class="d-grid gap-2">
+                        @foreach($shippers as $fixedPickerShipper)
+                            <button type="submit"
+                                class="btn btn-outline-primary text-start js-pick-default-shipper"
+                                data-shipper-id="{{ $fixedPickerShipper->id }}">
+                                <i class="bi bi-person me-2"></i>{{ $fixedPickerShipper->name }}
+                                @if($fixedPickerShipper->phone)
+                                    <span class="text-muted small ms-1">{{ $fixedPickerShipper->phone }}</span>
+                                @endif
+                            </button>
+                        @endforeach
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const form = document.getElementById('shipperPickerForm');
+    const orderInfo = document.getElementById('shipperPickerOrderInfo');
+    const shipperIdInput = document.getElementById('shipperPickerShipperId');
+    const setDefaultInput = document.getElementById('shipperPickerSetDefault');
+
+    document.querySelectorAll('.js-open-shipper-picker').forEach(function (button) {
+        button.addEventListener('click', function () {
+            form.action = button.dataset.action;
+            shipperIdInput.value = '';
+            setDefaultInput.value = button.dataset.setDefault;
+            orderInfo.textContent = 'Đơn ' + button.dataset.orderCode + ' - ' + button.dataset.customerName;
+        });
+    });
+
+    document.querySelectorAll('.js-pick-shipper').forEach(function (button) {
+        button.addEventListener('click', function () {
+            shipperIdInput.value = button.dataset.shipperId;
+        });
+    });
+
+    const defaultForm = document.getElementById('defaultShipperPickerForm');
+    const defaultCustomerInfo = document.getElementById('defaultShipperPickerCustomerInfo');
+    const defaultShipperIdInput = document.getElementById('defaultShipperPickerShipperId');
+    const defaultShipperButtons = document.querySelectorAll('.js-pick-default-shipper');
+
+    document.querySelectorAll('.js-open-default-shipper-picker').forEach(function (button) {
+        button.addEventListener('click', function () {
+            defaultForm.action = button.dataset.action;
+            defaultShipperIdInput.value = '';
+            defaultCustomerInfo.textContent = 'Khách hàng: ' + button.dataset.customerName;
+
+            defaultShipperButtons.forEach(function (shipperButton) {
+                shipperButton.classList.toggle(
+                    'active',
+                    shipperButton.dataset.shipperId === button.dataset.currentShipperId
+                );
+            });
+        });
+    });
+
+    defaultShipperButtons.forEach(function (button) {
+        button.addEventListener('click', function () {
+            defaultShipperIdInput.value = button.dataset.shipperId;
+        });
+    });
+});
+</script>
+@endpush
 @endsection

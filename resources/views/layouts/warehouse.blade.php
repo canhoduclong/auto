@@ -221,7 +221,7 @@
                 <i class="bi bi-box2-fill"></i> Đơn cần đóng gói
             </a>
             <a href="{{ route('warehouse.transfers.incoming') }}" class="wh-nav-link {{ request()->routeIs('warehouse.transfers.incoming') ? 'active' : '' }}">
-                <i class="bi bi-arrow-left-right"></i> Đơn điều chuyển đến
+                <i class="bi bi-arrow-left-right"></i> Tiếp nhận Đơn
             </a>
             <a href="{{ route('warehouse.inventory-transfers.incoming') }}" class="wh-nav-link {{ request()->routeIs('warehouse.inventory-transfers.incoming') ? 'active' : '' }}">
                 <i class="bi bi-box-arrow-in-down"></i> Tiếp nhận hàng

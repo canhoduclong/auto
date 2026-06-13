@@ -1,8 +1,8 @@
 {
-  "version": "1.0.21",
-  "version_code": 22,
+  "version": "1.0.22",
+  "version_code": 23,
   "apk_url": "https://hoanglongtnt.com/app-update/app-release.apk",
   "ios_url": "",
   "force_update": false,
-  "message": "Bản cập nhật 1.0.21: đồng bộ quyền cho phép kho trực tiếp điều chỉnh đơn hàng trên website và mobile."
+  "message": "Bản cập nhật 1.0.22: timeline điều chuyển kho theo ngày/giờ, giao diện điều phối đơn và đổi shipper cố định trên mobile."
 }

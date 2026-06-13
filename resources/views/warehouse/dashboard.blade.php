@@ -215,7 +215,7 @@
                     'route' => route('warehouse.orders'),
                 ],
                 [
-                    'label' => 'Đơn điều chuyển đến',
+                    'label' => 'Tiếp nhận Đơn',
                     'total' => ($stats['transfers_incoming'] ?? 0) + ($stats['transfers_completed'] ?? 0),
                     'done' => $stats['transfers_completed'] ?? 0,
                     'route' => route('warehouse.transfers.incoming'),

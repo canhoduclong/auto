@@ -789,9 +789,12 @@ class WarehouseDashboardController extends Controller
         return back()->with('success', 'Đã tạo phiếu điều chuyển và chờ shipper nhận hàng.');
     }
 
-    public function incomingTransfers()
+    public function incomingTransfers(Request $request)
     {
         $managedWarehouseId = Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
+        $selectedDate = $request->filled('date')
+            ? Carbon::parse($request->input('date'))->toDateString()
+            : Carbon::today()->toDateString();
 
         $transfers = WarehouseTransfer::query()
             ->with([
@@ -802,6 +805,7 @@ class WarehouseDashboardController extends Controller
                 'shipper',
             ])
             ->when($managedWarehouseId, fn ($query) => $query->where('target_warehouse_id', $managedWarehouseId))
+            ->whereHas('order', fn ($query) => $query->forDeliveryDate($selectedDate))
             ->whereIn('status', [
                 WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
                 WarehouseTransfer::STATUS_RECEIVED_COMPLETED,
@@ -821,7 +825,7 @@ class WarehouseDashboardController extends Controller
             $sequence++;
         }
 
-        return view('warehouse.transfers.incoming', compact('transfers', 'managedWarehouseId'));
+        return view('warehouse.transfers.incoming', compact('transfers', 'managedWarehouseId', 'selectedDate'));
     }
 
     public function confirmTransferReceipt(Request $request, WarehouseTransfer $transfer)
@@ -967,7 +971,7 @@ class WarehouseDashboardController extends Controller
 
         $managedWarehouseId = Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
         if ($managedWarehouseId && (int) $transfer->target_warehouse_id !== $managedWarehouseId) {
-            return back()->with('error', 'Bạn chỉ có thể hoàn lại phiếu điều chuyển của kho mình quản lý.');
+            return back()->with('error', 'Bạn chỉ có thể từ chối phiếu điều chuyển của kho mình quản lý.');
         }
 
         $validated = $request->validate([
@@ -979,7 +983,7 @@ class WarehouseDashboardController extends Controller
 
         $reason = trim((string) ($validated['rollback_note'] ?? ''));
         $noteParts = [
-            'Hoan lai truoc khi nhap kho (giu nguyen trang dieu chuyen).',
+            'Kho nhan tu choi tiep nhan truoc khi nhap kho (giu nguyen trang dieu chuyen).',
             'Can xem xet nghiep vu dieu chinh kho neu co chenh lech.',
         ];
 
@@ -1000,14 +1004,14 @@ class WarehouseDashboardController extends Controller
                 'role' => 'warehouse',
                 'status_before' => $order->status,
                 'status_after' => $order->status,
-                'note' => 'Hoan lai phieu dieu chuyen #' . $transfer->id
+                'note' => 'Kho nhan tu choi phieu dieu chuyen #' . $transfer->id
                     . ' truoc khi nhap kho. Kho gui: ' . ($transfer->sourceWarehouse?->name ?? 'N/A')
                     . '; Kho nhan: ' . ($transfer->targetWarehouse?->name ?? 'N/A')
                     . ($reason !== '' ? '; Ly do: ' . $reason : ''),
             ]);
         }
 
-        return back()->with('success', 'Đã hoàn lại phiếu điều chuyển trước khi nhập kho.');
+        return back()->with('success', 'Đã từ chối tiếp nhận phiếu điều chuyển.');
     }
 
     /**

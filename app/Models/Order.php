@@ -20,7 +20,7 @@ class Order extends Model
         'charge_foam_box_fee', 'foam_box_price',
         'amount_paid', 'amount_due', 'payment_method', 'payment_status',
         'qr_code', 'packed_image_path', 'delivered_image_path', 'has_return_order',
-        'collected_amount', 'delivered_at', 'return_reason', 'proof_images', 'shipper_note', 'delivery_time',
+        'collected_amount', 'delivered_at', 'return_reason', 'proof_images', 'shipper_note', 'delivery_time', 'delivery_date',
         'daily_sequence', 'stock_sufficient', 'stock_shortage_detail',
         'stock_alert_status',
         'warehouse_adjustment_status', 'warehouse_adjustment_note', 'warehouse_adjustment_changes',
@@ -34,6 +34,7 @@ class Order extends Model
         'proof_images' => 'array',
         'cancel_images' => 'array',
         'delivered_at' => 'datetime',
+        'delivery_date' => 'date',
         'cancelled_at' => 'datetime',
         'trash_at' => 'datetime',
         'total_weight' => 'decimal:3',
@@ -54,6 +55,18 @@ class Order extends Model
         'commission_amount_snapshot' => 'decimal:2',
         'commission_created_at' => 'datetime',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (Order $order): void {
+            $order->delivery_date ??= now()->addDay()->toDateString();
+        });
+    }
+
+    public function scopeForDeliveryDate($query, string $date)
+    {
+        return $query->whereDate('delivery_date', $date);
+    }
     
     public function approvals()
     {

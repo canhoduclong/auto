@@ -511,6 +511,7 @@ class SaleApiController extends BaseApiController
             'trash_at' => optional($order->getAttribute('trash_at'))->toIso8601String(),
             'copied_from_order_id' => $order->getAttribute('copied_from_order_id'),
             'customer' => $order->customer,
+            'delivery_date' => optional($order->delivery_date)->toDateString(),
             'created_at' => optional($order->created_at)->toIso8601String(),
             'updated_at' => optional($order->updated_at)->toIso8601String(),
             'can_edit' => $this->isEditableOrder($order),

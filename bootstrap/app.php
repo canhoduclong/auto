@@ -39,7 +39,10 @@ return Application::configure(basePath: dirname(__DIR__))
     //})
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->render(function (\Throwable $exception, Request $request) {
-            if ($exception instanceof TokenMismatchException) {
+            $isPageExpired = $exception instanceof TokenMismatchException
+                || ($exception instanceof HttpExceptionInterface && $exception->getStatusCode() === 419);
+
+            if ($isPageExpired) {
                 if ($request->expectsJson()) {
                     return response()->json([
                         'message' => 'Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.',

@@ -54,7 +54,10 @@
                         <div class=" border-0 w-100  d-flex justify-content-between align-items-center">
                             <div>
                                 <div class="fw-semibold fs-5 mb-0 pb-0">{{ $order->customer?->name ?? '—' }} </div>
-                                <div class="text-muted card-desript">#{{ $order->daily_sequence ?? '—' }}, {{ $order->created_at->format('d/m/Y H:i') }}, {{ $order->code }}</div>
+                                <div class="text-muted card-desript">
+                                    #{{ $order->daily_sequence ?? '—' }}, lên đơn {{ $order->created_at->format('d/m/Y H:i') }},
+                                    giao {{ optional($order->delivery_date)->format('d/m/Y') ?: 'chưa cập nhật' }}, {{ $order->code }}
+                                </div>
                             </div> 
                             <div class="d-flex align-items-center gap-2">
                                 @if($warehouseCanAdjust)

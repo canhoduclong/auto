@@ -338,7 +338,9 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         // Manager Shipper routes
         Route::middleware('role:manager_shipper,admin')->group(function () {
             Route::get('/manage-assignments',                [ShipperDashboardController::class, 'manageAssignments'])->name('manage-assignments');
+            Route::post('/assign-order/{order}',             [ShipperDashboardController::class, 'assignSelectedOrder'])->name('assign-order.selected');
             Route::post('/assign-order/{order}/{shipper}',   [ShipperDashboardController::class, 'assignOrder'])->name('assign-order');
+            Route::post('/customers/{customer}/default-shipper', [ShipperDashboardController::class, 'updateCustomerDefaultShipper'])->name('customers.default-shipper.update');
             Route::delete('/unassign-order/{order}',         [ShipperDashboardController::class, 'unassignOrder'])->name('unassign-order');
             Route::post('/bulk-transfer-assignments',       [ShipperDashboardController::class, 'bulkTransferAssignments'])->name('bulk-transfer-assignments');
             Route::post('/move-order-up/{order}',            [ShipperDashboardController::class, 'moveOrderUp'])->name('move-order-up');

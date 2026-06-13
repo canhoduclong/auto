@@ -104,6 +104,7 @@ class Customer extends Model
         'shipping_fee',
         'assigned_to',
         'current_owner_sale_id',
+        'default_shipper_id',
         'assigned_at',
         'status',
         'customer_status',
@@ -291,6 +292,11 @@ class Customer extends Model
     public function currentOwner()
     {
         return $this->belongsTo(User::class, 'current_owner_sale_id');
+    }
+
+    public function defaultShipper()
+    {
+        return $this->belongsTo(User::class, 'default_shipper_id');
     }
 
     public function user()
