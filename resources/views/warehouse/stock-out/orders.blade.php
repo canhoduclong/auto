@@ -93,6 +93,20 @@
         text-transform: uppercase;
         letter-spacing: .03em;
     }
+    .wh-priority-number {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 34px;
+        height: 34px;
+        flex: 0 0 34px;
+        border: 2px solid #f59e0b;
+        background: #fff7ed;
+        color: #9a3412;
+        border-radius: 50%;
+        font-weight: 800;
+        font-size: .82rem;
+    }
     @media (max-width: 767.98px) {
         .wh-item-table-head,
         .wh-item-table-row {
@@ -154,9 +168,14 @@
             <div class="col-12 col-xl-6">
                 <div class="card border-0 shadow-sm h-100">
                     <div class="card-header bg-white d-flex justify-content-between align-items-center gap-2">
-                        <div>
-                            <div class="fw-semibold">{{ $order?->customer?->name ?? 'Khách hàng' }}</div>
-                            <div class="small text-muted">{{ $order?->code ?? '—' }}, {{ optional($document->document_date)->format('d/m/Y') ?: '—' }}</div>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="wh-priority-number" title="Số thứ tự ưu tiên">
+                                {{ $order?->daily_sequence ?? '—' }}
+                            </span>
+                            <div>
+                                <div class="fw-semibold">{{ $order?->customer?->name ?? 'Khách hàng' }}</div>
+                                <div class="small text-muted">{{ $order?->code ?? '—' }}, {{ optional($document->document_date)->format('d/m/Y') ?: '—' }}</div>
+                            </div>
                         </div>
                         <span class="wh-exported-badge">ĐÃ XUẤT KHO</span>
                     </div>

@@ -29,6 +29,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Collection;
+use Illuminate\Pagination\LengthAwarePaginator;
 
 class WarehouseDashboardController extends Controller
 {
@@ -331,29 +332,8 @@ class WarehouseDashboardController extends Controller
             ->get();
 
 
-        $inventorySummaryService = app(WarehouseInventorySummaryService::class);
-        $currentInventorySummary = $inventorySummaryService->build($managedWarehouseId);
-        $summaryRows = $currentInventorySummary['rows'];
-        $summaryTotals = $currentInventorySummary['totals'];
-        $otherWarehouseSummaries = $managedWarehouseId
-            ? Warehouse::query()
-                ->whereKeyNot($managedWarehouseId)
-                ->where('status', true)
-                ->orderBy('name')
-                ->get(['id', 'name'])
-                ->map(function (Warehouse $warehouse) use ($inventorySummaryService) {
-                    $summary = $inventorySummaryService->build((int) $warehouse->id);
-
-                    return [
-                        'warehouse_id' => (int) $warehouse->id,
-                        'warehouse_name' => (string) $warehouse->name,
-                        'rows' => $summary['rows'],
-                        'totals' => $summary['totals'],
-                    ];
-                })
-                ->filter(fn ($summary) => $summary['rows']->contains(fn ($row) => (int) $row['closing'] > 0))
-                ->values()
-            : collect();
+        $consolidatedInventory = app(WarehouseInventorySummaryService::class)
+            ->buildConsolidated($dateString);
 
         return view('warehouse.dashboard', compact(
             'stats',
@@ -361,9 +341,7 @@ class WarehouseDashboardController extends Controller
             'selectedDate',
             'dailyOrders',
             'approvalStats',
-            'summaryRows',
-            'summaryTotals',
-            'otherWarehouseSummaries'
+            'consolidatedInventory'
         ));
     }
     /**
@@ -3698,157 +3676,29 @@ class WarehouseDashboardController extends Controller
      */
     public function inventory(Request $request)
     {
-        $warehouseId = Auth::user()->warehouse_id;
         $search = trim((string) $request->input('search', ''));
         $status = $request->input('status');
         $selectedDate = $request->filled('date')
             ? Carbon::parse($request->input('date'))->toDateString()
             : Carbon::today()->toDateString();
-        $dayStart = Carbon::parse($selectedDate)->startOfDay();
-        $dayEnd = Carbon::parse($selectedDate)->endOfDay();
+        $summary = app(WarehouseInventorySummaryService::class)
+            ->buildConsolidated($selectedDate, $search, $status);
+        $page = max(1, (int) $request->input('page', 1));
+        $perPage = 12;
+        $products = new LengthAwarePaginator(
+            $summary['rows']->forPage($page, $perPage)->values(),
+            $summary['rows']->count(),
+            $perPage,
+            $page,
+            ['path' => $request->url(), 'query' => $request->query()]
+        );
 
-        $isTodaySnapshot = $selectedDate === Carbon::today()->toDateString();
-
-        $inventoryScope = function ($query) use ($warehouseId, $status, $isTodaySnapshot) {
-            if ($warehouseId) {
-                $query->where('warehouse_id', $warehouseId);
-            }
-
-            if (!$isTodaySnapshot) {
-                return;
-            }
-
-            if ($status === 'low_stock') {
-                $query->whereColumn('quantity', '<=', 'low_stock_threshold');
-            } elseif ($status === 'out_of_stock') {
-                $query->where('quantity', 0);
-            }
-        };
-
-        $products = Product::query()
-            ->with([
-                'avatar.media',
-                'variants' => function ($variantQuery) use ($inventoryScope, $dayStart, $dayEnd) {
-                    $variantQuery->with([
-                        'avatar.media',
-                        'inventories' => function ($inventoryQuery) use ($inventoryScope, $dayStart, $dayEnd) {
-                            $inventoryScope($inventoryQuery);
-
-                            $inventoryQuery->with([
-                                'warehouse',
-                                'movements' => function ($movementQuery) use ($dayStart, $dayEnd) {
-                                    $movementQuery->whereBetween('created_at', [$dayStart, $dayEnd]);
-                                },
-                                'reservations' => function ($reservationQuery) use ($dayStart, $dayEnd) {
-                                    $reservationQuery->whereBetween('reserved_at', [$dayStart, $dayEnd]);
-                                },
-                            ])
-                                ->orderBy('warehouse_id');
-                        },
-                    ])
-                        ->whereHas('inventories', $inventoryScope)
-                        ->orderBy('name')
-                        ->orderBy('sku');
-                },
-            ])
-            ->whereHas('variants', function ($variantQuery) use ($inventoryScope) {
-                $variantQuery->whereHas('inventories', $inventoryScope);
-            })
-            ->when($search !== '', function ($productQuery) use ($search, $inventoryScope) {
-                $productQuery->where(function ($searchQuery) use ($search, $inventoryScope) {
-                    $searchQuery->where('name', 'like', "%{$search}%")
-                        ->orWhereHas('variants', function ($variantQuery) use ($search) {
-                            $variantQuery->whereHas('inventories', $inventoryScope)
-                                ->where(function ($variantSearchQuery) use ($search) {
-                                    $variantSearchQuery->where('name', 'like', "%{$search}%")
-                                        ->orWhere('sku', 'like', "%{$search}%");
-                                });
-                        });
-                });
-            })
-            ->orderBy('name')
-            ->paginate(12);
-
-        $movementQuery = InventoryMovement::query()
-            ->whereBetween('created_at', [$dayStart, $dayEnd])
-            ->when($warehouseId, function ($query) use ($warehouseId) {
-                $query->whereHas('inventory', function ($inventoryQuery) use ($warehouseId) {
-                    $inventoryQuery->where('warehouse_id', $warehouseId);
-                });
-            });
-
-        $reservationQuery = InventoryReservation::query()
-            ->whereBetween('reserved_at', [$dayStart, $dayEnd])
-            ->when($warehouseId, function ($query) use ($warehouseId) {
-                $query->whereHas('inventory', function ($inventoryQuery) use ($warehouseId) {
-                    $inventoryQuery->where('warehouse_id', $warehouseId);
-                });
-            });
-
-        $variantIds = $products->getCollection()
-            ->flatMap(fn (Product $product) => $product->variants->pluck('id'))
-            ->map(fn ($id) => (int) $id)
-            ->unique()
-            ->values();
-
-        $snapshotByVariant = $this->getInventorySnapshotByVariant($variantIds, $warehouseId, $selectedDate);
-
-        $products->getCollection()->transform(function (Product $product) use ($snapshotByVariant) {
-            $product->setRelation('variants', $product->variants->map(function (ProductVariant $variant) use ($snapshotByVariant) {
-                $snapshot = $snapshotByVariant[(int) $variant->id] ?? [
-                    'quantity' => 0,
-                    'reserved' => 0,
-                    'available' => 0,
-                ];
-
-                $variant->setAttribute('snapshot_quantity', (int) $snapshot['quantity']);
-                $variant->setAttribute('snapshot_reserved', (int) $snapshot['reserved']);
-                $variant->setAttribute('snapshot_available', (int) $snapshot['available']);
-
-                return $variant;
-            }));
-
-            return $product;
-        });
-
-        if (!$isTodaySnapshot && in_array($status, ['low_stock', 'out_of_stock'], true)) {
-            $products->setCollection(
-                $products->getCollection()
-                    ->map(function (Product $product) use ($status) {
-                        $filteredVariants = $product->variants->filter(function (ProductVariant $variant) use ($status) {
-                            $quantity = (int) ($variant->snapshot_quantity ?? 0);
-                            $threshold = max(5, (int) $variant->inventories->sum(fn ($inventory) => (int) ($inventory->low_stock_threshold ?: 5)));
-
-                            if ($status === 'out_of_stock') {
-                                return $quantity <= 0;
-                            }
-
-                            return $quantity > 0 && $quantity <= $threshold;
-                        })->values();
-
-                        $product->setRelation('variants', $filteredVariants);
-
-                        return $product;
-                    })
-                    ->filter(fn (Product $product) => $product->variants->isNotEmpty())
-                    ->values()
-            );
-        }
-
-        $snapshotByVariantColl = collect($snapshotByVariant);
-        $stats = [
-            'total_quantity'         => $snapshotByVariantColl->sum('quantity'),
-            'total_reserved'         => $snapshotByVariantColl->sum('reserved'),
-            'total_available'        => $snapshotByVariantColl->sum('available'),
-            'low_stock'              => $snapshotByVariantColl->filter(fn ($v) => $v['quantity'] <= ($v['low_stock_threshold'] ?? 5))->count(),
-            'out_of_stock'           => $snapshotByVariantColl->filter(fn ($v) => $v['quantity'] <= 0)->count(),
-            'daily_import'           => (clone $movementQuery)->where('quantity', '>', 0)->sum('quantity'),
-            'daily_export'           => abs((int) ((clone $movementQuery)->where('quantity', '<', 0)->sum('quantity'))),
-            'daily_reserved'         => (clone $reservationQuery)->sum('quantity'),
-            'daily_reservation_rows' => (clone $reservationQuery)->count(),
-        ];
-
-        return view('warehouse.inventory.index', compact('products', 'stats', 'selectedDate'));
+        return view('warehouse.inventory.index', [
+            'products' => $products,
+            'warehouses' => $summary['warehouses'],
+            'summaryTotals' => $summary['totals'],
+            'selectedDate' => $summary['selectedDate'],
+        ]);
     }
 
     /**

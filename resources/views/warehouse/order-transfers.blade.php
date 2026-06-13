@@ -32,9 +32,56 @@
     border-color: #0f766e;
     box-shadow: 0 2px 8px rgba(20,184,166,.08);
 }
+.transfer-day-group {
+    border: 1px solid #dbe5e3;
+    border-radius: 10px;
+    background: #fff;
+    overflow: hidden;
+    margin-bottom: 16px;
+}
+.transfer-day-head {
+    padding: 9px 12px;
+    background: #dff3ef;
+    color: #115e59;
+    font-weight: 800;
+}
+.transfer-slip {
+    padding: 12px;
+    border-top: 1px solid #e5e7eb;
+}
+.transfer-order-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 7px 0;
+    border-top: 1px dashed #e2e8f0;
+}
 </style>
 @endpush
 @section('content')
+<div class="card border-0 shadow-sm mb-3">
+    <div class="card-body">
+        <form method="GET" action="{{ route('warehouse.order-transfers') }}" class="row g-2 align-items-end">
+            <div class="col-lg-3 col-md-4">
+                <label class="form-label small fw-semibold mb-1">Từ ngày</label>
+                <input type="date" name="from_date" value="{{ $from }}" class="form-control">
+            </div>
+            <div class="col-lg-3 col-md-4">
+                <label class="form-label small fw-semibold mb-1">Đến ngày</label>
+                <input type="date" name="to_date" value="{{ $to }}" class="form-control">
+            </div>
+            <div class="col-lg-4 col-md-4">
+                <label class="form-label small fw-semibold mb-1">Mã đơn / khách hàng</label>
+                <input type="text" name="search" value="{{ $search ?? '' }}" class="form-control" placeholder="Nhập từ khóa...">
+            </div>
+            <div class="col-lg-2 d-flex gap-2">
+                <button class="btn btn-primary flex-fill" type="submit">Lọc</button>
+                <a href="{{ route('warehouse.order-transfers') }}" class="btn btn-outline-secondary">Đặt lại</a>
+            </div>
+        </form>
+    </div>
+</div>
+
 <div class="row g-4">
     <div class="col-md-6">
         <div class="order-transfer-col">
@@ -93,46 +140,97 @@
     </div>
     <div class="col-md-6">
         <div class="order-transfer-col">
-            <h5>Đơn đã được tạo phiếu điều chuyển</h5>
-            @if($recentTransfers->isEmpty())
-                <div class="alert alert-info text-center my-4">Chưa có phiếu điều chuyển nào.</div>
+            <h5 class="mb-3">Phiếu điều chuyển theo ngày</h5>
+            @if($transferGroups->isEmpty())
+                <div class="alert alert-info text-center my-4">
+                    {{ !empty($search) ? 'Không tìm thấy phiếu điều chuyển phù hợp.' : 'Chưa có phiếu điều chuyển nào.' }}
+                </div>
             @else
-                @foreach($recentTransfers as $transfer)
-                    @php
-                        // Disable nếu bất kỳ đơn nào đã có warehouse_transfer trạng thái đã ship nhận hoặc kho nhận xác nhận
-                        $disableDelete = false;
-                        foreach ($transfer->orders as $order) {
-                            $latestTransfer = $order->warehouseTransfers()->latest()->first();
-                            if ($latestTransfer && in_array($latestTransfer->status, [
-                                \App\Models\WarehouseTransfer::STATUS_IN_TRANSIT,
-                                \App\Models\WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
-                                \App\Models\WarehouseTransfer::STATUS_RECEIVED_COMPLETED,
-                            ])) {
-                                $disableDelete = true;
-                                break;
-                            }
-                        }
-                    @endphp
-                    <div class="mb-3 border rounded p-2">
-                        <div class="d-flex justify-content-between align-items-center mb-1">
-                            <div>
-                                <span class="fw-semibold">Phiếu #{{ $transfer->id }}</span>
-                                <span class="badge bg-info ms-2">Shipper: {{ $transfer->shipper?->name ?? '—' }}</span>
-                                <span class="badge bg-secondary ms-2">Kho: {{ $transfer->warehouse?->name ?? '—' }}</span>
-                            </div>
-                            <div class="small text-muted">{{ $transfer->created_at->format('d/m/Y H:i') }}</div>
+                @foreach($transferGroups as $date => $dayTransfers)
+                    <div class="transfer-day-group">
+                        <div class="transfer-day-head d-flex justify-content-between gap-2">
+                            <span>{{ \Illuminate\Support\Carbon::parse($date)->format('d/m/Y') }}</span>
+                            <span>{{ $dayTransfers->count() }} phiếu · {{ $dayTransfers->sum(fn ($transfer) => $transfer->orders->count()) }} đơn</span>
                         </div>
-                        <div class="small text-muted mb-1">Người tạo: {{ $transfer->created_by ? (\App\Models\User::find($transfer->created_by)?->name ?? $transfer->created_by) : '—' }}</div>
-                        <ul class="mb-0 ps-3">
-                            @foreach($transfer->orders as $order)
-                                <li>#{{ $order->code ?? $order->id }} - {{ $order->customer?->name ?? '—' }} ({{ optional($order->created_at)->format('d/m/Y H:i') }})</li>
-                            @endforeach
-                        </ul>
-                        <form method="POST" action="{{ route('warehouse.order-transfers.destroy', $transfer->id) }}" onsubmit="return confirm('Bạn có chắc muốn xóa phiếu này?');" class="mt-2">
-                            @csrf
-                            @method('DELETE')
-                            <button type="submit" class="btn btn-danger btn-sm" @if($disableDelete) disabled title="Phiếu đã có ship nhận hoặc kho nhận xác nhận, không thể xóa" @endif>Xóa phiếu</button>
-                        </form>
+                        @foreach($dayTransfers as $transfer)
+                            <div class="transfer-slip">
+                                <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap mb-2">
+                                    <div>
+                                        <div class="fw-bold">Phiếu #{{ $transfer->id }}</div>
+                                        <div class="small text-muted">
+                                            Shipper: <strong>{{ $transfer->shipper?->name ?? '—' }}</strong>
+                                            · Kho nhận: <strong>{{ $transfer->warehouse?->name ?? '—' }}</strong>
+                                        </div>
+                                    </div>
+                                    <span class="badge {{ $transfer->is_completed ? 'bg-success' : ($transfer->can_delete ? 'bg-warning text-dark' : 'bg-info text-dark') }}">
+                                        {{ $transfer->status_label }}
+                                    </span>
+                                </div>
+                                <div class="small text-muted mb-2">
+                                    Tạo lúc {{ $transfer->created_at->format('H:i') }} · {{ $transfer->orders->count() }} đơn
+                                </div>
+
+                                @foreach($transfer->orders as $order)
+                                    @php
+                                        $latestTransfer = $order->warehouseTransfers->first();
+                                        $orderStatus = $latestTransfer?->status;
+                                        $orderCompleted = $orderStatus === \App\Models\WarehouseTransfer::STATUS_RECEIVED_COMPLETED;
+                                        $orderStatusLabel = match ($orderStatus) {
+                                            \App\Models\WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP => 'Chờ shipper nhận',
+                                            \App\Models\WarehouseTransfer::STATUS_IN_TRANSIT => 'Đang vận chuyển',
+                                            \App\Models\WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE => 'Chờ kho tiếp nhận',
+                                            \App\Models\WarehouseTransfer::STATUS_RECEIVED_COMPLETED => 'Đã tiếp nhận',
+                                            \App\Models\WarehouseTransfer::STATUS_CANCELLED => 'Đã hủy / hoàn lại',
+                                            default => 'Chưa tạo vận chuyển',
+                                        };
+                                    @endphp
+                                    <div class="transfer-order-row">
+                                        <div>
+                                            <div class="fw-semibold">#{{ $order->code ?? $order->id }} - {{ $order->customer?->name ?? '—' }}</div>
+                                            <div class="small text-muted">{{ optional($order->created_at)->format('d/m/Y H:i') }}</div>
+                                        </div>
+                                        <div class="text-end">
+                                            <span class="badge {{ $orderCompleted ? 'bg-success' : 'bg-light text-dark border' }}">{{ $orderStatusLabel }}</span>
+                                            @if(in_array($orderStatus, [
+                                                \App\Models\WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
+                                                \App\Models\WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
+                                            ], true))
+                                                @php
+                                                    $willRestoreStock = $orderStatus === \App\Models\WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE;
+                                                @endphp
+                                                <form method="POST"
+                                                    action="{{ route('warehouse.order-transfers.orders.detach', [$transfer, $order]) }}"
+                                                    class="mt-2"
+                                                    onsubmit="return confirm('{{ $willRestoreStock
+                                                        ? 'Gỡ phiếu điều chuyển hiện tại để chọn shipper khác? Đơn hàng được giữ nguyên và tồn kho nguồn sẽ được hoàn lại.'
+                                                        : 'Gỡ phiếu điều chuyển hiện tại để chọn shipper khác? Đơn hàng được giữ nguyên.'
+                                                    }}');">
+                                                    @csrf
+                                                    <button type="submit" class="btn btn-outline-warning btn-sm">
+                                                        Gỡ phiếu điều chuyển
+                                                    </button>
+                                                </form>
+                                            @endif
+                                        </div>
+                                    </div>
+                                @endforeach
+
+                                @if($transfer->can_delete)
+                                    <form method="POST" action="{{ route('warehouse.order-transfers.destroy', $transfer->id) }}"
+                                        onsubmit="return confirm('Bạn có chắc muốn xóa phiếu chưa được shipper nhận này?');" class="mt-2">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="btn btn-outline-danger btn-sm">Xóa phiếu</button>
+                                    </form>
+                                @elseif($transfer->is_completed)
+                                    <div class="small text-success fw-semibold mt-2">
+                                        Kho chuyển đến đã tiếp nhận hoàn tất. Phiếu chỉ còn hiển thị lịch sử.
+                                    </div>
+                                @else
+                                    <div class="small text-muted mt-2">Phiếu đã bắt đầu vận chuyển nên không còn thao tác tại đây.</div>
+                                @endif
+                            </div>
+                        @endforeach
                     </div>
                 @endforeach
             @endif

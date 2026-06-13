@@ -351,31 +351,24 @@ class WarehouseApiController extends BaseApiController
     public function inventory(Request $request): JsonResponse
     {
         $this->ensureWarehouseRole($request);
-        $warehouseId = $request->user()->warehouse_id ? (int) $request->user()->warehouse_id : null;
+        $date = $request->filled('date')
+            ? Carbon::parse($request->query('date'))->toDateString()
+            : now()->toDateString();
+        $summary = app(WarehouseInventorySummaryService::class)->buildConsolidated(
+            $date,
+            trim((string) $request->query('search', '')),
+            $request->query('status')
+        );
 
-        $query = Inventory::query()
-            ->with(['productVariant.product'])
-            ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId))
-            ->latest('updated_at');
-
-        $items = $query->paginate(30)->through(function (Inventory $inventory) {
-            $variant = $inventory->productVariant;
-            $product = $variant?->product;
-
-            return [
-                'id' => (int) $inventory->id,
-                'variant_id' => (int) ($inventory->product_variant_id ?? 0),
-                'sku' => (string) ($variant?->sku ?? ''),
-                'product_name' => (string) ($product?->name ?? 'San pham'),
-                'variant_name' => (string) ($variant?->name ?? ''),
-                'quantity' => (int) ($inventory->quantity ?? 0),
-                'reserved' => (int) ($inventory->reserved_quantity ?? 0),
-                'available' => max(0, (int) ($inventory->quantity ?? 0) - (int) ($inventory->reserved_quantity ?? 0)),
-                'updated_at' => optional($inventory->updated_at)->toIso8601String(),
-            ];
-        });
-
-        return $this->paginated($items);
+        return $this->ok([
+            'selected_date' => $summary['selectedDate'],
+            'warehouses' => $summary['warehouses']->map(fn (Warehouse $warehouse) => [
+                'id' => (int) $warehouse->id,
+                'name' => (string) $warehouse->name,
+            ])->values(),
+            'rows' => $summary['rows'],
+            'totals' => $summary['totals'],
+        ]);
     }
 
     public function returns(Request $request): JsonResponse

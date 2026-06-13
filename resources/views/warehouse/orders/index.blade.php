@@ -45,6 +45,44 @@
         background: #64748b;
         color: #fff;
     }
+    .wh-orders-print-sheet {
+        display: none;
+    }
+    @media print {
+        @page {
+            size: A4 portrait;
+            margin: 12mm;
+        }
+        body * {
+            visibility: hidden !important;
+        }
+        .wh-orders-print-sheet,
+        .wh-orders-print-sheet * {
+            visibility: visible !important;
+        }
+        .wh-orders-print-sheet {
+            display: block !important;
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            color: #000;
+            background: #fff;
+        }
+        .wh-orders-print-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12pt;
+        }
+        .wh-orders-print-table th,
+        .wh-orders-print-table td {
+            border: 1px solid #000;
+            padding: 7px 9px;
+        }
+        .wh-orders-print-table th {
+            text-align: center;
+            font-weight: 700;
+        }
+    }
     .card-desript{
         font-size: .75rem;
         color: #64748b;
@@ -711,6 +749,9 @@
             <span class="badge bg-danger wh-summary-pill">Sale từ chối điều chỉnh: {{ $orders->where('warehouse_adjustment_status', \App\Models\Order::WAREHOUSE_ADJUSTMENT_STATUS_SALE_REJECTED)->count() }}</span>
         </div>
         <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-primary btn-sm" onclick="window.print()">
+                <i class="bi bi-printer me-1"></i>In toàn bộ
+            </button>
             <button type="button"
                 class="btn btn-outline-info btn-sm wh-stock-trigger-btn"
                 id="stockDrawerToggleBtn"
@@ -793,6 +834,40 @@
         </div>
     </div>
     @endif
+</div>
+
+@php
+    $printOrders = $orders
+        ->sortBy(fn ($order) => $order->daily_sequence ?? PHP_INT_MAX)
+        ->values();
+@endphp
+<div class="wh-orders-print-sheet">
+    <div class="text-center mb-3">
+        <h2 class="mb-1">DANH SÁCH ĐƠN HÀNG</h2>
+        <div>Ngày: {{ \Illuminate\Support\Carbon::parse($selectedDate)->format('d/m/Y') }}</div>
+    </div>
+    <table class="wh-orders-print-table">
+        <thead>
+            <tr>
+                <th style="width: 110px;">Số thứ tự</th>
+                <th>Tên khách hàng</th>
+                <th style="width: 180px;">Ngày</th>
+            </tr>
+        </thead>
+        <tbody>
+            @forelse($printOrders as $order)
+                <tr>
+                    <td class="text-center">{{ $order->daily_sequence ?? $loop->iteration }}</td>
+                    <td>{{ $order->customer?->name ?? 'Khách hàng' }}</td>
+                    <td class="text-center">{{ optional($order->created_at)->format('d/m/Y') ?: '—' }}</td>
+                </tr>
+            @empty
+                <tr>
+                    <td colspan="3" class="text-center">Không có đơn hàng.</td>
+                </tr>
+            @endforelse
+        </tbody>
+    </table>
 </div>
 
 {{-- Stock Offcanvas Drawer --}}

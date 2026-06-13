@@ -344,46 +344,7 @@
         <div class="underline mb-4">
             <span class="fw-semibold progress-title-underline d-flex align-items-center text-uppercase">Thống kê tồn kho</span>
         </div>
-        @include('warehouse._inventory_summary', [
-            'title' => 'Danh sách thống kê tồn kho (sản phẩm và biến thể cùng một cấu trúc cột)',
-            'rows' => $summaryRows,
-            'targetPrefix' => 'current',
-        ])
-        @foreach($otherWarehouseSummaries as $otherWarehouseSummary)
-            @include('warehouse._inventory_summary', [
-                'title' => 'Tồn kho của kho khác (' . $otherWarehouseSummary['warehouse_name'] . ')',
-                'rows' => $otherWarehouseSummary['rows'],
-                'targetPrefix' => 'warehouse-' . $otherWarehouseSummary['warehouse_id'],
-            ])
-        @endforeach
-        @push('scripts')
-        <script>
-        document.querySelectorAll('.js-inv-toggle').forEach(function (button) {
-            button.addEventListener('click', function () {
-                const targetId = button.getAttribute('data-target');
-                const headerRow = document.getElementById(targetId);
-                if (!headerRow) return;
-                const isOpen = headerRow.style.display !== 'none';
-                const nextDisplay = isOpen ? 'none' : 'block';
-                headerRow.style.display = nextDisplay;
-                // Toggle icons
-                const plus = button.querySelector('.icon-plus');
-                const minus = button.querySelector('.icon-minus');
-                if (!isOpen) {
-                    plus.style.display = 'none';
-                    minus.style.display = 'inline';
-                } else {
-                    plus.style.display = 'inline';
-                    minus.style.display = 'none';
-                }
-            });
-        });
-        // Mặc định ẩn hết các dòng biến thể (dùng layout div)
-        document.querySelectorAll('.inv-child-row-div').forEach(function(row) {
-            row.style.display = 'none';
-        });
-        </script>
-        @endpush
+        @include('warehouse._consolidated_inventory_summary')
 
     </div> 
 </div>
