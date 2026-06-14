@@ -21,6 +21,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class TextOrderImportController extends Controller
 {
@@ -38,6 +39,7 @@ class TextOrderImportController extends Controller
     {
         $drafts = TextOrderDraft::query()
             ->with(['sale:id,name,zalo_name', 'customer:id,name,phone', 'truckBrand:id,name', 'truckStation:id,name,address,brand_id', 'variant.product:id,name', 'order:id,code'])
+            ->where('draft_scope', $saleId ? TextOrderDraft::SCOPE_SALE_PRIVATE : TextOrderDraft::SCOPE_ADMIN_IMPORT)
             ->when($saleId, fn ($query) => $query->where('sale_id', $saleId))
             ->latest()
             ->limit(100)
@@ -71,6 +73,7 @@ class TextOrderImportController extends Controller
         foreach ($parsed as $data) {
             TextOrderDraft::query()->create(array_merge($data, [
                 'created_by' => $data['sale_id'] ?? $request->user()->id,
+                'draft_scope' => TextOrderDraft::SCOPE_ADMIN_IMPORT,
             ]));
         }
 
@@ -87,6 +90,7 @@ class TextOrderImportController extends Controller
             TextOrderDraft::query()->create(array_merge($data, [
                 'sale_id' => $saleId,
                 'created_by' => $saleId,
+                'draft_scope' => TextOrderDraft::SCOPE_SALE_PRIVATE,
             ]));
         }
 
@@ -98,7 +102,7 @@ class TextOrderImportController extends Controller
         $this->ensureSaleDraft($request, $draft);
         $this->forceSale($request);
 
-        return $this->confirm($request, $draft, $approvalService);
+        return $this->confirmAction($request, $draft, $approvalService);
     }
 
     public function saleCopy(Request $request, TextOrderDraft $draft): JsonResponse
@@ -106,7 +110,7 @@ class TextOrderImportController extends Controller
         $this->ensureSaleDraft($request, $draft);
         $this->forceSale($request);
 
-        return $this->copy($request, $draft);
+        return $this->copyAction($request, $draft);
     }
 
     public function saleCopyConfirm(Request $request, TextOrderDraft $draft, ApprovalService $approvalService): JsonResponse
@@ -114,17 +118,24 @@ class TextOrderImportController extends Controller
         $this->ensureSaleDraft($request, $draft);
         $this->forceSale($request);
 
-        return $this->copyConfirm($request, $draft, $approvalService);
+        return $this->copyConfirmAction($request, $draft, $approvalService);
     }
 
     public function saleDestroy(Request $request, TextOrderDraft $draft): JsonResponse
     {
         $this->ensureSaleDraft($request, $draft);
 
-        return $this->destroy($draft);
+        return $this->destroyAction($draft);
     }
 
     public function confirm(Request $request, TextOrderDraft $draft, ApprovalService $approvalService): JsonResponse
+    {
+        $this->ensureAdminDraft($draft);
+
+        return $this->confirmAction($request, $draft, $approvalService);
+    }
+
+    private function confirmAction(Request $request, TextOrderDraft $draft, ApprovalService $approvalService): JsonResponse
     {
         try {
             $order = $this->confirmDraft($request, $draft, $approvalService);
@@ -142,6 +153,13 @@ class TextOrderImportController extends Controller
 
     public function copy(Request $request, TextOrderDraft $draft): JsonResponse
     {
+        $this->ensureAdminDraft($draft);
+
+        return $this->copyAction($request, $draft);
+    }
+
+    private function copyAction(Request $request, TextOrderDraft $draft): JsonResponse
+    {
         try {
             $copy = $this->copyDraft($request, $draft);
 
@@ -156,6 +174,13 @@ class TextOrderImportController extends Controller
     }
 
     public function copyConfirm(Request $request, TextOrderDraft $draft, ApprovalService $approvalService): JsonResponse
+    {
+        $this->ensureAdminDraft($draft);
+
+        return $this->copyConfirmAction($request, $draft, $approvalService);
+    }
+
+    private function copyConfirmAction(Request $request, TextOrderDraft $draft, ApprovalService $approvalService): JsonResponse
     {
         try {
             [$copy, $order] = DB::transaction(function () use ($request, $draft, $approvalService) {
@@ -178,6 +203,13 @@ class TextOrderImportController extends Controller
 
     public function destroy(TextOrderDraft $draft): JsonResponse
     {
+        $this->ensureAdminDraft($draft);
+
+        return $this->destroyAction($draft);
+    }
+
+    private function destroyAction(TextOrderDraft $draft): JsonResponse
+    {
         $draft->delete();
 
         return response()->json(['message' => 'Đã xóa dòng import. Đơn sale đã tạo (nếu có) không bị ảnh hưởng.']);
@@ -187,12 +219,19 @@ class TextOrderImportController extends Controller
     {
         $validated = $request->validate([
             'draft_ids' => ['required', 'array', 'min:1'],
-            'draft_ids.*' => ['integer', 'exists:text_order_drafts,id'],
+            'draft_ids.*' => [
+                'integer',
+                Rule::exists('text_order_drafts', 'id')
+                    ->where('draft_scope', TextOrderDraft::SCOPE_ADMIN_IMPORT),
+            ],
         ]);
 
         $confirmed = 0;
         $failed = [];
-        foreach (TextOrderDraft::query()->whereIn('id', $validated['draft_ids'])->get() as $draft) {
+        foreach (TextOrderDraft::query()
+            ->where('draft_scope', TextOrderDraft::SCOPE_ADMIN_IMPORT)
+            ->whereIn('id', $validated['draft_ids'])
+            ->get() as $draft) {
             try {
                 $this->confirmDraft($request, $draft, $approvalService);
                 $confirmed++;
@@ -407,7 +446,16 @@ class TextOrderImportController extends Controller
 
     private function ensureSaleDraft(Request $request, TextOrderDraft $draft): void
     {
-        abort_unless((int) $draft->sale_id === (int) $request->user()->id, 403);
+        abort_unless(
+            $draft->draft_scope === TextOrderDraft::SCOPE_SALE_PRIVATE
+            && (int) $draft->sale_id === (int) $request->user()->id,
+            403
+        );
+    }
+
+    private function ensureAdminDraft(TextOrderDraft $draft): void
+    {
+        abort_unless($draft->draft_scope === TextOrderDraft::SCOPE_ADMIN_IMPORT, 403);
     }
 
     private function forceSale(Request $request): void

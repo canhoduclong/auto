@@ -271,6 +271,7 @@ class SaleApiController extends BaseApiController
         $this->ensureSaleRole($request);
         $drafts = TextOrderDraft::query()
             ->with(['customer:id,name,phone,address', 'sale:id,name', 'order:id,code'])
+            ->where('draft_scope', TextOrderDraft::SCOPE_SALE_PRIVATE)
             ->where('sale_id', (int) $request->user()->id)
             ->latest()
             ->paginate(min(50, max(10, (int) $request->query('per_page', 20))));
@@ -286,7 +287,11 @@ class SaleApiController extends BaseApiController
         $saleId = (int) $request->user()->id;
         $parsed = $parser->parse($validated['text']);
         foreach ($parsed as $data) {
-            TextOrderDraft::query()->create(array_merge($data, ['sale_id' => $saleId, 'created_by' => $saleId]));
+            TextOrderDraft::query()->create(array_merge($data, [
+                'sale_id' => $saleId,
+                'created_by' => $saleId,
+                'draft_scope' => TextOrderDraft::SCOPE_SALE_PRIVATE,
+            ]));
         }
 
         return $this->ok(['count' => $parsed->count()], 'Đã tạo đơn nháp.');
