@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Models\Customer;
 use App\Models\ProductVariant;
+use App\Models\TruckBrand;
+use App\Models\TruckStation;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -13,6 +15,8 @@ class ZaloOrderTextParser
 {
     private ?Collection $sales = null;
     private ?Collection $variants = null;
+    private ?Collection $truckBrands = null;
+    private ?Collection $truckStations = null;
 
     public function parse(string $text): Collection
     {
@@ -81,6 +85,8 @@ class ZaloOrderTextParser
             $priceUnit = $price ? 'k' : null;
         }
         $deliveryTime = $this->match('/(?:giờ\s*nhận|thời\s*gian(?:\s*giao)?|giao hàng)\s*[:\-]?\s*([^\n]+)/iu', $body);
+        $truckBrandName = $this->match('/^\s*(?:nhà\s*xe)\s*[:\-]\s*([^\n]+)/imu', $body);
+        $truckStationAddress = $this->match('/^\s*(?:địa\s*chỉ\s*nhà\s*xe|địa\s*chỉ\s*trạm\s*xe|trạm\s*xe)\s*[:\-]\s*([^\n]+)/imu', $body);
 
         $deliveryDate = Carbon::createFromFormat('d/m/Y', $messageDate)->addDay()->toDateString();
         if ($dateText = $this->match('/\b(\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?)\b/u', $body)) {
@@ -94,6 +100,8 @@ class ZaloOrderTextParser
         }
 
         $sale = $this->resolveSale($zaloName);
+        $truckBrand = $this->resolveTruckBrand((string) $truckBrandName);
+        $truckStation = $this->resolveTruckStation($truckBrand, (string) $truckStationAddress);
         $customer = $phone !== '' ? Customer::query()->whereRaw("REPLACE(REPLACE(REPLACE(phone, ' ', ''), '.', ''), '-', '') LIKE ?", ['%' . $phone . '%'])->first() : null;
         $normalizedSize = preg_replace('/kg(?=\d)/iu', '.', (string) $size);
         $variant = $this->resolveVariant((string) $product, (float) str_replace(',', '.', $normalizedSize));
@@ -104,11 +112,15 @@ class ZaloOrderTextParser
         return [
             'sale_id' => $sale?->id,
             'customer_id' => $customer?->id,
+            'truck_brand_id' => $truckBrand?->id,
+            'truck_station_id' => $truckStation?->id,
             'product_variant_id' => $primaryItem['product_variant_id'] ?? $variant?->id,
             'zalo_name' => $zaloName,
             'customer_name' => trim((string) $customerName) ?: $customer?->name,
             'phone' => $phone ?: $customer?->phone,
             'address' => trim((string) $address) ?: $customer?->address,
+            'truck_brand_name' => trim((string) $truckBrandName) ?: $truckBrand?->name,
+            'truck_station_address' => trim((string) $truckStationAddress) ?: $truckStation?->address,
             'product_text' => trim((string) $product),
             'parsed_items' => $items,
             'quantity' => $primaryItem['quantity'] ?? ($quantity ? (int) $quantity : null),
@@ -185,6 +197,33 @@ class ZaloOrderTextParser
                 }
                 return $score;
             })->first(fn (ProductVariant $variant) => $keywords->contains(fn ($word) => str_contains($this->normalize(($variant->product?->name ?? '') . ' ' . ($variant->name ?? '')), $word)));
+    }
+
+    private function resolveTruckBrand(string $name): ?TruckBrand
+    {
+        $needle = $this->normalize($name);
+        if ($needle === '') {
+            return null;
+        }
+
+        $this->truckBrands ??= TruckBrand::query()->where('is_active', true)->get();
+
+        return $this->truckBrands->first(fn (TruckBrand $brand) => $this->normalize($brand->name) === $needle);
+    }
+
+    private function resolveTruckStation(?TruckBrand $brand, string $address): ?TruckStation
+    {
+        $needle = $this->normalize($address);
+        if (!$brand || $needle === '') {
+            return null;
+        }
+
+        $this->truckStations ??= TruckStation::query()->where('is_active', true)->get();
+
+        return $this->truckStations->first(fn (TruckStation $station) =>
+            (int) $station->brand_id === (int) $brand->id
+            && ($this->normalize((string) $station->address) === $needle || $this->normalize($station->name) === $needle)
+        );
     }
 
     private function match(string $pattern, string $subject, int $group = 1): ?string

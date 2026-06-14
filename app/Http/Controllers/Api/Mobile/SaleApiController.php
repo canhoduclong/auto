@@ -6,16 +6,19 @@ use App\Http\Controllers\OrderApprovalController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\PageController;
 use App\Http\Controllers\MyDashboardController;
+use App\Http\Controllers\Admin\TextOrderImportController;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\ProductVariant;
 use App\Models\Province;
 use App\Models\Team;
+use App\Models\TextOrderDraft;
 use App\Models\TruckRoute;
 use App\Models\TruckStation;
 use App\Models\Ward;
 use App\Services\ApprovalService;
 use App\Services\CustomerPriorityService;
+use App\Services\ZaloOrderTextParser;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -261,6 +264,56 @@ class SaleApiController extends BaseApiController
         ]);
 
         return $this->paginated($variants);
+    }
+
+    public function draftOrders(Request $request): JsonResponse
+    {
+        $this->ensureSaleRole($request);
+        $drafts = TextOrderDraft::query()
+            ->with(['customer:id,name,phone,address', 'sale:id,name', 'order:id,code'])
+            ->where('sale_id', (int) $request->user()->id)
+            ->latest()
+            ->paginate(min(50, max(10, (int) $request->query('per_page', 20))));
+        $drafts->getCollection()->transform(fn (TextOrderDraft $draft) => $this->draftPayload($draft));
+
+        return $this->salePaginated($drafts);
+    }
+
+    public function parseDraftOrders(Request $request, ZaloOrderTextParser $parser): JsonResponse
+    {
+        $this->ensureSaleRole($request);
+        $validated = $request->validate(['text' => ['required', 'string', 'max:200000']]);
+        $saleId = (int) $request->user()->id;
+        $parsed = $parser->parse($validated['text']);
+        foreach ($parsed as $data) {
+            TextOrderDraft::query()->create(array_merge($data, ['sale_id' => $saleId, 'created_by' => $saleId]));
+        }
+
+        return $this->ok(['count' => $parsed->count()], 'Đã tạo đơn nháp.');
+    }
+
+    public function confirmDraftOrder(Request $request, TextOrderDraft $draft, ApprovalService $approvalService): JsonResponse
+    {
+        $this->bindWebAuth($request);
+        return app(TextOrderImportController::class)->saleConfirm($request, $draft, $approvalService);
+    }
+
+    public function copyDraftOrder(Request $request, TextOrderDraft $draft): JsonResponse
+    {
+        $this->bindWebAuth($request);
+        return app(TextOrderImportController::class)->saleCopy($request, $draft);
+    }
+
+    public function copyConfirmDraftOrder(Request $request, TextOrderDraft $draft, ApprovalService $approvalService): JsonResponse
+    {
+        $this->bindWebAuth($request);
+        return app(TextOrderImportController::class)->saleCopyConfirm($request, $draft, $approvalService);
+    }
+
+    public function deleteDraftOrder(Request $request, TextOrderDraft $draft): JsonResponse
+    {
+        $this->bindWebAuth($request);
+        return app(TextOrderImportController::class)->saleDestroy($request, $draft);
     }
 
     public function storeOrder(Request $request, Customer $customer, ApprovalService $approvalService): JsonResponse
@@ -535,6 +588,40 @@ class SaleApiController extends BaseApiController
             $payload['order_discount_type'] = (string) ($order->order_discount_type ?? 'decrease');
         }
         return $payload;
+    }
+
+    private function draftPayload(TextOrderDraft $draft): array
+    {
+        $items = collect($draft->parsed_items ?: [[
+            'product_text' => $draft->product_text,
+            'quantity' => $draft->quantity,
+            'size_kg' => $draft->size_kg,
+            'unit_price' => $draft->unit_price,
+        ]])->map(fn ($item) => [
+            'name' => (string) ($item['product_text'] ?? 'Sản phẩm'),
+            'size' => (string) ($item['size_kg'] ?? ''),
+            'quantity' => (int) ($item['quantity'] ?? 0),
+            'size_kg' => (float) ($item['size_kg'] ?? 0),
+            'price' => (float) ($item['unit_price'] ?? 0),
+        ])->values();
+
+        return [
+            'id' => (int) $draft->id,
+            'code' => 'Nháp #' . $draft->id,
+            'status' => (string) $draft->status,
+            'customer' => [
+                'name' => (string) ($draft->customer_name ?: $draft->customer?->name ?: 'Khách hàng'),
+                'phone' => (string) ($draft->phone ?: $draft->customer?->phone ?: ''),
+                'address' => (string) ($draft->address ?: $draft->customer?->address ?: ''),
+            ],
+            'items' => $items,
+            'total' => $items->sum(fn ($item) => $item['quantity'] * $item['price']),
+            'delivery_date' => optional($draft->delivery_date)->toDateString(),
+            'created_at' => optional($draft->created_at)->toIso8601String(),
+            'note' => (string) ($draft->note ?? ''),
+            'truck_brand_name' => (string) ($draft->truck_brand_name ?? ''),
+            'truck_station_address' => (string) ($draft->truck_station_address ?? ''),
+        ];
     }
 
     private function customerTabCounts(int $userId): array

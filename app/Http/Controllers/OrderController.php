@@ -1312,14 +1312,16 @@ class OrderController extends Controller
         }
 
         $allowBackorder = (bool) ($orderData['allow_backorder'] ?? false);
+        $actorUserId = (int) ($orderData['actor_user_id'] ?? auth()->id() ?? 0);
+        $actorUser = $actorUserId > 0 ? User::query()->find($actorUserId) : null;
 
-        return DB::transaction(function () use ($items, $orderData, $approvalService, $allowBackorder) {
+        return DB::transaction(function () use ($items, $orderData, $approvalService, $allowBackorder, $actorUserId, $actorUser) {
             $customer = null;
             $customerId = (int) ($orderData['customer_id'] ?? 0);
             if ($customerId > 0) {
                 $customer = Customer::query()->find($customerId);
-                if ($customer && auth()->check()) {
-                    app(CustomerPriorityService::class)->assertCanCreateOrder($customer, (int) auth()->id());
+                if ($customer && $actorUserId > 0) {
+                    app(CustomerPriorityService::class)->assertCanCreateOrder($customer, $actorUserId);
                 }
             }
 
@@ -1498,7 +1500,7 @@ class OrderController extends Controller
             $approvalService->initOrderApproval($order);
 
             $order->refresh();
-            $this->logOrderHistory($order, 'create_order', null, (string) $order->status, 'Sale tao don hang');
+            $this->logOrderHistory($order, 'create_order', null, (string) $order->status, 'Sale tao don hang', $actorUser);
 
             if ($order->shipper_id) {
                 $this->logOrderHistory(
@@ -1506,12 +1508,13 @@ class OrderController extends Controller
                     'shipper_auto_assigned',
                     (string) $order->status,
                     (string) $order->status,
-                    'Tự động gán shipper cố định của khách hàng'
+                    'Tự động gán shipper cố định của khách hàng',
+                    $actorUser
                 );
             }
 
-            if ($customer && auth()->check()) {
-                app(CustomerPriorityService::class)->onOrderCreated($customer, $order, (int) auth()->id());
+            if ($customer && $actorUserId > 0) {
+                app(CustomerPriorityService::class)->onOrderCreated($customer, $order, $actorUserId);
             }
 
             // Cập nhật thứ tự ưu tiên trong ngày + trạng thái đủ/thiếu hàng cho toàn bộ đơn cùng ngày.

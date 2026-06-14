@@ -83,6 +83,12 @@ Route::prefix('mobile')->group(function () {
             Route::delete('/customers/{customer}', [SaleApiController::class, 'deleteCustomer']);
             Route::post('/customers/{customerId}/restore', [SaleApiController::class, 'restoreCustomer']);
             Route::get('/products', [SaleApiController::class, 'products']);
+            Route::get('/draft-orders', [SaleApiController::class, 'draftOrders']);
+            Route::post('/draft-orders/parse', [SaleApiController::class, 'parseDraftOrders']);
+            Route::post('/draft-orders/{draft}/copy', [SaleApiController::class, 'copyDraftOrder']);
+            Route::post('/draft-orders/{draft}/copy-confirm', [SaleApiController::class, 'copyConfirmDraftOrder']);
+            Route::post('/draft-orders/{draft}/confirm', [SaleApiController::class, 'confirmDraftOrder']);
+            Route::delete('/draft-orders/{draft}', [SaleApiController::class, 'deleteDraftOrder']);
             Route::post('/customers/{customer}/orders', [SaleApiController::class, 'storeOrder']);
             Route::get('/orders', [SaleApiController::class, 'orders']);
             Route::get('/orders/{order}', [SaleApiController::class, 'order']);

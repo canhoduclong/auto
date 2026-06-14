@@ -482,7 +482,10 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::get('admin/text-order-import', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'index'])->name('admin.text-order-import.index')->middleware('role:admin');
     Route::post('admin/text-order-import/parse', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'parse'])->name('admin.text-order-import.parse')->middleware('role:admin');
     Route::post('admin/text-order-import/bulk-confirm', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'bulkConfirm'])->name('admin.text-order-import.bulk-confirm')->middleware('role:admin');
+    Route::post('admin/text-order-import/{draft}/copy', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'copy'])->name('admin.text-order-import.copy')->middleware('role:admin');
+    Route::post('admin/text-order-import/{draft}/copy-confirm', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'copyConfirm'])->name('admin.text-order-import.copy-confirm')->middleware('role:admin');
     Route::post('admin/text-order-import/{draft}/confirm', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'confirm'])->name('admin.text-order-import.confirm')->middleware('role:admin');
+    Route::delete('admin/text-order-import/{draft}', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'destroy'])->name('admin.text-order-import.destroy')->middleware('role:admin');
 
 
     // Quản lý đơn hàng
@@ -795,6 +798,12 @@ Route::post('/my-profile', [PageController::class, 'updateProfile'])->name('page
 
 // My Orders routes (sale / leader / manager only)
 Route::middleware(['auth', 'role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin'])->group(function () {
+    Route::get('/my-order-drafts', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'saleIndex'])->name('pages.my_order_drafts');
+    Route::post('/my-order-drafts/parse', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'saleParse'])->name('pages.my_order_drafts.parse');
+    Route::post('/my-order-drafts/{draft}/copy', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'saleCopy'])->name('pages.my_order_drafts.copy');
+    Route::post('/my-order-drafts/{draft}/copy-confirm', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'saleCopyConfirm'])->name('pages.my_order_drafts.copy-confirm');
+    Route::post('/my-order-drafts/{draft}/confirm', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'saleConfirm'])->name('pages.my_order_drafts.confirm');
+    Route::delete('/my-order-drafts/{draft}', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'saleDestroy'])->name('pages.my_order_drafts.destroy');
     Route::get('/my-orders', [PageController::class, 'myOrders'])->name('pages.my_orders');
     Route::get('/my-orders/monitoring', [PageController::class, 'myOrdersMonitoring'])
         ->name('pages.my_orders.monitoring')

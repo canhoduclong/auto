@@ -354,6 +354,9 @@
                     @if(Auth::user()->hasPermission('task.create') || Auth::user()->hasPermission('task.assign') || \App\Services\TaskMenuService::canAssignTasks(Auth::user()) || \App\Services\TaskMenuService::canCompleteTasks(Auth::user()))
                         <li><a href="{{ route($offcanvasMyTasksRoute) }}" class="d-block py-1"><i class="bi bi-list-task me-1"></i> Nhiệm vụ được giao</a></li>
                     @endif
+                    @if(Auth::user()->isSalesFlowRole())
+                        <li><a href="{{ route('pages.my_order_drafts') }}" class="d-block py-1"><i class="bi bi-file-earmark-text me-1"></i> Đơn nháp</a></li>
+                    @endif
                     <li><a href="{{ route('pages.my_orders') }}" class="d-block py-1"><i class="bi bi-bag-check me-1"></i> {{ __('site.my_orders') }}</a></li>
                     @if($offcanvasCanViewMonitoring)
                         <li><a href="{{ route('pages.my_orders.monitoring') }}" class="d-block py-1"><i class="bi bi-activity me-1"></i> Theo dõi đơn hàng</a></li>
@@ -593,6 +596,9 @@
                                             @endif
                                         @endif
                                         @if(Auth::user()->isSalesFlowRole())
+                                        <a class="dropdown-item" href="{{ route('pages.my_order_drafts') }}">
+                                            <i class="bi bi-file-earmark-text"></i> Đơn nháp
+                                        </a>
                                         <a class="dropdown-item" href="{{ route('pages.my_orders') }}">
                                             <i class="bi bi-bag-check"></i> {{ __('site.my_orders') }}
                                         </a>
