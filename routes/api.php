@@ -44,6 +44,8 @@ Route::prefix('mobile')->group(function () {
             Route::post('/assignments/create-schedules', [ShipperApiController::class, 'createDeliverySchedules']);
             Route::get('/my-orders', [ShipperApiController::class, 'myOrders']);
             Route::get('/history', [ShipperApiController::class, 'history']);
+            Route::get('/customers', [ShipperApiController::class, 'customers']);
+            Route::get('/delivery-statistics', [ShipperApiController::class, 'deliveryStatistics']);
             Route::post('/orders/{order}/status', [ShipperApiController::class, 'updateStatus']);
             Route::post('/orders/{order}/complete-delivery', [ShipperApiController::class, 'completeDelivery']);
             Route::post('/orders/{order}/upload-proof', [ShipperApiController::class, 'uploadProof']);

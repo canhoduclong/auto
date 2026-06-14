@@ -15,6 +15,11 @@
             <label class="form-label">Email</label>
             <input type="email" name="email" class="form-control" required>
         </div>
+        <div class="mb-3">
+            <label class="form-label">Tên Zalo</label>
+            <input type="text" name="zalo_name" class="form-control" value="{{ old('zalo_name') }}" placeholder="Ví dụ: Ba Sơn Hoàng Long Tnt">
+            <small class="text-muted">Dùng để nhận diện sale khi nhập đơn từ nội dung Zalo.</small>
+        </div>
 
         <div class="mb-3">
             <label class="form-label">Mật khẩu</label>

@@ -703,8 +703,16 @@ class RoleScreenApiController extends BaseApiController
             ->orderBy('daily_sequence')
             ->orderBy('created_at')
             ->get();
+        $canPublishSchedule = $orders
+            ->whereNotNull('shipper_id')
+            ->pluck('shipper_id')
+            ->unique()
+            ->contains(fn ($shipperId) => app(\App\Services\ShipperAssignmentService::class)
+                ->hasUnpublishedDailySchedule((int) $shipperId, $date));
 
         return $this->ok([
+            'can_publish_schedule' => $canPublishSchedule,
+            'selected_date' => $date,
             'cards' => [
                 ['label' => 'Tổng đơn điều phối', 'value' => $orders->count()],
                 ['label' => 'Chưa phân công', 'value' => $orders->whereNull('shipper_id')->count()],

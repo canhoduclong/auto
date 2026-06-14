@@ -245,6 +245,7 @@
                                     <div class="min-w-0">
                                         <div class="fw-semibold text-truncate" style="max-width:160px;">{{ $user->name }}</div>
                                         <div class="small text-muted text-truncate" style="max-width:160px;">{{ $user->email }}</div>
+                                        @if($user->zalo_name)<div class="small text-primary text-truncate" style="max-width:160px;">Zalo: {{ $user->zalo_name }}</div>@endif
                                     </div>
                                 </div>
                             </td>

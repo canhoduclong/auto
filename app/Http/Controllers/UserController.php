@@ -26,7 +26,8 @@ class UserController extends Controller
             $search = $request->input('q');
             $query->where(function ($sub) use ($search) {
                 $sub->where('name', 'like', '%' . $search . '%')
-                    ->orWhere('email', 'like', '%' . $search . '%');
+                    ->orWhere('email', 'like', '%' . $search . '%')
+                    ->orWhere('zalo_name', 'like', '%' . $search . '%');
             });
         }
 
@@ -162,6 +163,7 @@ class UserController extends Controller
 
         $request->validate([
             'name' => 'required|string|max:255',
+            'zalo_name' => 'nullable|string|max:255',
             'email' => 'required|email|unique:users',
             'password' => 'required|min:6|confirmed',
             'roles' => 'array',
@@ -173,6 +175,7 @@ class UserController extends Controller
 
         $user = User::create([
             'name'          => $request->name,
+            'zalo_name'     => $request->zalo_name,
             'email'         => $request->email,
             'password'      => Hash::make($request->password),
             'warehouse_id'  => $request->warehouse_id,
@@ -232,6 +235,7 @@ class UserController extends Controller
     {
         $request->validate([
             'name' => 'required|string|max:255',
+            'zalo_name' => 'nullable|string|max:255',
             'email' => 'required|email|unique:users,email,'.$user->id,
             'password' => 'nullable|min:6|confirmed',
             'roles' => 'array',
@@ -284,6 +288,7 @@ class UserController extends Controller
 
         $user->update([
             'name'          => $request->name,
+            'zalo_name'     => $request->zalo_name,
             'email'         => $request->email,
             'password'      => $request->password ? Hash::make($request->password) : $user->password,
             'warehouse_id'  => $request->warehouse_id,

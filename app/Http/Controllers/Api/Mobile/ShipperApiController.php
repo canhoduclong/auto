@@ -265,13 +265,6 @@ class ShipperApiController extends BaseApiController
             'status_after' => $order->status,
             'note' => 'Điều phối mobile: ' . ($previous?->name ? $previous->name . ' -> ' : '') . $shipper->name,
         ]);
-        app(ShipperAssignmentService::class)->publishDailySchedule(
-            (int) $shipper->id,
-            $order->delivery_date ?? now()->addDay(),
-            (int) $request->user()->id,
-            'manager_shipper',
-        );
-
         return $this->ok(null, 'Da dieu phoi don cho ' . $shipper->name);
     }
 
@@ -292,15 +285,6 @@ class ShipperApiController extends BaseApiController
             'status_after' => $order->status,
             'note' => 'Gỡ điều phối mobile khỏi ' . ($previous?->name ?? 'shipper'),
         ]);
-        if ($previous) {
-            app(ShipperAssignmentService::class)->publishDailySchedule(
-                (int) $previous->id,
-                $order->delivery_date ?? now()->addDay(),
-                (int) $request->user()->id,
-                'manager_shipper',
-            );
-        }
-
         return $this->ok(null, 'Da go dieu phoi don');
     }
 
@@ -335,7 +319,11 @@ class ShipperApiController extends BaseApiController
     public function createDeliverySchedules(Request $request): JsonResponse
     {
         $this->ensureManagerShipperRole($request);
-        $date = (string) $request->input('date', now()->addDay()->toDateString());
+        $validated = $request->validate([
+            'date' => ['nullable', 'date'],
+            'notes' => ['nullable', 'string', 'max:500'],
+        ]);
+        $date = (string) ($validated['date'] ?? now()->addDay()->toDateString());
         $groups = Order::query()
             ->whereNotNull('shipper_id')
             ->whereIn('status', $this->assignmentStatuses())
@@ -352,26 +340,17 @@ class ShipperApiController extends BaseApiController
         }
 
         $count = 0;
-        DB::transaction(function () use ($groups, $request, &$count) {
-            foreach ($groups as $orders) {
-                $snapshot = $this->buildDeliveryScheduleSnapshot($orders);
-                $hash = $this->hashDeliveryScheduleSnapshot($snapshot);
-                foreach ($orders as $order) {
-                    OrderHistory::query()->create([
-                        'order_id' => $order->id,
-                        'action' => 'schedule_created',
-                        'user_id' => $request->user()->id,
-                        'role' => 'manager_shipper',
-                        'status_before' => $order->status,
-                        'status_after' => $order->status,
-                        'note' => 'Lịch trình giao hàng được gửi từ mobile.',
-                        'schedule_snapshot_hash' => $hash,
-                        'schedule_snapshot' => json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-                    ]);
-                    $count++;
-                }
+        foreach ($groups as $shipperId => $orders) {
+            if (app(ShipperAssignmentService::class)->publishDailySchedule(
+                (int) $shipperId,
+                $date,
+                (int) $request->user()->id,
+                'manager_shipper',
+                $validated['notes'] ?? null,
+            )) {
+                $count += $orders->count();
             }
-        });
+        }
 
         return $this->ok(['orders_count' => $count], 'Da gui lich trinh giao hang');
     }
@@ -404,6 +383,91 @@ class ShipperApiController extends BaseApiController
             ->paginate(20);
 
         return $this->paginated($orders);
+    }
+
+    public function customers(Request $request): JsonResponse
+    {
+        $this->ensureShipperRole($request);
+        $userId = (int) $request->user()->id;
+        $date = Carbon::parse($request->query('date', now()->toDateString()))->toDateString();
+        $sort = in_array($request->query('sort'), ['name', 'delivery_time', 'orders_count', 'total'], true)
+            ? (string) $request->query('sort')
+            : 'delivery_time';
+        $direction = $request->query('direction') === 'desc' ? 'desc' : 'asc';
+
+        $customers = Customer::query()
+            ->where(fn ($query) => $query->where('default_shipper_id', $userId)->orWhereNull('default_shipper_id'))
+            ->whereHas('orders', fn ($query) => $query->where('shipper_id', $userId)->forDeliveryDate($date))
+            ->withCount(['orders as orders_count' => fn ($query) => $query->where('shipper_id', $userId)->forDeliveryDate($date)])
+            ->withSum(['orders as orders_total' => fn ($query) => $query->where('shipper_id', $userId)->forDeliveryDate($date)], 'total')
+            ->when($sort === 'name', fn ($query) => $query->orderBy('name', $direction))
+            ->when($sort === 'delivery_time', fn ($query) => $query->orderByRaw("CASE WHEN delivery_time IS NULL OR delivery_time = '' THEN 1 ELSE 0 END")->orderBy('delivery_time', $direction))
+            ->when($sort === 'orders_count', fn ($query) => $query->orderBy('orders_count', $direction))
+            ->when($sort === 'total', fn ($query) => $query->orderBy('orders_total', $direction))
+            ->orderBy('name')
+            ->get();
+
+        return $this->ok([
+            'date' => $date,
+            'fixed' => $customers->where('default_shipper_id', $userId)->values()->map(fn (Customer $customer) => $this->shipperCustomerPayload($customer)),
+            'unassigned' => $customers->whereNull('default_shipper_id')->values()->map(fn (Customer $customer) => $this->shipperCustomerPayload($customer)),
+        ]);
+    }
+
+    public function deliveryStatistics(Request $request): JsonResponse
+    {
+        $this->ensureShipperRole($request);
+        $fromDate = Carbon::parse($request->query('from_date', now()->startOfWeek()->toDateString()))->startOfDay();
+        $toDate = Carbon::parse($request->query('to_date', now()->endOfWeek()->toDateString()))->startOfDay();
+        if ($fromDate->gt($toDate)) {
+            [$fromDate, $toDate] = [$toDate, $fromDate];
+        }
+        if ($fromDate->diffInDays($toDate) > 31) {
+            $toDate = $fromDate->copy()->addDays(31);
+        }
+
+        $dates = collect();
+        for ($date = $fromDate->copy(); $date->lte($toDate); $date->addDay()) {
+            $dates->push($date->toDateString());
+        }
+
+        $orders = Order::query()
+            ->with('customer:id,name')
+            ->where('shipper_id', (int) $request->user()->id)
+            ->whereIn('status', [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED])
+            ->whereDate('delivery_date', '>=', $fromDate->toDateString())
+            ->whereDate('delivery_date', '<=', $toDate->toDateString())
+            ->get();
+
+        return $this->ok([
+            'from_date' => $fromDate->toDateString(),
+            'to_date' => $toDate->toDateString(),
+            'dates' => $dates,
+            'rows' => $orders->groupBy('customer_id')->map(function ($customerOrders) use ($dates) {
+                return [
+                    'customer_id' => (int) $customerOrders->first()->customer_id,
+                    'customer_name' => $customerOrders->first()->customer?->name ?? 'Khách hàng',
+                    'days' => $dates->mapWithKeys(fn ($date) => [
+                        $date => $customerOrders->where(fn ($order) => optional($order->delivery_date)->toDateString() === $date)->count(),
+                    ]),
+                    'total' => $customerOrders->count(),
+                ];
+            })->sortBy('customer_name')->values(),
+        ]);
+    }
+
+    private function shipperCustomerPayload(Customer $customer): array
+    {
+        return [
+            'id' => (int) $customer->id,
+            'name' => (string) $customer->name,
+            'phone' => (string) ($customer->phone ?? ''),
+            'address' => (string) ($customer->address ?? ''),
+            'delivery_time' => (string) ($customer->delivery_time ?? ''),
+            'is_fixed' => $customer->default_shipper_id !== null,
+            'orders_count' => (int) ($customer->orders_count ?? 0),
+            'orders_total' => (float) ($customer->orders_total ?? 0),
+        ];
     }
 
     public function updateStatus(Request $request, Order $order): JsonResponse

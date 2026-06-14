@@ -67,6 +67,15 @@ class ShipperDashboardController extends Controller
             : Carbon::today()->toDateString();
     }
 
+    private function assignmentMutationResponse(Request $request, string $message)
+    {
+        if ($request->expectsJson()) {
+            return response()->json(['message' => $message]);
+        }
+
+        return back()->with('success', $message);
+    }
+
     private function constrainAvailableReadyOrder($query): void
     {
         $query->where('shipper_id', Auth::id())
@@ -182,14 +191,7 @@ class ShipperDashboardController extends Controller
 
         $dateString = $this->assignmentOrderingDate($request);
         $this->moveOrderWithinShipper($order, -1, $dateString);
-        app(ShipperAssignmentService::class)->publishDailySchedule(
-            (int) $order->shipper_id,
-            $dateString,
-            (int) Auth::id(),
-            'manager_shipper',
-        );
-
-        return back()->with('success', 'Đã đưa đơn #' . ($order->code ?: $order->id) . ' lên trên.');
+        return $this->assignmentMutationResponse($request, 'Đã đưa đơn #' . ($order->code ?: $order->id) . ' lên trên.');
     }
 
     // Di chuyển đơn xuống dưới trong danh sách shipper
@@ -199,14 +201,7 @@ class ShipperDashboardController extends Controller
 
         $dateString = $this->assignmentOrderingDate($request);
         $this->moveOrderWithinShipper($order, 1, $dateString);
-        app(ShipperAssignmentService::class)->publishDailySchedule(
-            (int) $order->shipper_id,
-            $dateString,
-            (int) Auth::id(),
-            'manager_shipper',
-        );
-
-        return back()->with('success', 'Đã đưa đơn #' . ($order->code ?: $order->id) . ' xuống dưới.');
+        return $this->assignmentMutationResponse($request, 'Đã đưa đơn #' . ($order->code ?: $order->id) . ' xuống dưới.');
     }
 
     public function moveOwnScheduleUp(Request $request, Order $order)
@@ -1543,7 +1538,8 @@ class ShipperDashboardController extends Controller
             ->orderBy('name')
             ->get();
 
-        $shipperScheduleStatuses = $this->resolveShipperScheduleStatuses($selectedDate);
+        $shipperScheduleStatuses = $this->resolveShipperScheduleStatuses($selectedDate, $assignedOrders);
+        $hasUnpublishedSchedules = collect($shipperScheduleStatuses)->contains('draft');
 
         $warehouses = Warehouse::query()->orderBy('name')->get();
         return view('shipper.manage-assignments', compact(
@@ -1555,38 +1551,22 @@ class ShipperDashboardController extends Controller
             'unassignedOrdersCount',
             'totalOrdersCount',
             'shipperScheduleStatuses',
+            'hasUnpublishedSchedules',
             'warehouses'
         ));
     }
 
-    private function resolveShipperScheduleStatuses(string $selectedDate): array
+    private function resolveShipperScheduleStatuses(string $selectedDate, $assignedOrders): array
     {
-        $scheduleActions = OrderHistory::query()
-            ->join('orders', 'orders.id', '=', 'order_histories.order_id')
-            ->whereDate('orders.delivery_date', $selectedDate)
-            ->whereIn('order_histories.action', ['schedule_created', 'schedule_confirmed', 'schedule_rejected'])
-            ->whereNotNull('orders.shipper_id')
-            ->orderBy('orders.shipper_id')
-            ->orderByDesc('order_histories.created_at')
-            ->orderByDesc('order_histories.id')
-            ->get(['orders.shipper_id as shipper_id', 'order_histories.action as action']);
-
         $statusByShipperId = [];
 
-        foreach ($scheduleActions as $scheduleAction) {
-            $shipperId = (int) $scheduleAction->shipper_id;
-
-            // Query is already ordered by newest action first per shipper,
-            // so keep only the first hit (latest status) and ignore older ones.
-            if (array_key_exists($shipperId, $statusByShipperId)) {
-                continue;
+        foreach ($assignedOrders as $shipperId => $orders) {
+            $snapshotHash = $this->hashDeliveryScheduleSnapshot($this->buildDeliveryScheduleSnapshot($orders));
+            $latestHistory = $this->latestDeliveryScheduleHistoryForShipperOnDate((int) $shipperId, $selectedDate);
+            $statusByShipperId[(int) $shipperId] = $this->deliveryScheduleStatus($latestHistory, $snapshotHash);
+            if (in_array($statusByShipperId[(int) $shipperId], ['none', 'changed'], true)) {
+                $statusByShipperId[(int) $shipperId] = 'draft';
             }
-
-            $statusByShipperId[$shipperId] = match ($scheduleAction->action) {
-                'schedule_confirmed' => 'confirmed',
-                'schedule_rejected' => 'rejected',
-                default => 'waiting',
-            };
         }
 
         return $statusByShipperId;
@@ -1608,18 +1588,6 @@ class ShipperDashboardController extends Controller
     private function hashDeliveryScheduleSnapshot(array $snapshot): string
     {
         return hash('sha256', json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
-    }
-
-    private function latestDeliveryScheduleHistoryForShipper(int $shipperId): ?OrderHistory
-    {
-        return OrderHistory::query()
-            ->join('orders', 'orders.id', '=', 'order_histories.order_id')
-            ->where('orders.shipper_id', $shipperId)
-            ->whereIn('order_histories.action', ['schedule_created', 'schedule_confirmed', 'schedule_rejected'])
-            ->orderByDesc('order_histories.created_at')
-            ->orderByDesc('order_histories.id')
-            ->select('order_histories.*')
-            ->first();
     }
 
     private function latestDeliveryScheduleHistoryForShipperOnDate(int $shipperId, string $selectedDate): ?OrderHistory
@@ -1719,22 +1687,7 @@ class ShipperDashboardController extends Controller
             ]);
         });
 
-        app(ShipperAssignmentService::class)->publishDailySchedule(
-            (int) $shipper->id,
-            $request->input('date', optional($order->delivery_date)->toDateString() ?: now()->addDay()),
-            (int) Auth::id(),
-            'manager_shipper',
-        );
-        if ($previousShipper && (int) $previousShipper->id !== (int) $shipper->id) {
-            app(ShipperAssignmentService::class)->publishDailySchedule(
-                (int) $previousShipper->id,
-                $request->input('date', optional($order->delivery_date)->toDateString() ?: now()->addDay()),
-                (int) Auth::id(),
-                'manager_shipper',
-            );
-        }
-
-        return back()->with('success', 'Đã gán đơn #' . $order->code . ' cho ' . $shipper->name . ' thành công!');
+        return $this->assignmentMutationResponse($request, 'Đã gán đơn #' . $order->code . ' cho ' . $shipper->name . ' thành công!');
     }
 
     /**
@@ -1754,7 +1707,6 @@ class ShipperDashboardController extends Controller
         abort_if(!($shipper->hasRole('shipper') || $shipper->hasRole('manager_shipper')), 422, 'Người dùng không phải shipper.');
 
         $previousShipperId = $customer->default_shipper_id ? (int) $customer->default_shipper_id : null;
-        $scheduleDate = $request->input('date', now()->addDay());
         $transferredOrders = collect();
 
         DB::transaction(function () use ($request, $customer, $shipper, $previousShipperId, &$transferredOrders): void {
@@ -1786,27 +1738,12 @@ class ShipperDashboardController extends Controller
             }
         });
 
-        app(ShipperAssignmentService::class)->publishDailySchedule(
-            (int) $shipper->id,
-            $scheduleDate,
-            (int) Auth::id(),
-            'manager_shipper',
-        );
-        if ($previousShipperId && $previousShipperId !== (int) $shipper->id) {
-            app(ShipperAssignmentService::class)->publishDailySchedule(
-                $previousShipperId,
-                $scheduleDate,
-                (int) Auth::id(),
-                'manager_shipper',
-            );
-        }
-
         $message = 'Đã đổi shipper cố định của khách ' . $customer->name . ' sang ' . $shipper->name . '.';
         if ($transferredOrders->isNotEmpty()) {
             $message .= ' Đã chuyển ' . $transferredOrders->count() . ' đơn đang chờ sang shipper mới.';
         }
 
-        return back()->with('success', $message);
+        return $this->assignmentMutationResponse($request, $message);
     }
 
     /**
@@ -1820,6 +1757,7 @@ class ShipperDashboardController extends Controller
             'from_shipper_id' => ['required', 'exists:users,id'],
             'to_shipper_id' => ['required', 'different:from_shipper_id', 'exists:users,id'],
             'notes' => ['nullable', 'string', 'max:500'],
+            'date' => ['nullable', 'date'],
         ]);
 
         $fromShipper = User::query()->findOrFail((int) $validated['from_shipper_id']);
@@ -1828,15 +1766,12 @@ class ShipperDashboardController extends Controller
         abort_if(!($fromShipper->hasRole('shipper') || $fromShipper->hasRole('manager_shipper')), 422, 'Người chuyển không phải shipper.');
         abort_if(!($toShipper->hasRole('shipper') || $toShipper->hasRole('manager_shipper')), 422, 'Người nhận không phải shipper.');
 
-        $date = Carbon::today()->toDateString();
+        $date = $this->assignmentOrderingDate($request);
 
         $ordersQuery = Order::query()
             ->where('shipper_id', $fromShipper->id)
             ->whereIn('status', $this->assignmentStatuses())
-            ->where(function ($query) use ($date) {
-                $query->whereDate('created_at', $date)
-                    ->orWhereDate('updated_at', $date);
-            });
+            ->forDeliveryDate($date);
 
         $orders = DB::transaction(function () use ($ordersQuery, $fromShipper, $toShipper, $validated) {
             $orders = $ordersQuery->lockForUpdate()->get();
@@ -1861,29 +1796,16 @@ class ShipperDashboardController extends Controller
         });
 
         if ($orders->isEmpty()) {
-            return back()->with('info', 'Không có đơn nào phù hợp để chuyển.');
+            return $this->assignmentMutationResponse($request, 'Không có đơn nào phù hợp để chuyển.');
         }
 
-        app(ShipperAssignmentService::class)->publishDailySchedule(
-            (int) $fromShipper->id,
-            $date,
-            (int) Auth::id(),
-            'manager_shipper',
-        );
-        app(ShipperAssignmentService::class)->publishDailySchedule(
-            (int) $toShipper->id,
-            $date,
-            (int) Auth::id(),
-            'manager_shipper',
-        );
-
-        return back()->with('success', 'Đã chuyển ' . $orders->count() . ' đơn từ ' . $fromShipper->name . ' sang ' . $toShipper->name . '.');
+        return $this->assignmentMutationResponse($request, 'Đã chuyển ' . $orders->count() . ' đơn từ ' . $fromShipper->name . ' sang ' . $toShipper->name . '.');
     }
 
     /**
      * Gỡ ra: Loại đơn hàng khỏi danh sách gán shipper
      */
-    public function unassignOrder(Order $order)
+    public function unassignOrder(Request $request, Order $order)
     {
         $this->authorizeManagerShipper();
 
@@ -1891,8 +1813,6 @@ class ShipperDashboardController extends Controller
         abort_if(!$order->shipper_id, 422, 'Đơn chưa được gán cho shipper nào.');
 
         $previousShipper = $order->shipper;
-        $scheduleDate = $order->delivery_date ?? now()->addDay();
-
         $order->update([
             'shipper_id' => null,
         ]);
@@ -1907,14 +1827,7 @@ class ShipperDashboardController extends Controller
             'note'          => 'Quản lý gỡ ra đơn từ shipper ' . ($previousShipper?->name ?? 'N/A'),
         ]);
 
-        app(ShipperAssignmentService::class)->publishDailySchedule(
-            (int) $previousShipper->id,
-            $scheduleDate,
-            (int) Auth::id(),
-            'manager_shipper',
-        );
-
-        return back()->with('success', 'Đã gỡ ra đơn #' . $order->code . ' khỏi danh sách ' . ($previousShipper?->name ?? '') . ' thành công!');
+        return $this->assignmentMutationResponse($request, 'Đã gỡ ra đơn #' . $order->code . ' khỏi danh sách ' . ($previousShipper?->name ?? '') . ' thành công!');
     }
 
     /**
@@ -1926,111 +1839,50 @@ class ShipperDashboardController extends Controller
 
         $validated = $request->validate([
             'notes' => ['nullable', 'string', 'max:500'],
+            'date' => ['nullable', 'date'],
         ]);
 
-        $date = Carbon::today()->toDateString();
+        $date = $this->assignmentOrderingDate($request);
 
         // Lấy danh sách tất cả shippers có đơn đã gán trong ngày
         $shipperIds = Order::query()
             ->whereNotNull('shipper_id')
             ->whereIn('status', $this->assignmentStatuses())
-            ->where(function ($query) use ($date) {
-                $query->whereDate('created_at', $date)
-                    ->orWhereDate('updated_at', $date);
-            })
+            ->forDeliveryDate($date)
             ->distinct('shipper_id')
             ->pluck('shipper_id')
             ->toArray();
 
         if (empty($shipperIds)) {
-            return back()->with('warning', 'Không có shipper nào được gán đơn trong ngày để tạo lịch trình giao hàng.');
+            return $this->assignmentMutationResponse($request, 'Không có shipper nào được gán đơn trong ngày để tạo lịch trình giao hàng.');
         }
 
         $totalOrdersCount = 0;
         $processedShippers = [];
-        $skippedShippers = [];
-        $changedRouteShippers = [];
-
-        // Lặp qua từng shipper và tạo lịch trình
         foreach ($shipperIds as $shipperId) {
             $shipper = User::query()->findOrFail($shipperId);
-
-            // Lấy tất cả đơn đã gán cho shipper trong ngày
-            $orders = Order::query()
-                ->where('shipper_id', $shipper->id)
-                ->whereIn('status', $this->assignmentStatuses())
-                ->where(function ($query) use ($date) {
-                    $query->whereDate('created_at', $date)
-                        ->orWhereDate('updated_at', $date);
-                })
-                ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
-                ->orderBy('daily_sequence', 'asc')
-                ->orderBy('delivery_time', 'asc')
-                ->orderBy('created_at', 'asc')
-                ->orderBy('id', 'asc')
-                ->get();
-
-            if ($orders->isNotEmpty()) {
-                $snapshot = $this->buildDeliveryScheduleSnapshot($orders);
-                $snapshotHash = $this->hashDeliveryScheduleSnapshot($snapshot);
-                $latestHistory = $this->latestDeliveryScheduleHistoryForShipper($shipper->id);
-                $latestHash = $latestHistory?->schedule_snapshot_hash;
-                $latestAction = $latestHistory?->action;
-
-                if ($latestHash === $snapshotHash && $latestAction === 'schedule_confirmed') {
-                    $skippedShippers[] = $shipper->name;
-                    continue;
-                }
-
-                $isRouteChanged = $latestHash !== null && $latestHash !== $snapshotHash;
-                if ($isRouteChanged) {
-                    $changedRouteShippers[] = $shipper->name;
-                }
-
-                $message = $isRouteChanged
-                    ? 'Có sự thay đổi lộ trình giao hàng, đề nghị kiểm tra và xác nhận.'
-                    : 'Lịch trình giao hàng đã được gửi cho ' . $shipper->name;
-
-                // Ghi lại OrderHistory cho mỗi đơn
-                foreach ($orders as $order) {
-                    OrderHistory::create([
-                        'order_id'      => $order->id,
-                        'action'        => 'schedule_created',
-                        'user_id'       => Auth::id(),
-                        'role'          => 'manager_shipper',
-                        'status_before' => $order->status,
-                        'status_after'  => $order->status,
-                        'note'          => $message,
-                        'schedule_snapshot_hash' => $snapshotHash,
-                        'schedule_snapshot'      => json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-                    ]);
-                }
-
-                $totalOrdersCount += $orders->count();
-                $processedShippers[] = $shipper->name . ' (' . $orders->count() . ' đơn)';
+            $ordersCount = $this->deliveryScheduleOrdersForShipper((int) $shipperId, $date)->count();
+            if (app(ShipperAssignmentService::class)->publishDailySchedule(
+                (int) $shipperId,
+                $date,
+                (int) Auth::id(),
+                'manager_shipper',
+                $validated['notes'] ?? null,
+            )) {
+                $totalOrdersCount += $ordersCount;
+                $processedShippers[] = $shipper->name . ' (' . $ordersCount . ' đơn)';
             }
         }
 
         if (empty($processedShippers)) {
-            if (!empty($skippedShippers)) {
-                return back()->with('info', 'Các shipper đã xác nhận và không đổi lộ trình nên không gửi lại: ' . implode(', ', $skippedShippers) . '.');
-            }
-
-            return back()->with('warning', 'Không có đơn nào để tạo lịch trình giao hàng.');
+            $message = 'Lộ trình hiện tại đã được gửi, không có thay đổi mới.';
+            return $request->expectsJson() ? response()->json(['message' => $message]) : back()->with('info', $message);
         }
 
         $shipperList = implode(', ', $processedShippers);
         $message = 'Đã gửi lịch trình giao hàng cho ' . count($processedShippers) . ' shipper (' . $totalOrdersCount . ' đơn): ' . $shipperList . '. Các shipper sẽ nhận được thông báo xác nhận.';
 
-        if (!empty($changedRouteShippers)) {
-            $message .= ' Có sự thay đổi lộ trình giao hàng, đề nghị kiểm tra và xác nhận: ' . implode(', ', array_unique($changedRouteShippers)) . '.';
-        }
-
-        if (!empty($skippedShippers)) {
-            $message .= ' Đã bỏ qua các shipper đã xác nhận và không đổi lộ trình: ' . implode(', ', array_unique($skippedShippers)) . '.';
-        }
-
-        return back()->with('success', $message);
+        return $this->assignmentMutationResponse($request, $message);
     }
 
     /**
@@ -2056,6 +1908,96 @@ class ShipperDashboardController extends Controller
             'selectedDate',
             'scheduleAlreadyConfirmed'
         ));
+    }
+
+    public function customers(Request $request)
+    {
+        $selectedDate = $request->filled('date')
+            ? Carbon::parse($request->input('date'))->toDateString()
+            : Carbon::today()->toDateString();
+        $sort = in_array($request->input('sort'), ['name', 'delivery_time', 'orders_count', 'total'], true)
+            ? $request->input('sort')
+            : 'delivery_time';
+        $direction = $request->input('direction') === 'desc' ? 'desc' : 'asc';
+
+        $customers = Customer::query()
+            ->where(function ($query) {
+                $query->where('default_shipper_id', Auth::id())
+                    ->orWhereNull('default_shipper_id');
+            })
+            ->whereHas('orders', fn ($query) => $query
+                ->where('shipper_id', Auth::id())
+                ->forDeliveryDate($selectedDate))
+            ->withCount(['orders as orders_count' => fn ($query) => $query
+                ->where('shipper_id', Auth::id())
+                ->forDeliveryDate($selectedDate)])
+            ->withSum(['orders as orders_total' => fn ($query) => $query
+                ->where('shipper_id', Auth::id())
+                ->forDeliveryDate($selectedDate)], 'total')
+            ->when($sort === 'name', fn ($query) => $query->orderBy('name', $direction))
+            ->when($sort === 'delivery_time', fn ($query) => $query->orderByRaw("CASE WHEN delivery_time IS NULL OR delivery_time = '' THEN 1 ELSE 0 END")->orderBy('delivery_time', $direction))
+            ->when($sort === 'orders_count', fn ($query) => $query->orderBy('orders_count', $direction))
+            ->when($sort === 'total', fn ($query) => $query->orderBy('orders_total', $direction))
+            ->orderBy('name')
+            ->get();
+
+        $fixedCustomers = $customers->where('default_shipper_id', Auth::id())->values();
+        $unassignedCustomers = $customers->whereNull('default_shipper_id')->values();
+
+        return view('shipper.customers', compact(
+            'selectedDate',
+            'sort',
+            'direction',
+            'fixedCustomers',
+            'unassignedCustomers',
+        ));
+    }
+
+    public function deliveryStatistics(Request $request)
+    {
+        $fromDate = $request->filled('from_date')
+            ? Carbon::parse($request->input('from_date'))->startOfDay()
+            : Carbon::today()->startOfWeek();
+        $toDate = $request->filled('to_date')
+            ? Carbon::parse($request->input('to_date'))->startOfDay()
+            : Carbon::today()->endOfWeek();
+
+        if ($fromDate->gt($toDate)) {
+            [$fromDate, $toDate] = [$toDate, $fromDate];
+        }
+        if ($fromDate->diffInDays($toDate) > 31) {
+            $toDate = $fromDate->copy()->addDays(31);
+        }
+
+        $dates = collect();
+        for ($date = $fromDate->copy(); $date->lte($toDate); $date->addDay()) {
+            $dates->push($date->toDateString());
+        }
+
+        $orders = Order::query()
+            ->with('customer:id,name')
+            ->where('shipper_id', Auth::id())
+            ->whereIn('status', [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED])
+            ->whereDate('delivery_date', '>=', $fromDate->toDateString())
+            ->whereDate('delivery_date', '<=', $toDate->toDateString())
+            ->get();
+
+        $rows = $orders->groupBy('customer_id')->map(function ($customerOrders) use ($dates) {
+            return [
+                'customer' => $customerOrders->first()->customer?->name ?? 'Khách hàng',
+                'days' => $dates->mapWithKeys(fn ($date) => [
+                    $date => $customerOrders->where(fn ($order) => optional($order->delivery_date)->toDateString() === $date)->count(),
+                ]),
+                'total' => $customerOrders->count(),
+            ];
+        })->sortBy('customer')->values();
+
+        return view('shipper.delivery-statistics', [
+            'fromDate' => $fromDate->toDateString(),
+            'toDate' => $toDate->toDateString(),
+            'dates' => $dates,
+            'rows' => $rows,
+        ]);
     }
 
     /**

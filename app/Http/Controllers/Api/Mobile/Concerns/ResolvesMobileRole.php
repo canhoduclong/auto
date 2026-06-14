@@ -85,7 +85,9 @@ trait ResolvesMobileRole
                 ['key' => 'my_orders', 'label' => 'Đơn hàng', 'route' => '/shipper/my-orders', 'api' => '/shipper/my-orders', 'icon' => 'local_shipping'],
                 ['key' => 'available_orders', 'label' => 'Đơn có thể nhận', 'route' => '/shipper/available', 'api' => '/shipper/available-orders', 'icon' => 'inventory_2'],
                 ['key' => 'warehouse_transfers', 'label' => 'Điều chuyển kho', 'route' => '/shipper/warehouse-transfers', 'api' => '/screens/shipper/warehouse_transfers', 'icon' => 'swap_horiz'],
-                ['key' => 'delivery_schedules', 'label' => 'Thống kê', 'route' => '/shipper/delivery-schedules', 'api' => '/shipper/delivery-schedules', 'icon' => 'route'],
+                ['key' => 'delivery_schedules', 'label' => 'Lộ trình', 'route' => '/shipper/delivery-schedules', 'api' => '/shipper/delivery-schedules', 'icon' => 'route'],
+                ['key' => 'customers', 'label' => 'Khách hàng', 'route' => '/shipper/customers', 'api' => '/shipper/customers', 'icon' => 'people'],
+                ['key' => 'delivery_statistics', 'label' => 'Thống kê giao hàng', 'route' => '/shipper/delivery-statistics', 'api' => '/shipper/delivery-statistics', 'icon' => 'table_chart'],
             ];
         }
 

@@ -270,7 +270,17 @@
                 @endif
 
                 @if($order->shipper_id)
-                    <form action="{{ route('shipper.unassign-order', [$order->id]) }}" method="POST" class="ms-auto">
+                    <button type="button"
+                        class="btn btn-sm btn-outline-primary js-open-shipper-picker ms-auto"
+                        data-bs-toggle="modal"
+                        data-bs-target="#shipperPickerModal"
+                        data-action="{{ route('shipper.assign-order.selected', $order) }}"
+                        data-order-code="{{ $order->code ?: $order->id }}"
+                        data-customer-name="{{ $customerName }}"
+                        data-set-default="0">
+                        <i class="bi bi-arrow-left-right me-1"></i>Chuyển shipper
+                    </button>
+                    <form action="{{ route('shipper.unassign-order', [$order->id]) }}" method="POST">
                         @csrf
                         @method('DELETE')
                         <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Bạn có chắc chắn muốn gỡ đơn này ra?')">

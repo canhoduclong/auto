@@ -329,6 +329,8 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/orders/{order}/store-return',    [ShipperDashboardController::class, 'storeReturn'])->name('store-return');
         Route::get('/history',                         [ShipperDashboardController::class, 'history'])->name('history');
         Route::get('/history/{order}',                 [ShipperDashboardController::class, 'historyDetail'])->name('history-detail');
+        Route::get('/customers',                       [ShipperDashboardController::class, 'customers'])->name('customers');
+        Route::get('/delivery-statistics',             [ShipperDashboardController::class, 'deliveryStatistics'])->name('delivery-statistics');
         Route::get('/warehouse-transfers',             [ShipperDashboardController::class, 'warehouseTransfers'])->name('warehouse-transfers');
         Route::post('/warehouse-transfers/{transfer}/pickup', [ShipperDashboardController::class, 'pickupWarehouseTransfer'])->name('warehouse-transfers.pickup');
         Route::post('/warehouse-transfers/{transfer}/deliver', [ShipperDashboardController::class, 'deliverWarehouseTransfer'])->name('warehouse-transfers.deliver');
@@ -477,6 +479,10 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::get('admin/order-schedule-runs', [OrderScheduleRunController::class, 'index'])->name('admin.order-schedule-runs.index')->middleware('role:admin');
     Route::post('admin/order-schedule-runs/run-now', [OrderScheduleRunController::class, 'runNow'])->name('admin.order-schedule-runs.run-now')->middleware('role:admin');
     Route::post('admin/order-schedule-runs/run-daily-rules-now', [OrderScheduleRunController::class, 'runDailyRulesNow'])->name('admin.order-schedule-runs.run-daily-rules-now')->middleware('role:admin');
+    Route::get('admin/text-order-import', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'index'])->name('admin.text-order-import.index')->middleware('role:admin');
+    Route::post('admin/text-order-import/parse', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'parse'])->name('admin.text-order-import.parse')->middleware('role:admin');
+    Route::post('admin/text-order-import/bulk-confirm', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'bulkConfirm'])->name('admin.text-order-import.bulk-confirm')->middleware('role:admin');
+    Route::post('admin/text-order-import/{draft}/confirm', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'confirm'])->name('admin.text-order-import.confirm')->middleware('role:admin');
 
 
     // Quản lý đơn hàng

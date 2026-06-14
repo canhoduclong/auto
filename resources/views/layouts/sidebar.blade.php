@@ -131,6 +131,14 @@
 								<span>Đơn hàng</span>
 							</a>
 						</li>
+						@if(auth()->user()?->hasRole('admin'))
+						<li class="nav-item">
+							<a href="{{ route('admin.text-order-import.index') }}" class="nav-link{{ request()->routeIs('admin.text-order-import.*') ? ' active' : '' }}">
+								<i class="ph-textbox"></i>
+								<span>Nhập đơn text</span>
+							</a>
+						</li>
+						@endif
 						<li class="nav-item">
 							<a href="{{ route('order-returns.index') }}" class="nav-link{{ request()->routeIs('order-returns.*') ? ' active' : '' }}">
 								<i class="ph-arrow-fat-lines-left"></i>

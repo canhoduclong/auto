@@ -1380,7 +1380,9 @@ class OrderController extends Controller
 
                 $unitDiscount = max(0, $unitDiscount);
 
-                $unitWeight = round(max(0.01, $this->resolveVariantKg($variant)), 3);
+                $unitWeight = isset($item['unit_weight']) && (float) $item['unit_weight'] > 0
+                    ? round((float) $item['unit_weight'], 3)
+                    : round(max(0.01, $this->resolveVariantKg($variant)), 3);
                 $isPricedByKg = $this->resolveVariantPricedByKg($variant);
                 $pricingFactor = $isPricedByKg ? $unitWeight : 1;
                 $lineDiscount = ($unitDiscountType === 'increase' ? -1 : 1) * $unitDiscount * $quantity * $pricingFactor;

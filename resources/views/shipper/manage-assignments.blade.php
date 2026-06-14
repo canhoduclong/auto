@@ -80,6 +80,7 @@
 @endpush
 
 @section('content')
+<div id="manageAssignmentsApp" data-refresh-url="{{ route('shipper.manage-assignments', ['date' => $selectedDate]) }}">
 <div class="row ">
     <div class="col col-md-6">
         <form method="GET" action="{{ route('shipper.manage-assignments') }}" class="d-flex gap-2 align-items-center flex-grow-1">
@@ -95,9 +96,14 @@
     <div class="col col-md-6 d-flex justify-content-end align-items-center">
         <form method="POST" action="{{ route('shipper.create-delivery-schedule') }}" class="d-flex gap-2 align-items-center ms-auto">
             @csrf
-            <input type="text" name="notes" class="form-control form-control-sm" maxlength="5000" placeholder="Ghi chú (tùy chọn)" style="width: 100%">
-            <button type="submit" class="btn btn-sm btn-success" style="min-width: 220px" title="Gửi lịch trình cho tất cả shipper">
-                <i class="bi bi-check-circle me-1"></i>Hoàn thành & Gửi xác nhận
+            <input type="hidden" name="date" value="{{ $selectedDate }}">
+            <input type="text" name="notes" class="form-control form-control-sm" maxlength="500" placeholder="Ghi chú (tùy chọn)" style="width: 100%">
+            <button type="submit"
+                class="btn btn-sm {{ $hasUnpublishedSchedules ? 'btn-success' : 'btn-secondary' }}"
+                style="min-width: 220px"
+                title="{{ $hasUnpublishedSchedules ? 'Gửi lịch trình cho tất cả shipper' : 'Lộ trình hiện tại đã được gửi' }}"
+                @disabled(!$hasUnpublishedSchedules)>
+                <i class="bi bi-check-circle me-1"></i>{{ $hasUnpublishedSchedules ? 'Hoàn thành & Gửi xác nhận' : 'Đã gửi lộ trình' }}
             </button>
         </form>
     </div>
@@ -180,11 +186,13 @@
                                     $scheduleBadgeClass = match ($scheduleStatus) {
                                         'confirmed' => 'bg-success',
                                         'rejected' => 'bg-danger',
+                                        'draft' => 'bg-secondary',
                                         default => 'bg-warning text-dark',
                                     };
                                     $scheduleLabel = match ($scheduleStatus) {
                                         'confirmed' => 'Đã Xác nhận',
                                         'rejected' => 'Từ chối',
+                                        'draft' => 'Chưa gửi',
                                         default => 'Chờ xác nhận',
                                     };
                                 @endphp
@@ -205,6 +213,7 @@
                                             </div>
                                             <form method="POST" action="{{ route('shipper.bulk-transfer-assignments') }}" class="d-flex gap-1" style="width: 220px;">
                                                 @csrf
+                                                <input type="hidden" name="date" value="{{ $selectedDate }}">
                                                 <input type="hidden" name="from_shipper_id" value="{{ $shipperId }}">
                                                 <select name="to_shipper_id" class="form-select form-select-sm" required style="flex: 1; font-size: 0.8rem;">
                                                     <option value="">-- Chuyển --</option>
@@ -316,54 +325,94 @@
         </div>
     </div>
 </div>
+</div>
 
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    const form = document.getElementById('shipperPickerForm');
-    const orderInfo = document.getElementById('shipperPickerOrderInfo');
-    const shipperIdInput = document.getElementById('shipperPickerShipperId');
-    const setDefaultInput = document.getElementById('shipperPickerSetDefault');
+    const appSelector = '#manageAssignmentsApp';
 
-    document.querySelectorAll('.js-open-shipper-picker').forEach(function (button) {
-        button.addEventListener('click', function () {
+    function notify(message, isError = false) {
+        const alert = document.createElement('div');
+        alert.className = `alert ${isError ? 'alert-danger' : 'alert-success'} shadow position-fixed top-0 end-0 m-3`;
+        alert.style.zIndex = '2000';
+        alert.textContent = message;
+        document.body.appendChild(alert);
+        setTimeout(() => alert.remove(), 3500);
+    }
+
+    async function refreshAssignments() {
+        const app = document.querySelector(appSelector);
+        const response = await fetch(app.dataset.refreshUrl, {
+            headers: {'X-Requested-With': 'XMLHttpRequest'}
+        });
+        if (!response.ok) throw new Error('Không thể tải lại danh sách điều phối.');
+        const html = await response.text();
+        const documentFragment = new DOMParser().parseFromString(html, 'text/html');
+        const refreshedApp = documentFragment.querySelector(appSelector);
+        if (!refreshedApp) throw new Error('Dữ liệu điều phối trả về không hợp lệ.');
+        app.replaceWith(refreshedApp);
+        document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('overflow');
+        document.body.style.removeProperty('padding-right');
+    }
+
+    document.addEventListener('click', function (event) {
+        const button = event.target.closest('.js-open-shipper-picker, .js-open-default-shipper-picker, .js-pick-shipper, .js-pick-default-shipper');
+        if (!button) return;
+
+        if (button.classList.contains('js-open-shipper-picker')) {
+            const form = document.getElementById('shipperPickerForm');
             form.action = button.dataset.action;
-            shipperIdInput.value = '';
-            setDefaultInput.value = button.dataset.setDefault;
-            orderInfo.textContent = 'Đơn ' + button.dataset.orderCode + ' - ' + button.dataset.customerName;
-        });
-    });
-
-    document.querySelectorAll('.js-pick-shipper').forEach(function (button) {
-        button.addEventListener('click', function () {
-            shipperIdInput.value = button.dataset.shipperId;
-        });
-    });
-
-    const defaultForm = document.getElementById('defaultShipperPickerForm');
-    const defaultCustomerInfo = document.getElementById('defaultShipperPickerCustomerInfo');
-    const defaultShipperIdInput = document.getElementById('defaultShipperPickerShipperId');
-    const defaultShipperButtons = document.querySelectorAll('.js-pick-default-shipper');
-
-    document.querySelectorAll('.js-open-default-shipper-picker').forEach(function (button) {
-        button.addEventListener('click', function () {
-            defaultForm.action = button.dataset.action;
-            defaultShipperIdInput.value = '';
-            defaultCustomerInfo.textContent = 'Khách hàng: ' + button.dataset.customerName;
-
-            defaultShipperButtons.forEach(function (shipperButton) {
-                shipperButton.classList.toggle(
-                    'active',
-                    shipperButton.dataset.shipperId === button.dataset.currentShipperId
-                );
+            document.getElementById('shipperPickerShipperId').value = '';
+            document.getElementById('shipperPickerSetDefault').value = button.dataset.setDefault;
+            document.getElementById('shipperPickerOrderInfo').textContent = 'Đơn ' + button.dataset.orderCode + ' - ' + button.dataset.customerName;
+        }
+        if (button.classList.contains('js-pick-shipper')) {
+            document.getElementById('shipperPickerShipperId').value = button.dataset.shipperId;
+        }
+        if (button.classList.contains('js-open-default-shipper-picker')) {
+            const form = document.getElementById('defaultShipperPickerForm');
+            form.action = button.dataset.action;
+            document.getElementById('defaultShipperPickerShipperId').value = '';
+            document.getElementById('defaultShipperPickerCustomerInfo').textContent = 'Khách hàng: ' + button.dataset.customerName;
+            document.querySelectorAll('.js-pick-default-shipper').forEach(function (shipperButton) {
+                shipperButton.classList.toggle('active', shipperButton.dataset.shipperId === button.dataset.currentShipperId);
             });
-        });
+        }
+        if (button.classList.contains('js-pick-default-shipper')) {
+            document.getElementById('defaultShipperPickerShipperId').value = button.dataset.shipperId;
+        }
     });
 
-    defaultShipperButtons.forEach(function (button) {
-        button.addEventListener('click', function () {
-            defaultShipperIdInput.value = button.dataset.shipperId;
-        });
+    document.addEventListener('submit', async function (event) {
+        const form = event.target;
+        if (!form.closest(appSelector) || form.method.toLowerCase() === 'get') return;
+        event.preventDefault();
+
+        const submitButton = form.querySelector('button[type="submit"]');
+        if (submitButton) submitButton.disabled = true;
+
+        try {
+            const response = await fetch(form.action, {
+                method: 'POST',
+                headers: {'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+                body: new FormData(form),
+            });
+            const payload = await response.json();
+            if (!response.ok) {
+                throw new Error(payload.message || Object.values(payload.errors || {}).flat()[0] || 'Không thể cập nhật điều phối.');
+            }
+            document.querySelectorAll('.modal.show').forEach(function (modal) {
+                bootstrap.Modal.getInstance(modal)?.hide();
+            });
+            await refreshAssignments();
+            notify(payload.message || 'Đã cập nhật điều phối.');
+        } catch (error) {
+            if (submitButton) submitButton.disabled = false;
+            notify(error.message, true);
+        }
     });
 });
 </script>
