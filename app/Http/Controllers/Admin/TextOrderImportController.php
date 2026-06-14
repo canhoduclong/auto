@@ -293,7 +293,12 @@ class TextOrderImportController extends Controller
         $draft->refresh();
 
         if (!$draft->sale_id) {
-            throw new \RuntimeException('Chưa nhận diện sale. Hãy chọn sale hoặc cập nhật tên Zalo của sale.');
+            throw new \RuntimeException('⚠️ Bắt buộc phải chọn Sale trước khi xác nhận. Hãy chọn Sale từ dropdown hoặc cập nhật tên Zalo của Sale.');
+        }
+        
+        $sale = User::query()->find($draft->sale_id);
+        if (!$sale) {
+            throw new \RuntimeException('Không tìm thấy Sale ID ' . $draft->sale_id . '.');
         }
         $draftItems = collect($draft->parsed_items ?: [[
             'product_variant_id' => $draft->product_variant_id,
@@ -389,7 +394,7 @@ class TextOrderImportController extends Controller
     private function validatedDraftData(Request $request): array
     {
         $validated = $request->validate([
-            'sale_id' => ['nullable', 'exists:users,id'],
+            'sale_id' => ['required', 'exists:users,id'],
             'customer_id' => ['nullable', 'exists:customers,id'],
             'truck_brand_id' => ['nullable', 'exists:truck_brands,id'],
             'truck_station_id' => ['nullable', 'exists:truck_stations,id'],

@@ -31,7 +31,10 @@
 
     <div class="card border-0 shadow-sm">
         <div class="card-header bg-white d-flex justify-content-between align-items-center">
-            <strong>Đơn nháp gần nhất</strong>
+            <div>
+                <strong>Đơn nháp gần nhất</strong>
+                <small class="text-muted d-block mt-1">ℹ️ <strong>Bắt buộc chọn Sale</strong> trước khi xác nhận - Đơn sẽ được tạo dưới tài khoản Sale đó</small>
+            </div>
             <button type="button" class="btn btn-success btn-sm" id="bulk-confirm"><i class="ph-checks me-1"></i>Xác nhận đã chọn</button>
         </div>
         <div class="table-responsive">
@@ -194,7 +197,25 @@ document.addEventListener('DOMContentLoaded', function () {
         sourceRow.after(copy);
     };
     async function confirmRow(row) {
-        const button = row.querySelector('.js-confirm-draft'); button.disabled = true;
+        const button = row.querySelector('.js-confirm-draft');
+        const saleSelect = row.querySelector('[name="sale_id"]');
+        const saleId = saleSelect.value;
+        
+        // Check if sale is selected
+        if (!saleId) {
+            alert('⚠️ Bắt buộc chọn Sale trước khi xác nhận!\n\nVui lòng chọn Sale từ dropdown phía trên.');
+            return;
+        }
+        
+        const saleName = saleSelect.options[saleSelect.selectedIndex].text;
+        const customerName = row.querySelector('[name="customer_name"]')?.value || 'Không xác định';
+        
+        // Confirm dialog
+        if (!confirm(`Xác nhận tạo đơn dưới tài khoản của:\n\n👤 ${saleName}\n\nKhách hàng: ${customerName}`)) {
+            return;
+        }
+        
+        button.disabled = true;
         let payload;
         try {
             payload = await requestAction(row, '/confirm');

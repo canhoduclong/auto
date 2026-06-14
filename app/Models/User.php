@@ -79,9 +79,20 @@ class User extends Authenticatable
     {
         return $this->hasMany(MobileApiToken::class);
     }
-    // có một vai trò
+    // có một vai trò (hỗ trợ string hoặc array)
     public function hasRole($role)
     {
+        // Nếu $role là array, kiểm tra user có bất kỳ role nào không
+        if (is_array($role)) {
+            foreach ($role as $r) {
+                if ($this->hasRole($r)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        
+        // Nếu $role là string, kiểm tra chuẩn
         return $this->roles->contains(function ($assignedRole) use ($role) {
             return strcasecmp((string) $assignedRole->name, (string) $role) === 0;
         });
