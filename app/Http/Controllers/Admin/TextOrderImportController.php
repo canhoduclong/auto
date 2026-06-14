@@ -22,9 +22,18 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use App\Models\Setting;
+use Illuminate\Support\Facades\Cache;
 
 class TextOrderImportController extends Controller
 {
+    protected $settings;
+    public function __construct()
+    {
+        $this->settings = Cache::remember('settings', 60, function () {
+            return Setting::all()->keyBy('key');
+        });
+    } 
     public function index()
     {
         return $this->draftIndex();
@@ -37,6 +46,7 @@ class TextOrderImportController extends Controller
 
     private function draftIndex(?int $saleId = null)
     {
+        $settings = $this->settings;
         $drafts = TextOrderDraft::query()
             ->with(['sale:id,name,zalo_name', 'customer:id,name,phone', 'truckBrand:id,name', 'truckStation:id,name,address,brand_id', 'variant.product:id,name', 'order:id,code'])
             ->where('draft_scope', $saleId ? TextOrderDraft::SCOPE_SALE_PRIVATE : TextOrderDraft::SCOPE_ADMIN_IMPORT)
@@ -57,11 +67,12 @@ class TextOrderImportController extends Controller
 
         $saleMode = $saleId !== null;
         $pageTitle = $saleMode ? 'Đơn nháp' : 'Nhập đơn text';
-        $actionBaseUrl = $saleMode ? url('my-dashboard/draft-orders') : url('admin/text-order-import');
-        $parseRoute = $saleMode ? route('pages.my_draft_orders.parse') : route('admin.text-order-import.parse');
+        $actionBaseUrl = $saleMode ? url('my-order-drafts') : url('admin/text-order-import');
+        $parseRoute = $saleMode ? route('pages.my_order_drafts.parse') : route('admin.text-order-import.parse');
+        $viewName = $saleMode ? 'site.my-draft-orders' : 'admin.text-order-import.index';
 
-        return view('admin.text-order-import.index', compact(
-            'drafts', 'sales', 'variants', 'truckStations', 'saleMode', 'pageTitle', 'actionBaseUrl', 'parseRoute'
+        return view($viewName, compact(
+            'drafts', 'sales', 'variants', 'truckStations', 'saleMode', 'pageTitle', 'actionBaseUrl', 'parseRoute', 'settings'
         ));
     }
 
