@@ -57,8 +57,8 @@ class TextOrderImportController extends Controller
 
         $saleMode = $saleId !== null;
         $pageTitle = $saleMode ? 'Đơn nháp' : 'Nhập đơn text';
-        $actionBaseUrl = $saleMode ? url('my-order-drafts') : url('admin/text-order-import');
-        $parseRoute = $saleMode ? route('pages.my_order_drafts.parse') : route('admin.text-order-import.parse');
+        $actionBaseUrl = $saleMode ? url('my-dashboard/draft-orders') : url('admin/text-order-import');
+        $parseRoute = $saleMode ? route('pages.my_draft_orders.parse') : route('admin.text-order-import.parse');
 
         return view('admin.text-order-import.index', compact(
             'drafts', 'sales', 'variants', 'truckStations', 'saleMode', 'pageTitle', 'actionBaseUrl', 'parseRoute'
@@ -126,6 +126,40 @@ class TextOrderImportController extends Controller
         $this->ensureSaleDraft($request, $draft);
 
         return $this->destroyAction($draft);
+    }
+
+    public function saleBulkConfirm(Request $request, ApprovalService $approvalService): JsonResponse
+    {
+        $saleId = (int) $request->user()->id;
+        $validated = $request->validate([
+            'draft_ids' => ['required', 'array', 'min:1'],
+            'draft_ids.*' => [
+                'integer',
+                Rule::exists('text_order_drafts', 'id')
+                    ->where('draft_scope', TextOrderDraft::SCOPE_SALE_PRIVATE)
+                    ->where('sale_id', $saleId),
+            ],
+        ]);
+
+        $confirmed = 0;
+        $failed = [];
+        foreach (TextOrderDraft::query()
+            ->where('draft_scope', TextOrderDraft::SCOPE_SALE_PRIVATE)
+            ->where('sale_id', $saleId)
+            ->whereIn('id', $validated['draft_ids'])
+            ->get() as $draft) {
+            try {
+                $this->confirmDraft($request, $draft, $approvalService);
+                $confirmed++;
+            } catch (\Throwable $exception) {
+                $draft->update(['status' => 'error', 'error_message' => $exception->getMessage()]);
+                $failed[] = '#' . $draft->id . ': ' . $exception->getMessage();
+            }
+        }
+
+        return response()->json([
+            'message' => 'Đã xác nhận ' . $confirmed . ' đơn.' . ($failed ? ' Lỗi: ' . implode(' | ', $failed) : ''),
+        ]);
     }
 
     public function confirm(Request $request, TextOrderDraft $draft, ApprovalService $approvalService): JsonResponse

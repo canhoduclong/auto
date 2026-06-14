@@ -131,6 +131,14 @@
 								<span>Đơn hàng</span>
 							</a>
 						</li>
+						@if(auth()->user()?->hasRole(['sale', 'leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale', 'admin']))
+						<li class="nav-item">
+							<a href="{{ route('pages.my_draft_orders.index') }}" class="nav-link{{ request()->routeIs('pages.my_draft_orders.*') ? ' active' : '' }}">
+								<i class="ph-textbox"></i>
+								<span>Đơn nháp</span>
+							</a>
+						</li>
+						@endif
 						@if(auth()->user()?->hasRole('admin'))
 						<li class="nav-item">
 							<a href="{{ route('admin.text-order-import.index') }}" class="nav-link{{ request()->routeIs('admin.text-order-import.*') ? ' active' : '' }}">

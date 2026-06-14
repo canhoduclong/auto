@@ -185,6 +185,29 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         ->name('pages.my_dashboard.order_adjustments.reject')
         ->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
 
+    // Đơn Nháp (Draft Orders) - Sale
+    Route::get('/my-dashboard/draft-orders', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'saleIndex'])
+        ->name('pages.my_draft_orders.index')
+        ->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
+    Route::post('/my-dashboard/draft-orders/parse', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'saleParse'])
+        ->name('pages.my_draft_orders.parse')
+        ->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
+    Route::post('/my-dashboard/draft-orders/bulk-confirm', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'saleBulkConfirm'])
+        ->name('pages.my_draft_orders.bulk_confirm')
+        ->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
+    Route::post('/my-dashboard/draft-orders/{draft}/confirm', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'saleConfirm'])
+        ->name('pages.my_draft_orders.confirm')
+        ->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
+    Route::post('/my-dashboard/draft-orders/{draft}/copy', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'saleCopy'])
+        ->name('pages.my_draft_orders.copy')
+        ->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
+    Route::post('/my-dashboard/draft-orders/{draft}/copy-confirm', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'saleCopyConfirm'])
+        ->name('pages.my_draft_orders.copy_confirm')
+        ->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
+    Route::delete('/my-dashboard/draft-orders/{draft}', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'saleDestroy'])
+        ->name('pages.my_draft_orders.destroy')
+        ->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
+
     Route::prefix('accounting')->name('accounting.')->middleware('role:accountant,accounting,admin')->group(function () {
         Route::get('/', [AccountingDashboardController::class, 'index'])->name('dashboard');
         Route::get('/orders', [AccountingDashboardController::class, 'orders'])->name('orders');
