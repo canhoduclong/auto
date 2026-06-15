@@ -1,8 +1,8 @@
 {
-  "version": "1.0.22",
-  "version_code": 23,
+  "version": "1.0.23",
+  "version_code": 24,
   "apk_url": "https://hoanglongtnt.com/app-update/app-release.apk",
   "ios_url": "",
   "force_update": false,
-  "message": "Bản cập nhật 1.0.22: timeline điều chuyển kho theo ngày/giờ, giao diện điều phối đơn và đổi shipper cố định trên mobile."
+  "message": "Bản cập nhật 1.0.23: danh sách đơn hàng hiển thị sản phẩm dạng bảng, số ưu tiên khoanh tròn trước khách hàng và trạng thái đặt ngay sau ngày lên đơn."
 }
