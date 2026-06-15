@@ -35,7 +35,10 @@
                 <strong>Đơn nháp gần nhất</strong>
                 <small class="text-muted d-block mt-1">ℹ️ <strong>Bắt buộc chọn Sale</strong> trước khi xác nhận - Đơn sẽ được tạo dưới tài khoản Sale đó</small>
             </div>
-            <button type="button" class="btn btn-success btn-sm" id="bulk-confirm"><i class="ph-checks me-1"></i>Xác nhận đã chọn</button>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-outline-danger btn-sm" id="bulk-delete" disabled><i class="ph-trash me-1"></i>Xóa đã chọn</button>
+                <button type="button" class="btn btn-success btn-sm" id="bulk-confirm" disabled><i class="ph-checks me-1"></i>Xác nhận đã chọn</button>
+            </div>
         </div>
         <div class="table-responsive">
             <table class="table table-sm table-hover align-middle mb-0">
@@ -53,8 +56,8 @@
                 </thead>
                 <tbody>
                 @forelse($drafts as $draft)
-                    <tr data-draft-id="{{ $draft->id }}">
-                        <td><input type="checkbox" class="draft-check" value="{{ $draft->id }}" @disabled($draft->status === 'confirmed')></td>
+                    <tr data-draft-id="{{ $draft->id }}" data-draft-status="{{ $draft->status }}">
+                        <td><input type="checkbox" class="draft-check" value="{{ $draft->id }}"></td>
                         <td style="min-width:240px">
                             <select name="sale_id" class="form-select form-select-sm mb-1 {{ $draft->sale_id ? '' : 'is-invalid' }}" @disabled($saleMode ?? false)>
                                 <option value="">Sale: {{ $draft->zalo_name ?: 'chưa nhận diện' }}</option>
@@ -181,12 +184,12 @@ document.addEventListener('DOMContentLoaded', function () {
     const insertCopiedRow = (sourceRow, payload, confirmed = false) => {
         const copy = sourceRow.cloneNode(true);
         copy.dataset.draftId = payload.draft_id;
+        copy.dataset.draftStatus = confirmed ? 'confirmed' : 'draft';
         const deliveryDate = copy.querySelector('[name="delivery_date"]');
         if (deliveryDate) deliveryDate.value = payload.delivery_date;
         const checkbox = copy.querySelector('.draft-check');
         checkbox.value = payload.draft_id;
         checkbox.checked = false;
-        checkbox.disabled = confirmed;
         copy.querySelector('.js-confirm-draft').disabled = confirmed;
         copy.querySelectorAll('button').forEach(button => {
             if (!button.classList.contains('js-confirm-draft') || !confirmed) button.disabled = false;
@@ -195,6 +198,7 @@ document.addEventListener('DOMContentLoaded', function () {
             ? `<span class="badge bg-success">Đã tạo ${payload.order_code || 'đơn'}</span>`
             : '<span class="badge bg-warning text-dark">Bản nháp sao chép</span>';
         sourceRow.after(copy);
+        updateBulkButtons();
     };
     async function confirmRow(row) {
         const button = row.querySelector('.js-confirm-draft');
@@ -223,10 +227,11 @@ document.addEventListener('DOMContentLoaded', function () {
             button.disabled = false;
             throw error;
         }
-        row.querySelector('.draft-check').disabled = true;
+        row.dataset.draftStatus = 'confirmed';
         const deliveryDate = row.querySelector('[name="delivery_date"]');
         if (deliveryDate) deliveryDate.value = payload.delivery_date;
         row.querySelector('td:nth-last-child(2)').innerHTML = `<span class="badge bg-success">Đã tạo ${payload.order_code || 'đơn'}</span>`;
+        updateBulkButtons();
         notify(payload.message);
     }
     document.addEventListener('click', async event => {
@@ -240,6 +245,7 @@ document.addEventListener('DOMContentLoaded', function () {
             try {
                 const payload = await requestAction(row, '', 'DELETE');
                 row.remove();
+                updateBulkButtons();
                 notify(payload.message);
             } catch (error) {
                 button.disabled = false;
@@ -283,13 +289,54 @@ document.addEventListener('DOMContentLoaded', function () {
         if (option?.dataset.brandName) row.querySelector('[name="truck_brand_name"]').value = option.dataset.brandName;
         if (option?.dataset.address) row.querySelector('[name="truck_station_address"]').value = option.dataset.address;
     });
-    document.getElementById('check-all')?.addEventListener('change', event => document.querySelectorAll('.draft-check:not(:disabled)').forEach(input => input.checked = event.target.checked));
+    const selectedRows = () => [...document.querySelectorAll('.draft-check:checked')].map(input => input.closest('tr'));
+    const updateBulkButtons = () => {
+        const rows = selectedRows();
+        document.getElementById('bulk-delete').disabled = rows.length === 0;
+        document.getElementById('bulk-confirm').disabled = !rows.some(row => row.dataset.draftStatus !== 'confirmed');
+        const checkAll = document.getElementById('check-all');
+        const checkboxes = [...document.querySelectorAll('.draft-check')];
+        if (checkAll) {
+            checkAll.checked = checkboxes.length > 0 && checkboxes.every(input => input.checked);
+            checkAll.indeterminate = checkboxes.some(input => input.checked) && !checkAll.checked;
+        }
+    };
+    document.getElementById('check-all')?.addEventListener('change', event => {
+        document.querySelectorAll('.draft-check').forEach(input => input.checked = event.target.checked);
+        updateBulkButtons();
+    });
+    document.addEventListener('change', event => {
+        if (event.target.matches('.draft-check')) updateBulkButtons();
+    });
+    document.getElementById('bulk-delete')?.addEventListener('click', async event => {
+        const rows = selectedRows();
+        if (!rows.length) return notify('Chưa chọn dòng import.', true);
+        if (!confirm(`Xóa ${rows.length} dòng import đã chọn? Đơn sale đã tạo (nếu có) sẽ không bị xóa.`)) return;
+
+        event.currentTarget.disabled = true;
+        try {
+            const response = await fetch('{{ route('admin.text-order-import.bulk-delete') }}', {
+                method: 'POST',
+                headers: {'Content-Type':'application/json','Accept':'application/json','X-CSRF-TOKEN':csrf},
+                body: JSON.stringify({draft_ids: rows.map(row => row.dataset.draftId)})
+            });
+            const payload = await response.json();
+            if (!response.ok) throw new Error(payload.message || 'Không thể xóa các dòng đã chọn');
+            rows.forEach(row => row.remove());
+            updateBulkButtons();
+            notify(payload.message);
+        } catch (error) {
+            updateBulkButtons();
+            notify(error.message, true);
+        }
+    });
     document.getElementById('bulk-confirm')?.addEventListener('click', async () => {
-        const rows = [...document.querySelectorAll('.draft-check:checked')].map(input => input.closest('tr'));
+        const rows = selectedRows().filter(row => row.dataset.draftStatus !== 'confirmed');
         if (!rows.length) return notify('Chưa chọn đơn nháp.', true);
         for (const row of rows) {
             try { await confirmRow(row); } catch (error) { notify(`#${row.dataset.draftId}: ${error.message}`, true); }
         }
+        updateBulkButtons();
     });
 });
 </script>

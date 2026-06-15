@@ -483,6 +483,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::get('admin/text-order-import', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'index'])->name('admin.text-order-import.index')->middleware('role:admin');
     Route::post('admin/text-order-import/parse', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'parse'])->name('admin.text-order-import.parse')->middleware('role:admin');
     Route::post('admin/text-order-import/bulk-confirm', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'bulkConfirm'])->name('admin.text-order-import.bulk-confirm')->middleware('role:admin');
+    Route::post('admin/text-order-import/bulk-delete', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'bulkDestroy'])->name('admin.text-order-import.bulk-delete')->middleware('role:admin');
     Route::post('admin/text-order-import/{draft}/copy', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'copy'])->name('admin.text-order-import.copy')->middleware('role:admin');
     Route::post('admin/text-order-import/{draft}/copy-confirm', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'copyConfirm'])->name('admin.text-order-import.copy-confirm')->middleware('role:admin');
     Route::post('admin/text-order-import/{draft}/confirm', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'confirm'])->name('admin.text-order-import.confirm')->middleware('role:admin');

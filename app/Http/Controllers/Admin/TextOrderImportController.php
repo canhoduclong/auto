@@ -260,6 +260,27 @@ class TextOrderImportController extends Controller
         return response()->json(['message' => 'Đã xóa dòng import. Đơn sale đã tạo (nếu có) không bị ảnh hưởng.']);
     }
 
+    public function bulkDestroy(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'draft_ids' => ['required', 'array', 'min:1'],
+            'draft_ids.*' => [
+                'integer',
+                Rule::exists('text_order_drafts', 'id')
+                    ->where('draft_scope', TextOrderDraft::SCOPE_ADMIN_IMPORT),
+            ],
+        ]);
+
+        $deleted = TextOrderDraft::query()
+            ->where('draft_scope', TextOrderDraft::SCOPE_ADMIN_IMPORT)
+            ->whereIn('id', $validated['draft_ids'])
+            ->delete();
+
+        return response()->json([
+            'message' => 'Đã xóa ' . $deleted . ' dòng import. Đơn sale đã tạo (nếu có) không bị ảnh hưởng.',
+        ]);
+    }
+
     public function bulkConfirm(Request $request, ApprovalService $approvalService): JsonResponse
     {
         $validated = $request->validate([
