@@ -19,7 +19,7 @@ return [
     'hotline' => 'Hotline',
     'email' => 'Email',
     'policy' => 'Chính sách',
-    'policy_and_terms' => 'Chính sách và quy định',
+    'policy_and_terms' => 'Chính sách quyền riêng tư',
     'official_channels' => 'Kênh chính thức',
     'copyright' => 'Bảo lưu mọi quyền',
     'slogan_fallback' => 'Slogan của bạn',

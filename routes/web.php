@@ -40,6 +40,7 @@ use App\Http\Controllers\HomeController;
 use App\Http\Controllers\CustomerPopupController;
 use App\Http\Controllers\OrderAjaxController;
 use App\Http\Controllers\PageController;
+use App\Http\Controllers\SiteController;
 use App\Http\Controllers\ProvinceController;
 use App\Http\Controllers\PostController; 
 use App\Http\Controllers\Admin\PostCategoryController;
@@ -785,6 +786,7 @@ Route::resource('transactions', TransactionController::class)->only(['index','cr
 Route::post('expense-types', [TransactionController::class, 'storeExpenseType'])->name('expense-types.store')->middleware('permission');
 
 // Static Pages
+Route::get('/privacy-policy', [SiteController::class, 'privacyPolicy'])->name('pages.privacy_policy');
 Route::get('/gioi-thieu', [PageController::class, 'about'])->name('pages.about');
 Route::get('/lien-he', [PageController::class, 'contact'])->name('pages.contact');
 Route::post('/lien-he', [PageController::class, 'storeContact'])->name('pages.contact.store');

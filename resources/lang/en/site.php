@@ -19,7 +19,7 @@ return [
     'hotline' => 'Hotline',
     'email' => 'Email',
     'policy' => 'Policy',
-    'policy_and_terms' => 'Policy and terms',
+    'policy_and_terms' => 'Privacy policy',
     'official_channels' => 'Official channels',
     'copyright' => 'All rights reserved',
     'slogan_fallback' => 'Your slogan here',

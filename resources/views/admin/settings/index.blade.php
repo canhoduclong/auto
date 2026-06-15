@@ -217,7 +217,7 @@
                         <input type="text" class="form-control" id="slogan" name="slogan" value="{{ $settings['slogan']->value ?? '' }}" placeholder="VD: Chất lượng tạo niềm tin">
                     </div>
                     <div class="col-12">
-                        <label class="form-label">Policy Page URL</label>
+                        <label class="form-label">Privacy Policy URL (legacy)</label>
                         <input type="text" class="form-control" id="policy_page" name="policy_page" value="{{ $settings['policy_page']->value ?? '' }}" placeholder="https://...">
                     </div>
                 </div>

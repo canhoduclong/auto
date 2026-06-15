@@ -10,7 +10,7 @@
     $address = $settings['address']->value ?? '';
     $hotline = $settings['hotline']->value ?? ($settings['HOTLINE']->value ?? '');
     $email = $settings['email']->value ?? '';
-    $policyLink = $settings['policy_page']->value ?? '#';
+    $policyLink = route('pages.privacy_policy');
 
     $normalizedPhone = preg_replace('/\s+/', '', $hotline);
 

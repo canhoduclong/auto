@@ -109,7 +109,7 @@
             </div>
             <div class="col-md-4">
                 <h5>Chính sách</h5>
-                <p><a href="{{ $settings['policy_page']->value ?? '#' }}">Chính sách và quy định</a></p>
+                <p><a href="{{ route('pages.privacy_policy') }}">Chính sách quyền riêng tư</a></p>
             </div>
         </div>
     </div>
