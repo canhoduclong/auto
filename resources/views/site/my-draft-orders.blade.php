@@ -240,7 +240,7 @@
                             @csrf
                             <div>
                                 <label class="form-label fw-bold" style="font-size:0.9rem;">Nội dung copy từ Zalo</label>
-                                <textarea name="text" rows="12" class="form-control" required placeholder="[14/06/2026 10:45:10] Tên Zalo sale.&#10;KH: Lò Quay....&#10;SĐT: 0919622559&#10;ĐC: .123 Nguyễn Trãi,...&#10;Giờ giao: 4:00 &#10;SL: 10....&#10;Yêu cầu: .......&#10;Size: 2.6 ...&#10;Ghi chú: .....&#10;Giá: 58.000đ/kg...&#10;Gửi nhà xe: Trúc Phương&#10;Địa chỉ nhà xe: Số 107 Đường số 4, ....">{{ old('text') }}</textarea>
+                                <textarea name="text" rows="12" class="form-control" required placeholder="[14/06/2026 10:45:10] Tên Zalo sale.&#10;KH: Lò Quay....&#10;SĐT: 0919622559&#10;ĐC: .123 Nguyễn Trãi,...&#10;Giờ giao: 4:00 &#10;SL: 10....&#10;Yêu cầu: .......&#10;Size: 2.6 ...&#10;Giá: 58.000đ/kg...&#10;Gửi nhà xe: Trúc Phương&#10;Địa chỉ nhà xe: Số 107 Đường số 4, ....">{{ old('text') }}</textarea>
                                 <small class="d-block mt-2 text-muted">Tin nhắn ghi chú sẽ nối vào đơn gần nhất.</small>
                             </div>
                             <button type="submit" class="btn btn-primary w-100">
