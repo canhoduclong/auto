@@ -57,7 +57,7 @@
     .drafts-panel {
         border: 1px solid rgba(15, 23, 42, 0.08);
         border-radius: 9px;
-        background: #dbe0d4;
+        background: #f0f1ee;
         box-shadow: 0 12px 34px rgba(15, 23, 42, 0.06);
     }
     .drafts-form {
@@ -240,7 +240,7 @@
                             @csrf
                             <div>
                                 <label class="form-label fw-bold" style="font-size:0.9rem;">Nội dung copy từ Zalo</label>
-                                <textarea name="text" rows="12" class="form-control" required placeholder="[14/06/2026 10:45:10] Tên Zalo sale&#10;KH: Tên khách&#10;SĐT: 0909...&#10;SL: 1...">{{ old('text') }}</textarea>
+                                <textarea name="text" rows="12" class="form-control" required placeholder="[14/06/2026 10:45:10] Tên Zalo sale.&#10;KH: Lò Quay....&#10;SĐT: 0919622559&#10;ĐC: .123 Nguyễn Trãi,...&#10;Giờ giao: 4:00 &#10;SL: 10....&#10;Yêu cầu: .......&#10;Size: 2.6 ...&#10;Ghi chú: .....&#10;Giá: 58.000đ/kg...&#10;Gửi nhà xe: Trúc Phương&#10;Địa chỉ nhà xe: Số 107 Đường số 4, ....">{{ old('text') }}</textarea>
                                 <small class="d-block mt-2 text-muted">Tin nhắn ghi chú sẽ nối vào đơn gần nhất.</small>
                             </div>
                             <button type="submit" class="btn btn-primary w-100">
@@ -388,10 +388,20 @@
                                                     </select>
                                                 </div>
                                                 <div>
-                                                    <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-                                                        <input type="number" name="item_quantity" value="{{ $item['quantity'] ?? '' }}" min="1" class="form-control form-control-sm" placeholder="SL">
-                                                        <input type="number" step=".001" name="item_size_kg" value="{{ $item['size_kg'] ?? '' }}" class="form-control form-control-sm" placeholder="Kg">
-                                                        <input type="number" step="1" name="item_unit_price" value="{{ $item['unit_price'] ?? '' }}" class="form-control form-control-sm" placeholder="Giá">
+                                                    <div style="display: flex; width:100%; gap: 8px; margin-bottom: 12px;">
+                                                        <div>
+                                                            <small style="display: block; font-size: 0.75rem; font-weight: 700; color: #64748b; margin-bottom: 4px;">Số lượng</small>
+                                                            <input type="number" name="item_quantity" value="{{ $item['quantity'] ?? '' }}" min="1" class="form-control form-control-sm" placeholder="SL">
+                                                        </div>
+                                                        <div>
+                                                            <small style="display: block; font-size: 0.75rem; font-weight: 700; color: #64748b; margin-bottom: 4px;">Size</small>
+                                                            <input type="number" step=".001" name="item_size_kg" value="{{ $item['size_kg'] ?? '' }}" class="form-control form-control-sm" placeholder="Kg">
+                                                        </div>
+
+                                                        <div>
+                                                            <small style="display: block; font-size: 0.75rem; font-weight: 700; color: #64748b; margin-bottom: 4px;">Giá bán</small>
+                                                            <input type="number" step="1" name="item_unit_price" value="{{ $item['unit_price'] ?? '' }}" class="form-control form-control-sm" placeholder="Giá">
+                                                        </div>
                                                     </div>
                                                 </div> 
                                             @endforeach 
