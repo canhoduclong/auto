@@ -154,8 +154,8 @@ class ZaloOrderTextParser
                 'product_text' => $description,
                 'product_variant_id' => $variant?->id,
                 'quantity' => (int) $match[1],
-                'size_kg' => $size > 0 ? $size : null,
-                'unit_price' => $price > 0 ? $price : null,
+                'size_kg' => $size > 0 ? $size : ($fallbackSize > 0 ? $fallbackSize : null),
+                'unit_price' => $price > 0 ? $price : ($fallbackPrice > 0 ? $fallbackPrice : null),
             ];
         }
 
