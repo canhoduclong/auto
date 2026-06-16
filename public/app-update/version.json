@@ -1,8 +1,8 @@
 {
-  "version": "1.0.23",
-  "version_code": 24,
+  "version": "1.0.27",
+  "version_code": 28,
   "apk_url": "https://hoanglongtnt.com/app-update/app-release.apk",
   "ios_url": "",
   "force_update": false,
-  "message": "Bản cập nhật 1.0.23: danh sách đơn hàng hiển thị sản phẩm dạng bảng, số ưu tiên khoanh tròn trước khách hàng và trạng thái đặt ngay sau ngày lên đơn."
+  "message": "Bản cập nhật 1.0.27: cải thiện trải nghiệm và đồng bộ phiên bản ứng dụng mới nhất."
 }
