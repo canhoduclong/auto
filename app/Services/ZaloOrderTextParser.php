@@ -175,17 +175,51 @@ class ZaloOrderTextParser
     private function resolveSale(string $zaloName): ?User
     {
         $needle = $this->normalize($zaloName);
+        if ($needle === '') {
+            return null;
+        }
+
         $this->sales ??= User::query()->whereHas('roles', fn ($query) => $query->where('name', 'sale'))->get();
 
-        return $this->sales->first(function (User $user) use ($needle) {
-            $zalo = $this->normalize((string) $user->zalo_name);
-            $name = $this->normalize((string) $user->name);
+        return $this->sales
+            ->map(fn (User $user) => ['user' => $user, 'score' => $this->saleMatchScore($needle, $user)])
+            ->filter(fn (array $match) => $match['score'] > 0)
+            ->sortByDesc('score')
+            ->first()['user'] ?? null;
+    }
 
-            return $zalo === $needle
-                || $name === $needle
-                || ($zalo !== '' && (str_contains($zalo, $needle) || str_contains($needle, $zalo)))
-                || ($name !== '' && str_contains($name, $needle));
-        });
+    private function saleMatchScore(string $needle, User $user): int
+    {
+        $zalo = $this->normalize((string) $user->zalo_name);
+        $name = $this->normalize((string) $user->name);
+
+        if ($zalo !== '' && $zalo === $needle) {
+            return 100;
+        }
+        if ($name !== '' && $name === $needle) {
+            return 90;
+        }
+        if (mb_strlen($needle) >= 5 && $zalo !== '' && (str_contains($zalo, $needle) || str_contains($needle, $zalo))) {
+            return 80;
+        }
+        if (mb_strlen($needle) >= 5 && $name !== '' && (str_contains($name, $needle) || str_contains($needle, $name))) {
+            return 70;
+        }
+
+        $tokens = collect(preg_split('/\s+/', $needle))
+            ->filter(fn ($token) => mb_strlen($token) >= 3 && !in_array($token, ['tnt', 'long', 'hoang'], true))
+            ->values();
+        if ($tokens->isEmpty()) {
+            return 0;
+        }
+
+        $zaloMatches = $zalo !== '' && $tokens->every(fn ($token) => str_contains($zalo, $token));
+        if ($zaloMatches) {
+            return 60 + min($tokens->count(), 5);
+        }
+
+        $nameMatches = $name !== '' && $tokens->every(fn ($token) => str_contains($name, $token));
+        return $nameMatches ? 50 + min($tokens->count(), 5) : 0;
     }
 
     private function resolveVariant(string $productText, float $size): ?ProductVariant
