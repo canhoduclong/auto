@@ -123,9 +123,28 @@
     }
     .tmo-page .tmo-order-top {
         display: grid;
-        grid-template-columns: 1.3fr 1fr 1fr 1fr 1fr auto;
+        grid-template-columns: 56px minmax(220px, 1.6fr) minmax(120px, .8fr) minmax(130px, .8fr) auto;
         gap: .5rem;
         align-items: center;
+    }
+    .tmo-page .tmo-priority-circle {
+        width: 42px;
+        height: 42px;
+        border-radius: 50%;
+        border: 2px solid #0f766e;
+        background: #ecfdf5;
+        color: #0f766e;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 800;
+        font-size: 1.05rem;
+        line-height: 1;
+    }
+    .tmo-page .tmo-priority-circle.empty {
+        border-color: #cbd5e1;
+        background: #f8fafc;
+        color: #94a3b8;
     }
     .tmo-page .tmo-code {
         font-weight: 700;
@@ -464,6 +483,17 @@
                     <div class="tmo-mini" id="saleFilterState">Hien thi toan bo don theo bo loc hien tai.</div>
                 </div>
                 <div class="d-flex align-items-center gap-1">
+                    <form method="POST" action="{{ route('pages.all_team_orders.approve_all') }}" onsubmit="return confirm('Duyet tat ca don PKD hom nay dang toi luot ban theo bo loc hien tai?');">
+                        @csrf
+                        <input type="hidden" name="from_date" value="{{ $fromDate }}">
+                        <input type="hidden" name="to_date" value="{{ $toDate }}">
+                        <input type="hidden" name="team_id" value="{{ request('team_id') }}">
+                        <input type="hidden" name="status" value="{{ request('status') }}">
+                        <input type="hidden" name="search" value="{{ request('search') }}">
+                        <button type="submit" class="btn btn-success btn-sm">
+                            <i class="bi bi-check2-all me-1"></i>Duyet tat ca
+                        </button>
+                    </form>
                     <label class="small text-muted mb-0" for="orderSort" style="min-width:60px">Sap xep:</label>
                     <select id="orderSort" class="form-select form-select-sm" style="min-width: 210px;">
                         <option value="created_desc">Ngay tao moi nhat</option>
@@ -508,20 +538,18 @@
 
                         <div class="tmo-order-top">
                             <div>
-                                <div class="tmo-code">{{ $order->code }}</div>
-                                <div class="tmo-mini">Tao: {{ optional($order->created_at)->format('d/m/Y H:i') }}</div>
+                                <span class="tmo-priority-circle {{ $order->daily_sequence ? '' : 'empty' }}">
+                                    {{ $order->daily_sequence ?: '—' }}
+                                </span>
                             </div>
                             <div>
-                                <div class="fw-semibold">{{ $order->customer->name ?? '-' }}</div>
-                                <div class="tmo-mini">{{ $order->customer->phone ?? '-' }}</div>
-                            </div>
-                            <div>
-                                <div class="fw-semibold">{{ $order->user->name ?? '-' }}</div>
-                                <div class="tmo-mini">Team: {{ $order->user?->team?->name ?? '-' }}</div>
+                                <div class="tmo-code">{{ $order->customer->name ?? '-' }}</div>
+                                <div class="tmo-mini">Sale: {{ $order->user->name ?? '-' }}{{ $order->user?->team?->name ? ' / '.$order->user->team->name : '' }}</div>
+                                <div class="tmo-mini">Mã: {{ $order->code }} · {{ optional($order->created_at)->format('d/m/Y H:i') }}</div>
                             </div>
                             <div>
                                 <div class="fw-semibold">{{ number_format((float) $order->total, 0, ',', '.') }} đ</div>
-                                <div class="tmo-mini">Tổng giá trị đơn</div>
+                                <div class="tmo-mini">Giá trị đơn hàng</div>
                             </div>
                             <div>
                                 <span class="tmo-status js-order-status {{ $statusClass }}" data-status="{{ $order->status }}">{{ $statusLabel }}</span>

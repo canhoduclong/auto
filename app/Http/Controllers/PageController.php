@@ -1455,6 +1455,46 @@ class PageController extends Controller
         return back()->with('success', $message);
     }
 
+    public function myTeamOrdersApproveAll(Request $request, ApprovalService $approvalService)
+    {
+        if (!auth()->check()) {
+            return redirect()->route('login')->with('error', 'Bạn cần đăng nhập để thao tác.');
+        }
+
+        $user = auth()->user();
+        $isLeader = $user->hasRole('leader') || $user->hasRole('leader_sale') || $user->hasRole('sale_manager') || $user->hasRole('admin');
+        if (!$isLeader) {
+            abort(403, 'Bạn không có quyền duyệt tất cả đơn của team.');
+        }
+
+        $fromDate = $request->input('from_date', now()->toDateString());
+        $toDate = $request->input('to_date', now()->toDateString());
+        $roleNames = $this->normalizedRoleNames($user);
+
+        $query = Order::with(['approvals.step', 'user.roles', 'customer'])
+            ->when(!$user->hasRole('admin'), function ($q) use ($user) {
+                $q->whereHas('user', function ($sub) use ($user) {
+                    $sub->where(function ($scope) use ($user) {
+                        $scope->where(function ($teamSale) use ($user) {
+                            $teamSale->where('team_id', $user->team_id)
+                                ->whereHas('roles', function ($roleQuery) {
+                                    $roleQuery->whereRaw('LOWER(name) = ?', ['sale']);
+                                });
+                        })->orWhere('id', $user->id);
+                    });
+                });
+            })
+            ->whereDate('created_at', '>=', $fromDate)
+            ->whereDate('created_at', '<=', $toDate);
+
+        $this->applyTeamOrderFilters($query, $request);
+        $this->applyCurrentApprovalStepScope($query, $roleNames);
+
+        $result = $this->approveOrdersFromQuery($query, $user, $approvalService, 'Leader duyệt tất cả từ trang my-team-orders');
+
+        return $this->redirectAfterApproveAll($result, 'team');
+    }
+
     public function allTearmOrders(Request $request)
     {
         if (!auth()->check()) {
@@ -1733,6 +1773,136 @@ class PageController extends Controller
         $message = "Đã duyệt tự động {$approvedCount} đơn";
         if ($failedCount > 0) {
             $message .= ", {$failedCount} đơn không thể duyệt.";
+        } else {
+            $message .= '.';
+        }
+
+        return back()->with('success', $message);
+    }
+
+    public function allTeamOrdersApproveAll(Request $request, ApprovalService $approvalService)
+    {
+        if (!auth()->check()) {
+            return redirect()->route('login')->with('error', 'Bạn cần đăng nhập để thao tác.');
+        }
+
+        $user = auth()->user();
+        $isManager = $user->hasRole('manager') || $user->hasRole('manager_sale') || $user->hasRole('director') || $user->hasRole('admin');
+        if (!$isManager) {
+            abort(403, 'Bạn không có quyền duyệt tất cả đơn PKD.');
+        }
+
+        $fromDate = $request->input('from_date', now()->toDateString());
+        $toDate = $request->input('to_date', now()->toDateString());
+        $roleNames = $this->normalizedRoleNames($user);
+        $allowedCreatorRoles = ['sale', 'leader', 'leader_sale', 'sale_manager'];
+
+        $query = Order::with(['approvals.step', 'user.roles', 'customer'])
+            ->whereHas('user.roles', function ($q) use ($allowedCreatorRoles) {
+                $q->whereIn(DB::raw('LOWER(name)'), $allowedCreatorRoles);
+            })
+            ->whereDate('created_at', '>=', $fromDate)
+            ->whereDate('created_at', '<=', $toDate)
+            ->whereDate('created_at', now()->toDateString());
+
+        if ($request->filled('team_id')) {
+            $teamId = (int) $request->input('team_id');
+            $query->whereHas('user', function ($sub) use ($teamId) {
+                $sub->where('team_id', $teamId);
+            });
+        }
+
+        $this->applyTeamOrderFilters($query, $request);
+        $this->applyCurrentApprovalStepScope($query, $roleNames);
+
+        $result = $this->approveOrdersFromQuery($query, $user, $approvalService, 'Manager duyệt tất cả từ trang all-team-orders');
+
+        return $this->redirectAfterApproveAll($result, 'PKD');
+    }
+
+    private function normalizedRoleNames(User $user)
+    {
+        return $user->roles->pluck('name')
+            ->map(fn ($role) => strtolower((string) $role))
+            ->values();
+    }
+
+    private function applyCurrentApprovalStepScope(Builder $query, $roleNames): Builder
+    {
+        if ($roleNames->isEmpty()) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->whereExists(function ($sub) use ($roleNames) {
+            $sub->select(DB::raw(1))
+                ->from('approval_orders as ao')
+                ->join('approval_steps as aps', 'aps.id', '=', 'ao.approval_step_id')
+                ->whereColumn('ao.order_id', 'orders.id')
+                ->where('ao.status', 'pending')
+                ->whereIn(DB::raw('LOWER(aps.role_slug)'), $roleNames->toArray())
+                ->whereNotExists(function ($prev) {
+                    $prev->select(DB::raw(1))
+                        ->from('approval_orders as ao_prev')
+                        ->join('approval_steps as aps_prev', 'aps_prev.id', '=', 'ao_prev.approval_step_id')
+                        ->whereColumn('ao_prev.order_id', 'ao.order_id')
+                        ->where('ao_prev.status', 'pending')
+                        ->whereColumn('aps_prev.step_order', '<', 'aps.step_order');
+                });
+        });
+    }
+
+    private function applyTeamOrderFilters(Builder $query, Request $request): void
+    {
+        if ($request->filled('status')) {
+            $query->where('status', $request->input('status'));
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->where(function ($sub) use ($search) {
+                $sub->where('code', 'like', "%{$search}%")
+                    ->orWhereHas('customer', function ($c) use ($search) {
+                        $c->where('name', 'like', "%{$search}%")
+                            ->orWhere('phone', 'like', "%{$search}%");
+                    })
+                    ->orWhereHas('user', function ($u) use ($search) {
+                        $u->where('name', 'like', "%{$search}%");
+                    });
+            });
+        }
+    }
+
+    private function approveOrdersFromQuery(Builder $query, User $user, ApprovalService $approvalService, string $note): array
+    {
+        $approvedCount = 0;
+        $failedCount = 0;
+
+        foreach ($query->latest()->get() as $order) {
+            try {
+                if (!$approvalService->canApproveCurrentStep($order, $user)) {
+                    $failedCount++;
+                    continue;
+                }
+
+                $approvalService->approve($order, $user, $note);
+                $approvedCount++;
+            } catch (\Throwable) {
+                $failedCount++;
+            }
+        }
+
+        return ['approved' => $approvedCount, 'failed' => $failedCount];
+    }
+
+    private function redirectAfterApproveAll(array $result, string $scope)
+    {
+        if ($result['approved'] === 0) {
+            return back()->with('error', "Không có đơn {$scope} nào đang tới lượt bạn duyệt.");
+        }
+
+        $message = "Đã duyệt tất cả {$result['approved']} đơn {$scope}";
+        if ($result['failed'] > 0) {
+            $message .= ", {$result['failed']} đơn không thể duyệt.";
         } else {
             $message .= '.';
         }

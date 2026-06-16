@@ -99,6 +99,7 @@ Route::prefix('mobile')->group(function () {
             Route::post('/orders/{order}/cancel', [SaleApiController::class, 'cancelOrder']);
             Route::post('/orders/{order}/trash', [SaleApiController::class, 'trashOrder']);
             Route::get('/approvals/{scope}', [SaleApiController::class, 'approvals']);
+            Route::post('/approvals/{scope}/approve-all', [SaleApiController::class, 'approveAll']);
             Route::post('/approvals/{order}/approve', [SaleApiController::class, 'approve']);
             Route::post('/approvals/{order}/reject', [SaleApiController::class, 'reject']);
         });

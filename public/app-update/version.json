@@ -1,8 +1,8 @@
 {
-  "version": "1.0.27",
-  "version_code": 28,
+  "version": "1.0.28",
+  "version_code": 29,
   "apk_url": "https://hoanglongtnt.com/app-update/app-release.apk",
   "ios_url": "",
   "force_update": false,
-  "message": "Bản cập nhật 1.0.27: cải thiện trải nghiệm và đồng bộ phiên bản ứng dụng mới nhất."
+  "message": "Bản cập nhật 1.0.28: bổ sung tiện ích sale, duyệt tất cả và cải thiện trải nghiệm đăng nhập."
 }

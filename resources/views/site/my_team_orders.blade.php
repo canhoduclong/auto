@@ -575,6 +575,16 @@
                     <div class="tmo-mini" id="saleFilterState">Hiển thị toàn bộ đơn theo bộ lọc hiện tại.</div>
                 </div>
                 <div class="d-flex align-items-center gap-2">
+                    <form method="POST" action="{{ route('pages.my_team_orders.approve_all') }}" onsubmit="return confirm('Duyệt tất cả đơn team đang tới lượt bạn theo bộ lọc hiện tại?');">
+                        @csrf
+                        <input type="hidden" name="from_date" value="{{ $fromDate }}">
+                        <input type="hidden" name="to_date" value="{{ $toDate }}">
+                        <input type="hidden" name="status" value="{{ request('status') }}">
+                        <input type="hidden" name="search" value="{{ request('search') }}">
+                        <button type="submit" class="btn btn-success btn-sm">
+                            <i class="bi bi-check2-all me-1"></i>Duyệt tất cả
+                        </button>
+                    </form>
                     <div class="d-flex align-items-center  gap-1">
                         <label class="small text-muted mb-0" for="orderSort" style="min-width:60px">Sắp xếp:</label>
                         <select id="orderSort" class="form-select form-select-sm" style="min-width: 210px;">

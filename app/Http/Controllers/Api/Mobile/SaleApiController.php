@@ -502,29 +502,11 @@ class SaleApiController extends BaseApiController
     {
         $this->ensureSaleRole($request);
         $user = $request->user();
-        $isLeader = $scope === 'leader';
-        if ($isLeader && !($user->hasRole('leader') || $user->hasRole('leader_sale') || $user->hasRole('sale_manager') || $user->hasRole('admin'))) {
-            abort(403);
-        }
-        if (!$isLeader && !($user->hasRole('manager') || $user->hasRole('manager_sale') || $user->hasRole('director') || $user->hasRole('admin'))) {
-            abort(403);
-        }
+        $isLeader = $this->ensureApprovalScope($request, $scope);
 
         $roles = $user->roles->pluck('name')->map(fn ($role) => strtolower((string) $role))->values();
-        $query = Order::query()->with(['customer', 'user.team', 'items.product:id,name', 'items.variant:id,name,sku,size,product_id', 'approvals.step', 'approvals.approver', 'histories.user']);
-        if ($isLeader && !$user->hasRole('admin')) {
-            $query->whereHas('user', fn ($sale) => $sale->where(fn ($owner) => $owner
-                ->where(fn ($teamSale) => $teamSale
-                    ->where('team_id', $user->team_id)
-                    ->whereHas('roles', fn ($role) => $role->whereRaw('LOWER(name) = ?', ['sale'])))
-                ->orWhere('id', $user->id)));
-        }
-        if (!$isLeader) {
-            $query->whereHas('user.roles', fn ($role) => $role->whereIn(DB::raw('LOWER(name)'), ['sale', 'leader', 'leader_sale', 'sale_manager']));
-            if ($request->filled('team_id')) {
-                $query->whereHas('user', fn ($sale) => $sale->where('team_id', (int) $request->query('team_id')));
-            }
-        }
+        $query = $this->approvalQuery($request, $isLeader)
+            ->with(['customer', 'user.team', 'items.product:id,name', 'items.variant:id,name,sku,size,product_id', 'approvals.step', 'approvals.approver', 'histories.user']);
         if (!$request->filled('from_date') && !$request->filled('to_date')) {
             $query->whereDate('created_at', today());
         }
@@ -539,6 +521,62 @@ class SaleApiController extends BaseApiController
         });
 
         return $this->salePaginated($orders, ['teams' => Team::query()->orderBy('name')->get(['id', 'name'])]);
+    }
+
+    public function approveAll(Request $request, string $scope, ApprovalService $approvalService): JsonResponse
+    {
+        $this->ensureSaleRole($request);
+        $this->bindWebAuth($request);
+        $user = $request->user();
+        $isLeader = $this->ensureApprovalScope($request, $scope);
+        $roles = $user->roles->pluck('name')->map(fn ($role) => strtolower((string) $role))->values();
+
+        $query = $this->approvalQuery($request, $isLeader)
+            ->with(['approvals.step'])
+            ->whereExists(function ($sub) use ($roles) {
+                $sub->select(DB::raw(1))
+                    ->from('approval_orders as ao')
+                    ->join('approval_steps as aps', 'aps.id', '=', 'ao.approval_step_id')
+                    ->whereColumn('ao.order_id', 'orders.id')
+                    ->where('ao.status', 'pending')
+                    ->whereIn(DB::raw('LOWER(aps.role_slug)'), $roles->toArray())
+                    ->whereNotExists(function ($prev) {
+                        $prev->select(DB::raw(1))
+                            ->from('approval_orders as ao_prev')
+                            ->join('approval_steps as aps_prev', 'aps_prev.id', '=', 'ao_prev.approval_step_id')
+                            ->whereColumn('ao_prev.order_id', 'ao.order_id')
+                            ->where('ao_prev.status', 'pending')
+                            ->whereColumn('aps_prev.step_order', '<', 'aps.step_order');
+                    });
+            });
+
+        if (!$request->filled('from_date') && !$request->filled('to_date')) {
+            $query->whereDate('created_at', today());
+        }
+        $this->applyOrderFilters($request, $query);
+
+        $approved = 0;
+        $failed = 0;
+        $note = $request->input('note') ?: ($isLeader ? 'Leader duyệt tất cả từ mobile' : 'Manager duyệt tất cả từ mobile');
+        foreach ($query->latest()->get() as $order) {
+            $request->merge(['note' => $note]);
+            $response = app(OrderApprovalController::class)->approve($request, $order, $approvalService);
+            $payload = $response instanceof JsonResponse ? $response->getData(true) : [];
+            if (($payload['success'] ?? false) === true) {
+                $approved++;
+            } else {
+                $failed++;
+            }
+        }
+
+        if ($approved === 0) {
+            return $this->fail('Không có đơn nào đang tới lượt bạn duyệt.', 422, ['approved' => 0, 'failed' => $failed]);
+        }
+
+        return $this->ok([
+            'approved' => $approved,
+            'failed' => $failed,
+        ], $failed > 0 ? "Đã duyệt {$approved} đơn, {$failed} đơn không thể duyệt." : "Đã duyệt tất cả {$approved} đơn.");
     }
 
     public function approve(Request $request, Order $order, ApprovalService $approvalService): JsonResponse
@@ -575,6 +613,41 @@ class SaleApiController extends BaseApiController
         if ($request->filled('to_date')) $query->whereDate('created_at', '<=', $request->query('to_date'));
         $sortBy = in_array($request->query('sort_by'), ['code', 'total', 'status', 'payment_status', 'created_at'], true) ? $request->query('sort_by') : 'created_at';
         $query->orderBy($sortBy, strtolower((string) $request->query('sort_dir')) === 'asc' ? 'asc' : 'desc');
+    }
+
+    private function ensureApprovalScope(Request $request, string $scope): bool
+    {
+        $user = $request->user();
+        $isLeader = $scope === 'leader';
+        if ($isLeader && !($user->hasRole('leader') || $user->hasRole('leader_sale') || $user->hasRole('sale_manager') || $user->hasRole('admin'))) {
+            abort(403);
+        }
+        if (!$isLeader && !($user->hasRole('manager') || $user->hasRole('manager_sale') || $user->hasRole('director') || $user->hasRole('admin'))) {
+            abort(403);
+        }
+
+        return $isLeader;
+    }
+
+    private function approvalQuery(Request $request, bool $isLeader)
+    {
+        $user = $request->user();
+        $query = Order::query();
+        if ($isLeader && !$user->hasRole('admin')) {
+            $query->whereHas('user', fn ($sale) => $sale->where(fn ($owner) => $owner
+                ->where(fn ($teamSale) => $teamSale
+                    ->where('team_id', $user->team_id)
+                    ->whereHas('roles', fn ($role) => $role->whereRaw('LOWER(name) = ?', ['sale'])))
+                ->orWhere('id', $user->id)));
+        }
+        if (!$isLeader) {
+            $query->whereHas('user.roles', fn ($role) => $role->whereIn(DB::raw('LOWER(name)'), ['sale', 'leader', 'leader_sale', 'sale_manager']));
+            if ($request->filled('team_id')) {
+                $query->whereHas('user', fn ($sale) => $sale->where('team_id', (int) $request->query('team_id')));
+            }
+        }
+
+        return $query;
     }
 
     private function customerPayload(Customer $customer, bool $details = false): array
