@@ -733,6 +733,7 @@ class PageController extends Controller
                 'customer_feedback_status' => null,
                 'customer_feedback_note' => null,
                 'customer_feedback_sale_review' => null,
+                'customer_feedback_images' => null,
                 'customer_feedback_by' => null,
                 'customer_feedback_at' => null,
             ]);
@@ -744,15 +745,27 @@ class PageController extends Controller
             'customer_feedback_status' => ['required', Rule::in(array_keys(Order::customerFeedbackOptions()))],
             'customer_feedback_note' => ['required', 'string', 'max:2000'],
             'customer_feedback_sale_review' => ['nullable', 'string', 'max:2000'],
+            'customer_feedback_images' => ['nullable', 'array', 'max:6'],
+            'customer_feedback_images.*' => ['image', 'mimes:jpeg,jpg,png,webp', 'max:5120'],
         ], [
             'customer_feedback_status.required' => 'Vui long chon tinh trang khach hang.',
             'customer_feedback_note.required' => 'Vui long nhap thong tin phan hoi tu khach hang.',
         ]);
 
+        $feedbackImages = collect($order->customer_feedback_images ?? [])
+            ->filter()
+            ->values()
+            ->all();
+
+        foreach ($request->file('customer_feedback_images', []) as $image) {
+            $feedbackImages[] = $image->store('customer-feedback', 'public');
+        }
+
         $order->update([
             'customer_feedback_status' => $validated['customer_feedback_status'],
             'customer_feedback_note' => trim((string) $validated['customer_feedback_note']),
             'customer_feedback_sale_review' => trim((string) ($validated['customer_feedback_sale_review'] ?? '')),
+            'customer_feedback_images' => $feedbackImages ?: null,
             'customer_feedback_by' => $user->id,
             'customer_feedback_at' => now(),
         ]);

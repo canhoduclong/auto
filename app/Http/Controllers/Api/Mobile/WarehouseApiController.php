@@ -686,6 +686,10 @@ class WarehouseApiController extends BaseApiController
                     'meta' => Order::customerFeedbackMeta((string) $feedbackOrder->customer_feedback_status),
                     'note' => (string) $feedbackOrder->customer_feedback_note,
                     'sale_review' => (string) ($feedbackOrder->customer_feedback_sale_review ?? ''),
+                    'images' => collect($feedbackOrder->customer_feedback_images ?? [])->map(fn ($path) => [
+                        'path' => (string) $path,
+                        'url' => asset('storage/' . ltrim((string) $path, '/')),
+                    ])->values()->all(),
                     'user' => (string) ($feedbackOrder->customerFeedbackUser?->name ?? ''),
                     'at' => optional($feedbackOrder->customer_feedback_at ?? $feedbackOrder->updated_at)->toIso8601String(),
                 ])->values()->all(),

@@ -107,6 +107,9 @@
         gap: 16px;
         align-items: start;
     }
+    .wh-order-card-grid.no-feedback {
+        grid-template-columns: 1fr;
+    }
     .wh-order-main {
         min-width: 0;
         order: 1;

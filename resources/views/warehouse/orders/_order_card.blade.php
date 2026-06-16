@@ -48,7 +48,7 @@
                 }
             @endphp
             <div class="col-12" id="order-card-{{ $order->id }}">
-                <div class="wh-order-card-grid">
+                <div class="wh-order-card-grid {{ $hasCustomerFeedback ? 'has-feedback' : 'no-feedback' }}">
                 <div class="wh-order-main">
                 <div class="card wh-order-card js-order-card" data-order-id="{{ $order->id }}">
                     <div class="d-flex align-items-center card-header bg-white">
@@ -778,7 +778,8 @@
                     </div>
                 </div>
                 </div>
-                <div class="wh-customer-feedback-panel {{ $hasCustomerFeedback ? 'is-alert' : '' }}">
+                @if($hasCustomerFeedback)
+                <div class="wh-customer-feedback-panel is-alert">
                     <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
                         <div class="wh-customer-feedback-title">Tình trạng khách hàng</div>
                         <span class="badge border {{ $customerFeedbackMeta['class'] ?? 'bg-secondary-subtle text-secondary border-secondary-subtle' }}">
@@ -801,17 +802,23 @@
                                             <strong>Đánh giá sale:</strong> {{ $feedback['sale_review'] }}
                                         </div>
                                     @endif
+                                    @if(!empty($feedback['images']))
+                                        <div class="d-flex flex-wrap gap-2 mt-2">
+                                            @foreach($feedback['images'] as $image)
+                                                <a href="{{ $image['url'] ?? '#' }}" target="_blank" rel="noopener">
+                                                    <img src="{{ $image['url'] ?? '' }}" alt="Feedback" style="width:54px;height:54px;object-fit:cover;border-radius:8px;border:1px solid #e2e8f0;">
+                                                </a>
+                                            @endforeach
+                                        </div>
+                                    @endif
                                     <div class="small text-muted mt-1">
                                         {{ $feedback['code'] ?? '' }}{{ !empty($feedback['user']) ? ' • ' . $feedback['user'] : '' }}
                                     </div>
                                 </div>
                             @endforeach
                         </div>
-                    @else
-                        <div class="wh-customer-feedback-note text-muted">
-                            Chưa có phản hồi sau giao/trả hàng. Đóng theo quy trình chuẩn.
-                        </div>
                     @endif
                 </div>
+                @endif
                 </div>
             </div>

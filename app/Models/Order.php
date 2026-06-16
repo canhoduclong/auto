@@ -22,7 +22,7 @@ class Order extends Model
         'qr_code', 'packed_image_path', 'delivered_image_path', 'has_return_order',
         'collected_amount', 'delivered_at', 'return_reason', 'proof_images', 'shipper_note', 'delivery_time', 'delivery_date',
         'customer_feedback_status', 'customer_feedback_note', 'customer_feedback_sale_review',
-        'customer_feedback_by', 'customer_feedback_at',
+        'customer_feedback_images', 'customer_feedback_by', 'customer_feedback_at',
         'daily_sequence', 'stock_sufficient', 'stock_shortage_detail',
         'stock_alert_status',
         'warehouse_adjustment_status', 'warehouse_adjustment_note', 'warehouse_adjustment_changes',
@@ -35,6 +35,7 @@ class Order extends Model
     protected $casts = [
         'proof_images' => 'array',
         'cancel_images' => 'array',
+        'customer_feedback_images' => 'array',
         'delivered_at' => 'datetime',
         'customer_feedback_at' => 'datetime',
         'delivery_date' => 'date',

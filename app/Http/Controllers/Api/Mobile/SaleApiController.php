@@ -401,6 +401,7 @@ class SaleApiController extends BaseApiController
                 'customer_feedback_status' => null,
                 'customer_feedback_note' => null,
                 'customer_feedback_sale_review' => null,
+                'customer_feedback_images' => null,
                 'customer_feedback_by' => null,
                 'customer_feedback_at' => null,
             ]);
@@ -414,12 +415,24 @@ class SaleApiController extends BaseApiController
             'customer_feedback_status' => ['required', 'in:' . implode(',', array_keys(Order::customerFeedbackOptions()))],
             'customer_feedback_note' => ['required', 'string', 'max:2000'],
             'customer_feedback_sale_review' => ['nullable', 'string', 'max:2000'],
+            'customer_feedback_images' => ['nullable', 'array', 'max:6'],
+            'customer_feedback_images.*' => ['image', 'mimes:jpeg,jpg,png,webp', 'max:5120'],
         ]);
+
+        $feedbackImages = collect($order->customer_feedback_images ?? [])
+            ->filter()
+            ->values()
+            ->all();
+
+        foreach ($request->file('customer_feedback_images', []) as $image) {
+            $feedbackImages[] = $image->store('customer-feedback', 'public');
+        }
 
         $order->update([
             'customer_feedback_status' => $validated['customer_feedback_status'],
             'customer_feedback_note' => trim((string) $validated['customer_feedback_note']),
             'customer_feedback_sale_review' => trim((string) ($validated['customer_feedback_sale_review'] ?? '')),
+            'customer_feedback_images' => $feedbackImages ?: null,
             'customer_feedback_by' => $user->id,
             'customer_feedback_at' => now(),
         ]);
@@ -630,6 +643,10 @@ class SaleApiController extends BaseApiController
             'customer_feedback_status' => (string) ($order->customer_feedback_status ?? ''),
             'customer_feedback_note' => (string) ($order->customer_feedback_note ?? ''),
             'customer_feedback_sale_review' => (string) ($order->customer_feedback_sale_review ?? ''),
+            'customer_feedback_images' => collect($order->customer_feedback_images ?? [])->map(fn ($path) => [
+                'path' => (string) $path,
+                'url' => asset('storage/' . ltrim((string) $path, '/')),
+            ])->values(),
             'customer_feedback_meta' => Order::customerFeedbackMeta($order->customer_feedback_status),
             'customer_feedback_at' => optional($order->customer_feedback_at)->toIso8601String(),
         ];

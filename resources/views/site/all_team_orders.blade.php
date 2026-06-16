@@ -158,6 +158,39 @@
         display: grid;
         gap: .35rem;
     }
+    .tmo-page .tmo-product-stats {
+        margin-top: .75rem;
+        border-top: 1px dashed var(--tmo-border);
+        padding-top: .75rem;
+    }
+    .tmo-page .tmo-product-vertical {
+        display: grid;
+        gap: .35rem;
+        max-height: 260px;
+        overflow: auto;
+        padding-right: .15rem;
+    }
+    .tmo-page .tmo-product-vertical-row {
+        display: grid;
+        grid-template-columns: 48px 1.4fr repeat(5, minmax(76px, auto));
+        gap: .35rem;
+        align-items: center;
+        font-size: .82rem;
+        border: 1px solid #e7edf5;
+        border-radius: 8px;
+        background: #fff;
+        padding: .32rem .45rem;
+    }
+    .tmo-page .tmo-product-vertical-head {
+        font-size: .73rem;
+        color: var(--tmo-muted);
+        text-transform: uppercase;
+        letter-spacing: .03em;
+        background: var(--tmo-soft);
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
     .tmo-page .tmo-product-line {
         display: grid;
         grid-template-columns: 1.2fr repeat(5, minmax(80px, auto));
@@ -395,12 +428,32 @@
                         <div class="tmo-summary-value" id="sumVisibleOrders">0</div>
                     </div>
                     <div class="tmo-summary-item">
+                        <div class="tmo-summary-label">Tong hang hoa</div>
+                        <div class="tmo-summary-value" id="sumItemLines">0 mat hang</div>
+                    </div>
+                    <div class="tmo-summary-item">
+                        <div class="tmo-summary-label">Tong so luong</div>
+                        <div class="tmo-summary-value" id="sumItemQty">0</div>
+                    </div>
+                    <div class="tmo-summary-item">
                         <div class="tmo-summary-label">Tong gia tri don</div>
                         <div class="tmo-summary-value" id="sumOrderTotal">0 đ</div>
                     </div>
                     <div class="tmo-summary-item">
                         <div class="tmo-summary-label">Da duyet / Cho duyet / Tu choi</div>
                         <div class="tmo-summary-value" id="sumStatus">0 / 0 / 0</div>
+                    </div>
+                </div>
+                <div class="tmo-product-stats">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <div class="tmo-summary-label mb-0">Hang - So luong</div>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="toggleProductStatsBtn">
+                            <i class="bi bi-chevron-expand"></i>
+                            Chi tiet
+                        </button>
+                    </div>
+                    <div class="d-none" id="sumProductDetailWrap">
+                        <div class="tmo-product-vertical" id="sumProductDetailList"></div>
                     </div>
                 </div>
             </div>
@@ -521,7 +574,15 @@
                                             }
                                         @endphp
                                         <div class="tmo-product-line">
-                                            <div class="fw-semibold">{{ $productName }}</div>
+                                            <div class="fw-semibold js-product-line"
+                                                data-product-name="{{ $productName }}"
+                                                data-product-qty="{{ $qty }}"
+                                                data-product-total-value="{{ $displayTotalValue }}"
+                                                data-product-total-unit="{{ $displayTotalUnit }}"
+                                                data-product-size="{{ $sizeLabel }}"
+                                                data-product-est-weight="{{ $estimatedWeight }}"
+                                                data-product-price="{{ $price }}"
+                                                data-product-subtotal="{{ $lineSubtotal }}">{{ $productName }}</div>
                                             <div>{{ $sizeLabel }}</div>
                                             <div>{{ rtrim(rtrim(number_format($qty, 3, '.', ''), '0'), '.') }}</div>
                                             <div>{{ $displayTotalLabel }}</div>
@@ -661,6 +722,13 @@ document.addEventListener('DOMContentLoaded', function () {
         return new Intl.NumberFormat('vi-VN').format(Number(value || 0)) + ' đ';
     }
 
+    function formatQty(value) {
+        const normalized = Number(value || 0);
+        return normalized % 1 === 0
+            ? String(normalized)
+            : normalized.toLocaleString('en-US', { maximumFractionDigits: 3 });
+    }
+
     function applySaleFilter() {
         const saleState = document.getElementById('saleFilterState');
         const saleChips = Array.from(document.querySelectorAll('.js-sale-chip'));
@@ -699,6 +767,9 @@ document.addEventListener('DOMContentLoaded', function () {
         let pending = 0;
         let rejected = 0;
         let totalValue = 0;
+        let totalGoods = 0;
+        let totalQty = 0;
+        const itemMap = new Map();
 
         rows.forEach(function (row) {
             const statusEl = row.querySelector('.js-order-status');
@@ -713,20 +784,91 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             totalValue += Number(row.dataset.total || 0);
+            row.querySelectorAll('.js-product-line').forEach(function (line) {
+                const name = (line.dataset.productName || '').trim();
+                const totalUnit = (line.dataset.productTotalUnit || '').trim();
+                const size = (line.dataset.productSize || '').trim();
+                const qty = Number(line.dataset.productQty || 0);
+                const totalValue = Number(line.dataset.productTotalValue || 0);
+                const estWeight = Number(line.dataset.productEstWeight || 0);
+                const price = Number(line.dataset.productPrice || 0);
+                const subtotal = Number(line.dataset.productSubtotal || 0);
+
+                if (!name) return;
+
+                const key = [name, totalUnit, size, price].join('||');
+                const current = itemMap.get(key) || {
+                    name: name,
+                    totalUnit: totalUnit || '-',
+                    size: size || '-',
+                    qty: 0,
+                    totalValue: 0,
+                    estWeight: 0,
+                    price: price,
+                    subtotal: 0,
+                };
+
+                current.qty += qty;
+                current.totalValue += totalValue;
+                current.estWeight += estWeight;
+                current.subtotal += subtotal;
+
+                itemMap.set(key, current);
+            });
         });
 
+        totalGoods = itemMap.size;
+        totalQty = Array.from(itemMap.values()).reduce(function (sum, item) {
+            return sum + Number(item.qty || 0);
+        }, 0);
+
         const sumVisibleOrders = document.getElementById('sumVisibleOrders');
+        const sumItemLines = document.getElementById('sumItemLines');
+        const sumItemQty = document.getElementById('sumItemQty');
         const sumOrderTotal = document.getElementById('sumOrderTotal');
         const sumStatus = document.getElementById('sumStatus');
+        const sumProductDetailList = document.getElementById('sumProductDetailList');
 
         if (sumVisibleOrders) {
             sumVisibleOrders.textContent = String(rows.length);
+        }
+        if (sumItemLines) {
+            sumItemLines.textContent = formatQty(totalGoods) + ' mat hang';
+        }
+        if (sumItemQty) {
+            sumItemQty.textContent = formatQty(totalQty);
         }
         if (sumOrderTotal) {
             sumOrderTotal.textContent = formatMoney(totalValue);
         }
         if (sumStatus) {
             sumStatus.textContent = approved + ' / ' + pending + ' / ' + rejected;
+        }
+        if (sumProductDetailList) {
+            const items = Array.from(itemMap.values()).sort(function (a, b) {
+                return b.qty - a.qty;
+            });
+
+            if (!items.length) {
+                sumProductDetailList.innerHTML = '<div class="tmo-mini">Khong co du lieu hang hoa.</div>';
+            } else {
+                const head = '<div class="tmo-product-vertical-row tmo-product-vertical-head"><div>STT</div><div>San pham</div><div>So luong</div><div>Tong</div><div>Size</div><div>Don gia</div><div>Tam tinh</div></div>';
+                const body = items.map(function (item, index) {
+                    const displayTotalText = formatQty(item.totalValue) + ' ' + item.totalUnit;
+
+                    return '<div class="tmo-product-vertical-row">'
+                        + '<div>' + (index + 1) + '</div>'
+                        + '<div class="fw-semibold">' + item.name + '</div>'
+                        + '<div>' + formatQty(item.qty) + '</div>'
+                        + '<div>' + displayTotalText + '</div>'
+                        + '<div>' + item.size + '</div>'
+                        + '<div>' + formatMoney(item.price) + '</div>'
+                        + '<div>' + formatMoney(item.subtotal) + '</div>'
+                        + '</div>';
+                }).join('');
+
+                sumProductDetailList.innerHTML = head + body;
+            }
         }
     }
 
@@ -762,6 +904,9 @@ document.addEventListener('DOMContentLoaded', function () {
     const saleChips = Array.from(document.querySelectorAll('.js-sale-chip'));
     const clearSaleBtn = document.getElementById('clearSaleFilter');
     const sortSelect = document.getElementById('orderSort');
+    const toggleProductStatsBtn = document.getElementById('toggleProductStatsBtn');
+    const sumProductDetailWrap = document.getElementById('sumProductDetailWrap');
+    let productDetailVisible = false;
 
     saleChips.forEach(function (chip) {
         chip.addEventListener('click', function () {
@@ -788,6 +933,21 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (sortSelect) {
         sortSelect.addEventListener('change', applySort);
+    }
+
+    if (toggleProductStatsBtn && sumProductDetailWrap) {
+        const renderToggleLabel = function () {
+            toggleProductStatsBtn.textContent = productDetailVisible ? 'An chi tiet' : 'Chi tiet';
+        };
+
+        renderToggleLabel();
+        sumProductDetailWrap.classList.toggle('d-none', !productDetailVisible);
+
+        toggleProductStatsBtn.addEventListener('click', function () {
+            productDetailVisible = !productDetailVisible;
+            sumProductDetailWrap.classList.toggle('d-none', !productDetailVisible);
+            renderToggleLabel();
+        });
     }
 
     applySort();

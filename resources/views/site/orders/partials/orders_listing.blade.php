@@ -467,13 +467,13 @@
                                     <div class="mt-3 p-3 rounded border bg-light">
                                         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
                                             <div class="fw-bold">
-                                                <i class="bi bi-chat-square-text me-1"></i>Phản hồi khách hàng cho bộ phận đóng hàng
+                                                <i class="bi bi-chat-square-text me-1"></i>Phản hồi khách hàng
                                             </div>
                                             <span class="badge border {{ $customerFeedbackMeta['class'] }}">
                                                 {{ $customerFeedbackMeta['label'] }}
                                             </span>
                                         </div>
-                                        <form method="POST" action="{{ route('site.orders.customer-feedback', $order) }}" class="d-grid gap-2">
+                                        <form method="POST" action="{{ route('site.orders.customer-feedback', $order) }}" enctype="multipart/form-data" class="d-grid gap-2">
                                             @csrf
                                             <div>
                                                 <label class="form-label small fw-semibold mb-1">Tình trạng khách</label>
@@ -492,6 +492,20 @@
                                             <div>
                                                 <label class="form-label small fw-semibold mb-1">Đánh giá đơn hàng từ sale</label>
                                                 <textarea name="customer_feedback_sale_review" class="form-control form-control-sm" rows="2" placeholder="Ví dụ: đơn giao tốt, khách hài lòng, lần sau đóng thêm lớp chống móp...">{{ old('customer_feedback_sale_review', $order->customer_feedback_sale_review ?? '') }}</textarea>
+                                            </div>
+                                            <div>
+                                                <label class="form-label small fw-semibold mb-1">Hình ảnh phản hồi</label>
+                                                <input type="file" name="customer_feedback_images[]" class="form-control form-control-sm" accept="image/*" multiple>
+                                                <div class="form-text">Có thể chọn nhiều ảnh, tối đa 5MB/ảnh.</div>
+                                                @if(!empty($order->customer_feedback_images))
+                                                    <div class="d-flex flex-wrap gap-2 mt-2">
+                                                        @foreach($order->customer_feedback_images as $feedbackImage)
+                                                            <a href="{{ asset('storage/' . $feedbackImage) }}" target="_blank" rel="noopener">
+                                                                <img src="{{ asset('storage/' . $feedbackImage) }}" alt="Feedback" style="width:58px;height:58px;object-fit:cover;border-radius:8px;border:1px solid #dee2e6;">
+                                                            </a>
+                                                        @endforeach
+                                                    </div>
+                                                @endif
                                             </div>
                                             <div class="d-flex flex-wrap gap-2">
                                                 <button class="btn btn-sm btn-primary" type="submit">
