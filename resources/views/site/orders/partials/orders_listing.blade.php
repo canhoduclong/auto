@@ -398,10 +398,10 @@
                                             {{ $customerFeedbackMeta['label'] }}
                                         </span>
                                     </div>
-                                    <form method="POST" action="{{ route('site.orders.customer-feedback', $order) }}" class="row g-2 align-items-end">
+                                    <form method="POST" action="{{ route('site.orders.customer-feedback', $order) }}" class="d-grid gap-2">
                                         @csrf
-                                        <div class="col-12 col-lg-3">
-                                            <label class="form-label small fw-semibold mb-1">Tình trạng</label>
+                                        <div>
+                                            <label class="form-label small fw-semibold mb-1">Tình trạng khách</label>
                                             <select name="customer_feedback_status" class="form-select form-select-sm" required>
                                                 @foreach($customerFeedbackOptions as $value => $label)
                                                     <option value="{{ $value }}" {{ (string) ($order->customer_feedback_status ?? '') === (string) $value ? 'selected' : '' }}>
@@ -410,13 +410,20 @@
                                                 @endforeach
                                             </select>
                                         </div>
-                                        <div class="col-12 col-lg-7">
-                                            <label class="form-label small fw-semibold mb-1">Thông tin phản hồi từ khách</label>
+                                        <div>
+                                            <label class="form-label small fw-semibold mb-1">Phản hồi từ khách hàng</label>
                                             <textarea name="customer_feedback_note" class="form-control form-control-sm" rows="2" required placeholder="Ví dụ: khách yêu cầu đóng kỹ đáy thùng, dễ trả nếu móp méo...">{{ old('customer_feedback_note', $order->customer_feedback_note ?? '') }}</textarea>
                                         </div>
-                                        <div class="col-12 col-lg-2 d-grid">
+                                        <div>
+                                            <label class="form-label small fw-semibold mb-1">Đánh giá đơn hàng từ sale</label>
+                                            <textarea name="customer_feedback_sale_review" class="form-control form-control-sm" rows="2" placeholder="Ví dụ: đơn giao tốt, khách hài lòng, lần sau đóng thêm lớp chống móp...">{{ old('customer_feedback_sale_review', $order->customer_feedback_sale_review ?? '') }}</textarea>
+                                        </div>
+                                        <div class="d-flex flex-wrap gap-2">
                                             <button class="btn btn-sm btn-primary" type="submit">
                                                 <i class="bi bi-save2 me-1"></i>Lưu phản hồi
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-secondary" type="submit" name="reset_feedback" value="1" onclick="return confirm('Reset phản hồi khách hàng cho đơn này?')">
+                                                <i class="bi bi-arrow-counterclockwise me-1"></i>Reset
                                             </button>
                                         </div>
                                     </form>

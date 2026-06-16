@@ -101,10 +101,20 @@
     .wh-section {
         padding: 0; 
     }
+    .wh-order-card-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+        gap: 16px;
+        align-items: start;
+    }
+    .wh-order-main {
+        min-width: 0;
+        order: 1;
+    }
     .wh-customer-feedback-panel {
-        float: right;
-        width: min(320px, 100%);
-        margin: 0 0 12px 16px;
+        order: 2;
+        width: 100%;
+        margin: 0;
         border: 1px solid #e2e8f0;
         border-radius: 10px;
         background: #f8fafc;
@@ -127,10 +137,14 @@
         line-height: 1.35;
     }
     @media (max-width: 991.98px) {
+        .wh-order-card-grid {
+            grid-template-columns: 1fr;
+        }
         .wh-customer-feedback-panel {
-            float: none;
-            width: 100%;
-            margin: 0 0 12px;
+            order: 1;
+        }
+        .wh-order-main {
+            order: 2;
         }
     }
     .wh-logistics-title {
@@ -834,36 +848,15 @@
         </div>
     </div>
 
-    <div class="row g-4">
-        <!-- Cột trái: Đơn chưa đóng -->
-        <div class="col-12 col-lg-6">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h5 class="mb-0 fw-bold" style="color:#64748b;">
-                    <i class="bi bi-box-seam me-2"></i>Chưa đóng hàng
-                </h5>
-                <span class="badge" style="background:#64748b;color:#fff;">{{ $unpackedOrders->count() }} đơn</span>
-            </div>
-            <div class="row g-3">
-                @foreach($unpackedOrders as $order)
-                    @include('warehouse.orders._order_card', ['order' => $order, 'statusMeta' => $statusMeta, 'activeTransfersByOrder' => $activeTransfersByOrder ?? [], 'selectedDate' => $selectedDate ?? now()->toDateString()])
-                @endforeach
-            </div>
-        </div>
+    @php
+        $orderedPackingList = $unpackedOrders->values()
+            ->concat($packedOrders->sortBy('daily_sequence')->values());
+    @endphp
 
-        <!-- Cột phải: Đơn đã đóng -->
-        <div class="col-12 col-lg-6 border-start">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h5 class="mb-0 fw-bold text-success">
-                    <i class="bi bi-check-circle me-2"></i>Đã đóng hàng
-                </h5>
-                <span class="badge bg-success rounded-pill">{{ $packedOrders->count() }} đơn</span>
-            </div>
-            <div class="row g-3">
-                @foreach($packedOrders as $order)
-                    @include('warehouse.orders._order_card', ['order' => $order, 'statusMeta' => $statusMeta, 'activeTransfersByOrder' => $activeTransfersByOrder ?? [], 'selectedDate' => $selectedDate ?? now()->toDateString()])
-                @endforeach
-            </div>
-        </div>
+    <div class="row g-3">
+        @foreach($orderedPackingList as $order)
+            @include('warehouse.orders._order_card', ['order' => $order, 'statusMeta' => $statusMeta, 'activeTransfersByOrder' => $activeTransfersByOrder ?? [], 'selectedDate' => $selectedDate ?? now()->toDateString()])
+        @endforeach
     </div>
     @endif
 </div>

@@ -728,9 +728,22 @@ class PageController extends Controller
             return back()->with('error', 'Chi nhap phan hoi khach hang cho don da hoan thanh, dang tra hang hoac co tra mot phan.');
         }
 
+        if ($request->boolean('reset_feedback')) {
+            $order->update([
+                'customer_feedback_status' => null,
+                'customer_feedback_note' => null,
+                'customer_feedback_sale_review' => null,
+                'customer_feedback_by' => null,
+                'customer_feedback_at' => null,
+            ]);
+
+            return back()->with('success', 'Da reset phan hoi khach hang.');
+        }
+
         $validated = $request->validate([
             'customer_feedback_status' => ['required', Rule::in(array_keys(Order::customerFeedbackOptions()))],
             'customer_feedback_note' => ['required', 'string', 'max:2000'],
+            'customer_feedback_sale_review' => ['nullable', 'string', 'max:2000'],
         ], [
             'customer_feedback_status.required' => 'Vui long chon tinh trang khach hang.',
             'customer_feedback_note.required' => 'Vui long nhap thong tin phan hoi tu khach hang.',
@@ -739,6 +752,7 @@ class PageController extends Controller
         $order->update([
             'customer_feedback_status' => $validated['customer_feedback_status'],
             'customer_feedback_note' => trim((string) $validated['customer_feedback_note']),
+            'customer_feedback_sale_review' => trim((string) ($validated['customer_feedback_sale_review'] ?? '')),
             'customer_feedback_by' => $user->id,
             'customer_feedback_at' => now(),
         ]);

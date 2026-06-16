@@ -732,6 +732,7 @@ class WarehouseDashboardController extends Controller
                     'status' => (string) $feedbackOrder->customer_feedback_status,
                     'meta' => Order::customerFeedbackMeta((string) $feedbackOrder->customer_feedback_status),
                     'note' => (string) $feedbackOrder->customer_feedback_note,
+                    'sale_review' => (string) ($feedbackOrder->customer_feedback_sale_review ?? ''),
                     'user' => (string) ($feedbackOrder->customerFeedbackUser?->name ?? ''),
                     'at' => optional($feedbackOrder->customer_feedback_at ?? $feedbackOrder->updated_at)->format('d/m/Y H:i'),
                 ])->values()->all(),

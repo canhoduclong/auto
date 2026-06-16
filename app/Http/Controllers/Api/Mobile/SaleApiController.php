@@ -396,14 +396,30 @@ class SaleApiController extends BaseApiController
             return $this->fail('Chi nhap phan hoi cho don da hoan thanh, tra hang hoac tra mot phan.', 422);
         }
 
+        if ($request->boolean('reset_feedback')) {
+            $order->update([
+                'customer_feedback_status' => null,
+                'customer_feedback_note' => null,
+                'customer_feedback_sale_review' => null,
+                'customer_feedback_by' => null,
+                'customer_feedback_at' => null,
+            ]);
+
+            $order->refresh()->load(['customer:id,name,phone,address', 'items.product:id,name', 'items.variant:id,name,sku,size,product_id', 'approvals.step', 'histories.user:id,name']);
+
+            return $this->ok($this->orderPayload($order, true), 'Da reset phan hoi khach hang');
+        }
+
         $validated = $request->validate([
             'customer_feedback_status' => ['required', 'in:' . implode(',', array_keys(Order::customerFeedbackOptions()))],
             'customer_feedback_note' => ['required', 'string', 'max:2000'],
+            'customer_feedback_sale_review' => ['nullable', 'string', 'max:2000'],
         ]);
 
         $order->update([
             'customer_feedback_status' => $validated['customer_feedback_status'],
             'customer_feedback_note' => trim((string) $validated['customer_feedback_note']),
+            'customer_feedback_sale_review' => trim((string) ($validated['customer_feedback_sale_review'] ?? '')),
             'customer_feedback_by' => $user->id,
             'customer_feedback_at' => now(),
         ]);
@@ -613,6 +629,7 @@ class SaleApiController extends BaseApiController
             'can_customer_feedback' => $order->canReceiveCustomerFeedback(),
             'customer_feedback_status' => (string) ($order->customer_feedback_status ?? ''),
             'customer_feedback_note' => (string) ($order->customer_feedback_note ?? ''),
+            'customer_feedback_sale_review' => (string) ($order->customer_feedback_sale_review ?? ''),
             'customer_feedback_meta' => Order::customerFeedbackMeta($order->customer_feedback_status),
             'customer_feedback_at' => optional($order->customer_feedback_at)->toIso8601String(),
         ];

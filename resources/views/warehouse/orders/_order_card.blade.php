@@ -74,7 +74,8 @@
                         </div>
                     </div>
 
-                    <div class="card-body"> 
+                    <div class="card-body">
+                        <div class="wh-order-card-grid">
                         <div class="wh-customer-feedback-panel {{ $hasCustomerFeedback ? 'is-alert' : '' }}">
                             <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
                                 <div class="wh-customer-feedback-title">Tình trạng khách hàng</div>
@@ -93,6 +94,11 @@
                                                 <span class="small text-muted">{{ $feedback['at'] ?? '' }}</span>
                                             </div>
                                             <div class="wh-customer-feedback-note mt-1">{{ $feedback['note'] ?? '' }}</div>
+                                            @if(!empty($feedback['sale_review']))
+                                                <div class="wh-customer-feedback-note mt-1">
+                                                    <strong>Đánh giá sale:</strong> {{ $feedback['sale_review'] }}
+                                                </div>
+                                            @endif
                                             <div class="small text-muted mt-1">
                                                 {{ $feedback['code'] ?? '' }}{{ !empty($feedback['user']) ? ' • ' . $feedback['user'] : '' }}
                                             </div>
@@ -106,6 +112,7 @@
                             @endif
                         </div>
 
+                        <div class="wh-order-main">
                         <div class="wh-section">
                             @if($isConfirmedBySale)
                                 <div class="alert alert-success py-2 px-3 mb-2">
@@ -582,6 +589,8 @@
                                     </form>
                                 </details>
                             @endif
+                        </div>
+                        </div>
                         </div>
                     </div>
 
