@@ -21,6 +21,7 @@ class Order extends Model
         'amount_paid', 'amount_due', 'payment_method', 'payment_status',
         'qr_code', 'packed_image_path', 'delivered_image_path', 'has_return_order',
         'collected_amount', 'delivered_at', 'return_reason', 'proof_images', 'shipper_note', 'delivery_time', 'delivery_date',
+        'customer_feedback_status', 'customer_feedback_note', 'customer_feedback_by', 'customer_feedback_at',
         'daily_sequence', 'stock_sufficient', 'stock_shortage_detail',
         'stock_alert_status',
         'warehouse_adjustment_status', 'warehouse_adjustment_note', 'warehouse_adjustment_changes',
@@ -34,6 +35,7 @@ class Order extends Model
         'proof_images' => 'array',
         'cancel_images' => 'array',
         'delivered_at' => 'datetime',
+        'customer_feedback_at' => 'datetime',
         'delivery_date' => 'date',
         'cancelled_at' => 'datetime',
         'trash_at' => 'datetime',
@@ -138,6 +140,40 @@ class Order extends Model
     const WAREHOUSE_ADJUSTMENT_STATUS_SALE_CONFIRMED = 'sale_confirmed';
     const WAREHOUSE_ADJUSTMENT_STATUS_SALE_REJECTED = 'sale_rejected';
 
+    public const CUSTOMER_FEEDBACK_GOOD = 'good';
+    public const CUSTOMER_FEEDBACK_CAREFUL = 'careful';
+    public const CUSTOMER_FEEDBACK_RISK = 'risk';
+
+    public static function customerFeedbackOptions(): array
+    {
+        return [
+            self::CUSTOMER_FEEDBACK_GOOD => 'Khách ổn định',
+            self::CUSTOMER_FEEDBACK_CAREFUL => 'Cần đóng kỹ',
+            self::CUSTOMER_FEEDBACK_RISK => 'Rủi ro/khó tính',
+        ];
+    }
+
+    public static function customerFeedbackMeta(?string $status): array
+    {
+        return match ($status) {
+            self::CUSTOMER_FEEDBACK_GOOD => ['label' => 'Khách ổn định', 'class' => 'bg-success-subtle text-success border-success-subtle', 'level' => 1],
+            self::CUSTOMER_FEEDBACK_RISK => ['label' => 'Rủi ro/khó tính', 'class' => 'bg-danger-subtle text-danger border-danger-subtle', 'level' => 3],
+            self::CUSTOMER_FEEDBACK_CAREFUL => ['label' => 'Cần đóng kỹ', 'class' => 'bg-warning-subtle text-warning-emphasis border-warning-subtle', 'level' => 2],
+            default => ['label' => 'Chưa có phản hồi', 'class' => 'bg-secondary-subtle text-secondary border-secondary-subtle', 'level' => 0],
+        };
+    }
+
+    public function canReceiveCustomerFeedback(): bool
+    {
+        return in_array((string) $this->status, [
+            self::STATUS_DELIVERED,
+            self::STATUS_COMPLETED,
+            self::STATUS_RETURNING,
+            self::STATUS_RETURNED,
+            self::STATUS_RETURNED_COMPLETED,
+        ], true) || (bool) ($this->has_return_order ?? false);
+    }
+
     public function clearWarehouseAdjustmentState(): self
     {
         $this->forceFill([
@@ -158,6 +194,7 @@ class Order extends Model
 
     public function customer() { return $this->belongsTo(Customer::class); }
     public function user() { return $this->belongsTo(User::class); }
+    public function customerFeedbackUser() { return $this->belongsTo(User::class, 'customer_feedback_by'); }
     public function warehouseAdjustmentRequester() { return $this->belongsTo(User::class, 'warehouse_adjustment_requested_by'); }
     public function warehouseAdjustmentConfirmer() { return $this->belongsTo(User::class, 'warehouse_adjustment_confirmed_by'); }
     public function warehouseAdjustmentRejecter() { return $this->belongsTo(User::class, 'warehouse_adjustment_rejected_by'); }

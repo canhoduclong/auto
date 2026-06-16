@@ -93,6 +93,7 @@ Route::prefix('mobile')->group(function () {
             Route::get('/orders', [SaleApiController::class, 'orders']);
             Route::get('/orders/{order}', [SaleApiController::class, 'order']);
             Route::put('/orders/{order}', [SaleApiController::class, 'updateOrder']);
+            Route::post('/orders/{order}/customer-feedback', [SaleApiController::class, 'updateOrderCustomerFeedback']);
             Route::post('/orders/{orderId}/copy', [SaleApiController::class, 'copyOrder']);
             Route::post('/orders/{order}/confirm-copy', [SaleApiController::class, 'confirmCopy']);
             Route::post('/orders/{order}/cancel', [SaleApiController::class, 'cancelOrder']);

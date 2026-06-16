@@ -32,6 +32,10 @@
                 $activeTransfer = $activeTransfersByOrder[$order->id] ?? null;
                 $shipPickupWarehouseName = $sourceWarehouseName;
                 $shipPickupWarehouseHint = null;
+                $customerFeedbackContext = $order->getAttribute('customer_feedback_context') ?? [];
+                $customerFeedbackMeta = $customerFeedbackContext['highest_meta'] ?? \App\Models\Order::customerFeedbackMeta(null);
+                $customerFeedbackRows = collect($customerFeedbackContext['recent'] ?? []);
+                $hasCustomerFeedback = (bool) ($customerFeedbackContext['has_feedback'] ?? false);
 
                 if ($activeTransfer?->targetWarehouse?->name) {
                     $shipPickupWarehouseName = $activeTransfer->targetWarehouse->name;
@@ -71,6 +75,36 @@
                     </div>
 
                     <div class="card-body"> 
+                        <div class="wh-customer-feedback-panel {{ $hasCustomerFeedback ? 'is-alert' : '' }}">
+                            <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                                <div class="wh-customer-feedback-title">Tình trạng khách hàng</div>
+                                <span class="badge border {{ $customerFeedbackMeta['class'] ?? 'bg-secondary-subtle text-secondary border-secondary-subtle' }}">
+                                    {{ $customerFeedbackMeta['label'] ?? 'Chưa có phản hồi' }}
+                                </span>
+                            </div>
+                            @if($customerFeedbackRows->isNotEmpty())
+                                <div class="d-grid gap-2">
+                                    @foreach($customerFeedbackRows->take(3) as $feedback)
+                                        <div class="border-top pt-2">
+                                            <div class="d-flex justify-content-between gap-2">
+                                                <span class="badge border {{ $feedback['meta']['class'] ?? 'bg-secondary-subtle text-secondary border-secondary-subtle' }}">
+                                                    {{ $feedback['meta']['label'] ?? 'Phản hồi' }}
+                                                </span>
+                                                <span class="small text-muted">{{ $feedback['at'] ?? '' }}</span>
+                                            </div>
+                                            <div class="wh-customer-feedback-note mt-1">{{ $feedback['note'] ?? '' }}</div>
+                                            <div class="small text-muted mt-1">
+                                                {{ $feedback['code'] ?? '' }}{{ !empty($feedback['user']) ? ' • ' . $feedback['user'] : '' }}
+                                            </div>
+                                        </div>
+                                    @endforeach
+                                </div>
+                            @else
+                                <div class="wh-customer-feedback-note text-muted">
+                                    Chưa có phản hồi sau giao/trả hàng. Đóng theo quy trình chuẩn.
+                                </div>
+                            @endif
+                        </div>
 
                         <div class="wh-section">
                             @if($isConfirmedBySale)

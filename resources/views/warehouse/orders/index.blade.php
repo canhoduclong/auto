@@ -101,6 +101,38 @@
     .wh-section {
         padding: 0; 
     }
+    .wh-customer-feedback-panel {
+        float: right;
+        width: min(320px, 100%);
+        margin: 0 0 12px 16px;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        background: #f8fafc;
+        padding: 10px;
+    }
+    .wh-customer-feedback-panel.is-alert {
+        border-color: #f59e0b;
+        background: #fffbeb;
+    }
+    .wh-customer-feedback-title {
+        font-size: .78rem;
+        font-weight: 800;
+        color: #0f172a;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+    }
+    .wh-customer-feedback-note {
+        font-size: .78rem;
+        color: #334155;
+        line-height: 1.35;
+    }
+    @media (max-width: 991.98px) {
+        .wh-customer-feedback-panel {
+            float: none;
+            width: 100%;
+            margin: 0 0 12px;
+        }
+    }
     .wh-logistics-title {
         font-size: .78rem;
         font-weight: 700;
@@ -581,9 +613,9 @@
     $statusMeta = [
         'approved' => ['label' => 'Chờ đóng gói', 'class' => 'bg-primary'],
         'ready_to_pack' => ['label' => 'Chờ đóng gói', 'class' => 'bg-primary'],
-        'packing' => ['label' => 'Đang đóng gói', 'class' => 'bg-warning text-dark'],
-        'packed' => ['label' => 'Đã đóng gói', 'class' => 'bg-info text-dark'],
-        'packed_waiting_pickup' => ['label' => 'Chờ shipper nhận', 'class' => 'bg-info text-dark'],
+        'packing' => ['label' => 'Đang đóng', 'class' => 'bg-warning text-dark'],
+        'packed' => ['label' => 'Đã hoàn thành đóng hàng', 'class' => 'bg-success'],
+        'packed_waiting_pickup' => ['label' => 'Đã hoàn thành đóng hàng', 'class' => 'bg-success'],
         'delivering' => ['label' => 'Đang giao', 'class' => 'bg-secondary'],
         'delivered' => ['label' => 'Đã giao', 'class' => 'bg-success'],
         'completed' => ['label' => 'Hoàn thành', 'class' => 'bg-success'],
@@ -1387,7 +1419,7 @@
                         const statusEl = card.querySelector('.js-order-status');
                         if (statusEl && payload.order) {
                             statusEl.className = 'badge js-order-status ' + (payload.order.status_class || 'bg-warning text-dark');
-                            statusEl.textContent = payload.order.status_label || 'Đang đóng gói';
+                            statusEl.textContent = payload.order.status_label || 'Đang đóng';
                         }
 
                         const orderIndexEl = card.querySelector('.wh-order-index');

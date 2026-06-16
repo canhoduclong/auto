@@ -20,6 +20,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class WarehouseApiController extends BaseApiController
 {
@@ -307,8 +308,10 @@ class WarehouseApiController extends BaseApiController
             ->orderBy('daily_sequence')
             ->orderBy('created_at')
             ->orderBy('id')
-            ->paginate(50)
-            ->through(fn (Order $order) => $this->warehouseOrderPayload($order));
+            ->paginate(50);
+
+        $this->attachCustomerFeedbackContext($orders->getCollection());
+        $orders->getCollection()->transform(fn (Order $order) => $this->warehouseOrderPayload($order));
 
         return $this->paginated($orders);
     }
@@ -621,6 +624,12 @@ class WarehouseApiController extends BaseApiController
             'warehouse_adjustment_rejected_reason' => (string) ($order->warehouse_adjustment_rejected_reason ?? ''),
             'warehouse_adjustment_changes' => $order->warehouse_adjustment_changes ?? [],
             'warehouse_can_adjust' => (bool) ($order->warehouse_can_adjust ?? false),
+            'customer_feedback_context' => $order->getAttribute('customer_feedback_context') ?? [
+                'has_feedback' => false,
+                'highest_status' => null,
+                'highest_meta' => Order::customerFeedbackMeta(null),
+                'recent' => [],
+            ],
             'can_start_packing' => in_array((string) $order->status, ['approved', Order::STATUS_READY_TO_PACK], true)
                 && $order->warehouse_adjustment_status !== Order::WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION
                 && $order->warehouse_adjustment_status !== Order::WAREHOUSE_ADJUSTMENT_STATUS_SALE_REJECTED,
@@ -633,6 +642,54 @@ class WarehouseApiController extends BaseApiController
                 && $order->created_at?->isToday(),
             'items' => $items,
         ];
+    }
+
+    private function attachCustomerFeedbackContext($orders): void
+    {
+        if ($orders->isEmpty() || !Schema::hasColumn('orders', 'customer_feedback_status')) {
+            $orders->each(fn (Order $order) => $order->setAttribute('customer_feedback_context', [
+                'has_feedback' => false,
+                'highest_status' => null,
+                'highest_meta' => Order::customerFeedbackMeta(null),
+                'recent' => [],
+            ]));
+
+            return;
+        }
+
+        $customerIds = $orders->pluck('customer_id')->filter()->unique()->values();
+        $feedbackByCustomer = Order::query()
+            ->with(['customerFeedbackUser:id,name'])
+            ->whereIn('customer_id', $customerIds)
+            ->whereNotNull('customer_feedback_status')
+            ->whereNotNull('customer_feedback_note')
+            ->latest('customer_feedback_at')
+            ->latest('updated_at')
+            ->get()
+            ->groupBy('customer_id');
+
+        $orders->each(function (Order $order) use ($feedbackByCustomer): void {
+            $rows = $feedbackByCustomer->get($order->customer_id, collect())->take(5);
+            $highestStatus = $rows
+                ->map(fn (Order $feedbackOrder) => (string) $feedbackOrder->customer_feedback_status)
+                ->sortByDesc(fn (string $status) => Order::customerFeedbackMeta($status)['level'] ?? 0)
+                ->first();
+
+            $order->setAttribute('customer_feedback_context', [
+                'has_feedback' => $rows->isNotEmpty(),
+                'highest_status' => $highestStatus,
+                'highest_meta' => Order::customerFeedbackMeta($highestStatus),
+                'recent' => $rows->map(fn (Order $feedbackOrder) => [
+                    'order_id' => (int) $feedbackOrder->id,
+                    'code' => (string) ($feedbackOrder->code ?: '#' . $feedbackOrder->id),
+                    'status' => (string) $feedbackOrder->customer_feedback_status,
+                    'meta' => Order::customerFeedbackMeta((string) $feedbackOrder->customer_feedback_status),
+                    'note' => (string) $feedbackOrder->customer_feedback_note,
+                    'user' => (string) ($feedbackOrder->customerFeedbackUser?->name ?? ''),
+                    'at' => optional($feedbackOrder->customer_feedback_at ?? $feedbackOrder->updated_at)->toIso8601String(),
+                ])->values()->all(),
+            ]);
+        });
     }
 
     private function warehouseOrderItemPayload($item): array
@@ -670,9 +727,9 @@ class WarehouseApiController extends BaseApiController
     {
         return match ($status) {
             'approved', Order::STATUS_READY_TO_PACK => ['label' => 'Chờ đóng gói', 'color' => 'gray'],
-            Order::STATUS_PACKING => ['label' => 'Đang đóng gói', 'color' => 'amber'],
-            'packed' => ['label' => 'Đã đóng gói', 'color' => 'green'],
-            Order::STATUS_READY_TO_SHIP => ['label' => 'Chờ shipper nhận', 'color' => 'green'],
+            Order::STATUS_PACKING => ['label' => 'Đang đóng', 'color' => 'amber'],
+            'packed' => ['label' => 'Đã hoàn thành đóng hàng', 'color' => 'green'],
+            Order::STATUS_READY_TO_SHIP => ['label' => 'Đã hoàn thành đóng hàng', 'color' => 'green'],
             Order::STATUS_DELIVERING => ['label' => 'Đang giao', 'color' => 'green'],
             Order::STATUS_DELIVERED => ['label' => 'Đã giao', 'color' => 'green'],
             Order::STATUS_COMPLETED => ['label' => 'Hoàn thành', 'color' => 'green'],

@@ -534,6 +534,7 @@ class PageController extends Controller
             'customer.truckStation.province',
             'customer.truckStation.ward',
             'user',
+            'customerFeedbackUser:id,name',
             'items.product.avatar.media',
             'items.variant.avatar.media',
             'items.variant.product',
@@ -706,6 +707,43 @@ class PageController extends Controller
         ]);
 
         return back()->with('success', 'Da dua don hang vao thung rac.');
+    }
+
+    public function storeOrderCustomerFeedback(Request $request, Order $order)
+    {
+        if (!auth()->check()) {
+            abort(403);
+        }
+
+        if (!Schema::hasColumn('orders', 'customer_feedback_status')) {
+            return back()->with('error', 'Chuc nang phan hoi khach hang chua duoc khoi tao tren he thong.');
+        }
+
+        $user = auth()->user();
+        if ((int) $order->user_id !== (int) $user->id && !$user->hasRole('admin')) {
+            abort(403, 'Ban khong co quyen cap nhat phan hoi cho don nay.');
+        }
+
+        if (!$order->canReceiveCustomerFeedback()) {
+            return back()->with('error', 'Chi nhap phan hoi khach hang cho don da hoan thanh, dang tra hang hoac co tra mot phan.');
+        }
+
+        $validated = $request->validate([
+            'customer_feedback_status' => ['required', Rule::in(array_keys(Order::customerFeedbackOptions()))],
+            'customer_feedback_note' => ['required', 'string', 'max:2000'],
+        ], [
+            'customer_feedback_status.required' => 'Vui long chon tinh trang khach hang.',
+            'customer_feedback_note.required' => 'Vui long nhap thong tin phan hoi tu khach hang.',
+        ]);
+
+        $order->update([
+            'customer_feedback_status' => $validated['customer_feedback_status'],
+            'customer_feedback_note' => trim((string) $validated['customer_feedback_note']),
+            'customer_feedback_by' => $user->id,
+            'customer_feedback_at' => now(),
+        ]);
+
+        return back()->with('success', 'Da luu phan hoi khach hang cho bo phan dong hang.');
     }
 
     public function myOrdersMonitoring(Request $request)

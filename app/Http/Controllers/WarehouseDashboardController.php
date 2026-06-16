@@ -570,6 +570,8 @@ class WarehouseDashboardController extends Controller
             ->orderByDesc('created_at')
             ->get();
 
+        $this->attachCustomerFeedbackContext($orders);
+
         $managedWarehouseId = Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
         $stockGuardResult = $this->buildPackingQueueStockGuards($orders, $managedWarehouseId, $selectedDate);
         $stockGuardMap = $stockGuardResult['guards'];
@@ -683,6 +685,58 @@ class WarehouseDashboardController extends Controller
             'packingInventoryRoute',
             'packingDashboardRoute'
         ));
+    }
+
+    private function attachCustomerFeedbackContext(Collection $orders): void
+    {
+        if ($orders->isEmpty() || !Schema::hasColumn('orders', 'customer_feedback_status')) {
+            $orders->each(fn (Order $order) => $order->setAttribute('customer_feedback_context', [
+                'has_feedback' => false,
+                'highest_status' => null,
+                'highest_meta' => Order::customerFeedbackMeta(null),
+                'recent' => [],
+            ]));
+
+            return;
+        }
+
+        $customerIds = $orders->pluck('customer_id')->filter()->unique()->values();
+        if ($customerIds->isEmpty()) {
+            return;
+        }
+
+        $feedbackByCustomer = Order::query()
+            ->with(['customerFeedbackUser:id,name'])
+            ->whereIn('customer_id', $customerIds)
+            ->whereNotNull('customer_feedback_status')
+            ->whereNotNull('customer_feedback_note')
+            ->latest('customer_feedback_at')
+            ->latest('updated_at')
+            ->get()
+            ->groupBy('customer_id');
+
+        $orders->each(function (Order $order) use ($feedbackByCustomer): void {
+            $rows = $feedbackByCustomer->get($order->customer_id, collect())->take(5);
+            $highestStatus = $rows
+                ->map(fn (Order $feedbackOrder) => (string) $feedbackOrder->customer_feedback_status)
+                ->sortByDesc(fn (string $status) => Order::customerFeedbackMeta($status)['level'] ?? 0)
+                ->first();
+
+            $order->setAttribute('customer_feedback_context', [
+                'has_feedback' => $rows->isNotEmpty(),
+                'highest_status' => $highestStatus,
+                'highest_meta' => Order::customerFeedbackMeta($highestStatus),
+                'recent' => $rows->map(fn (Order $feedbackOrder) => [
+                    'order_id' => (int) $feedbackOrder->id,
+                    'code' => (string) ($feedbackOrder->code ?: '#' . $feedbackOrder->id),
+                    'status' => (string) $feedbackOrder->customer_feedback_status,
+                    'meta' => Order::customerFeedbackMeta((string) $feedbackOrder->customer_feedback_status),
+                    'note' => (string) $feedbackOrder->customer_feedback_note,
+                    'user' => (string) ($feedbackOrder->customerFeedbackUser?->name ?? ''),
+                    'at' => optional($feedbackOrder->customer_feedback_at ?? $feedbackOrder->updated_at)->format('d/m/Y H:i'),
+                ])->values()->all(),
+            ]);
+        });
     }
 
     public function createTransferRequest(Request $request, Order $order)
@@ -1140,7 +1194,7 @@ class WarehouseDashboardController extends Controller
                 'order' => [
                     'id' => $order->id,
                     'status' => Order::STATUS_PACKING,
-                    'status_label' => 'Đang đóng gói',
+                    'status_label' => 'Đang đóng',
                     'status_class' => 'bg-warning text-dark',
                 ],
             ]);
@@ -2102,8 +2156,8 @@ class WarehouseDashboardController extends Controller
                 'order' => [
                     'id' => (int) $order->id,
                     'status' => Order::STATUS_READY_TO_SHIP,
-                    'status_label' => 'Chờ shipper nhận',
-                    'status_class' => 'bg-info text-dark',
+                    'status_label' => 'Đã hoàn thành đóng hàng',
+                    'status_class' => 'bg-success',
                 ],
             ]);
         }

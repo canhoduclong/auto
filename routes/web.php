@@ -820,6 +820,7 @@ Route::middleware(['auth', 'role:sale,leader,leader_sale,sale_manager,manager,ma
     Route::get('/my-orders/{order}', [PageController::class, 'myOrderDetail'])->name('site.orders.show');
     Route::post('/my-orders/{order}/cancel', [OrderController::class, 'cancel'])->name('site.orders.cancel');
     Route::post('/my-orders/{order}/trash', [PageController::class, 'moveOrderToTrash'])->name('site.orders.trash');
+    Route::post('/my-orders/{order}/customer-feedback', [PageController::class, 'storeOrderCustomerFeedback'])->name('site.orders.customer-feedback');
     Route::get('/my-orders/{order}/edit', [PageController::class, 'myOrderEdit'])->name('site.orders.edit');
     Route::put('/my-orders/{order}', [PageController::class, 'myOrderUpdate'])->name('site.orders.update');
     Route::get('/my-orders/{order}/adjustments/create', [\App\Http\Controllers\OrderAdjustmentController::class, 'create'])->name('site.order-adjustments.create');

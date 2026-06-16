@@ -155,6 +155,9 @@
                         $canEdit = $isCopiedOrder
                             || ($order->status === \App\Models\Order::STATUS_PENDING_LEADER_APPROVAL
                                 && $order->created_at?->isToday());
+                        $canSaveCustomerFeedback = !$isTrashView && method_exists($order, 'canReceiveCustomerFeedback') && $order->canReceiveCustomerFeedback();
+                        $customerFeedbackOptions = \App\Models\Order::customerFeedbackOptions();
+                        $customerFeedbackMeta = \App\Models\Order::customerFeedbackMeta($order->customer_feedback_status ?? null);
                     @endphp
                     <div class="col-12">
                         <div
@@ -384,6 +387,49 @@
                                     <div class="orders-subtle">Không có sản phẩm</div>
                                 @endif
                             </div>
+
+                            @if($canSaveCustomerFeedback)
+                                <div class="mt-3 p-3 rounded border bg-light">
+                                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                                        <div class="fw-bold">
+                                            <i class="bi bi-chat-square-text me-1"></i>Phản hồi khách hàng cho bộ phận đóng hàng
+                                        </div>
+                                        <span class="badge border {{ $customerFeedbackMeta['class'] }}">
+                                            {{ $customerFeedbackMeta['label'] }}
+                                        </span>
+                                    </div>
+                                    <form method="POST" action="{{ route('site.orders.customer-feedback', $order) }}" class="row g-2 align-items-end">
+                                        @csrf
+                                        <div class="col-12 col-lg-3">
+                                            <label class="form-label small fw-semibold mb-1">Tình trạng</label>
+                                            <select name="customer_feedback_status" class="form-select form-select-sm" required>
+                                                @foreach($customerFeedbackOptions as $value => $label)
+                                                    <option value="{{ $value }}" {{ (string) ($order->customer_feedback_status ?? '') === (string) $value ? 'selected' : '' }}>
+                                                        {{ $label }}
+                                                    </option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+                                        <div class="col-12 col-lg-7">
+                                            <label class="form-label small fw-semibold mb-1">Thông tin phản hồi từ khách</label>
+                                            <textarea name="customer_feedback_note" class="form-control form-control-sm" rows="2" required placeholder="Ví dụ: khách yêu cầu đóng kỹ đáy thùng, dễ trả nếu móp méo...">{{ old('customer_feedback_note', $order->customer_feedback_note ?? '') }}</textarea>
+                                        </div>
+                                        <div class="col-12 col-lg-2 d-grid">
+                                            <button class="btn btn-sm btn-primary" type="submit">
+                                                <i class="bi bi-save2 me-1"></i>Lưu phản hồi
+                                            </button>
+                                        </div>
+                                    </form>
+                                    @if($order->customer_feedback_at)
+                                        <div class="small text-muted mt-2">
+                                            Cập nhật lúc {{ $order->customer_feedback_at->format('d/m/Y H:i') }}
+                                            @if($order->customerFeedbackUser?->name)
+                                                bởi {{ $order->customerFeedbackUser->name }}
+                                            @endif
+                                        </div>
+                                    @endif
+                                </div>
+                            @endif
                             
                             <div class="order-tootls d-md-flex justify-content-between align-items-center mt-4">
                                 <div class="code small mt-3">
