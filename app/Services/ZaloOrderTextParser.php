@@ -177,8 +177,15 @@ class ZaloOrderTextParser
         $needle = $this->normalize($zaloName);
         $this->sales ??= User::query()->whereHas('roles', fn ($query) => $query->where('name', 'sale'))->get();
 
-        return $this->sales
-            ->first(fn (User $user) => $this->normalize((string) $user->zalo_name) === $needle);
+        return $this->sales->first(function (User $user) use ($needle) {
+            $zalo = $this->normalize((string) $user->zalo_name);
+            $name = $this->normalize((string) $user->name);
+
+            return $zalo === $needle
+                || $name === $needle
+                || ($zalo !== '' && (str_contains($zalo, $needle) || str_contains($needle, $zalo)))
+                || ($name !== '' && str_contains($name, $needle));
+        });
     }
 
     private function resolveVariant(string $productText, float $size): ?ProductVariant

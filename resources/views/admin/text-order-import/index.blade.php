@@ -60,7 +60,9 @@
                         <td><input type="checkbox" class="draft-check" value="{{ $draft->id }}"></td>
                         <td style="min-width:240px">
                             <select name="sale_id" class="form-select form-select-sm mb-1 {{ $draft->sale_id ? '' : 'is-invalid' }}" @disabled($saleMode ?? false)>
-                                <option value="">Sale: {{ $draft->zalo_name ?: 'chưa nhận diện' }}</option>
+                                @unless($draft->sale_id)
+                                    <option value="">Sale: {{ $draft->zalo_name ?: 'chưa nhận diện' }}</option>
+                                @endunless
                                 @foreach($sales as $sale)<option value="{{ $sale->id }}" @selected($draft->sale_id === $sale->id)>{{ $sale->name }}{{ $sale->zalo_name ? ' · '.$sale->zalo_name : '' }}</option>@endforeach
                             </select>
                             @if($saleMode ?? false)<input type="hidden" name="sale_id" value="{{ auth()->id() }}">@endif
