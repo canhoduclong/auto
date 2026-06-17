@@ -422,7 +422,7 @@
     </ul>
     <div class="offcanvas__phone__num">
         <i class="fa fa-phone"></i>
-        <span>0909 990 909</span>
+        <span>{{ $settings['HOTLINE']->value ?? '--' }}</span>
     </div>
     <div class="offcanvas__social">
         <a href="#"><i class="fa fa-facebook"></i></a>
@@ -438,7 +438,7 @@
                 <div class="col-lg-7">
                     <ul class="header__top__widget">
                         <li><i class="fa fa-clock-o"></i>{{ $settings['slogan']->value ?? __('site.slogan_fallback') }}</li>
-                        <li><i class="fa fa-phone"></i>  {{ $settings['HOTLINE']->value ?? '0909 990 909' }}</li>
+                        <li><i class="fa fa-phone"></i>  {{ $settings['HOTLINE']->value ?? '--' }}</li>
                     </ul>
                 </div>
                 <div class="col-lg-5  d-flex justify-content-end align-items-center">
