@@ -42,6 +42,16 @@
     <div class="card-body">
         <h5 class="mb-3">Giao dich #{{ $transaction->id }}</h5>
         <div class="row g-3">
+            @if($transaction->request_source)
+                <div class="col-md-4">
+                    <div class="text-muted small">Bộ phận yêu cầu</div>
+                    <div><span class="badge text-bg-light border">{{ $transaction->request_department ?: $transaction->request_source }}</span></div>
+                </div>
+                <div class="col-md-8">
+                    <div class="text-muted small">Tiêu đề phiếu</div>
+                    <div class="fw-semibold">{{ $transaction->request_title ?: 'Phiếu yêu cầu' }}</div>
+                </div>
+            @endif
             <div class="col-md-4">
                 <div class="text-muted small">Loai</div>
                 <div><span class="badge text-bg-light border">{{ $transaction->type }}</span></div>
@@ -92,6 +102,10 @@
                 <div>{{ $transaction->customer?->name ?? '-' }}</div>
             </div>
             <div class="col-md-4">
+                <div class="text-muted small">Tai khoan</div>
+                <div>{{ $transaction->account?->name ?? '-' }}</div>
+            </div>
+            <div class="col-md-4">
                 <div class="text-muted small">Phuong thuc</div>
                 <div>{{ $transaction->method ?: '-' }}</div>
             </div>
@@ -129,6 +143,19 @@
                 <h6 class="mb-3">Duyet giao dich</h6>
                 <form method="POST" action="{{ accounting_route('transactions.approve', $transaction) }}">
                     @csrf
+                    @if($transaction->request_source)
+                        <div class="mb-2">
+                            <label class="form-label">Tài khoản thực hiện <span class="text-danger">*</span></label>
+                            <select name="account_id" class="form-select" required>
+                                <option value="">-- Chọn tài khoản --</option>
+                                @foreach($accounts as $account)
+                                    <option value="{{ $account->id }}" @selected((string) old('account_id', $transaction->account_id) === (string) $account->id)>
+                                        {{ $account->name }} - {{ $account->type === 'cash' ? 'Tiền mặt' : 'Ngân hàng' }} ({{ number_format((float) $account->balance) }}đ)
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+                    @endif
                     <div class="mb-2">
                         <label class="form-label">Ghi chu (tuy chon)</label>
                         <textarea name="note" class="form-control" rows="3" placeholder="Ghi chu phe duyet..."></textarea>

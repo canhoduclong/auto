@@ -308,6 +308,9 @@
             <a href="{{ route('ceo.cashflow') }}" class="ceo-nav-link {{ request()->routeIs('ceo.cashflow', 'ceo.cashflow.show', 'ceo.transactions.*') ? 'active' : '' }}">
                 <i class="bi bi-arrow-left-right"></i> Thu chi
             </a>
+            <a href="{{ route('ceo.finance-requests.index') }}" class="ceo-nav-link {{ request()->routeIs('ceo.finance-requests.*') ? 'active' : '' }}">
+                <i class="bi bi-file-earmark-text"></i> Phiếu yêu cầu
+            </a>
             <a href="{{ route('ceo.financial-reports') }}" class="ceo-nav-link {{ request()->routeIs('ceo.financial-reports') ? 'active' : '' }}">
                 <i class="bi bi-graph-up-arrow"></i> Báo cáo tài chính
             </a>

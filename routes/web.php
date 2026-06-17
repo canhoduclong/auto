@@ -61,6 +61,7 @@ use App\Http\Controllers\ShipperDashboardController;
 use App\Http\Controllers\CeoDashboardController;
 use App\Http\Controllers\TaskManagementController;
 use App\Http\Controllers\AccountingDashboardController;
+use App\Http\Controllers\DepartmentFinanceRequestController;
 use App\Http\Controllers\TruckStationController;
 use App\Http\Controllers\CustomerAppointmentController;
 use App\Http\Controllers\OrderScheduleController;
@@ -185,6 +186,18 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::post('/my-dashboard/order-adjustments/{order}/reject', [MyDashboardController::class, 'rejectWarehouseAdjustment'])
         ->name('pages.my_dashboard.order_adjustments.reject')
         ->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
+
+    Route::prefix('leader')->name('leader.')->middleware('role:leader,leader_sale,sale_manager,admin')->group(function () {
+        Route::get('/requests', [DepartmentFinanceRequestController::class, 'leaderIndex'])->name('finance-requests.index');
+        Route::post('/requests', [DepartmentFinanceRequestController::class, 'leaderStore'])->name('finance-requests.store');
+        Route::get('/requests/{transaction}/print', [DepartmentFinanceRequestController::class, 'leaderPrint'])->name('finance-requests.print');
+    });
+
+    Route::prefix('manager')->name('manager.')->middleware('role:manager,manager_sale,director,admin')->group(function () {
+        Route::get('/requests', [DepartmentFinanceRequestController::class, 'managerIndex'])->name('finance-requests.index');
+        Route::post('/requests', [DepartmentFinanceRequestController::class, 'managerStore'])->name('finance-requests.store');
+        Route::get('/requests/{transaction}/print', [DepartmentFinanceRequestController::class, 'managerPrint'])->name('finance-requests.print');
+    });
 
     Route::prefix('accounting')->name('accounting.')->middleware('role:accountant,accounting,admin')->group(function () {
         Route::get('/', [AccountingDashboardController::class, 'index'])->name('dashboard');
@@ -314,6 +327,9 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/inventory-daily', [WarehouseDashboardController::class, 'inventoryDaily'])->name('inventory-daily');
         Route::post('/inventory/cancel-overdue', [WarehouseDashboardController::class, 'cancelOverdueOrders'])->name('inventory.cancel-overdue');
         Route::get('/products',    [WarehouseDashboardController::class, 'products'])->name('products');
+        Route::get('/requests', [\App\Http\Controllers\DepartmentFinanceRequestController::class, 'warehouseIndex'])->name('finance-requests.index');
+        Route::post('/requests', [\App\Http\Controllers\DepartmentFinanceRequestController::class, 'warehouseStore'])->name('finance-requests.store');
+        Route::get('/requests/{transaction}/print', [\App\Http\Controllers\DepartmentFinanceRequestController::class, 'warehousePrint'])->name('finance-requests.print');
         Route::get('/reports',     [WarehouseDashboardController::class, 'reports'])->name('reports');
     });
 
@@ -398,6 +414,9 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/cashflow', [AccountingDashboardController::class, 'cashflow'])->name('cashflow');
         Route::get('/cashflow/{transaction}/edit', [AccountingDashboardController::class, 'transactionEdit'])->name('transactions.edit');
         Route::get('/cashflow/{transaction}', [AccountingDashboardController::class, 'cashflowShow'])->name('cashflow.show');
+        Route::get('/requests', [DepartmentFinanceRequestController::class, 'ceoIndex'])->name('finance-requests.index');
+        Route::post('/requests', [DepartmentFinanceRequestController::class, 'ceoStore'])->name('finance-requests.store');
+        Route::get('/requests/{transaction}/print', [DepartmentFinanceRequestController::class, 'ceoPrint'])->name('finance-requests.print');
         Route::get('/transactions/create', [AccountingDashboardController::class, 'transactionCreate'])->name('transactions.create');
         Route::post('/transactions', [AccountingDashboardController::class, 'transactionStore'])->name('transactions.store');
         Route::put('/transactions/{transaction}', [AccountingDashboardController::class, 'transactionUpdate'])->name('transactions.update');

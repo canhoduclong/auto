@@ -344,10 +344,16 @@
                 <ul class="list-unstyled mb-2">
                     @php
                         $offcanvasCanViewMonitoring = Auth::user()->isAdmin() || Auth::user()->hasPermission('orders.monitoring');
-                        $offcanvasCanApproveTeamOrders = Auth::user()->hasRole('leader');
-                        $offcanvasCanApproveDepartmentOrders = Auth::user()->hasRole('manager');
+                        $offcanvasCanApproveTeamOrders = Auth::user()->hasRole('leader') || Auth::user()->hasRole('leader_sale') || Auth::user()->hasRole('sale_manager');
+                        $offcanvasCanApproveDepartmentOrders = Auth::user()->hasRole('manager') || Auth::user()->hasRole('manager_sale') || Auth::user()->hasRole('director');
                         $offcanvasCanManageAppointments = Auth::user()->isAdmin() || Auth::user()->isSalesFlowRole();
                         $offcanvasMyTasksRoute = Auth::user()->isSalesFlowRole() ? 'my-tasks' : 'tasks.my-tasks';
+                        $offcanvasFinanceRequestRoute = null;
+                        if ($offcanvasCanApproveDepartmentOrders || Auth::user()->isAdmin()) {
+                            $offcanvasFinanceRequestRoute = 'manager.finance-requests.index';
+                        } elseif ($offcanvasCanApproveTeamOrders) {
+                            $offcanvasFinanceRequestRoute = 'leader.finance-requests.index';
+                        }
                     @endphp
                     <li><a href="{{ route('pages.my_dashboard') }}" class="d-block py-1"><i class="bi bi-speedometer2 me-1"></i> My Dashboard</a></li>
                     <li><a href="{{ route('pages.my_profile') }}" class="d-block py-1"><i class="bi bi-person-circle me-1"></i> {{ __('site.profile') }}</a></li>
@@ -366,6 +372,9 @@
                     @endif
                     @if($offcanvasCanApproveDepartmentOrders)
                         <li><a href="{{ route('pages.all_team_orders') }}" class="d-block py-1"><i class="bi bi-check2-all me-1"></i> Duyệt đơn PKD</a></li>
+                    @endif
+                    @if($offcanvasFinanceRequestRoute)
+                        <li><a href="{{ route($offcanvasFinanceRequestRoute) }}" class="d-block py-1"><i class="bi bi-file-earmark-text me-1"></i> Phiếu yêu cầu</a></li>
                     @endif
                     <li><a href="{{ route('pages.my_customer') }}" class="d-block py-1"><i class="bi bi-people me-1"></i> {{ __('site.my_customers') }}</a></li>
                     <li><a href="{{ route('my_customer.schedules.index') }}" class="d-block py-1"><i class="bi bi-calendar2-check me-1"></i> Lịch lên đơn</a></li>
@@ -636,8 +645,14 @@
                                             $isSalesFlowRole = Auth::user()->isSalesFlowRole();
                                             $canManageCustomerAppointments = $isSalesFlowRole || Auth::user()->isAdmin();
                                             $canAccessSalesDailyPages = Auth::user()->canAccessSalesDailyFeatures();
-                                            $canApproveTeamOrders = Auth::user()->hasRole('leader');
-                                            $canApproveDepartmentOrders = Auth::user()->hasRole('manager');
+                                            $canApproveTeamOrders = Auth::user()->hasRole('leader') || Auth::user()->hasRole('leader_sale') || Auth::user()->hasRole('sale_manager');
+                                            $canApproveDepartmentOrders = Auth::user()->hasRole('manager') || Auth::user()->hasRole('manager_sale') || Auth::user()->hasRole('director');
+                                            $financeRequestRoute = null;
+                                            if ($canApproveDepartmentOrders || Auth::user()->isAdmin()) {
+                                                $financeRequestRoute = 'manager.finance-requests.index';
+                                            } elseif ($canApproveTeamOrders) {
+                                                $financeRequestRoute = 'leader.finance-requests.index';
+                                            }
                                         @endphp
                                         @if($canAccessSalesDailyPages)
                                             <a class="dropdown-item" href="{{ route('pages.my_orders.daily_prices') }}">
@@ -650,6 +665,11 @@
                                         @if($canManageCustomerAppointments)
                                             <a class="dropdown-item" href="{{ route('pages.my_customer_appointments') }}">
                                                 <i class="bi bi-camera"></i> Cuộc hẹn khách hàng
+                                            </a>
+                                        @endif
+                                        @if($financeRequestRoute)
+                                            <a class="dropdown-item" href="{{ route($financeRequestRoute) }}">
+                                                <i class="bi bi-file-earmark-text"></i> Phiếu yêu cầu
                                             </a>
                                         @endif
                                         @if(!$isSalesFlowRole)

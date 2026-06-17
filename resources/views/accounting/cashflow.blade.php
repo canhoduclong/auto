@@ -18,6 +18,60 @@
     <div class="item"><div class="label">Can doi</div><div class="value">{{ number_format($incomeTotal - $expenseTotal) }} d</div></div>
 </div>
 
+@if(($pendingRequests ?? collect())->isNotEmpty())
+<div class="acc-card mb-3">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <div>
+                <div class="fw-bold">Phiếu yêu cầu chờ duyệt</div>
+                <div class="small text-muted">Các bộ phận gửi yêu cầu thu/chi sang Kế toán</div>
+            </div>
+            <span class="badge bg-warning text-dark">{{ $pendingRequests->count() }}</span>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>#</th>
+                        <th>Bộ phận</th>
+                        <th>Phiếu</th>
+                        <th>Dòng tiền</th>
+                        <th class="text-end">Số tiền</th>
+                        <th>Người gửi</th>
+                        <th>Ngày gửi</th>
+                        <th class="text-end"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach($pendingRequests as $requestTx)
+                        @php $flow = $requestTx->transactionCategory?->flow_direction === 'in' ? 'in' : 'out'; @endphp
+                        <tr>
+                            <td class="text-muted">#{{ $requestTx->id }}</td>
+                            <td><span class="badge text-bg-light border">{{ $requestTx->request_department ?: $requestTx->request_source }}</span></td>
+                            <td>
+                                <div class="fw-semibold">{{ $requestTx->request_title ?: 'Phiếu yêu cầu' }}</div>
+                                <div class="small text-muted">{{ $requestTx->transactionCategory?->name ?: '-' }}</div>
+                            </td>
+                            <td>
+                                <span class="badge bg-{{ $flow === 'in' ? 'success' : 'danger' }}">{{ $flow === 'in' ? 'Thu' : 'Chi' }}</span>
+                            </td>
+                            <td class="text-end fw-bold">{{ number_format((float) $requestTx->amount) }} d</td>
+                            <td>{{ $requestTx->submitter?->name ?: '-' }}</td>
+                            <td>{{ optional($requestTx->created_at)->format('d/m/Y H:i') }}</td>
+                            <td class="text-end">
+                                <a href="{{ accounting_route('cashflow.show', $requestTx) }}" class="btn btn-sm btn-warning">
+                                    <i class="bi bi-check2-circle me-1"></i>Duyệt
+                                </a>
+                            </td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+@endif
+
 <div class="acc-card mb-3">
     <div class="card-body">
         <form method="GET" class="acc-filter">

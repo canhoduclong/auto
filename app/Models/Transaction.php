@@ -33,11 +33,22 @@ class Transaction extends Model
         'approved_at',
         'rejected_at',
         'reject_reason',
+        'request_source',
+        'request_department',
+        'request_title',
+        'request_items',
+        'request_subtotal',
+        'request_vat',
+        'request_total',
     ];
 
     protected $casts = [
         'approved_at' => 'datetime',
         'rejected_at' => 'datetime',
+        'request_items' => 'array',
+        'request_subtotal' => 'decimal:2',
+        'request_vat' => 'decimal:2',
+        'request_total' => 'decimal:2',
     ];
 
     public function order() { return $this->belongsTo(Order::class); }
@@ -56,4 +67,3 @@ class Transaction extends Model
         return $this->hasMany(ApprovalOrder::class, 'transaction_id');
     }
 }
-

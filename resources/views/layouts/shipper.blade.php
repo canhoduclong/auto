@@ -247,17 +247,17 @@
             <a href="{{ route('shipper.history') }}" class="sp-nav-link {{ request()->routeIs('shipper.history') ? 'active' : '' }}">
                 <i class="bi bi-clock-history"></i> Lịch sử giao hàng
             </a>
-            <a href="{{ route('shipper.customers') }}" class="sp-nav-link {{ request()->routeIs('shipper.customers') ? 'active' : '' }}">
-                <i class="bi bi-people"></i> Khách hàng
-            </a>
             <a href="{{ route('shipper.delivery-statistics') }}" class="sp-nav-link {{ request()->routeIs('shipper.delivery-statistics') ? 'active' : '' }}">
                 <i class="bi bi-table"></i> Thống kê giao hàng
             </a>
 
-            @if(auth()->user()->hasRole('manager_shipper'))
+            @if(auth()->user()->hasRole('manager_shipper') || auth()->user()->hasRole('admin'))
                 <div class="sp-nav-section">Quản lý ship</div>
                 <a href="{{ route('shipper.manage-assignments') }}" class="sp-nav-link {{ request()->routeIs('shipper.manage-assignments') ? 'active' : '' }}">
                     <i class="bi bi-person-badge"></i> Điều phối đơn hàng
+                </a>
+                <a href="{{ route('shipper.customers') }}" class="sp-nav-link {{ request()->routeIs('shipper.customers') ? 'active' : '' }}">
+                    <i class="bi bi-people"></i> Quản lý khách hàng
                 </a>
                 <a href="{{ route('shipper.manage-fees') }}" class="sp-nav-link {{ request()->routeIs('shipper.manage-fees') ? 'active' : '' }}">
                     <i class="bi bi-cash-coin"></i> Quản lý phí ship

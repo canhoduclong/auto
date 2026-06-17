@@ -165,6 +165,18 @@ class AccountingDashboardController extends Controller
             ->when($categoryId > 0, fn ($q) => $q->where('transaction_category_id', $categoryId))
             ->when($accountId > 0, fn ($q) => $q->where('account_id', $accountId));
 
+        $pendingRequests = Transaction::query()
+            ->with([
+                'submitter:id,name',
+                'transactionCategory:id,code,name,flow_direction',
+                'account:id,name,type',
+            ])
+            ->where('status', Transaction::STATUS_PENDING_APPROVAL)
+            ->whereNotNull('request_source')
+            ->latest('created_at')
+            ->limit(20)
+            ->get();
+
         $transactions = (clone $baseQuery)
             ->with([
                 'customer:id,name',
@@ -204,6 +216,7 @@ class AccountingDashboardController extends Controller
             'type' => $request->input('type', ''),
             'transactionCategories' => TransactionCategory::active()->orderBy('sort_order')->get(['id', 'code', 'name', 'flow_direction']),
             'accountSummaries' => $accountSummaries,
+            'pendingRequests' => $pendingRequests,
             'from' => $from,
             'to' => $to,
             'rangeLabel' => $rangeLabel,
@@ -223,6 +236,7 @@ class AccountingDashboardController extends Controller
             'expenseType:id,name',
             'payeeUser:id,name',
             'transactionCategory:id,code,name,flow_direction',
+            'account:id,name,type,balance',
             'approvalSteps.approver:id,name',
         ]);
 
@@ -237,6 +251,7 @@ class AccountingDashboardController extends Controller
         return view('accounting.cashflow_show', [
             'transaction' => $transaction,
             'canReview' => $canReview,
+            'accounts' => Account::active()->orderBy('name')->get(['id', 'name', 'type', 'balance']),
         ]);
     }
 
@@ -1096,6 +1111,16 @@ class AccountingDashboardController extends Controller
         }
 
         $note = trim((string) $request->input('note', ''));
+
+        if ($transaction->request_source) {
+            $validated = $request->validate([
+                'account_id' => ['required', 'integer', 'exists:accounts,id'],
+            ]);
+
+            $transaction->forceFill([
+                'account_id' => (int) $validated['account_id'],
+            ])->save();
+        }
 
         $hasPendingStep = $transaction->approvalSteps()->where('status', 'pending')->exists();
         $allApproved = true;

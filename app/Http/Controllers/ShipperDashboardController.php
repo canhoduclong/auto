@@ -1912,6 +1912,8 @@ class ShipperDashboardController extends Controller
 
     public function customers(Request $request)
     {
+        $user = Auth::user();
+        $isManagerShipper = $user && ($user->hasRole('manager_shipper') || $user->hasRole('admin'));
         $selectedDate = $request->filled('date')
             ? Carbon::parse($request->input('date'))->toDateString()
             : Carbon::today()->toDateString();
@@ -1919,6 +1921,51 @@ class ShipperDashboardController extends Controller
             ? $request->input('sort')
             : 'delivery_time';
         $direction = $request->input('direction') === 'desc' ? 'desc' : 'asc';
+
+        if ($isManagerShipper) {
+            $assignmentStatus = in_array($request->input('assignment_status'), ['all', 'fixed', 'unassigned'], true)
+                ? $request->input('assignment_status')
+                : 'all';
+            $keyword = trim((string) $request->input('q', ''));
+
+            $customers = Customer::query()
+                ->with('defaultShipper:id,name')
+                ->when($keyword !== '', function ($query) use ($keyword) {
+                    $query->where(function ($subQuery) use ($keyword) {
+                        $subQuery->where('name', 'like', '%' . $keyword . '%')
+                            ->orWhere('phone', 'like', '%' . $keyword . '%')
+                            ->orWhere('address', 'like', '%' . $keyword . '%');
+                    });
+                })
+                ->when($assignmentStatus === 'fixed', fn ($query) => $query->whereNotNull('default_shipper_id'))
+                ->when($assignmentStatus === 'unassigned', fn ($query) => $query->whereNull('default_shipper_id'))
+                ->withCount(['orders as orders_count' => fn ($query) => $query->forDeliveryDate($selectedDate)])
+                ->withSum(['orders as orders_total' => fn ($query) => $query->forDeliveryDate($selectedDate)], 'total')
+                ->when($sort === 'name', fn ($query) => $query->orderBy('name', $direction))
+                ->when($sort === 'delivery_time', fn ($query) => $query->orderByRaw("CASE WHEN delivery_time IS NULL OR delivery_time = '' THEN 1 ELSE 0 END")->orderBy('delivery_time', $direction))
+                ->when($sort === 'orders_count', fn ($query) => $query->orderBy('orders_count', $direction))
+                ->when($sort === 'total', fn ($query) => $query->orderBy('orders_total', $direction))
+                ->orderBy('name')
+                ->get();
+
+            $shippers = User::query()
+                ->whereHas('roles', function ($query) {
+                    $query->whereIn('name', ['shipper', 'manager_shipper']);
+                })
+                ->orderBy('name')
+                ->get(['id', 'name']);
+
+            return view('shipper.customers', compact(
+                'selectedDate',
+                'sort',
+                'direction',
+                'customers',
+                'shippers',
+                'isManagerShipper',
+                'assignmentStatus',
+                'keyword',
+            ));
+        }
 
         $customers = Customer::query()
             ->where(function ($query) {
@@ -1950,6 +1997,7 @@ class ShipperDashboardController extends Controller
             'direction',
             'fixedCustomers',
             'unassignedCustomers',
+            'isManagerShipper',
         ));
     }
 

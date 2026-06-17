@@ -244,7 +244,7 @@
                 <div class="col-lg-12 col-md-12  d-flex justify-content-between">
 
                     <p class="mb-0">Copyright &copy; {{ date('Y') }} {{ __('site.copyright') }}</p>
-                    <p class="mb-0">{{ $brandName }} | Auto Parts & Service Platform</p>
+                    <p class="mb-0">{{ $brandName }} | Service Platform</p>
                 </div>
             </div>
         </div>

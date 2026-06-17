@@ -256,6 +256,11 @@
                 <i class="bi bi-box"></i> Sản Phẩm
             </a>
 
+            <div class="wh-nav-section">Tài chính</div>
+            <a href="{{ route('warehouse.finance-requests.index') }}" class="wh-nav-link {{ request()->routeIs('warehouse.finance-requests.*') ? 'active' : '' }}">
+                <i class="bi bi-file-earmark-text"></i> Phiếu yêu cầu
+            </a>
+
             <div class="wh-nav-section">Nhiệm vụ & Trả hàng</div>
             <a href="{{ route('tasks.my-tasks') }}" class="wh-nav-link {{ request()->routeIs('tasks.my-tasks') || request()->routeIs('task-assignments.assigned-to-me') ? 'active' : '' }}">
                 <i class="bi bi-list-task"></i> Nhiệm vụ
