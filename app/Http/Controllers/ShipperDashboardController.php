@@ -1565,6 +1565,7 @@ class ShipperDashboardController extends Controller
             ->whereIn('status', $this->assignmentStatuses())
             ->forDeliveryDate($selectedDate)
             ->whereHas('customer', fn ($query) => $query->whereNotNull('default_shipper_id'))
+            ->whereDoesntHave('histories', fn ($query) => $query->where('action', 'shipper_unassigned'))
             ->get();
 
         if ($orders->isEmpty()) {
