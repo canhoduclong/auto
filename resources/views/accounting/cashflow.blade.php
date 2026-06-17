@@ -60,7 +60,7 @@
                             <td>{{ optional($requestTx->created_at)->format('d/m/Y H:i') }}</td>
                             <td class="text-end">
                                 <a href="{{ accounting_route('cashflow.show', $requestTx) }}" class="btn btn-sm btn-warning">
-                                    <i class="bi bi-check2-circle me-1"></i>Duyệt
+                                    <i class="bi bi-eye me-1"></i>Xem/Duyệt
                                 </a>
                             </td>
                         </tr>

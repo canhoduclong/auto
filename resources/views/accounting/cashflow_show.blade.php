@@ -135,6 +135,77 @@
     </div>
 </div>
 
+@if($transaction->request_source)
+    @php
+        $requestItems = collect($transaction->request_items ?: []);
+        if ($requestItems->isEmpty()) {
+            $requestItems = collect([[
+                'content' => $transaction->note ?: $transaction->request_title,
+                'unit' => '',
+                'quantity' => 1,
+                'unit_price' => (float) $transaction->amount,
+                'line_total' => (float) $transaction->amount,
+            ]]);
+        }
+
+        $requestSubtotal = (float) ($transaction->request_subtotal ?? $requestItems->sum('line_total'));
+        $requestVat = (float) ($transaction->request_vat ?? 0);
+        $requestTotal = (float) ($transaction->request_total ?? $transaction->amount);
+    @endphp
+    <div class="acc-card mb-3">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <h5 class="mb-1">Chi tiết nội dung phiếu yêu cầu</h5>
+                    <div class="small text-muted">Kế toán kiểm tra nội dung, VAT và tổng cộng trước khi duyệt.</div>
+                </div>
+                <span class="badge text-bg-light border">{{ $transaction->request_department ?: $transaction->request_source }}</span>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="text-center" style="width:56px">STT</th>
+                            <th>Nội dung</th>
+                            <th class="text-center" style="width:90px">ĐVT</th>
+                            <th class="text-end" style="width:110px">Số lượng</th>
+                            <th class="text-end" style="width:140px">Đơn giá</th>
+                            <th class="text-end" style="width:150px">Thành tiền</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($requestItems as $index => $item)
+                            <tr>
+                                <td class="text-center">{{ $index + 1 }}</td>
+                                <td>{{ $item['content'] ?? '-' }}</td>
+                                <td class="text-center">{{ $item['unit'] ?? '-' }}</td>
+                                <td class="text-end">{{ number_format((float) ($item['quantity'] ?? 0), 2) }}</td>
+                                <td class="text-end">{{ number_format((float) ($item['unit_price'] ?? 0)) }} d</td>
+                                <td class="text-end fw-semibold">{{ number_format((float) ($item['line_total'] ?? 0)) }} d</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <th colspan="5" class="text-end">Tổng tiền</th>
+                            <th class="text-end">{{ number_format($requestSubtotal) }} d</th>
+                        </tr>
+                        <tr>
+                            <th colspan="5" class="text-end">VAT</th>
+                            <th class="text-end">{{ number_format($requestVat) }} d</th>
+                        </tr>
+                        <tr>
+                            <th colspan="5" class="text-end">Tổng cộng</th>
+                            <th class="text-end text-primary fs-6">{{ number_format($requestTotal) }} d</th>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+@endif
+
 @if($canReview)
 <div class="row g-3">
     <div class="col-lg-6">
