@@ -15,7 +15,7 @@
     $selectedCategory = $categories->firstWhere('id', (int) old('transaction_category_id'));
     $oldItems = old('items', [['content' => '', 'unit' => '', 'quantity' => 1, 'unit_price' => 0]]);
 @endphp
-
+<div class="container">
 <div class="row g-3">
     <div class="col-xl-5">
         <div class="card border-0 shadow-sm">
@@ -282,7 +282,7 @@
         </div>
     </div>
 </div>
-
+</div>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const categoryInput = document.getElementById('transactionCategoryId');

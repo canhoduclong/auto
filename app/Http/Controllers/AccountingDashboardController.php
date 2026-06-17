@@ -255,6 +255,26 @@ class AccountingDashboardController extends Controller
         ]);
     }
 
+    public function cashflowPrint(Transaction $transaction)
+    {
+        abort_unless($transaction->request_source, 404);
+
+        $transaction->load([
+            'submitter:id,name,email',
+            'approver:id,name',
+            'rejecter:id,name',
+            'transactionCategory:id,code,name,flow_direction',
+            'account:id,name,type',
+        ]);
+
+        return view('department_finance_requests.print', [
+            'config' => [
+                'label' => 'Kế toán',
+            ],
+            'transaction' => $transaction,
+        ]);
+    }
+
     public function reconciliation(Request $request)
     {
         $selectedDate = (string) $request->input('date', now()->toDateString());

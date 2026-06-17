@@ -6,6 +6,8 @@ use App\Models\Transaction;
 use App\Models\TransactionCategory;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
+use App\Models\Setting;
+use Illuminate\Support\Facades\Cache;
 
 class DepartmentFinanceRequestController extends Controller
 {
@@ -36,9 +38,14 @@ class DepartmentFinanceRequestController extends Controller
         ],
     ];
 
+    protected $settings;
+
     public function __construct()
     {
         $this->middleware('auth');
+        $this->settings = Cache::remember('settings', 60, function () {
+            return Setting::all()->keyBy('key');
+        });
     }
 
     public function warehouseIndex(Request $request)
@@ -110,6 +117,9 @@ class DepartmentFinanceRequestController extends Controller
 
     private function index(Request $request, string $source)
     {
+        $settings = $this->settings;
+        
+
         $config = $this->config($source);
         $this->authorizeSource($config);
 
@@ -143,6 +153,7 @@ class DepartmentFinanceRequestController extends Controller
             'requests' => $requests,
             'categories' => $categories,
             'status' => $status,
+            'settings' => $settings,
         ]);
     }
 

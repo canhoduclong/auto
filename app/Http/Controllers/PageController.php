@@ -3747,6 +3747,9 @@ public function apiTruckRoutes(Request $request)
                 'total_discount' => $totalDiscount,
                 'total' => $newTotal,
                 'amount_due' => max($newTotal - $paid, 0),
+                'stock_sufficient' => true,
+                'stock_shortage_detail' => null,
+                'stock_alert_status' => 'ready',
             ];
 
             if ($isReturnOrder) {
@@ -3788,10 +3791,6 @@ public function apiTruckRoutes(Request $request)
                     : \App\Models\ApprovalWorkflow::ACTIVITY_ORDER_CREATE
             );
         });
-
-        if (!$isReturnOrder) {
-            app(OrderController::class)->syncDailySequenceAndStockSufficiency($order->fresh()->created_at ?: now());
-        }
 
         return redirect()->route('site.orders.show', $order)
             ->with('success', 'Da cap nhat don hang thanh cong.');

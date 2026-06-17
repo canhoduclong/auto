@@ -207,6 +207,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/cashflow', [AccountingDashboardController::class, 'cashflow'])->name('cashflow');
         Route::get('/cashflow/refresh-history', [AccountingDashboardController::class, 'refreshHistory'])->name('refresh-history');
         Route::get('/cashflow/{transaction}/edit', [AccountingDashboardController::class, 'transactionEdit'])->name('transactions.edit');
+        Route::get('/cashflow/{transaction}/print', [AccountingDashboardController::class, 'cashflowPrint'])->name('cashflow.print');
         Route::get('/cashflow/{transaction}', [AccountingDashboardController::class, 'cashflowShow'])->name('cashflow.show');
         Route::get('/reconciliation', [AccountingDashboardController::class, 'reconciliation'])->name('reconciliation');
         Route::get('/reconciliation/{order}/detail', [AccountingDashboardController::class, 'reconciliationDetail'])->name('reconciliation.detail');
@@ -250,6 +251,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/cashflow', [AccountingDashboardController::class, 'cashflow'])->name('cashflow');
         Route::get('/cashflow/refresh-history', [AccountingDashboardController::class, 'refreshHistory'])->name('refresh-history');
         Route::get('/cashflow/{transaction}/edit', [AccountingDashboardController::class, 'transactionEdit'])->name('transactions.edit');
+        Route::get('/cashflow/{transaction}/print', [AccountingDashboardController::class, 'cashflowPrint'])->name('cashflow.print');
         Route::get('/cashflow/{transaction}', [AccountingDashboardController::class, 'cashflowShow'])->name('cashflow.show');
         Route::get('/financial-reports', [AccountingDashboardController::class, 'financialReports'])->name('financial-reports');
         Route::get('/transactions/create', [AccountingDashboardController::class, 'transactionCreate'])->name('transactions.create');
@@ -413,6 +415,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         // Thu chi (cashflow) — reuse AccountingDashboardController, CEO layout via helpers
         Route::get('/cashflow', [AccountingDashboardController::class, 'cashflow'])->name('cashflow');
         Route::get('/cashflow/{transaction}/edit', [AccountingDashboardController::class, 'transactionEdit'])->name('transactions.edit');
+        Route::get('/cashflow/{transaction}/print', [AccountingDashboardController::class, 'cashflowPrint'])->name('cashflow.print');
         Route::get('/cashflow/{transaction}', [AccountingDashboardController::class, 'cashflowShow'])->name('cashflow.show');
         Route::get('/requests', [DepartmentFinanceRequestController::class, 'ceoIndex'])->name('finance-requests.index');
         Route::post('/requests', [DepartmentFinanceRequestController::class, 'ceoStore'])->name('finance-requests.store');

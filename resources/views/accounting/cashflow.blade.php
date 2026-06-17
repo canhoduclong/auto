@@ -59,6 +59,9 @@
                             <td>{{ $requestTx->submitter?->name ?: '-' }}</td>
                             <td>{{ optional($requestTx->created_at)->format('d/m/Y H:i') }}</td>
                             <td class="text-end">
+                                <a href="{{ accounting_route('cashflow.print', $requestTx) }}" target="_blank" class="btn btn-sm btn-outline-secondary" title="In phiếu">
+                                    <i class="bi bi-printer"></i>
+                                </a>
                                 <a href="{{ accounting_route('cashflow.show', $requestTx) }}" class="btn btn-sm btn-warning">
                                     <i class="bi bi-eye me-1"></i>Xem/Duyệt
                                 </a>
