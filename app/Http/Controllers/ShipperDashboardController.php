@@ -1496,6 +1496,8 @@ class ShipperDashboardController extends Controller
             ? Carbon::parse($request->input('date'))->toDateString()
             : Carbon::tomorrow()->toDateString();
 
+        $this->applyDefaultShipperAssignmentsForDate($selectedDate);
+
         $ordersQuery = Order::with(['customer.defaultShipper', 'customer.truckStation', 'customer.truckRoute.stops.station', 'items.variant', 'shipper'])
             ->whereIn('status', $this->assignmentStatuses())
             ->forDeliveryDate($selectedDate)
@@ -1554,6 +1556,42 @@ class ShipperDashboardController extends Controller
             'hasUnpublishedSchedules',
             'warehouses'
         ));
+    }
+
+    private function applyDefaultShipperAssignmentsForDate(string $selectedDate): void
+    {
+        $orders = Order::with(['customer.defaultShipper'])
+            ->whereNull('shipper_id')
+            ->whereIn('status', $this->assignmentStatuses())
+            ->forDeliveryDate($selectedDate)
+            ->whereHas('customer', fn ($query) => $query->whereNotNull('default_shipper_id'))
+            ->get();
+
+        if ($orders->isEmpty()) {
+            return;
+        }
+
+        DB::transaction(function () use ($orders): void {
+            foreach ($orders as $order) {
+                $defaultShipperId = $order->customer?->default_shipper_id;
+                if (!$defaultShipperId) {
+                    continue;
+                }
+
+                $order->update(['shipper_id' => $defaultShipperId]);
+
+                OrderHistory::create([
+                    'order_id'      => $order->id,
+                    'action'        => 'shipper_auto_assigned',
+                    'user_id'       => Auth::id(),
+                    'role'          => 'manager_shipper',
+                    'status_before' => $order->status,
+                    'status_after'  => $order->status,
+                    'note'          => 'Tự động gán shipper cố định của khách hàng'
+                        . ($order->customer?->defaultShipper?->name ? ': ' . $order->customer->defaultShipper->name : ''),
+                ]);
+            }
+        });
     }
 
     private function resolveShipperScheduleStatuses(string $selectedDate, $assignedOrders): array

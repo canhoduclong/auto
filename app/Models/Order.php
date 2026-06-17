@@ -64,7 +64,21 @@ class Order extends Model
     {
         static::creating(function (Order $order): void {
             $order->delivery_date ??= now()->addDay()->toDateString();
+            $order->shipper_id ??= $order->resolveDefaultShipperId();
         });
+    }
+
+    private function resolveDefaultShipperId(): ?int
+    {
+        if (!$this->customer_id || $this->is_return_order || (string) $this->order_type === 'order_return') {
+            return null;
+        }
+
+        $defaultShipperId = Customer::query()
+            ->whereKey($this->customer_id)
+            ->value('default_shipper_id');
+
+        return $defaultShipperId ? (int) $defaultShipperId : null;
     }
 
     public function scopeForDeliveryDate($query, string $date)
