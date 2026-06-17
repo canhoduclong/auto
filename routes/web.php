@@ -17,6 +17,7 @@ use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\LayoutPreferenceController;
 use App\Http\Controllers\LayoutController;
+use App\Http\Controllers\OrganizationUnitController;
 use App\Http\Controllers\RoleSwitchController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\RoleController;
@@ -497,6 +498,13 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::post('admin/notifications/read-all', [AdminNotificationController::class, 'markAllAsRead'])->name('admin.notifications.read_all');
     Route::post('admin/notifications/{notificationId}/read', [AdminNotificationController::class, 'markAsRead'])->name('admin.notifications.read');
     Route::get('admin/events', [AdminEventController::class, 'index'])->name('admin.events.index');
+    Route::get('admin/organization-units', [OrganizationUnitController::class, 'index'])->name('admin.organization-units.index')->middleware('role:admin');
+    Route::post('admin/organization-units/blocks', [OrganizationUnitController::class, 'storeBlock'])->name('admin.organization-units.blocks.store')->middleware('role:admin');
+    Route::put('admin/organization-units/blocks/{block}', [OrganizationUnitController::class, 'updateBlock'])->name('admin.organization-units.blocks.update')->middleware('role:admin');
+    Route::delete('admin/organization-units/blocks/{block}', [OrganizationUnitController::class, 'destroyBlock'])->name('admin.organization-units.blocks.destroy')->middleware('role:admin');
+    Route::post('admin/organization-units/departments', [OrganizationUnitController::class, 'storeDepartment'])->name('admin.organization-units.departments.store')->middleware('role:admin');
+    Route::put('admin/organization-units/departments/{department}', [OrganizationUnitController::class, 'updateDepartment'])->name('admin.organization-units.departments.update')->middleware('role:admin');
+    Route::delete('admin/organization-units/departments/{department}', [OrganizationUnitController::class, 'destroyDepartment'])->name('admin.organization-units.departments.destroy')->middleware('role:admin');
 
     // Đơn tự động — kiểm soát & lịch sử chạy lệnh
     Route::get('admin/order-schedule-runs', [OrderScheduleRunController::class, 'index'])->name('admin.order-schedule-runs.index')->middleware('role:admin');

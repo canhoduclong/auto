@@ -14,27 +14,218 @@
     $expenseCategories = $categories->where('flow_direction', 'out')->values();
     $selectedCategory = $categories->firstWhere('id', (int) old('transaction_category_id'));
     $oldItems = old('items', [['content' => '', 'unit' => '', 'quantity' => 1, 'unit_price' => 0]]);
+    $currentUser = auth()->user();
+    $currentDepartmentName = $currentUser?->department?->name;
+    $currentBlockName = $currentUser?->department?->block?->name ?: $currentUser?->block?->name;
 @endphp
-<div class="container">
-<div class="row g-3">
-    <div class="col-xl-5">
-        <div class="card border-0 shadow-sm">
-            <div class="card-header bg-white">
-                <div class="fw-bold">Tạo phiếu yêu cầu</div>
-                <div class="small text-muted">{{ $config['label'] }} gửi Kế toán duyệt thu/chi</div>
-            </div>
-            <div class="card-body">
-                @if($errors->any())
-                    <div class="alert alert-danger">
-                        @foreach($errors->all() as $error)
-                            <div>{{ $error }}</div>
-                        @endforeach
-                    </div>
-                @endif
+<style>
+    .finance-request-page {
+        max-width: 1440px;
+        margin: 0 auto;
+        padding: 0 12px 24px;
+    }
+    .fr-panel {
+        border: 1px solid rgba(148, 163, 184, .24);
+        border-radius: 8px;
+        background: #fff;
+        box-shadow: 0 10px 28px rgba(15, 23, 42, .06);
+        overflow: hidden;
+    }
+    .fr-panel-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 16px 18px;
+        border-bottom: 1px solid #eef2f7;
+        background: #f8fafc;
+    }
+    .fr-title {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 800;
+        color: #0f172a;
+    }
+    .fr-subtitle {
+        margin-top: 2px;
+        color: #64748b;
+        font-size: 13px;
+    }
+    .fr-panel-body {
+        padding: 18px;
+    }
+    .fr-section-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 10px;
+        font-weight: 800;
+        color: #334155;
+    }
+    .fr-section-label i {
+        color: var(--theme-primary, #0f766e);
+    }
+    .fr-meta-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 14px;
+    }
+    .fr-note-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 16px;
+        align-items: start;
+    }
+    .fr-summary-box {
+        border: 1px solid #dbe4ee;
+        border-radius: 8px;
+        background: #f8fafc;
+        padding: 14px;
+    }
+    .fr-summary-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 7px 0;
+        color: #334155;
+    }
+    .fr-summary-total {
+        border-top: 1px solid #cbd5e1;
+        margin-top: 6px;
+        padding-top: 12px;
+        font-size: 18px;
+        font-weight: 800;
+        color: var(--theme-primary, #0f766e);
+    }
+    .fr-items-table th {
+        white-space: nowrap;
+        font-size: 12px;
+        color: #475569;
+    }
+    .fr-items-table td {
+        vertical-align: middle;
+    }
+    .fr-items-table .form-control-sm {
+        min-height: 34px;
+    }
+    .fr-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 16px;
+    }
+    .fr-history-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .fr-id-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 52px;
+        border-radius: 999px;
+        padding: 4px 8px;
+        background: #f1f5f9;
+        color: #475569;
+        font-weight: 700;
+        font-size: 12px;
+    }
+    .fr-action-icon {
+        width: 34px;
+        height: 34px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+    }
+    .fr-user-card {
+        border: 1px solid #dbe4ee;
+        border-radius: 8px;
+        background: #f8fafc;
+        padding: 10px 12px;
+        color: #334155;
+    }
+    .fr-user-card strong {
+        color: #0f172a;
+    }
+    .fr-creator-line {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 4px;
+        font-size: 12px;
+        color: #64748b;
+    }
+    .fr-creator-line span {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+    @media (max-width: 1199.98px) {
+        .fr-meta-grid,
+        .fr-note-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+    @media (max-width: 767.98px) {
+        .finance-request-page {
+            padding-inline: 8px;
+        }
+        .fr-panel-head {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+        .fr-meta-grid,
+        .fr-note-grid {
+            grid-template-columns: 1fr;
+        }
+        .fr-panel-body {
+            padding: 14px;
+        }
+        .fr-actions {
+            flex-direction: column;
+        }
+        .fr-actions .btn {
+            width: 100%;
+        }
+    }
+</style>
 
-                <form method="POST" action="{{ route($config['route_prefix'] . '.store') }}" enctype="multipart/form-data">
-                    @csrf
-                    <div class="mb-3">
+<div class="finance-request-page">
+    @if($errors->any())
+        <div class="alert alert-danger border-0 shadow-sm">
+            @foreach($errors->all() as $error)
+                <div>{{ $error }}</div>
+            @endforeach
+        </div>
+    @endif
+
+    <div class="row g-3 align-items-start">
+        <div class="col-lg-5">
+    <div class="fr-panel">
+        <div class="fr-panel-head">
+            <div>
+                <h2 class="fr-title">Tạo phiếu yêu cầu</h2>
+                <div class="fr-subtitle">{{ $config['label'] }} gửi Kế toán duyệt thu/chi</div>
+            </div>
+            <span class="badge text-bg-light border px-3 py-2">{{ $config['label'] }}</span>
+        </div>
+        <div class="fr-panel-body">
+            <form method="POST" action="{{ route($config['route_prefix'] . '.store') }}" enctype="multipart/form-data">
+                @csrf
+
+                <div class="fr-section-label"><i class="bi bi-card-checklist"></i> Thông tin phiếu</div>
+                <div class="fr-user-card mb-3">
+                    <div class="small text-muted">Người tạo phiếu</div>
+                    <div><strong>{{ $currentUser?->name ?: '-' }}</strong></div>
+                    <div class="fr-creator-line">
+                        <span><i class="bi bi-diagram-3"></i>{{ $currentBlockName ?: 'Chưa gán khối' }}</span>
+                        <span><i class="bi bi-building"></i>{{ $currentDepartmentName ?: 'Chưa gán phòng ban' }}</span>
+                    </div>
+                </div>
+                <div class="fr-meta-grid mb-4">
+                    <div>
                         <label class="form-label fw-semibold">Loại phiếu <span class="text-danger">*</span></label>
                         <div class="btn-group w-100" role="group" aria-label="Loại phiếu">
                             <input type="radio" class="btn-check" name="flow_direction" id="requestIn" value="in" @checked(old('flow_direction') === 'in')>
@@ -44,13 +235,11 @@
                             <label class="btn btn-outline-danger" for="requestOut"><i class="bi bi-arrow-up-circle me-1"></i>Chi</label>
                         </div>
                     </div>
-
-                    <div class="mb-3">
+                    <div>
                         <label class="form-label fw-semibold">Tiêu đề phiếu <span class="text-danger">*</span></label>
                         <input type="text" name="request_title" class="form-control" value="{{ old('request_title') }}" placeholder="VD: Mua vật tư đóng gói">
                     </div>
-
-                    <div class="mb-3">
+                    <div>
                         <label class="form-label fw-semibold">Danh mục kế toán <span class="text-danger">*</span></label>
                         <input type="hidden" name="transaction_category_id" id="transactionCategoryId" value="{{ old('transaction_category_id') }}" required>
                         <button type="button" class="btn btn-outline-primary w-100 d-flex align-items-center justify-content-between" data-bs-toggle="modal" data-bs-target="#categoryPickerModal">
@@ -64,8 +253,7 @@
                             <i class="bi bi-search"></i>
                         </button>
                     </div>
-
-                    <div class="mb-3">
+                    <div>
                         <label class="form-label fw-semibold">Phương thức dự kiến</label>
                         <select name="method" class="form-select">
                             <option value="">-- Chọn --</option>
@@ -74,184 +262,193 @@
                             @endforeach
                         </select>
                     </div>
+                </div>
 
-                    <div class="mb-3">
+                <div class="fr-note-grid mb-4">
+                    <div>
                         <label class="form-label fw-semibold">Nội dung/Lý do <span class="text-danger">*</span></label>
-                        <textarea name="note" class="form-control" rows="4" maxlength="1000" placeholder="Mô tả rõ lý do thu/chi, nhà cung cấp, vật tư, ghi chú kế toán...">{{ old('note') }}</textarea>
+                        <textarea name="note" class="form-control" rows="5" maxlength="1000" placeholder="Mô tả rõ lý do thu/chi, nhà cung cấp, vật tư, ghi chú kế toán...">{{ old('note') }}</textarea>
                     </div>
-
-                    <div class="mb-3">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <label class="form-label fw-semibold mb-0">Danh sách nội dung <span class="text-danger">*</span></label>
-                            <button type="button" class="btn btn-outline-primary btn-sm" id="addRequestLine">
-                                <i class="bi bi-plus-circle me-1"></i>Thêm dòng
-                            </button>
-                        </div>
-                        <div class="table-responsive border rounded">
-                            <table class="table table-sm align-middle mb-0" id="requestItemsTable">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th style="width:48px">STT</th>
-                                        <th style="min-width:180px">Nội dung</th>
-                                        <th style="width:80px">ĐVT</th>
-                                        <th style="width:110px">Số lượng</th>
-                                        <th style="width:130px">Đơn giá</th>
-                                        <th style="width:130px">Thành tiền</th>
-                                        <th style="width:42px"></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach($oldItems as $itemIndex => $item)
-                                        <tr class="request-line">
-                                            <td class="line-index text-center">{{ $itemIndex + 1 }}</td>
-                                            <td>
-                                                <input type="text" name="items[{{ $itemIndex }}][content]" class="form-control form-control-sm line-content" value="{{ $item['content'] ?? '' }}" required>
-                                            </td>
-                                            <td>
-                                                <input type="text" name="items[{{ $itemIndex }}][unit]" class="form-control form-control-sm" value="{{ $item['unit'] ?? '' }}">
-                                            </td>
-                                            <td>
-                                                <input type="number" name="items[{{ $itemIndex }}][quantity]" class="form-control form-control-sm line-quantity" min="0.01" step="0.01" value="{{ $item['quantity'] ?? 1 }}" required>
-                                            </td>
-                                            <td>
-                                                <input type="number" name="items[{{ $itemIndex }}][unit_price]" class="form-control form-control-sm line-price" min="0" step="1000" value="{{ $item['unit_price'] ?? 0 }}" required>
-                                            </td>
-                                            <td class="line-total text-end fw-semibold">0đ</td>
-                                            <td class="text-center">
-                                                <button type="button" class="btn btn-outline-danger btn-sm remove-request-line" title="Xóa dòng">
-                                                    <i class="bi bi-x"></i>
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    @endforeach
-                                </tbody>
-                            </table>
-                        </div>
-                        <div class="mt-3 border rounded p-3 bg-light">
-                            <div class="d-flex justify-content-between mb-2">
-                                <span>Tổng tiền</span>
-                                <strong id="requestSubtotalText">0đ</strong>
-                            </div>
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <label class="form-label mb-0" for="requestVat">VAT</label>
-                                <div class="input-group input-group-sm" style="max-width: 180px;">
-                                    <input type="number" name="request_vat" id="requestVat" class="form-control text-end" min="0" step="1000" value="{{ old('request_vat', 0) }}">
-                                    <span class="input-group-text">đ</span>
-                                </div>
-                            </div>
-                            <div class="d-flex justify-content-between fs-5">
-                                <span class="fw-bold">Tổng cộng</span>
-                                <strong id="requestTotalText" class="text-primary">0đ</strong>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="mb-3">
+                    <div>
                         <label class="form-label fw-semibold">Chứng từ đính kèm</label>
                         <input type="file" name="receipt_image" class="form-control" accept="image/*">
                     </div>
+                </div>
 
-                    <button type="submit" class="btn btn-primary w-100">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                    <div class="fr-section-label mb-0"><i class="bi bi-list-ul"></i> Danh sách nội dung</div>
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="addRequestLine">
+                        <i class="bi bi-plus-circle me-1"></i>Thêm dòng
+                    </button>
+                </div>
+                <div class="table-responsive border rounded mb-3">
+                    <table class="table table-sm align-middle mb-0 fr-items-table" id="requestItemsTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="text-center" style="width:56px">STT</th>
+                                <th style="min-width:260px">Nội dung</th>
+                                <th style="width:96px">ĐVT</th>
+                                <th style="width:130px">Số lượng</th>
+                                <th style="width:150px">Đơn giá</th>
+                                <th style="width:150px">Thành tiền</th>
+                                <th style="width:48px"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($oldItems as $itemIndex => $item)
+                                <tr class="request-line">
+                                    <td class="line-index text-center">{{ $itemIndex + 1 }}</td>
+                                    <td>
+                                        <input type="text" name="items[{{ $itemIndex }}][content]" class="form-control form-control-sm line-content" value="{{ $item['content'] ?? '' }}" required>
+                                    </td>
+                                    <td>
+                                        <input type="text" name="items[{{ $itemIndex }}][unit]" class="form-control form-control-sm" value="{{ $item['unit'] ?? '' }}">
+                                    </td>
+                                    <td>
+                                        <input type="number" name="items[{{ $itemIndex }}][quantity]" class="form-control form-control-sm line-quantity" min="0.01" step="0.01" value="{{ $item['quantity'] ?? 1 }}" required>
+                                    </td>
+                                    <td>
+                                        <input type="number" name="items[{{ $itemIndex }}][unit_price]" class="form-control form-control-sm line-price" min="0" step="1000" value="{{ $item['unit_price'] ?? 0 }}" required>
+                                    </td>
+                                    <td class="line-total text-end fw-semibold">0đ</td>
+                                    <td class="text-center">
+                                        <button type="button" class="btn btn-outline-danger btn-sm fr-action-icon remove-request-line" title="Xóa dòng">
+                                            <i class="bi bi-x"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="fr-note-grid">
+                    <div></div>
+                    <div class="fr-summary-box">
+                        <div class="fr-summary-row">
+                            <span>Tổng tiền</span>
+                            <strong id="requestSubtotalText">0đ</strong>
+                        </div>
+                        <div class="fr-summary-row align-items-center">
+                            <label class="form-label mb-0" for="requestVat">VAT</label>
+                            <div class="input-group input-group-sm" style="max-width: 190px;">
+                                <input type="number" name="request_vat" id="requestVat" class="form-control text-end" min="0" step="1000" value="{{ old('request_vat', 0) }}">
+                                <span class="input-group-text">đ</span>
+                            </div>
+                        </div>
+                        <div class="fr-summary-row fr-summary-total">
+                            <span>Tổng cộng</span>
+                            <strong id="requestTotalText">0đ</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="fr-actions">
+                    <button type="submit" class="btn btn-primary px-4">
                         <i class="bi bi-send me-1"></i>Gửi Kế toán duyệt
                     </button>
-                </form>
-            </div>
+                </div>
+            </form>
         </div>
     </div>
+        </div>
 
-    <div class="col-xl-7">
-        <div class="card border-0 shadow-sm">
-            <div class="card-header bg-white">
-                <form method="GET" class="d-flex flex-wrap gap-2 align-items-end justify-content-between">
-                    <div>
-                        <div class="fw-bold">Phiếu đã gửi</div>
-                        <div class="small text-muted">Theo dõi trạng thái duyệt từ phòng Kế toán</div>
-                    </div>
-                    <div class="d-flex gap-2 align-items-end">
-                        <div>
-                            <label class="form-label small mb-1">Trạng thái</label>
-                            <select name="status" class="form-select form-select-sm">
-                                <option value="all" @selected($status === 'all')>Tất cả</option>
-                                <option value="{{ \App\Models\Transaction::STATUS_PENDING_APPROVAL }}" @selected($status === \App\Models\Transaction::STATUS_PENDING_APPROVAL)>Chờ duyệt</option>
-                                <option value="{{ \App\Models\Transaction::STATUS_APPROVED }}" @selected($status === \App\Models\Transaction::STATUS_APPROVED)>Đã duyệt</option>
-                                <option value="{{ \App\Models\Transaction::STATUS_REJECTED }}" @selected($status === \App\Models\Transaction::STATUS_REJECTED)>Từ chối</option>
-                            </select>
-                        </div>
-                        <button class="btn btn-outline-primary btn-sm"><i class="bi bi-funnel me-1"></i>Lọc</button>
-                    </div>
-                </form>
+        <div class="col-lg-7">
+    <div class="fr-panel">
+        <div class="fr-panel-head">
+            <div>
+                <h2 class="fr-title">Phiếu đã gửi</h2>
+                <div class="fr-subtitle">Theo dõi trạng thái duyệt từ phòng Kế toán</div>
             </div>
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="table-light">
+            <form method="GET" class="d-flex gap-2 align-items-end">
+                <div>
+                    <label class="form-label small mb-1">Trạng thái</label>
+                    <select name="status" class="form-select form-select-sm">
+                        <option value="all" @selected($status === 'all')>Tất cả</option>
+                        <option value="{{ \App\Models\Transaction::STATUS_PENDING_APPROVAL }}" @selected($status === \App\Models\Transaction::STATUS_PENDING_APPROVAL)>Chờ duyệt</option>
+                        <option value="{{ \App\Models\Transaction::STATUS_APPROVED }}" @selected($status === \App\Models\Transaction::STATUS_APPROVED)>Đã duyệt</option>
+                        <option value="{{ \App\Models\Transaction::STATUS_REJECTED }}" @selected($status === \App\Models\Transaction::STATUS_REJECTED)>Từ chối</option>
+                    </select>
+                </div>
+                <button class="btn btn-outline-primary btn-sm"><i class="bi bi-funnel me-1"></i>Lọc</button>
+            </form>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>#</th>
+                        <th>Phiếu</th>
+                        <th>Dòng tiền</th>
+                        <th class="text-end">Số tiền</th>
+                        <th>Trạng thái</th>
+                        <th>Người xử lý</th>
+                        <th>Ngày gửi</th>
+                        <th class="text-end"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($requests as $requestItem)
+                        @php
+                            $flow = $requestItem->transactionCategory?->flow_direction === 'in' ? 'in' : 'out';
+                            $statusMeta = $statusLabels[$requestItem->status] ?? ['label' => $requestItem->status, 'class' => 'secondary'];
+                        @endphp
                         <tr>
-                            <th>#</th>
-                            <th>Phiếu</th>
-                            <th>Dòng tiền</th>
-                            <th class="text-end">Số tiền</th>
-                            <th>Trạng thái</th>
-                            <th>Người xử lý</th>
-                            <th>Ngày gửi</th>
-                            <th></th>
+                            <td><span class="fr-id-pill">#{{ $requestItem->id }}</span></td>
+                            <td>
+                                <div class="fw-semibold">{{ $requestItem->request_title ?: 'Phiếu yêu cầu' }}</div>
+                                <div class="small text-muted">{{ $requestItem->transactionCategory?->name ?: '-' }}</div>
+                                <div class="fr-creator-line">
+                                    <span><i class="bi bi-person"></i>{{ $requestItem->submitter?->name ?: '-' }}</span>
+                                    <span><i class="bi bi-diagram-3"></i>{{ $requestItem->submitter?->department?->block?->name ?: $requestItem->submitter?->block?->name ?: 'Chưa gán khối' }}</span>
+                                    <span><i class="bi bi-building"></i>{{ $requestItem->submitter?->department?->name ?: 'Chưa gán phòng ban' }}</span>
+                                </div>
+                                @if($requestItem->note)
+                                    <div class="small text-muted">{{ \Illuminate\Support\Str::limit($requestItem->note, 90) }}</div>
+                                @endif
+                            </td>
+                            <td>
+                                <span class="badge bg-{{ $flow === 'in' ? 'success' : 'danger' }}">
+                                    {{ $flow === 'in' ? 'Thu' : 'Chi' }}
+                                </span>
+                            </td>
+                            <td class="text-end fw-bold">{{ number_format((float) $requestItem->amount) }}đ</td>
+                            <td>
+                                <span class="badge bg-{{ $statusMeta['class'] }}">{{ $statusMeta['label'] }}</span>
+                                @if($requestItem->status === \App\Models\Transaction::STATUS_REJECTED && $requestItem->reject_reason)
+                                    <div class="small text-danger mt-1">{{ \Illuminate\Support\Str::limit($requestItem->reject_reason, 80) }}</div>
+                                @endif
+                            </td>
+                            <td>
+                                @if($requestItem->status === \App\Models\Transaction::STATUS_APPROVED)
+                                    {{ $requestItem->approver?->name ?: '-' }}
+                                @elseif($requestItem->status === \App\Models\Transaction::STATUS_REJECTED)
+                                    {{ $requestItem->rejecter?->name ?: '-' }}
+                                @else
+                                    <span class="text-muted">Kế toán</span>
+                                @endif
+                            </td>
+                            <td>{{ optional($requestItem->created_at)->format('d/m/Y H:i') }}</td>
+                            <td class="text-end">
+                                <a href="{{ route($config['route_prefix'] . '.print', $requestItem) }}" target="_blank" class="btn btn-outline-secondary btn-sm fr-action-icon" title="In phiếu">
+                                    <i class="bi bi-printer"></i>
+                                </a>
+                            </td>
                         </tr>
-                    </thead>
-                    <tbody>
-                        @forelse($requests as $requestItem)
-                            @php
-                                $flow = $requestItem->transactionCategory?->flow_direction === 'in' ? 'in' : 'out';
-                                $statusMeta = $statusLabels[$requestItem->status] ?? ['label' => $requestItem->status, 'class' => 'secondary'];
-                            @endphp
-                            <tr>
-                                <td class="text-muted">#{{ $requestItem->id }}</td>
-                                <td>
-                                    <div class="fw-semibold">{{ $requestItem->request_title ?: 'Phiếu yêu cầu' }}</div>
-                                    <div class="small text-muted">{{ $requestItem->transactionCategory?->name ?: '-' }}</div>
-                                    @if($requestItem->note)
-                                        <div class="small text-muted">{{ \Illuminate\Support\Str::limit($requestItem->note, 90) }}</div>
-                                    @endif
-                                </td>
-                                <td>
-                                    <span class="badge bg-{{ $flow === 'in' ? 'success' : 'danger' }}">
-                                        {{ $flow === 'in' ? 'Thu' : 'Chi' }}
-                                    </span>
-                                </td>
-                                <td class="text-end fw-bold">{{ number_format((float) $requestItem->amount) }}đ</td>
-                                <td>
-                                    <span class="badge bg-{{ $statusMeta['class'] }}">{{ $statusMeta['label'] }}</span>
-                                    @if($requestItem->status === \App\Models\Transaction::STATUS_REJECTED && $requestItem->reject_reason)
-                                        <div class="small text-danger mt-1">{{ \Illuminate\Support\Str::limit($requestItem->reject_reason, 80) }}</div>
-                                    @endif
-                                </td>
-                                <td>
-                                    @if($requestItem->status === \App\Models\Transaction::STATUS_APPROVED)
-                                        {{ $requestItem->approver?->name ?: '-' }}
-                                    @elseif($requestItem->status === \App\Models\Transaction::STATUS_REJECTED)
-                                        {{ $requestItem->rejecter?->name ?: '-' }}
-                                    @else
-                                        <span class="text-muted">Kế toán</span>
-                                    @endif
-                                </td>
-                                <td>{{ optional($requestItem->created_at)->format('d/m/Y H:i') }}</td>
-                                <td class="text-end">
-                                    <a href="{{ route($config['route_prefix'] . '.print', $requestItem) }}" target="_blank" class="btn btn-outline-secondary btn-sm">
-                                        <i class="bi bi-printer"></i>
-                                    </a>
-                                </td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="8" class="text-center text-muted py-4">Chưa có phiếu yêu cầu.</td>
-                            </tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
-            <div class="card-footer bg-white">
-                {{ $requests->links() }}
-            </div>
+                    @empty
+                        <tr>
+                            <td colspan="8" class="text-center text-muted py-4">Chưa có phiếu yêu cầu.</td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+        <div class="p-3 border-top bg-white">
+            {{ $requests->links() }}
         </div>
     </div>
-</div>
+        </div>
+    </div>
 
 <div class="modal fade" id="categoryPickerModal" tabindex="-1" aria-labelledby="categoryPickerModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-scrollable">

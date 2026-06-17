@@ -129,7 +129,10 @@ class DepartmentFinanceRequestController extends Controller
 
         $requests = Transaction::query()
             ->with([
-                'submitter:id,name',
+                'submitter:id,name,email,department_id,block_id',
+                'submitter.department:id,name,block_id',
+                'submitter.department.block:id,name',
+                'submitter.block:id,name',
                 'approver:id,name',
                 'rejecter:id,name',
                 'transactionCategory:id,code,name,flow_direction',

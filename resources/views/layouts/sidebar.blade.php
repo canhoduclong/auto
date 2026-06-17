@@ -416,6 +416,14 @@
 								<span>Teams</span>
 							</a>
 						</li>
+						@if(auth()->user()?->isAdmin())
+						<li class="nav-item">
+							<a href="{{ route('admin.organization-units.index') }}" class="nav-link{{ request()->routeIs('admin.organization-units.*') ? ' active' : '' }}">
+								<i class="ph-buildings"></i>
+								<span>Khối & phòng ban</span>
+							</a>
+						</li>
+						@endif
 						<li class="nav-item">
 							<a href="{{ route('provinces.index') }}" class="nav-link{{ request()->routeIs('provinces.*') ? ' active' : '' }}">
 								<i class="ph-map-trifold"></i>
