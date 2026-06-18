@@ -456,9 +456,9 @@
         flex-wrap: wrap;
     }
     .orders-actions .btn {
-        border-radius: 12px;
+        border-radius: 4px;
         font-weight: 700;
-        padding: 9px 14px;
+        padding: 4px 9px;
     }
     .orders-mobile-list {
         display: none;

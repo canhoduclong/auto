@@ -397,18 +397,11 @@ class SaleApiController extends BaseApiController
         }
 
         if ($request->boolean('reset_feedback')) {
-            $order->update([
-                'customer_feedback_status' => null,
-                'customer_feedback_note' => null,
-                'customer_feedback_sale_review' => null,
-                'customer_feedback_images' => null,
-                'customer_feedback_by' => null,
-                'customer_feedback_at' => null,
-            ]);
+            return $this->fail('Phan hoi khach hang chi duoc tao mot lan, khong the reset.', 422);
+        }
 
-            $order->refresh()->load(['customer:id,name,phone,address', 'items.product:id,name', 'items.variant:id,name,sku,size,product_id', 'approvals.step', 'histories.user:id,name']);
-
-            return $this->ok($this->orderPayload($order, true), 'Da reset phan hoi khach hang');
+        if ($order->hasCustomerFeedback()) {
+            return $this->fail('Don hang nay da co phan hoi khach hang.', 422);
         }
 
         $validated = $request->validate([
@@ -712,7 +705,8 @@ class SaleApiController extends BaseApiController
                 && in_array((string) $order->status, ['pending_leader_approval', 'pending_manager_approval', 'approved', 'packing', 'pending', 'confirmed', 'picking', Order::STATUS_ORDER_PLACED], true),
             'can_trash' => in_array((string) $order->status, [Order::STATUS_REJECTED, Order::STATUS_CANCELLED], true)
                 && empty($order->getAttribute('trash_at')),
-            'can_customer_feedback' => $order->canReceiveCustomerFeedback(),
+            'has_customer_feedback' => $order->hasCustomerFeedback(),
+            'can_customer_feedback' => $order->canReceiveCustomerFeedback() && !$order->hasCustomerFeedback(),
             'customer_feedback_status' => (string) ($order->customer_feedback_status ?? ''),
             'customer_feedback_note' => (string) ($order->customer_feedback_note ?? ''),
             'customer_feedback_sale_review' => (string) ($order->customer_feedback_sale_review ?? ''),

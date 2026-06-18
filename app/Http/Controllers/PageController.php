@@ -729,16 +729,11 @@ class PageController extends Controller
         }
 
         if ($request->boolean('reset_feedback')) {
-            $order->update([
-                'customer_feedback_status' => null,
-                'customer_feedback_note' => null,
-                'customer_feedback_sale_review' => null,
-                'customer_feedback_images' => null,
-                'customer_feedback_by' => null,
-                'customer_feedback_at' => null,
-            ]);
+            return back()->with('error', 'Phan hoi khach hang chi duoc tao mot lan, khong the reset.');
+        }
 
-            return back()->with('success', 'Da reset phan hoi khach hang.');
+        if ($order->hasCustomerFeedback()) {
+            return back()->with('error', 'Don hang nay da co phan hoi khach hang.');
         }
 
         $validated = $request->validate([

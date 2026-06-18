@@ -190,6 +190,11 @@ class Order extends Model
         ], true) || (bool) ($this->has_return_order ?? false);
     }
 
+    public function hasCustomerFeedback(): bool
+    {
+        return filled($this->customer_feedback_status) || filled($this->customer_feedback_note);
+    }
+
     public function clearWarehouseAdjustmentState(): self
     {
         $this->forceFill([

@@ -155,7 +155,13 @@
                         $canEdit = $isCopiedOrder
                             || ($order->status === \App\Models\Order::STATUS_PENDING_LEADER_APPROVAL
                                 && $order->created_at?->isToday());
-                        $canSaveCustomerFeedback = !$isTrashView && method_exists($order, 'canReceiveCustomerFeedback') && $order->canReceiveCustomerFeedback();
+                        $hasCustomerFeedback = method_exists($order, 'hasCustomerFeedback')
+                            ? $order->hasCustomerFeedback()
+                            : filled($order->customer_feedback_status ?? null) || filled($order->customer_feedback_note ?? null);
+                        $canSaveCustomerFeedback = !$isTrashView
+                            && !$hasCustomerFeedback
+                            && method_exists($order, 'canReceiveCustomerFeedback')
+                            && $order->canReceiveCustomerFeedback();
                         $customerFeedbackOptions = \App\Models\Order::customerFeedbackOptions();
                         $customerFeedbackMeta = \App\Models\Order::customerFeedbackMeta($order->customer_feedback_status ?? null);
                         $feedbackCollapseId = 'customer-feedback-form-' . $order->id;
@@ -413,22 +419,15 @@
                                                 <i class="fa fa-copy me-1"></i>Copy Đơn
                                             </a>
                                         @endif
-                                        @if($canSaveCustomerFeedback)
+                                        @if($canSaveCustomerFeedback || $hasCustomerFeedback)
                                             <button type="button"
-                                                    class="btn btn-outline-info btn-sm"
+                                                    class="btn {{ $hasCustomerFeedback ? 'btn-info text-white' : 'btn-outline-info' }} btn-sm"
                                                     data-bs-toggle="collapse"
                                                     data-bs-target="#{{ $feedbackCollapseId }}"
                                                     aria-expanded="false"
                                                     aria-controls="{{ $feedbackCollapseId }}">
-                                                <i class="bi bi-chat-square-text me-1"></i>Feedback
+                                                <i class="bi bi-chat-square-text me-1"></i>{{ $hasCustomerFeedback ? 'Xem feedback' : 'Feedback' }}
                                             </button>
-                                        @endif
-                                        @if(!$isTrashView && $canReturn)
-                                            <a href="{{ route('site.orders.return', $order->id) }}"
-                                               class="btn btn-outline-danger btn-sm"
-                                               onclick="return confirm('Tạo đơn hoàn trả từ đơn #{{ $order->code }}?')">
-                                                <i class="fa fa-undo me-1"></i>Trả hàng
-                                            </a>
                                         @endif
                                                                                 @if(!$isTrashView && $canMoveToTrash)
                                             <form action="{{ route('site.orders.trash', $order) }}" method="POST" class="d-inline"
@@ -462,7 +461,7 @@
                                 </div>
                              </div>
 
-                            @if($canSaveCustomerFeedback)
+                            @if($canSaveCustomerFeedback || $hasCustomerFeedback)
                                 <div class="collapse" id="{{ $feedbackCollapseId }}">
                                     <div class="mt-3 p-3 rounded border bg-light">
                                         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
@@ -473,32 +472,20 @@
                                                 {{ $customerFeedbackMeta['label'] }}
                                             </span>
                                         </div>
-                                        <form method="POST" action="{{ route('site.orders.customer-feedback', $order) }}" enctype="multipart/form-data" class="d-grid gap-2">
-                                            @csrf
-                                            <div>
-                                                <label class="form-label small fw-semibold mb-1">Tình trạng khách</label>
-                                                <select name="customer_feedback_status" class="form-select form-select-sm" required>
-                                                    @foreach($customerFeedbackOptions as $value => $label)
-                                                        <option value="{{ $value }}" {{ (string) ($order->customer_feedback_status ?? '') === (string) $value ? 'selected' : '' }}>
-                                                            {{ $label }}
-                                                        </option>
-                                                    @endforeach
-                                                </select>
-                                            </div>
-                                            <div>
-                                                <label class="form-label small fw-semibold mb-1">Phản hồi từ khách hàng</label>
-                                                <textarea name="customer_feedback_note" class="form-control form-control-sm" rows="2" required placeholder="Ví dụ: khách yêu cầu đóng kỹ đáy thùng, dễ trả nếu móp méo...">{{ old('customer_feedback_note', $order->customer_feedback_note ?? '') }}</textarea>
-                                            </div>
-                                            <div>
-                                                <label class="form-label small fw-semibold mb-1">Đánh giá đơn hàng từ sale</label>
-                                                <textarea name="customer_feedback_sale_review" class="form-control form-control-sm" rows="2" placeholder="Ví dụ: đơn giao tốt, khách hài lòng, lần sau đóng thêm lớp chống móp...">{{ old('customer_feedback_sale_review', $order->customer_feedback_sale_review ?? '') }}</textarea>
-                                            </div>
-                                            <div>
-                                                <label class="form-label small fw-semibold mb-1">Hình ảnh phản hồi</label>
-                                                <input type="file" name="customer_feedback_images[]" class="form-control form-control-sm" accept="image/*" multiple>
-                                                <div class="form-text">Có thể chọn nhiều ảnh, tối đa 5MB/ảnh.</div>
+                                        @if($hasCustomerFeedback)
+                                            <div class="d-grid gap-2 small">
+                                                <div>
+                                                    <div class="text-muted fw-semibold mb-1">Phản hồi từ khách hàng</div>
+                                                    <div>{{ $order->customer_feedback_note ?: 'Không có nội dung' }}</div>
+                                                </div>
+                                                @if(filled($order->customer_feedback_sale_review ?? null))
+                                                    <div>
+                                                        <div class="text-muted fw-semibold mb-1">Đánh giá đơn hàng từ sale</div>
+                                                        <div>{{ $order->customer_feedback_sale_review }}</div>
+                                                    </div>
+                                                @endif
                                                 @if(!empty($order->customer_feedback_images))
-                                                    <div class="d-flex flex-wrap gap-2 mt-2">
+                                                    <div class="d-flex flex-wrap gap-2 mt-1">
                                                         @foreach($order->customer_feedback_images as $feedbackImage)
                                                             <a href="{{ asset('storage/' . $feedbackImage) }}" target="_blank" rel="noopener">
                                                                 <img src="{{ asset('storage/' . $feedbackImage) }}" alt="Feedback" style="width:58px;height:58px;object-fit:cover;border-radius:8px;border:1px solid #dee2e6;">
@@ -507,15 +494,39 @@
                                                     </div>
                                                 @endif
                                             </div>
-                                            <div class="d-flex flex-wrap gap-2">
-                                                <button class="btn btn-sm btn-primary" type="submit">
-                                                    <i class="bi bi-save2 me-1"></i>Lưu phản hồi
-                                                </button>
-                                                <button class="btn btn-sm btn-outline-secondary" type="submit" name="reset_feedback" value="1" onclick="return confirm('Reset phản hồi khách hàng cho đơn này?')">
-                                                    <i class="bi bi-arrow-counterclockwise me-1"></i>Reset
-                                                </button>
-                                            </div>
-                                        </form>
+                                        @else
+                                            <form method="POST" action="{{ route('site.orders.customer-feedback', $order) }}" enctype="multipart/form-data" class="d-grid gap-2">
+                                                @csrf
+                                                <div>
+                                                    <label class="form-label small fw-semibold mb-1">Tình trạng khách</label>
+                                                    <select name="customer_feedback_status" class="form-select form-select-sm" required>
+                                                        @foreach($customerFeedbackOptions as $value => $label)
+                                                            <option value="{{ $value }}" {{ (string) old('customer_feedback_status', $order->customer_feedback_status ?? '') === (string) $value ? 'selected' : '' }}>
+                                                                {{ $label }}
+                                                            </option>
+                                                        @endforeach
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label class="form-label small fw-semibold mb-1">Phản hồi từ khách hàng</label>
+                                                    <textarea name="customer_feedback_note" class="form-control form-control-sm" rows="2" required placeholder="Ví dụ: khách yêu cầu đóng kỹ đáy thùng, dễ trả nếu móp méo...">{{ old('customer_feedback_note') }}</textarea>
+                                                </div>
+                                                <div>
+                                                    <label class="form-label small fw-semibold mb-1">Đánh giá đơn hàng từ sale</label>
+                                                    <textarea name="customer_feedback_sale_review" class="form-control form-control-sm" rows="2" placeholder="Ví dụ: đơn giao tốt, khách hài lòng, lần sau đóng thêm lớp chống móp...">{{ old('customer_feedback_sale_review') }}</textarea>
+                                                </div>
+                                                <div>
+                                                    <label class="form-label small fw-semibold mb-1">Hình ảnh phản hồi</label>
+                                                    <input type="file" name="customer_feedback_images[]" class="form-control form-control-sm" accept="image/*" multiple>
+                                                    <div class="form-text">Có thể chọn nhiều ảnh, tối đa 5MB/ảnh.</div>
+                                                </div>
+                                                <div>
+                                                    <button class="btn btn-sm btn-primary" type="submit">
+                                                        <i class="bi bi-save2 me-1"></i>Lưu phản hồi
+                                                    </button>
+                                                </div>
+                                            </form>
+                                        @endif
                                         @if($order->customer_feedback_at)
                                             <div class="small text-muted mt-2">
                                                 Cập nhật lúc {{ $order->customer_feedback_at->format('d/m/Y H:i') }}
