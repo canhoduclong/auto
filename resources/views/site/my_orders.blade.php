@@ -458,7 +458,7 @@
     .orders-actions .btn {
         border-radius: 4px;
         font-weight: 700;
-        padding: 4px 9px;
+        padding: 6px 7px;
     }
     .orders-mobile-list {
         display: none;

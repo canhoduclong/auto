@@ -426,7 +426,7 @@
                                                     data-bs-target="#{{ $feedbackCollapseId }}"
                                                     aria-expanded="false"
                                                     aria-controls="{{ $feedbackCollapseId }}">
-                                                <i class="bi bi-chat-square-text me-1"></i>{{ $hasCustomerFeedback ? 'Xem feedback' : 'Feedback' }}
+                                                <i class="bi bi-chat-square-text me-1"></i>{{ $hasCustomerFeedback ? 'Xem FB' : 'Feedback' }}
                                             </button>
                                         @endif
                                                                                 @if(!$isTrashView && $canMoveToTrash)
