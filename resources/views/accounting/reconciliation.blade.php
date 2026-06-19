@@ -487,6 +487,15 @@ document.addEventListener('DOMContentLoaded', function () {
             toggleDetail(row);
         });
     });
+
+    const requestedOrderId = new URLSearchParams(window.location.search).get('order_id');
+    if (requestedOrderId) {
+        const requestedRow = document.querySelector(`.recon-order-row[data-order-id="${CSS.escape(requestedOrderId)}"]`);
+        if (requestedRow) {
+            loadDetail(requestedRow);
+            requestedRow.scrollIntoView({behavior: 'smooth', block: 'center'});
+        }
+    }
 });
 </script>
 @endpush

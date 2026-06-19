@@ -273,7 +273,10 @@ class AccountingDashboardController extends Controller
                 'amount' => $total,
                 'paid' => $paid,
                 'remaining' => max($total - $paid, 0),
-                'url' => route('orders.show', $order),
+                'url' => accounting_route('reconciliation', [
+                    'date' => optional($order->delivered_at ?? $order->created_at)->toDateString(),
+                    'order_id' => $order->id,
+                ]),
                 'items' => $order->items->map(function ($item): array {
                     $variant = $item->variant;
                     $product = $item->product ?? $variant?->product;
@@ -626,6 +629,7 @@ class AccountingDashboardController extends Controller
     {
         $selectedDate = (string) $request->input('date', now()->toDateString());
         $targetDate = Carbon::parse($selectedDate)->toDateString();
+        $orderId = (int) $request->input('order_id', 0);
         $saleId = (int) $request->input('sale_id', 0);
         $shipperId = (int) $request->input('shipper_id', 0);
         $status = trim((string) $request->input('status', ''));
@@ -643,6 +647,7 @@ class AccountingDashboardController extends Controller
             ->withSum('items as total_item_quantity', 'quantity')
             ->withSum('returnRecords as return_amount_sum', 'refund_amount')
             ->whereDate('delivered_at', $targetDate)
+            ->when($orderId > 0, fn ($q) => $q->whereKey($orderId))
             ->when($saleId > 0, fn ($q) => $q->where('user_id', $saleId))
             ->when($shipperId > 0, fn ($q) => $q->where('shipper_id', $shipperId))
             ->when($status !== '', fn ($q) => $q->where('status', $status))
