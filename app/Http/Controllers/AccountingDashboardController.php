@@ -82,6 +82,16 @@ class AccountingDashboardController extends Controller
         $debtDaysMin = $request->filled('debt_days_min') ? max(0, (int) $request->input('debt_days_min')) : null;
         $debtDaysMax = $request->filled('debt_days_max') ? max(0, (int) $request->input('debt_days_max')) : null;
         $sortBy = (string) $request->input('sort_by', 'latest_debt_desc');
+        $fromDate = $request->filled('from_date')
+            ? Carbon::parse($request->input('from_date'))->startOfDay()
+            : null;
+        $toDate = $request->filled('to_date')
+            ? Carbon::parse($request->input('to_date'))->endOfDay()
+            : null;
+
+        if ($fromDate && $toDate && $fromDate->gt($toDate)) {
+            [$fromDate, $toDate] = [$toDate->copy()->startOfDay(), $fromDate->copy()->endOfDay()];
+        }
 
         if ($keyword = trim((string) $request->input('keyword', ''))) {
             $query->where(function ($q) use ($keyword) {
@@ -91,31 +101,41 @@ class AccountingDashboardController extends Controller
             });
         }
 
-        $rows = $query->get()->map(function (Customer $customer) {
-            $summary = $this->customerDebtSummary($customer);
+        $rows = $query->get()->map(function (Customer $customer) use ($fromDate, $toDate) {
+            $summary = $this->customerDebtSummary($customer, $fromDate, $toDate);
             $debt = $summary['current_debt'];
 
             $lastPaymentAt = Transaction::query()
                 ->where('customer_id', $customer->id)
                 ->where('type', 'payment')
+                ->when($fromDate, fn ($query) => $query->where('created_at', '>=', $fromDate))
+                ->when($toDate, fn ($query) => $query->where('created_at', '<=', $toDate))
                 ->max('created_at');
 
             $firstOrderDebtAt = Order::query()
                 ->where('customer_id', $customer->id)
+                ->when($fromDate, fn ($query) => $query->where('created_at', '>=', $fromDate))
+                ->when($toDate, fn ($query) => $query->where('created_at', '<=', $toDate))
                 ->min('created_at');
 
             $firstAdjustmentDebtAt = Transaction::query()
                 ->where('customer_id', $customer->id)
                 ->whereIn('type', $this->customerDebtAdjustmentTypes())
+                ->when($fromDate, fn ($query) => $query->where('created_at', '>=', $fromDate))
+                ->when($toDate, fn ($query) => $query->where('created_at', '<=', $toDate))
                 ->min('created_at');
 
             $latestOrderDebtAt = Order::query()
                 ->where('customer_id', $customer->id)
+                ->when($fromDate, fn ($query) => $query->where('created_at', '>=', $fromDate))
+                ->when($toDate, fn ($query) => $query->where('created_at', '<=', $toDate))
                 ->max('created_at');
 
             $latestAdjustmentDebtAt = Transaction::query()
                 ->where('customer_id', $customer->id)
                 ->whereIn('type', $this->customerDebtAdjustmentTypes())
+                ->when($fromDate, fn ($query) => $query->where('created_at', '>=', $fromDate))
+                ->when($toDate, fn ($query) => $query->where('created_at', '<=', $toDate))
                 ->max('created_at');
 
             $firstDebtAt = collect([$firstOrderDebtAt, $firstAdjustmentDebtAt])
@@ -165,7 +185,20 @@ class AccountingDashboardController extends Controller
             });
 
         $rows = (match ($sortBy) {
+            'customer_asc' => $rows->sortBy(fn (array $row) => mb_strtolower((string) $row['customer']->name)),
+            'customer_desc' => $rows->sortByDesc(fn (array $row) => mb_strtolower((string) $row['customer']->name)),
+            'debt_type_asc' => $rows->sortBy(fn (array $row) => $row['debt_type']['label']),
+            'debt_type_desc' => $rows->sortByDesc(fn (array $row) => $row['debt_type']['label']),
+            'debt_increase_asc' => $rows->sortBy('debt_increase'),
+            'debt_increase_desc' => $rows->sortByDesc('debt_increase'),
+            'payments_asc' => $rows->sortBy('payments'),
+            'payments_desc' => $rows->sortByDesc('payments'),
             'debt_asc' => $rows->sortBy('debt'),
+            'debt_desc' => $rows->sortByDesc('debt'),
+            'status_asc' => $rows->sortBy('status'),
+            'status_desc' => $rows->sortByDesc('status'),
+            'unpaid_days_asc' => $rows->sortBy('unpaid_days'),
+            'unpaid_days_desc' => $rows->sortByDesc('unpaid_days'),
             'latest_debt_asc' => $rows->sortBy(fn (array $row) => optional($row['latest_debt_at'])->timestamp ?? 0),
             'latest_debt_desc' => $rows->sortByDesc(fn (array $row) => optional($row['latest_debt_at'])->timestamp ?? 0),
             default => $rows->sortByDesc('debt'),
@@ -191,6 +224,8 @@ class AccountingDashboardController extends Controller
             'debtDaysMin' => $debtDaysMin,
             'debtDaysMax' => $debtDaysMax,
             'sortBy' => $sortBy,
+            'fromDate' => $fromDate,
+            'toDate' => $toDate,
             'debtTypeOptions' => $this->customerDebtTypeOptions(),
             'totalDebt' => $customers->getCollection()->sum('debt'),
         ]);

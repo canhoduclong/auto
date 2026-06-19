@@ -4,12 +4,33 @@
 @section('subtitle', 'Theo dõi công nợ đầu kỳ, bổ sung, đơn hàng và thanh toán')
 
 @section('accounting_content')
+@php
+    $sortLink = function (string $key, string $label, string $class = '') use ($sortBy) {
+        $isActiveAsc = $sortBy === $key . '_asc';
+        $isActiveDesc = $sortBy === $key . '_desc';
+        $next = $isActiveDesc ? $key . '_asc' : $key . '_desc';
+        $icon = $isActiveDesc ? '↓' : ($isActiveAsc ? '↑' : '↕');
+        $url = request()->fullUrlWithQuery(['sort_by' => $next, 'page' => null]);
+
+        return '<a href="' . e($url) . '" class="text-decoration-none text-dark d-inline-flex gap-1 align-items-center ' . e($class) . '"><span>' . e($label) . '</span><span class="small text-muted">' . e($icon) . '</span></a>';
+    };
+@endphp
+
 <div class="acc-card mb-3">
     <div class="card-body">
         <form method="GET" class="row g-2 align-items-end">
+            <input type="hidden" name="sort_by" value="{{ $sortBy }}">
             <div class="col-lg-3 col-md-6">
                 <label class="form-label">Tìm khách hàng</label>
                 <input type="text" class="form-control" name="keyword" value="{{ $keyword }}" placeholder="Tên, SĐT, Email...">
+            </div>
+            <div class="col-lg-2 col-md-3">
+                <label class="form-label">Từ ngày</label>
+                <input type="date" class="form-control" name="from_date" value="{{ $fromDate?->toDateString() }}">
+            </div>
+            <div class="col-lg-2 col-md-3">
+                <label class="form-label">Đến ngày</label>
+                <input type="date" class="form-control" name="to_date" value="{{ $toDate?->toDateString() }}">
             </div>
             <div class="col-lg-2 col-md-3">
                 <label class="form-label">Nợ từ ngày</label>
@@ -19,16 +40,7 @@
                 <label class="form-label">Nợ đến ngày</label>
                 <input type="number" class="form-control" name="debt_days_max" value="{{ $debtDaysMax }}" min="0" placeholder="VD: 30">
             </div>
-            <div class="col-lg-3 col-md-6">
-                <label class="form-label">Sắp xếp theo</label>
-                <select name="sort_by" class="form-select">
-                    <option value="latest_debt_desc" @selected($sortBy === 'latest_debt_desc')>Phát sinh công nợ mới nhất</option>
-                    <option value="latest_debt_asc" @selected($sortBy === 'latest_debt_asc')>Phát sinh công nợ cũ nhất</option>
-                    <option value="debt_desc" @selected($sortBy === 'debt_desc')>Nợ hiện tại cao nhất</option>
-                    <option value="debt_asc" @selected($sortBy === 'debt_asc')>Nợ hiện tại thấp nhất</option>
-                </select>
-            </div>
-            <div class="col-lg-2 col-md-6"><button class="btn btn-primary w-100">Lọc</button></div>
+            <div class="col-lg-1 col-md-6"><button class="btn btn-primary w-100">Lọc</button></div>
             <div class="col-12 d-flex justify-content-between align-items-center gap-2 flex-wrap">
                 <a href="{{ accounting_route('customer-debts') }}" class="btn btn-outline-secondary btn-sm">Xóa lọc</a>
                 <span class="badge text-bg-light border">Tổng nợ trang này: {{ number_format($totalDebt, 0, ',', '.') }} đ</span>
@@ -42,13 +54,13 @@
         <table class="table table-hover align-middle">
             <thead>
                 <tr>
-                    <th>Khách hàng</th>
-                    <th>Loại công nợ</th>
-                    <th class="text-end">Tăng công nợ</th>
-                    <th class="text-end">Thanh toán</th>
-                    <th class="text-end">Nợ hiện tại</th>
-                    <th>Trạng thái</th>
-                    <th>Thời gian</th>
+                    <th>{!! $sortLink('customer', 'Khách hàng') !!}</th>
+                    <th>{!! $sortLink('debt_type', 'Loại công nợ') !!}</th>
+                    <th class="text-end">{!! $sortLink('debt_increase', 'Tăng công nợ') !!}</th>
+                    <th class="text-end">{!! $sortLink('payments', 'Thanh toán') !!}</th>
+                    <th class="text-end">{!! $sortLink('debt', 'Nợ hiện tại') !!}</th>
+                    <th>{!! $sortLink('status', 'Trạng thái') !!}</th>
+                    <th>{!! $sortLink('latest_debt', 'Thời gian') !!}</th>
                     <th class="text-end">Thao tác</th>
                 </tr>
             </thead>
