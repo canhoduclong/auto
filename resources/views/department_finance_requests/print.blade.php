@@ -16,31 +16,107 @@
     $subtotal = (float) ($transaction->request_subtotal ?? $items->sum('line_total'));
     $vat = (float) ($transaction->request_vat ?? 0);
     $total = (float) ($transaction->request_total ?? $transaction->amount);
-    $flow = $transaction->transactionCategory?->flow_direction === 'in' ? 'Thu' : 'Chi';
-    $statusLabels = [
-        \App\Models\Transaction::STATUS_PENDING_APPROVAL => 'Chờ duyệt',
-        \App\Models\Transaction::STATUS_APPROVED => 'Đã duyệt',
-        \App\Models\Transaction::STATUS_REJECTED => 'Từ chối',
-    ];
+    $createdAt = $transaction->created_at ?: now();
+
+    $companyName = Setting::get('company_legal_name', Setting::get('brand_name', 'CÔNG TY CỔ PHẦN THỰC PHẨM HOÀNG LONG TNT'));
+    $amountText = function (float $amount): string {
+        $number = (int) round($amount);
+        if ($number === 0) {
+            return 'Không đồng.';
+        }
+
+        $digits = ['không', 'một', 'hai', 'ba', 'bốn', 'năm', 'sáu', 'bảy', 'tám', 'chín'];
+        $units = ['', 'ngàn', 'triệu', 'tỷ'];
+
+        $readThree = function (int $value, bool $full) use ($digits): string {
+            $hundreds = intdiv($value, 100);
+            $tens = intdiv($value % 100, 10);
+            $ones = $value % 10;
+            $parts = [];
+
+            if ($hundreds > 0 || $full) {
+                $parts[] = $digits[$hundreds] . ' trăm';
+            }
+
+            if ($tens > 1) {
+                $parts[] = $digits[$tens] . ' mươi';
+                if ($ones === 1) {
+                    $parts[] = 'mốt';
+                } elseif ($ones === 5) {
+                    $parts[] = 'lăm';
+                } elseif ($ones > 0) {
+                    $parts[] = $digits[$ones];
+                }
+            } elseif ($tens === 1) {
+                $parts[] = 'mười';
+                if ($ones === 5) {
+                    $parts[] = 'lăm';
+                } elseif ($ones > 0) {
+                    $parts[] = $digits[$ones];
+                }
+            } elseif ($ones > 0) {
+                if ($hundreds > 0 || $full) {
+                    $parts[] = 'lẻ';
+                }
+                $parts[] = $digits[$ones];
+            }
+
+            return trim(implode(' ', $parts));
+        };
+
+        $groups = [];
+        while ($number > 0) {
+            $groups[] = $number % 1000;
+            $number = intdiv($number, 1000);
+        }
+
+        $words = [];
+        for ($i = count($groups) - 1; $i >= 0; $i--) {
+            $group = (int) $groups[$i];
+            if ($group === 0) {
+                continue;
+            }
+
+            $full = $i < count($groups) - 1 && $group < 100;
+            $words[] = trim($readThree($group, $full) . ' ' . ($units[$i] ?? ''));
+        }
+
+        $text = trim(implode(' ', $words)) . ' đồng.';
+        return mb_strtoupper(mb_substr($text, 0, 1)) . mb_substr($text, 1);
+    };
+
+    $formatQuantity = function ($quantity): string {
+        $quantity = (float) $quantity;
+        if (floor($quantity) == $quantity) {
+            return str_pad((string) (int) $quantity, 2, '0', STR_PAD_LEFT);
+        }
+
+        return rtrim(rtrim(number_format($quantity, 2, ',', '.'), '0'), ',');
+    };
+
+    $minimumRows = 4;
+    $emptyRows = max(0, $minimumRows - $items->count());
 @endphp
 <!DOCTYPE html>
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Phiếu yêu cầu #{{ $transaction->id }}</title>
+    <title>Phiếu yêu cầu chi #{{ $transaction->id }}</title>
     <style>
         * { box-sizing: border-box; }
         body {
             margin: 0;
             background: #e5e7eb;
-            color: #111827;
-            font-family: Arial, sans-serif;
-            font-size: 13px;
+            color: #111;
+            font-family: "Times New Roman", Times, serif;
+            font-size: 15px;
+            line-height: 1.28;
         }
         .toolbar {
             position: sticky;
             top: 0;
+            z-index: 10;
             display: flex;
             justify-content: flex-end;
             gap: 8px;
@@ -49,8 +125,8 @@
             border-bottom: 1px solid #d1d5db;
         }
         .btn {
-            border: 1px solid #0f766e;
-            background: #0f766e;
+            border: 1px solid #111827;
+            background: #111827;
             color: #fff;
             border-radius: 4px;
             padding: 8px 14px;
@@ -61,78 +137,88 @@
             width: 210mm;
             min-height: 297mm;
             margin: 16px auto;
-            padding: 18mm;
+            padding: 18mm 16mm;
             background: #fff;
             box-shadow: 0 10px 32px rgba(15, 23, 42, .18);
         }
-        .header {
+        .top {
             display: grid;
-            grid-template-columns: 1fr auto;
-            gap: 16px;
-            border-bottom: 2px solid #111827;
-            padding-bottom: 12px;
+            grid-template-columns: 1fr 250px;
+            gap: 18px;
+            align-items: start;
         }
-        .brand {
-            font-size: 18px;
+        .company {
             font-weight: 800;
             text-transform: uppercase;
+            text-align: center;
+            max-width: 280px;
+            line-height: 1.12;
         }
-        .muted { color: #6b7280; }
-        .doc-code {
-            text-align: right;
-            line-height: 1.7;
+        .voucher-no {
+            margin-top: 12px;
+            text-align: center;
+        }
+        .form-code {
+            text-align: center;
+            font-weight: 700;
+            line-height: 1.25;
+        }
+        .form-code em {
+            display: block;
+            font-weight: 400;
         }
         h1 {
-            margin: 22px 0 6px;
+            margin: 16px 0 12px;
             text-align: center;
-            font-size: 24px;
+            font-family: Arial, sans-serif;
+            font-size: 25px;
             text-transform: uppercase;
+            letter-spacing: .2px;
         }
-        .subtitle {
+        .date-line {
             text-align: center;
-            margin-bottom: 20px;
+            font-style: italic;
+            margin-bottom: 10px;
         }
-        .info-grid {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 8px 24px;
-            margin-bottom: 16px;
+        .info-lines {
+            margin: 0 8px 12px;
         }
-        .info-item {
-            display: grid;
-            grid-template-columns: 120px 1fr;
+        .info-row {
+            display: flex;
             gap: 8px;
+            margin: 6px 0;
+        }
+        .info-label {
+            font-weight: 700;
+            font-style: italic;
+            white-space: nowrap;
+        }
+        .money {
+            font-weight: 800;
         }
         table {
             width: 100%;
             border-collapse: collapse;
         }
         th, td {
-            border: 1px solid #111827;
+            border: 1px solid #111;
             padding: 7px 8px;
             vertical-align: top;
         }
         th {
-            background: #f3f4f6;
             text-align: center;
             font-weight: 800;
         }
-        .text-end { text-align: right; }
         .text-center { text-align: center; }
-        .totals {
-            width: 44%;
-            margin-left: auto;
-            margin-top: 12px;
-        }
-        .totals td {
-            border-color: #6b7280;
-        }
-        .total-label {
+        .text-end { text-align: right; }
+        .fw-bold { font-weight: 800; }
+        .empty-row td { height: 26px; }
+        .summary-label {
+            text-align: center;
             font-weight: 800;
         }
         .note {
-            margin-top: 18px;
-            line-height: 1.55;
+            margin: 22px 8px 0;
         }
         .signatures {
             display: grid;
@@ -140,13 +226,19 @@
             gap: 18px;
             margin-top: 34px;
             text-align: center;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
         }
         .signature-box {
-            min-height: 92px;
+            min-height: 88px;
         }
         .signature-title {
             font-weight: 800;
             margin-bottom: 6px;
+        }
+        .signature-hint {
+            color: #374151;
+            font-weight: 400;
         }
         @media print {
             body { background: #fff; }
@@ -160,7 +252,7 @@
             }
             @page {
                 size: A4;
-                margin: 14mm;
+                margin: 16mm;
             }
         }
     </style>
@@ -171,58 +263,62 @@
     </div>
 
     <main class="page">
-        <div class="header">
+        <div class="top">
             <div>
-                <div class="brand">{{ Setting::get('brand_name', 'Hoàng Long TNT') }}</div>
-                <div class="muted">{{ Setting::get('company_address', '') }}</div>
-                <div class="muted">{{ Setting::get('company_phone', '') }}</div>
+                <div class="company">{{ $companyName }}</div>
+                <div class="voucher-no"><strong>Số phiếu:</strong> #{{ $transaction->id }}</div>
             </div>
-            <div class="doc-code">
-                <div><strong>Số phiếu:</strong> #{{ $transaction->id }}</div>
-                <div><strong>Ngày:</strong> {{ optional($transaction->created_at)->format('d/m/Y H:i') }}</div>
-                <div><strong>Trạng thái:</strong> {{ $statusLabels[$transaction->status] ?? $transaction->status }}</div>
+            <div class="form-code">
+                Mẫu số: 05-TT
+                <em>(Ban hành theo Thông tư 200/2014/TT-BTC</em>
+                <em>ngày 24/12/2014 của Bộ trưởng BTC)</em>
             </div>
         </div>
 
-        <h1>Phiếu yêu cầu {{ $flow }}</h1>
-        <div class="subtitle">{{ $transaction->request_title ?: 'Phiếu yêu cầu' }}</div>
+        <h1>Phiếu yêu cầu chi</h1>
+        <div class="date-line">
+            Ngày {{ $createdAt->format('d') }} tháng {{ $createdAt->format('m') }} năm {{ $createdAt->format('Y') }}.
+        </div>
 
-        <div class="info-grid">
-            <div class="info-item">
-                <strong>Bộ phận:</strong>
-                <span>{{ $transaction->request_department ?: $config['label'] }}</span>
+        <div class="info-lines">
+            <div class="info-row">
+                <span class="info-label">Kính gửi:</span>
+                <span>Ban lãnh đạo và bộ phận kế toán</span>
             </div>
-            <div class="info-item">
-                <strong>Người lập:</strong>
+            <div class="info-row">
+                <span class="info-label">Họ và tên người đề nghị thanh toán:</span>
                 <span>{{ $transaction->submitter?->name ?: '-' }}</span>
             </div>
-            <div class="info-item">
-                <strong>Danh mục:</strong>
-                <span>{{ $transaction->transactionCategory?->code }} - {{ $transaction->transactionCategory?->name }}</span>
+            <div class="info-row">
+                <span class="info-label">Bộ phận:</span>
+                <span>{{ $transaction->request_department ?: ($config['label'] ?? '-') }}</span>
             </div>
-            <div class="info-item">
-                <strong>Phương thức:</strong>
-                <span>{{ $transaction->method ?: '-' }}</span>
+            <div class="info-row">
+                <span class="info-label">Nội dung thanh toán:</span>
+                <span>{{ $transaction->request_title ?: ($transaction->note ?: '-') }}</span>
             </div>
-            <div class="info-item">
-                <strong>Tài khoản:</strong>
-                <span>{{ $transaction->account?->name ?: 'Kế toán chọn khi duyệt' }}</span>
+            <div class="info-row">
+                <span class="info-label">Số tiền:</span>
+                <span>
+                    <span class="money">{{ number_format($total, 0, ',', '.') }}</span>
+                    vnđ (Viết bằng chữ): <em>{{ $amountText($total) }}</em>
+                </span>
             </div>
-            <div class="info-item">
-                <strong>Người duyệt:</strong>
-                <span>{{ $transaction->approver?->name ?: '-' }}</span>
+            <div class="info-row">
+                <span class="info-label">(Kèm theo:</span>
+                <span>........................................................ chứng từ gốc).</span>
             </div>
         </div>
 
         <table>
             <thead>
                 <tr>
-                    <th style="width:42px">STT</th>
+                    <th style="width:38px">STT</th>
                     <th>Nội dung</th>
-                    <th style="width:80px">ĐVT</th>
-                    <th style="width:90px">Số lượng</th>
-                    <th style="width:120px">Đơn giá</th>
-                    <th style="width:130px">Thành tiền</th>
+                    <th style="width:68px">ĐVT</th>
+                    <th style="width:58px">Số<br>lượng</th>
+                    <th style="width:94px">Đơn giá</th>
+                    <th style="width:94px">Thành tiền</th>
                 </tr>
             </thead>
             <tbody>
@@ -231,27 +327,34 @@
                         <td class="text-center">{{ $index + 1 }}</td>
                         <td>{{ $item['content'] ?? '' }}</td>
                         <td class="text-center">{{ $item['unit'] ?? '' }}</td>
-                        <td class="text-end">{{ number_format((float) ($item['quantity'] ?? 0), 2) }}</td>
-                        <td class="text-end">{{ number_format((float) ($item['unit_price'] ?? 0)) }}</td>
-                        <td class="text-end">{{ number_format((float) ($item['line_total'] ?? 0)) }}</td>
+                        <td class="text-center">{{ $formatQuantity($item['quantity'] ?? 0) }}</td>
+                        <td class="text-end">{{ number_format((float) ($item['unit_price'] ?? 0), 0, ',', '.') }}</td>
+                        <td class="text-end">{{ number_format((float) ($item['line_total'] ?? 0), 0, ',', '.') }}</td>
                     </tr>
                 @endforeach
+                @for($i = 0; $i < $emptyRows; $i++)
+                    <tr class="empty-row">
+                        <td>&nbsp;</td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                    </tr>
+                @endfor
+                <tr>
+                    <td colspan="5" class="summary-label">TỔNG</td>
+                    <td class="text-end fw-bold">{{ number_format($subtotal, 0, ',', '.') }}</td>
+                </tr>
+                <tr>
+                    <td colspan="5" class="summary-label">VAT</td>
+                    <td class="text-end">{{ number_format($vat, 0, ',', '.') }}</td>
+                </tr>
+                <tr>
+                    <td colspan="5" class="summary-label">TỔNG CỘNG</td>
+                    <td class="text-end fw-bold">{{ number_format($total, 0, ',', '.') }}</td>
+                </tr>
             </tbody>
-        </table>
-
-        <table class="totals">
-            <tr>
-                <td>Tổng tiền</td>
-                <td class="text-end">{{ number_format($subtotal) }}đ</td>
-            </tr>
-            <tr>
-                <td>VAT</td>
-                <td class="text-end">{{ number_format($vat) }}đ</td>
-            </tr>
-            <tr>
-                <td class="total-label">Tổng cộng</td>
-                <td class="text-end total-label">{{ number_format($total) }}đ</td>
-            </tr>
         </table>
 
         <div class="note">
@@ -262,15 +365,15 @@
         <div class="signatures">
             <div class="signature-box">
                 <div class="signature-title">Người lập phiếu</div>
-                <div class="muted">(Ký, ghi rõ họ tên)</div>
+                <div class="signature-hint">(Ký, ghi rõ họ tên)</div>
             </div>
             <div class="signature-box">
                 <div class="signature-title">Trưởng bộ phận</div>
-                <div class="muted">(Ký, ghi rõ họ tên)</div>
+                <div class="signature-hint">(Ký, ghi rõ họ tên)</div>
             </div>
             <div class="signature-box">
                 <div class="signature-title">Kế toán duyệt</div>
-                <div class="muted">(Ký, ghi rõ họ tên)</div>
+                <div class="signature-hint">(Ký, ghi rõ họ tên)</div>
             </div>
         </div>
     </main>
