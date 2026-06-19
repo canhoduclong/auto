@@ -4,6 +4,14 @@
 @section('subtitle', $customer->name)
 
 @section('accounting_content')
+@php
+    $formatKg = function ($value): string {
+        $formatted = number_format((float) $value, 3, ',', '.');
+
+        return rtrim(rtrim($formatted, '0'), ',');
+    };
+@endphp
+
 <div class="d-flex justify-content-between align-items-center gap-2 mb-3">
     <div>
         <h5 class="mb-1">{{ $customer->name }}</h5>
@@ -131,7 +139,7 @@
                                                                 <td>{{ $item['product_name'] }}</td>
                                                                 <td>{{ $item['size'] }}</td>
                                                                 <td class="text-end">{{ number_format($item['quantity'], 0, ',', '.') }}</td>
-                                                                <td class="text-end">{{ number_format($item['weight'], 3, ',', '.') }} kg</td>
+                                                                <td class="text-end">{{ $formatKg($item['weight']) }} kg</td>
                                                                 <td class="text-end">{{ number_format($item['price'], 0, ',', '.') }} đ</td>
                                                                 <td class="text-end fw-semibold">{{ number_format($item['total'], 0, ',', '.') }} đ</td>
                                                             </tr>
