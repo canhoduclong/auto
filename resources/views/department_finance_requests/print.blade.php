@@ -17,6 +17,10 @@
     $vat = (float) ($transaction->request_vat ?? 0);
     $total = (float) ($transaction->request_total ?? $transaction->amount);
     $createdAt = $transaction->created_at ?: now();
+    $flow = $transaction->transactionCategory?->flow_direction === 'in' || $transaction->type === 'extra_income' ? 'Thu' : 'Chi';
+    $departmentName = $transaction->submitter?->department?->name
+        ?: $transaction->submitter?->block?->name
+        ?: ($transaction->request_department ?: ($config['label'] ?? '-'));
 
     $companyName = Setting::get('company_legal_name', Setting::get('brand_name', 'CÔNG TY CỔ PHẦN THỰC PHẨM HOÀNG LONG TNT'));
     $amountText = function (float $amount): string {
@@ -102,7 +106,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Phiếu yêu cầu chi #{{ $transaction->id }}</title>
+    <title>Phiếu yêu cầu {{ mb_strtolower($flow) }} #{{ $transaction->id }}</title>
     <style>
         * { box-sizing: border-box; }
         body {
@@ -143,15 +147,20 @@
         }
         .top {
             display: grid;
-            grid-template-columns: 1fr 250px;
+            grid-template-columns: 1fr 290px;
             gap: 18px;
             align-items: start;
+        }
+        .company-block {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
         .company {
             font-weight: 800;
             text-transform: uppercase;
             text-align: center;
-            max-width: 280px;
+            max-width: 330px;
             line-height: 1.12;
         }
         .voucher-no {
@@ -162,6 +171,9 @@
             text-align: center;
             font-weight: 700;
             line-height: 1.25;
+        }
+        .form-code-line {
+            white-space: nowrap;
         }
         .form-code em {
             display: block;
@@ -208,6 +220,7 @@
         th {
             text-align: center;
             font-weight: 800;
+            white-space: nowrap;
         }
         .text-center { text-align: center; }
         .text-end { text-align: right; }
@@ -264,18 +277,18 @@
 
     <main class="page">
         <div class="top">
-            <div>
+            <div class="company-block">
                 <div class="company">{{ $companyName }}</div>
                 <div class="voucher-no"><strong>Số phiếu:</strong> #{{ $transaction->id }}</div>
             </div>
             <div class="form-code">
                 Mẫu số: 05-TT
-                <em>(Ban hành theo Thông tư 200/2014/TT-BTC</em>
-                <em>ngày 24/12/2014 của Bộ trưởng BTC)</em>
+                <em class="form-code-line">(Ban hành theo Thông tư 200/2014/TT-BTC)</em>
+                <em>ngày 24/12/2014 của Bộ trưởng BTC</em>
             </div>
         </div>
 
-        <h1>Phiếu yêu cầu chi</h1>
+        <h1>Phiếu yêu cầu {{ mb_strtolower($flow) }}</h1>
         <div class="date-line">
             Ngày {{ $createdAt->format('d') }} tháng {{ $createdAt->format('m') }} năm {{ $createdAt->format('Y') }}.
         </div>
@@ -291,7 +304,7 @@
             </div>
             <div class="info-row">
                 <span class="info-label">Bộ phận:</span>
-                <span>{{ $transaction->request_department ?: ($config['label'] ?? '-') }}</span>
+                <span>{{ $departmentName }}</span>
             </div>
             <div class="info-row">
                 <span class="info-label">Nội dung thanh toán:</span>
@@ -316,7 +329,7 @@
                     <th style="width:38px">STT</th>
                     <th>Nội dung</th>
                     <th style="width:68px">ĐVT</th>
-                    <th style="width:58px">Số<br>lượng</th>
+                    <th style="width:76px">Số lượng</th>
                     <th style="width:94px">Đơn giá</th>
                     <th style="width:94px">Thành tiền</th>
                 </tr>

@@ -260,7 +260,9 @@ class DepartmentFinanceRequestController extends Controller
         abort_unless($transaction->request_source === $source, 404);
 
         $transaction->load([
-            'submitter:id,name,email',
+            'submitter:id,name,email,department_id,block_id',
+            'submitter.department:id,name,block_id',
+            'submitter.block:id,name',
             'approver:id,name',
             'rejecter:id,name',
             'transactionCategory:id,code,name,flow_direction',
