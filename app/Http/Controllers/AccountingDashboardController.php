@@ -273,10 +273,7 @@ class AccountingDashboardController extends Controller
                 'amount' => $total,
                 'paid' => $paid,
                 'remaining' => max($total - $paid, 0),
-                'url' => accounting_route('reconciliation', [
-                    'date' => optional($order->delivered_at ?? $order->created_at)->toDateString(),
-                    'order_id' => $order->id,
-                ]),
+                'url' => accounting_route('orders.detail', $order),
                 'items' => $order->items->map(function ($item): array {
                     $variant = $item->variant;
                     $product = $item->product ?? $variant?->product;
@@ -337,6 +334,41 @@ class AccountingDashboardController extends Controller
             'debtTypeOptions' => $this->customerDebtTypeOptions(),
             'currentDebtType' => (string) ($customer->debt_type ?: 'normal'),
             'currentDebtTypeMeta' => $this->customerDebtTypeMeta((string) ($customer->debt_type ?: 'normal')),
+        ]);
+    }
+
+    public function orderDetail(Order $order)
+    {
+        $order->load([
+            'customer:id,name,phone,email,address,company_name,tax_code',
+            'user:id,name',
+            'shipper:id,name',
+            'warehouse:id,name',
+            'items.product:id,name',
+            'items.variant:id,name,sku,size',
+            'transactions' => fn ($query) => $query->latest(),
+            'histories.user:id,name',
+            'returnRecords.returnItems.productVariant.product:id,name',
+            'returnRecords.warehouse:id,name',
+            'returnRecords.warehouseConfirmer:id,name',
+            'accountingReconciliation.confirmer:id,name',
+        ]);
+
+        $returnAmount = $this->returnAmountForOrder($order);
+        $recognizedRevenue = $this->recognizedRevenueForOrder($order);
+        $effectivePaid = $this->effectivePaidForOrder($order);
+        $effectiveDue = max(0, $recognizedRevenue - $effectivePaid);
+
+        return view('accounting.order_detail', [
+            'order' => $order,
+            'returnAmount' => $returnAmount,
+            'recognizedRevenue' => $recognizedRevenue,
+            'effectivePaid' => $effectivePaid,
+            'effectiveDue' => $effectiveDue,
+            'reconciliationUrl' => accounting_route('reconciliation', [
+                'date' => optional($order->delivered_at ?? $order->created_at)->toDateString(),
+                'order_id' => $order->id,
+            ]),
         ]);
     }
 

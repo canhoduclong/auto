@@ -203,6 +203,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::prefix('accounting')->name('accounting.')->middleware('role:account,accountant,accounting,admin')->group(function () {
         Route::get('/', [AccountingDashboardController::class, 'index'])->name('dashboard');
         Route::get('/orders', [AccountingDashboardController::class, 'orders'])->name('orders');
+        Route::get('/orders/{order}/detail', [AccountingDashboardController::class, 'orderDetail'])->name('orders.detail');
         Route::get('/customer-debts', [AccountingDashboardController::class, 'customerDebts'])->name('customer-debts');
         Route::get('/customer-debts/{customer}', [AccountingDashboardController::class, 'customerDebtShow'])->name('customer-debts.show');
         Route::post('/customer-debts/{customer}/debt-type', [AccountingDashboardController::class, 'customerDebtTypeUpdate'])->name('customer-debts.debt-type.update');
