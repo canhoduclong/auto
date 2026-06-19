@@ -1,290 +1,173 @@
 @extends(accounting_layout())
 
-@section('title', 'Don Hang')
-@section('subtitle', 'Danh sach don hang cua tat ca sale trong ngay')
+@section('title', 'Đơn hàng')
+@section('subtitle', 'Danh sách đơn hàng của tất cả sale trong ngày')
 
 @section('accounting_content')
 @php
     $dailyQtyText = rtrim(rtrim(number_format((float) $dailyTotalItemQuantity, 3, '.', ''), '0'), '.');
     $filteredQtyText = rtrim(rtrim(number_format((float) $filteredItemQuantity, 3, '.', ''), '0'), '.');
+    $compactNumber = fn ($value, $decimals = 3) => rtrim(rtrim(number_format((float) $value, $decimals, ',', '.'), '0'), ',');
+    $money = fn ($value) => number_format((float) $value, 0, ',', '.') . 'đ';
+    $statusMeta = [
+        'pending' => ['label' => 'Chờ xử lý', 'class' => 'text-bg-secondary'],
+        'approved' => ['label' => 'Đã duyệt', 'class' => 'text-bg-primary'],
+        'ready_to_pack' => ['label' => 'Chờ đóng hàng', 'class' => 'text-bg-info'],
+        'packing' => ['label' => 'Đang đóng hàng', 'class' => 'text-bg-warning'],
+        'packed' => ['label' => 'Đã đóng hàng', 'class' => 'text-bg-primary'],
+        'packed_waiting_pickup' => ['label' => 'Chờ lấy hàng', 'class' => 'text-bg-info'],
+        'delivering' => ['label' => 'Đang giao', 'class' => 'text-bg-warning'],
+        'delivered' => ['label' => 'Đã giao', 'class' => 'text-bg-success'],
+        'completed' => ['label' => 'Hoàn thành', 'class' => 'text-bg-success'],
+        'cancelled' => ['label' => 'Đã hủy', 'class' => 'text-bg-danger'],
+        'returned' => ['label' => 'Đã hoàn trả', 'class' => 'text-bg-danger'],
+        'returned_completed' => ['label' => 'Hoàn trả hoàn tất', 'class' => 'text-bg-dark'],
+    ];
 @endphp
 
+@push('styles')
+<style>
+    .acc-order-card { border: 0; border-radius: 12px; box-shadow: 0 10px 24px rgba(15,23,42,.07); overflow: hidden; }
+    .acc-order-sequence { width: 42px; min-width: 42px; height: 36px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; background: #64748b; color: #fff; font-weight: 800; }
+    .acc-order-sequence.is-done { background: #198754; }
+    .acc-order-sequence.is-processing { background: #ffc107; color: #212529; }
+    .acc-order-description { color: #64748b; font-size: .76rem; }
+    .acc-order-info { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc; }
+    .acc-order-info-label { color: #64748b; font-size: .7rem; text-transform: uppercase; letter-spacing: .03em; }
+    .acc-order-info-value { color: #0f172a; font-size: .87rem; font-weight: 700; overflow-wrap: anywhere; }
+    .acc-item-table { min-width: 760px; }
+    .acc-item-thumb { width: 40px; height: 40px; object-fit: cover; border-radius: 8px; border: 1px solid #e2e8f0; background: #fff; }
+    .acc-item-thumb-empty { width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; border: 1px dashed #cbd5e1; color: #94a3b8; background: #f8fafc; }
+    .acc-adjustment-panel { border-left: 1px solid #e2e8f0; background: #f8fafc; width: 340px; min-width: 300px; }
+    @media (max-width: 991.98px) {
+        .acc-order-info { grid-template-columns: repeat(2, minmax(0,1fr)); }
+        .acc-adjustment-panel { width: 100%; border-left: 0; border-top: 1px solid #e2e8f0; }
+    }
+</style>
+@endpush
+
 <div class="acc-kpi mb-3">
-    <div class="acc-card p-3">
-        <div class="text-muted small">Tong don hang trong ngay</div>
-        <div class="h4 mb-0">{{ number_format((int) $dailyTotalOrders) }}</div>
-    </div>
-    <div class="acc-card p-3">
-        <div class="text-muted small">Tong so luong hang hoa trong ngay</div>
-        <div class="h4 mb-0">{{ $dailyQtyText }}</div>
-    </div>
-    <div class="acc-card p-3">
-        <div class="text-muted small">So luong tren trang hien tai</div>
-        <div class="h4 mb-0">{{ $filteredQtyText }}</div>
-    </div>
+    <div class="acc-card p-3"><div class="text-muted small">Tổng đơn hàng trong ngày</div><div class="h4 mb-0">{{ number_format((int) $dailyTotalOrders) }}</div></div>
+    <div class="acc-card p-3"><div class="text-muted small">Tổng số lượng hàng hóa</div><div class="h4 mb-0">{{ $dailyQtyText }}</div></div>
+    <div class="acc-card p-3"><div class="text-muted small">Số lượng trên trang hiện tại</div><div class="h4 mb-0">{{ $filteredQtyText }}</div></div>
 </div>
 
 <div class="acc-card mb-3">
     <div class="card-body">
         <form method="GET" class="row g-2 align-items-end">
-            <div class="col-md-2">
-                <label class="form-label">Ngay</label>
-                <input type="date" name="date" class="form-control" value="{{ $date }}">
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Khach hang</label>
-                <select class="form-select" name="customer_id">
-                    <option value="0">Tat ca</option>
-                    @foreach($customers as $customer)
-                        <option value="{{ $customer->id }}" {{ $customerId === (int) $customer->id ? 'selected' : '' }}>{{ $customer->name }}</option>
-                    @endforeach
-                </select>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Sale</label>
-                <select class="form-select" name="sale_id">
-                    <option value="0">Tat ca sale</option>
-                    @foreach($sales as $sale)
-                        <option value="{{ $sale->id }}" {{ $saleId === (int) $sale->id ? 'selected' : '' }}>{{ $sale->name }}</option>
-                    @endforeach
-                </select>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">Trang thai don</label>
-                <input class="form-control" name="status" value="{{ $status }}" placeholder="order_placed...">
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">TT thanh toan</label>
-                <input class="form-control" name="payment_status" value="{{ $paymentStatus }}" placeholder="paid/partial/...">
-            </div>
-            <div class="col-md-4">
-                <label class="form-label">Tim nhanh</label>
-                <input class="form-control" name="keyword" value="{{ $keyword }}" placeholder="Ma don, ten khach, ten sale">
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">So dong/trang</label>
-                <select class="form-select" name="per_page">
-                    @foreach([10, 20, 50, 100] as $size)
-                        <option value="{{ $size }}" {{ (int) $perPage === $size ? 'selected' : '' }}>{{ $size }}</option>
-                    @endforeach
-                </select>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">Sap xep</label>
-                <select class="form-select" name="sort_by">
-                    <option value="created_at" {{ $sortBy === 'created_at' ? 'selected' : '' }}>Ngay tao</option>
-                    <option value="code" {{ $sortBy === 'code' ? 'selected' : '' }}>Ma don</option>
-                    <option value="total" {{ $sortBy === 'total' ? 'selected' : '' }}>Tong tien</option>
-                    <option value="customer_name" {{ $sortBy === 'customer_name' ? 'selected' : '' }}>Khach hang</option>
-                    <option value="sale_name" {{ $sortBy === 'sale_name' ? 'selected' : '' }}>Sale</option>
-                </select>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">Chieu sap xep</label>
-                <select class="form-select" name="sort_dir">
-                    <option value="desc" {{ $sortDir === 'desc' ? 'selected' : '' }}>Giam dan</option>
-                    <option value="asc" {{ $sortDir === 'asc' ? 'selected' : '' }}>Tang dan</option>
-                </select>
-            </div>
-            <div class="col-md-2">
-                <button class="btn btn-primary w-100">Loc danh sach</button>
-            </div>
+            <div class="col-md-2"><label class="form-label">Ngày</label><input type="date" name="date" class="form-control" value="{{ $date }}"></div>
+            <div class="col-md-3"><label class="form-label">Khách hàng</label><select class="form-select" name="customer_id"><option value="0">Tất cả</option>@foreach($customers as $customer)<option value="{{ $customer->id }}" @selected($customerId === (int) $customer->id)>{{ $customer->name }}</option>@endforeach</select></div>
+            <div class="col-md-3"><label class="form-label">Sale</label><select class="form-select" name="sale_id"><option value="0">Tất cả sale</option>@foreach($sales as $sale)<option value="{{ $sale->id }}" @selected($saleId === (int) $sale->id)>{{ $sale->name }}</option>@endforeach</select></div>
+            <div class="col-md-2"><label class="form-label">Trạng thái đơn</label><input class="form-control" name="status" value="{{ $status }}" placeholder="delivered..."></div>
+            <div class="col-md-2"><label class="form-label">Thanh toán</label><input class="form-control" name="payment_status" value="{{ $paymentStatus }}" placeholder="paid/unpaid..."></div>
+            <div class="col-md-4"><label class="form-label">Tìm nhanh</label><input class="form-control" name="keyword" value="{{ $keyword }}" placeholder="Mã đơn, khách hàng, sale"></div>
+            <div class="col-md-2"><label class="form-label">Số đơn/trang</label><select class="form-select" name="per_page">@foreach([10,20,50,100] as $size)<option value="{{ $size }}" @selected((int) $perPage === $size)>{{ $size }}</option>@endforeach</select></div>
+            <div class="col-md-2"><label class="form-label">Sắp xếp</label><select class="form-select" name="sort_by"><option value="created_at" @selected($sortBy === 'created_at')>Ngày tạo</option><option value="code" @selected($sortBy === 'code')>Mã đơn</option><option value="total" @selected($sortBy === 'total')>Tổng tiền</option><option value="customer_name" @selected($sortBy === 'customer_name')>Khách hàng</option><option value="sale_name" @selected($sortBy === 'sale_name')>Sale</option></select></div>
+            <div class="col-md-2"><label class="form-label">Chiều sắp xếp</label><select class="form-select" name="sort_dir"><option value="desc" @selected($sortDir === 'desc')>Giảm dần</option><option value="asc" @selected($sortDir === 'asc')>Tăng dần</option></select></div>
+            <div class="col-md-2"><button class="btn btn-primary w-100">Lọc danh sách</button></div>
         </form>
     </div>
 </div>
 
-<div class="acc-card">
-    <div class="card-body">
-        <div class="mb-3 small text-muted">
-            Hien thi {{ $orders->firstItem() ?? 0 }} - {{ $orders->lastItem() ?? 0 }} / {{ $orders->total() }} don.
-        </div>
+<div class="mb-3 small text-muted">Hiển thị {{ $orders->firstItem() ?? 0 }}–{{ $orders->lastItem() ?? 0 }} / {{ $orders->total() }} đơn.</div>
 
-        @forelse($orders as $order)
-            @php
-                $orderQty = rtrim(rtrim(number_format((float) ($order->total_item_quantity ?? 0), 3, '.', ''), '0'), '.');
-                $pendingAdjustments = $order->adjustments->where('status', \App\Models\OrderAdjustment::STATUS_PENDING_APPROVAL);
-                $otherAdjustments = $order->adjustments->whereNotIn('status', [\App\Models\OrderAdjustment::STATUS_PENDING_APPROVAL]);
-                $isReturnOrder = (bool) ($order->is_return_order ?? false)
-                    || (string) ($order->order_type ?? '') === 'order_return'
-                    || (string) ($order->workflow_code ?? '') === 'order_return';
-            @endphp
-            <div class="border rounded mb-3 bg-white overflow-hidden {{ $isReturnOrder ? 'border-danger' : '' }}">
-                <div class="d-flex flex-wrap gap-0">
-                    {{-- Order card --}}
-                    <div class="flex-grow-1 p-3" style="min-width:280px">
-                        <div class="d-flex flex-wrap justify-content-between gap-2 mb-2">
-                            <div>
-                                <div class="fw-bold">
-                                    {{ $order->code ?: ('#' . $order->id) }}
-                                    @if($isReturnOrder)
-                                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle ms-1">Đơn hoàn trả</span>
-                                    @endif
-                                </div>
-                                <div class="small text-muted">
-                                    {{ optional($order->created_at)->format('d/m/Y H:i') }}
-                                    | Khach: {{ $order->customer?->name ?? '-' }}
-                                    | Sale: {{ $order->user?->name ?? '-' }}
-                                </div>
-                            </div>
-                            <div class="text-end">
-                                <div class="fw-semibold">{{ number_format((float) $order->total, 0, ',', '.') }} d</div>
-                                <div class="small text-muted">
-                                    So luong: {{ $orderQty }}
-                                    | TT: {{ $order->status ?? '-' }}
-                                    | Thanh toan: {{ $order->payment_status ?? '-' }}
-                                </div>
-                            </div>
+<div class="row g-3">
+@forelse($orders as $order)
+    @php
+        $meta = $statusMeta[$order->status] ?? ['label' => $order->status ?: '-', 'class' => 'text-bg-secondary'];
+        $isDone = in_array($order->status, ['delivered','completed','returned_completed'], true);
+        $isProcessing = in_array($order->status, ['packing','delivering'], true);
+        $isReturnOrder = (bool) ($order->is_return_order ?? false) || in_array((string) ($order->order_type ?? ''), ['order_return','return'], true);
+        $reconciliation = $order->accountingReconciliation;
+        $isReconciled = $reconciliation?->status === \App\Models\AccountingReconciliation::STATUS_CONFIRMED;
+    @endphp
+    <div class="col-12" id="order-card-{{ $order->id }}">
+        <div class="card acc-order-card {{ $isReturnOrder ? 'border border-danger' : '' }}">
+            <div class="card-header bg-white py-3 d-flex align-items-center gap-3">
+                <div class="acc-order-sequence {{ $isDone ? 'is-done' : ($isProcessing ? 'is-processing' : '') }}">{{ $order->daily_sequence ?? '—' }}</div>
+                <div class="flex-grow-1 min-w-0">
+                    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2">
+                        <div>
+                            <div class="fw-semibold fs-5">{{ $order->customer?->name ?? '—' }}</div>
+                            <div class="acc-order-description">#{{ $order->daily_sequence ?? '—' }}, lên đơn {{ optional($order->created_at)->format('d/m/Y H:i') }}, giao {{ optional($order->delivery_date)->format('d/m/Y') ?: 'chưa cập nhật' }}, {{ $order->code }}</div>
                         </div>
-
-                        @if($order->items->isNotEmpty())
-                            <div class="table-responsive">
-                                <table class="table table-sm align-middle mb-0">
-                                    <thead>
-                                        <tr>
-                                            <th>San pham</th>
-                                            <th>Bien the</th>
-                                            <th class="text-end">So luong</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        @foreach($order->items as $item)
-                                            <tr>
-                                                <td>{{ $item->product?->name ?? '-' }}</td>
-                                                <td>{{ $item->variant?->name ?? '-' }}</td>
-                                                <td class="text-end">{{ rtrim(rtrim(number_format((float) $item->quantity, 3, '.', ''), '0'), '.') }}</td>
-                                            </tr>
-                                        @endforeach
-                                    </tbody>
-                                </table>
-                            </div>
-                        @endif
+                        <div class="d-flex flex-wrap gap-2 align-items-center">
+                            @if($isReturnOrder)<span class="badge text-bg-danger">Đơn hoàn trả</span>@endif
+                            <span class="badge {{ $isReconciled ? 'text-bg-success' : 'text-bg-warning' }}">{{ $isReconciled ? 'Đã đối soát' : 'Chưa đối soát' }}</span>
+                            <span class="badge {{ $meta['class'] }}">{{ $meta['label'] }}</span>
+                        </div>
                     </div>
-
-                    {{-- Adjustment panel --}}
-                    @if($order->adjustments->isNotEmpty())
-                        <div class="border-start p-3 bg-light" style="min-width:300px;max-width:420px;flex:0 0 auto">
-                            <div class="fw-semibold small mb-2 text-secondary">
-                                <i class="fa fa-exchange me-1"></i>Yeu cau dieu chinh
-                            </div>
-
-                            @foreach($order->adjustments as $adj)
-                                @php
-                                    $isPending = $adj->status === \App\Models\OrderAdjustment::STATUS_PENDING_APPROVAL;
-                                    $canApprove = $isPending && (
-                                        $authUser?->hasRole('admin') ||
-                                        $authUser?->hasRole('accountant') ||
-                                        app(\App\Services\ApprovalService::class)->canApproveAdjustmentStep($adj, $authUser)
-                                    );
-                                    $statusColor = match($adj->status) {
-                                        'pending_approval' => 'warning',
-                                        'approved' => 'success',
-                                        'rejected' => 'danger',
-                                        'completed' => 'primary',
-                                        default => 'secondary',
-                                    };
-                                @endphp
-                                <div class="border rounded p-2 mb-2 bg-white small">
-                                    <div class="d-flex justify-content-between align-items-center mb-1">
-                                        <span class="fw-semibold">#{{ $adj->id }}</span>
-                                        <span class="badge bg-{{ $statusColor }}">{{ $adj->status }}</span>
-                                    </div>
-                                    <div class="text-muted mb-1">
-                                        Nguoi yeu cau: {{ $adj->requester?->name ?? '-' }}
-                                        @if($adj->submitted_at)
-                                            | {{ $adj->submitted_at->format('d/m H:i') }}
-                                        @endif
-                                    </div>
-                                    @if($adj->adjustment_note)
-                                        <div class="mb-1 fst-italic text-muted">"{{ Str::limit($adj->adjustment_note, 80) }}"</div>
-                                    @endif
-
-                                    {{-- Items changed --}}
-                                    @if($adj->items->isNotEmpty())
-                                        <table class="table table-sm mb-1" style="font-size:0.78rem">
-                                            <thead><tr>
-                                                <th>San pham</th>
-                                                <th class="text-end">SL cu</th>
-                                                <th class="text-end">SL moi</th>
-                                                <th class="text-end">Gia moi</th>
-                                            </tr></thead>
-                                            <tbody>
-                                            @foreach($adj->items as $adjItem)
-                                                <tr>
-                                                    <td>{{ $adjItem->variant?->product?->name ?? '-' }}</td>
-                                                    <td class="text-end">{{ $adjItem->original_quantity }}</td>
-                                                    <td class="text-end @if($adjItem->adjusted_quantity < $adjItem->original_quantity) text-danger @elseif($adjItem->adjusted_quantity > $adjItem->original_quantity) text-success @endif">
-                                                        {{ $adjItem->adjusted_quantity }}
-                                                    </td>
-                                                    <td class="text-end">{{ number_format((float) $adjItem->adjusted_price, 0, ',', '.') }}</td>
-                                                </tr>
-                                            @endforeach
-                                            </tbody>
-                                        </table>
-                                    @endif
-
-                                    @if($canApprove)
-                                        <div class="d-flex gap-2 mt-2">
-                                            <form action="{{ route('site.order-adjustments.approve', $adj) }}" method="POST" class="flex-grow-1">
-                                                @csrf
-                                                <input type="hidden" name="note" value="">
-                                                <button type="submit" class="btn btn-success btn-sm w-100"
-                                                        onclick="return confirm('Duyet yeu cau dieu chinh #{{ $adj->id }}?')">
-                                                    <i class="fa fa-check me-1"></i>Duyet
-                                                </button>
-                                            </form>
-                                            <button type="button" class="btn btn-danger btn-sm flex-grow-1"
-                                                    data-bs-toggle="modal"
-                                                    data-bs-target="#rejectAdjModal{{ $adj->id }}">
-                                                <i class="fa fa-times me-1"></i>Tu choi
-                                            </button>
-                                        </div>
-                                    @endif
-
-                                    @if($adj->reject_reason)
-                                        <div class="text-danger mt-1 small">Ly do tu choi: {{ $adj->reject_reason }}</div>
-                                    @endif
-                                </div>
-                            @endforeach
-                        </div>
-                    @endif
                 </div>
             </div>
 
-            {{-- Reject modals (outside card) --}}
-            @foreach($order->adjustments->where('status', \App\Models\OrderAdjustment::STATUS_PENDING_APPROVAL) as $adj)
-                @php
-                    $canApprove = $authUser?->hasRole('admin') || $authUser?->hasRole('accountant') ||
-                        app(\App\Services\ApprovalService::class)->canApproveAdjustmentStep($adj, $authUser);
-                @endphp
-                @if($canApprove)
-                <div class="modal fade" id="rejectAdjModal{{ $adj->id }}" tabindex="-1">
-                    <div class="modal-dialog">
-                        <div class="modal-content">
-                            <form action="{{ route('site.order-adjustments.reject', $adj) }}" method="POST">
-                                @csrf
-                                <div class="modal-header">
-                                    <h6 class="modal-title">Tu choi yeu cau dieu chinh #{{ $adj->id }}</h6>
-                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                </div>
-                                <div class="modal-body">
-                                    <label class="form-label fw-semibold">Ly do tu choi <span class="text-danger">*</span></label>
-                                    <textarea name="reason" class="form-control" rows="3" required placeholder="Nhap ly do..."></textarea>
-                                </div>
-                                <div class="modal-footer">
-                                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Huy</button>
-                                    <button type="submit" class="btn btn-danger btn-sm">Xac nhan tu choi</button>
-                                </div>
-                            </form>
-                        </div>
+            <div class="d-flex flex-wrap">
+                <div class="card-body flex-grow-1" style="min-width:0">
+                    <div class="small text-muted mb-1"><i class="bi bi-geo-alt me-1"></i>{{ $order->customer?->address ?: 'Chưa có địa chỉ' }}</div>
+                    <div class="small text-muted mb-3"><i class="bi bi-clock me-1"></i>Giờ giao: {{ $order->delivery_time ?: ($order->customer?->delivery_time ?: 'Chưa cập nhật') }}</div>
+
+                    <div class="acc-order-info mb-3">
+                        <div><div class="acc-order-info-label">Sale</div><div class="acc-order-info-value">{{ $order->user?->name ?? '-' }}</div></div>
+                        <div><div class="acc-order-info-label">Shipper</div><div class="acc-order-info-value">{{ $order->shipper?->name ?? '-' }}</div></div>
+                        <div><div class="acc-order-info-label">Kho xuất</div><div class="acc-order-info-value">{{ $order->warehouse?->name ?? '-' }}</div></div>
+                        <div><div class="acc-order-info-label">Thanh toán</div><div class="acc-order-info-value">{{ $order->payment_status ?? '-' }}</div></div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0 acc-item-table">
+                            <thead><tr><th>Ảnh</th><th>Sản phẩm</th><th class="text-center">Size</th><th class="text-center">SL</th><th class="text-center">Tổng</th><th class="text-center">Khối lượng</th><th class="text-end">Đơn giá</th><th class="text-end">Thành tiền</th></tr></thead>
+                            <tbody>
+                            @foreach($order->items as $item)
+                                @php
+                                    $variant = $item->variant;
+                                    $imagePath = $variant?->avatar?->media?->file_path ?? $item->product?->avatar?->media?->file_path;
+                                    $weight = $item->actual_weight ?? $item->total_weight;
+                                @endphp
+                                <tr>
+                                    <td>@if($imagePath)<img class="acc-item-thumb" src="{{ asset('storage/' . $imagePath) }}" alt="">@else<span class="acc-item-thumb-empty"><i class="bi bi-image"></i></span>@endif</td>
+                                    <td><div class="fw-semibold">{{ $variant?->name ?? $item->product?->name ?? 'Sản phẩm' }}</div><div class="small text-muted">{{ $variant?->sku ?: '---' }}</div></td>
+                                    <td class="text-center fw-semibold">{{ filled($variant?->size) ? $compactNumber($variant->size, 2) : '-' }}</td>
+                                    <td class="text-center fw-semibold">{{ $compactNumber($item->quantity) }}</td>
+                                    <td class="text-center">{{ $item->display_total_label }}</td>
+                                    <td class="text-center">{{ $weight !== null ? $compactNumber($weight) . ' kg' : '---' }}</td>
+                                    <td class="text-end">{{ $money($item->price) }}</td>
+                                    <td class="text-end fw-semibold">{{ $money($item->total ?? ((float) $item->quantity * (float) $item->price)) }}</td>
+                                </tr>
+                            @endforeach
+                            </tbody>
+                        </table>
                     </div>
                 </div>
-                @endif
-            @endforeach
-        @empty
-            <div class="text-center text-muted py-4">Khong co don hang nao trong bo loc hien tai.</div>
-        @endforelse
 
-        {{ $orders->links() }}
+                @if($order->adjustments->isNotEmpty())
+                    <aside class="acc-adjustment-panel p-3">
+                        <div class="fw-bold small text-uppercase text-secondary mb-2"><i class="bi bi-arrow-left-right me-1"></i>Yêu cầu điều chỉnh</div>
+                        @foreach($order->adjustments as $adjustment)
+                            @php
+                                $adjustmentClass = match($adjustment->status) {'approved','completed' => 'success', 'rejected' => 'danger', 'pending_approval' => 'warning', default => 'secondary'};
+                            @endphp
+                            <div class="bg-white border rounded p-2 mb-2 small">
+                                <div class="d-flex justify-content-between gap-2"><strong>#{{ $adjustment->id }}</strong><span class="badge text-bg-{{ $adjustmentClass }}">{{ $adjustment->status }}</span></div>
+                                <div class="text-muted mt-1">{{ $adjustment->requester?->name ?? '-' }} · {{ optional($adjustment->submitted_at)->format('d/m H:i') }}</div>
+                                @if($adjustment->adjustment_note)<div class="mt-1">{{ $adjustment->adjustment_note }}</div>@endif
+                            </div>
+                        @endforeach
+                    </aside>
+                @endif
+            </div>
+
+            <div class="card-footer bg-white py-2 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <div><span class="text-muted small me-2">Tổng đơn hàng</span><strong class="text-primary fs-5">{{ $money($order->total) }}</strong></div>
+                <div class="d-flex gap-2">
+                    @if($order->delivered_at)<a href="{{ accounting_route('reconciliation', ['date' => $order->delivered_at->toDateString(), 'order_id' => $order->id]) }}" class="btn btn-outline-success btn-sm"><i class="bi bi-check2-square me-1"></i>Đối soát</a>@endif
+                    <a href="{{ accounting_route('orders.detail', $order) }}" class="btn btn-primary btn-sm"><i class="bi bi-eye me-1"></i>Xem chi tiết</a>
+                </div>
+            </div>
+        </div>
     </div>
+@empty
+    <div class="col-12"><div class="text-center text-muted py-5 acc-card">Không có đơn hàng nào trong bộ lọc hiện tại.</div></div>
+@endforelse
 </div>
+
+<div class="mt-3">{{ $orders->links() }}</div>
 @endsection

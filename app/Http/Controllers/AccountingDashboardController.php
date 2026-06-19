@@ -1063,11 +1063,13 @@ class AccountingDashboardController extends Controller
 
         $query = Order::query()
             ->with([
-                'customer:id,name',
+                'customer:id,name,address,delivery_time',
                 'user:id,name',
-                'items:id,order_id,product_id,product_variant_id,quantity',
-                'items.product:id,name',
-                'items.variant:id,name',
+                'shipper:id,name',
+                'warehouse:id,name',
+                'items.product.avatar.media',
+                'items.variant.avatar.media',
+                'accountingReconciliation.confirmer:id,name',
                 'adjustments' => function ($q) {
                     $q->with(['requester:id,name', 'items.variant.product'])
                       ->whereIn('status', [
