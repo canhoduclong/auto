@@ -23,6 +23,11 @@
         ?: ($transaction->request_department ?: ($config['label'] ?? '-'));
 
     $companyName = Setting::get('company_legal_name', Setting::get('brand_name', 'CÔNG TY CỔ PHẦN THỰC PHẨM HOÀNG LONG TNT'));
+    $companyDisplayName = str_replace(
+        'CÔNG TY CỔ PHẦN THỰC PHẨM HOÀNG LONG TNT',
+        "CÔNG TY CỔ PHẦN THỰC PHẨM\nHOÀNG LONG TNT",
+        $companyName
+    );
     $amountText = function (float $amount): string {
         $number = (int) round($amount);
         if ($number === 0) {
@@ -278,7 +283,7 @@
     <main class="page">
         <div class="top">
             <div class="company-block">
-                <div class="company">{{ $companyName }}</div>
+                <div class="company">{!! nl2br(e($companyDisplayName)) !!}</div>
                 <div class="voucher-no"><strong>Số phiếu:</strong> #{{ $transaction->id }}</div>
             </div>
             <div class="form-code">
