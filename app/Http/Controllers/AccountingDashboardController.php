@@ -98,17 +98,29 @@ class AccountingDashboardController extends Controller
                 ->where('type', 'payment')
                 ->max('created_at');
 
-            $dueDate = Order::query()
+            $firstOrderDebtAt = Order::query()
                 ->where('customer_id', $customer->id)
-                ->whereDate('created_at', '>=', now()->subMonths(6)->toDateString())
                 ->min('created_at');
+
+            $firstAdjustmentDebtAt = Transaction::query()
+                ->where('customer_id', $customer->id)
+                ->whereIn('type', $this->customerDebtAdjustmentTypes())
+                ->min('created_at');
+
+            $firstDebtAt = collect([$firstOrderDebtAt, $firstAdjustmentDebtAt])
+                ->filter()
+                ->map(fn ($date) => Carbon::parse($date))
+                ->sort()
+                ->first();
 
             return [
                 'customer' => $customer,
                 'debt' => $debt,
                 'debt_increase' => $summary['debt_increase'],
                 'payments' => $summary['payments'],
-                'due_date' => $dueDate ? Carbon::parse($dueDate)->addDays(7) : null,
+                'due_date' => $firstDebtAt ? $firstDebtAt->copy()->addDays(7) : null,
+                'first_debt_at' => $firstDebtAt,
+                'unpaid_days' => $debt > 0 && $firstDebtAt ? $firstDebtAt->diffInDays(now()) : 0,
                 'status' => $debt <= 0 ? 'Đã thanh toán' : 'Còn nợ',
                 'payment_history' => $lastPaymentAt ? ('Lần gần nhất: ' . Carbon::parse($lastPaymentAt)->format('d/m/Y H:i')) : 'Chưa có thanh toán',
             ];
@@ -126,11 +138,28 @@ class AccountingDashboardController extends Controller
     {
         $customer->loadMissing(['assignedTo:id,name']);
 
-        $summary = $this->customerDebtSummary($customer);
+        $fromDate = $request->filled('from_date')
+            ? Carbon::parse($request->input('from_date'))->startOfDay()
+            : null;
+        $toDate = $request->filled('to_date')
+            ? Carbon::parse($request->input('to_date'))->endOfDay()
+            : null;
+
+        if ($fromDate && $toDate && $fromDate->gt($toDate)) {
+            [$fromDate, $toDate] = [$toDate->copy()->startOfDay(), $fromDate->copy()->endOfDay()];
+        }
+
+        $summary = $this->customerDebtSummary($customer, $fromDate, $toDate);
 
         $orders = Order::query()
             ->where('customer_id', $customer->id)
-            ->with(['transactions' => fn ($query) => $query->whereIn('type', ['payment', 'refund'])])
+            ->when($fromDate, fn ($query) => $query->where('created_at', '>=', $fromDate))
+            ->when($toDate, fn ($query) => $query->where('created_at', '<=', $toDate))
+            ->with([
+                'items.product',
+                'items.variant.product',
+                'transactions' => fn ($query) => $query->whereIn('type', ['payment', 'refund']),
+            ])
             ->latest()
             ->get();
 
@@ -148,12 +177,27 @@ class AccountingDashboardController extends Controller
                 'paid' => $paid,
                 'remaining' => max($total - $paid, 0),
                 'url' => route('orders.show', $order),
+                'items' => $order->items->map(function ($item): array {
+                    $variant = $item->variant;
+                    $product = $item->product ?? $variant?->product;
+
+                    return [
+                        'product_name' => $product?->name ?: '-',
+                        'size' => $variant?->size ?: ($variant?->name ?: ($variant?->sku ?: '-')),
+                        'quantity' => (float) ($item->quantity ?? 0),
+                        'weight' => (float) ($item->total_weight ?? $item->display_total_value ?? 0),
+                        'price' => (float) ($item->price ?? 0),
+                        'total' => (float) ($item->total ?? ((float) ($item->price ?? 0) * (float) ($item->quantity ?? 0))),
+                    ];
+                })->values(),
             ];
         });
 
         $adjustments = Transaction::query()
             ->where('customer_id', $customer->id)
             ->whereIn('type', $this->customerDebtAdjustmentTypes())
+            ->when($fromDate, fn ($query) => $query->where('created_at', '>=', $fromDate))
+            ->when($toDate, fn ($query) => $query->where('created_at', '<=', $toDate))
             ->latest()
             ->get()
             ->map(function (Transaction $transaction): array {
@@ -165,6 +209,7 @@ class AccountingDashboardController extends Controller
                     'paid' => 0.0,
                     'remaining' => (float) $transaction->amount,
                     'url' => null,
+                    'items' => collect(),
                 ];
             });
 
@@ -176,6 +221,8 @@ class AccountingDashboardController extends Controller
         $payments = Transaction::query()
             ->where('customer_id', $customer->id)
             ->where('type', 'payment')
+            ->when($fromDate, fn ($query) => $query->where('created_at', '>=', $fromDate))
+            ->when($toDate, fn ($query) => $query->where('created_at', '<=', $toDate))
             ->with('order:id,code')
             ->latest()
             ->get();
@@ -185,6 +232,8 @@ class AccountingDashboardController extends Controller
             'summary' => $summary,
             'debtIncreases' => $debtIncreases,
             'payments' => $payments,
+            'fromDate' => $fromDate,
+            'toDate' => $toDate,
         ]);
     }
 
@@ -233,25 +282,33 @@ class AccountingDashboardController extends Controller
         return ['customer_opening_debt', 'customer_debt_adjustment'];
     }
 
-    private function customerDebtSummary(Customer $customer): array
+    private function customerDebtSummary(Customer $customer, ?Carbon $fromDate = null, ?Carbon $toDate = null): array
     {
         $ordersTotal = (float) Order::query()
             ->where('customer_id', $customer->id)
+            ->when($fromDate, fn ($query) => $query->where('created_at', '>=', $fromDate))
+            ->when($toDate, fn ($query) => $query->where('created_at', '<=', $toDate))
             ->sum('total');
 
         $adjustmentsTotal = (float) Transaction::query()
             ->where('customer_id', $customer->id)
             ->whereIn('type', $this->customerDebtAdjustmentTypes())
+            ->when($fromDate, fn ($query) => $query->where('created_at', '>=', $fromDate))
+            ->when($toDate, fn ($query) => $query->where('created_at', '<=', $toDate))
             ->sum('amount');
 
         $paymentsTotal = (float) Transaction::query()
             ->where('customer_id', $customer->id)
             ->where('type', 'payment')
+            ->when($fromDate, fn ($query) => $query->where('created_at', '>=', $fromDate))
+            ->when($toDate, fn ($query) => $query->where('created_at', '<=', $toDate))
             ->sum('amount');
 
         $refundsTotal = (float) Transaction::query()
             ->where('customer_id', $customer->id)
             ->where('type', 'refund')
+            ->when($fromDate, fn ($query) => $query->where('created_at', '>=', $fromDate))
+            ->when($toDate, fn ($query) => $query->where('created_at', '<=', $toDate))
             ->sum('amount');
 
         $debtIncrease = $ordersTotal + $adjustmentsTotal + $refundsTotal;
