@@ -90,12 +90,8 @@ class AccountingDashboardController extends Controller
         $customers = $query->paginate(20)->appends($request->query());
 
         $rows = $customers->getCollection()->map(function (Customer $customer) {
-            $debt = Schema::hasColumn('orders', 'amount_due')
-                ? (float) Order::query()
-                    ->where('customer_id', $customer->id)
-                    ->where('amount_due', '>', 0)
-                    ->sum('amount_due')
-                : 0.0;
+            $summary = $this->customerDebtSummary($customer);
+            $debt = $summary['current_debt'];
 
             $lastPaymentAt = Transaction::query()
                 ->where('customer_id', $customer->id)
@@ -110,11 +106,13 @@ class AccountingDashboardController extends Controller
             return [
                 'customer' => $customer,
                 'debt' => $debt,
+                'debt_increase' => $summary['debt_increase'],
+                'payments' => $summary['payments'],
                 'due_date' => $dueDate ? Carbon::parse($dueDate)->addDays(7) : null,
-                'status' => $debt <= 0 ? 'Da thanh toan' : 'Con no',
-                'payment_history' => $lastPaymentAt ? ('Lan gan nhat: ' . Carbon::parse($lastPaymentAt)->format('d/m/Y H:i')) : 'Chua co thanh toan',
+                'status' => $debt <= 0 ? 'Đã thanh toán' : 'Còn nợ',
+                'payment_history' => $lastPaymentAt ? ('Lần gần nhất: ' . Carbon::parse($lastPaymentAt)->format('d/m/Y H:i')) : 'Chưa có thanh toán',
             ];
-        })->filter(fn ($row) => $row['debt'] > 0)->values();
+        })->values();
 
         return view('accounting.customer_debts', [
             'customers' => $customers,
@@ -122,6 +120,150 @@ class AccountingDashboardController extends Controller
             'keyword' => (string) $request->input('keyword', ''),
             'totalDebt' => $rows->sum('debt'),
         ]);
+    }
+
+    public function customerDebtShow(Request $request, Customer $customer)
+    {
+        $customer->loadMissing(['assignedTo:id,name']);
+
+        $summary = $this->customerDebtSummary($customer);
+
+        $orders = Order::query()
+            ->where('customer_id', $customer->id)
+            ->with(['transactions' => fn ($query) => $query->whereIn('type', ['payment', 'refund'])])
+            ->latest()
+            ->get();
+
+        $orderDebtRows = $orders->map(function (Order $order): array {
+            $payments = (float) $order->transactions->where('type', 'payment')->sum('amount');
+            $refunds = (float) $order->transactions->where('type', 'refund')->sum('amount');
+            $paid = max($payments - $refunds, 0);
+            $total = (float) ($order->total ?? 0);
+
+            return [
+                'date' => $order->created_at,
+                'label' => $order->code ?: ('#' . $order->id),
+                'description' => $order->note ?: 'Phát sinh công nợ theo đơn hàng',
+                'amount' => $total,
+                'paid' => $paid,
+                'remaining' => max($total - $paid, 0),
+                'url' => route('orders.show', $order),
+            ];
+        });
+
+        $adjustments = Transaction::query()
+            ->where('customer_id', $customer->id)
+            ->whereIn('type', $this->customerDebtAdjustmentTypes())
+            ->latest()
+            ->get()
+            ->map(function (Transaction $transaction): array {
+                return [
+                    'date' => $transaction->created_at,
+                    'label' => $transaction->type === 'customer_opening_debt' ? 'Công nợ đầu kỳ' : 'Công nợ bổ sung',
+                    'description' => $transaction->note ?: '-',
+                    'amount' => (float) $transaction->amount,
+                    'paid' => 0.0,
+                    'remaining' => (float) $transaction->amount,
+                    'url' => null,
+                ];
+            });
+
+        $debtIncreases = $orderDebtRows
+            ->concat($adjustments)
+            ->sortByDesc(fn (array $row) => optional($row['date'])->timestamp ?? 0)
+            ->values();
+
+        $payments = Transaction::query()
+            ->where('customer_id', $customer->id)
+            ->where('type', 'payment')
+            ->with('order:id,code')
+            ->latest()
+            ->get();
+
+        return view('accounting.customer_debt_show', [
+            'customer' => $customer,
+            'summary' => $summary,
+            'debtIncreases' => $debtIncreases,
+            'payments' => $payments,
+        ]);
+    }
+
+    public function customerDebtAdjustmentStore(Request $request, Customer $customer)
+    {
+        $rawAmount = str_replace(['.', ',', ' '], '', (string) $request->input('amount', ''));
+        $request->merge(['amount' => $rawAmount]);
+
+        $validated = $request->validate([
+            'adjustment_type' => ['required', 'in:opening,additional'],
+            'amount' => ['required', 'numeric', 'min:1000'],
+            'effective_date' => ['nullable', 'date'],
+            'note' => ['required', 'string', 'max:255'],
+        ]);
+
+        $createdAt = !empty($validated['effective_date'])
+            ? Carbon::parse($validated['effective_date'])->setTimeFrom(now())
+            : now();
+
+        $transaction = Transaction::create([
+            'customer_id' => $customer->id,
+            'amount' => round((float) $validated['amount'], 2),
+            'type' => $validated['adjustment_type'] === 'opening'
+                ? 'customer_opening_debt'
+                : 'customer_debt_adjustment',
+            'method' => $validated['adjustment_type'],
+            'note' => $validated['note'],
+            'submitted_by' => auth()->id(),
+            'status' => Transaction::STATUS_APPROVED,
+            'approved_by' => auth()->id(),
+            'approved_at' => now(),
+        ]);
+
+        $transaction->forceFill([
+            'created_at' => $createdAt,
+            'updated_at' => now(),
+        ])->save();
+
+        return redirect()
+            ->route(accounting_route_name('customer-debts.show'), $customer)
+            ->with('success', 'Đã cập nhật công nợ khách hàng.');
+    }
+
+    private function customerDebtAdjustmentTypes(): array
+    {
+        return ['customer_opening_debt', 'customer_debt_adjustment'];
+    }
+
+    private function customerDebtSummary(Customer $customer): array
+    {
+        $ordersTotal = (float) Order::query()
+            ->where('customer_id', $customer->id)
+            ->sum('total');
+
+        $adjustmentsTotal = (float) Transaction::query()
+            ->where('customer_id', $customer->id)
+            ->whereIn('type', $this->customerDebtAdjustmentTypes())
+            ->sum('amount');
+
+        $paymentsTotal = (float) Transaction::query()
+            ->where('customer_id', $customer->id)
+            ->where('type', 'payment')
+            ->sum('amount');
+
+        $refundsTotal = (float) Transaction::query()
+            ->where('customer_id', $customer->id)
+            ->where('type', 'refund')
+            ->sum('amount');
+
+        $debtIncrease = $ordersTotal + $adjustmentsTotal + $refundsTotal;
+
+        return [
+            'orders_total' => $ordersTotal,
+            'adjustments_total' => $adjustmentsTotal,
+            'refunds_total' => $refundsTotal,
+            'debt_increase' => $debtIncrease,
+            'payments' => $paymentsTotal,
+            'current_debt' => max($debtIncrease - $paymentsTotal, 0),
+        ];
     }
 
     public function supplierDebts(Request $request)
