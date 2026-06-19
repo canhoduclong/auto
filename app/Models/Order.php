@@ -5,6 +5,7 @@ use App\Models\ApprovalOrder;
 use App\Models\OrderHistory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Schema;
 
 class Order extends Model
 {
@@ -65,6 +66,33 @@ class Order extends Model
         static::creating(function (Order $order): void {
             $order->delivery_date ??= now()->addDay()->toDateString();
             $order->shipper_id ??= $order->resolveDefaultShipperId();
+        });
+
+        // Công nợ đơn hàng chỉ được ghi nhận sau khi kế toán xác nhận đối soát.
+        // Chặn mọi luồng cập nhật tổng tiền/thanh toán vô tình làm phát sinh nợ sớm.
+        static::saving(function (Order $order): void {
+            if (!$order->isDirty('amount_due')) {
+                return;
+            }
+
+            $recognizedRevenue = Schema::hasTable('accounting_reconciliations') && $order->exists
+                ? AccountingReconciliation::query()
+                    ->where('order_id', $order->getKey())
+                    ->where('status', AccountingReconciliation::STATUS_CONFIRMED)
+                    ->value('recognized_revenue')
+                : null;
+
+            if ($recognizedRevenue === null) {
+                $order->amount_due = 0;
+
+                return;
+            }
+
+            $effectivePaid = max(
+                (float) ($order->amount_paid ?? 0),
+                (float) ($order->collected_amount ?? 0)
+            );
+            $order->amount_due = max(0, (float) $recognizedRevenue - $effectivePaid);
         });
     }
 

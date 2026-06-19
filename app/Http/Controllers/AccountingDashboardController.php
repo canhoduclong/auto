@@ -1701,6 +1701,7 @@ class AccountingDashboardController extends Controller
         DB::transaction(function () use ($order, $request, $validated, &$reconciliation): void {
             $returnAmount = $this->returnAmountForOrder($order);
             $recognizedRevenue = $this->recognizedRevenueForOrder($order);
+            $effectivePaid = $this->effectivePaidForOrder($order);
 
             $reconciliation = AccountingReconciliation::query()->updateOrCreate(
                 ['order_id' => $order->id],
@@ -1708,7 +1709,7 @@ class AccountingDashboardController extends Controller
                     'sale_id' => $order->user_id,
                     'shipper_id' => $order->shipper_id,
                     'total_amount' => (float) ($order->total ?? 0),
-                    'paid_amount' => $this->effectivePaidForOrder($order),
+                    'paid_amount' => $effectivePaid,
                     'shipping_fee' => (float) ($order->shipping_fee ?? 0),
                     'return_amount' => $returnAmount,
                     'recognized_revenue' => $recognizedRevenue,
@@ -1718,6 +1719,17 @@ class AccountingDashboardController extends Controller
                     'note' => $validated['note'] ?? null,
                 ]
             );
+
+            $amountDue = max(0, $recognizedRevenue - $effectivePaid);
+            $order->forceFill([
+                'status' => Order::STATUS_COMPLETED,
+                'amount_due' => $amountDue,
+                'payment_status' => match (true) {
+                    $amountDue <= 0.0001 => 'paid',
+                    $effectivePaid > 0 => 'partially_paid',
+                    default => 'unpaid',
+                },
+            ])->save();
 
             $this->createCommissionForCompletedOrder($order, $recognizedRevenue, (int) $request->user()->id);
         });
@@ -1985,10 +1997,6 @@ class AccountingDashboardController extends Controller
             return [false, 'Don chua giao thanh cong.'];
         }
 
-        if ($this->effectiveDueForOrder($order) > 0) {
-            return [false, 'Thanh toan cua don chua hop le hoac con thieu.'];
-        }
-
         $pendingReturn = $order->returnRecords
             ->filter(fn ($return) => !in_array((string) $return->status, ['warehouse_confirmed', 'completed', 'cancelled', 'rejected'], true))
             ->first();
@@ -2020,16 +2028,14 @@ class AccountingDashboardController extends Controller
 
     private function effectiveDueForOrder(Order $order): float
     {
-        return max(0, (float) ($order->total ?? 0) - $this->effectivePaidForOrder($order));
+        return max(0, $this->recognizedRevenueForOrder($order) - $this->effectivePaidForOrder($order));
     }
 
     private function recognizedRevenueForOrder(Order $order): float
     {
-        $paidAmount = $this->effectivePaidForOrder($order);
         $orderTotal = (float) ($order->total ?? 0);
-        $baseAmount = min($paidAmount, $orderTotal);
 
-        return max(0, $baseAmount - $this->returnAmountForOrder($order));
+        return max(0, $orderTotal - $this->returnAmountForOrder($order));
     }
 
     private function createCommissionForCompletedOrder(Order $order, ?float $recognizedRevenue = null, ?int $confirmedBy = null): void

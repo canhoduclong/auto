@@ -76,7 +76,7 @@ class OrderService
 
             $order->update([
                 'total' => $total,
-                'amount_due' => $total,
+                'amount_due' => 0,
             ]);
 
             $this->approvalService->initOrderApproval($order);
