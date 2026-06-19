@@ -114,6 +114,7 @@ class AccountingDashboardController extends Controller
 
             $firstOrderDebtAt = Order::query()
                 ->where('customer_id', $customer->id)
+                ->whereHas('accountingReconciliation', fn ($query) => $query->where('status', AccountingReconciliation::STATUS_CONFIRMED))
                 ->when($fromDate, fn ($query) => $query->where('created_at', '>=', $fromDate))
                 ->when($toDate, fn ($query) => $query->where('created_at', '<=', $toDate))
                 ->min('created_at');
@@ -127,6 +128,7 @@ class AccountingDashboardController extends Controller
 
             $latestOrderDebtAt = Order::query()
                 ->where('customer_id', $customer->id)
+                ->whereHas('accountingReconciliation', fn ($query) => $query->where('status', AccountingReconciliation::STATUS_CONFIRMED))
                 ->when($fromDate, fn ($query) => $query->where('created_at', '>=', $fromDate))
                 ->when($toDate, fn ($query) => $query->where('created_at', '<=', $toDate))
                 ->max('created_at');
@@ -250,12 +252,14 @@ class AccountingDashboardController extends Controller
 
         $orders = Order::query()
             ->where('customer_id', $customer->id)
+            ->whereHas('accountingReconciliation', fn ($query) => $query->where('status', AccountingReconciliation::STATUS_CONFIRMED))
             ->when($fromDate, fn ($query) => $query->where('created_at', '>=', $fromDate))
             ->when($toDate, fn ($query) => $query->where('created_at', '<=', $toDate))
             ->with([
                 'items.product',
                 'items.variant.product',
                 'transactions' => fn ($query) => $query->whereIn('type', ['payment', 'refund']),
+                'accountingReconciliation',
             ])
             ->latest()
             ->get();
@@ -264,7 +268,7 @@ class AccountingDashboardController extends Controller
             $payments = (float) $order->transactions->where('type', 'payment')->sum('amount');
             $refunds = (float) $order->transactions->where('type', 'refund')->sum('amount');
             $paid = max($payments - $refunds, 0);
-            $total = (float) ($order->total ?? 0);
+            $total = (float) ($order->accountingReconciliation?->recognized_revenue ?? 0);
 
             return [
                 'date' => $order->created_at,
@@ -318,6 +322,10 @@ class AccountingDashboardController extends Controller
         $payments = Transaction::query()
             ->where('customer_id', $customer->id)
             ->where('type', 'payment')
+            ->where(function ($query): void {
+                $query->whereNull('order_id')
+                    ->orWhereHas('order.accountingReconciliation', fn ($reconciliation) => $reconciliation->where('status', AccountingReconciliation::STATUS_CONFIRMED));
+            })
             ->when($fromDate, fn ($query) => $query->where('created_at', '>=', $fromDate))
             ->when($toDate, fn ($query) => $query->where('created_at', '<=', $toDate))
             ->with('order:id,code')
@@ -465,11 +473,14 @@ class AccountingDashboardController extends Controller
 
     private function customerDebtSummary(Customer $customer, ?Carbon $fromDate = null, ?Carbon $toDate = null): array
     {
-        $ordersTotal = (float) Order::query()
-            ->where('customer_id', $customer->id)
-            ->when($fromDate, fn ($query) => $query->where('created_at', '>=', $fromDate))
-            ->when($toDate, fn ($query) => $query->where('created_at', '<=', $toDate))
-            ->sum('total');
+        $ordersTotal = (float) AccountingReconciliation::query()
+            ->where('status', AccountingReconciliation::STATUS_CONFIRMED)
+            ->whereHas('order', function ($query) use ($customer, $fromDate, $toDate): void {
+                $query->where('customer_id', $customer->id)
+                    ->when($fromDate, fn ($orderQuery) => $orderQuery->where('created_at', '>=', $fromDate))
+                    ->when($toDate, fn ($orderQuery) => $orderQuery->where('created_at', '<=', $toDate));
+            })
+            ->sum('recognized_revenue');
 
         $adjustmentsTotal = (float) Transaction::query()
             ->where('customer_id', $customer->id)
@@ -481,6 +492,10 @@ class AccountingDashboardController extends Controller
         $paymentsTotal = (float) Transaction::query()
             ->where('customer_id', $customer->id)
             ->where('type', 'payment')
+            ->where(function ($query): void {
+                $query->whereNull('order_id')
+                    ->orWhereHas('order.accountingReconciliation', fn ($reconciliation) => $reconciliation->where('status', AccountingReconciliation::STATUS_CONFIRMED));
+            })
             ->when($fromDate, fn ($query) => $query->where('created_at', '>=', $fromDate))
             ->when($toDate, fn ($query) => $query->where('created_at', '<=', $toDate))
             ->sum('amount');
@@ -488,6 +503,7 @@ class AccountingDashboardController extends Controller
         $refundsTotal = (float) Transaction::query()
             ->where('customer_id', $customer->id)
             ->where('type', 'refund')
+            ->whereHas('order.accountingReconciliation', fn ($query) => $query->where('status', AccountingReconciliation::STATUS_CONFIRMED))
             ->when($fromDate, fn ($query) => $query->where('created_at', '>=', $fromDate))
             ->when($toDate, fn ($query) => $query->where('created_at', '<=', $toDate))
             ->sum('amount');
