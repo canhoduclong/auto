@@ -434,53 +434,6 @@
                                 </ul>
                             </div> 
 
-                            @if(!$isPackedReadonly && $canProcessThisOrder)
-                                <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.logistics', $order) }}" method="POST" class="mt-2 js-logistics-fee-form js-packing-only {{ $isPacking ? '' : 'd-none' }}">
-                                    @csrf
-                                    <div class="row g-2">
-                                        <div class="col-6">
-                                            <label class="wh-meta-label mb-1">Phí ship</label>
-                                            <input type="number" name="shipping_fee" class="form-control form-control-sm"
-                                                   value="{{ number_format((float) ($order->shipping_fee ?? 0), 2, '.', '') }}"
-                                                   min="0" step="0.01">
-                                        </div>
-                                        <div class="col-6">
-                                            <label class="wh-meta-label mb-1">Giá thùng xốp</label>
-                                            <input type="number" name="foam_box_price" class="form-control form-control-sm"
-                                                   value="{{ number_format((float) ($order->foam_box_price ?? 0), 2, '.', '') }}"
-                                                   min="0" step="0.01">
-                                        </div>
-                                        <div class="col-6 d-flex align-items-end">
-                                            <div class="form-check mb-1">
-                                                <input type="hidden" name="charge_shipping_fee" value="0">
-                                                <input class="form-check-input" type="checkbox" name="charge_shipping_fee" value="1"
-                                                       id="charge_shipping_fee_{{ $order->id }}"
-                                                       {{ ($order->charge_shipping_fee ?? true) ? 'checked' : '' }}>
-                                                <label class="form-check-label" for="charge_shipping_fee_{{ $order->id }}">
-                                                    Tính ship
-                                                </label>
-                                            </div>
-                                        </div>
-                                        <div class="col-6 d-flex align-items-end">
-                                            <div class="form-check mb-1">
-                                                <input type="hidden" name="charge_foam_box_fee" value="0">
-                                                <input class="form-check-input" type="checkbox" name="charge_foam_box_fee" value="1"
-                                                       id="charge_foam_box_fee_{{ $order->id }}"
-                                                       {{ ($order->charge_foam_box_fee ?? false) ? 'checked' : '' }}>
-                                                <label class="form-check-label" for="charge_foam_box_fee_{{ $order->id }}">
-                                                    Thêm thùng xốp
-                                                </label>
-                                            </div>
-                                        </div>
-                                        <div class="col-12 d-grid">
-                                            <button class="btn btn-sm wh-warning-action-btn js-logistics-submit-btn" type="submit">
-                                                <i class="bi bi-save2 me-1"></i>Lưu phí giao hàng / thùng xốp
-                                            </button>
-                                        </div>
-                                    </div>
-                                </form>
-                            @endif
-
                             @if(!$isPackedReadonly && $canProcessThisOrder && !$isPacking)
                                 <details class="mt-3 border rounded p-2 bg-light">
                                     <summary class="fw-semibold">
@@ -564,22 +517,6 @@
                                     <div class="col-6">
                                         <div class="wh-meta-label">Kg thực tế</div>
                                         <div class="wh-meta-value text-primary">{{ $order->actual_weight !== null ? $formatKg((float) $order->actual_weight) : '—' }}</div>
-                                    </div>
-                                    <div class="col-6">
-                                        <div class="wh-meta-label">Phí ship</div>
-                                        <div class="wh-meta-value text-info">{{ $order->shipping_fee !== null ? number_format((float) $order->shipping_fee) . 'đ' : '—' }}</div>
-                                    </div>
-                                    <div class="col-6">
-                                        <div class="wh-meta-label">Tính phí ship</div>
-                                        <div class="wh-meta-value">{{ ($order->charge_shipping_fee ?? true) ? 'Có' : 'Không' }}</div>
-                                    </div>
-                                    <div class="col-6">
-                                        <div class="wh-meta-label">Thùng xốp</div>
-                                        <div class="wh-meta-value">{{ ($order->charge_foam_box_fee ?? false) ? 'Có' : 'Không' }}</div>
-                                    </div>
-                                    <div class="col-6">
-                                        <div class="wh-meta-label">Giá thùng xốp</div>
-                                        <div class="wh-meta-value text-info">{{ $order->foam_box_price !== null ? number_format((float) $order->foam_box_price) . 'đ' : '—' }}</div>
                                     </div>
                                     <div class="col-6">
                                         <div class="wh-meta-label">Trạng thái</div>

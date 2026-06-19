@@ -89,17 +89,21 @@
                                 @foreach($currentUser->roles as $role)
                                     @php
                                         $roleName = strtolower((string) $role->name);
-                                        if (in_array($roleName, ['accountant', 'accounting'], true)) {
-                                            continue;
-                                        }
                                         $isActive = strtolower(session('active_role')) === strtolower($role->name);
+                                        $roleLabel = match ($roleName) {
+                                            'account', 'accountant', 'accounting' => 'Kế toán',
+                                            'package' => 'Đóng hàng',
+                                            'warehouse' => 'Kho',
+                                            'manager_shipper' => 'Điều phối ship',
+                                            default => ucfirst($role->name),
+                                        };
                                     @endphp
                                     <form action="{{ route('role.switch', $role->name) }}" method="POST" class="d-grid">
                                         @csrf
                                         <button type="submit" 
                                             class="btn btn-sm {{ $isActive ? 'btn-primary' : 'btn-outline-secondary' }} text-start"
                                             title="Chuyển sang vai trò {{ $role->name }}">
-                                            <i class="ph {{ $isActive ? 'ph-check-circle' : 'ph-circle' }} me-2"></i>{{ ucfirst($role->name) }}
+                                            <i class="ph {{ $isActive ? 'ph-check-circle' : 'ph-circle' }} me-2"></i>{{ $roleLabel }}
                                         </button>
                                     </form>
                                 @endforeach
@@ -241,5 +245,4 @@
 </script>
 </body>
 </html>
-
 

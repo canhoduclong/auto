@@ -200,7 +200,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/requests/{transaction}/print', [DepartmentFinanceRequestController::class, 'managerPrint'])->name('finance-requests.print');
     });
 
-    Route::prefix('accounting')->name('accounting.')->middleware('role:accountant,accounting,admin')->group(function () {
+    Route::prefix('accounting')->name('accounting.')->middleware('role:account,accountant,accounting,admin')->group(function () {
         Route::get('/', [AccountingDashboardController::class, 'index'])->name('dashboard');
         Route::get('/orders', [AccountingDashboardController::class, 'orders'])->name('orders');
         Route::get('/customer-debts', [AccountingDashboardController::class, 'customerDebts'])->name('customer-debts');

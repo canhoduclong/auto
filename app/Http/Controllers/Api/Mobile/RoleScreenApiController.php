@@ -798,7 +798,7 @@ class RoleScreenApiController extends BaseApiController
         $allowed = match ($layout) {
             'warehouse' => $user->hasRole('warehouse') || $user->hasRole('admin'),
             'sale' => $user->hasRole('sale') || $user->hasRole('leader') || $user->hasRole('leader_sale') || $user->hasRole('sale_manager') || $user->hasRole('manager') || $user->hasRole('manager_sale') || $user->hasRole('admin'),
-            'accounting' => $user->hasRole('accounting') || $user->hasRole('accountant') || $user->hasRole('admin'),
+            'accounting' => $user->hasRole('account') || $user->hasRole('accounting') || $user->hasRole('accountant') || $user->hasRole('admin'),
             'ceo' => $user->hasRole('ceo') || $user->hasRole('admin'),
             'manager_shipper' => $user->hasRole('manager_shipper') || $user->hasRole('admin'),
             'shipper' => $user->hasRole('shipper') || $user->hasRole('ship') || $user->hasRole('manager_shipper') || $user->hasRole('admin'),

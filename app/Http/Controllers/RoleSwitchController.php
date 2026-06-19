@@ -63,7 +63,7 @@ class RoleSwitchController extends Controller
 
     private function fallbackRouteForRole(string $role): string
     {
-        if (in_array($role, ['accountant', 'accounting'], true)) {
+        if (in_array($role, ['account', 'accountant', 'accounting'], true)) {
             return 'accounting.dashboard';
         }
 

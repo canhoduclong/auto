@@ -21,7 +21,7 @@ return [
             'description' => 'Dashboard ke toan.',
             'platform' => 'website',
             'route' => 'accounting.dashboard',
-            'role_hints' => ['accountant', 'accounting'],
+            'role_hints' => ['account', 'accountant', 'accounting'],
         ],
         'website_warehouse' => [
             'label' => 'Website / Warehouse',
@@ -72,7 +72,7 @@ return [
             'description' => 'Giao dien my_app cho ke toan.',
             'platform' => 'my_app',
             'route' => 'mobile.home',
-            'role_hints' => ['accountant', 'accounting'],
+            'role_hints' => ['account', 'accountant', 'accounting'],
             'mobile_layout' => 'accounting',
         ],
         'my_app_ceo' => [

@@ -75,18 +75,22 @@
 							@foreach(auth()->user()->roles as $role)
 								@php
 									$roleName = strtolower((string) $role->name);
-									if (in_array($roleName, ['accountant', 'accounting'], true)) {
-										continue;
-									}
 									$isActive = session('active_role') === $role->name || 
 										(session()->missing('active_role') && auth()->user()->roles->first()->name === $role->name);
+									$roleLabel = match ($roleName) {
+										'account', 'accountant', 'accounting' => 'Kế toán',
+										'package' => 'Đóng hàng',
+										'warehouse' => 'Kho',
+										'manager_shipper' => 'Điều phối ship',
+										default => ucfirst($role->name),
+									};
 								@endphp
 								<form action="{{ route('role.switch', $role->name) }}" method="POST" class="inline-block">
 									@csrf
 									<button type="submit" 
 										class="btn btn-sm {{ $isActive ? 'btn-primary' : 'btn-outline-secondary' }}"
 										title="Chuyển sang vai trò {{ $role->name }}">
-										{{ ucfirst($role->name) }}
+										{{ $roleLabel }}
 									</button>
 								</form>
 							@endforeach
@@ -213,7 +217,7 @@
 								<span>Quản trị danh mục giao dịch</span>
 							</a>
 						</li>
-						@elseif(auth()->user()?->hasRole('accountant') || auth()->user()?->hasRole('accounting'))
+						@elseif(auth()->user()?->hasRole('account') || auth()->user()?->hasRole('accountant') || auth()->user()?->hasRole('accounting'))
 						<li class="nav-item-header">
 							<div class="text-uppercase fs-sm lh-sm opacity-50 sidebar-resize-hide">Kế toán</div>
 							<i class="ph-dots-three sidebar-resize-show"></i>

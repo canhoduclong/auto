@@ -307,7 +307,7 @@
                         $roleName = strtolower((string) $role->name);
 
                         return match ($roleName) {
-                            'accountant', 'accounting' => [
+                            'account', 'accountant', 'accounting' => [
                                 'label' => 'Kế toán',
                                 'href' => url('/accounting'),
                             ],
@@ -434,10 +434,14 @@
                             @foreach($currentUser->roles as $role)
                                 @php
                                     $roleName = strtolower((string) $role->name);
-                                    if (in_array($roleName, ['accountant', 'accounting'], true)) {
-                                        continue;
-                                    }
                                     $isActive = strtolower(session('active_role')) === strtolower($role->name);
+                                    $roleLabel = match ($roleName) {
+                                        'account', 'accountant', 'accounting' => 'Kế toán',
+                                        'package' => 'Đóng hàng',
+                                        'warehouse' => 'Kho',
+                                        'manager_shipper' => 'Điều phối ship',
+                                        default => ucfirst($role->name),
+                                    };
                                 @endphp
                                 <li>
                                     <form action="{{ route('role.switch', $role->name) }}" method="POST" class="d-inline-block w-100">
@@ -447,11 +451,7 @@
                                             title="Chuyển sang vai trò {{ $role->name }}">
                                             <i class="bi {{ $isActive ? 'bi-check-circle-fill text-primary' : 'bi-circle' }}"></i>
                                             <span>
-                                                @if($roleName === 'package')
-                                                    Đóng hàng
-                                                @else
-                                                    {{ ucfirst($role->name) }}
-                                                @endif
+                                                {{ $roleLabel }}
                                             </span>
                                         </button>
                                     </form>

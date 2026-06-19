@@ -182,7 +182,7 @@
                                         @php
                                             $userRoles = $currentUser->roles()->pluck('name')->toArray();
                                             $dashboardUrl = null;
-                                            if (in_array('accountant', $userRoles) || in_array('accounting', $userRoles)) {
+                                            if (in_array('account', $userRoles) || in_array('accountant', $userRoles) || in_array('accounting', $userRoles)) {
                                                 $dashboardUrl = route('accounting.dashboard');
                                             } elseif (array_intersect($userRoles, ['sale', 'leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale'])) {
                                                 $dashboardUrl = route('pages.my_dashboard');
@@ -439,5 +439,4 @@
 </script>
 </body>
 </html>
-
 

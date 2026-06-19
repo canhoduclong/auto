@@ -1660,7 +1660,7 @@ class WarehouseDashboardController extends Controller
     }
 
     /**
-     * Warehouse updates actual package weight and shipping fee for an order.
+     * Warehouse/package updates actual packed item weight for an order.
      */
     public function updateLogistics(Request $request, Order $order)
     {
@@ -1685,11 +1685,11 @@ class WarehouseDashboardController extends Controller
             if ($expectsJson) {
                 return response()->json([
                     'ok' => false,
-                    'message' => 'Không thể cập nhật kg/phí ship ở trạng thái hiện tại của đơn hàng.',
+                    'message' => 'Không thể cập nhật kg thực tế ở trạng thái hiện tại của đơn hàng.',
                 ], 422);
             }
 
-            return back()->with('error', 'Không thể cập nhật kg/phí ship ở trạng thái hiện tại của đơn hàng.');
+            return back()->with('error', 'Không thể cập nhật kg thực tế ở trạng thái hiện tại của đơn hàng.');
         }
 
         $order->loadMissing('items');
@@ -1699,10 +1699,6 @@ class WarehouseDashboardController extends Controller
         $rules = [
             'item_id' => ['nullable', 'integer'],
             'item_actual_weight' => ['nullable', 'numeric', 'min:0'],
-            'charge_shipping_fee' => ['nullable', 'boolean'],
-            'shipping_fee'  => ['nullable', 'numeric', 'min:0', 'required_if:charge_shipping_fee,1'],
-            'charge_foam_box_fee' => ['nullable', 'boolean'],
-            'foam_box_price' => ['nullable', 'numeric', 'min:0', 'required_if:charge_foam_box_fee,1'],
         ];
 
         if ($request->filled('item_id')) {
@@ -1712,10 +1708,6 @@ class WarehouseDashboardController extends Controller
         $validated = $request->validate($rules);
 
         $oldWeight = $order->actual_weight;
-        $oldShippingFee = $order->shipping_fee;
-        $oldChargeShippingFee = $order->charge_shipping_fee;
-        $oldFoamBoxPrice = $order->foam_box_price;
-        $oldChargeFoamBoxFee = $order->charge_foam_box_fee;
 
         if ($request->filled('item_id')) {
             $itemId = (int) $validated['item_id'];
@@ -1742,32 +1734,10 @@ class WarehouseDashboardController extends Controller
             }
         }
 
-        $chargeShippingFee = $oldChargeShippingFee;
-        $shippingFee = (float) ($oldShippingFee ?? 0);
-        if ($request->has('charge_shipping_fee')) {
-            $chargeShippingFee = $request->boolean('charge_shipping_fee');
-            $shippingFee = $chargeShippingFee
-                ? round((float) ($validated['shipping_fee'] ?? 0), 2)
-                : 0.0;
-        }
-
-        $chargeFoamBoxFee = $oldChargeFoamBoxFee;
-        $foamBoxPrice = (float) ($oldFoamBoxPrice ?? 0);
-        if ($request->has('charge_foam_box_fee')) {
-            $chargeFoamBoxFee = $request->boolean('charge_foam_box_fee');
-            $foamBoxPrice = $chargeFoamBoxFee
-                ? round((float) ($validated['foam_box_price'] ?? 0), 2)
-                : 0.0;
-        }
-
         $actualWeight = round((float) $order->items()->sum('actual_weight'), 3);
 
         $order->update([
             'actual_weight' => $actualWeight,
-            'charge_shipping_fee' => $chargeShippingFee,
-            'shipping_fee' => $shippingFee,
-            'charge_foam_box_fee' => $chargeFoamBoxFee,
-            'foam_box_price' => $foamBoxPrice,
             // Keep total_weight aligned with real measured package weight in warehouse flow.
             'total_weight' => $actualWeight,
         ]);
@@ -1780,17 +1750,9 @@ class WarehouseDashboardController extends Controller
             'status_before' => $order->status,
             'status_after'  => $order->status,
             'note'          => sprintf(
-                'Cập nhật logistics: Kg thực tế %s → %s | Tính phí ship %s → %s | Phí ship %s → %s | Thùng xốp %s → %s | Giá thùng xốp %s → %s',
+                'Cập nhật Kg thực tế đóng hàng: %s → %s',
                 number_format((float) $oldWeight, 3, '.', ''),
-                number_format($actualWeight, 3, '.', ''),
-                ((bool) $oldChargeShippingFee) ? 'Có' : 'Không',
-                $chargeShippingFee ? 'Có' : 'Không',
-                number_format((float) $oldShippingFee, 2, '.', ''),
-                number_format($shippingFee, 2, '.', ''),
-                ((bool) $oldChargeFoamBoxFee) ? 'Có' : 'Không',
-                $chargeFoamBoxFee ? 'Có' : 'Không',
-                number_format((float) $oldFoamBoxPrice, 2, '.', ''),
-                number_format($foamBoxPrice, 2, '.', '')
+                number_format($actualWeight, 3, '.', '')
             ),
         ]);
 
@@ -1812,19 +1774,15 @@ class WarehouseDashboardController extends Controller
         if ($expectsJson) {
             return response()->json([
                 'ok' => true,
-                'message' => 'Đã cập nhật phí ship/thùng xốp cho đơn #' . $order->code,
+                'message' => 'Đã cập nhật Kg thực tế cho đơn #' . $order->code,
                 'order' => [
                     'id' => $order->id,
                     'actual_weight' => (float) $actualWeight,
-                    'shipping_fee' => (float) $shippingFee,
-                    'foam_box_price' => (float) $foamBoxPrice,
-                    'charge_shipping_fee' => (bool) $chargeShippingFee,
-                    'charge_foam_box_fee' => (bool) $chargeFoamBoxFee,
                 ],
             ]);
         }
 
-        return back()->with('success', 'Đã cập nhật phí ship/thùng xốp cho đơn #' . $order->code);
+        return back()->with('success', 'Đã cập nhật Kg thực tế cho đơn #' . $order->code);
     }
 
     public function requestAdjustment(Request $request, Order $order)
@@ -2135,11 +2093,11 @@ class WarehouseDashboardController extends Controller
             return back()->with('error', 'Đơn hàng không đang ở trạng thái Đang đóng gói.');
         }
 
-        if ($order->actual_weight === null || $order->shipping_fee === null) {
+        if ($order->actual_weight === null) {
             if ($request->expectsJson()) {
-                return response()->json(['ok' => false, 'message' => 'Vui lòng cập nhật Kg thực tế và phí ship trước khi hoàn thành đóng gói.'], 422);
+                return response()->json(['ok' => false, 'message' => 'Vui lòng cập nhật Kg thực tế trước khi hoàn thành đóng gói.'], 422);
             }
-            return back()->with('error', 'Vui lòng cập nhật Kg thực tế và phí ship trước khi hoàn thành đóng gói.');
+            return back()->with('error', 'Vui lòng cập nhật Kg thực tế trước khi hoàn thành đóng gói.');
         }
 
         $order->update(['status' => Order::STATUS_READY_TO_SHIP]);

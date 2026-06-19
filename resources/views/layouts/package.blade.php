@@ -125,6 +125,44 @@
             </div>
             <div class="d-flex align-items-center gap-3">
                 @php
+                    $currentUser = auth()->user();
+                @endphp
+                @if($currentUser->roles->count() > 1)
+                    <div class="dropdown">
+                        <button class="btn btn-outline-primary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-person-badge"></i> {{ ucfirst(session('active_role', 'Vai trò')) }}
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                            <li><h6 class="dropdown-header">Chọn vai trò</h6></li>
+                            <li><hr class="dropdown-divider"></li>
+                            @foreach($currentUser->roles as $role)
+                                @php
+                                    $roleName = strtolower((string) $role->name);
+                                    $isActive = strtolower(session('active_role')) === strtolower($role->name);
+                                    $roleLabel = match ($roleName) {
+                                        'account', 'accountant', 'accounting' => 'Kế toán',
+                                        'package' => 'Đóng hàng',
+                                        'warehouse' => 'Kho',
+                                        'manager_shipper' => 'Điều phối ship',
+                                        default => ucfirst($role->name),
+                                    };
+                                @endphp
+                                <li>
+                                    <form action="{{ route('role.switch', $role->name) }}" method="POST" class="d-inline-block w-100">
+                                        @csrf
+                                        <button type="submit"
+                                            class="dropdown-item d-flex align-items-center gap-2 {{ $isActive ? 'bg-light' : '' }}"
+                                            title="Chuyển sang vai trò {{ $roleLabel }}">
+                                            <i class="bi {{ $isActive ? 'bi-check-circle-fill text-primary' : 'bi-circle' }}"></i>
+                                            <span>{{ $roleLabel }}</span>
+                                        </button>
+                                    </form>
+                                </li>
+                            @endforeach
+                        </ul>
+                    </div>
+                @endif
+                @php
                     $packageNotifications = getWarehouseNotifications(auth()->user(), 7);
                 @endphp
                 <div class="dropdown">
