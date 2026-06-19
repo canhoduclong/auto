@@ -122,7 +122,21 @@
                         <tbody>
                             @forelse($debtIncreases as $row)
                                 <tr>
-                                    <td>{{ optional($row['date'])->format('d/m/Y') }}</td>
+                                    <td class="text-nowrap">
+                                        @if(!empty($row['url']))
+                                            <a href="{{ $row['url'] }}"
+                                               class="fw-semibold text-decoration-none"
+                                               target="_blank"
+                                               rel="noopener"
+                                               title="Xem chi tiết đơn hàng {{ $row['label'] }}">
+                                                {{ optional($row['date'])->format('d/m/Y') }}
+                                                <i class="bi bi-box-arrow-up-right ms-1 small" aria-hidden="true"></i>
+                                                <span class="visually-hidden">Xem chi tiết đơn hàng {{ $row['label'] }}</span>
+                                            </a>
+                                        @else
+                                            {{ optional($row['date'])->format('d/m/Y') }}
+                                        @endif
+                                    </td>
                                     <td>
                                         @if(empty($row['items']) || $row['items']->isEmpty())
                                             <div class="fw-semibold">
