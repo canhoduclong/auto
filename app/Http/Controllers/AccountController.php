@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Account;
 use App\Models\AccountAdjustment;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 
 class AccountController extends Controller
@@ -19,10 +20,25 @@ class AccountController extends Controller
 
     public function adjustmentHistory(Request $request)
     {
-        $accountId = (int) $request->input('account_id', 0);
-        $type = $request->input('type', '');
-        $fromDate = $request->input('from_date', '');
-        $toDate = $request->input('to_date', '');
+        $filters = $request->validate([
+            'account_id' => ['nullable', 'integer', 'exists:accounts,id'],
+            'type' => ['nullable', 'in:deposit,withdraw'],
+            'from_date' => ['nullable', 'date_format:Y-m-d'],
+            'to_date' => ['nullable', 'date_format:Y-m-d'],
+        ]);
+
+        $accountId = (int) ($filters['account_id'] ?? 0);
+        $type = (string) ($filters['type'] ?? '');
+        $fromDate = filled($filters['from_date'] ?? null)
+            ? Carbon::createFromFormat('Y-m-d', $filters['from_date'])->toDateString()
+            : null;
+        $toDate = filled($filters['to_date'] ?? null)
+            ? Carbon::createFromFormat('Y-m-d', $filters['to_date'])->toDateString()
+            : null;
+
+        if ($fromDate && $toDate && $fromDate > $toDate) {
+            [$fromDate, $toDate] = [$toDate, $fromDate];
+        }
 
         $currentAccountsQuery = Account::query()
             ->where('is_active', true)
@@ -38,8 +54,8 @@ class AccountController extends Controller
             ->with(['account:id,name,type', 'performer:id,name'])
             ->when($accountId > 0, fn ($q) => $q->where('account_id', $accountId))
             ->when(in_array($type, ['deposit', 'withdraw'], true), fn ($q) => $q->where('type', $type))
-            ->when($fromDate !== '', fn ($q) => $q->whereDate('created_at', '>=', $fromDate))
-            ->when($toDate !== '', fn ($q) => $q->whereDate('created_at', '<=', $toDate))
+            ->when($fromDate, fn ($q) => $q->whereDate('created_at', '>=', $fromDate))
+            ->when($toDate, fn ($q) => $q->whereDate('created_at', '<=', $toDate))
             ->latest()
             ->paginate(30)
             ->appends($request->query());
@@ -48,14 +64,14 @@ class AccountController extends Controller
         $totalDeposit = AccountAdjustment::query()
             ->where('type', 'deposit')
             ->when($accountId > 0, fn ($q) => $q->where('account_id', $accountId))
-            ->when($fromDate !== '', fn ($q) => $q->whereDate('created_at', '>=', $fromDate))
-            ->when($toDate !== '', fn ($q) => $q->whereDate('created_at', '<=', $toDate))
+            ->when($fromDate, fn ($q) => $q->whereDate('created_at', '>=', $fromDate))
+            ->when($toDate, fn ($q) => $q->whereDate('created_at', '<=', $toDate))
             ->sum('amount');
         $totalWithdraw = AccountAdjustment::query()
             ->where('type', 'withdraw')
             ->when($accountId > 0, fn ($q) => $q->where('account_id', $accountId))
-            ->when($fromDate !== '', fn ($q) => $q->whereDate('created_at', '>=', $fromDate))
-            ->when($toDate !== '', fn ($q) => $q->whereDate('created_at', '<=', $toDate))
+            ->when($fromDate, fn ($q) => $q->whereDate('created_at', '>=', $fromDate))
+            ->when($toDate, fn ($q) => $q->whereDate('created_at', '<=', $toDate))
             ->sum('amount');
 
         return view('accounting.accounts.adjustments', compact(
