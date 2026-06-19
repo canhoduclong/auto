@@ -50,10 +50,14 @@
     <div class="card-body">
         <div class="row g-3 align-items-end">
             <div class="col-lg-5">
+                <div class="mb-2">
+                    <div class="text-muted small">Loại công nợ hiện tại</div>
+                    <span class="badge {{ $currentDebtTypeMeta['class'] }} fs-6">{{ $currentDebtTypeMeta['label'] }}</span>
+                </div>
                 <form action="{{ accounting_route('customer-debts.debt-type.update', $customer) }}" method="POST" class="row g-2 align-items-end">
                     @csrf
                     <div class="col-md-7">
-                        <label class="form-label">Loại công nợ</label>
+                        <label class="form-label">Chọn loại công nợ khác</label>
                         <select name="debt_type" class="form-select">
                             @foreach($debtTypeOptions as $value => $label)
                                 <option value="{{ $value }}" @selected($currentDebtType === $value)>{{ $label }}</option>
@@ -61,7 +65,7 @@
                         </select>
                     </div>
                     <div class="col-md-5">
-                        <button class="btn btn-warning w-100">Đánh dấu</button>
+                        <button class="btn btn-warning w-100">Cập nhật</button>
                     </div>
                 </form>
             </div>

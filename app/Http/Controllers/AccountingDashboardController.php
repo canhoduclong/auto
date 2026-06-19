@@ -298,6 +298,7 @@ class AccountingDashboardController extends Controller
             'toDate' => $toDate,
             'debtTypeOptions' => $this->customerDebtTypeOptions(),
             'currentDebtType' => (string) ($customer->debt_type ?: 'normal'),
+            'currentDebtTypeMeta' => $this->customerDebtTypeMeta((string) ($customer->debt_type ?: 'normal')),
         ]);
     }
 
