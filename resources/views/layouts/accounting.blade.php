@@ -224,6 +224,9 @@
             <a href="{{ route('accounting.accounts.index') }}" class="{{ request()->routeIs('accounting.accounts.index') || request()->routeIs('accounting.accounts.create') || request()->routeIs('accounting.accounts.edit') ? 'active' : '' }}">
                 <i class="bi bi-wallet2"></i> Tài khoản
             </a>
+            <a href="{{ route('accounting.accounts.balance-history') }}" class="{{ request()->routeIs('accounting.accounts.balance-history') ? 'active' : '' }}" style="padding-left:2rem;font-size:13px">
+                <i class="bi bi-graph-up-down"></i> Lịch sử thay đổi số dư
+            </a>
             <a href="{{ route('accounting.accounts.adjustments') }}" class="{{ request()->routeIs('accounting.accounts.adjustments') ? 'active' : '' }}" style="padding-left:2rem;font-size:13px">
                 <i class="bi bi-clock-history"></i> Lịch sử nạp / rút tiền
             </a>

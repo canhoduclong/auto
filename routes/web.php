@@ -243,6 +243,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
 
         // Accounts management
         Route::get('/accounts', [\App\Http\Controllers\AccountController::class, 'index'])->name('accounts.index');
+        Route::get('/accounts/balance-history', [\App\Http\Controllers\AccountController::class, 'balanceHistory'])->name('accounts.balance-history');
         Route::get('/accounts/adjustments', [\App\Http\Controllers\AccountController::class, 'adjustmentHistory'])->name('accounts.adjustments');
         Route::get('/accounts/create', [\App\Http\Controllers\AccountController::class, 'create'])->name('accounts.create');
         Route::post('/accounts', [\App\Http\Controllers\AccountController::class, 'store'])->name('accounts.store');
