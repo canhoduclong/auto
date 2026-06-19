@@ -206,24 +206,24 @@
                 </div>
                 <div class="modal-body">
                     <div class="row g-3">
-                        <div class="col-md-6">
+                        <div class="col-12">
                             <label class="form-label">Loại công nợ</label>
                             <select name="adjustment_type" class="form-select" required>
                                 <option value="opening" @selected(old('adjustment_type') === 'opening')>Công nợ đầu kỳ</option>
                                 <option value="additional" @selected(old('adjustment_type') === 'additional')>Công nợ bổ sung</option>
                             </select>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-12">
                             <label class="form-label">Ngày ghi nhận</label>
                             <input type="date" name="effective_date" class="form-control" value="{{ old('effective_date', now()->toDateString()) }}">
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-12">
                             <label class="form-label">Số tiền</label>
                             <input type="text" name="amount" class="form-control" value="{{ old('amount') }}" placeholder="VD: 5.000.000" required>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-12">
                             <label class="form-label">Nội dung/Lý do</label>
-                            <input type="text" name="note" class="form-control" value="{{ old('note') }}" placeholder="Nhập lý do phát sinh công nợ" required>
+                            <textarea name="note" class="form-control" rows="6" placeholder="Nhập lý do phát sinh công nợ" required>{{ old('note') }}</textarea>
                         </div>
                     </div>
                 </div>
