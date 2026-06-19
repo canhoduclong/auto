@@ -48,7 +48,25 @@
 
 <div class="acc-card mb-3">
     <div class="card-body">
-        <form method="GET" class="row g-2 align-items-end">
+        <div class="row g-3 align-items-end">
+            <div class="col-lg-5">
+                <form action="{{ accounting_route('customer-debts.debt-type.update', $customer) }}" method="POST" class="row g-2 align-items-end">
+                    @csrf
+                    <div class="col-md-7">
+                        <label class="form-label">Loại công nợ</label>
+                        <select name="debt_type" class="form-select">
+                            @foreach($debtTypeOptions as $value => $label)
+                                <option value="{{ $value }}" @selected($currentDebtType === $value)>{{ $label }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="col-md-5">
+                        <button class="btn btn-warning w-100">Đánh dấu</button>
+                    </div>
+                </form>
+            </div>
+            <div class="col-lg-7">
+                <form method="GET" class="row g-2 align-items-end">
             <div class="col-md-3">
                 <label class="form-label">Từ ngày</label>
                 <input type="date" name="from_date" class="form-control" value="{{ old('from_date', $fromDate?->toDateString()) }}">
@@ -68,7 +86,9 @@
                     {{ $fromDate || $toDate ? 'Đang lọc theo ngày' : 'Tất cả thời gian' }}
                 </span>
             </div>
-        </form>
+                </form>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -92,27 +112,15 @@
                                 <tr>
                                     <td>{{ optional($row['date'])->format('d/m/Y') }}</td>
                                     <td>
-                                        <div class="fw-semibold">
-                                            @if($row['url'])
-                                                <a href="{{ $row['url'] }}">{{ $row['label'] }}</a>
-                                            @else
+                                        @if(empty($row['items']) || $row['items']->isEmpty())
+                                            <div class="fw-semibold">
                                                 {{ $row['label'] }}
-                                            @endif
-                                        </div>
-                                        <div class="text-muted small">{{ $row['description'] }}</div>
+                                            </div>
+                                            <div class="text-muted small">{{ $row['description'] }}</div>
+                                        @endif
                                         @if(!empty($row['items']) && $row['items']->isNotEmpty())
                                             <div class="table-responsive mt-2">
                                                 <table class="table table-bordered table-sm mb-0 small">
-                                                    <thead class="table-light">
-                                                        <tr>
-                                                            <th>Tên sản phẩm</th>
-                                                            <th>Size</th>
-                                                            <th class="text-end">Số lượng</th>
-                                                            <th class="text-end">Khối lượng</th>
-                                                            <th class="text-end">Giá thành</th>
-                                                            <th class="text-end">Thành tiền</th>
-                                                        </tr>
-                                                    </thead>
                                                     <tbody>
                                                         @foreach($row['items'] as $item)
                                                             <tr>

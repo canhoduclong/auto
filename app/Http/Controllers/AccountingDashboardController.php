@@ -18,6 +18,7 @@ use App\Models\User;
 use App\Models\Warehouse;
 use App\Notifications\AccountingOrderRevenueConfirmed;
 use Carbon\Carbon;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -78,6 +79,9 @@ class AccountingDashboardController extends Controller
     public function customerDebts(Request $request)
     {
         $query = Customer::query()->with('assignedTo:id,name');
+        $debtDaysMin = $request->filled('debt_days_min') ? max(0, (int) $request->input('debt_days_min')) : null;
+        $debtDaysMax = $request->filled('debt_days_max') ? max(0, (int) $request->input('debt_days_max')) : null;
+        $sortBy = (string) $request->input('sort_by', 'latest_debt_desc');
 
         if ($keyword = trim((string) $request->input('keyword', ''))) {
             $query->where(function ($q) use ($keyword) {
@@ -87,9 +91,7 @@ class AccountingDashboardController extends Controller
             });
         }
 
-        $customers = $query->paginate(20)->appends($request->query());
-
-        $rows = $customers->getCollection()->map(function (Customer $customer) {
+        $rows = $query->get()->map(function (Customer $customer) {
             $summary = $this->customerDebtSummary($customer);
             $debt = $summary['current_debt'];
 
@@ -107,10 +109,25 @@ class AccountingDashboardController extends Controller
                 ->whereIn('type', $this->customerDebtAdjustmentTypes())
                 ->min('created_at');
 
+            $latestOrderDebtAt = Order::query()
+                ->where('customer_id', $customer->id)
+                ->max('created_at');
+
+            $latestAdjustmentDebtAt = Transaction::query()
+                ->where('customer_id', $customer->id)
+                ->whereIn('type', $this->customerDebtAdjustmentTypes())
+                ->max('created_at');
+
             $firstDebtAt = collect([$firstOrderDebtAt, $firstAdjustmentDebtAt])
                 ->filter()
                 ->map(fn ($date) => Carbon::parse($date))
                 ->sort()
+                ->first();
+
+            $latestDebtAt = collect([$latestOrderDebtAt, $latestAdjustmentDebtAt])
+                ->filter()
+                ->map(fn ($date) => Carbon::parse($date))
+                ->sortDesc()
                 ->first();
 
             return [
@@ -118,19 +135,64 @@ class AccountingDashboardController extends Controller
                 'debt' => $debt,
                 'debt_increase' => $summary['debt_increase'],
                 'payments' => $summary['payments'],
+                'debt_type' => $this->customerDebtTypeMeta((string) ($customer->debt_type ?: 'normal')),
                 'due_date' => $firstDebtAt ? $firstDebtAt->copy()->addDays(7) : null,
                 'first_debt_at' => $firstDebtAt,
+                'latest_debt_at' => $latestDebtAt,
                 'unpaid_days' => $debt > 0 && $firstDebtAt ? $firstDebtAt->diffInDays(now()) : 0,
                 'status' => $debt <= 0 ? 'Đã thanh toán' : 'Còn nợ',
                 'payment_history' => $lastPaymentAt ? ('Lần gần nhất: ' . Carbon::parse($lastPaymentAt)->format('d/m/Y H:i')) : 'Chưa có thanh toán',
             ];
+        })
+            ->filter(function (array $row) use ($debtDaysMin, $debtDaysMax): bool {
+                if ($debtDaysMin === null && $debtDaysMax === null) {
+                    return true;
+                }
+
+                if ($row['debt'] <= 0) {
+                    return false;
+                }
+
+                if ($debtDaysMin !== null && $row['unpaid_days'] < $debtDaysMin) {
+                    return false;
+                }
+
+                if ($debtDaysMax !== null && $row['unpaid_days'] > $debtDaysMax) {
+                    return false;
+                }
+
+                return true;
+            });
+
+        $rows = (match ($sortBy) {
+            'debt_asc' => $rows->sortBy('debt'),
+            'latest_debt_asc' => $rows->sortBy(fn (array $row) => optional($row['latest_debt_at'])->timestamp ?? 0),
+            'latest_debt_desc' => $rows->sortByDesc(fn (array $row) => optional($row['latest_debt_at'])->timestamp ?? 0),
+            default => $rows->sortByDesc('debt'),
         })->values();
+
+        $perPage = 20;
+        $currentPage = LengthAwarePaginator::resolveCurrentPage();
+        $customers = new LengthAwarePaginator(
+            $rows->forPage($currentPage, $perPage)->values(),
+            $rows->count(),
+            $perPage,
+            $currentPage,
+            [
+                'path' => $request->url(),
+                'query' => $request->query(),
+            ]
+        );
 
         return view('accounting.customer_debts', [
             'customers' => $customers,
-            'rows' => $rows,
+            'rows' => $customers->getCollection(),
             'keyword' => (string) $request->input('keyword', ''),
-            'totalDebt' => $rows->sum('debt'),
+            'debtDaysMin' => $debtDaysMin,
+            'debtDaysMax' => $debtDaysMax,
+            'sortBy' => $sortBy,
+            'debtTypeOptions' => $this->customerDebtTypeOptions(),
+            'totalDebt' => $customers->getCollection()->sum('debt'),
         ]);
     }
 
@@ -234,7 +296,26 @@ class AccountingDashboardController extends Controller
             'payments' => $payments,
             'fromDate' => $fromDate,
             'toDate' => $toDate,
+            'debtTypeOptions' => $this->customerDebtTypeOptions(),
+            'currentDebtType' => (string) ($customer->debt_type ?: 'normal'),
         ]);
+    }
+
+    public function customerDebtTypeUpdate(Request $request, Customer $customer)
+    {
+        $options = $this->customerDebtTypeOptions();
+
+        $validated = $request->validate([
+            'debt_type' => ['required', 'in:' . implode(',', array_keys($options))],
+        ]);
+
+        $customer->update([
+            'debt_type' => $validated['debt_type'],
+        ]);
+
+        return redirect()
+            ->route(accounting_route_name('customer-debts.show'), $customer)
+            ->with('success', 'Đã cập nhật loại công nợ khách hàng.');
     }
 
     public function customerDebtAdjustmentStore(Request $request, Customer $customer)
@@ -280,6 +361,35 @@ class AccountingDashboardController extends Controller
     private function customerDebtAdjustmentTypes(): array
     {
         return ['customer_opening_debt', 'customer_debt_adjustment'];
+    }
+
+    private function customerDebtTypeOptions(): array
+    {
+        return [
+            'hard_to_recover' => 'Khó thu hồi',
+            'doubtful' => 'Khó đòi',
+            'high_risk' => 'Rủi ro cao',
+            'risk' => 'Rủi ro',
+            'normal' => 'Bình Thường',
+        ];
+    }
+
+    private function customerDebtTypeMeta(string $type): array
+    {
+        $labels = $this->customerDebtTypeOptions();
+        $classes = [
+            'hard_to_recover' => 'text-bg-danger',
+            'doubtful' => 'text-bg-dark',
+            'high_risk' => 'text-bg-warning',
+            'risk' => 'text-bg-secondary',
+            'normal' => 'text-bg-success',
+        ];
+
+        return [
+            'value' => array_key_exists($type, $labels) ? $type : 'normal',
+            'label' => $labels[$type] ?? $labels['normal'],
+            'class' => $classes[$type] ?? $classes['normal'],
+        ];
     }
 
     private function customerDebtSummary(Customer $customer, ?Carbon $fromDate = null, ?Carbon $toDate = null): array

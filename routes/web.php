@@ -205,6 +205,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/orders', [AccountingDashboardController::class, 'orders'])->name('orders');
         Route::get('/customer-debts', [AccountingDashboardController::class, 'customerDebts'])->name('customer-debts');
         Route::get('/customer-debts/{customer}', [AccountingDashboardController::class, 'customerDebtShow'])->name('customer-debts.show');
+        Route::post('/customer-debts/{customer}/debt-type', [AccountingDashboardController::class, 'customerDebtTypeUpdate'])->name('customer-debts.debt-type.update');
         Route::post('/customer-debts/{customer}/adjustments', [AccountingDashboardController::class, 'customerDebtAdjustmentStore'])->name('customer-debts.adjustments.store');
         Route::get('/supplier-debts', [AccountingDashboardController::class, 'supplierDebts'])->name('supplier-debts');
         Route::get('/cashflow', [AccountingDashboardController::class, 'cashflow'])->name('cashflow');

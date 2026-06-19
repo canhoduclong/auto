@@ -108,6 +108,7 @@ class Customer extends Model
         'assigned_at',
         'status',
         'customer_status',
+        'debt_type',
         'free_from_date',
         'current_cycle_no',
         'commission_percent',
