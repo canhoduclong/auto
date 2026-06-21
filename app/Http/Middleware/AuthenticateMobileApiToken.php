@@ -6,6 +6,7 @@ use App\Models\MobileApiToken;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use App\Services\UserPresenceService;
 use Symfony\Component\HttpFoundation\Response;
 
 class AuthenticateMobileApiToken
@@ -43,6 +44,8 @@ class AuthenticateMobileApiToken
         if (!$lastUsed || $lastUsed->lt(Carbon::now()->subMinutes(5))) {
             $mobileToken->forceFill(['last_used_at' => now()])->save();
         }
+
+        app(UserPresenceService::class)->record($user, $request, 'mobile');
 
         return $next($request);
     }

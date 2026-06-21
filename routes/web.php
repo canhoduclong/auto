@@ -381,6 +381,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
             Route::get('/manage-fees',                       [ShipperDashboardController::class, 'manageFees'])->name('manage-fees');
             Route::post('/update-fee/{order}',               [ShipperDashboardController::class, 'updateFee'])->name('update-fee');
             Route::post('/bulk-update-fees',                 [ShipperDashboardController::class, 'bulkUpdateFees'])->name('bulk-update-fees');
+            Route::post('/shipping-fee-requests',            [ShipperDashboardController::class, 'createShippingFeeRequest'])->name('shipping-fee-requests.store');
             Route::get('/route-planning',                    [ShipperDashboardController::class, 'routePlanning'])->name('route-planning');
             Route::get('/team-report',                       [ShipperDashboardController::class, 'teamReport'])->name('team-report');
             Route::get('/shipping-fee-report',               [ShipperDashboardController::class, 'shippingFeeReport'])->name('shipping-fee-report');

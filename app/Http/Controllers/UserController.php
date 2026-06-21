@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AdminEvent;
 use App\Models\User;
+use App\Models\UserPresenceLog;
 use App\Models\Role;
 use App\Models\Setting;
 use App\Models\Team;
@@ -256,7 +257,70 @@ class UserController extends Controller
             'mobile_sessions' => $mobileSessions,
         ];
 
-        return view('users.show', compact('user', 'activities', 'presence'));
+        $usageFrom = now()->subDays(6)->startOfDay();
+        $usagePoints = Schema::hasTable('user_presence_logs')
+            ? UserPresenceLog::query()
+                ->where('user_id', $user->id)
+                ->where('observed_at', '>=', $usageFrom)
+                ->get()
+                ->map(fn (UserPresenceLog $log) => [
+                    'at' => $log->observed_at,
+                    'source' => $log->source === 'mobile' ? 'Mobile' : 'Web',
+                    'reason' => $log->reason ?: 'Hoạt động hệ thống',
+                    'ip' => $log->ip_address,
+                ])
+            : collect();
+
+        // Backfill the seven-day chart with existing audited actions.
+        if (Schema::hasTable('admin_events')) {
+            $historicalPoints = AdminEvent::query()
+                ->where('actor_id', $user->id)
+                ->where('created_at', '>=', $usageFrom)
+                ->get(['created_at', 'title', 'action', 'url'])
+                ->map(fn (AdminEvent $event) => [
+                    'at' => $event->created_at,
+                    'source' => 'Web',
+                    'reason' => $event->title ?: $event->action,
+                    'ip' => null,
+                ]);
+            $usagePoints = $usagePoints->concat($historicalPoints);
+        }
+
+        $usageGrid = [];
+        foreach (range(0, 6) as $dayOffset) {
+            $date = now()->subDays($dayOffset)->toDateString();
+            $dayPoints = $usagePoints->filter(fn (array $point) => $point['at']->toDateString() === $date);
+            $hours = [];
+            foreach (range(0, 23) as $hour) {
+                $hourPoints = $dayPoints->filter(fn (array $point) => (int) $point['at']->format('G') === $hour)
+                    ->sortBy('at')
+                    ->values();
+                $details = $hourPoints->take(8)->map(function (array $point): string {
+                    return $point['at']->format('H:i') . ' · ' . $point['source'] . ' · ' . $point['reason']
+                        . ($point['ip'] ? ' · IP ' . $point['ip'] : '');
+                })->all();
+                if ($hourPoints->count() > 8) {
+                    $details[] = '+ ' . ($hourPoints->count() - 8) . ' hoạt động khác';
+                }
+                $hours[$hour] = [
+                    'count' => $hourPoints->count(),
+                    'tooltip' => $details ? implode("\n", $details) : 'Không ghi nhận hoạt động',
+                ];
+            }
+            $usageGrid[] = [
+                'date' => Carbon::parse($date),
+                'hours' => $hours,
+                'points' => $dayPoints->count(),
+            ];
+        }
+
+        $usageSummary = [
+            'points' => $usagePoints->count(),
+            'active_days' => $usagePoints->groupBy(fn (array $point) => $point['at']->toDateString())->count(),
+            'active_hours' => $usagePoints->groupBy(fn (array $point) => $point['at']->format('Y-m-d-H'))->count(),
+        ];
+
+        return view('users.show', compact('user', 'activities', 'presence', 'usageGrid', 'usageSummary'));
     }
 
     public function edit(User $user, UserWorkspaceService $workspaceService)

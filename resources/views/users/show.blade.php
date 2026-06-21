@@ -2,6 +2,24 @@
 
 @section('title', 'Chi tiết: ' . $user->name)
 
+@push('styles')
+<style>
+    .usage-heatmap-wrap { overflow-x: auto; padding-bottom: 8px; }
+    .usage-heatmap { min-width: 980px; border-collapse: separate; border-spacing: 4px; }
+    .usage-heatmap th { font-size: .68rem; color: #64748b; text-align: center; font-weight: 600; }
+    .usage-heatmap .usage-day { min-width: 92px; text-align: left; white-space: nowrap; }
+    .usage-hour-cell {
+        width: 28px; height: 28px; border: 0; border-radius: 6px;
+        background: #f1f5f9; color: #94a3b8; font-size: .66rem; font-weight: 700;
+    }
+    .usage-hour-cell.level-1 { background: #dcfce7; color: #15803d; }
+    .usage-hour-cell.level-2 { background: #86efac; color: #166534; }
+    .usage-hour-cell.level-3 { background: #16a34a; color: #fff; }
+    .usage-hour-cell:not(:disabled):hover { outline: 3px solid rgba(22, 163, 74, .22); transform: scale(1.08); }
+    .tooltip-inner { white-space: pre-line; text-align: left; max-width: 390px; }
+</style>
+@endpush
+
 @section('content')
 @php
     $isOnline = $presence['is_online'];
@@ -118,7 +136,7 @@
                 </li>
                 <li class="nav-item">
                     <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-login">
-                        <i class="ph ph-sign-in me-1"></i>Lịch sử đăng nhập
+                        <i class="ph ph-sign-in me-1"></i>Lịch sử đăng nhập 7 ngày
                     </button>
                 </li>
             </ul>
@@ -223,6 +241,70 @@
                             </div>
                         </div>
 
+                        <div class="p-3 border-bottom">
+                            <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+                                <div>
+                                    <h6 class="fw-bold mb-1">Mức độ sử dụng theo khung giờ</h6>
+                                    <div class="small text-muted">Mỗi ô là một giờ. Di chuột vào ô có màu để xem thời điểm, nguồn và lý do ghi nhận hoạt động.</div>
+                                </div>
+                                <div class="d-flex gap-2 flex-wrap">
+                                    <span class="badge bg-light text-dark border">{{ $usageSummary['points'] }} điểm online</span>
+                                    <span class="badge bg-light text-dark border">{{ $usageSummary['active_hours'] }} giờ hoạt động</span>
+                                    <span class="badge bg-light text-dark border">{{ $usageSummary['active_days'] }}/7 ngày có sử dụng</span>
+                                </div>
+                            </div>
+
+                            <div class="usage-heatmap-wrap">
+                                <table class="usage-heatmap" aria-label="Lịch sử sử dụng trong 7 ngày theo giờ">
+                                    <thead>
+                                        <tr>
+                                            <th class="usage-day">Ngày</th>
+                                            @foreach(range(0, 23) as $hour)
+                                                <th>{{ str_pad((string) $hour, 2, '0', STR_PAD_LEFT) }}</th>
+                                            @endforeach
+                                            <th>Tổng</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach($usageGrid as $day)
+                                            <tr>
+                                                <th class="usage-day">
+                                                    <div>{{ $day['date']->isToday() ? 'Hôm nay' : $day['date']->translatedFormat('D') }}</div>
+                                                    <div class="fw-normal text-muted">{{ $day['date']->format('d/m/Y') }}</div>
+                                                </th>
+                                                @foreach($day['hours'] as $hour => $cell)
+                                                    @php
+                                                        $level = $cell['count'] === 0 ? 0 : ($cell['count'] <= 2 ? 1 : ($cell['count'] <= 5 ? 2 : 3));
+                                                        $tooltip = $day['date']->format('d/m/Y') . ' · ' . str_pad((string) $hour, 2, '0', STR_PAD_LEFT) . ':00–' . str_pad((string) $hour, 2, '0', STR_PAD_LEFT) . ':59' . "\n" . $cell['tooltip'];
+                                                    @endphp
+                                                    <td>
+                                                        <button type="button"
+                                                            class="usage-hour-cell level-{{ $level }}"
+                                                            @disabled($cell['count'] === 0)
+                                                            data-bs-toggle="tooltip"
+                                                            data-bs-container="body"
+                                                            data-bs-placement="top"
+                                                            data-bs-title="{{ $tooltip }}"
+                                                            aria-label="{{ $tooltip }}">
+                                                            {{ $cell['count'] ?: '·' }}
+                                                        </button>
+                                                    </td>
+                                                @endforeach
+                                                <td class="text-center fw-bold small">{{ $day['points'] }}</td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="d-flex align-items-center gap-2 small text-muted mt-2">
+                                <span>Ít</span>
+                                <span class="usage-hour-cell level-1 d-inline-grid place-items-center" style="width:18px;height:18px"></span>
+                                <span class="usage-hour-cell level-2 d-inline-grid" style="width:18px;height:18px"></span>
+                                <span class="usage-hour-cell level-3 d-inline-grid" style="width:18px;height:18px"></span>
+                                <span>Nhiều</span>
+                            </div>
+                        </div>
+
                         @if($presence['web_sessions']->isNotEmpty() || $presence['mobile_sessions']->isNotEmpty())
                             <div class="table-responsive border-bottom">
                                 <table class="table table-sm table-hover align-middle mb-0">
@@ -323,3 +405,13 @@
     </div>{{-- end row --}}
 </div>
 @endsection
+
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function (element) {
+        bootstrap.Tooltip.getOrCreateInstance(element);
+    });
+});
+</script>
+@endpush

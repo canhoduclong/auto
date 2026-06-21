@@ -17,7 +17,7 @@ class Order extends Model
         'warehouse_id', 'warehouse_can_adjust', 'return_warehouse_id',
         'recipient_name', 'recipient_phone', 'recipient_email', 'recipient_address', 'note',
         'subtotal_amount', 'item_discount_total', 'extra_discount_total',
-        'total_discount', 'order_discount', 'order_discount_type', 'total_weight', 'actual_weight', 'charge_shipping_fee', 'shipping_fee',
+        'total_discount', 'order_discount', 'order_discount_type', 'total_weight', 'actual_weight', 'charge_shipping_fee', 'shipping_fee', 'shipping_fee_transaction_id',
         'charge_foam_box_fee', 'foam_box_price',
         'amount_paid', 'amount_due', 'payment_method', 'payment_status',
         'qr_code', 'packed_image_path', 'delivered_image_path', 'has_return_order',
@@ -258,6 +258,7 @@ class Order extends Model
     public function adjustments() { return $this->hasMany(OrderAdjustment::class); }
     public function warehouseTransfers() { return $this->hasMany(WarehouseTransfer::class); }
     public function accountingReconciliation() { return $this->hasOne(AccountingReconciliation::class); }
+    public function shippingFeeRequest() { return $this->belongsTo(Transaction::class, 'shipping_fee_transaction_id'); }
 
     public function getPaymentStatusTextAttribute()
     {

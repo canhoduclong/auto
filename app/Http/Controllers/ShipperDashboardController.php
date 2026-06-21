@@ -14,6 +14,8 @@ use App\Models\ReturnItem;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Models\WarehouseTransfer;
+use App\Models\Transaction;
+use App\Models\TransactionCategory;
 use App\Services\ShipperAssignmentService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -2202,7 +2204,7 @@ class ShipperDashboardController extends Controller
             : Carbon::today()->toDateString();
 
         // Get orders with delivery status
-        $orders = Order::with(['customer', 'shipper', 'items', 'accountingReconciliation'])
+        $orders = Order::with(['customer', 'shipper', 'items', 'accountingReconciliation', 'shippingFeeRequest:id,status,request_title'])
             ->whereIn('status', [Order::STATUS_READY_TO_SHIP, Order::STATUS_DELIVERING, 'delivered', 'completed'])
             ->forDeliveryDate($selectedDate)
             ->orderBy('created_at', 'asc')
@@ -2217,7 +2219,19 @@ class ShipperDashboardController extends Controller
             ->orderByDesc('id')
             ->get();
 
-        return view('shipper.manage-fees', compact('orders', 'selectedDate', 'orderReturns'));
+        $feeRequestOrders = Order::query()
+            ->whereIn('status', [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED])
+            ->forDeliveryDate($selectedDate)
+            ->where('shipping_fee', '>', 0)
+            ->get(['id', 'shipping_fee', 'shipping_fee_transaction_id']);
+        $feeRequestSummary = [
+            'total_orders' => $feeRequestOrders->count(),
+            'requested_orders' => $feeRequestOrders->whereNotNull('shipping_fee_transaction_id')->count(),
+            'pending_orders' => $feeRequestOrders->whereNull('shipping_fee_transaction_id')->count(),
+            'pending_total' => (float) $feeRequestOrders->whereNull('shipping_fee_transaction_id')->sum('shipping_fee'),
+        ];
+
+        return view('shipper.manage-fees', compact('orders', 'selectedDate', 'orderReturns', 'feeRequestSummary'));
     }
 
     /**
@@ -2228,6 +2242,7 @@ class ShipperDashboardController extends Controller
         $this->authorizeManagerShipper();
 
         abort_if($order->accountingReconciliation?->status === \App\Models\AccountingReconciliation::STATUS_CONFIRMED, 422, 'Kế toán đã xác nhận đơn, không thể điều chỉnh phí ship.');
+        abort_if($order->shipping_fee_transaction_id, 422, 'Đơn đã được đưa vào phiếu yêu cầu chi phí ship.');
 
         $request->validate([
             'shipping_fee' => 'required|numeric|min:0',
@@ -2284,6 +2299,7 @@ class ShipperDashboardController extends Controller
 
         $orders = Order::with('accountingReconciliation')->whereIn('id', $request->input('order_ids'))->get();
         abort_if($orders->contains(fn (Order $order) => $order->accountingReconciliation?->status === \App\Models\AccountingReconciliation::STATUS_CONFIRMED), 422, 'Danh sách có đơn đã được kế toán xác nhận. Vui lòng bỏ các đơn đã chốt.');
+        abort_if($orders->contains(fn (Order $order) => $order->shipping_fee_transaction_id), 422, 'Danh sách có đơn đã được đưa vào phiếu yêu cầu chi phí ship.');
         $adjustmentType = $request->input('adjustment_type');
         $adjustmentValue = (float) $request->input('fee_adjustment');
         $notes = $request->input('notes', '');
@@ -2321,6 +2337,98 @@ class ShipperDashboardController extends Controller
         });
 
         return back()->with('success', 'Cập nhật phí ship cho ' . count($orders) . ' đơn hàng thành công!');
+    }
+
+    public function createShippingFeeRequest(Request $request)
+    {
+        $this->authorizeManagerShipper();
+
+        $validated = $request->validate([
+            'selected_date' => ['required', 'date'],
+            'request_order_ids' => ['required', 'array', 'min:1'],
+            'request_order_ids.*' => ['integer', 'distinct', 'exists:orders,id'],
+            'note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $selectedDate = Carbon::parse($validated['selected_date'])->toDateString();
+        $requestedIds = collect($validated['request_order_ids'])->map(fn ($id) => (int) $id)->values();
+        $transaction = null;
+
+        DB::transaction(function () use ($selectedDate, $requestedIds, $validated, &$transaction): void {
+            $orders = Order::query()
+                ->with(['customer:id,name', 'shipper:id,name'])
+                ->whereIn('id', $requestedIds)
+                ->whereIn('status', [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED])
+                ->forDeliveryDate($selectedDate)
+                ->whereNull('shipping_fee_transaction_id')
+                ->where('shipping_fee', '>', 0)
+                ->lockForUpdate()
+                ->get();
+
+            if ($orders->count() !== $requestedIds->count()) {
+                abort(422, 'Có đơn không hợp lệ, chưa giao, phí ship bằng 0 hoặc đã được tạo phiếu. Vui lòng tải lại danh sách.');
+            }
+
+            $category = TransactionCategory::query()
+                ->where('flow_direction', 'out')
+                ->where('is_active', true)
+                ->where(function ($query): void {
+                    $query->whereIn('code', ['SHIP', 'SHIPPING', 'SHIP_FEE'])
+                        ->orWhere('name', 'like', '%ship%')
+                        ->orWhere('name', 'like', '%giao hàng%');
+                })
+                ->orderBy('sort_order')
+                ->first();
+
+            $category ??= TransactionCategory::query()->updateOrCreate(
+                ['code' => 'SHIP_FEE'],
+                [
+                    'name' => 'Chi phí giao hàng',
+                    'flow_direction' => 'out',
+                    'sort_order' => (int) TransactionCategory::query()->max('sort_order') + 1,
+                    'is_active' => true,
+                ]
+            );
+
+            $items = $orders->values()->map(function (Order $order, int $index): array {
+                $fee = round((float) $order->shipping_fee, 2);
+                return [
+                    'stt' => $index + 1,
+                    'content' => 'Đơn #' . $order->code . ' · ' . ($order->customer?->name ?? 'Khách hàng') . ' · Shipper: ' . ($order->shipper?->name ?? 'Chưa gán'),
+                    'unit' => 'đơn',
+                    'quantity' => 1,
+                    'unit_price' => $fee,
+                    'line_total' => $fee,
+                ];
+            });
+            $total = round((float) $items->sum('line_total'), 2);
+
+            $transaction = Transaction::create([
+                'amount' => $total,
+                'type' => 'extra_expense',
+                'transaction_category_id' => $category->id,
+                'account_id' => null,
+                'note' => $validated['note'] ?? ('Tổng hợp ' . $orders->count() . ' đơn giao ngày ' . Carbon::parse($selectedDate)->format('d/m/Y')),
+                'status' => Transaction::STATUS_PENDING_APPROVAL,
+                'submitted_by' => Auth::id(),
+                'request_source' => 'shipper',
+                'request_department' => 'Điều phối ship',
+                'request_title' => 'Chi phí ship ngày ' . Carbon::parse($selectedDate)->format('d/m/Y'),
+                'request_items' => $items->all(),
+                'request_subtotal' => $total,
+                'request_vat' => 0,
+                'request_total' => $total,
+            ]);
+
+            Order::query()->whereIn('id', $orders->pluck('id'))->update([
+                'shipping_fee_transaction_id' => $transaction->id,
+            ]);
+
+            app(\App\Services\ApprovalService::class)->initTransactionApproval($transaction);
+        });
+
+        return redirect()->route('shipper.finance-requests.index')
+            ->with('success', 'Đã tạo phiếu yêu cầu chi phí ship #' . $transaction->id . ' từ ' . $requestedIds->count() . ' đơn.');
     }
 
     /**

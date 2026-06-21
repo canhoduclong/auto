@@ -15,6 +15,11 @@
         border-radius: 8px;
         margin-bottom: 0.75rem;
     }
+    .mf-order-row.is-requested {
+        background: #e5e7eb;
+        border-color: #cbd5e1;
+        opacity: .82;
+    }
     @media (max-width: 992px) {
         .mf-order-row {
             grid-template-columns: 1fr;
@@ -123,6 +128,41 @@
     </div>
 </div>
 
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div>
+            <h6 class="mb-1"><i class="bi bi-receipt-cutoff me-2 text-primary"></i>Tạo phiếu yêu cầu chi phí ship</h6>
+            <div class="small text-muted">Chọn các đơn đã giao bên dưới. Mỗi đơn sẽ trở thành một dòng trong bảng Nội dung của phiếu yêu cầu.</div>
+        </div>
+        <span class="badge bg-secondary">Đã tạo: {{ $feeRequestSummary['requested_orders'] }}/{{ $feeRequestSummary['total_orders'] }} đơn</span>
+    </div>
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <div class="small text-muted">Đơn chưa tạo phiếu</div>
+                <div class="fs-5 fw-bold text-primary">{{ $feeRequestSummary['pending_orders'] }} đơn</div>
+            </div>
+            <div class="col-md-3">
+                <div class="small text-muted">Tổng phí chưa gửi</div>
+                <div class="fs-5 fw-bold text-danger">{{ number_format($feeRequestSummary['pending_total'], 0, ',', '.') }} đ</div>
+            </div>
+            <div class="col-md-6">
+                <form id="shippingFeeRequestForm" method="POST" action="{{ route('shipper.shipping-fee-requests.store') }}" onsubmit="return confirm('Tạo phiếu yêu cầu từ các đơn đã chọn? Sau khi tạo, phí ship của các đơn này sẽ bị khóa.');">
+                    @csrf
+                    <input type="hidden" name="selected_date" value="{{ $selectedDate }}">
+                    <div class="d-flex gap-2">
+                        <input type="text" name="note" class="form-control" placeholder="Ghi chú cho phiếu chi phí ship (không bắt buộc)">
+                        <button type="submit" class="btn btn-primary text-nowrap">
+                            <i class="bi bi-send-check me-1"></i>Tạo phiếu từ đơn đã chọn
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <div class="form-text mt-3"><span class="badge bg-secondary me-1">Màu xám</span> Đơn đã được tính vào phiếu yêu cầu trước đó và không thể chọn lại.</div>
+    </div>
+</div>
+
 <!-- Bulk Fee Update Section -->
 <div class="mf-bulk-section">
     <h6 class="mb-3"><i class="bi bi-sliders me-2"></i>Cập nhật hàng loạt</h6>
@@ -167,12 +207,27 @@
         @php
             $customer = $order->customer;
             $shipper = $order->shipper;
-            $feeLocked = $order->accountingReconciliation?->status === \App\Models\AccountingReconciliation::STATUS_CONFIRMED;
+            $alreadyRequested = (bool) $order->shipping_fee_transaction_id;
+            $feeLocked = $alreadyRequested || $order->accountingReconciliation?->status === \App\Models\AccountingReconciliation::STATUS_CONFIRMED;
+            $requestEligible = !$alreadyRequested
+                && in_array($order->status, [\App\Models\Order::STATUS_DELIVERED, \App\Models\Order::STATUS_COMPLETED], true)
+                && (float) ($order->shipping_fee ?? 0) > 0;
         @endphp
-        <div class="mf-order-row">
+        <div class="mf-order-row {{ $alreadyRequested ? 'is-requested' : '' }}">
             <div class="text-center">
+                @if($requestEligible)
+                    <label class="d-block small fw-semibold text-primary mb-1">
+                        <input type="checkbox" name="request_order_ids[]" value="{{ $order->id }}" form="shippingFeeRequestForm" class="form-check-input me-1">
+                        Phiếu chi
+                    </label>
+                @elseif($alreadyRequested)
+                    <span class="badge bg-secondary mb-1" title="{{ $order->shippingFeeRequest?->request_title }}">Đã vào phiếu #{{ $order->shipping_fee_transaction_id }}</span>
+                @endif
                 @unless($feeLocked)
-                    <input type="checkbox" name="order_ids[]" value="{{ $order->id }}" form="bulkFeeForm" class="form-check-input mb-1" aria-label="Chọn đơn {{ $order->code }}">
+                    <label class="d-block small text-muted mb-1">
+                        <input type="checkbox" name="order_ids[]" value="{{ $order->id }}" form="bulkFeeForm" class="form-check-input me-1" aria-label="Chọn đơn {{ $order->code }}">
+                        Sửa hàng loạt
+                    </label>
                 @endunless
                 <div class="mf-order-code">#{{ $order->code }}</div>
                 <div style="font-size: 0.7rem; color: #94a3b8;">{{ $order->created_at->format('d/m') }}</div>
