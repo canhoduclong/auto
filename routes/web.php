@@ -347,6 +347,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/', [\App\Http\Controllers\ProcurementController::class, 'dashboard'])->name('dashboard');
         Route::get('/purchases', [\App\Http\Controllers\ProcurementController::class, 'purchases'])->name('purchases.index');
         Route::post('/purchases', [\App\Http\Controllers\ProcurementController::class, 'storePurchase'])->name('purchases.store');
+        Route::post('/purchases/import-pasted', [\App\Http\Controllers\ProcurementController::class, 'importPastedPurchases'])->name('purchases.import-pasted');
         Route::post('/purchases/{purchase}/send-warehouse', [\App\Http\Controllers\ProcurementController::class, 'sendToWarehouse'])->name('purchases.send-warehouse');
         Route::post('/purchases/{purchase}/request-payment', [\App\Http\Controllers\ProcurementController::class, 'requestPayment'])->name('purchases.request-payment');
         Route::get('/farms', [\App\Http\Controllers\ProcurementController::class, 'farms'])->name('farms.index');
