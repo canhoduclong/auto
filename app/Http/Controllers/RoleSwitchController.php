@@ -75,6 +75,7 @@ class RoleSwitchController extends Controller
             'admin' => 'dashboard',
             'ceo' => 'ceo.dashboard',
             'manager_shipper', 'shipper', 'ship' => 'shipper.dashboard',
+            'procurement_manager' => 'procurement.dashboard',
             'package' => 'package.dashboard',
             'warehouse' => 'warehouse.dashboard',
             default => 'pages.my_profile',
