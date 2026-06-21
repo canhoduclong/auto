@@ -4,7 +4,8 @@
 
 @section('content')
 @php
-    $isOnline = $user->last_seen_at && $user->last_seen_at->gte(now()->subMinutes(5));
+    $isOnline = $presence['is_online'];
+    $lastActivityAt = $presence['last_activity_at'];
     $avatarUrl = $user->avatar
         ? asset($user->avatar)
         : ($user->google_avatar ?: 'https://ui-avatars.com/api/?name=' . urlencode($user->name ?? 'U') . '&background=0F172A&color=F8FAFC&size=200&bold=true');
@@ -85,8 +86,12 @@
                     <div class="d-flex justify-content-between py-1">
                         <span class="text-muted">Lần cuối online</span>
                         <span class="fw-semibold">
-                            {{ $user->last_seen_at ? $user->last_seen_at->format('d/m H:i') : '—' }}
+                            {{ $lastActivityAt ? $lastActivityAt->format('d/m/Y H:i') : '—' }}
                         </span>
+                    </div>
+                    <div class="d-flex justify-content-between py-1 border-top">
+                        <span class="text-muted">Địa chỉ IP</span>
+                        <span class="fw-semibold font-monospace">{{ $presence['last_ip_address'] ?: '—' }}</span>
                     </div>
                 </div>
 
@@ -190,6 +195,69 @@
                         @php
                             $loginEvents = $activities->filter(fn($e) => in_array($e->event_type, ['auth', 'login', 'session']));
                         @endphp
+                        <div class="p-3 border-bottom">
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <div class="card border bg-light h-100 p-3">
+                                        <div class="small text-muted mb-1">Trạng thái hiện tại</div>
+                                        <div class="fw-bold fs-5" style="color:{{ $isOnline ? '#16a34a' : '#64748b' }}">
+                                            ● {{ $isOnline ? 'Đang Online' : 'Offline' }}
+                                        </div>
+                                        <div class="small text-muted">Online khi có hoạt động trong 5 phút gần nhất</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="card border bg-light h-100 p-3">
+                                        <div class="small text-muted mb-1">Hoạt động gần nhất</div>
+                                        <div class="fw-bold">{{ $lastActivityAt?->format('d/m/Y H:i:s') ?? 'Chưa ghi nhận' }}</div>
+                                        @if($lastActivityAt)<div class="small text-muted">{{ $lastActivityAt->diffForHumans() }}</div>@endif
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="card border bg-light h-100 p-3">
+                                        <div class="small text-muted mb-1">Địa chỉ IP gần nhất</div>
+                                        <div class="fw-bold font-monospace">{{ $presence['last_ip_address'] ?: 'Chưa ghi nhận' }}</div>
+                                        <div class="small text-muted">IP mạng, không phải địa chỉ nhà chính xác</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        @if($presence['web_sessions']->isNotEmpty() || $presence['mobile_sessions']->isNotEmpty())
+                            <div class="table-responsive border-bottom">
+                                <table class="table table-sm table-hover align-middle mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Loại phiên</th>
+                                            <th>Thiết bị / trình duyệt</th>
+                                            <th>Địa chỉ IP</th>
+                                            <th>Hoạt động cuối</th>
+                                            <th>Trạng thái</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach($presence['web_sessions'] as $session)
+                                            <tr>
+                                                <td><i class="ph ph-browser me-1"></i>Web</td>
+                                                <td class="small" title="{{ $session->user_agent }}">{{ Str::limit($session->user_agent ?: 'Không xác định', 70) }}</td>
+                                                <td class="font-monospace small">{{ $session->ip_address ?: '—' }}</td>
+                                                <td class="small">{{ $session->last_activity_at->format('d/m/Y H:i:s') }}<div class="text-muted">{{ $session->last_activity_at->diffForHumans() }}</div></td>
+                                                <td><span class="badge {{ $session->is_active ? 'bg-success' : 'bg-secondary' }}">{{ $session->is_active ? 'Online' : 'Offline' }}</span></td>
+                                            </tr>
+                                        @endforeach
+                                        @foreach($presence['mobile_sessions'] as $token)
+                                            <tr>
+                                                <td><i class="ph ph-device-mobile me-1"></i>Ứng dụng</td>
+                                                <td class="small">{{ $token->device_name ?: ($token->platform ?: 'Thiết bị di động') }} @if($token->app_version)<span class="text-muted">v{{ $token->app_version }}</span>@endif</td>
+                                                <td class="font-monospace small">{{ $token->ip_address ?: '—' }}</td>
+                                                <td class="small">{{ $token->last_used_at?->format('d/m/Y H:i:s') ?? '—' }} @if($token->last_used_at)<div class="text-muted">{{ $token->last_used_at->diffForHumans() }}</div>@endif</td>
+                                                <td><span class="badge {{ $token->is_active ? 'bg-success' : 'bg-secondary' }}">{{ $token->is_active ? 'Online' : 'Offline' }}</span></td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                        @endif
                         @if($loginEvents->isEmpty())
                             {{-- Fallback: show last_seen_at summary --}}
                             <div class="p-4">
@@ -202,10 +270,10 @@
                                         <div class="card border bg-light p-3">
                                             <div class="small text-muted mb-1">Lần cuối truy cập hệ thống</div>
                                             <div class="fw-bold fs-5">
-                                                {{ $user->last_seen_at ? $user->last_seen_at->format('d/m/Y H:i') : 'Chưa ghi nhận' }}
+                                                {{ $lastActivityAt ? $lastActivityAt->format('d/m/Y H:i') : 'Chưa ghi nhận' }}
                                             </div>
-                                            @if($user->last_seen_at)
-                                                <div class="small text-muted">{{ $user->last_seen_at->diffForHumans() }}</div>
+                                            @if($lastActivityAt)
+                                                <div class="small text-muted">{{ $lastActivityAt->diffForHumans() }}</div>
                                             @endif
                                         </div>
                                     </div>

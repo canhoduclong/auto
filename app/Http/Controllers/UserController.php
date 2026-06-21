@@ -11,6 +11,7 @@ use App\Models\Warehouse;
 use App\Models\Block;
 use App\Models\Department;
 use App\Services\UserWorkspaceService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -207,8 +208,55 @@ class UserController extends Controller
                 ->get()
             : collect();
 
+        $webSessions = Schema::hasTable('sessions')
+            ? DB::table('sessions')
+                ->where('user_id', $user->id)
+                ->orderByDesc('last_activity')
+                ->limit(10)
+                ->get()
+                ->map(function ($session) {
+                    $session->last_activity_at = Carbon::createFromTimestamp((int) $session->last_activity);
+                    $session->is_active = $session->last_activity_at->gte(now()->subMinutes(5));
 
-        return view('users.show', compact('user', 'activities'));
+                    return $session;
+                })
+            : collect();
+
+        $mobileSessions = Schema::hasTable('mobile_api_tokens')
+            ? $user->mobileApiTokens()
+                ->orderByDesc('last_used_at')
+                ->limit(10)
+                ->get()
+                ->map(function ($token) {
+                    $token->is_active = $token->last_used_at?->gte(now()->subMinutes(5)) ?? false;
+
+                    return $token;
+                })
+            : collect();
+
+        $lastWebSession = $webSessions->first();
+        $lastMobileSession = $mobileSessions->first();
+        $lastConnection = collect([
+            $lastWebSession ? ['at' => $lastWebSession->last_activity_at, 'ip' => $lastWebSession->ip_address] : null,
+            $lastMobileSession ? ['at' => $lastMobileSession->last_used_at, 'ip' => $lastMobileSession->ip_address] : null,
+        ])->filter()->sortByDesc('at')->first();
+        $lastActivityAt = collect([
+            $user->last_seen_at,
+            $lastWebSession?->last_activity_at,
+            $lastMobileSession?->last_used_at,
+        ])->filter()->sortDesc()->first();
+
+        $presence = [
+            'is_online' => $webSessions->contains('is_active', true)
+                || $mobileSessions->contains('is_active', true)
+                || ($user->last_seen_at?->gte(now()->subMinutes(5)) ?? false),
+            'last_activity_at' => $lastActivityAt,
+            'last_ip_address' => $lastConnection['ip'] ?? null,
+            'web_sessions' => $webSessions,
+            'mobile_sessions' => $mobileSessions,
+        ];
+
+        return view('users.show', compact('user', 'activities', 'presence'));
     }
 
     public function edit(User $user, UserWorkspaceService $workspaceService)
