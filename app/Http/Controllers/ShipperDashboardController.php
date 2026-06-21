@@ -2584,33 +2584,73 @@ class ShipperDashboardController extends Controller
     {
         $this->authorizeManagerShipper();
 
-        $fromDate = $request->filled('from_date')
-            ? Carbon::parse($request->input('from_date'))->toDateString()
+        $reportMode = in_array($request->input('mode'), ['day', 'range'], true)
+            ? $request->input('mode')
+            : 'day';
+        $selectedDate = $request->filled('date')
+            ? Carbon::parse($request->input('date'))->toDateString()
             : Carbon::today()->toDateString();
-
-        $toDate = $request->filled('to_date')
-            ? Carbon::parse($request->input('to_date'))->toDateString()
-            : Carbon::today()->toDateString();
+        $fromDate = $reportMode === 'day'
+            ? $selectedDate
+            : ($request->filled('from_date') ? Carbon::parse($request->input('from_date'))->toDateString() : Carbon::today()->startOfMonth()->toDateString());
+        $toDate = $reportMode === 'day'
+            ? $selectedDate
+            : ($request->filled('to_date') ? Carbon::parse($request->input('to_date'))->toDateString() : Carbon::today()->toDateString());
 
         if ($fromDate > $toDate) {
             [$fromDate, $toDate] = [$toDate, $fromDate];
         }
 
         $dailyOrders = Order::query()
-            ->with(['customer', 'shipper'])
-            ->whereIn('status', [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED, Order::STATUS_RETURNED_COMPLETED])
-            ->whereDate('updated_at', '>=', $fromDate)
-            ->whereDate('updated_at', '<=', $toDate)
+            ->with(['customer', 'shipper', 'shippingFeeRequest:id,status,request_title'])
+            ->whereIn('status', [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED])
+            ->whereDate('delivery_date', '>=', $fromDate)
+            ->whereDate('delivery_date', '<=', $toDate)
+            ->orderByDesc('delivery_date')
             ->orderByDesc('updated_at')
             ->get();
 
         $dailySummary = [
             'total_orders' => $dailyOrders->count(),
-            'total_ship_fee' => (float) $dailyOrders->sum(function (Order $order) {
-                return ($order->charge_shipping_fee ?? true) ? (float) ($order->shipping_fee ?? 0) : 0;
-            }),
+            'total_ship_fee' => (float) $dailyOrders->sum('shipping_fee'),
             'customers' => $dailyOrders->pluck('customer_id')->filter()->unique()->count(),
+            'shippers' => $dailyOrders->pluck('shipper_id')->filter()->unique()->count(),
+            'requested_orders' => $dailyOrders->whereNotNull('shipping_fee_transaction_id')->count(),
+            'requested_fee' => (float) $dailyOrders->whereNotNull('shipping_fee_transaction_id')->sum('shipping_fee'),
+            'pending_orders' => $dailyOrders->whereNull('shipping_fee_transaction_id')->count(),
+            'pending_fee' => (float) $dailyOrders->whereNull('shipping_fee_transaction_id')->sum('shipping_fee'),
         ];
+
+        $dailyBreakdown = $dailyOrders
+            ->groupBy(fn (Order $order) => optional($order->delivery_date)->toDateString() ?: $order->updated_at->toDateString())
+            ->map(function ($orders, string $date): array {
+                return [
+                    'date' => Carbon::parse($date),
+                    'orders' => $orders->count(),
+                    'shippers' => $orders->pluck('shipper_id')->filter()->unique()->count(),
+                    'total_fee' => (float) $orders->sum('shipping_fee'),
+                    'requested_fee' => (float) $orders->whereNotNull('shipping_fee_transaction_id')->sum('shipping_fee'),
+                    'pending_fee' => (float) $orders->whereNull('shipping_fee_transaction_id')->sum('shipping_fee'),
+                ];
+            })
+            ->sortByDesc('date')
+            ->values();
+
+        $shipperBreakdown = $dailyOrders
+            ->groupBy(fn (Order $order) => (int) ($order->shipper_id ?? 0))
+            ->map(function ($orders): array {
+                return [
+                    'shipper' => $orders->first()?->shipper,
+                    'orders' => $orders->count(),
+                    'total_fee' => (float) $orders->sum('shipping_fee'),
+                    'requested_orders' => $orders->whereNotNull('shipping_fee_transaction_id')->count(),
+                    'requested_fee' => (float) $orders->whereNotNull('shipping_fee_transaction_id')->sum('shipping_fee'),
+                    'pending_orders' => $orders->whereNull('shipping_fee_transaction_id')->count(),
+                    'pending_fee' => (float) $orders->whereNull('shipping_fee_transaction_id')->sum('shipping_fee'),
+                ];
+            })
+            ->sortByDesc('total_fee')
+            ->values();
 
         $feeChanges = CustomerShippingFeeHistory::query()
             ->with(['customer', 'order', 'user'])
@@ -2623,10 +2663,14 @@ class ShipperDashboardController extends Controller
             ->get();
 
         return view('shipper.shipping-fee-report', compact(
+            'reportMode',
+            'selectedDate',
             'fromDate',
             'toDate',
             'dailyOrders',
             'dailySummary',
+            'dailyBreakdown',
+            'shipperBreakdown',
             'feeChanges'
         ));
     }

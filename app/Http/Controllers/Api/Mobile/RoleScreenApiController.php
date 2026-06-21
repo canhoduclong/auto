@@ -14,6 +14,9 @@ use App\Models\Transaction;
 use App\Models\User;
 use App\Models\WarehouseInventoryTransfer;
 use App\Models\WarehouseTransfer;
+use App\Models\DuckFarm;
+use App\Models\DuckProcessingConversionRate;
+use App\Models\ProcurementPurchase;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -33,7 +36,56 @@ class RoleScreenApiController extends BaseApiController
             'sale' => $this->sale($request, $key),
             'accounting' => $this->accounting($request, $key),
             'ceo' => $this->ceo($request, $key),
+            'procurement' => $this->procurement($request, $key),
             default => $this->fail('Layout khong duoc ho tro.', 404),
+        };
+    }
+
+    private function procurement(Request $request, string $key): JsonResponse
+    {
+        $todayPurchases = ProcurementPurchase::query()->whereDate('purchased_at', today());
+        return match ($key) {
+            'dashboard' => $this->ok([
+                'cards' => [
+                    ['label' => 'Lần thu mua hôm nay', 'value' => (clone $todayPurchases)->count()],
+                    ['label' => 'Số vịt hôm nay', 'value' => (int) (clone $todayPurchases)->sum('quantity')],
+                    ['label' => 'Khối lượng (kg)', 'value' => (float) (clone $todayPurchases)->sum('total_weight')],
+                    ['label' => 'Tổng chi hôm nay', 'value' => (float) (clone $todayPurchases)->sum('total_amount')],
+                ],
+                'items' => DuckFarm::query()->where('is_active', true)->orderBy('last_purchase_at')->get()->filter(function (DuckFarm $farm) {
+                    return !$farm->last_purchase_at || $farm->last_purchase_at->copy()->addDays(39)->lte(now()->addDays(7));
+                })->take(30)->map(fn (DuckFarm $farm) => [
+                    'id' => $farm->id, 'title' => $farm->name,
+                    'subtitle' => ($farm->address ?: 'Chưa có địa chỉ') . ' · Quy mô ' . number_format($farm->scale ?? 0) . ' con',
+                    'status' => $farm->last_purchase_at ? 'Dự kiến ' . $farm->last_purchase_at->copy()->addDays(39)->format('d/m') . '–' . $farm->last_purchase_at->copy()->addDays(45)->format('d/m') : 'Chưa có lịch sử bắt',
+                    'updated_at' => optional($farm->last_purchase_at)->toIso8601String(),
+                ])->values(),
+            ]),
+            'purchases', 'warehouse_shipments' => $this->ok([
+                'cards' => [
+                    ['label' => 'Tổng lần thu mua', 'value' => ProcurementPurchase::count()],
+                    ['label' => 'Chờ gửi kho', 'value' => ProcurementPurchase::where('status', 'draft')->count()],
+                    ['label' => 'Kho chờ nhận', 'value' => ProcurementPurchase::where('status', 'sent_to_warehouse')->count()],
+                    ['label' => 'Đã nhập kho', 'value' => ProcurementPurchase::where('status', 'received')->count()],
+                ],
+                'items' => ProcurementPurchase::with(['farm:id,name', 'supplier:id,name', 'warehouse:id,name'])->latest('purchased_at')->limit(50)->get()->map(fn (ProcurementPurchase $purchase) => [
+                    'id' => $purchase->id, 'title' => $purchase->code . ' · ' . ($purchase->purchase_type === 'live_duck' ? 'Vịt lông' : 'Vịt thịt'),
+                    'subtitle' => ($purchase->farm?->name ?? $purchase->supplier?->name ?? 'Nguồn mua') . ' · ' . number_format($purchase->quantity) . ' con · ' . number_format((float) $purchase->total_weight, 1) . 'kg · ' . number_format((float) $purchase->total_amount) . 'đ',
+                    'status' => $purchase->status, 'updated_at' => optional($purchase->purchased_at)->toIso8601String(),
+                ])->values(),
+            ]),
+            'farms' => $this->ok([
+                'cards' => [
+                    ['label' => 'Tổng trang trại', 'value' => DuckFarm::count()], ['label' => 'Đang hoạt động', 'value' => DuckFarm::where('is_active', true)->count()],
+                    ['label' => 'Quy mô tổng', 'value' => (int) DuckFarm::sum('scale')], ['label' => 'Đánh giá TB', 'value' => round((float) DuckFarm::avg('rating'), 1)],
+                ],
+                'items' => DuckFarm::latest()->limit(50)->get()->map(fn (DuckFarm $farm) => ['id' => $farm->id, 'title' => $farm->name, 'subtitle' => ($farm->phone ?: '—') . ' · ' . ($farm->address ?: 'Chưa có địa chỉ') . ' · ' . ($farm->duck_breed ?: 'Chưa rõ giống'), 'status' => number_format((float) $farm->rating, 1) . ' sao · ' . number_format($farm->scale ?? 0) . ' con', 'updated_at' => optional($farm->updated_at)->toIso8601String()])->values(),
+            ]),
+            'conversions' => $this->ok([
+                'cards' => [['label' => 'Size vịt lông', 'value' => DuckProcessingConversionRate::where('percentage', '>', 0)->distinct('live_size')->count('live_size')], ['label' => 'Tỷ lệ đã cấu hình', 'value' => DuckProcessingConversionRate::where('percentage', '>', 0)->count()]],
+                'items' => DuckProcessingConversionRate::where('percentage', '>', 0)->orderBy('live_size')->orderBy('processed_size')->get()->groupBy('live_size')->map(fn ($rates, $liveSize) => ['id' => (int) round((float) $liveSize * 10), 'title' => 'Vịt lông size ' . $liveSize, 'subtitle' => $rates->map(fn ($rate) => 'Size ' . $rate->processed_size . ': ' . $rate->percentage . '%')->join(' · '), 'status' => 'Tổng ' . number_format((float) $rates->sum('percentage'), 1) . '%', 'updated_at' => optional($rates->first()?->updated_at)->toIso8601String()])->values(),
+            ]),
+            default => $this->fail('Màn hình thu mua không được hỗ trợ.', 404),
         };
     }
 
@@ -52,6 +104,7 @@ class RoleScreenApiController extends BaseApiController
             'supplier_prices' => $this->supplierPrices(),
             'incoming_transfers' => $this->incomingOrderTransfers($warehouseId, $date),
             'incoming_inventory_transfers' => $this->incomingInventoryTransfers($warehouseId),
+            'procurement_receipts' => $this->procurementReceipts($warehouseId),
             'stock_in_create' => $this->documents('import', $warehouseId),
             'order_transfers' => $this->orderTransfers($warehouseId),
             'inventory_transfers' => $this->inventoryTransfers($warehouseId),
@@ -60,6 +113,26 @@ class RoleScreenApiController extends BaseApiController
             'returns' => $this->warehouseReturns($warehouseId),
             default => $this->fail('Man hinh kho khong duoc ho tro.', 404),
         };
+    }
+
+    private function procurementReceipts(?int $warehouseId): JsonResponse
+    {
+        $query = ProcurementPurchase::with(['farm:id,name', 'supplier:id,name'])
+            ->whereIn('status', ['sent_to_warehouse', 'received'])
+            ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId));
+        return $this->ok([
+            'cards' => [
+                ['label' => 'Chờ tiếp nhận', 'value' => (clone $query)->where('status', 'sent_to_warehouse')->count()],
+                ['label' => 'Đã tiếp nhận', 'value' => (clone $query)->where('status', 'received')->count()],
+            ],
+            'items' => $query->latest('sent_to_warehouse_at')->limit(50)->get()->map(fn (ProcurementPurchase $purchase) => [
+                'id' => $purchase->id,
+                'title' => $purchase->code . ' · ' . ($purchase->purchase_type === 'live_duck' ? 'Vịt lông' : 'Vịt thịt'),
+                'subtitle' => ($purchase->farm?->name ?? $purchase->supplier?->name ?? '') . ' · ' . number_format($purchase->quantity) . ' con · ' . number_format((float) $purchase->total_weight, 1) . 'kg',
+                'status' => $purchase->status,
+                'updated_at' => optional($purchase->sent_to_warehouse_at)->toIso8601String(),
+            ])->values(),
+        ]);
     }
 
     private function managerShipper(Request $request, string $key): JsonResponse
@@ -802,6 +875,7 @@ class RoleScreenApiController extends BaseApiController
             'ceo' => $user->hasRole('ceo') || $user->hasRole('admin'),
             'manager_shipper' => $user->hasRole('manager_shipper') || $user->hasRole('admin'),
             'shipper' => $user->hasRole('shipper') || $user->hasRole('ship') || $user->hasRole('manager_shipper') || $user->hasRole('admin'),
+            'procurement' => $user->hasRole('procurement_manager') || $user->hasRole('admin'),
             default => false,
         };
 

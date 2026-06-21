@@ -44,6 +44,13 @@ return [
             'route' => 'shipper.dashboard',
             'role_hints' => ['shipper', 'ship', 'manager_shipper'],
         ],
+        'website_procurement' => [
+            'label' => 'Website / Procurement',
+            'description' => 'Quản lý trại vịt, thu mua, sơ chế và chuyển nhập kho.',
+            'platform' => 'website',
+            'route' => 'procurement.dashboard',
+            'role_hints' => ['procurement_manager'],
+        ],
         'website_sales' => [
             'label' => 'Website / Sales',
             'description' => 'Dashboard kinh doanh.',
@@ -66,6 +73,14 @@ return [
             'route' => 'mobile.home',
             'role_hints' => ['package'],
             'mobile_layout' => 'package',
+        ],
+        'my_app_procurement' => [
+            'label' => 'My_app / Procurement',
+            'description' => 'Ứng dụng quản lý thu mua vịt và chuyển nhập kho.',
+            'platform' => 'my_app',
+            'route' => 'mobile.home',
+            'role_hints' => ['procurement_manager'],
+            'mobile_layout' => 'procurement',
         ],
         'my_app_accounting' => [
             'label' => 'My_app / Accounting',

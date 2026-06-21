@@ -286,6 +286,8 @@ Route::middleware(['auth', 'assigned'])->group(function () {
 
     // ─── Warehouse module ───────────────────────────────────────────────────
     Route::prefix('warehouse')->name('warehouse.')->middleware('role:warehouse,admin')->group(function () {
+        Route::get('/procurement-receipts', [\App\Http\Controllers\WarehouseProcurementController::class, 'index'])->name('procurement-receipts.index');
+        Route::post('/procurement-receipts/{purchase}/receive', [\App\Http\Controllers\WarehouseProcurementController::class, 'receive'])->name('procurement-receipts.receive');
         Route::get('/order-transfers', [\App\Http\Controllers\Warehouse\OrderTransferController::class, 'index'])->name('order-transfers');
         Route::post('/order-transfers', [\App\Http\Controllers\Warehouse\OrderTransferController::class, 'store'])->name('order-transfers.store');
         Route::delete('/order-transfers/{id}', [\App\Http\Controllers\Warehouse\OrderTransferController::class, 'destroy'])->name('order-transfers.destroy');
@@ -339,6 +341,24 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/requests', [\App\Http\Controllers\DepartmentFinanceRequestController::class, 'warehouseStore'])->name('finance-requests.store');
         Route::get('/requests/{transaction}/print', [\App\Http\Controllers\DepartmentFinanceRequestController::class, 'warehousePrint'])->name('finance-requests.print');
         Route::get('/reports',     [WarehouseDashboardController::class, 'reports'])->name('reports');
+    });
+
+    Route::prefix('procurement')->name('procurement.')->middleware('role:procurement_manager,admin')->group(function () {
+        Route::get('/', [\App\Http\Controllers\ProcurementController::class, 'dashboard'])->name('dashboard');
+        Route::get('/purchases', [\App\Http\Controllers\ProcurementController::class, 'purchases'])->name('purchases.index');
+        Route::post('/purchases', [\App\Http\Controllers\ProcurementController::class, 'storePurchase'])->name('purchases.store');
+        Route::post('/purchases/{purchase}/send-warehouse', [\App\Http\Controllers\ProcurementController::class, 'sendToWarehouse'])->name('purchases.send-warehouse');
+        Route::post('/purchases/{purchase}/request-payment', [\App\Http\Controllers\ProcurementController::class, 'requestPayment'])->name('purchases.request-payment');
+        Route::get('/farms', [\App\Http\Controllers\ProcurementController::class, 'farms'])->name('farms.index');
+        Route::post('/farms', [\App\Http\Controllers\ProcurementController::class, 'storeFarm'])->name('farms.store');
+        Route::put('/farms/{farm}', [\App\Http\Controllers\ProcurementController::class, 'updateFarm'])->name('farms.update');
+        Route::post('/farms/{farm}/reviews', [\App\Http\Controllers\ProcurementController::class, 'reviewFarm'])->name('farms.reviews.store');
+        Route::get('/conversions', [\App\Http\Controllers\ProcurementController::class, 'conversions'])->name('conversions.index');
+        Route::post('/conversions', [\App\Http\Controllers\ProcurementController::class, 'storeConversions'])->name('conversions.store');
+        Route::get('/warehouse-shipments', [\App\Http\Controllers\ProcurementController::class, 'purchases'])->name('warehouse-shipments.index');
+        Route::get('/requests', [DepartmentFinanceRequestController::class, 'procurementIndex'])->name('finance-requests.index');
+        Route::post('/requests', [DepartmentFinanceRequestController::class, 'procurementStore'])->name('finance-requests.store');
+        Route::get('/requests/{transaction}/print', [DepartmentFinanceRequestController::class, 'procurementPrint'])->name('finance-requests.print');
     });
 
     // ─── Shipper module ─────────────────────────────────────────────────────

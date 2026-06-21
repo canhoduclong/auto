@@ -226,6 +226,9 @@
             <a href="{{ route('warehouse.inventory-transfers.incoming') }}" class="wh-nav-link {{ request()->routeIs('warehouse.inventory-transfers.incoming') ? 'active' : '' }}">
                 <i class="bi bi-box-arrow-in-down"></i> Tiếp nhận hàng
             </a>
+            <a href="{{ route('warehouse.procurement-receipts.index') }}" class="wh-nav-link {{ request()->routeIs('warehouse.procurement-receipts.*') ? 'active' : '' }}">
+                <i class="bi bi-basket2-fill"></i> Nhập kho từ thu mua
+            </a>
 
             <div class="wh-nav-section">Quản lý kho</div>
             <a href="{{ route('warehouse.stock-in') }}" class="wh-nav-link {{ request()->routeIs('warehouse.stock-in') ? 'active' : '' }}">

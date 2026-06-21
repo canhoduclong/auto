@@ -68,10 +68,11 @@ trait ResolvesMobileRole
             'my_app_ceo' => 'ceo',
             'my_app_manager_shipper' => 'manager_shipper',
             'my_app_package' => 'package',
+            'my_app_procurement' => 'procurement',
             'my_app_sales' => 'sale',
             'my_app_shipper' => 'shipper',
             'my_app_warehouse' => 'warehouse',
-            default => in_array($layoutSlug, ['accounting', 'ceo', 'manager_shipper', 'package', 'sale', 'shipper', 'warehouse'], true)
+            default => in_array($layoutSlug, ['accounting', 'ceo', 'manager_shipper', 'package', 'procurement', 'sale', 'shipper', 'warehouse'], true)
                 ? $layoutSlug
                 : 'unsupported',
         };
@@ -112,6 +113,7 @@ trait ResolvesMobileRole
                 ['group' => 'Xử lý chính', 'key' => 'supplier_prices', 'label' => 'Giá thu mua', 'route' => '/warehouse/supplier-prices', 'api' => '/screens/warehouse/supplier_prices', 'icon' => 'payments'],
                 ['group' => 'Xử lý chính', 'key' => 'incoming_transfers', 'label' => 'Tiếp nhận Đơn', 'route' => '/warehouse/transfers/incoming', 'api' => '/screens/warehouse/incoming_transfers', 'icon' => 'assignment_returned'],
                 ['group' => 'Xử lý chính', 'key' => 'incoming_inventory_transfers', 'label' => 'Nhận hàng chuyển tới', 'route' => '/warehouse/inventory-transfers/incoming', 'api' => '/screens/warehouse/incoming_inventory_transfers', 'icon' => 'move_to_inbox'],
+                ['group' => 'Xử lý chính', 'key' => 'procurement_receipts', 'label' => 'Nhập từ thu mua', 'route' => '/warehouse/procurement-receipts', 'api' => '/screens/warehouse/procurement_receipts', 'icon' => 'agriculture'],
                 ['group' => 'Xử lý chính', 'key' => 'stock_in_create', 'label' => 'Nhập kho', 'route' => '/warehouse/stock-in/create', 'api' => '/screens/warehouse/stock_in_create', 'icon' => 'add_box'],
                 ['group' => 'Xử lý chính', 'key' => 'returns', 'label' => 'Đơn trả về', 'route' => '/warehouse/returns', 'api' => '/warehouse/returns', 'icon' => 'assignment_return'],
                 ['group' => 'Điều chuyển / xuất kho', 'key' => 'order_transfers', 'label' => 'Điều chuyển đơn', 'route' => '/warehouse/order-transfers', 'api' => '/screens/warehouse/order_transfers', 'icon' => 'swap_horiz'],
@@ -125,6 +127,16 @@ trait ResolvesMobileRole
         if ($layout === 'package') {
             return [
                 ['group' => 'Đóng hàng', 'key' => 'orders', 'label' => 'Đơn cần đóng hàng', 'route' => '/package/orders', 'api' => '/warehouse/orders', 'icon' => 'inventory_2'],
+            ];
+        }
+
+        if ($layout === 'procurement') {
+            return [
+                ['group' => 'Tổng quan', 'key' => 'dashboard', 'label' => 'Dashboard thu mua', 'route' => '/procurement', 'api' => '/screens/procurement/dashboard', 'icon' => 'dashboard'],
+                ['group' => 'Thu mua', 'key' => 'purchases', 'label' => 'Nhật ký thu mua', 'route' => '/procurement/purchases', 'api' => '/screens/procurement/purchases', 'icon' => 'receipt_long'],
+                ['group' => 'Nguồn hàng', 'key' => 'farms', 'label' => 'Trang trại', 'route' => '/procurement/farms', 'api' => '/screens/procurement/farms', 'icon' => 'agriculture'],
+                ['group' => 'Sơ chế', 'key' => 'conversions', 'label' => 'Quy đổi sơ chế', 'route' => '/procurement/conversions', 'api' => '/screens/procurement/conversions', 'icon' => 'sync_alt'],
+                ['group' => 'Kho', 'key' => 'warehouse_shipments', 'label' => 'Chuyển nhập kho', 'route' => '/procurement/warehouse-shipments', 'api' => '/screens/procurement/warehouse_shipments', 'icon' => 'move_to_inbox'],
             ];
         }
 

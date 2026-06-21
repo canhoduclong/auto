@@ -43,6 +43,13 @@ class DepartmentFinanceRequestController extends Controller
             'role' => 'shipper,manager_shipper,admin',
             'own_only' => true,
         ],
+        'procurement' => [
+            'label' => 'Thu mua',
+            'layout' => 'layouts.procurement',
+            'route_prefix' => 'procurement.finance-requests',
+            'role' => 'procurement_manager,admin',
+            'own_only' => true,
+        ],
     ];
 
     protected $settings;
@@ -129,6 +136,10 @@ class DepartmentFinanceRequestController extends Controller
     {
         return $this->printRequest($transaction, 'shipper');
     }
+
+    public function procurementIndex(Request $request) { return $this->index($request, 'procurement'); }
+    public function procurementStore(Request $request) { return $this->store($request, 'procurement'); }
+    public function procurementPrint(Transaction $transaction) { return $this->printRequest($transaction, 'procurement'); }
 
     private function config(string $source): array
     {
