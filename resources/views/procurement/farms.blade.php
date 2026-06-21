@@ -87,16 +87,36 @@
 </form></div></div>
 @endsection
 
+@php
+    $farmModalData = $farms->mapWithKeys(function ($farm) {
+        return [$farm->id => [
+            'id' => $farm->id,
+            'name' => $farm->name,
+            'phone' => $farm->phone,
+            'address' => $farm->address,
+            'scale' => $farm->scale,
+            'duck_breed' => $farm->duck_breed,
+            'business_type' => $farm->business_type,
+            'raising_days' => $farm->raising_days,
+            'last_purchase_at' => $farm->last_purchase_at?->format('d/m/Y'),
+            'rating' => number_format($farm->rating, 1),
+            'notes' => $farm->notes,
+            'is_active' => $farm->is_active,
+            'reviews' => $farm->reviews->take(5)->map(function ($review) {
+                return [
+                    'rating' => $review->rating,
+                    'comment' => $review->comment,
+                    'user' => $review->user?->name,
+                ];
+            })->values(),
+        ]];
+    });
+@endphp
+
 @push('scripts')
 <script>
 (() => {
-    const farms = @json($farms->mapWithKeys(fn($farm) => [$farm->id => [
-        'id' => $farm->id, 'name' => $farm->name, 'phone' => $farm->phone, 'address' => $farm->address,
-        'scale' => $farm->scale, 'duck_breed' => $farm->duck_breed, 'business_type' => $farm->business_type,
-        'raising_days' => $farm->raising_days, 'last_purchase_at' => $farm->last_purchase_at?->format('d/m/Y'),
-        'rating' => number_format($farm->rating, 1), 'notes' => $farm->notes, 'is_active' => $farm->is_active,
-        'reviews' => $farm->reviews->take(5)->map(fn($review) => ['rating' => $review->rating, 'comment' => $review->comment, 'user' => $review->user?->name])->values(),
-    ]]));
+    const farms = @json($farmModalData);
     const businessLabels = {individual:'Cá nhân', household:'Hộ kinh doanh', company:'Công ty', cooperative:'Hợp tác xã'};
     const escapeHtml = value => { const div = document.createElement('div'); div.textContent = value ?? ''; return div.innerHTML; };
     const route = (template, id) => template.replace('__FARM__', id);
