@@ -39,7 +39,10 @@ class ProcurementController extends Controller
             $farm->raising_age_days = $base ? max(0, (int) floor($base->diffInDays($today, false))) : null;
             $farm->availability = !$base ? 'unknown' : ($farm->available_from->lte($today->copy()->addDays(7)) && $farm->available_to->gte($today) ? 'soon' : ($farm->available_to->lt($today) ? 'overdue' : 'later'));
             return $farm;
-        })->filter(fn (DuckFarm $farm) => in_array($farm->availability, ['soon', 'overdue', 'unknown'], true))->sortBy(fn (DuckFarm $farm) => $farm->available_from?->timestamp ?? PHP_INT_MAX)->values();
+        })->filter(fn (DuckFarm $farm) => $farm->raising_age_days !== null
+            && $farm->raising_age_days >= 39
+            && $farm->raising_age_days <= 50
+        )->sortBy('raising_age_days')->values();
 
         $todayPurchases = ProcurementPurchase::with(['farm', 'supplier', 'warehouse', 'paymentRequest'])->whereDate('purchased_at', today())->latest('purchased_at')->get();
         return view('procurement.dashboard', [

@@ -8,7 +8,7 @@
 <div class="card border-0 shadow-sm mb-4"><div class="card-header bg-white"><strong>Thống kê hôm nay</strong></div><div class="card-body row text-center g-3"><div class="col-6 col-lg-3"><div class="fs-2 fw-bold">{{ $todayPurchases->count() }}</div><small>lần thu mua</small></div><div class="col-6 col-lg-3"><div class="fs-2 fw-bold">{{ number_format($todayPurchases->sum('quantity')) }}</div><small>con vịt</small></div><div class="col-6 col-lg-3"><div class="fs-4 fw-bold">{{ number_format($todayPurchases->sum('total_weight'), 1) }}</div><small>kg</small></div><div class="col-6 col-lg-3"><div class="fs-4 money">{{ number_format($todayPurchases->sum('total_amount')) }}đ</div><small>tổng chi</small></div></div></div>
 
 <div class="card border-0 shadow-sm mb-4">
-    <div class="card-header bg-white"><strong>Trại có hàng / sắp có hàng trong 7 ngày</strong><div class="small text-muted">Dựa trên lần bắt gần nhất + 39–45 ngày. Bấm tiêu đề có biểu tượng mũi tên để sắp xếp; bấm một dòng để thu mua.</div></div>
+    <div class="card-header bg-white"><strong>Trại có vịt đang nuôi từ 39–50 ngày</strong><div class="small text-muted">Chỉ hiển thị các trại có tuổi đàn từ 39 đến 50 ngày, tính từ lần bắt gần nhất. Bấm tiêu đề có biểu tượng mũi tên để sắp xếp; bấm một dòng để thu mua.</div></div>
     <div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr>
         <th>Trang trại</th><th>Liên hệ / Quy mô</th>
         <th><button type="button" class="sortable-heading" data-farm-sort="lastDate">Lần bắt gần nhất <i class="bi bi-arrow-down-up ms-1"></i></button></th>
@@ -27,7 +27,7 @@
                 <td class="text-end"><button type="button" class="btn btn-sm btn-outline-success text-nowrap">Chọn trại</button></td>
             </tr>
         @empty
-            <tr><td colspan="7" class="text-center py-4"><div class="text-muted mb-3">Chưa có trang trại phù hợp trong danh sách.</div><button type="button" class="btn btn-primary" data-purchase-form-toggle><i class="bi bi-plus-circle me-1"></i>Tạo thu mua</button></td></tr>
+            <tr><td colspan="7" class="text-center py-4"><div class="text-muted mb-3">Không có trang trại nào đang nuôi vịt trong khoảng 39–50 ngày.</div><button type="button" class="btn btn-primary" data-purchase-form-toggle><i class="bi bi-plus-circle me-1"></i>Tạo thu mua</button></td></tr>
         @endforelse
     </tbody></table></div>
 </div>
