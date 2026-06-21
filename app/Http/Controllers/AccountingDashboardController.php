@@ -1787,6 +1787,7 @@ class AccountingDashboardController extends Controller
             ])->save();
 
             $this->createCommissionForCompletedOrder($order, $recognizedRevenue, (int) $request->user()->id);
+            $this->createShipperExpenseRequest($order);
         });
 
         $reconciliation?->load(['order', 'sale']);
@@ -1803,6 +1804,71 @@ class AccountingDashboardController extends Controller
                 'recognized_revenue' => (float) ($reconciliation?->recognized_revenue ?? 0),
             ],
         ]);
+    }
+
+    private function createShipperExpenseRequest(Order $order): void
+    {
+        $shippingFee = round(max(0, (float) ($order->shipping_fee ?? 0)), 2);
+        if (!$order->shipper_id || $shippingFee <= 0) {
+            return;
+        }
+
+        $category = TransactionCategory::query()
+            ->where('flow_direction', 'out')
+            ->where('is_active', true)
+            ->where(function ($query): void {
+                $query->whereIn('code', ['SHIP', 'SHIPPING', 'SHIP_FEE'])
+                    ->orWhere('name', 'like', '%ship%')
+                    ->orWhere('name', 'like', '%giao hàng%');
+            })
+            ->orderBy('sort_order')
+            ->first();
+
+        $category ??= TransactionCategory::query()->updateOrCreate(
+            ['code' => 'SHIP_FEE'],
+            [
+                'name' => 'Chi phí giao hàng',
+                'flow_direction' => 'out',
+                'sort_order' => (int) TransactionCategory::query()->max('sort_order') + 1,
+                'is_active' => true,
+            ]
+        );
+
+        $transaction = Transaction::query()->firstOrCreate(
+            [
+                'order_id' => $order->id,
+                'request_source' => 'shipper',
+                'request_title' => 'Chi phí ship đơn #' . $order->code,
+            ],
+            [
+                'customer_id' => $order->customer_id,
+                'amount' => $shippingFee,
+                'type' => 'extra_expense',
+                'payee_user_id' => $order->shipper_id,
+                'transaction_category_id' => $category->id,
+                'account_id' => null,
+                'method' => null,
+                'note' => 'Phiếu tự động tạo khi kế toán xác nhận đơn #' . $order->code,
+                'status' => Transaction::STATUS_PENDING_APPROVAL,
+                'submitted_by' => $order->shipper_id,
+                'request_department' => 'Shipper',
+                'request_items' => [[
+                    'stt' => 1,
+                    'content' => 'Chi phí giao hàng đơn #' . $order->code,
+                    'unit' => 'đơn',
+                    'quantity' => 1,
+                    'unit_price' => $shippingFee,
+                    'line_total' => $shippingFee,
+                ]],
+                'request_subtotal' => $shippingFee,
+                'request_vat' => 0,
+                'request_total' => $shippingFee,
+            ]
+        );
+
+        if ($transaction->wasRecentlyCreated) {
+            app(\App\Services\ApprovalService::class)->initTransactionApproval($transaction);
+        }
     }
 
     public function apiOrdersList(Request $request)

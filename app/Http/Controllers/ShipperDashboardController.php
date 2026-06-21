@@ -2202,7 +2202,7 @@ class ShipperDashboardController extends Controller
             : Carbon::today()->toDateString();
 
         // Get orders with delivery status
-        $orders = Order::with(['customer', 'shipper', 'items'])
+        $orders = Order::with(['customer', 'shipper', 'items', 'accountingReconciliation'])
             ->whereIn('status', [Order::STATUS_READY_TO_SHIP, Order::STATUS_DELIVERING, 'delivered', 'completed'])
             ->forDeliveryDate($selectedDate)
             ->orderBy('created_at', 'asc')
@@ -2226,6 +2226,8 @@ class ShipperDashboardController extends Controller
     public function updateFee(Request $request, Order $order)
     {
         $this->authorizeManagerShipper();
+
+        abort_if($order->accountingReconciliation?->status === \App\Models\AccountingReconciliation::STATUS_CONFIRMED, 422, 'Kế toán đã xác nhận đơn, không thể điều chỉnh phí ship.');
 
         $request->validate([
             'shipping_fee' => 'required|numeric|min:0',
@@ -2280,7 +2282,8 @@ class ShipperDashboardController extends Controller
             'notes' => 'nullable|string|max:500',
         ]);
 
-        $orders = Order::whereIn('id', $request->input('order_ids'))->get();
+        $orders = Order::with('accountingReconciliation')->whereIn('id', $request->input('order_ids'))->get();
+        abort_if($orders->contains(fn (Order $order) => $order->accountingReconciliation?->status === \App\Models\AccountingReconciliation::STATUS_CONFIRMED), 422, 'Danh sách có đơn đã được kế toán xác nhận. Vui lòng bỏ các đơn đã chốt.');
         $adjustmentType = $request->input('adjustment_type');
         $adjustmentValue = (float) $request->input('fee_adjustment');
         $notes = $request->input('notes', '');
@@ -2523,18 +2526,11 @@ class ShipperDashboardController extends Controller
     private function syncCustomerShippingFeeHistory(Order $order, float $oldFee, float $newFee, ?string $note = null): void
     {
         $customer = $order->customer;
-        if (!$customer) {
+        if (!$customer || abs($oldFee - $newFee) < 0.00001) {
             return;
         }
 
-        $currentFee = $customer->shipping_fee !== null ? round((float) $customer->shipping_fee, 2) : null;
         $normalizedNewFee = round(max(0, $newFee), 2);
-
-        if ($currentFee !== null && abs($currentFee - $normalizedNewFee) < 0.00001) {
-            return;
-        }
-
-        $customer->update(['shipping_fee' => $normalizedNewFee]);
 
         CustomerShippingFeeHistory::create([
             'customer_id' => $customer->id,
@@ -2542,9 +2538,35 @@ class ShipperDashboardController extends Controller
             'old_fee' => $oldFee,
             'new_fee' => $normalizedNewFee,
             'changed_by' => Auth::id(),
-            'note' => $note ? mb_substr((string) $note, 0, 500) : null,
+            'note' => $note ? mb_substr((string) $note, 0, 500) : 'Điều chỉnh riêng trên đơn hàng',
             'changed_at' => now(),
         ]);
+    }
+
+    public function updateCustomerShippingFee(Request $request, Customer $customer)
+    {
+        $this->authorizeManagerShipper();
+
+        $validated = $request->validate([
+            'shipping_fee' => ['required', 'numeric', 'min:0'],
+            'note' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $oldFee = $customer->shipping_fee === null ? null : (float) $customer->shipping_fee;
+        $newFee = round((float) $validated['shipping_fee'], 2);
+        $customer->update(['shipping_fee' => $newFee]);
+
+        CustomerShippingFeeHistory::create([
+            'customer_id' => $customer->id,
+            'order_id' => null,
+            'old_fee' => $oldFee,
+            'new_fee' => $newFee,
+            'changed_by' => Auth::id(),
+            'note' => $validated['note'] ?? 'Cập nhật phí ship mặc định theo khách hàng',
+            'changed_at' => now(),
+        ]);
+
+        return back()->with('success', 'Đã cập nhật phí ship mặc định cho khách hàng ' . $customer->name . '.');
     }
 
     protected function authorizeManagerShipper(): void

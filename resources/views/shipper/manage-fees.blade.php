@@ -126,7 +126,7 @@
 <!-- Bulk Fee Update Section -->
 <div class="mf-bulk-section">
     <h6 class="mb-3"><i class="bi bi-sliders me-2"></i>Cập nhật hàng loạt</h6>
-    <form action="{{ route('shipper.bulk-update-fees') }}" method="POST">
+    <form id="bulkFeeForm" action="{{ route('shipper.bulk-update-fees') }}" method="POST">
         @csrf
         <div class="row g-2">
             <div class="col-md-2">
@@ -167,9 +167,13 @@
         @php
             $customer = $order->customer;
             $shipper = $order->shipper;
+            $feeLocked = $order->accountingReconciliation?->status === \App\Models\AccountingReconciliation::STATUS_CONFIRMED;
         @endphp
         <div class="mf-order-row">
             <div class="text-center">
+                @unless($feeLocked)
+                    <input type="checkbox" name="order_ids[]" value="{{ $order->id }}" form="bulkFeeForm" class="form-check-input mb-1" aria-label="Chọn đơn {{ $order->code }}">
+                @endunless
                 <div class="mf-order-code">#{{ $order->code }}</div>
                 <div style="font-size: 0.7rem; color: #94a3b8;">{{ $order->created_at->format('d/m') }}</div>
             </div>
@@ -193,12 +197,12 @@
                 <div class="mf-label d-lg-none">Phí mới:</div>
                 <form action="{{ route('shipper.update-fee', $order->id) }}" method="POST" class="d-inline-block w-100">
                     @csrf
-                    <input type="number" name="shipping_fee" class="form-control mf-fee-input" value="{{ $order->shipping_fee ?? $order->customer?->shipping_fee ?? 0 }}" step="1000" required style="width: 100%;">
+                    <input type="number" name="shipping_fee" class="form-control mf-fee-input" value="{{ $order->shipping_fee ?? $order->customer?->shipping_fee ?? 0 }}" step="1000" required style="width: 100%;" @disabled($feeLocked)>
             </div>
             <div>
                 <div class="mf-label d-lg-none">Hành động:</div>
-                <button type="submit" class="btn btn-sm btn-primary mf-btn-update w-100">
-                    <i class="bi bi-check me-1"></i>Cập nhật
+                <button type="submit" class="btn btn-sm {{ $feeLocked ? 'btn-secondary' : 'btn-primary' }} mf-btn-update w-100" @disabled($feeLocked)>
+                    <i class="bi {{ $feeLocked ? 'bi-lock' : 'bi-check' }} me-1"></i>{{ $feeLocked ? 'Đã chốt' : 'Cập nhật' }}
                 </button>
                 </form>
             </div>

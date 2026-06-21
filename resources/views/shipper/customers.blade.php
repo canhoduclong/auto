@@ -65,6 +65,7 @@
                         <th>Liên hệ</th>
                         <th>Giờ giao</th>
                         <th>Shipper cố định</th>
+                        <th style="min-width: 210px">Phí ship mặc định</th>
                         <th class="text-center">Số đơn</th>
                         <th class="text-end">Tổng tiền</th>
                         <th class="text-end">Gắn shipper</th>
@@ -86,6 +87,13 @@
                                     <span class="badge bg-secondary">Chưa gán</span>
                                 @endif
                             </td>
+                            <td>
+                                <form method="POST" action="{{ route('shipper.customers.shipping-fee.update', $customer) }}" class="d-flex gap-2">
+                                    @csrf
+                                    <input type="number" name="shipping_fee" value="{{ $customer->shipping_fee ?? 0 }}" min="0" step="1000" class="form-control form-control-sm" required aria-label="Phí ship mặc định">
+                                    <button class="btn btn-sm btn-outline-success" title="Lưu phí ship"><i class="bi bi-check-lg"></i></button>
+                                </form>
+                            </td>
                             <td class="text-center">{{ $customer->orders_count }}</td>
                             <td class="text-end fw-semibold">{{ number_format((float) $customer->orders_total) }}đ</td>
                             <td class="text-end">
@@ -102,7 +110,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="7" class="text-center text-muted py-4">Không tìm thấy khách hàng phù hợp.</td></tr>
+                        <tr><td colspan="8" class="text-center text-muted py-4">Không tìm thấy khách hàng phù hợp.</td></tr>
                     @endforelse
                 </tbody>
             </table>

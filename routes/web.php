@@ -355,6 +355,9 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/history',                         [ShipperDashboardController::class, 'history'])->name('history');
         Route::get('/history/{order}',                 [ShipperDashboardController::class, 'historyDetail'])->name('history-detail');
         Route::get('/customers',                       [ShipperDashboardController::class, 'customers'])->name('customers');
+        Route::get('/requests',                        [DepartmentFinanceRequestController::class, 'shipperIndex'])->name('finance-requests.index');
+        Route::post('/requests',                       [DepartmentFinanceRequestController::class, 'shipperStore'])->name('finance-requests.store');
+        Route::get('/requests/{transaction}/print',    [DepartmentFinanceRequestController::class, 'shipperPrint'])->name('finance-requests.print');
         Route::get('/delivery-statistics',             [ShipperDashboardController::class, 'deliveryStatistics'])->name('delivery-statistics');
         Route::get('/warehouse-transfers',             [ShipperDashboardController::class, 'warehouseTransfers'])->name('warehouse-transfers');
         Route::post('/warehouse-transfers/{transfer}/pickup', [ShipperDashboardController::class, 'pickupWarehouseTransfer'])->name('warehouse-transfers.pickup');
@@ -368,6 +371,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
             Route::post('/assign-order/{order}',             [ShipperDashboardController::class, 'assignSelectedOrder'])->name('assign-order.selected');
             Route::post('/assign-order/{order}/{shipper}',   [ShipperDashboardController::class, 'assignOrder'])->name('assign-order');
             Route::post('/customers/{customer}/default-shipper', [ShipperDashboardController::class, 'updateCustomerDefaultShipper'])->name('customers.default-shipper.update');
+            Route::post('/customers/{customer}/shipping-fee', [ShipperDashboardController::class, 'updateCustomerShippingFee'])->name('customers.shipping-fee.update');
             Route::delete('/unassign-order/{order}',         [ShipperDashboardController::class, 'unassignOrder'])->name('unassign-order');
             Route::post('/bulk-transfer-assignments',       [ShipperDashboardController::class, 'bulkTransferAssignments'])->name('bulk-transfer-assignments');
             Route::post('/move-order-up/{order}',            [ShipperDashboardController::class, 'moveOrderUp'])->name('move-order-up');

@@ -36,6 +36,13 @@ class DepartmentFinanceRequestController extends Controller
             'route_prefix' => 'manager.finance-requests',
             'role' => 'manager,manager_sale,director,admin',
         ],
+        'shipper' => [
+            'label' => 'Shipper',
+            'layout' => 'layouts.shipper',
+            'route_prefix' => 'shipper.finance-requests',
+            'role' => 'shipper,manager_shipper,admin',
+            'own_only' => true,
+        ],
     ];
 
     protected $settings;
@@ -108,6 +115,21 @@ class DepartmentFinanceRequestController extends Controller
         return $this->printRequest($transaction, 'manager');
     }
 
+    public function shipperIndex(Request $request)
+    {
+        return $this->index($request, 'shipper');
+    }
+
+    public function shipperStore(Request $request)
+    {
+        return $this->store($request, 'shipper');
+    }
+
+    public function shipperPrint(Transaction $transaction)
+    {
+        return $this->printRequest($transaction, 'shipper');
+    }
+
     private function config(string $source): array
     {
         abort_unless(isset(self::SOURCES[$source]), 404);
@@ -139,6 +161,7 @@ class DepartmentFinanceRequestController extends Controller
                 'account:id,name,type',
             ])
             ->where('request_source', $source)
+            ->when($config['own_only'] ?? false, fn ($query) => $query->where('submitted_by', auth()->id()))
             ->when($status !== 'all', fn ($query) => $query->where('status', $status))
             ->latest()
             ->paginate(20)
@@ -258,6 +281,9 @@ class DepartmentFinanceRequestController extends Controller
         $this->authorizeSource($config);
 
         abort_unless($transaction->request_source === $source, 404);
+        if ($config['own_only'] ?? false) {
+            abort_unless((int) $transaction->submitted_by === (int) auth()->id(), 403);
+        }
 
         $transaction->load([
             'submitter:id,name,email,department_id,block_id',

@@ -251,6 +251,11 @@
                 <i class="bi bi-table"></i> Thống kê giao hàng
             </a>
 
+            <div class="sp-nav-section">Tài chính</div>
+            <a href="{{ route('shipper.finance-requests.index') }}" class="sp-nav-link {{ request()->routeIs('shipper.finance-requests.*') ? 'active' : '' }}">
+                <i class="bi bi-file-earmark-text"></i> Phiếu yêu cầu của tôi
+            </a>
+
             @if(auth()->user()->hasRole('manager_shipper') || auth()->user()->hasRole('admin'))
                 <div class="sp-nav-section">Quản lý ship</div>
                 <a href="{{ route('shipper.manage-assignments') }}" class="sp-nav-link {{ request()->routeIs('shipper.manage-assignments') ? 'active' : '' }}">
