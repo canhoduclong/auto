@@ -380,6 +380,60 @@ class ProcurementController extends Controller
         return view('procurement.farms', ['farms' => DuckFarm::with(['reviews.user'])->latest()->get()]);
     }
 
+    public function farmDebts(Request $request)
+    {
+        $query = ProcurementPurchase::query()
+            ->with(['farm', 'paymentRequest'])
+            ->whereNotNull('duck_farm_id')
+            ->where('remaining_amount', '>', 0);
+
+        if ($request->filled('q')) {
+            $keyword = trim((string) $request->input('q'));
+            $query->whereHas('farm', fn ($farmQuery) => $farmQuery
+                ->where('name', 'like', '%' . $keyword . '%')
+                ->orWhere('phone', 'like', '%' . $keyword . '%'));
+        }
+
+        match ($request->input('due_status')) {
+            'overdue' => $query->whereNotNull('payment_due_date')->whereDate('payment_due_date', '<', today()),
+            'due_soon' => $query->whereBetween('payment_due_date', [today(), today()->addDays(7)]),
+            'no_due' => $query->whereNull('payment_due_date'),
+            default => null,
+        };
+
+        if ($request->filled('from_date')) {
+            $query->whereDate('purchased_at', '>=', $request->input('from_date'));
+        }
+        if ($request->filled('to_date')) {
+            $query->whereDate('purchased_at', '<=', $request->input('to_date'));
+        }
+
+        $outstandingPurchases = $query->latest('purchased_at')->get();
+        $farmDebts = $outstandingPurchases->groupBy('duck_farm_id')->map(function ($purchases) {
+            $farm = $purchases->first()->farm;
+            $overduePurchases = $purchases->filter(fn ($purchase) => $purchase->payment_due_date?->isBefore(today()) ?? false);
+
+            return [
+                'farm' => $farm,
+                'purchases' => $purchases,
+                'purchase_count' => $purchases->count(),
+                'total_amount' => (float) $purchases->sum('total_amount'),
+                'paid_amount' => (float) $purchases->sum('paid_amount'),
+                'remaining_amount' => (float) $purchases->sum('remaining_amount'),
+                'overdue_amount' => (float) $overduePurchases->sum('remaining_amount'),
+                'nearest_due_date' => $purchases->whereNotNull('payment_due_date')->min('payment_due_date'),
+                'last_purchase_at' => $purchases->max('purchased_at'),
+            ];
+        })->sortByDesc('remaining_amount')->values();
+
+        return view('procurement.farm-debts', [
+            'farmDebts' => $farmDebts,
+            'totalDebt' => (float) $farmDebts->sum('remaining_amount'),
+            'totalOverdue' => (float) $farmDebts->sum('overdue_amount'),
+            'totalPaid' => (float) $farmDebts->sum('paid_amount'),
+        ]);
+    }
+
     public function storeFarm(Request $request)
     {
         $data = $request->validate(['name' => ['required', 'string', 'max:255'], 'phone' => ['nullable', 'string', 'max:30'], 'address' => ['nullable', 'string', 'max:1000'], 'scale' => ['nullable', 'integer', 'min:0'], 'duck_breed' => ['nullable', 'string', 'max:255'], 'business_type' => ['required', 'in:individual,household,company,cooperative'], 'raising_days' => ['required', 'integer', 'min:30', 'max:60'], 'notes' => ['nullable', 'string', 'max:1000']]);
