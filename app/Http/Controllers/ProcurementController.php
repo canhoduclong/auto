@@ -390,6 +390,14 @@ class ProcurementController extends Controller
         return back()->with('success', 'Đã cập nhật trang trại.');
     }
 
+    public function destroyFarm(DuckFarm $farm)
+    {
+        $name = $farm->name;
+        $farm->delete();
+
+        return back()->with('success', 'Đã xóa trang trại ' . $name . '.');
+    }
+
     public function reviewFarm(Request $request, DuckFarm $farm)
     {
         $data = $request->validate(['rating' => ['required', 'integer', 'between:1,5'], 'comment' => ['nullable', 'string', 'max:1000']]);

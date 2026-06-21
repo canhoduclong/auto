@@ -353,6 +353,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/farms', [\App\Http\Controllers\ProcurementController::class, 'farms'])->name('farms.index');
         Route::post('/farms', [\App\Http\Controllers\ProcurementController::class, 'storeFarm'])->name('farms.store');
         Route::put('/farms/{farm}', [\App\Http\Controllers\ProcurementController::class, 'updateFarm'])->name('farms.update');
+        Route::delete('/farms/{farm}', [\App\Http\Controllers\ProcurementController::class, 'destroyFarm'])->name('farms.destroy');
         Route::post('/farms/{farm}/reviews', [\App\Http\Controllers\ProcurementController::class, 'reviewFarm'])->name('farms.reviews.store');
         Route::get('/conversions', [\App\Http\Controllers\ProcurementController::class, 'conversions'])->name('conversions.index');
         Route::post('/conversions', [\App\Http\Controllers\ProcurementController::class, 'storeConversions'])->name('conversions.store');
