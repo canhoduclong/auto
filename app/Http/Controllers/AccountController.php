@@ -246,18 +246,42 @@ class AccountController extends Controller
             ->when($toDate, fn ($items) => $items->filter(fn ($item) => $item['occurred_at']?->lte($toDate)))
             ->values();
 
+        $ledgerEntries = $filteredMovements
+            ->groupBy(fn (array $movement) => $movement['source'] . '-' . $movement['source_id'])
+            ->map(function ($entryMovements): array {
+                $first = $entryMovements->first();
+
+                return [
+                    'key' => $first['source'] . '-' . $first['source_id'],
+                    'source' => $first['source'],
+                    'source_id' => $first['source_id'],
+                    'movement_scope' => $first['movement_scope'],
+                    'from_name' => $first['from_name'],
+                    'to_name' => $first['to_name'],
+                    'type_label' => $first['type_label'],
+                    'request_title' => $first['request_title'],
+                    'performed_by' => $first['performed_by'],
+                    'note' => $first['note'],
+                    'occurred_at' => $entryMovements->max('occurred_at'),
+                    'detail_url' => $first['detail_url'],
+                    'movements_by_account' => $entryMovements->keyBy('account_id'),
+                ];
+            })
+            ->sortByDesc(fn (array $entry) => optional($entry['occurred_at'])->timestamp ?? 0)
+            ->values();
+
         $perPage = 30;
         $currentPage = LengthAwarePaginator::resolveCurrentPage();
-        $movements = new LengthAwarePaginator(
-            $filteredMovements->forPage($currentPage, $perPage)->values(),
-            $filteredMovements->count(),
+        $ledgerRows = new LengthAwarePaginator(
+            $ledgerEntries->forPage($currentPage, $perPage)->values(),
+            $ledgerEntries->count(),
             $perPage,
             $currentPage,
             ['path' => $request->url(), 'query' => $request->query()]
         );
 
         return view('accounting.accounts.balance_history', [
-            'movements' => $movements,
+            'ledgerRows' => $ledgerRows,
             'accounts' => $accounts,
             'accountId' => $accountId,
             'direction' => $direction,

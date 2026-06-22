@@ -14,9 +14,13 @@
     .flow-node .node-name { font-weight:700; color:#0f172a; line-height:1.25; }
     .flow-arrow { display:flex; flex-direction:column; align-items:center; color:#64748b; flex:0 0 auto; }
     .flow-arrow i { font-size:20px; line-height:1; }
-    .movement-row-in { box-shadow:inset 3px 0 #22c55e; }
-    .movement-row-out { box-shadow:inset 3px 0 #ef4444; }
     .balance-value { font-variant-numeric:tabular-nums; white-space:nowrap; }
+    .account-impact-head { min-width:155px; text-align:right; background:#f8fafc !important; }
+    .account-impact-head.selected { background:#dbeafe !important; color:#1d4ed8; }
+    .account-impact-cell { min-width:155px; text-align:right; border-left:1px solid #eef2f7; }
+    .account-impact-cell.selected { background:#eff6ff; }
+    .impact-empty { color:#cbd5e1; }
+    .impact-balance { font-size:11px; color:#64748b; margin-top:2px; }
     @media(max-width:767.98px) { .balance-account-grid { grid-template-columns:1fr 1fr; } .flow-route { min-width:245px; } }
 </style>
 
@@ -66,41 +70,63 @@
 </div></div>
 
 <div class="d-flex justify-content-between align-items-center mb-2">
-    <div><span class="fw-bold">Chi tiết biến động</span><span class="text-muted small ms-2">{{ number_format($movements->total()) }} dòng</span></div>
+    <div><span class="fw-bold">Nhật ký theo phiếu</span><span class="text-muted small ms-2">{{ number_format($ledgerRows->total()) }} phiếu / lần điều chỉnh</span></div>
     <div class="small text-muted"><span class="text-success me-3"><i class="bi bi-arrow-down-left"></i> Tiền vào</span><span class="text-danger"><i class="bi bi-arrow-up-right"></i> Tiền ra</span></div>
 </div>
 
 <div class="acc-card"><div class="card-body p-0"><div class="table-responsive">
     <table class="table table-hover align-middle mb-0">
-        <thead class="table-light"><tr><th>Phiếu / Thời gian</th><th>Luồng tiền</th><th>Tài khoản ghi nhận</th><th class="text-end">Biến động</th><th class="text-end">Số dư trước</th><th class="text-end">Số dư sau</th><th>Người thực hiện</th><th></th></tr></thead>
+        <thead class="table-light">
+            <tr>
+                <th style="min-width:125px">Lịch sử</th>
+                <th style="min-width:310px">Luồng tiền</th>
+                @foreach($accounts as $account)
+                    <th class="account-impact-head {{ $accountId === (int)$account->id ? 'selected' : '' }}">
+                        <div>{{ $account->name }}</div>
+                        <div class="small fw-normal text-muted">{{ number_format((float)$account->balance) }}đ hiện tại</div>
+                    </th>
+                @endforeach
+                <th style="min-width:155px">Người thực hiện</th>
+                <th></th>
+            </tr>
+        </thead>
         <tbody>
-        @forelse($movements as $movement)
-            <tr class="{{ $movement['direction'] === 'in' ? 'movement-row-in' : 'movement-row-out' }}">
+        @forelse($ledgerRows as $entry)
+            <tr>
                 <td class="text-nowrap">
-                    <div class="fw-semibold">{{ $movement['source'] === 'transaction' ? 'Phiếu #' . $movement['source_id'] : 'Điều chỉnh #' . $movement['source_id'] }}</div>
-                    <div class="small text-muted">{{ optional($movement['occurred_at'])->format('d/m/Y H:i') }}</div>
+                    <div class="fw-semibold">{{ $entry['source'] === 'transaction' ? 'Phiếu #' . $entry['source_id'] : 'Điều chỉnh #' . $entry['source_id'] }}</div>
+                    <div class="small text-muted">{{ optional($entry['occurred_at'])->format('d/m/Y H:i') }}</div>
                 </td>
                 <td>
                     <div class="flow-route">
-                        <div class="flow-node"><div class="node-name">{{ $movement['from_name'] }}</div><div class="small text-muted">{{ $movement['movement_scope'] === 'internal' ? 'Tài khoản nguồn' : ($movement['direction'] === 'in' ? 'Nguồn tiền' : 'Tài khoản nguồn') }}</div></div>
-                        <div class="flow-arrow"><i class="bi bi-arrow-right"></i><span class="badge {{ $movement['movement_scope'] === 'internal' ? 'text-bg-primary' : ($movement['movement_scope'] === 'adjustment' ? 'text-bg-secondary' : 'text-bg-light border text-dark') }}">{{ $movement['movement_scope'] === 'internal' ? 'Nội bộ' : ($movement['movement_scope'] === 'adjustment' ? 'Thủ công' : 'Bên ngoài') }}</span></div>
-                        <div class="flow-node"><div class="node-name">{{ $movement['to_name'] }}</div><div class="small text-muted">Nơi nhận tiền</div></div>
+                        <div class="flow-node"><div class="node-name">{{ $entry['from_name'] }}</div><div class="small text-muted">Nguồn tiền</div></div>
+                        <div class="flow-arrow"><i class="bi bi-arrow-right"></i><span class="badge {{ $entry['movement_scope'] === 'internal' ? 'text-bg-primary' : ($entry['movement_scope'] === 'adjustment' ? 'text-bg-secondary' : 'text-bg-light border text-dark') }}">{{ $entry['movement_scope'] === 'internal' ? 'Nội bộ' : ($entry['movement_scope'] === 'adjustment' ? 'Thủ công' : 'Bên ngoài') }}</span></div>
+                        <div class="flow-node"><div class="node-name">{{ $entry['to_name'] }}</div><div class="small text-muted">Nơi nhận tiền</div></div>
                     </div>
-                    <div class="small mt-1"><span class="text-muted">{{ $movement['type_label'] }}</span>@if($movement['request_title']) · {{ $movement['request_title'] }}@endif</div>
+                    <div class="small mt-1"><span class="text-muted">{{ $entry['type_label'] }}</span>@if($entry['request_title']) · {{ $entry['request_title'] }}@endif</div>
                 </td>
-                <td><div class="fw-semibold">{{ $movement['account']?->name ?? 'Tài khoản đã xóa' }}</div><span class="badge {{ $movement['direction'] === 'in' ? 'text-bg-success' : 'text-bg-danger' }}">{{ $movement['direction'] === 'in' ? 'Ghi tăng' : 'Ghi giảm' }}</span></td>
-                <td class="text-end fw-bold balance-value {{ $movement['direction'] === 'in' ? 'text-success' : 'text-danger' }}">{{ $movement['direction'] === 'in' ? '+' : '-' }}{{ number_format($movement['amount']) }}đ</td>
-                <td class="text-end text-muted balance-value">{{ number_format($movement['balance_before']) }}đ</td>
-                <td class="text-end fw-bold balance-value">{{ number_format($movement['balance_after']) }}đ</td>
-                <td><div>{{ $movement['performed_by'] }}</div>@if($movement['note'])<div class="small text-muted text-truncate" style="max-width:190px" title="{{ $movement['note'] }}">{{ $movement['note'] }}</div>@endif</td>
-                <td>@if($movement['detail_url'])<a href="{{ $movement['detail_url'] }}" class="btn btn-sm btn-outline-primary" title="Xem phiếu"><i class="bi bi-eye"></i></a>@endif</td>
+                @foreach($accounts as $account)
+                    @php $impact = $entry['movements_by_account']->get($account->id); @endphp
+                    <td class="account-impact-cell {{ $accountId === (int)$account->id ? 'selected' : '' }}">
+                        @if($impact)
+                            <div class="fw-bold balance-value {{ $impact['direction'] === 'in' ? 'text-success' : 'text-danger' }}">
+                                {{ $impact['direction'] === 'in' ? '+' : '-' }}{{ number_format($impact['amount']) }}đ
+                            </div>
+                            <div class="impact-balance">{{ number_format($impact['balance_before']) }} → {{ number_format($impact['balance_after']) }}đ</div>
+                        @else
+                            <span class="impact-empty">—</span>
+                        @endif
+                    </td>
+                @endforeach
+                <td><div>{{ $entry['performed_by'] }}</div>@if($entry['note'])<div class="small text-muted text-truncate" style="max-width:145px" title="{{ $entry['note'] }}">{{ $entry['note'] }}</div>@endif</td>
+                <td>@if($entry['detail_url'])<a href="{{ $entry['detail_url'] }}" class="btn btn-sm btn-outline-primary" title="Xem phiếu"><i class="bi bi-eye"></i></a>@endif</td>
             </tr>
         @empty
-            <tr><td colspan="8" class="text-center text-muted py-5"><i class="bi bi-inbox fs-3 d-block mb-2"></i>Chưa có biến động phù hợp bộ lọc.</td></tr>
+            <tr><td colspan="{{ $accounts->count() + 4 }}" class="text-center text-muted py-5"><i class="bi bi-inbox fs-3 d-block mb-2"></i>Chưa có biến động phù hợp bộ lọc.</td></tr>
         @endforelse
         </tbody>
     </table>
 </div></div></div>
 
-<div class="mt-3">{{ $movements->links() }}</div>
+<div class="mt-3">{{ $ledgerRows->links() }}</div>
 @endsection
