@@ -270,6 +270,19 @@
                             @endforeach
                         </select>
                     </div>
+                    @if($managedAccounts->isNotEmpty())
+                        <div id="sourceAccountGroup">
+                            <label class="form-label fw-semibold">Tài khoản chi <span class="text-danger">*</span></label>
+                            <select name="source_account_id" id="sourceAccountId" class="form-select">
+                                @foreach($managedAccounts as $account)
+                                    <option value="{{ $account->id }}" @selected((string) old('source_account_id', $defaultManagedAccountId) === (string) $account->id)>
+                                        {{ $account->name }}{{ $account->account_number ? ' - ' . $account->account_number : '' }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            <div class="form-text">Chỉ hiển thị tài khoản bạn đang được giao quản lý.</div>
+                        </div>
+                    @endif
                     <div>
                         <label class="form-label fw-semibold">Nơi nhận tiền <span class="text-danger">*</span></label>
                         <select name="destination_type" id="destinationType" class="form-select" required>
@@ -543,6 +556,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const destinationAccountId = document.getElementById('destinationAccountId');
     const externalRecipientGroup = document.getElementById('externalRecipientGroup');
     const externalRecipient = document.getElementById('externalRecipient');
+    const sourceAccountGroup = document.getElementById('sourceAccountGroup');
+    const sourceAccountId = document.getElementById('sourceAccountId');
 
     function syncDestinationFields() {
         const isInternal = destinationType?.value === 'internal';
@@ -550,6 +565,12 @@ document.addEventListener('DOMContentLoaded', function () {
         externalRecipientGroup?.classList.toggle('d-none', isInternal);
         if (destinationAccountId) destinationAccountId.required = isInternal;
         if (externalRecipient) externalRecipient.required = !isInternal;
+    }
+
+    function syncSourceAccount() {
+        const isExpense = currentFlow() === 'out';
+        sourceAccountGroup?.classList.toggle('d-none', !isExpense);
+        if (sourceAccountId) sourceAccountId.required = isExpense;
     }
 
     destinationType?.addEventListener('change', syncDestinationFields);
@@ -601,9 +622,13 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
-    flowInputs.forEach((input) => input.addEventListener('change', syncCategoryList));
+    flowInputs.forEach((input) => input.addEventListener('change', function () {
+        syncCategoryList();
+        syncSourceAccount();
+    }));
     formTypeInput?.addEventListener('change', syncFormType);
     syncFormType();
+    syncSourceAccount();
 
     function requestRows() {
         return Array.from(requestItemsTable.querySelectorAll('tbody tr.request-line'));

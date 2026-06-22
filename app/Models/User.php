@@ -75,6 +75,13 @@ class User extends Authenticatable
         return $this->belongsToMany(Role::class);
     }
 
+    public function managedAccounts()
+    {
+        return $this->belongsToMany(Account::class)
+            ->withPivot('is_default')
+            ->withTimestamps();
+    }
+
     public function mobileApiTokens()
     {
         return $this->hasMany(MobileApiToken::class);

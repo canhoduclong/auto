@@ -23,6 +23,13 @@ class Account extends Model
         return $this->hasMany(Transaction::class);
     }
 
+    public function managers()
+    {
+        return $this->belongsToMany(User::class)
+            ->withPivot('is_default')
+            ->withTimestamps();
+    }
+
     public function isLowBalance(): bool
     {
         return (float) $this->balance < (float) $this->warning_threshold;

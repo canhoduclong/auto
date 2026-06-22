@@ -324,6 +324,12 @@
                     vnđ (Viết bằng chữ): <em>{{ $amountText($total) }}</em>
                 </span>
             </div>
+            @if($flow === 'Chi' && $transaction->account)
+                <div class="info-row">
+                    <span class="info-label">Tài khoản chi:</span>
+                    <span>{{ $transaction->account->name }}</span>
+                </div>
+            @endif
             <div class="info-row">
                 <span class="info-label">Nơi nhận tiền:</span>
                 <span>

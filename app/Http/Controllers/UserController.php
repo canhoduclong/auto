@@ -11,6 +11,7 @@ use App\Models\Team;
 use App\Models\Warehouse;
 use App\Models\Block;
 use App\Models\Department;
+use App\Models\Account;
 use App\Services\UserWorkspaceService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -154,7 +155,8 @@ class UserController extends Controller
         $warehouses = Warehouse::orderBy('name')->get();
         $blocks = Block::active()->orderBy('name')->get();
         $departments = Department::active()->with('block')->orderBy('name')->get();
-        return view('users.create', compact('roles', 'teams', 'warehouses', 'blocks', 'departments'));
+        $accounts = Account::active()->orderBy('name')->get();
+        return view('users.create', compact('roles', 'teams', 'warehouses', 'blocks', 'departments', 'accounts'));
     }
 
     public function store(Request $request)
@@ -173,7 +175,11 @@ class UserController extends Controller
             'team_id' => 'nullable|exists:teams,id',
             'block_id' => 'nullable|exists:blocks,id',
             'department_id' => 'nullable|exists:departments,id',
+            'account_ids' => 'nullable|array',
+            'account_ids.*' => 'integer|exists:accounts,id',
+            'default_account_id' => 'nullable|integer|exists:accounts,id',
         ]);
+        $managedAccountPayload = $this->managedAccountPayload($request);
 
         $user = User::create([
             'name'          => $request->name,
@@ -189,6 +195,7 @@ class UserController extends Controller
         if ($request->roles) {
             $user->roles()->attach($request->roles);
         }
+        $user->managedAccounts()->sync($managedAccountPayload);
         /*
         if (!empty($validated['roles'])) {
             $user->roles()->sync($validated['roles']);
@@ -330,6 +337,8 @@ class UserController extends Controller
         $warehouses = Warehouse::orderBy('name')->get();
         $blocks = Block::active()->orderBy('name')->get();
         $departments = Department::active()->with('block')->orderBy('name')->get();
+        $accounts = Account::active()->orderBy('name')->get();
+        $user->load('managedAccounts');
         $availableWorkspaces = $workspaceService->availableForUser($user);
 
         return view('users.edit', compact(
@@ -339,6 +348,7 @@ class UserController extends Controller
             'warehouses',
             'blocks',
             'departments',
+            'accounts',
             'availableWorkspaces'
         ));
     }
@@ -357,7 +367,11 @@ class UserController extends Controller
             'department_id' => 'nullable|exists:departments,id',
             'default_workspace' => 'nullable|string|max:120',
             'default_mobile_role_id' => 'nullable|integer|exists:roles,id',
+            'account_ids' => 'nullable|array',
+            'account_ids.*' => 'integer|exists:accounts,id',
+            'default_account_id' => 'nullable|integer|exists:accounts,id',
         ]);
+        $managedAccountPayload = $this->managedAccountPayload($request);
 
         $selectedRoleIds = collect($request->input('roles', []))
             ->map(fn ($roleId) => (int) $roleId)
@@ -413,6 +427,7 @@ class UserController extends Controller
         ]);
 
         $user->roles()->sync($request->roles ?? []);
+        $user->managedAccounts()->sync($managedAccountPayload);
 
         return redirect()->route('users.index')->with('success', __('users.messages.updated'));
     }
@@ -467,5 +482,29 @@ class UserController extends Controller
                 ->whereIn('approved_by', $userIds)
                 ->update(['approved_by' => null]);
         }
+    }
+
+    private function managedAccountPayload(Request $request): array
+    {
+        $accountIds = collect($request->input('account_ids', []))
+            ->map(fn ($id) => (int) $id)
+            ->filter()
+            ->unique()
+            ->values();
+        $defaultAccountId = (int) $request->input('default_account_id', 0);
+
+        if ($defaultAccountId > 0 && !$accountIds->contains($defaultAccountId)) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'default_account_id' => 'Tài khoản mặc định phải nằm trong danh sách tài khoản được gán.',
+            ]);
+        }
+
+        if ($accountIds->isNotEmpty() && $defaultAccountId === 0) {
+            $defaultAccountId = (int) $accountIds->first();
+        }
+
+        return $accountIds->mapWithKeys(fn ($accountId) => [
+            $accountId => ['is_default' => $accountId === $defaultAccountId],
+        ])->all();
     }
 }

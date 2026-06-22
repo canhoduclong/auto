@@ -190,6 +190,15 @@ class DepartmentFinanceRequestController extends Controller
             ->orderBy('name')
             ->get(['id', 'code', 'name', 'flow_direction']);
 
+        $managedAccounts = auth()->user()->managedAccounts()
+            ->where('accounts.is_active', true)
+            ->orderByDesc('account_user.is_default')
+            ->orderBy('accounts.name')
+            ->get(['accounts.id', 'accounts.name', 'accounts.type', 'accounts.account_number', 'accounts.bank_name']);
+        $defaultManagedAccountId = optional(
+            $managedAccounts->first(fn ($account) => (bool) $account->pivot->is_default) ?: $managedAccounts->first()
+        )->id;
+
         return view('department_finance_requests.index', [
             'config' => $config,
             'source' => $source,
@@ -199,6 +208,8 @@ class DepartmentFinanceRequestController extends Controller
             'formType' => $formType,
             'settings' => $settings,
             'accounts' => Account::active()->orderBy('name')->get(['id', 'name', 'type', 'account_number', 'bank_name']),
+            'managedAccounts' => $managedAccounts,
+            'defaultManagedAccountId' => $defaultManagedAccountId,
         ]);
     }
 
@@ -225,6 +236,7 @@ class DepartmentFinanceRequestController extends Controller
             'destination_type' => ['required', 'in:internal,external'],
             'destination_account_id' => ['nullable', 'required_if:destination_type,internal', 'integer', 'exists:accounts,id'],
             'external_recipient' => ['nullable', 'required_if:destination_type,external', 'string', 'max:255'],
+            'source_account_id' => ['nullable', 'integer', 'exists:accounts,id'],
             'note' => ['required', 'string', 'max:1000'],
             'receipt_image' => ['nullable', 'image', 'max:5120'],
         ]);
@@ -237,6 +249,33 @@ class DepartmentFinanceRequestController extends Controller
             ->whereKey((int) $validated['transaction_category_id'])
             ->where('flow_direction', $validated['flow_direction'])
             ->firstOrFail();
+
+        $managedAccountIds = auth()->user()->managedAccounts()
+            ->where('accounts.is_active', true)
+            ->pluck('accounts.id')
+            ->map(fn ($id) => (int) $id);
+        $sourceAccountId = (int) ($validated['source_account_id'] ?? 0);
+
+        if ($category->flow_direction === 'out' && $managedAccountIds->isNotEmpty()) {
+            if ($sourceAccountId === 0 || !$managedAccountIds->contains($sourceAccountId)) {
+                throw ValidationException::withMessages([
+                    'source_account_id' => 'Vui lòng chọn tài khoản chi trong danh sách tài khoản bạn đang quản lý.',
+                ]);
+            }
+        } else {
+            $sourceAccountId = 0;
+        }
+
+        if (
+            $category->flow_direction === 'out'
+            && $validated['destination_type'] === 'internal'
+            && $sourceAccountId > 0
+            && $sourceAccountId === (int) $validated['destination_account_id']
+        ) {
+            throw ValidationException::withMessages([
+                'destination_account_id' => 'Tài khoản đến phải khác tài khoản chi.',
+            ]);
+        }
 
         $items = collect($validated['items'])
             ->map(function (array $item, int $index) {
@@ -276,7 +315,7 @@ class DepartmentFinanceRequestController extends Controller
             'amount' => $total,
             'type' => $category->flow_direction === 'in' ? 'extra_income' : 'extra_expense',
             'transaction_category_id' => $category->id,
-            'account_id' => null,
+            'account_id' => $sourceAccountId ?: null,
             'destination_type' => $validated['destination_type'],
             'destination_account_id' => $validated['destination_type'] === 'internal'
                 ? (int) $validated['destination_account_id']

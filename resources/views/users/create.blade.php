@@ -53,6 +53,11 @@
             <small class="text-muted">Leader/Manager sẽ xem đơn theo team được gán.</small>
         </div>
 
+        @include('users.partials.managed_accounts', [
+            'selectedAccountIds' => collect(old('account_ids', []))->map(fn($id) => (int)$id),
+            'defaultAccountId' => (int) old('default_account_id', 0),
+        ])
+
         <div class="mb-3">
             <label class="form-label">Kho duoc assign</label>
             <select name="warehouse_id" class="form-control">
