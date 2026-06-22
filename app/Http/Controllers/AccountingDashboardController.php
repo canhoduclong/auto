@@ -633,6 +633,7 @@ class AccountingDashboardController extends Controller
             'payeeUser:id,name',
             'transactionCategory:id,code,name,flow_direction',
             'account:id,name,type,balance',
+            'destinationAccount:id,name,type,balance,account_number,bank_name',
             'approvalSteps.approver:id,name',
         ]);
 
@@ -663,6 +664,7 @@ class AccountingDashboardController extends Controller
             'rejecter:id,name',
             'transactionCategory:id,code,name,flow_direction',
             'account:id,name,type',
+            'destinationAccount:id,name,type,account_number,bank_name',
         ]);
 
         return view('department_finance_requests.print', [
@@ -1539,6 +1541,16 @@ class AccountingDashboardController extends Controller
                 'account_id' => ['required', 'integer', 'exists:accounts,id'],
             ]);
 
+            if (
+                $transaction->transactionCategory?->flow_direction === 'out'
+                && $transaction->destination_type === 'internal'
+                && (int) $validated['account_id'] === (int) $transaction->destination_account_id
+            ) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'account_id' => 'Tài khoản thực hiện phải khác tài khoản đến khi luân chuyển nội bộ.',
+                ]);
+            }
+
             $transaction->forceFill([
                 'account_id' => (int) $validated['account_id'],
             ])->save();
@@ -1955,6 +1967,9 @@ class AccountingDashboardController extends Controller
         if ($transaction->account_id) {
             $this->refreshAccountBalanceById((int) $transaction->account_id);
         }
+        if ($transaction->destination_type === 'internal' && $transaction->destination_account_id) {
+            $this->refreshAccountBalanceById((int) $transaction->destination_account_id);
+        }
 
         if ($transaction->order_id) {
             $this->refreshOrderFinancialState($transaction->order);
@@ -1974,7 +1989,7 @@ class AccountingDashboardController extends Controller
             return;
         }
 
-        collect([$previousAccountId, $transaction->account_id])
+        collect([$previousAccountId, $transaction->account_id, $transaction->destination_account_id])
             ->filter(fn ($accountId) => (int) $accountId > 0)
             ->unique()
             ->each(function ($accountId) {
@@ -2017,6 +2032,15 @@ class AccountingDashboardController extends Controller
                 $txnNet -= (float) $txn->amount;
             }
         }
+
+        $internalTransfersIn = (float) Transaction::query()
+            ->where('destination_type', 'internal')
+            ->where('destination_account_id', $account->id)
+            ->where('status', Transaction::STATUS_APPROVED)
+            ->whereHas('transactionCategory', fn ($query) => $query->where('flow_direction', 'out'))
+            ->sum('amount');
+
+        $txnNet += $internalTransfersIn;
 
         $account->update(['balance' => $openingBalance + $txnNet]);
     }

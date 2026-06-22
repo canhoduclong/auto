@@ -88,6 +88,7 @@ class AccountController extends Controller
             'account_id' => ['nullable', 'integer', 'exists:accounts,id'],
             'direction' => ['nullable', 'in:in,out'],
             'source' => ['nullable', 'in:transaction,adjustment'],
+            'movement_scope' => ['nullable', 'in:internal,external,adjustment'],
             'from_date' => ['nullable', 'date_format:Y-m-d'],
             'to_date' => ['nullable', 'date_format:Y-m-d'],
         ]);
@@ -95,6 +96,7 @@ class AccountController extends Controller
         $accountId = (int) ($filters['account_id'] ?? 0);
         $direction = (string) ($filters['direction'] ?? '');
         $source = (string) ($filters['source'] ?? '');
+        $movementScope = (string) ($filters['movement_scope'] ?? '');
         $fromDate = filled($filters['from_date'] ?? null) ? Carbon::parse($filters['from_date'])->startOfDay() : null;
         $toDate = filled($filters['to_date'] ?? null) ? Carbon::parse($filters['to_date'])->endOfDay() : null;
 
@@ -117,10 +119,14 @@ class AccountController extends Controller
                     'key' => 'adjustment-' . $adjustment->id,
                     'source' => 'adjustment',
                     'source_id' => $adjustment->id,
+                    'movement_scope' => 'adjustment',
                     'account_id' => (int) $adjustment->account_id,
                     'account' => $accountMap->get($adjustment->account_id),
                     'direction' => $isDeposit ? 'in' : 'out',
                     'type_label' => $isDeposit ? 'Nạp tiền' : 'Rút tiền',
+                    'from_name' => $isDeposit ? 'Ngoài hệ thống' : ($accountMap->get($adjustment->account_id)?->name ?? 'Tài khoản'),
+                    'to_name' => $isDeposit ? ($accountMap->get($adjustment->account_id)?->name ?? 'Tài khoản') : 'Ngoài hệ thống',
+                    'request_title' => null,
                     'amount' => (float) $adjustment->amount,
                     'signed_amount' => ($isDeposit ? 1 : -1) * (float) $adjustment->amount,
                     'performed_by' => $adjustment->performer?->name ?? 'Hệ thống',
@@ -135,6 +141,7 @@ class AccountController extends Controller
                 'transactionCategory:id,name,flow_direction',
                 'submitter:id,name',
                 'approver:id,name',
+                'destinationAccount:id,name,type,account_number,bank_name',
             ])
             ->whereIn('account_id', $accountIds)
             ->where('status', Transaction::STATUS_APPROVED)
@@ -143,15 +150,26 @@ class AccountController extends Controller
                 $flowDirection = $transaction->transactionCategory?->flow_direction
                     ?? (in_array((string) $transaction->type, ['payment', 'extra_income'], true) ? 'in' : 'out');
                 $isIncome = $flowDirection === 'in';
+                $isInternalTransfer = !$isIncome
+                    && $transaction->destination_type === 'internal'
+                    && $transaction->destination_account_id;
+                $accountName = $accountMap->get($transaction->account_id)?->name ?? 'Tài khoản nguồn';
+                $externalName = $transaction->external_recipient ?: 'Bên ngoài hệ thống';
 
                 return [
                     'key' => 'transaction-' . $transaction->id,
                     'source' => 'transaction',
                     'source_id' => $transaction->id,
+                    'movement_scope' => $isInternalTransfer ? 'internal' : 'external',
                     'account_id' => (int) $transaction->account_id,
                     'account' => $accountMap->get($transaction->account_id),
                     'direction' => $isIncome ? 'in' : 'out',
                     'type_label' => $transaction->transactionCategory?->name ?: $this->transactionTypeLabel((string) $transaction->type),
+                    'from_name' => $isIncome ? $externalName : $accountName,
+                    'to_name' => $isIncome
+                        ? $accountName
+                        : ($isInternalTransfer ? ($transaction->destinationAccount?->name ?? 'Tài khoản đến') : $externalName),
+                    'request_title' => $transaction->request_title,
                     'amount' => (float) $transaction->amount,
                     'signed_amount' => ($isIncome ? 1 : -1) * (float) $transaction->amount,
                     'performed_by' => $transaction->approver?->name ?? $transaction->submitter?->name ?? 'Hệ thống',
@@ -161,8 +179,44 @@ class AccountController extends Controller
                 ];
             });
 
+        $internalTransferMovements = Transaction::query()
+            ->with([
+                'transactionCategory:id,name,flow_direction',
+                'submitter:id,name',
+                'approver:id,name',
+                'account:id,name',
+            ])
+            ->where('destination_type', 'internal')
+            ->whereIn('destination_account_id', $accountIds)
+            ->where('status', Transaction::STATUS_APPROVED)
+            ->whereHas('transactionCategory', fn ($query) => $query->where('flow_direction', 'out'))
+            ->get()
+            ->map(function (Transaction $transaction) use ($accountMap): array {
+                return [
+                    'key' => 'transaction-destination-' . $transaction->id,
+                    'source' => 'transaction',
+                    'source_id' => $transaction->id,
+                    'movement_scope' => 'internal',
+                    'account_id' => (int) $transaction->destination_account_id,
+                    'account' => $accountMap->get($transaction->destination_account_id),
+                    'direction' => 'in',
+                    'type_label' => 'Luân chuyển nội bộ',
+                    'from_name' => $transaction->account?->name ?? 'Tài khoản nguồn',
+                    'to_name' => $accountMap->get($transaction->destination_account_id)?->name ?? 'Tài khoản đến',
+                    'request_title' => $transaction->request_title,
+                    'amount' => (float) $transaction->amount,
+                    'signed_amount' => (float) $transaction->amount,
+                    'performed_by' => $transaction->approver?->name ?? $transaction->submitter?->name ?? 'Hệ thống',
+                    'note' => 'Nhận từ ' . ($transaction->account?->name ?? 'tài khoản nguồn')
+                        . ($transaction->note ? ' - ' . $transaction->note : ''),
+                    'occurred_at' => $transaction->approved_at ?? $transaction->created_at,
+                    'detail_url' => accounting_route('cashflow.show', $transaction),
+                ];
+            });
+
         $allMovements = $adjustmentMovements
             ->concat($transactionMovements)
+            ->concat($internalTransferMovements)
             ->groupBy('account_id')
             ->flatMap(function ($accountMovements, $movementAccountId) use ($accountMap) {
                 $runningBalance = (float) ($accountMap->get((int) $movementAccountId)?->balance ?? 0);
@@ -187,6 +241,7 @@ class AccountController extends Controller
         $filteredMovements = $allMovements
             ->when($direction !== '', fn ($items) => $items->where('direction', $direction))
             ->when($source !== '', fn ($items) => $items->where('source', $source))
+            ->when($movementScope !== '', fn ($items) => $items->where('movement_scope', $movementScope))
             ->when($fromDate, fn ($items) => $items->filter(fn ($item) => $item['occurred_at']?->gte($fromDate)))
             ->when($toDate, fn ($items) => $items->filter(fn ($item) => $item['occurred_at']?->lte($toDate)))
             ->values();
@@ -207,10 +262,15 @@ class AccountController extends Controller
             'accountId' => $accountId,
             'direction' => $direction,
             'source' => $source,
+            'movementScope' => $movementScope,
             'fromDate' => $fromDate?->toDateString(),
             'toDate' => $toDate?->toDateString(),
             'totalIn' => (float) $filteredMovements->where('direction', 'in')->sum('amount'),
             'totalOut' => (float) $filteredMovements->where('direction', 'out')->sum('amount'),
+            'externalIn' => (float) $filteredMovements->where('movement_scope', 'external')->where('direction', 'in')->sum('amount'),
+            'externalOut' => (float) $filteredMovements->where('movement_scope', 'external')->where('direction', 'out')->sum('amount'),
+            'internalTransferTotal' => (float) $filteredMovements->where('movement_scope', 'internal')->unique('source_id')->sum('amount'),
+            'totalAccountBalance' => (float) $accounts->where('is_active', true)->sum('balance'),
         ]);
     }
 

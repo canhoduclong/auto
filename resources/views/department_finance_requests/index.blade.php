@@ -270,6 +270,29 @@
                             @endforeach
                         </select>
                     </div>
+                    <div>
+                        <label class="form-label fw-semibold">Nơi nhận tiền <span class="text-danger">*</span></label>
+                        <select name="destination_type" id="destinationType" class="form-select" required>
+                            <option value="internal" @selected(old('destination_type', 'internal') === 'internal')>Tài khoản nội bộ</option>
+                            <option value="external" @selected(old('destination_type') === 'external')>Bên ngoài</option>
+                        </select>
+                    </div>
+                    <div id="destinationAccountGroup">
+                        <label class="form-label fw-semibold">Tài khoản đến <span class="text-danger">*</span></label>
+                        <select name="destination_account_id" id="destinationAccountId" class="form-select">
+                            <option value="">-- Chọn tài khoản đến --</option>
+                            @foreach($accounts as $account)
+                                <option value="{{ $account->id }}" @selected((string) old('destination_account_id') === (string) $account->id)>
+                                    {{ $account->name }}{{ $account->account_number ? ' - ' . $account->account_number : '' }}{{ $account->bank_name ? ' (' . $account->bank_name . ')' : '' }}
+                                </option>
+                            @endforeach
+                        </select>
+                        <div class="form-text">Dùng khi tiền được luân chuyển vào một tài khoản đang quản lý.</div>
+                    </div>
+                    <div id="externalRecipientGroup" class="d-none">
+                        <label class="form-label fw-semibold">Người/đơn vị nhận <span class="text-danger">*</span></label>
+                        <input type="text" name="external_recipient" id="externalRecipient" class="form-control" maxlength="255" value="{{ old('external_recipient') }}" placeholder="VD: Công ty ABC, Nguyễn Văn A...">
+                    </div>
                 </div>
 
                 <div class="fr-note-grid mb-4">
@@ -515,6 +538,22 @@ document.addEventListener('DOMContentLoaded', function () {
     const requestVatInput = document.getElementById('requestVat');
     const requestSubtotalText = document.getElementById('requestSubtotalText');
     const requestTotalText = document.getElementById('requestTotalText');
+    const destinationType = document.getElementById('destinationType');
+    const destinationAccountGroup = document.getElementById('destinationAccountGroup');
+    const destinationAccountId = document.getElementById('destinationAccountId');
+    const externalRecipientGroup = document.getElementById('externalRecipientGroup');
+    const externalRecipient = document.getElementById('externalRecipient');
+
+    function syncDestinationFields() {
+        const isInternal = destinationType?.value === 'internal';
+        destinationAccountGroup?.classList.toggle('d-none', !isInternal);
+        externalRecipientGroup?.classList.toggle('d-none', isInternal);
+        if (destinationAccountId) destinationAccountId.required = isInternal;
+        if (externalRecipient) externalRecipient.required = !isInternal;
+    }
+
+    destinationType?.addEventListener('change', syncDestinationFields);
+    syncDestinationFields();
 
     function formatMoney(value) {
         return Math.round(Number(value) || 0).toLocaleString('vi-VN') + 'đ';

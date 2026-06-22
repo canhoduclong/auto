@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Transaction;
 use App\Models\TransactionCategory;
+use App\Models\Account;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use App\Models\Setting;
@@ -173,6 +174,7 @@ class DepartmentFinanceRequestController extends Controller
                 'rejecter:id,name',
                 'transactionCategory:id,code,name,flow_direction',
                 'account:id,name,type',
+                'destinationAccount:id,name,type,account_number,bank_name',
             ])
             ->where('request_source', $source)
             ->when($config['own_only'] ?? false, fn ($query) => $query->where('submitted_by', auth()->id()))
@@ -196,6 +198,7 @@ class DepartmentFinanceRequestController extends Controller
             'status' => $status,
             'formType' => $formType,
             'settings' => $settings,
+            'accounts' => Account::active()->orderBy('name')->get(['id', 'name', 'type', 'account_number', 'bank_name']),
         ]);
     }
 
@@ -219,6 +222,9 @@ class DepartmentFinanceRequestController extends Controller
             'items.*.unit_price' => ['required', 'numeric', 'min:0'],
             'request_vat' => ['nullable', 'numeric', 'min:0'],
             'method' => ['nullable', 'string', 'max:50'],
+            'destination_type' => ['required', 'in:internal,external'],
+            'destination_account_id' => ['nullable', 'required_if:destination_type,internal', 'integer', 'exists:accounts,id'],
+            'external_recipient' => ['nullable', 'required_if:destination_type,external', 'string', 'max:255'],
             'note' => ['required', 'string', 'max:1000'],
             'receipt_image' => ['nullable', 'image', 'max:5120'],
         ]);
@@ -271,6 +277,13 @@ class DepartmentFinanceRequestController extends Controller
             'type' => $category->flow_direction === 'in' ? 'extra_income' : 'extra_expense',
             'transaction_category_id' => $category->id,
             'account_id' => null,
+            'destination_type' => $validated['destination_type'],
+            'destination_account_id' => $validated['destination_type'] === 'internal'
+                ? (int) $validated['destination_account_id']
+                : null,
+            'external_recipient' => $validated['destination_type'] === 'external'
+                ? trim((string) $validated['external_recipient'])
+                : null,
             'method' => $validated['method'] ?? null,
             'note' => $validated['note'],
             'status' => Transaction::STATUS_PENDING_APPROVAL,
@@ -315,6 +328,7 @@ class DepartmentFinanceRequestController extends Controller
             'rejecter:id,name',
             'transactionCategory:id,code,name,flow_direction',
             'account:id,name,type',
+            'destinationAccount:id,name,type,account_number,bank_name',
         ]);
 
         return view('department_finance_requests.print', [

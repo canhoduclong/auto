@@ -115,6 +115,18 @@
                         <div>{{ $transaction->account?->name ?? '-' }}</div>
                     </div>
                     <div class="col-md-4">
+                        <div class="text-muted small">Nơi nhận tiền</div>
+                        <div>
+                            @if($transaction->destination_type === 'internal')
+                                <span class="badge text-bg-info">Nội bộ</span>
+                                {{ $transaction->destinationAccount?->name ?: '-' }}
+                            @else
+                                <span class="badge text-bg-secondary">Bên ngoài</span>
+                                {{ $transaction->external_recipient ?: '-' }}
+                            @endif
+                        </div>
+                    </div>
+                    <div class="col-md-4">
                         <div class="text-muted small">Phương thức</div>
                         <div>{{ $transaction->method ?: '-' }}</div>
                     </div>
@@ -228,11 +240,11 @@
                     @csrf
                     @if($transaction->request_source)
                         <div class="mb-2">
-                            <label class="form-label">Tài khoản thực hiện <span class="text-danger">*</span></label>
+                            <label class="form-label">{{ $transaction->transactionCategory?->flow_direction === 'in' ? 'Tài khoản nhận tiền' : 'Tài khoản thực hiện/nguồn' }} <span class="text-danger">*</span></label>
                             <select name="account_id" class="form-select" required>
                                 <option value="">-- Chọn tài khoản --</option>
                                 @foreach($accounts as $account)
-                                    <option value="{{ $account->id }}" @selected((string) old('account_id', $transaction->account_id) === (string) $account->id)>
+                                    <option value="{{ $account->id }}" @selected((string) old('account_id', $transaction->account_id ?: ($transaction->transactionCategory?->flow_direction === 'in' ? $transaction->destination_account_id : null)) === (string) $account->id)>
                                         {{ $account->name }} - {{ $account->type === 'cash' ? 'Tiền mặt' : 'Ngân hàng' }} ({{ number_format((float) $account->balance) }}đ)
                                     </option>
                                 @endforeach

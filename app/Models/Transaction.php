@@ -24,6 +24,9 @@ class Transaction extends Model
         'payee_user_id',
         'transaction_category_id',
         'account_id',
+        'destination_type',
+        'destination_account_id',
+        'external_recipient',
         'method',
         'note',
         'receipt_image_path',
@@ -60,6 +63,7 @@ class Transaction extends Model
     public function payeeUser() { return $this->belongsTo(User::class, 'payee_user_id'); }
     public function transactionCategory() { return $this->belongsTo(TransactionCategory::class, 'transaction_category_id'); }
     public function account() { return $this->belongsTo(Account::class); }
+    public function destinationAccount() { return $this->belongsTo(Account::class, 'destination_account_id'); }
     public function customer() { return $this->belongsTo(Customer::class); }
     public function submitter() { return $this->belongsTo(User::class, 'submitted_by'); }
     public function approver() { return $this->belongsTo(User::class, 'approved_by'); }

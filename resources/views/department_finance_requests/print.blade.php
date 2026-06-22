@@ -325,6 +325,22 @@
                 </span>
             </div>
             <div class="info-row">
+                <span class="info-label">Nơi nhận tiền:</span>
+                <span>
+                    @if($transaction->destination_type === 'internal')
+                        {{ $transaction->destinationAccount?->name ?: '-' }}
+                        @if($transaction->destinationAccount?->account_number)
+                            - {{ $transaction->destinationAccount->account_number }}
+                        @endif
+                        @if($transaction->destinationAccount?->bank_name)
+                            ({{ $transaction->destinationAccount->bank_name }})
+                        @endif
+                    @else
+                        {{ $transaction->external_recipient ?: 'Bên ngoài' }}
+                    @endif
+                </span>
+            </div>
+            <div class="info-row">
                 <span class="info-label">(Kèm theo:</span>
                 <span>........................................................ chứng từ gốc).</span>
             </div>
