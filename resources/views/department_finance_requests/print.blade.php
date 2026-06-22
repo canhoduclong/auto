@@ -18,6 +18,8 @@
     $total = (float) ($transaction->request_total ?? $transaction->amount);
     $createdAt = $transaction->created_at ?: now();
     $flow = $transaction->transactionCategory?->flow_direction === 'in' || $transaction->type === 'extra_income' ? 'Thu' : 'Chi';
+    $isPaymentProposal = $transaction->request_form_type === \App\Models\Transaction::REQUEST_FORM_PAYMENT;
+    $documentTitle = $isPaymentProposal ? 'Phiếu đề nghị thanh toán' : 'Phiếu yêu cầu ' . mb_strtolower($flow);
     $departmentName = $transaction->submitter?->department?->name
         ?: $transaction->submitter?->block?->name
         ?: ($transaction->request_department ?: ($config['label'] ?? '-'));
@@ -111,7 +113,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Phiếu yêu cầu {{ mb_strtolower($flow) }} #{{ $transaction->id }}</title>
+    <title>{{ $documentTitle }} #{{ $transaction->id }}</title>
     <style>
         * { box-sizing: border-box; }
         body {
@@ -293,7 +295,7 @@
             </div>
         </div>
 
-        <h1>Phiếu yêu cầu {{ mb_strtolower($flow) }}</h1>
+        <h1>{{ $documentTitle }}</h1>
         <div class="date-line">
             Ngày {{ $createdAt->format('d') }} tháng {{ $createdAt->format('m') }} năm {{ $createdAt->format('Y') }}.
         </div>
@@ -304,7 +306,7 @@
                 <span>Ban lãnh đạo và bộ phận kế toán</span>
             </div>
             <div class="info-row">
-                <span class="info-label">Họ và tên người đề nghị thanh toán:</span>
+                <span class="info-label">{{ $isPaymentProposal ? 'Họ và tên người đề nghị thanh toán:' : 'Họ và tên người yêu cầu:' }}</span>
                 <span>{{ $transaction->submitter?->name ?: '-' }}</span>
             </div>
             <div class="info-row">
@@ -312,7 +314,7 @@
                 <span>{{ $departmentName }}</span>
             </div>
             <div class="info-row">
-                <span class="info-label">Nội dung thanh toán:</span>
+                <span class="info-label">{{ $isPaymentProposal ? 'Nội dung thanh toán:' : 'Nội dung yêu cầu:' }}</span>
                 <span>{{ $transaction->request_title ?: ($transaction->note ?: '-') }}</span>
             </div>
             <div class="info-row">
@@ -382,7 +384,7 @@
 
         <div class="signatures">
             <div class="signature-box">
-                <div class="signature-title">Người lập phiếu</div>
+                <div class="signature-title">{{ $isPaymentProposal ? 'Người đề nghị' : 'Người lập phiếu' }}</div>
                 <div class="signature-hint">(Ký, ghi rõ họ tên)</div>
             </div>
             <div class="signature-box">

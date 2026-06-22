@@ -23,8 +23,8 @@
     <div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-2">
             <div>
-                <div class="fw-bold">Phiếu yêu cầu chờ duyệt</div>
-                <div class="small text-muted">Các bộ phận gửi yêu cầu thu/chi sang Kế toán</div>
+                <div class="fw-bold">Phiếu tài chính chờ duyệt</div>
+                <div class="small text-muted">Phiếu yêu cầu thu/chi và đề nghị thanh toán từ các bộ phận</div>
             </div>
             <span class="badge bg-warning text-dark">{{ $pendingRequests->count() }}</span>
         </div>
@@ -49,6 +49,7 @@
                             <td class="text-muted">#{{ $requestTx->id }}</td>
                             <td><span class="badge text-bg-light border">{{ $requestTx->request_department ?: $requestTx->request_source }}</span></td>
                             <td>
+                                <div class="mb-1"><span class="badge text-bg-light border">{{ $requestTx->request_form_type === \App\Models\Transaction::REQUEST_FORM_PAYMENT ? 'Đề nghị thanh toán' : 'Yêu cầu thu/chi' }}</span></div>
                                 <div class="fw-semibold">{{ $requestTx->request_title ?: 'Phiếu yêu cầu' }}</div>
                                 <div class="small text-muted">{{ $requestTx->transactionCategory?->name ?: '-' }}</div>
                             </td>

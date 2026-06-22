@@ -11,6 +11,8 @@ class Transaction extends Model
     public const STATUS_PENDING_APPROVAL = 'pending_approval';
     public const STATUS_APPROVED = 'approved';
     public const STATUS_REJECTED = 'rejected';
+    public const REQUEST_FORM_CASH = 'cash_request';
+    public const REQUEST_FORM_PAYMENT = 'payment_proposal';
 
     protected $fillable = [
         'order_id',
@@ -35,6 +37,7 @@ class Transaction extends Model
         'reject_reason',
         'request_source',
         'request_department',
+        'request_form_type',
         'request_title',
         'request_items',
         'request_subtotal',

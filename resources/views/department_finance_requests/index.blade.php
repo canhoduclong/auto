@@ -1,7 +1,7 @@
 @extends($config['layout'])
 
-@section('title', 'Phiếu yêu cầu')
-@section('subtitle', 'Tạo yêu cầu thu/chi gửi phòng Kế toán duyệt')
+@section('title', 'Phiếu tài chính')
+@section('subtitle', 'Tạo phiếu yêu cầu thu/chi hoặc phiếu đề nghị thanh toán')
 
 @section('content')
 @php
@@ -13,6 +13,7 @@
     $incomeCategories = $categories->where('flow_direction', 'in')->values();
     $expenseCategories = $categories->where('flow_direction', 'out')->values();
     $selectedCategory = $categories->firstWhere('id', (int) old('transaction_category_id'));
+    $selectedFormType = old('request_form_type', \App\Models\Transaction::REQUEST_FORM_CASH);
     $oldItems = old('items', [['content' => '', 'unit' => '', 'quantity' => 1, 'unit_price' => 0]]);
     $currentUser = auth()->user();
     $currentDepartmentName = $currentUser?->department?->name;
@@ -206,8 +207,8 @@
     <div class="fr-panel">
         <div class="fr-panel-head">
             <div>
-                <h2 class="fr-title">Tạo phiếu yêu cầu</h2>
-                <div class="fr-subtitle">{{ $config['label'] }} gửi Kế toán duyệt thu/chi</div>
+                <h2 class="fr-title">Tạo phiếu tài chính</h2>
+                <div class="fr-subtitle">{{ $config['label'] }} gửi Kế toán duyệt</div>
             </div>
             <span class="badge text-bg-light border px-3 py-2">{{ $config['label'] }}</span>
         </div>
@@ -226,8 +227,15 @@
                 </div>
                 <div class="fr-meta-grid mb-4">
                     <div>
-                        <label class="form-label fw-semibold">Loại phiếu <span class="text-danger">*</span></label>
-                        <div class="btn-group w-100" role="group" aria-label="Loại phiếu">
+                        <label class="form-label fw-semibold">Loại chứng từ <span class="text-danger">*</span></label>
+                        <select name="request_form_type" id="requestFormType" class="form-select" required>
+                            <option value="{{ \App\Models\Transaction::REQUEST_FORM_CASH }}" @selected($selectedFormType === \App\Models\Transaction::REQUEST_FORM_CASH)>Phiếu yêu cầu thu/chi</option>
+                            <option value="{{ \App\Models\Transaction::REQUEST_FORM_PAYMENT }}" @selected($selectedFormType === \App\Models\Transaction::REQUEST_FORM_PAYMENT)>Phiếu đề nghị thanh toán</option>
+                        </select>
+                    </div>
+                    <div id="flowDirectionGroup">
+                        <label class="form-label fw-semibold">Dòng tiền <span class="text-danger">*</span></label>
+                        <div class="btn-group w-100" role="group" aria-label="Dòng tiền">
                             <input type="radio" class="btn-check" name="flow_direction" id="requestIn" value="in" @checked(old('flow_direction') === 'in')>
                             <label class="btn btn-outline-success" for="requestIn"><i class="bi bi-arrow-down-circle me-1"></i>Thu</label>
 
@@ -360,7 +368,15 @@
                 <h2 class="fr-title">Phiếu đã gửi</h2>
                 <div class="fr-subtitle">Theo dõi trạng thái duyệt từ phòng Kế toán</div>
             </div>
-            <form method="GET" class="d-flex gap-2 align-items-end">
+            <form method="GET" class="d-flex gap-2 align-items-end flex-wrap">
+                <div>
+                    <label class="form-label small mb-1">Loại chứng từ</label>
+                    <select name="form_type" class="form-select form-select-sm">
+                        <option value="all" @selected($formType === 'all')>Tất cả</option>
+                        <option value="{{ \App\Models\Transaction::REQUEST_FORM_CASH }}" @selected($formType === \App\Models\Transaction::REQUEST_FORM_CASH)>Yêu cầu thu/chi</option>
+                        <option value="{{ \App\Models\Transaction::REQUEST_FORM_PAYMENT }}" @selected($formType === \App\Models\Transaction::REQUEST_FORM_PAYMENT)>Đề nghị thanh toán</option>
+                    </select>
+                </div>
                 <div>
                     <label class="form-label small mb-1">Trạng thái</label>
                     <select name="status" class="form-select form-select-sm">
@@ -396,6 +412,11 @@
                         <tr>
                             <td><span class="fr-id-pill">#{{ $requestItem->id }}</span></td>
                             <td>
+                                <div class="mb-1">
+                                    <span class="badge text-bg-light border">
+                                        {{ $requestItem->request_form_type === \App\Models\Transaction::REQUEST_FORM_PAYMENT ? 'Đề nghị thanh toán' : 'Yêu cầu thu/chi' }}
+                                    </span>
+                                </div>
                                 <div class="fw-semibold">{{ $requestItem->request_title ?: 'Phiếu yêu cầu' }}</div>
                                 <div class="small text-muted">{{ $requestItem->transactionCategory?->name ?: '-' }}</div>
                                 <div class="fr-creator-line">
@@ -486,6 +507,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const categoryText = document.getElementById('selectedCategoryText');
     const categoryItems = Array.from(document.querySelectorAll('.category-picker-item'));
     const flowInputs = Array.from(document.querySelectorAll('input[name="flow_direction"]'));
+    const formTypeInput = document.getElementById('requestFormType');
+    const flowDirectionGroup = document.getElementById('flowDirectionGroup');
     const modalElement = document.getElementById('categoryPickerModal');
     const requestItemsTable = document.getElementById('requestItemsTable');
     const addLineButton = document.getElementById('addRequestLine');
@@ -499,6 +522,16 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function currentFlow() {
         return document.querySelector('input[name="flow_direction"]:checked')?.value || 'out';
+    }
+
+    function syncFormType() {
+        const isPaymentProposal = formTypeInput?.value === '{{ \App\Models\Transaction::REQUEST_FORM_PAYMENT }}';
+        flowDirectionGroup?.classList.toggle('d-none', isPaymentProposal);
+        if (isPaymentProposal) {
+            const outInput = document.getElementById('requestOut');
+            if (outInput) outInput.checked = true;
+        }
+        syncCategoryList();
     }
 
     function syncCategoryList() {
@@ -530,7 +563,8 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     flowInputs.forEach((input) => input.addEventListener('change', syncCategoryList));
-    syncCategoryList();
+    formTypeInput?.addEventListener('change', syncFormType);
+    syncFormType();
 
     function requestRows() {
         return Array.from(requestItemsTable.querySelectorAll('tbody tr.request-line'));

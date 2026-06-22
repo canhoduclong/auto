@@ -369,7 +369,7 @@ class ProcurementController extends Controller
         if ((float) $purchase->paid_amount > 0) {
             $items = [['stt' => 1, 'content' => 'Số tiền còn phải thanh toán - ' . $source . ' - ' . $purchase->code, 'unit' => 'lần', 'quantity' => 1, 'unit_price' => $requestAmount, 'line_total' => $requestAmount]];
         }
-        $transaction = Transaction::create(['amount' => $requestAmount, 'type' => 'extra_expense', 'transaction_category_id' => $category->id, 'note' => 'Yêu cầu thanh toán lần thu mua ' . $purchase->code, 'status' => Transaction::STATUS_PENDING_APPROVAL, 'submitted_by' => auth()->id(), 'request_source' => 'procurement', 'request_department' => 'Thu mua', 'request_title' => 'Thanh toán thu mua ' . $purchase->code, 'request_items' => $items, 'request_subtotal' => $requestAmount, 'request_vat' => 0, 'request_total' => $requestAmount]);
+        $transaction = Transaction::create(['amount' => $requestAmount, 'type' => 'extra_expense', 'transaction_category_id' => $category->id, 'note' => 'Yêu cầu thanh toán lần thu mua ' . $purchase->code, 'status' => Transaction::STATUS_PENDING_APPROVAL, 'submitted_by' => auth()->id(), 'request_source' => 'procurement', 'request_department' => 'Thu mua', 'request_form_type' => Transaction::REQUEST_FORM_PAYMENT, 'request_title' => 'Thanh toán thu mua ' . $purchase->code, 'request_items' => $items, 'request_subtotal' => $requestAmount, 'request_vat' => 0, 'request_total' => $requestAmount]);
         $purchase->update(['payment_transaction_id' => $transaction->id]);
         app(ApprovalService::class)->initTransactionApproval($transaction);
         return back()->with('success', 'Đã gửi phiếu yêu cầu thanh toán #' . $transaction->id . '.');

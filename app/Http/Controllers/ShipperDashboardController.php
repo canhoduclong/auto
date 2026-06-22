@@ -2413,6 +2413,7 @@ class ShipperDashboardController extends Controller
                 'submitted_by' => Auth::id(),
                 'request_source' => 'shipper',
                 'request_department' => 'Điều phối ship',
+                'request_form_type' => Transaction::REQUEST_FORM_PAYMENT,
                 'request_title' => 'Chi phí ship ngày ' . Carbon::parse($selectedDate)->format('d/m/Y'),
                 'request_items' => $items->all(),
                 'request_subtotal' => $total,

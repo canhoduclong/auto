@@ -159,6 +159,9 @@ class DepartmentFinanceRequestController extends Controller
         $status = in_array($request->input('status'), ['all', Transaction::STATUS_PENDING_APPROVAL, Transaction::STATUS_APPROVED, Transaction::STATUS_REJECTED], true)
             ? $request->input('status')
             : 'all';
+        $formType = in_array($request->input('form_type'), ['all', Transaction::REQUEST_FORM_CASH, Transaction::REQUEST_FORM_PAYMENT], true)
+            ? $request->input('form_type')
+            : 'all';
 
         $requests = Transaction::query()
             ->with([
@@ -174,6 +177,7 @@ class DepartmentFinanceRequestController extends Controller
             ->where('request_source', $source)
             ->when($config['own_only'] ?? false, fn ($query) => $query->where('submitted_by', auth()->id()))
             ->when($status !== 'all', fn ($query) => $query->where('status', $status))
+            ->when($formType !== 'all', fn ($query) => $query->where('request_form_type', $formType))
             ->latest()
             ->paginate(20)
             ->appends($request->query());
@@ -190,6 +194,7 @@ class DepartmentFinanceRequestController extends Controller
             'requests' => $requests,
             'categories' => $categories,
             'status' => $status,
+            'formType' => $formType,
             'settings' => $settings,
         ]);
     }
@@ -203,6 +208,7 @@ class DepartmentFinanceRequestController extends Controller
         $request->merge(['amount' => $rawAmount]);
 
         $validated = $request->validate([
+            'request_form_type' => ['required', 'in:' . Transaction::REQUEST_FORM_CASH . ',' . Transaction::REQUEST_FORM_PAYMENT],
             'flow_direction' => ['required', 'in:in,out'],
             'request_title' => ['required', 'string', 'max:255'],
             'transaction_category_id' => ['required', 'integer', 'exists:transaction_categories,id'],
@@ -216,6 +222,10 @@ class DepartmentFinanceRequestController extends Controller
             'note' => ['required', 'string', 'max:1000'],
             'receipt_image' => ['nullable', 'image', 'max:5120'],
         ]);
+
+        if ($validated['request_form_type'] === Transaction::REQUEST_FORM_PAYMENT) {
+            $validated['flow_direction'] = 'out';
+        }
 
         $category = TransactionCategory::query()
             ->whereKey((int) $validated['transaction_category_id'])
@@ -267,6 +277,7 @@ class DepartmentFinanceRequestController extends Controller
             'submitted_by' => auth()->id(),
             'request_source' => $source,
             'request_department' => $config['label'],
+            'request_form_type' => $validated['request_form_type'],
             'request_title' => $validated['request_title'],
             'request_items' => $items->all(),
             'request_subtotal' => $subtotal,
@@ -283,7 +294,7 @@ class DepartmentFinanceRequestController extends Controller
 
         return redirect()
             ->route($config['route_prefix'] . '.index')
-            ->with('success', 'Đã gửi phiếu yêu cầu #' . $transaction->id . ' sang phòng Kế toán duyệt.');
+            ->with('success', 'Đã gửi ' . ($transaction->request_form_type === Transaction::REQUEST_FORM_PAYMENT ? 'phiếu đề nghị thanh toán' : 'phiếu yêu cầu thu/chi') . ' #' . $transaction->id . ' sang phòng Kế toán duyệt.');
     }
 
     private function printRequest(Transaction $transaction, string $source)

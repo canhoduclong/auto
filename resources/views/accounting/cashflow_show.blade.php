@@ -55,6 +55,8 @@
                             <div><span class="badge text-bg-light border">{{ $transaction->request_department ?: $transaction->request_source }}</span></div>
                         </div>
                         <div class="col-md-8">
+                            <div class="text-muted small">Loại chứng từ</div>
+                            <div class="mb-1"><span class="badge text-bg-light border">{{ $transaction->request_form_type === \App\Models\Transaction::REQUEST_FORM_PAYMENT ? 'Phiếu đề nghị thanh toán' : 'Phiếu yêu cầu thu/chi' }}</span></div>
                             <div class="text-muted small">Tiêu đề phiếu</div>
                             <div class="fw-semibold">{{ $transaction->request_title ?: 'Phiếu yêu cầu' }}</div>
                         </div>
