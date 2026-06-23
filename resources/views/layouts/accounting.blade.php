@@ -28,6 +28,10 @@
             display: grid;
             grid-template-columns: 280px 1fr;
             min-height: 100vh;
+            transition: grid-template-columns .18s ease;
+        }
+        body.acc-sidebar-collapsed .acc-shell {
+            grid-template-columns: 76px 1fr;
         }
         .acc-sidebar {
             background: linear-gradient(180deg, #0f172a, #0b1220);
@@ -39,6 +43,10 @@
             overflow-x: hidden;
             scrollbar-width: thin;
             scrollbar-color: #5f7a96 transparent;
+        }
+        body.acc-sidebar-collapsed .acc-sidebar {
+            overflow-y: auto;
+            overflow-x: hidden;
         }
         .acc-sidebar::-webkit-scrollbar {
             width: 10px;
@@ -62,12 +70,46 @@
             font-weight: 800;
             letter-spacing: 0.02em;
             border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 10px;
+            min-height: 78px;
         }
+        .acc-brand-text { min-width: 0; }
         .acc-brand small {
             display: block;
             font-weight: 500;
             color: #93c5fd;
             margin-top: 4px;
+        }
+        .acc-sidebar-collapse {
+            width: 32px;
+            height: 32px;
+            border: 1px solid rgba(125, 211, 252, 0.24);
+            border-radius: 10px;
+            background: rgba(15, 23, 42, 0.72);
+            color: #dbeafe;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 auto;
+            transition: background .15s, color .15s, transform .15s;
+        }
+        .acc-sidebar-collapse:hover {
+            background: rgba(14, 165, 233, 0.2);
+            color: #fff;
+        }
+        body.acc-sidebar-collapsed .acc-brand {
+            padding: 14px 10px;
+            align-items: center;
+            justify-content: center;
+        }
+        body.acc-sidebar-collapsed .acc-brand-text {
+            display: none;
+        }
+        body.acc-sidebar-collapsed .acc-sidebar-collapse i {
+            transform: rotate(180deg);
         }
         .acc-nav {
             padding: 12px;
@@ -104,9 +146,105 @@
             color: #475569;
             padding: 12px 12px 4px;
         }
+        body.acc-sidebar-collapsed .acc-nav {
+            padding: 10px 8px;
+            overflow: visible;
+        }
+        body.acc-sidebar-collapsed .acc-nav .nav-section {
+            height: 1px;
+            padding: 7px 0 0;
+            margin: 7px 8px 6px;
+            overflow: hidden;
+            color: transparent;
+            border-top: 1px solid rgba(148, 163, 184, 0.18);
+        }
+        body.acc-sidebar-collapsed .acc-nav a {
+            position: relative;
+            justify-content: center;
+            gap: 0;
+            width: 46px;
+            height: 42px;
+            padding: 0 !important;
+            margin: 0 auto 6px;
+            border-radius: 12px;
+            font-size: 0;
+            overflow: visible;
+        }
+        body.acc-sidebar-collapsed .acc-nav a i {
+            font-size: 19px;
+            margin: 0;
+        }
+        body.acc-sidebar-collapsed .acc-nav a:hover::after {
+            content: attr(data-label);
+            position: absolute;
+            left: calc(100% + 12px);
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 500;
+            min-width: max-content;
+            max-width: 260px;
+            padding: 7px 10px;
+            border-radius: 9px;
+            background: #0f172a;
+            color: #fff;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, .22);
+            font-size: 12.5px;
+            font-weight: 700;
+            line-height: 1.2;
+            pointer-events: none;
+        }
+        body.acc-sidebar-collapsed .acc-nav a:hover::before {
+            content: "";
+            position: absolute;
+            left: calc(100% + 6px);
+            top: 50%;
+            transform: translateY(-50%);
+            border: 6px solid transparent;
+            border-right-color: #0f172a;
+            z-index: 501;
+            pointer-events: none;
+        }
+        .acc-menu-tooltip {
+            position: fixed;
+            z-index: 1000;
+            min-width: max-content;
+            max-width: 260px;
+            padding: 7px 10px;
+            border-radius: 9px;
+            background: #0f172a;
+            color: #fff;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, .22);
+            font-size: 12.5px;
+            font-weight: 700;
+            line-height: 1.2;
+            pointer-events: none;
+            opacity: 0;
+            transform: translate(8px, -50%);
+            transition: opacity .08s ease;
+        }
+        .acc-menu-tooltip.show {
+            opacity: 1;
+        }
         .acc-sidebar-footer {
             padding: 12px;
             border-top: 1px solid rgba(148, 163, 184, 0.18);
+        }
+        body.acc-sidebar-collapsed .acc-sidebar-footer {
+            padding: 10px 8px;
+        }
+        body.acc-sidebar-collapsed .acc-sidebar-footer button {
+            width: 46px !important;
+            height: 42px;
+            padding: 0;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0;
+        }
+        body.acc-sidebar-collapsed .acc-sidebar-footer button i {
+            font-size: 18px;
+            margin: 0;
         }
         .acc-main {
             display: flex;
@@ -161,7 +299,8 @@
             .acc-kpi { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
         @media (max-width: 992px) {
-            .acc-shell { grid-template-columns: 1fr; }
+            .acc-shell,
+            body.acc-sidebar-collapsed .acc-shell { grid-template-columns: 1fr; }
             .acc-sidebar {
                 display: flex;
                 position: fixed;
@@ -172,6 +311,8 @@
                 z-index: 220;
                 transform: translateX(-100%);
                 transition: transform 0.22s ease;
+                overflow-y: auto;
+                overflow-x: hidden;
             }
             .acc-sidebar.mobile-open {
                 transform: translateX(0);
@@ -179,6 +320,7 @@
             .acc-kpi { grid-template-columns: 1fr; }
             .acc-topbar { padding: .65rem .85rem; }
             .acc-content { padding: .9rem; }
+            .acc-sidebar-collapse { display: none; }
         }
     </style>
     @stack('styles')
@@ -187,8 +329,13 @@
 <div class="acc-shell">
     <aside class="acc-sidebar">
         <div class="acc-brand">
-            <span style="font-size:15px">&#x1F4CA; Kế Toán</span>
-            <small>Kế toán &mdash; đối soát &mdash; báo cáo</small>
+            <div class="acc-brand-text">
+                <span style="font-size:15px">&#x1F4CA; Kế Toán</span>
+                <small>Kế toán &mdash; đối soát &mdash; báo cáo</small>
+            </div>
+            <button type="button" class="acc-sidebar-collapse js-acc-collapse" aria-label="Thu gọn menu" title="Thu gọn menu">
+                <i class="bi bi-layout-sidebar-inset"></i>
+            </button>
         </div>
 
         <nav class="acc-nav">
@@ -332,6 +479,70 @@ document.addEventListener('DOMContentLoaded', function () {
     const sidebar = document.querySelector('.acc-sidebar');
     const toggle = document.querySelector('.js-acc-toggle');
     const overlay = document.querySelector('.js-acc-overlay');
+    const collapse = document.querySelector('.js-acc-collapse');
+    const storageKey = 'accountingSidebarCollapsed';
+
+    document.querySelectorAll('.acc-nav a').forEach(function (link) {
+        const label = link.textContent.replace(/\s+/g, ' ').trim();
+        if (label) {
+            link.setAttribute('data-label', label);
+            if (!link.getAttribute('title')) {
+                link.setAttribute('title', label);
+            }
+        }
+    });
+
+    const tooltip = document.createElement('div');
+    tooltip.className = 'acc-menu-tooltip';
+    document.body.appendChild(tooltip);
+
+    const hideTooltip = function () {
+        tooltip.classList.remove('show');
+    };
+
+    const showTooltip = function (link) {
+        if (!document.body.classList.contains('acc-sidebar-collapsed')) {
+            hideTooltip();
+            return;
+        }
+
+        const label = link.getAttribute('data-label') || link.getAttribute('title') || '';
+        if (!label) {
+            hideTooltip();
+            return;
+        }
+
+        const rect = link.getBoundingClientRect();
+        tooltip.textContent = label;
+        tooltip.style.left = (rect.right + 12) + 'px';
+        tooltip.style.top = (rect.top + rect.height / 2) + 'px';
+        tooltip.classList.add('show');
+    };
+
+    document.querySelectorAll('.acc-nav a').forEach(function (link) {
+        link.addEventListener('mouseenter', function () { showTooltip(link); });
+        link.addEventListener('focus', function () { showTooltip(link); });
+        link.addEventListener('mouseleave', hideTooltip);
+        link.addEventListener('blur', hideTooltip);
+    });
+
+    if (sidebar) {
+        sidebar.addEventListener('scroll', hideTooltip);
+    }
+
+    if (collapse) {
+        const setCollapsed = function (collapsed) {
+            document.body.classList.toggle('acc-sidebar-collapsed', collapsed);
+            collapse.setAttribute('aria-label', collapsed ? 'Mở rộng menu' : 'Thu gọn menu');
+            collapse.setAttribute('title', collapsed ? 'Mở rộng menu' : 'Thu gọn menu');
+            localStorage.setItem(storageKey, collapsed ? '1' : '0');
+        };
+
+        setCollapsed(localStorage.getItem(storageKey) === '1');
+        collapse.addEventListener('click', function () {
+            setCollapsed(!document.body.classList.contains('acc-sidebar-collapsed'));
+        });
+    }
 
     if (sidebar && toggle && overlay) {
         const closeDrawer = function () {
