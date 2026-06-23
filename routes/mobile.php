@@ -17,8 +17,24 @@ Route::middleware(['auth'])->prefix('m')->name('mobile.')->group(function () {
             return redirect()->route('mobile.shipper.home');
         }
 
+        if ($user?->hasRole('account') || $user?->hasRole('accountant') || $user?->hasRole('accounting')) {
+            return redirect()->route('mobile.accounting.home');
+        }
+
+        if ($user?->hasRole('ceo')) {
+            return redirect()->route('mobile.ceo.home');
+        }
+
         return redirect()->route('mobile.sale.home');
     })->name('home');
+
+    Route::middleware('role:account,accountant,accounting,admin')->group(function () {
+        Route::get('/accounting', fn () => view('mobile.accounting.index'))->name('accounting.home');
+    });
+
+    Route::middleware('role:ceo,admin')->group(function () {
+        Route::get('/ceo', fn () => view('mobile.ceo.index'))->name('ceo.home');
+    });
 
     Route::middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin')->group(function () {
         Route::get('/sale', [SaleMobileController::class, 'index'])->name('sale.home');

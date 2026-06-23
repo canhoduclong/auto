@@ -29,6 +29,8 @@ class UserController extends Controller
             $search = $request->input('q');
             $query->where(function ($sub) use ($search) {
                 $sub->where('name', 'like', '%' . $search . '%')
+                    ->orWhere('short_name', 'like', '%' . $search . '%')
+                    ->orWhere('job_title', 'like', '%' . $search . '%')
                     ->orWhere('email', 'like', '%' . $search . '%')
                     ->orWhere('zalo_name', 'like', '%' . $search . '%');
             });
@@ -76,6 +78,8 @@ class UserController extends Controller
             $search = $request->input('q');
             $query->where(function ($sub) use ($search) {
                 $sub->where('name', 'like', '%' . $search . '%')
+                    ->orWhere('short_name', 'like', '%' . $search . '%')
+                    ->orWhere('job_title', 'like', '%' . $search . '%')
                     ->orWhere('email', 'like', '%' . $search . '%');
             });
         }
@@ -167,7 +171,9 @@ class UserController extends Controller
 
         $request->validate([
             'name' => 'required|string|max:255',
+            'short_name' => 'nullable|string|max:80',
             'zalo_name' => 'nullable|string|max:255',
+            'job_title' => 'nullable|string|max:150',
             'email' => 'required|email|unique:users',
             'password' => 'required|min:6|confirmed',
             'roles' => 'array',
@@ -183,7 +189,9 @@ class UserController extends Controller
 
         $user = User::create([
             'name'          => $request->name,
+            'short_name'    => $request->short_name,
             'zalo_name'     => $request->zalo_name,
+            'job_title'     => $request->job_title,
             'email'         => $request->email,
             'password'      => Hash::make($request->password),
             'warehouse_id'  => $request->warehouse_id,
@@ -357,7 +365,9 @@ class UserController extends Controller
     {
         $request->validate([
             'name' => 'required|string|max:255',
+            'short_name' => 'nullable|string|max:80',
             'zalo_name' => 'nullable|string|max:255',
+            'job_title' => 'nullable|string|max:150',
             'email' => 'required|email|unique:users,email,'.$user->id,
             'password' => 'nullable|min:6|confirmed',
             'roles' => 'array',
@@ -414,7 +424,9 @@ class UserController extends Controller
 
         $user->update([
             'name'          => $request->name,
+            'short_name'    => $request->short_name,
             'zalo_name'     => $request->zalo_name,
+            'job_title'     => $request->job_title,
             'email'         => $request->email,
             'password'      => $request->password ? Hash::make($request->password) : $user->password,
             'warehouse_id'  => $request->warehouse_id,

@@ -3,10 +3,7 @@
 @section('title', 'Mobile Sale')
 
 @section('content')
-<div class="m-header">
-    <h1 class="m-title">Mobile Sale</h1>
-    <p class="m-subtitle">Khách hàng, đơn hàng, công nợ và chiết khấu/hoa hồng.</p>
-</div>
+@include('mobile.partials.profile-card', ['roleLabel' => auth()->user()?->job_title ?: 'Kinh doanh'])
 
 <div class="m-card">
     <div class="m-grid">

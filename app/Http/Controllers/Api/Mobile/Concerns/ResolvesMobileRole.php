@@ -147,6 +147,7 @@ trait ResolvesMobileRole
                 ['group' => 'Khách hàng', 'key' => 'customers', 'label' => 'Khách hàng', 'route' => '/my-customer', 'api' => '/sale/customers', 'icon' => 'people'],
                 ['group' => 'Đơn hàng', 'key' => 'draft_orders', 'label' => 'Đơn nháp', 'route' => '/my-order-drafts', 'api' => '/sale/draft-orders', 'icon' => 'drafts'],
                 ['group' => 'Đơn hàng', 'key' => 'my_orders', 'label' => 'Đơn hàng của tôi', 'route' => '/my-orders', 'api' => '/sale/orders', 'icon' => 'receipt_long'],
+                ['group' => 'Sản phẩm', 'key' => 'products', 'label' => 'Sản phẩm', 'route' => '/products', 'api' => '/sale/products', 'icon' => 'inventory_2'],
             ];
             if (array_intersect($normalizedRoles, ['leader', 'leader_sale', 'sale_manager', 'admin'])) {
                 $menu[] = ['group' => 'Duyệt đơn', 'key' => 'team_approvals', 'label' => 'Duyệt đơn Team', 'route' => '/my-team-orders', 'api' => '/sale/approvals/leader', 'icon' => 'check_circle'];

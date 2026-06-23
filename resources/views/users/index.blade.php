@@ -40,7 +40,7 @@
         <div class="card-body py-2">
             <form method="GET" action="{{ route('users.index') }}" class="row g-2 align-items-end">
                 <div class="col-md-4">
-                    <input type="text" name="q" class="form-control form-control-sm" value="{{ request('q') }}" placeholder="Tìm tên hoặc email...">
+                    <input type="text" name="q" class="form-control form-control-sm" value="{{ request('q') }}" placeholder="Tìm tên, tên ngắn, chức danh, email...">
                 </div>
                 <div class="col-md-3">
                     <select name="team_id" class="form-select form-select-sm">
@@ -91,9 +91,14 @@
                                     <span class="position-absolute bottom-0 end-0 translate-middle-x"
                                           style="width:9px;height:9px;border-radius:50%;border:2px solid #fff;background:{{ $isOnline ? '#22c55e' : '#94a3b8' }};"></span>
                                 </div>
-                                <div class="min-w-0 flex-grow-1">
-                                    <div class="fw-semibold text-truncate" style="font-size:.9rem;color:#1e293b;">{{ $user->name }}</div>
-                                    <div class="small text-muted text-truncate">{{ $user->email }}</div>
+                                    <div class="min-w-0 flex-grow-1">
+                                        <div class="fw-semibold text-truncate" style="font-size:.9rem;color:#1e293b;">{{ $user->name }}</div>
+                                        @if($user->short_name || $user->job_title)
+                                            <div class="small text-muted text-truncate">
+                                                {{ $user->short_name ?: '—' }}@if($user->job_title) · {{ $user->job_title }}@endif
+                                            </div>
+                                        @endif
+                                        <div class="small text-muted text-truncate">{{ $user->email }}</div>
                                     @if($user->team)
                                         <div class="small text-muted" style="font-size:.75rem;">
                                             <i class="ph ph-users me-1"></i>{{ $user->team->name }}
@@ -134,6 +139,11 @@
                         </div>
 
                         <h5 class="fw-bold mb-0">{{ $selectedUser->name }}</h5>
+                        @if($selectedUser->short_name || $selectedUser->job_title)
+                            <div class="small text-primary fw-semibold mt-1">
+                                {{ $selectedUser->short_name ?: '—' }}@if($selectedUser->job_title) · {{ $selectedUser->job_title }}@endif
+                            </div>
+                        @endif
                         <div class="text-muted small mb-2">{{ $selectedUser->email }}</div>
 
                         @if($isOnline)
@@ -166,6 +176,14 @@
                             <div class="d-flex justify-content-between py-1 border-bottom">
                                 <span class="text-muted">Team</span>
                                 <span class="fw-semibold">{{ $selectedUser->team->name ?? '—' }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between py-1 border-bottom">
+                                <span class="text-muted">Tên ngắn</span>
+                                <span class="fw-semibold">{{ $selectedUser->short_name ?: '—' }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between py-1 border-bottom">
+                                <span class="text-muted">Chức danh</span>
+                                <span class="fw-semibold">{{ $selectedUser->job_title ?: '—' }}</span>
                             </div>
                             <div class="d-flex justify-content-between py-1 border-bottom">
                                 <span class="text-muted">Kho</span>
@@ -244,6 +262,9 @@
                                     </div>
                                     <div class="min-w-0">
                                         <div class="fw-semibold text-truncate" style="max-width:160px;">{{ $user->name }}</div>
+                                        @if($user->short_name || $user->job_title)
+                                            <div class="small text-muted text-truncate" style="max-width:160px;">{{ $user->short_name ?: '—' }}@if($user->job_title) · {{ $user->job_title }}@endif</div>
+                                        @endif
                                         <div class="small text-muted text-truncate" style="max-width:160px;">{{ $user->email }}</div>
                                         @if($user->zalo_name)<div class="small text-primary text-truncate" style="max-width:160px;">Zalo: {{ $user->zalo_name }}</div>@endif
                                     </div>

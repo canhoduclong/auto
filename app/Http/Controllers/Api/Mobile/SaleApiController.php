@@ -70,9 +70,31 @@ class SaleApiController extends BaseApiController
             })
             ->values();
 
+        $ordersQuery = Order::query()
+            ->with(['customer:id,name,phone,address', 'items.product:id,name', 'items.variant:id,name,sku,size,product_id', 'approvals.step', 'histories.user:id,name'])
+            ->where('user_id', (int) $request->user()->id)
+            ->when(Schema::hasColumn('orders', 'trash_at'), fn ($query) => $query->whereNull('trash_at'));
+
+        $todayOrders = (clone $ordersQuery)
+            ->whereDate('created_at', today())
+            ->latest('created_at')
+            ->limit(5)
+            ->get()
+            ->map(fn (Order $order) => $this->orderPayload($order, true))
+            ->values();
+
+        $recentOrders = (clone $ordersQuery)
+            ->latest('created_at')
+            ->limit(8)
+            ->get()
+            ->map(fn (Order $order) => $this->orderPayload($order, true))
+            ->values();
+
         return $this->ok([
             'stats' => $payload['dashboardStats'] ?? [],
             'pending_adjustments' => $adjustments,
+            'today_orders' => $todayOrders,
+            'recent_orders' => $recentOrders,
         ]);
     }
 

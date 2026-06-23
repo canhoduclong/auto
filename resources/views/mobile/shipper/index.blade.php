@@ -3,10 +3,7 @@
 @section('title', 'Mobile Shipper')
 
 @section('content')
-<div class="m-header">
-    <h1 class="m-title">Mobile Shipper</h1>
-    <p class="m-subtitle">Đơn giao hôm nay, cập nhật nhanh thành công/thất bại và thu tiền.</p>
-</div>
+@include('mobile.partials.profile-card', ['roleLabel' => auth()->user()?->job_title ?: 'Giao hàng'])
 
 <div id="spAlert"></div>
 <div id="spOrders"></div>

@@ -53,6 +53,11 @@
                 </div>
 
                 <h5 class="fw-bold mb-0">{{ $user->name }}</h5>
+                @if($user->short_name || $user->job_title)
+                    <div class="small text-primary fw-semibold mt-1">
+                        {{ $user->short_name ?: '—' }}@if($user->job_title) · {{ $user->job_title }}@endif
+                    </div>
+                @endif
                 <div class="text-muted small mb-2">{{ $user->email }}</div>
 
                 {{-- Online badge --}}
@@ -88,6 +93,14 @@
                     <div class="d-flex justify-content-between py-1 border-bottom">
                         <span class="text-muted">Team</span>
                         <span class="fw-semibold">{{ $user->team->name ?? '—' }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between py-1 border-bottom">
+                        <span class="text-muted">Tên ngắn</span>
+                        <span class="fw-semibold">{{ $user->short_name ?: '—' }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between py-1 border-bottom">
+                        <span class="text-muted">Chức danh</span>
+                        <span class="fw-semibold">{{ $user->job_title ?: '—' }}</span>
                     </div>
                     <div class="d-flex justify-content-between py-1 border-bottom">
                         <span class="text-muted">Kho</span>

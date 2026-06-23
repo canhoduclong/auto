@@ -109,7 +109,7 @@ class AccountController extends Controller
         $accountIds = $accountId > 0 ? [$accountId] : $accounts->pluck('id')->all();
 
         $adjustmentMovements = AccountAdjustment::query()
-            ->with('performer:id,name')
+            ->with('performer:id,name,short_name')
             ->whereIn('account_id', $accountIds)
             ->get()
             ->map(function (AccountAdjustment $adjustment) use ($accountMap): array {
@@ -129,7 +129,7 @@ class AccountController extends Controller
                     'request_title' => null,
                     'amount' => (float) $adjustment->amount,
                     'signed_amount' => ($isDeposit ? 1 : -1) * (float) $adjustment->amount,
-                    'performed_by' => $adjustment->performer?->name ?? 'Hệ thống',
+                    'performed_by' => $this->userLedgerName($adjustment->performer),
                     'note' => $adjustment->note,
                     'occurred_at' => $adjustment->created_at,
                     'detail_url' => null,
@@ -139,8 +139,8 @@ class AccountController extends Controller
         $transactionMovements = Transaction::query()
             ->with([
                 'transactionCategory:id,name,flow_direction',
-                'submitter:id,name',
-                'approver:id,name',
+                'submitter:id,name,short_name',
+                'approver:id,name,short_name',
                 'destinationAccount:id,name,type,account_number,bank_name',
             ])
             ->whereIn('account_id', $accountIds)
@@ -172,7 +172,7 @@ class AccountController extends Controller
                     'request_title' => $transaction->request_title,
                     'amount' => (float) $transaction->amount,
                     'signed_amount' => ($isIncome ? 1 : -1) * (float) $transaction->amount,
-                    'performed_by' => $transaction->approver?->name ?? $transaction->submitter?->name ?? 'Hệ thống',
+                    'performed_by' => $this->userLedgerName($transaction->approver ?: $transaction->submitter),
                     'note' => $transaction->note ?: $transaction->request_title,
                     'occurred_at' => $transaction->approved_at ?? $transaction->created_at,
                     'detail_url' => accounting_route('cashflow.show', $transaction),
@@ -182,8 +182,8 @@ class AccountController extends Controller
         $internalTransferMovements = Transaction::query()
             ->with([
                 'transactionCategory:id,name,flow_direction',
-                'submitter:id,name',
-                'approver:id,name',
+                'submitter:id,name,short_name',
+                'approver:id,name,short_name',
                 'account:id,name',
             ])
             ->where('destination_type', 'internal')
@@ -206,7 +206,7 @@ class AccountController extends Controller
                     'request_title' => $transaction->request_title,
                     'amount' => (float) $transaction->amount,
                     'signed_amount' => (float) $transaction->amount,
-                    'performed_by' => $transaction->approver?->name ?? $transaction->submitter?->name ?? 'Hệ thống',
+                    'performed_by' => $this->userLedgerName($transaction->approver ?: $transaction->submitter),
                     'note' => 'Nhận từ ' . ($transaction->account?->name ?? 'tài khoản nguồn')
                         . ($transaction->note ? ' - ' . $transaction->note : ''),
                     'occurred_at' => $transaction->approved_at ?? $transaction->created_at,
@@ -307,6 +307,15 @@ class AccountController extends Controller
             'expense' => 'Chi phí',
             default => ucfirst(str_replace('_', ' ', $type)),
         };
+    }
+
+    private function userLedgerName($user): string
+    {
+        if (!$user) {
+            return 'Hệ thống';
+        }
+
+        return (string) ($user->short_name ?: $user->name ?: 'Hệ thống');
     }
 
     public function create()

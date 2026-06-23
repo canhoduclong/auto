@@ -3,10 +3,7 @@
 @section('title', 'Mobile Warehouse')
 
 @section('content')
-<div class="m-header">
-    <h1 class="m-title">Mobile Warehouse</h1>
-    <p class="m-subtitle">Đơn chờ đóng gói, cảnh báo thiếu hàng, thao tác nhanh.</p>
-</div>
+@include('mobile.partials.profile-card', ['roleLabel' => auth()->user()?->job_title ?: 'Kho vận'])
 
 <div class="m-card">
     <div class="m-grid">

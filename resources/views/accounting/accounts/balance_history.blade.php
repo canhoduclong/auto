@@ -7,8 +7,8 @@
 <style>
     .balance-value { font-variant-numeric:tabular-nums; white-space:nowrap; }
     .ledger-wrap { max-height:68vh; overflow:auto; }
-    .ledger-table { font-size:13px; }
-    .ledger-table th,.ledger-table td { padding:7px 9px; }
+    .ledger-table { font-size:14px; line-height:1.35; }
+    .ledger-table th,.ledger-table td { padding:9px 11px; }
     .ledger-table thead th { position:sticky; top:0; z-index:3; }
     .history-head,.history-cell { position:sticky; left:0; min-width:240px; max-width:240px; }
     .history-head { z-index:5 !important; background:#f1f5f9 !important; }
@@ -19,9 +19,11 @@
     .account-impact-cell { min-width:132px; max-width:150px; text-align:right; border-left:1px solid #eef2f7; }
     .account-impact-cell.selected { background:#eff6ff; }
     .impact-empty { color:#cbd5e1; }
-    .impact-balance { font-size:11px; color:#64748b; margin-top:2px; }
-    .summary-strip { display:flex; flex-wrap:wrap; gap:8px 22px; align-items:center; padding:10px 14px; }
-    @media(max-width:767.98px) { .history-head,.history-cell { min-width:190px; max-width:190px; } .account-impact-head,.account-impact-cell { min-width:118px; } }
+    .impact-balance { font-size:12px; color:#64748b; margin-top:3px; }
+    .history-title { font-size:14px; font-weight:700; color:#0f172a; }
+    .history-meta { font-size:13px; color:#475569; }
+    .summary-strip { display:flex; flex-wrap:wrap; gap:8px 22px; align-items:center; padding:11px 15px; font-size:14px; }
+    @media(max-width:767.98px) { .ledger-table { font-size:13.5px; } .history-head,.history-cell { min-width:210px; max-width:210px; } .account-impact-head,.account-impact-cell { min-width:124px; } }
 </style>
 
 @php
@@ -76,8 +78,8 @@
             <tr>
                 <td class="history-cell">
                     <div class="d-flex justify-content-between gap-2"><strong>{{ $entry['source'] === 'transaction' ? 'Phiếu #' . $entry['source_id'] : 'Điều chỉnh #' . $entry['source_id'] }}</strong><span class="small text-muted text-nowrap">{{ optional($entry['occurred_at'])->format('d/m H:i') }}</span></div>
-                    <div class="text-truncate mt-1" title="{{ $entry['request_title'] ?: $entry['type_label'] }}">{{ $entry['request_title'] ?: $entry['type_label'] }}</div>
-                    <div class="small text-muted text-truncate">{{ $entry['performed_by'] }}@if($entry['note']) · {{ $entry['note'] }}@endif</div>
+                    <div class="history-title text-truncate mt-1" title="{{ $entry['request_title'] ?: $entry['type_label'] }}">{{ $entry['request_title'] ?: $entry['type_label'] }}</div>
+                    <div class="history-meta text-truncate">{{ $entry['performed_by'] }}@if($entry['note']) · {{ $entry['note'] }}@endif</div>
                 </td>
                 @foreach($accounts as $account)
                     @php $impact = $entry['movements_by_account']->get($account->id); @endphp

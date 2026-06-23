@@ -13,6 +13,19 @@
             <input type="text" name="name" class="form-control" value="{{ old('name',$user->name) }}" required>
         </div>
 
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <label class="form-label">Tên ngắn gọn</label>
+                <input type="text" name="short_name" class="form-control" value="{{ old('short_name', $user->short_name) }}" maxlength="80" placeholder="Ví dụ: Duyệt, Kế toán A">
+                <small class="text-muted">Dùng để hiển thị gọn trong báo cáo/sổ dòng tiền.</small>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Chức danh</label>
+                <input type="text" name="job_title" class="form-control" value="{{ old('job_title', $user->job_title) }}" maxlength="150" placeholder="Ví dụ: Trưởng Phòng Kinh Doanh">
+                <small class="text-muted">Dùng trên hồ sơ và dashboard mobile.</small>
+            </div>
+        </div>
+
         <div class="mb-3">
             <label class="form-label">Email</label>
             <input type="email" name="email" class="form-control" value="{{ old('email',$user->email) }}" required>

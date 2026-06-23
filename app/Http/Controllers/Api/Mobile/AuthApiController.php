@@ -415,18 +415,96 @@ class AuthApiController extends BaseApiController
             ];
         }
 
+        $roleLabel = (string) ($user->job_title ?: ($user->roles
+            ->first(fn ($item) => strtolower((string) $item->name) === strtolower($role))?->display_name
+            ?: $user->roles->first(fn ($item) => strtolower((string) $item->name) === strtolower($role))?->name
+            ?: $role));
+        $avatarUrl = $this->mobileAvatarUrl($user);
+
         return [
             'id' => (int) $user->id,
             'name' => (string) $user->name,
+            'short_name' => (string) ($user->short_name ?? ''),
             'email' => (string) $user->email,
             'phone' => (string) ($user->phone ?? ''),
+            'avatar_url' => $avatarUrl,
             'warehouse_id' => $user->warehouse_id ? (int) $user->warehouse_id : null,
             'warehouse_name' => (string) ($user->warehouse?->name ?? ''),
             'roles' => $user->roles->pluck('name')->values(),
             'role' => $role,
+            'role_label' => $roleLabel,
             'layout' => $layout,
+            'theme' => $this->mobileThemePayload($layout),
+            'profile_card' => $this->mobileProfileCardPayload($user, $roleLabel, $layout, $avatarUrl),
             'menu' => $this->mobileMenuByLayout($layout, $user->hasRole('manager_shipper') || $user->hasRole('admin'), $user->roles->pluck('name')->all()),
             'workspaces' => $workspaces,
+        ];
+    }
+
+    private function mobileAvatarUrl(User $user): string
+    {
+        $avatar = trim((string) ($user->avatar ?: $user->google_avatar ?: ''));
+        if ($avatar === '') {
+            return '';
+        }
+
+        if (str_starts_with($avatar, 'http://') || str_starts_with($avatar, 'https://')) {
+            return $avatar;
+        }
+
+        if (str_starts_with($avatar, 'avatars/') || str_starts_with($avatar, 'storage/')) {
+            return asset(ltrim($avatar, '/'));
+        }
+
+        return asset('storage/' . ltrim($avatar, '/'));
+    }
+
+    private function mobileThemePayload(string $layout): array
+    {
+        $accent = match ($layout) {
+            'ceo', 'accounting' => '#F2C66D',
+            'warehouse' => '#74D6C7',
+            'shipper', 'manager_shipper' => '#F5B86A',
+            'sale' => '#F4D27C',
+            default => '#F4D27C',
+        };
+
+        return [
+            'name' => 'heritage_navy',
+            'background' => '#031B32',
+            'background_secondary' => '#052846',
+            'foreground' => '#FFFFFF',
+            'muted_foreground' => '#D7E0EA',
+            'accent' => $accent,
+            'card_radius' => 28,
+            'pattern' => [
+                'type' => 'dong_son_lotus',
+                'opacity' => 0.18,
+                'stroke' => '#F4D27C',
+                'placement' => 'top_right',
+            ],
+        ];
+    }
+
+    private function mobileProfileCardPayload(User $user, string $roleLabel, string $layout, string $avatarUrl): array
+    {
+        return [
+            'style' => 'heritage_staff_card',
+            'layout' => $layout,
+            'brand_text' => 'HL',
+            'name' => (string) $user->name,
+            'role_label' => $roleLabel,
+            'email' => (string) $user->email,
+            'phone' => (string) ($user->phone ?? ''),
+            'avatar_url' => $avatarUrl,
+            'use_user_avatar' => true,
+            'background' => [
+                'gradient' => ['#031B32', '#052846', '#061F38'],
+                'pattern' => 'dong_son_lotus',
+                'pattern_color' => '#F4D27C',
+                'pattern_opacity' => 0.18,
+            ],
+            'text_shadow' => true,
         ];
     }
 

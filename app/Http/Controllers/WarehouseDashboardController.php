@@ -3733,7 +3733,6 @@ class WarehouseDashboardController extends Controller
             'search' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $warehouseId = Auth::user()->warehouse_id ? (int) Auth::user()->warehouse_id : null;
         $search = trim((string) $request->input('search', ''));
         $from = $request->filled('from')
             ? Carbon::parse($request->input('from'))->startOfDay()
@@ -3750,10 +3749,13 @@ class WarehouseDashboardController extends Controller
             $from = $to->copy()->subDays(30)->startOfDay();
         }
 
-        $inventoryScope = fn ($query) => $query->when(
-            $warehouseId,
-            fn ($inventoryQuery) => $inventoryQuery->where('warehouse_id', $warehouseId)
-        );
+        $activeWarehouseIds = Warehouse::query()
+            ->where('status', true)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->values();
+
+        $inventoryScope = fn ($query) => $query->whereIn('warehouse_id', $activeWarehouseIds->all());
 
         $variants = ProductVariant::query()
             ->with('product:id,name,unit')
@@ -3784,14 +3786,14 @@ class WarehouseDashboardController extends Controller
         $currentByVariant = Inventory::query()
             ->selectRaw('product_variant_id, COALESCE(SUM(quantity), 0) as quantity')
             ->whereIn('product_variant_id', $variantIds->all())
-            ->when($warehouseId, fn ($query) => $query->where('warehouse_id', $warehouseId))
+            ->whereIn('warehouse_id', $activeWarehouseIds->all())
             ->groupBy('product_variant_id')
             ->pluck('quantity', 'product_variant_id');
 
         $movementBase = InventoryMovement::query()
             ->join('inventories', 'inventories.id', '=', 'inventory_movements.inventory_id')
             ->whereIn('inventories.product_variant_id', $variantIds->all())
-            ->when($warehouseId, fn ($query) => $query->where('inventories.warehouse_id', $warehouseId));
+            ->whereIn('inventories.warehouse_id', $activeWarehouseIds->all());
 
         $movementAfterTo = (clone $movementBase)
             ->where('inventory_movements.created_at', '>', $to)
