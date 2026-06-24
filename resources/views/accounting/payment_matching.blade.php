@@ -276,6 +276,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const applyCustomerButton = document.getElementById('pmApplyCustomer');
     let pendingCustomer = null;
     let lastCustomerSearchMode = 'keyword';
+    let ordersRequestSeq = 0;
 
     const formatMoney = function (value) {
         const number = Number(String(value || '').replace(/[.,\s]/g, '')) || 0;
@@ -291,6 +292,22 @@ document.addEventListener('DOMContentLoaded', function () {
         return String(value ?? '').replace(/[&<>"']/g, function (char) {
             return {'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#039;'}[char];
         });
+    };
+
+    const uniqueValues = function (values) {
+        return Array.from(new Set((values || []).map(function (value) {
+            return String(value || '').trim();
+        }).filter(Boolean)));
+    };
+
+    const extractTransferCardCandidates = function () {
+        const matches = (transferInput.value || '').match(/[a-zA-Z0-9]{4,}/g) || [];
+
+        return uniqueValues(matches.map(function (value) {
+            return value.toLowerCase().replace(/[^a-z0-9]/g, '');
+        }).filter(function (value) {
+            return value.length >= 6 && /\d/.test(value);
+        }));
     };
 
     const renderCards = function (codes, hits) {
@@ -383,9 +400,9 @@ document.addEventListener('DOMContentLoaded', function () {
     const applyPendingCustomer = function () {
         if (!pendingCustomer) return;
 
-        const codes = modalCardCodesInput.value.split(/\r?\n|,|;/).map(function (code) {
+        const codes = uniqueValues(modalCardCodesInput.value.split(/\r?\n|,|;/).map(function (code) {
             return code.trim();
-        }).filter(Boolean);
+        }).filter(Boolean).concat(extractTransferCardCandidates()));
 
         customerIdInput.value = pendingCustomer.id;
         selectedCustomerName.value = pendingCustomer.name || '';
@@ -404,6 +421,7 @@ document.addEventListener('DOMContentLoaded', function () {
         submitButton.disabled = true;
         const customerId = customerIdInput.value;
         const amount = amountInput.value;
+        const requestSeq = ++ordersRequestSeq;
         if (!customerId || !amount) {
             ordersList.innerHTML = '<div class="text-muted py-4 text-center">Chọn khách hàng và nhập số tiền CK.</div>';
             return;
@@ -415,16 +433,22 @@ document.addEventListener('DOMContentLoaded', function () {
         })
             .then(response => response.json())
             .then(function (payload) {
+                if (requestSeq !== ordersRequestSeq) return;
+
                 const orders = payload.data || [];
                 if (!orders.length) {
-                    ordersList.innerHTML = '<div class="text-muted py-4 text-center">Không có đơn hàng nào đủ số tiền đã nhập.</div>';
+                    ordersList.innerHTML = '<div class="text-muted py-4 text-center">Khách hàng này chưa có đơn còn công nợ để thanh toán.</div>';
                     return;
                 }
                 ordersList.innerHTML = orders.map(function (order) {
+                    const disabled = order.is_enough ? '' : 'disabled';
+                    const hint = order.is_enough
+                        ? '<span class="small text-success">Có thể chọn để ghi nhận thanh toán</span>'
+                        : '<span class="small text-muted">Công nợ nhỏ hơn số tiền CK, thiếu ' + formatMoney(order.short_amount) + 'đ</span>';
                     return '<label class="pm-order-row mb-0">' +
-                        '<input class="form-check-input pm-radio js-pm-order" type="radio" name="order_id" value="' + order.id + '">' +
+                        '<input class="form-check-input pm-radio js-pm-order" type="radio" name="order_id" value="' + order.id + '" ' + disabled + '>' +
                         '<span><strong>' + escapeHtml(order.created_at || '') + '</strong><br><span class="small text-muted">' + escapeHtml(order.code) + '</span></span>' +
-                        '<span><strong>' + escapeHtml(order.note || 'Đơn hàng') + '</strong><br><span class="small text-muted">Đã thanh toán ' + formatMoney(order.amount_paid) + 'đ</span></span>' +
+                        '<span><strong>' + escapeHtml(order.note || 'Đơn hàng') + '</strong><br><span class="small text-muted">Đã thanh toán ' + formatMoney(order.amount_paid) + 'đ</span><br>' + hint + '</span>' +
                         '<span class="text-danger fw-bold text-end">' + formatMoney(order.amount_due) + 'đ</span>' +
                         '</label>';
                 }).join('');
@@ -435,11 +459,18 @@ document.addEventListener('DOMContentLoaded', function () {
                 });
             })
             .catch(() => {
+                if (requestSeq !== ordersRequestSeq) return;
                 ordersList.innerHTML = '<div class="text-danger py-4 text-center">Không tải được đơn hàng.</div>';
             });
     };
 
-    transferInput.addEventListener('input', syncPreview);
+    transferInput.addEventListener('input', function () {
+        syncPreview();
+        if (customerIdInput.value) {
+            const existingCodes = cardCodesInput.value.split(/\r?\n|,|;/);
+            cardCodesInput.value = uniqueValues(existingCodes.concat(extractTransferCardCandidates())).join('\n');
+        }
+    });
     modalCardCodesInput.addEventListener('input', refreshCardPreviewFromModal);
     amountInput.addEventListener('input', function () {
         syncPreview();

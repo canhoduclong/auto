@@ -806,7 +806,7 @@ class AccountingDashboardController extends Controller
 
     public function paymentMatchingOrders(Request $request)
     {
-        $rawAmount = str_replace(['.', ',', ' '], '', (string) $request->input('amount', ''));
+        $rawAmount = preg_replace('/[^\d]/', '', (string) $request->input('amount', '')) ?: '0';
         $customerId = (int) $request->input('customer_id', 0);
         $amount = (float) $rawAmount;
 
@@ -821,13 +821,14 @@ class AccountingDashboardController extends Controller
             ->orderByDesc('created_at')
             ->limit(50)
             ->get()
-            ->map(function (Order $order) {
+            ->map(function (Order $order) use ($amount) {
                 $paid = (float) $order->transactions->where('type', 'payment')->sum('amount')
                     - (float) $order->transactions->where('type', 'refund')->sum('amount');
                 $remaining = (float) ($order->amount_due ?? 0);
                 if ($remaining <= 0) {
                     $remaining = max(0, (float) ($order->total ?? 0) - $paid);
                 }
+                $isEnough = $remaining + 0.0001 >= $amount;
 
                 return [
                     'id' => $order->id,
@@ -838,9 +839,12 @@ class AccountingDashboardController extends Controller
                     'amount_paid' => max($paid, 0),
                     'amount_due' => $remaining,
                     'payment_status' => $order->payment_status,
+                    'is_enough' => $isEnough,
+                    'short_amount' => $isEnough ? 0 : max(0, $amount - $remaining),
                 ];
             })
-            ->filter(fn (array $order) => (float) $order['amount_due'] >= $amount)
+            ->filter(fn (array $order) => (float) $order['amount_due'] > 0)
+            ->sortByDesc(fn (array $order) => $order['is_enough'] ? 1 : 0)
             ->values();
 
         return response()->json(['data' => $orders]);
@@ -848,7 +852,7 @@ class AccountingDashboardController extends Controller
 
     public function storeMatchedPayment(Request $request)
     {
-        $rawAmount = str_replace(['.', ',', ' '], '', (string) $request->input('amount', ''));
+        $rawAmount = preg_replace('/[^\d]/', '', (string) $request->input('amount', '')) ?: '0';
         $request->merge(['amount' => $rawAmount]);
 
         $validated = $request->validate([
@@ -889,6 +893,7 @@ class AccountingDashboardController extends Controller
             $cardCodes = collect(preg_split('/[\r\n,;]+/', (string) ($validated['card_codes'] ?? ''), -1, PREG_SPLIT_NO_EMPTY))
                 ->map(fn ($code) => trim((string) $code))
                 ->filter()
+                ->merge($this->paymentMatchingCardCodeCandidates((string) $validated['transfer_content']))
                 ->unique()
                 ->values();
 
@@ -2144,6 +2149,14 @@ class AccountingDashboardController extends Controller
             ->map(fn ($token) => $this->normalizePaymentText((string) $token))
             ->filter()
             ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function paymentMatchingCardCodeCandidates(string $value): array
+    {
+        return collect($this->paymentMatchingTokens($value))
+            ->filter(fn (string $token) => strlen($token) >= 6 && preg_match('/\d/', $token))
             ->values()
             ->all();
     }

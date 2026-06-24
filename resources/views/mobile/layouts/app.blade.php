@@ -292,19 +292,45 @@
             box-shadow: 0 2px 8px rgba(15, 23, 42, .1);
             text-decoration: none;
         }
+        .m-notification-btn {
+            width: 40px;
+            height: 40px;
+            background: #fff7ed;
+            color: #c2410c;
+            border: 1px solid #fed7aa;
+            box-shadow: 0 8px 18px rgba(194, 65, 12, .18);
+        }
+        .m-notification-btn .m-bell {
+            font-size: 1.24rem;
+            line-height: 1;
+        }
         .m-noti-dot {
             position: absolute;
-            right: -2px;
-            top: -2px;
-            min-width: 16px;
-            height: 16px;
+            right: -7px;
+            top: -7px;
+            min-width: 21px;
+            height: 21px;
             border-radius: 999px;
             display: grid;
             place-items: center;
             background: #ef4444;
             color: #fff;
-            font-size: .62rem;
+            border: 2px solid #fff;
+            font-size: .68rem;
             font-weight: 800;
+            box-shadow: 0 4px 10px rgba(239, 68, 68, .42);
+        }
+        .m-noti-dot::after {
+            content: "";
+            position: absolute;
+            inset: -5px;
+            border-radius: inherit;
+            border: 1px solid rgba(239, 68, 68, .35);
+            animation: mNotiPulse 1.8s ease-out infinite;
+        }
+        @keyframes mNotiPulse {
+            from { opacity: .65; transform: scale(.78); }
+            to { opacity: 0; transform: scale(1.28); }
         }
         .m-profile-menu {
             position: relative;
@@ -434,8 +460,8 @@
             </div>
         </div>
         <div class="m-top-actions">
-            <a class="m-icon-btn" href="{{ route('pages.my_dashboard') }}" aria-label="Thông báo">
-                🔔
+            <a class="m-icon-btn m-notification-btn" href="{{ route('pages.my_dashboard') }}" aria-label="Thông báo">
+                <span class="m-bell" aria-hidden="true">🔔</span>
                 @if($unreadCount > 0)<span class="m-noti-dot">{{ min($unreadCount, 99) }}</span>@endif
             </a>
             <details class="m-profile-menu">

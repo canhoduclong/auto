@@ -1,8 +1,8 @@
 {
-  "version": "1.0.30",
-  "version_code": 31,
+  "version": "1.0.31",
+  "version_code": 32,
   "apk_url": "https://hoanglongtnt.com/app-update/app-release.apk",
   "ios_url": "",
   "force_update": false,
-  "message": "Bản cập nhật 1.0.30: cập nhật layout Sale với top logo công ty, slogan và menu cố định bên dưới."
+  "message": "Bản cập nhật 1.0.31: cải thiện form sửa đơn mobile, chọn lại khách hàng, thông báo góc phải phía trên và cập nhật menu theo Android/iOS."
 }

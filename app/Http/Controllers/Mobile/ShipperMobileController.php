@@ -52,19 +52,7 @@ class ShipperMobileController extends Controller
         $order->load(['customer:id,name,phone,address', 'items.variant.product']);
 
         return response()->json([
-            'data' => [
-                'id' => (int) $order->id,
-                'code' => (string) ($order->code ?: ('#' . $order->id)),
-                'status' => (string) $order->status,
-                'customer' => (string) ($order->customer?->name ?? '—'),
-                'phone' => (string) ($order->customer?->phone ?? '—'),
-                'address' => (string) ($order->customer?->address ?? '—'),
-                'items' => $order->items->map(fn ($item) => [
-                    'name' => (string) ($item->variant?->name ?? $item->product?->name ?? 'Sản phẩm'),
-                    'sku' => (string) ($item->variant?->sku ?? '—'),
-                    'quantity' => (int) ($item->quantity ?? 0),
-                ])->values(),
-            ],
+            'data' => $this->mobileOrderDetailPayload($order),
         ]);
     }
 
@@ -100,7 +88,13 @@ class ShipperMobileController extends Controller
             'note' => 'Mobile xác nhận giao thành công. Đã thu: ' . number_format($collected) . 'đ - ' . ($paymentMethod === 'cash' ? 'Tiền mặt' : 'Chuyển khoản'),
         ]);
 
-        return response()->json(['ok' => true, 'message' => 'Đã xác nhận giao hàng thành công.']);
+        $order->refresh()->load(['customer:id,name,phone,address', 'items.variant.product']);
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Đã xác nhận giao hàng thành công.',
+            'data' => $this->mobileOrderDetailPayload($order),
+        ]);
     }
 
     public function failOrder(Request $request, Order $order): JsonResponse
@@ -140,5 +134,27 @@ class ShipperMobileController extends Controller
         if ((int) $order->shipper_id !== (int) $user->id && !$user->hasRole('admin')) {
             abort(403, 'Bạn không có quyền thao tác đơn này.');
         }
+    }
+
+    private function mobileOrderDetailPayload(Order $order): array
+    {
+        return [
+            'id' => (int) $order->id,
+            'code' => (string) ($order->code ?: ('#' . $order->id)),
+            'status' => (string) $order->status,
+            'customer' => (string) ($order->customer?->name ?? '—'),
+            'phone' => (string) ($order->customer?->phone ?? '—'),
+            'address' => (string) ($order->customer?->address ?? '—'),
+            'total' => (float) ($order->total ?? 0),
+            'amount_due' => (float) ($order->amount_due ?? 0),
+            'collected_amount' => (float) ($order->collected_amount ?? 0),
+            'delivered_at' => optional($order->delivered_at)->format('d/m/Y H:i'),
+            'updated_at' => optional($order->updated_at)->format('d/m/Y H:i'),
+            'items' => $order->items->map(fn ($item) => [
+                'name' => (string) ($item->variant?->name ?? $item->product?->name ?? 'Sản phẩm'),
+                'sku' => (string) ($item->variant?->sku ?? '—'),
+                'quantity' => (int) ($item->quantity ?? 0),
+            ])->values(),
+        ];
     }
 }
