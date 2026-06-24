@@ -214,6 +214,10 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/cashflow/{transaction}/edit', [AccountingDashboardController::class, 'transactionEdit'])->name('transactions.edit');
         Route::get('/cashflow/{transaction}/print', [AccountingDashboardController::class, 'cashflowPrint'])->name('cashflow.print');
         Route::get('/cashflow/{transaction}', [AccountingDashboardController::class, 'cashflowShow'])->name('cashflow.show');
+        Route::get('/payment-matching', [AccountingDashboardController::class, 'paymentMatching'])->name('payment-matching');
+        Route::post('/payment-matching', [AccountingDashboardController::class, 'storeMatchedPayment'])->name('payment-matching.store');
+        Route::get('/payment-matching/customers', [AccountingDashboardController::class, 'paymentMatchingCustomers'])->name('payment-matching.customers');
+        Route::get('/payment-matching/orders', [AccountingDashboardController::class, 'paymentMatchingOrders'])->name('payment-matching.orders');
         Route::get('/reconciliation', [AccountingDashboardController::class, 'reconciliation'])->name('reconciliation');
         Route::get('/reconciliation/{order}/detail', [AccountingDashboardController::class, 'reconciliationDetail'])->name('reconciliation.detail');
         Route::post('/reconciliation/{order}/confirm', [AccountingDashboardController::class, 'confirmReconciliation'])->name('reconciliation.confirm');

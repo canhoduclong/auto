@@ -365,6 +365,9 @@
             <a href="{{ route('accounting.transactions.create') }}" class="{{ request()->routeIs('accounting.transactions.create') ? 'active' : '' }}">
                 <i class="bi bi-plus-circle"></i> Tạo giao dịch
             </a>
+            <a href="{{ route('accounting.payment-matching') }}" class="{{ request()->routeIs('accounting.payment-matching*') ? 'active' : '' }}">
+                <i class="bi bi-bank"></i> Form thanh toán
+            </a>
             <a href="{{ route('accounting.financial-reports') }}" class="{{ request()->routeIs('accounting.financial-reports') ? 'active' : '' }}">
                 <i class="bi bi-graph-up-arrow"></i> Báo cáo tài chính
             </a>

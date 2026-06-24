@@ -113,6 +113,7 @@ class Customer extends Model
         'current_cycle_no',
         'commission_percent',
         'is_employee',
+        'customer_card_codes',
         'deleted_by',
     ];
 
@@ -126,6 +127,7 @@ class Customer extends Model
         'commission_percent' => 'decimal:2',
         'shipping_fee' => 'decimal:2',
         'is_employee' => 'boolean',
+        'customer_card_codes' => 'array',
     ];
 
     public static function freeCustomerDays(): int

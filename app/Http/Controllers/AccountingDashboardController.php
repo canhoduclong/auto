@@ -748,6 +748,178 @@ class AccountingDashboardController extends Controller
         ]);
     }
 
+    public function paymentMatching(Request $request)
+    {
+        return view('accounting.payment_matching', [
+            'accounts' => Account::query()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'type', 'balance']),
+            'incomeCategories' => TransactionCategory::active()->where('flow_direction', 'in')->orderBy('sort_order')->get(['id', 'name', 'code']),
+        ]);
+    }
+
+    public function paymentMatchingCustomers(Request $request)
+    {
+        $mode = (string) $request->input('mode', 'keyword');
+        $keyword = trim((string) $request->input('keyword', ''));
+        $transferContent = trim((string) $request->input('transfer_content', ''));
+        $transferTokens = $this->paymentMatchingTokens($transferContent);
+
+        $query = Customer::query()
+            ->select(['id', 'name', 'phone', 'customer_code', 'customer_card_codes'])
+            ->when($mode !== 'card' && $keyword !== '', function ($query) use ($keyword) {
+                $query->where(function ($sub) use ($keyword) {
+                    $sub->where('name', 'like', "%{$keyword}%")
+                        ->orWhere('phone', 'like', "%{$keyword}%")
+                        ->orWhere('customer_code', 'like', "%{$keyword}%");
+                });
+            })
+            ->when($mode === 'card' && Schema::hasColumn('customers', 'customer_card_codes'), fn ($query) => $query->whereNotNull('customer_card_codes'))
+            ->orderBy('name');
+
+        $customers = $query
+            ->limit($mode === 'card' ? 500 : 30)
+            ->get()
+            ->map(function (Customer $customer) use ($transferTokens) {
+                $codes = collect($customer->customer_card_codes ?: [])
+                    ->map(fn ($code) => trim((string) $code))
+                    ->filter()
+                    ->values();
+                $matchedCodes = $codes->filter(function (string $code) use ($transferTokens) {
+                    $normalized = $this->normalizePaymentText($code);
+                    return $normalized !== '' && collect($transferTokens)->contains(function (string $token) use ($normalized) {
+                        return str_contains($token, $normalized) || str_contains($normalized, $token);
+                    });
+                })->values();
+
+                return [
+                    'id' => $customer->id,
+                    'name' => $customer->name,
+                    'phone' => $customer->phone,
+                    'code' => $customer->customer_code,
+                    'card_codes' => $codes,
+                    'matched_codes' => $matchedCodes,
+                ];
+            })
+            ->when($mode === 'card', fn ($rows) => $rows->filter(fn (array $row) => count($row['matched_codes']) > 0)->values());
+
+        return response()->json(['data' => $customers]);
+    }
+
+    public function paymentMatchingOrders(Request $request)
+    {
+        $rawAmount = str_replace(['.', ',', ' '], '', (string) $request->input('amount', ''));
+        $customerId = (int) $request->input('customer_id', 0);
+        $amount = (float) $rawAmount;
+
+        if ($customerId <= 0 || $amount <= 0) {
+            return response()->json(['data' => []]);
+        }
+
+        $orders = Order::query()
+            ->with(['customer:id,name', 'transactions' => fn ($query) => $query->where('status', Transaction::STATUS_APPROVED)->whereIn('type', ['payment', 'refund'])])
+            ->where('customer_id', $customerId)
+            ->whereNotIn('status', ['cancelled', 'canceled', 'rejected'])
+            ->orderByDesc('created_at')
+            ->limit(50)
+            ->get()
+            ->map(function (Order $order) {
+                $paid = (float) $order->transactions->where('type', 'payment')->sum('amount')
+                    - (float) $order->transactions->where('type', 'refund')->sum('amount');
+                $remaining = (float) ($order->amount_due ?? 0);
+                if ($remaining <= 0) {
+                    $remaining = max(0, (float) ($order->total ?? 0) - $paid);
+                }
+
+                return [
+                    'id' => $order->id,
+                    'code' => $order->code ?: ('#' . $order->id),
+                    'created_at' => $order->created_at?->format('d/m/Y'),
+                    'note' => $order->note ?: 'Đơn hàng',
+                    'total' => (float) ($order->total ?? 0),
+                    'amount_paid' => max($paid, 0),
+                    'amount_due' => $remaining,
+                    'payment_status' => $order->payment_status,
+                ];
+            })
+            ->filter(fn (array $order) => (float) $order['amount_due'] >= $amount)
+            ->values();
+
+        return response()->json(['data' => $orders]);
+    }
+
+    public function storeMatchedPayment(Request $request)
+    {
+        $rawAmount = str_replace(['.', ',', ' '], '', (string) $request->input('amount', ''));
+        $request->merge(['amount' => $rawAmount]);
+
+        $validated = $request->validate([
+            'transfer_content' => ['required', 'string', 'max:2000'],
+            'amount' => ['required', 'numeric', 'min:0.01'],
+            'customer_id' => ['required', 'exists:customers,id'],
+            'order_id' => ['required', 'exists:orders,id'],
+            'account_id' => ['nullable', 'exists:accounts,id'],
+            'transaction_category_id' => ['nullable', 'exists:transaction_categories,id'],
+            'card_codes' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $order = Order::query()
+            ->with(['transactions' => fn ($query) => $query->where('status', Transaction::STATUS_APPROVED)->whereIn('type', ['payment', 'refund'])])
+            ->where('customer_id', $validated['customer_id'])
+            ->whereNotIn('status', ['cancelled', 'canceled', 'rejected'])
+            ->findOrFail($validated['order_id']);
+        $paid = (float) $order->transactions->where('type', 'payment')->sum('amount')
+            - (float) $order->transactions->where('type', 'refund')->sum('amount');
+        $remaining = (float) ($order->amount_due ?? 0);
+        if ($remaining <= 0) {
+            $remaining = max(0, (float) ($order->total ?? 0) - $paid);
+        }
+        if ((float) $validated['amount'] > $remaining + 0.0001) {
+            return back()
+                ->withErrors(['amount' => 'Số tiền chuyển khoản lớn hơn công nợ còn lại của đơn đã chọn.'])
+                ->withInput();
+        }
+
+        $categoryId = $validated['transaction_category_id'] ?? null;
+        if (!$categoryId) {
+            $categoryId = TransactionCategory::active()->where('flow_direction', 'in')->orderBy('sort_order')->value('id');
+        }
+
+        $transaction = null;
+        DB::transaction(function () use ($validated, $request, $order, $categoryId, &$transaction): void {
+            $customer = Customer::query()->lockForUpdate()->findOrFail($validated['customer_id']);
+            $cardCodes = collect(preg_split('/[\r\n,;]+/', (string) ($validated['card_codes'] ?? ''), -1, PREG_SPLIT_NO_EMPTY))
+                ->map(fn ($code) => trim((string) $code))
+                ->filter()
+                ->unique()
+                ->values();
+
+            if (Schema::hasColumn('customers', 'customer_card_codes')) {
+                $existing = collect($customer->customer_card_codes ?: [])->map(fn ($code) => trim((string) $code))->filter();
+                $customer->customer_card_codes = $existing->merge($cardCodes)->unique()->values()->all();
+                $customer->save();
+            }
+
+            $transaction = Transaction::create([
+                'order_id' => $order->id,
+                'customer_id' => $customer->id,
+                'amount' => (float) $validated['amount'],
+                'type' => 'payment',
+                'method' => 'bank',
+                'transaction_category_id' => $categoryId,
+                'account_id' => $validated['account_id'] ?? null,
+                'note' => mb_substr('Thanh toán CK: ' . $validated['transfer_content'], 0, 255),
+                'status' => Transaction::STATUS_APPROVED,
+                'submitted_by' => $request->user()->id,
+                'approved_by' => $request->user()->id,
+                'approved_at' => now(),
+            ]);
+
+            $this->applyTransactionToOrder($transaction);
+        });
+
+        return redirect()->route(accounting_route_name('payment-matching'))
+            ->with('success', 'Đã ghi nhận thanh toán #' . ($transaction?->id ?? '') . ' cho đơn ' . ($order->code ?: ('#' . $order->id)) . '.');
+    }
+
     public function inventory(Request $request)
     {
         $timeFilter = (string) $request->input('time_filter', 'today');
@@ -1957,6 +2129,23 @@ class AccountingDashboardController extends Controller
             'total_spent' => $totalSpent,
             'last_order_at' => $lastOrder?->created_at?->format('d/m/Y'),
         ]);
+    }
+
+    private function normalizePaymentText(string $value): string
+    {
+        return preg_replace('/[^a-z0-9]/', '', mb_strtolower($value)) ?: '';
+    }
+
+    private function paymentMatchingTokens(string $value): array
+    {
+        preg_match_all('/[a-zA-Z0-9]{4,}/', $value, $matches);
+
+        return collect($matches[0] ?? [])
+            ->map(fn ($token) => $this->normalizePaymentText((string) $token))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
     }
 
     private function applyTransactionToOrder(Transaction $transaction): void
