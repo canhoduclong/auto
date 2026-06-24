@@ -9,12 +9,6 @@
 
 @push('styles')
 <style>
-    .pm-wrap {
-        display: grid;
-        grid-template-columns: minmax(320px, 1fr) minmax(320px, 420px);
-        gap: 16px;
-        align-items: start;
-    }
     .pm-transfer {
         display: grid;
         grid-template-columns: 120px minmax(0, 1fr) 180px;
@@ -100,11 +94,34 @@
         width: 20px;
         height: 20px;
     }
+    .pm-selected-customer {
+        border: 1px solid #111827;
+        background: #fff;
+        padding: 12px 16px;
+        min-height: 64px;
+    }
+    .pm-selected-customer strong {
+        color: #0f172a;
+        font-size: 1rem;
+    }
+    .pm-modal-grid {
+        display: grid;
+        grid-template-columns: minmax(300px, 1fr) minmax(280px, 380px);
+        gap: 16px;
+        align-items: start;
+    }
+    .pm-search-tools {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 8px;
+        margin-bottom: 12px;
+    }
     @media (max-width: 992px) {
-        .pm-wrap,
         .pm-transfer,
         .pm-form-grid,
-        .pm-order-row {
+        .pm-order-row,
+        .pm-modal-grid,
+        .pm-search-tools {
             grid-template-columns: 1fr;
         }
         .pm-transfer .pm-money { text-align: left; }
@@ -126,6 +143,7 @@
 <form method="POST" action="{{ accounting_route('payment-matching.store') }}" id="paymentMatchingForm">
     @csrf
     <input type="hidden" name="customer_id" id="pmCustomerId" value="{{ old('customer_id') }}">
+    <textarea name="card_codes" id="pmCardCodesInput" class="d-none">{{ old('card_codes') }}</textarea>
 
     <div class="acc-card mb-3">
         <div class="card-body">
@@ -151,31 +169,55 @@ O2OO9704220623184O442O26H7WE429485</div>
                 <input class="form-control" id="pmAmount" name="amount" value="{{ old('amount') }}" placeholder="3.500.000" required>
                 <span></span>
 
-                <label for="pmCustomerKeyword">Khách hàng</label>
-                <input class="form-control" id="pmCustomerKeyword" value="{{ old('customer_keyword') }}" placeholder="Nhập tên, SĐT hoặc mã KH">
+                <label for="pmSelectedCustomerName">Khách hàng</label>
+                <input class="form-control" id="pmSelectedCustomerName" value="{{ old('customer_keyword') }}" placeholder="Chưa chọn khách hàng" readonly>
                 <button class="btn btn-outline-success" type="button" id="pmLoadCustomers">Load Khách hàng</button>
             </div>
         </div>
     </div>
 
-    <div class="pm-wrap mb-3">
-        <div>
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <div class="text-success fw-bold">Chọn khách hàng</div>
-                <div class="small text-muted" id="pmCustomerStatus">Chưa tải danh sách</div>
-            </div>
-            <div class="pm-customer-list" id="pmCustomerList">
-                <div class="text-muted py-5 text-center">Nhập thông tin rồi bấm Load Khách hàng hoặc Tìm khách hàng.</div>
-            </div>
+    <div class="mb-3">
+        <div class="mb-2 text-success fw-bold">Đơn hàng</div>
+        <div class="pm-selected-customer mb-3">
+            <strong id="pmSelectedCustomerLabel">Chưa chọn khách hàng</strong>
+            <div class="small text-muted mt-1" id="pmSelectedCustomerMeta">Bấm Load Khách hàng hoặc Tìm khách hàng để mở popup và gán khách vào form.</div>
         </div>
+    </div>
 
-        <div>
-            <div class="mb-3">
-                <label class="form-label fw-bold">Số thẻ của khách hàng</label>
-                <textarea class="form-control" name="card_codes" id="pmCardCodesInput" rows="5" placeholder="Mỗi dòng một mã thẻ">{{ old('card_codes') }}</textarea>
-                <div class="form-text">Các mã này được lưu vào hồ sơ khách hàng để lần sau so khớp tự động.</div>
+    <div class="modal fade" id="pmCustomerModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <h5 class="modal-title" id="pmCustomerModalTitle">Chọn khách hàng</h5>
+                        <div class="small text-muted" id="pmCustomerStatus">Chưa tải danh sách</div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="pm-modal-grid">
+                        <div>
+                            <div class="pm-search-tools">
+                                <input class="form-control" id="pmCustomerKeyword" value="{{ old('customer_keyword') }}" placeholder="Nhập tên, SĐT hoặc mã KH">
+                                <button class="btn btn-outline-success" type="button" id="pmModalSearch">Tìm</button>
+                            </div>
+                            <div class="pm-customer-list" id="pmCustomerList">
+                                <div class="text-muted py-5 text-center">Chưa có dữ liệu khách hàng.</div>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="form-label fw-bold">Số thẻ của khách hàng</label>
+                            <textarea class="form-control" id="pmModalCardCodesInput" rows="6" placeholder="Mỗi dòng một mã thẻ"></textarea>
+                            <div class="form-text mb-2">Có thể bổ sung/sửa mã thẻ trước khi chọn khách hàng.</div>
+                            <div class="pm-card-codes" id="pmCardCodesBox">Chưa chọn khách hàng.</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Đóng</button>
+                    <button type="button" class="btn btn-success" id="pmApplyCustomer" disabled>Chọn khách hàng</button>
+                </div>
             </div>
-            <div class="pm-card-codes" id="pmCardCodesBox">Chưa chọn khách hàng.</div>
         </div>
     </div>
 
@@ -218,12 +260,22 @@ document.addEventListener('DOMContentLoaded', function () {
     const amountPreview = document.getElementById('pmAmountPreview');
     const keywordInput = document.getElementById('pmCustomerKeyword');
     const customerIdInput = document.getElementById('pmCustomerId');
+    const selectedCustomerName = document.getElementById('pmSelectedCustomerName');
+    const selectedCustomerLabel = document.getElementById('pmSelectedCustomerLabel');
+    const selectedCustomerMeta = document.getElementById('pmSelectedCustomerMeta');
     const customerList = document.getElementById('pmCustomerList');
     const customerStatus = document.getElementById('pmCustomerStatus');
     const cardCodesInput = document.getElementById('pmCardCodesInput');
+    const modalCardCodesInput = document.getElementById('pmModalCardCodesInput');
     const cardCodesBox = document.getElementById('pmCardCodesBox');
     const ordersList = document.getElementById('pmOrdersList');
     const submitButton = document.getElementById('pmSubmit');
+    const customerModalEl = document.getElementById('pmCustomerModal');
+    const customerModal = customerModalEl ? new bootstrap.Modal(customerModalEl) : null;
+    const customerModalTitle = document.getElementById('pmCustomerModalTitle');
+    const applyCustomerButton = document.getElementById('pmApplyCustomer');
+    let pendingCustomer = null;
+    let lastCustomerSearchMode = 'keyword';
 
     const formatMoney = function (value) {
         const number = Number(String(value || '').replace(/[.,\s]/g, '')) || 0;
@@ -245,13 +297,28 @@ document.addEventListener('DOMContentLoaded', function () {
         const hitSet = new Set((hits || []).map(String));
         if (!codes || !codes.length) {
             cardCodesBox.textContent = 'Khách hàng chưa có mã thẻ.';
-            cardCodesInput.value = '';
+            modalCardCodesInput.value = '';
             return;
         }
-        cardCodesInput.value = codes.join('\n');
+        modalCardCodesInput.value = codes.join('\n');
         cardCodesBox.innerHTML = codes.map(function (code) {
             const escaped = escapeHtml(code);
             return hitSet.has(String(code)) ? '<span class="hit">' + escaped + '</span>' : escaped;
+        }).join('<br>');
+    };
+
+    const refreshCardPreviewFromModal = function () {
+        const codes = modalCardCodesInput.value.split(/\r?\n|,|;/).map(function (code) {
+            return code.trim();
+        }).filter(Boolean);
+
+        if (!codes.length) {
+            cardCodesBox.textContent = 'Khách hàng chưa có mã thẻ.';
+            return;
+        }
+
+        cardCodesBox.innerHTML = codes.map(function (code) {
+            return escapeHtml(code);
         }).join('<br>');
     };
 
@@ -274,10 +341,10 @@ document.addEventListener('DOMContentLoaded', function () {
             const button = customerList.querySelector('.js-pm-select-customer[data-id="' + customer.id + '"]');
             const radio = customerList.querySelector('.js-pm-customer[value="' + customer.id + '"]');
             const select = function () {
-                customerIdInput.value = customer.id;
+                pendingCustomer = customer;
                 if (radio) radio.checked = true;
+                applyCustomerButton.disabled = false;
                 renderCards(customer.card_codes || [], customer.matched_codes || []);
-                loadOrders();
             };
             if (button) button.addEventListener('click', select);
             if (radio) radio.addEventListener('change', select);
@@ -286,7 +353,17 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const loadCustomers = function (mode) {
         syncPreview();
+        lastCustomerSearchMode = mode;
+        pendingCustomer = null;
+        applyCustomerButton.disabled = true;
+        if (customerModalTitle) {
+            customerModalTitle.textContent = mode === 'card' ? 'Tìm khách hàng theo nội dung chuyển khoản' : 'Load khách hàng';
+        }
+        if (customerModal) customerModal.show();
         customerStatus.textContent = 'Đang tải...';
+        customerList.innerHTML = '<div class="text-muted py-5 text-center">Đang tải khách hàng...</div>';
+        cardCodesBox.textContent = 'Chọn một khách hàng để xem mã thẻ.';
+        modalCardCodesInput.value = '';
         const params = new URLSearchParams({
             mode: mode,
             keyword: keywordInput.value || '',
@@ -301,6 +378,26 @@ document.addEventListener('DOMContentLoaded', function () {
                 customerStatus.textContent = 'Lỗi tải dữ liệu';
                 customerList.innerHTML = '<div class="text-danger py-5 text-center">Không tải được khách hàng.</div>';
             });
+    };
+
+    const applyPendingCustomer = function () {
+        if (!pendingCustomer) return;
+
+        const codes = modalCardCodesInput.value.split(/\r?\n|,|;/).map(function (code) {
+            return code.trim();
+        }).filter(Boolean);
+
+        customerIdInput.value = pendingCustomer.id;
+        selectedCustomerName.value = pendingCustomer.name || '';
+        selectedCustomerLabel.textContent = pendingCustomer.name || 'Khách hàng đã chọn';
+        selectedCustomerMeta.textContent = [
+            pendingCustomer.phone || '',
+            pendingCustomer.code || '',
+            codes.length ? ('Số thẻ: ' + codes.join(', ')) : 'Chưa có mã thẻ'
+        ].filter(Boolean).join(' · ');
+        cardCodesInput.value = codes.join('\n');
+        if (customerModal) customerModal.hide();
+        loadOrders();
     };
 
     const loadOrders = function () {
@@ -343,12 +440,21 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     transferInput.addEventListener('input', syncPreview);
+    modalCardCodesInput.addEventListener('input', refreshCardPreviewFromModal);
     amountInput.addEventListener('input', function () {
         syncPreview();
         if (customerIdInput.value) loadOrders();
     });
     document.getElementById('pmLoadCustomers').addEventListener('click', function () { loadCustomers('keyword'); });
     document.getElementById('pmFindByCard').addEventListener('click', function () { loadCustomers('card'); });
+    document.getElementById('pmModalSearch').addEventListener('click', function () { loadCustomers(lastCustomerSearchMode); });
+    keywordInput.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            loadCustomers('keyword');
+        }
+    });
+    applyCustomerButton.addEventListener('click', applyPendingCustomer);
     syncPreview();
 });
 </script>
