@@ -91,19 +91,15 @@
             <a href="{{ route('shipper.manage-assignments', ['date' => now()->toDateString()]) }}" class="btn btn-sm {{ $selectedDate === now()->toDateString() ? 'btn-success' : 'btn-outline-success' }}">
                 Hôm nay
             </a>
-            <a href="{{ route('shipper.manage-assignments', ['date' => now()->addDay()->toDateString()]) }}" class="btn btn-sm {{ $selectedDate === now()->addDay()->toDateString() ? 'btn-success' : 'btn-outline-success' }}">
-                Ngày mai
+            <a href="{{ route('shipper.manage-assignments', ['date' => now()->subDay()->toDateString()]) }}" class="btn btn-sm {{ $selectedDate === now()->subDay()->toDateString() ? 'btn-success' : 'btn-outline-success' }}">
+                Hôm qua
             </a>
             <a href="{{ route('shipper.manage-assignments') }}" class="btn btn-sm btn-outline-secondary">
                 <i class="bi bi-arrow-clockwise me-1"></i>Đặt lại
             </a>
         </form>
         <div class="small text-muted mt-2">
-            @if($hasExplicitDateFilter ?? false)
-                Đang lọc theo ngày giao {{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}.
-            @else
-                Đang hiển thị đơn điều phối hôm nay, gồm đơn có ngày giao hôm nay hoặc vừa tạo/cập nhật hôm nay.
-            @endif
+            Đang hiển thị đơn lên ngày {{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}; ngày giao của từng đơn có thể là hôm nay hoặc ngày mai.
         </div>
     </div>
     <div class="col col-md-6 d-flex justify-content-end align-items-center">

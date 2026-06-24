@@ -130,7 +130,7 @@ class ShipperDashboardController extends Controller
         $orders = Order::query()
             ->where('shipper_id', $shipperId)
             ->whereIn('status', $this->assignmentStatuses())
-            ->forDeliveryDate($dateString)
+            ->whereDate('created_at', $dateString)
             ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
             ->orderBy('daily_sequence', 'asc')
             ->orderByRaw("CASE WHEN delivery_time IS NULL OR delivery_time = '' THEN 1 ELSE 0 END")
@@ -158,7 +158,7 @@ class ShipperDashboardController extends Controller
             $orders = Order::query()
                 ->where('shipper_id', $order->shipper_id)
                 ->whereIn('status', $this->assignmentStatuses())
-                ->forDeliveryDate($dateString)
+                ->whereDate('created_at', $dateString)
                 ->orderBy('daily_sequence', 'asc')
                 ->orderBy('created_at', 'asc')
                 ->orderBy('id', 'asc')
@@ -1494,8 +1494,7 @@ class ShipperDashboardController extends Controller
         $this->authorizeManagerShipper();
 
         // Get orders that can be planned for a shipper before packing finishes
-        $hasExplicitDateFilter = $request->filled('date');
-        $selectedDate = $hasExplicitDateFilter
+        $selectedDate = $request->filled('date')
             ? Carbon::parse($request->input('date'))->toDateString()
             : Carbon::today()->toDateString();
 
@@ -1503,15 +1502,7 @@ class ShipperDashboardController extends Controller
 
         $ordersQuery = Order::with(['customer.defaultShipper', 'customer.truckStation', 'customer.truckRoute.stops.station', 'items.variant', 'shipper'])
             ->whereIn('status', $this->assignmentStatuses())
-            ->when($hasExplicitDateFilter, function ($query) use ($selectedDate) {
-                $query->forDeliveryDate($selectedDate);
-            }, function ($query) use ($selectedDate) {
-                $query->where(function ($dateQuery) use ($selectedDate) {
-                    $dateQuery->forDeliveryDate($selectedDate)
-                        ->orWhereDate('created_at', $selectedDate)
-                        ->orWhereDate('updated_at', $selectedDate);
-                });
-            })
+            ->whereDate('created_at', $selectedDate)
             ->orderByRaw("CASE WHEN delivery_time IS NULL OR delivery_time = '' THEN 1 ELSE 0 END")
             ->orderBy('delivery_time', 'asc')
             ->orderBy('created_at', 'asc');
@@ -1565,8 +1556,7 @@ class ShipperDashboardController extends Controller
             'totalOrdersCount',
             'shipperScheduleStatuses',
             'hasUnpublishedSchedules',
-            'warehouses',
-            'hasExplicitDateFilter'
+            'warehouses'
         ));
     }
 
@@ -1575,7 +1565,7 @@ class ShipperDashboardController extends Controller
         $orders = Order::with(['customer.defaultShipper'])
             ->whereNull('shipper_id')
             ->whereIn('status', $this->assignmentStatuses())
-            ->forDeliveryDate($selectedDate)
+            ->whereDate('created_at', $selectedDate)
             ->whereHas('customer', fn ($query) => $query->whereNotNull('default_shipper_id'))
             ->whereDoesntHave('histories', fn ($query) => $query->where('action', 'shipper_unassigned'))
             ->get();
@@ -1646,7 +1636,7 @@ class ShipperDashboardController extends Controller
         return OrderHistory::query()
             ->join('orders', 'orders.id', '=', 'order_histories.order_id')
             ->where('orders.shipper_id', $shipperId)
-            ->whereDate('orders.delivery_date', $selectedDate)
+            ->whereDate('orders.created_at', $selectedDate)
             ->whereIn('order_histories.action', ['schedule_created', 'schedule_confirmed', 'schedule_rejected'])
             ->orderByDesc('order_histories.created_at')
             ->orderByDesc('order_histories.id')
@@ -1659,7 +1649,7 @@ class ShipperDashboardController extends Controller
         return Order::with(['customer', 'items.variant'])
             ->where('shipper_id', $shipperId)
             ->whereIn('status', $this->assignmentStatuses())
-            ->forDeliveryDate($selectedDate)
+            ->whereDate('created_at', $selectedDate)
             ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
             ->orderBy('daily_sequence', 'asc')
             ->orderBy('delivery_time', 'asc')
@@ -1822,7 +1812,7 @@ class ShipperDashboardController extends Controller
         $ordersQuery = Order::query()
             ->where('shipper_id', $fromShipper->id)
             ->whereIn('status', $this->assignmentStatuses())
-            ->forDeliveryDate($date);
+            ->whereDate('created_at', $date);
 
         $orders = DB::transaction(function () use ($ordersQuery, $fromShipper, $toShipper, $validated) {
             $orders = $ordersQuery->lockForUpdate()->get();
@@ -1899,7 +1889,7 @@ class ShipperDashboardController extends Controller
         $shipperIds = Order::query()
             ->whereNotNull('shipper_id')
             ->whereIn('status', $this->assignmentStatuses())
-            ->forDeliveryDate($date)
+            ->whereDate('created_at', $date)
             ->distinct('shipper_id')
             ->pluck('shipper_id')
             ->toArray();
@@ -2128,7 +2118,7 @@ class ShipperDashboardController extends Controller
             $orders = Order::query()
                 ->whereIn('id', $validated['order_ids'])
                 ->where('shipper_id', $userId)
-                ->forDeliveryDate($selectedDate)
+                ->whereDate('created_at', $selectedDate)
                 ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
                 ->orderBy('daily_sequence', 'asc')
                 ->orderBy('delivery_time', 'asc')
@@ -2166,7 +2156,7 @@ class ShipperDashboardController extends Controller
         $orders = Order::query()
             ->where('shipper_id', $userId)
             ->whereIn('status', $this->assignmentStatuses())
-            ->forDeliveryDate($selectedDate)
+            ->whereDate('created_at', $selectedDate)
             ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
             ->orderBy('daily_sequence', 'asc')
             ->orderBy('delivery_time', 'asc')
