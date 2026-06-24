@@ -1494,7 +1494,8 @@ class ShipperDashboardController extends Controller
         $this->authorizeManagerShipper();
 
         // Get orders that can be planned for a shipper before packing finishes
-        $selectedDate = $request->filled('date')
+        $hasExplicitDateFilter = $request->filled('date');
+        $selectedDate = $hasExplicitDateFilter
             ? Carbon::parse($request->input('date'))->toDateString()
             : Carbon::today()->toDateString();
 
@@ -1502,7 +1503,15 @@ class ShipperDashboardController extends Controller
 
         $ordersQuery = Order::with(['customer.defaultShipper', 'customer.truckStation', 'customer.truckRoute.stops.station', 'items.variant', 'shipper'])
             ->whereIn('status', $this->assignmentStatuses())
-            ->forDeliveryDate($selectedDate)
+            ->when($hasExplicitDateFilter, function ($query) use ($selectedDate) {
+                $query->forDeliveryDate($selectedDate);
+            }, function ($query) use ($selectedDate) {
+                $query->where(function ($dateQuery) use ($selectedDate) {
+                    $dateQuery->forDeliveryDate($selectedDate)
+                        ->orWhereDate('created_at', $selectedDate)
+                        ->orWhereDate('updated_at', $selectedDate);
+                });
+            })
             ->orderByRaw("CASE WHEN delivery_time IS NULL OR delivery_time = '' THEN 1 ELSE 0 END")
             ->orderBy('delivery_time', 'asc')
             ->orderBy('created_at', 'asc');
@@ -1556,7 +1565,8 @@ class ShipperDashboardController extends Controller
             'totalOrdersCount',
             'shipperScheduleStatuses',
             'hasUnpublishedSchedules',
-            'warehouses'
+            'warehouses',
+            'hasExplicitDateFilter'
         ));
     }
 

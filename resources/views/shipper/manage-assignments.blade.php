@@ -99,7 +99,11 @@
             </a>
         </form>
         <div class="small text-muted mt-2">
-            Đang hiển thị đơn theo ngày giao {{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}.
+            @if($hasExplicitDateFilter ?? false)
+                Đang lọc theo ngày giao {{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}.
+            @else
+                Đang hiển thị đơn điều phối hôm nay, gồm đơn có ngày giao hôm nay hoặc vừa tạo/cập nhật hôm nay.
+            @endif
         </div>
     </div>
     <div class="col col-md-6 d-flex justify-content-end align-items-center">
