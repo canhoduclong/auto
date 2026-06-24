@@ -227,6 +227,173 @@
             background: #f8fafc;
         }
         .m-bottom-nav a.active { background: #e6fffb; color: #0f766e; }
+        .m-topbar {
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            max-width: 720px;
+            margin: 0 auto;
+            padding: 8px 12px;
+            background: rgba(248, 250, 252, .96);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .m-brand {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 0;
+        }
+        .m-brand-logo {
+            width: 34px;
+            height: 34px;
+            border-radius: 10px;
+            display: grid;
+            place-items: center;
+            background: #111827;
+            color: #facc15;
+            font-weight: 900;
+            flex: 0 0 auto;
+        }
+        .m-brand-title {
+            font-size: .9rem;
+            font-weight: 900;
+            line-height: 1.05;
+            white-space: nowrap;
+        }
+        .m-brand-subtitle {
+            font-size: .68rem;
+            color: var(--muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 190px;
+        }
+        .m-top-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex: 0 0 auto;
+        }
+        .m-icon-btn {
+            position: relative;
+            width: 34px;
+            height: 34px;
+            border: 0;
+            border-radius: 999px;
+            display: grid;
+            place-items: center;
+            background: #fff;
+            color: #0f172a;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, .1);
+            text-decoration: none;
+        }
+        .m-noti-dot {
+            position: absolute;
+            right: -2px;
+            top: -2px;
+            min-width: 16px;
+            height: 16px;
+            border-radius: 999px;
+            display: grid;
+            place-items: center;
+            background: #ef4444;
+            color: #fff;
+            font-size: .62rem;
+            font-weight: 800;
+        }
+        .m-profile-menu {
+            position: relative;
+        }
+        .m-profile-menu > summary {
+            list-style: none;
+            cursor: pointer;
+        }
+        .m-profile-menu > summary::-webkit-details-marker { display: none; }
+        .m-top-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid #fff;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, .18);
+            background: #e5e7eb;
+        }
+        .m-profile-dropdown {
+            position: absolute;
+            right: 0;
+            top: calc(100% + 8px);
+            width: min(82vw, 280px);
+            border-radius: 16px;
+            overflow: hidden;
+            background: #fff;
+            box-shadow: 0 18px 45px rgba(15, 23, 42, .22);
+            border: 1px solid #e2e8f0;
+        }
+        .m-profile-head {
+            display: grid;
+            grid-template-columns: 52px minmax(0, 1fr);
+            gap: 10px;
+            padding: 12px;
+            border-bottom: 1px solid #e2e8f0;
+            align-items: center;
+        }
+        .m-profile-head img {
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+        .m-profile-head strong,
+        .m-profile-head span {
+            display: block;
+            overflow-wrap: anywhere;
+        }
+        .m-profile-meta {
+            padding: 10px 12px;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: .78rem;
+            color: #334155;
+            display: grid;
+            gap: 4px;
+        }
+        .m-menu-section {
+            padding: 6px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .m-menu-title {
+            padding: 6px 10px;
+            font-size: .75rem;
+            color: #64748b;
+        }
+        .m-menu-item,
+        .m-menu-section form button {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border: 0;
+            border-radius: 10px;
+            background: transparent;
+            color: #0f172a;
+            padding: 9px 10px;
+            text-decoration: none;
+            font-size: .88rem;
+            text-align: left;
+        }
+        .m-menu-item.active,
+        .m-menu-section form button.active {
+            background: #1677ff;
+            color: #fff;
+        }
+        .m-menu-item.danger,
+        .m-menu-section form button.danger {
+            color: #dc2626;
+        }
         @media (max-width: 390px) {
             .m-profile-card {
                 grid-template-columns: 86px minmax(0, 1fr);
@@ -251,12 +418,71 @@
     @stack('styles')
 </head>
 <body>
+    @php
+        $mobileUser = auth()->user();
+        $avatarUrl = $mobileUser?->google_avatar ?: ($mobileUser?->avatar ? asset('storage/' . $mobileUser->avatar) : 'https://ui-avatars.com/api/?name=' . urlencode($mobileUser?->name ?? 'User') . '&background=0f766e&color=fff');
+        $activeRole = session('active_role');
+        $topRoles = $mobileUser?->roles ?? collect();
+        $unreadCount = (\Illuminate\Support\Facades\Schema::hasTable('notifications') && $mobileUser) ? $mobileUser->unreadNotifications()->count() : 0;
+    @endphp
+    <header class="m-topbar">
+        <div class="m-brand">
+            <div class="m-brand-logo">HL</div>
+            <div class="min-w-0">
+                <div class="m-brand-title">HOÀNG LONG TNT</div>
+                <div class="m-brand-subtitle">Uy tín - Chất lượng - Tận tâm</div>
+            </div>
+        </div>
+        <div class="m-top-actions">
+            <a class="m-icon-btn" href="{{ route('pages.my_dashboard') }}" aria-label="Thông báo">
+                🔔
+                @if($unreadCount > 0)<span class="m-noti-dot">{{ min($unreadCount, 99) }}</span>@endif
+            </a>
+            <details class="m-profile-menu">
+                <summary><img src="{{ $avatarUrl }}" alt="{{ $mobileUser?->name }}" class="m-top-avatar"></summary>
+                <div class="m-profile-dropdown">
+                    <div class="m-profile-head">
+                        <img src="{{ $avatarUrl }}" alt="{{ $mobileUser?->name }}">
+                        <div>
+                            <strong>{{ $mobileUser?->name }}</strong>
+                            <span class="m-label">{{ $mobileUser?->job_title ?: 'Nhân sự' }}</span>
+                        </div>
+                    </div>
+                    <div class="m-profile-meta">
+                        <div><strong>Email:</strong> {{ $mobileUser?->email ?: '—' }}</div>
+                        <div><strong>Tel:</strong> {{ $mobileUser?->phone ?: '—' }}</div>
+                        <div><strong>Ngày gia nhập:</strong> {{ optional($mobileUser?->created_at)->format('d/m/Y') }}</div>
+                    </div>
+                    <div class="m-menu-section">
+                        <div class="m-menu-title">Chuyển vai trò</div>
+                        @foreach($topRoles as $role)
+                            <form action="{{ route('role.switch', $role->name) }}" method="POST">
+                                @csrf
+                                <button class="{{ $activeRole === $role->name ? 'active' : '' }}" type="submit">
+                                    <span>▣</span><span>{{ $role->display_name ?? $role->name }}</span>
+                                </button>
+                            </form>
+                        @endforeach
+                    </div>
+                    <div class="m-menu-section">
+                        <a class="m-menu-item" href="{{ route('pages.my_profile') }}">☰ Chỉnh sửa profile</a>
+                        <a class="m-menu-item" href="{{ route('mobile.home') }}">▣ Cập nhật ứng dụng</a>
+                    </div>
+                    <div class="m-menu-section">
+                        <form action="{{ route('logout') }}" method="POST">
+                            @csrf
+                            <button class="danger" type="submit">↪ Đăng xuất</button>
+                        </form>
+                    </div>
+                </div>
+            </details>
+        </div>
+    </header>
     <div class="m-wrap">
         @yield('content')
     </div>
 
-    @php($mobileUser = auth()->user())
-    <nav class="m-bottom-nav">
+    <nav class="m-bottom-nav" style="display:none">
         @if($mobileUser?->hasRole('sale') || $mobileUser?->hasRole('leader') || $mobileUser?->hasRole('leader_sale') || $mobileUser?->hasRole('sale_manager') || $mobileUser?->hasRole('manager') || $mobileUser?->hasRole('manager_sale') || $mobileUser?->hasRole('admin'))
             <a href="{{ route('mobile.sale.home') }}" class="{{ request()->routeIs('mobile.sale.*') ? 'active' : '' }}">Sale</a>
         @endif

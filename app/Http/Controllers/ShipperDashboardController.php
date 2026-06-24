@@ -285,7 +285,7 @@ class ShipperDashboardController extends Controller
         $startDate = $today->copy()->subDays(6)->toDateString();
 
         $dailyCounts = Order::query()
-            ->selectRaw('delivery_date as day_key, COUNT(*) as total')
+            ->selectRaw('DATE(created_at) as day_key, COUNT(*) as total')
             ->where(function ($query) {
                 $query->where(function ($readyQuery) {
                     $this->constrainAvailableReadyOrder($readyQuery);
@@ -295,8 +295,8 @@ class ShipperDashboardController extends Controller
                     $this->constrainNoActiveWarehouseTransfer($acceptedQuery);
                 });
             })
-            ->whereDate('delivery_date', '>=', $startDate)
-            ->whereDate('delivery_date', '<=', $today->toDateString())
+            ->whereDate('created_at', '>=', $startDate)
+            ->whereDate('created_at', '<=', $today->toDateString())
             ->groupBy('day_key')
             ->pluck('total', 'day_key');
 
@@ -324,7 +324,7 @@ class ShipperDashboardController extends Controller
                     $this->constrainNoActiveWarehouseTransfer($acceptedQuery);
                 });
             })
-            ->forDeliveryDate($selectedDate)
+            ->whereDate('created_at', $selectedDate)
             ->orderBy('created_at', 'asc')
             ->get();
 
@@ -2130,6 +2130,10 @@ class ShipperDashboardController extends Controller
 
             $snapshot = $this->buildDeliveryScheduleSnapshot($orders);
             $snapshotHash = $this->hashDeliveryScheduleSnapshot($snapshot);
+            $latestHistory = $this->latestDeliveryScheduleHistoryForShipperOnDate($userId, $selectedDate);
+            if ($historyAction === 'schedule_confirmed' && $this->deliveryScheduleStatus($latestHistory, $snapshotHash) === 'confirmed') {
+                return back()->with('info', 'Lịch trình đã được xác nhận trước đó.');
+            }
 
             DB::transaction(function () use ($orders, $userId, $historyAction, $snapshotHash, $snapshot): void {
                 foreach ($orders as $order) {
@@ -2166,6 +2170,10 @@ class ShipperDashboardController extends Controller
 
         $snapshot = $this->buildDeliveryScheduleSnapshot($orders);
         $snapshotHash = $this->hashDeliveryScheduleSnapshot($snapshot);
+        $latestHistory = $this->latestDeliveryScheduleHistoryForShipperOnDate($userId, $selectedDate);
+        if ($historyAction === 'schedule_confirmed' && $this->deliveryScheduleStatus($latestHistory, $snapshotHash) === 'confirmed') {
+            return back()->with('info', 'Lịch trình đã được xác nhận trước đó.');
+        }
 
         OrderHistory::create([
             'order_id'      => $order->id,

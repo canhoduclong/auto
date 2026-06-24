@@ -238,8 +238,11 @@
             @endforeach
         </div>
         <div class="mt-4 text-center d-flex justify-content-center gap-2 flex-wrap">
-            <button type="submit" class="btn btn-primary px-5" formaction="{{ route('shipper.confirm-delivery-schedule', ['schedule' => 'bulk']) }}">
-                <i class="bi bi-check2-circle me-1"></i> Xác nhận lịch trình & nhận đơn
+            <button type="submit"
+                class="btn {{ $scheduleAlreadyConfirmed ? 'btn-secondary' : 'btn-primary' }} px-5"
+                formaction="{{ route('shipper.confirm-delivery-schedule', ['schedule' => 'bulk']) }}"
+                @disabled($scheduleAlreadyConfirmed)>
+                <i class="bi bi-check2-circle me-1"></i> {{ $scheduleAlreadyConfirmed ? 'Đã xác nhận lịch trình' : 'Xác nhận lịch trình & nhận đơn' }}
             </button>
             <button type="submit" class="btn btn-outline-danger px-5" formaction="{{ route('shipper.reject-delivery-schedule', ['schedule' => 'bulk']) }}">
                 <i class="bi bi-x-circle me-1"></i> Từ chối nhận

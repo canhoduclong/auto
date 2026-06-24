@@ -41,7 +41,9 @@ Route::middleware(['auth'])->prefix('m')->name('mobile.')->group(function () {
 
         Route::prefix('/api/sale')->name('api.sale.')->group(function () {
             Route::get('/customers', [SaleMobileController::class, 'customers'])->name('customers');
+            Route::get('/products', [SaleMobileController::class, 'products'])->name('products');
             Route::get('/orders', [SaleMobileController::class, 'orders'])->name('orders');
+            Route::post('/orders', [SaleMobileController::class, 'storeOrder'])->name('orders.store');
             Route::get('/metrics', [SaleMobileController::class, 'metrics'])->name('metrics');
         });
     });

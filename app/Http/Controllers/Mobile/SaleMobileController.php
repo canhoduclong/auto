@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Mobile;
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
 use App\Models\Order;
+use App\Models\OrderHistory;
+use App\Models\ProductVariant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -87,6 +89,128 @@ class SaleMobileController extends Controller
         });
 
         return response()->json(['data' => $rows]);
+    }
+
+    public function products(Request $request): JsonResponse
+    {
+        $search = trim((string) $request->query('q', ''));
+
+        $rows = ProductVariant::query()
+            ->with(['product:id,name,unit,kg,is_priced_by_kg'])
+            ->withAvailableStock()
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where(function ($subQuery) use ($search) {
+                    $subQuery->where('name', 'like', '%' . $search . '%')
+                        ->orWhere('sku', 'like', '%' . $search . '%')
+                        ->orWhereHas('product', fn ($productQuery) => $productQuery->where('name', 'like', '%' . $search . '%'));
+                });
+            })
+            ->orderByDesc('id')
+            ->limit(80)
+            ->get()
+            ->map(function (ProductVariant $variant) {
+                return [
+                    'id' => (int) $variant->id,
+                    'name' => trim(($variant->product?->name ? $variant->product->name . ' - ' : '') . ($variant->name ?: $variant->sku ?: ('SKU #' . $variant->id))),
+                    'sku' => (string) ($variant->sku ?? ''),
+                    'price' => (float) $variant->final_price,
+                    'kg' => (float) $variant->effective_kg,
+                    'is_priced_by_kg' => (bool) $variant->effective_priced_by_kg,
+                    'available_stock' => (int) $variant->available_stock,
+                ];
+            });
+
+        return response()->json(['data' => $rows]);
+    }
+
+    public function storeOrder(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $validated = $request->validate([
+            'customer_id' => ['required', 'integer', 'exists:customers,id'],
+            'delivery_date' => ['nullable', 'date'],
+            'delivery_time' => ['nullable', 'string', 'max:50'],
+            'note' => ['nullable', 'string', 'max:500'],
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.variant_id' => ['required', 'integer', 'exists:product_variants,id'],
+            'items.*.quantity' => ['required', 'integer', 'min:1'],
+        ]);
+
+        $customer = Customer::query()->findOrFail((int) $validated['customer_id']);
+        if (!$user->hasRole('admin')) {
+            abort_if(!in_array((int) $user->id, [(int) $customer->assigned_to, (int) $customer->user_id], true), 403, 'Khách hàng không thuộc quyền quản lý.');
+        }
+
+        $order = DB::transaction(function () use ($validated, $customer, $user) {
+            $variantIds = collect($validated['items'])->pluck('variant_id')->map(fn ($id) => (int) $id)->unique()->values();
+            $variants = ProductVariant::query()->with('product')->whereIn('id', $variantIds)->get()->keyBy('id');
+            $items = collect($validated['items'])->map(function (array $item) use ($variants) {
+                $variant = $variants->get((int) $item['variant_id']);
+                if (!$variant) {
+                    throw new \RuntimeException('Không tìm thấy sản phẩm.');
+                }
+                $quantity = max(1, (int) $item['quantity']);
+                $unitWeight = max(0.01, (float) $variant->effective_kg);
+                $isPricedByKg = (bool) $variant->effective_priced_by_kg;
+                $price = (float) $variant->final_price;
+                $lineTotal = $price * $quantity * ($isPricedByKg ? $unitWeight : 1);
+
+                return compact('variant', 'quantity', 'unitWeight', 'isPricedByKg', 'price', 'lineTotal');
+            });
+
+            $total = (float) $items->sum('lineTotal');
+            $totalWeight = (float) $items->sum(fn ($item) => $item['unitWeight'] * $item['quantity']);
+            $order = Order::create([
+                'customer_id' => $customer->id,
+                'user_id' => $user->id,
+                'shipper_id' => $customer->default_shipper_id,
+                'code' => 'ORD-' . strtoupper(substr(bin2hex(random_bytes(5)), 0, 10)),
+                'status' => Order::STATUS_APPROVED,
+                'payment_status' => 'unpaid',
+                'delivery_date' => $validated['delivery_date'] ?? now()->addDay()->toDateString(),
+                'delivery_time' => $validated['delivery_time'] ?? $customer->delivery_time,
+                'recipient_name' => $customer->name,
+                'recipient_phone' => $customer->phone,
+                'recipient_address' => $customer->address,
+                'note' => $validated['note'] ?? null,
+                'total' => $total,
+                'subtotal_amount' => $total,
+                'amount_due' => 0,
+                'total_weight' => round($totalWeight, 3),
+            ]);
+
+            foreach ($items as $item) {
+                $variant = $item['variant'];
+                $order->items()->create([
+                    'product_id' => $variant->product_id,
+                    'product_variant_id' => $variant->id,
+                    'quantity' => $item['quantity'],
+                    'price' => $item['price'],
+                    'base_price' => $item['price'],
+                    'unit_weight' => $item['unitWeight'],
+                    'is_priced_by_kg' => $item['isPricedByKg'],
+                    'total_weight' => round($item['unitWeight'] * $item['quantity'], 3),
+                    'total' => $item['lineTotal'],
+                ]);
+            }
+
+            OrderHistory::create([
+                'order_id' => $order->id,
+                'action' => 'create_order_mobile',
+                'user_id' => $user->id,
+                'role' => 'sale',
+                'status_before' => null,
+                'status_after' => $order->status,
+                'note' => 'Sale tạo đơn từ mobile',
+            ]);
+
+            return $order;
+        });
+
+        return response()->json([
+            'message' => 'Đã tạo đơn ' . ($order->code ?: ('#' . $order->id)),
+            'order_id' => (int) $order->id,
+        ], 201);
     }
 
     public function metrics(Request $request): JsonResponse
