@@ -82,7 +82,7 @@ class ShipperDashboardController extends Controller
     {
         $query->where('shipper_id', Auth::id())
             ->where(function ($statusQuery) {
-                $statusQuery->where('status', Order::STATUS_READY_TO_SHIP)
+                $statusQuery->whereIn('status', [Order::STATUS_READY_TO_SHIP, Order::STATUS_PACKED])
                     ->orWhere(function ($returnQuery) {
                         $returnQuery->where('status', Order::STATUS_APPROVED)
                             ->where('is_return_order', true);
@@ -411,7 +411,7 @@ class ShipperDashboardController extends Controller
                 'action'        => 'shipper_accepted',
                 'user_id'       => Auth::id(),
                 'role'          => 'shipper',
-                'status_before' => $isReturnOrder ? Order::STATUS_APPROVED : Order::STATUS_READY_TO_SHIP,
+                'status_before' => $isReturnOrder ? Order::STATUS_APPROVED : (string) $fresh->getOriginal('status'),
                 'status_after'  => Order::STATUS_DELIVERING,
                 'note'          => $isReturnOrder ? 'Shipper nhận đơn hoàn trả' : 'Shipper nhận đơn để giao',
             ]);
@@ -1496,7 +1496,7 @@ class ShipperDashboardController extends Controller
         // Get orders that can be planned for a shipper before packing finishes
         $selectedDate = $request->filled('date')
             ? Carbon::parse($request->input('date'))->toDateString()
-            : Carbon::tomorrow()->toDateString();
+            : Carbon::today()->toDateString();
 
         $this->applyDefaultShipperAssignmentsForDate($selectedDate);
 
@@ -2188,6 +2188,7 @@ class ShipperDashboardController extends Controller
             Order::STATUS_APPROVED,
             Order::STATUS_READY_TO_PACK,
             Order::STATUS_PACKING,
+            Order::STATUS_PACKED,
             Order::STATUS_READY_TO_SHIP,
         ];
     }

@@ -88,10 +88,19 @@
             <button type="submit" class="btn btn-sm btn-primary">
                 <i class="bi bi-search me-1"></i>Lọc
             </button>
+            <a href="{{ route('shipper.manage-assignments', ['date' => now()->toDateString()]) }}" class="btn btn-sm {{ $selectedDate === now()->toDateString() ? 'btn-success' : 'btn-outline-success' }}">
+                Hôm nay
+            </a>
+            <a href="{{ route('shipper.manage-assignments', ['date' => now()->addDay()->toDateString()]) }}" class="btn btn-sm {{ $selectedDate === now()->addDay()->toDateString() ? 'btn-success' : 'btn-outline-success' }}">
+                Ngày mai
+            </a>
             <a href="{{ route('shipper.manage-assignments') }}" class="btn btn-sm btn-outline-secondary">
                 <i class="bi bi-arrow-clockwise me-1"></i>Đặt lại
             </a>
         </form>
+        <div class="small text-muted mt-2">
+            Đang hiển thị đơn theo ngày giao {{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}.
+        </div>
     </div>
     <div class="col col-md-6 d-flex justify-content-end align-items-center">
         <form method="POST" action="{{ route('shipper.create-delivery-schedule') }}" class="d-flex gap-2 align-items-center ms-auto">

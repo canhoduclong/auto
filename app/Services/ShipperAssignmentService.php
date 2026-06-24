@@ -16,6 +16,7 @@ class ShipperAssignmentService
             Order::STATUS_APPROVED,
             Order::STATUS_READY_TO_PACK,
             Order::STATUS_PACKING,
+            Order::STATUS_PACKED,
             Order::STATUS_READY_TO_SHIP,
         ];
     }
