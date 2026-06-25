@@ -1,8 +1,8 @@
 {
-  "version": "1.0.34",
-  "version_code": 35,
+  "version": "1.0.36",
+  "version_code": 37,
   "apk_url": "https://hoanglongtnt.com/app-update/app-release.apk",
   "ios_url": "",
   "force_update": false,
-  "message": "Bản cập nhật 1.0.34: sửa lỗi lưu chỉnh sửa đơn/khách hàng trong my_app, cải thiện thông báo lỗi quyền truy cập."
+  "message": "Bản cập nhật 1.0.36: bổ sung ghim/lưu thứ tự sản phẩm cho Sale mobile và thêm bảng chức năng trong chi tiết đơn hàng."
 }
