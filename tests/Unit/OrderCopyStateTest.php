@@ -2,6 +2,9 @@
 
 namespace Tests\Unit;
 
+use App\Enums\DeliveryStatus;
+use App\Enums\OrderStatus;
+use App\Enums\PaymentStatus;
 use App\Models\Order;
 use Tests\TestCase;
 
@@ -34,5 +37,38 @@ class OrderCopyStateTest extends TestCase
         $this->assertNull($copiedOrder->warehouse_adjustment_rejected_by);
         $this->assertNull($copiedOrder->warehouse_adjustment_rejected_at);
         $this->assertNull($copiedOrder->warehouse_adjustment_rejected_reason);
+    }
+
+    public function test_copied_order_resets_operational_state_to_new_unconfirmed_order(): void
+    {
+        $sourceOrder = new Order([
+            'status' => Order::STATUS_DELIVERED,
+            'payment_status' => 'paid',
+            'delivery_status' => 'delivered',
+            'daily_sequence' => 9,
+            'warehouse_id' => 2,
+            'amount_paid' => 150000,
+            'amount_due' => 50000,
+            'collected_amount' => 200000,
+            'proof_images' => ['proof.jpg'],
+            'stock_sufficient' => true,
+            'stock_alert_status' => 'ready',
+        ]);
+        $sourceOrder->forceFill(['id' => 123]);
+
+        $copiedOrder = $sourceOrder->replicate()->resetForCopiedOrder((int) $sourceOrder->id);
+
+        $this->assertSame(OrderStatus::Pending->value, $copiedOrder->status);
+        $this->assertSame(PaymentStatus::Unpaid->value, $copiedOrder->payment_status);
+        $this->assertSame(DeliveryStatus::NotShipped->value, $copiedOrder->delivery_status);
+        $this->assertSame(123, $copiedOrder->copied_from_order_id);
+        $this->assertNull($copiedOrder->daily_sequence);
+        $this->assertNull($copiedOrder->warehouse_id);
+        $this->assertSame(0, $copiedOrder->amount_paid);
+        $this->assertSame(0, $copiedOrder->amount_due);
+        $this->assertNull($copiedOrder->collected_amount);
+        $this->assertNull($copiedOrder->proof_images);
+        $this->assertNull($copiedOrder->stock_sufficient);
+        $this->assertNull($copiedOrder->stock_alert_status);
     }
 }

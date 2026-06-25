@@ -585,6 +585,16 @@
                             <i class="bi bi-check2-all me-1"></i>Duyệt tất cả
                         </button>
                     </form>
+                    <form method="POST" action="{{ route('pages.my_team_orders.refresh_sequence') }}" onsubmit="return confirm('Cập nhật lại số thứ tự ưu tiên cho các đơn team đang thiếu số?');">
+                        @csrf
+                        <input type="hidden" name="from_date" value="{{ $fromDate }}">
+                        <input type="hidden" name="to_date" value="{{ $toDate }}">
+                        <input type="hidden" name="status" value="{{ request('status') }}">
+                        <input type="hidden" name="search" value="{{ request('search') }}">
+                        <button type="submit" class="btn btn-outline-primary btn-sm" title="Cập nhật số thứ tự ưu tiên">
+                            <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+                        </button>
+                    </form>
                     <div class="d-flex align-items-center  gap-1">
                         <label class="small text-muted mb-0" for="orderSort" style="min-width:60px">Sắp xếp:</label>
                         <select id="orderSort" class="form-select form-select-sm" style="min-width: 210px;">
@@ -1147,6 +1157,9 @@ document.addEventListener('DOMContentLoaded', function () {
         }, 600);
 
         showToast(data.message || (action === 'approve' ? 'Đơn đã được duyệt.' : 'Đơn đã bị từ chối.'), action === 'approve' ? 'success' : 'warning');
+        if (newStatus === 'rejected') {
+            row.remove();
+        }
         recalcSummary();
     }
 

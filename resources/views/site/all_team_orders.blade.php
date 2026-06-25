@@ -494,6 +494,17 @@
                             <i class="bi bi-check2-all me-1"></i>Duyet tat ca
                         </button>
                     </form>
+                    <form method="POST" action="{{ route('pages.all_team_orders.refresh_sequence') }}" onsubmit="return confirm('Cap nhat lai so thu tu uu tien cho cac don PKD dang thieu so?');">
+                        @csrf
+                        <input type="hidden" name="from_date" value="{{ $fromDate }}">
+                        <input type="hidden" name="to_date" value="{{ $toDate }}">
+                        <input type="hidden" name="team_id" value="{{ request('team_id') }}">
+                        <input type="hidden" name="status" value="{{ request('status') }}">
+                        <input type="hidden" name="search" value="{{ request('search') }}">
+                        <button type="submit" class="btn btn-outline-primary btn-sm" title="Cap nhat so thu tu uu tien">
+                            <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+                        </button>
+                    </form>
                     <label class="small text-muted mb-0" for="orderSort" style="min-width:60px">Sap xep:</label>
                     <select id="orderSort" class="form-select form-select-sm" style="min-width: 210px;">
                         <option value="created_desc">Ngay tao moi nhat</option>
@@ -725,6 +736,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
         setTimeout(function () { row.classList.remove('flash'); }, 600);
         showToast(data.message || (action === 'approve' ? 'Đơn đã được duyệt.' : 'Đơn đã bị từ chối.'), action === 'approve' ? 'success' : 'warning');
+        if (newStatus === 'rejected') {
+            row.remove();
+        }
         recalcSummary();
     }
 

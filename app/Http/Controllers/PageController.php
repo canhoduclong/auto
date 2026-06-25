@@ -1261,6 +1261,7 @@ class PageController extends Controller
                     });
                 });
             });
+        $query->where('status', '!=', Order::STATUS_REJECTED);
 
         // Mặc định giữ toàn bộ đơn trong ngày để leader theo dõi đầy đủ
         $fromDate = $request->input('from_date', now()->toDateString());
@@ -1293,7 +1294,7 @@ class PageController extends Controller
             }
         }
 
-        if ($request->filled('status')) {
+        if ($request->filled('status') && $request->input('status') !== Order::STATUS_REJECTED) {
             $query->where('status', $request->input('status'));
         }
 
@@ -1456,6 +1457,7 @@ class PageController extends Controller
                     });
                 });
             })
+            ->where('status', '!=', Order::STATUS_REJECTED)
             ->whereDate('created_at', '>=', $fromDate)
             ->whereDate('created_at', '<=', $toDate);
 
@@ -1581,6 +1583,44 @@ class PageController extends Controller
         return $this->redirectAfterApproveAll($result, 'team');
     }
 
+    public function myTeamOrdersRefreshSequence(Request $request)
+    {
+        if (!auth()->check()) {
+            return redirect()->route('login')->with('error', 'Bạn cần đăng nhập để thao tác.');
+        }
+
+        $user = auth()->user();
+        $isLeader = $user->hasRole('leader') || $user->hasRole('leader_sale') || $user->hasRole('sale_manager') || $user->hasRole('admin');
+        if (!$isLeader) {
+            abort(403, 'Bạn không có quyền cập nhật số thứ tự đơn team.');
+        }
+
+        $fromDate = $request->input('from_date', now()->toDateString());
+        $toDate = $request->input('to_date', now()->toDateString());
+
+        $query = Order::query()
+            ->with(['customer', 'user.roles'])
+            ->when(!$user->hasRole('admin'), function ($q) use ($user) {
+                $q->whereHas('user', function ($sub) use ($user) {
+                    $sub->where(function ($scope) use ($user) {
+                        $scope->where(function ($teamSale) use ($user) {
+                            $teamSale->where('team_id', $user->team_id)
+                                ->whereHas('roles', function ($roleQuery) {
+                                    $roleQuery->whereRaw('LOWER(name) = ?', ['sale']);
+                                });
+                        })->orWhere('id', $user->id);
+                    });
+                });
+            })
+            ->where('status', '!=', Order::STATUS_REJECTED)
+            ->whereDate('created_at', '>=', $fromDate)
+            ->whereDate('created_at', '<=', $toDate);
+
+        $this->applyTeamOrderFilters($query, $request);
+
+        return $this->refreshMissingDailySequencesFromQuery($query, 'team');
+    }
+
     public function allTearmOrders(Request $request)
     {
         if (!auth()->check()) {
@@ -1602,7 +1642,8 @@ class PageController extends Controller
         $query = Order::with(['customer', 'user.roles', 'user.team', 'approvals.step'])
             ->whereHas('user.roles', function ($q) use ($allowedCreatorRoles) {
                 $q->whereIn(DB::raw('LOWER(name)'), $allowedCreatorRoles);
-            });
+            })
+            ->where('status', '!=', Order::STATUS_REJECTED);
 
         $fromDate = $request->input('from_date', now()->toDateString());
         $toDate = $request->input('to_date', now()->toDateString());
@@ -1640,7 +1681,7 @@ class PageController extends Controller
             }
         }
 
-        if ($request->filled('status')) {
+        if ($request->filled('status') && $request->input('status') !== Order::STATUS_REJECTED) {
             $query->where('status', $request->input('status'));
         }
 
@@ -1774,6 +1815,7 @@ class PageController extends Controller
             })
             ->whereDate('created_at', '>=', $fromDate)
             ->whereDate('created_at', '<=', $toDate)
+            ->where('status', '!=', Order::STATUS_REJECTED)
             // Bắt buộc đã qua leader và đang chờ manager duyệt
             ->where('status', 'pending_manager_approval');
 
@@ -1889,6 +1931,7 @@ class PageController extends Controller
             })
             ->whereDate('created_at', '>=', $fromDate)
             ->whereDate('created_at', '<=', $toDate)
+            ->where('status', '!=', Order::STATUS_REJECTED)
             ->whereDate('created_at', now()->toDateString());
 
         if ($request->filled('team_id')) {
@@ -1904,6 +1947,43 @@ class PageController extends Controller
         $result = $this->approveOrdersFromQuery($query, $user, $approvalService, 'Manager duyệt tất cả từ trang all-team-orders');
 
         return $this->redirectAfterApproveAll($result, 'PKD');
+    }
+
+    public function allTeamOrdersRefreshSequence(Request $request)
+    {
+        if (!auth()->check()) {
+            return redirect()->route('login')->with('error', 'Bạn cần đăng nhập để thao tác.');
+        }
+
+        $user = auth()->user();
+        $isManager = $user->hasRole('manager') || $user->hasRole('manager_sale') || $user->hasRole('director') || $user->hasRole('admin');
+        if (!$isManager) {
+            abort(403, 'Bạn không có quyền cập nhật số thứ tự đơn PKD.');
+        }
+
+        $fromDate = $request->input('from_date', now()->toDateString());
+        $toDate = $request->input('to_date', now()->toDateString());
+        $allowedCreatorRoles = ['sale', 'leader', 'leader_sale', 'sale_manager'];
+
+        $query = Order::query()
+            ->with(['customer', 'user.roles'])
+            ->whereHas('user.roles', function ($q) use ($allowedCreatorRoles) {
+                $q->whereIn(DB::raw('LOWER(name)'), $allowedCreatorRoles);
+            })
+            ->where('status', '!=', Order::STATUS_REJECTED)
+            ->whereDate('created_at', '>=', $fromDate)
+            ->whereDate('created_at', '<=', $toDate);
+
+        if ($request->filled('team_id')) {
+            $teamId = (int) $request->input('team_id');
+            $query->whereHas('user', function ($sub) use ($teamId) {
+                $sub->where('team_id', $teamId);
+            });
+        }
+
+        $this->applyTeamOrderFilters($query, $request);
+
+        return $this->refreshMissingDailySequencesFromQuery($query, 'PKD');
     }
 
     private function normalizedRoleNames(User $user)
@@ -1939,7 +2019,7 @@ class PageController extends Controller
 
     private function applyTeamOrderFilters(Builder $query, Request $request): void
     {
-        if ($request->filled('status')) {
+        if ($request->filled('status') && $request->input('status') !== Order::STATUS_REJECTED) {
             $query->where('status', $request->input('status'));
         }
 
@@ -1956,6 +2036,32 @@ class PageController extends Controller
                     });
             });
         }
+    }
+
+    private function refreshMissingDailySequencesFromQuery(Builder $query, string $scope)
+    {
+        $missingOrders = (clone $query)
+            ->whereNull('daily_sequence')
+            ->get(['id', 'created_at']);
+
+        if ($missingOrders->isEmpty()) {
+            return back()->with('success', "Không có đơn {$scope} nào thiếu số thứ tự ưu tiên.");
+        }
+
+        $dates = $missingOrders
+            ->map(fn (Order $order) => optional($order->created_at)->toDateString())
+            ->filter()
+            ->unique()
+            ->values();
+
+        foreach ($dates as $date) {
+            app(OrderController::class)->syncDailySequenceAndStockSufficiency($date);
+        }
+
+        return back()->with(
+            'success',
+            'Đã cập nhật lại số thứ tự ưu tiên cho ' . $missingOrders->count() . " đơn {$scope} thiếu số."
+        );
     }
 
     private function approveOrdersFromQuery(Builder $query, User $user, ApprovalService $approvalService, string $note): array
@@ -3878,6 +3984,10 @@ public function apiTruckRoutes(Request $request)
             );
         });
 
+        if (!$isReturnOrder) {
+            app(OrderController::class)->syncDailySequenceAndStockSufficiency($order->fresh()->created_at ?: now());
+        }
+
         return redirect()->route('site.orders.show', $order)
             ->with('success', 'Da cap nhat don hang thanh cong.');
     }
@@ -4067,34 +4177,9 @@ public function apiTruckRoutes(Request $request)
                 $newCode = 'OD' . time() . rand(10, 99);
             } while (Order::where('code', $newCode)->exists());
             $newOrder->code = $newCode;
-            $newOrder->status = Order::STATUS_ORDER_PLACED; // sẽ được override nếu source là order_placed
-            $newOrder->payment_status = 'unpaid';
-            $newOrder->delivery_status = 'not_shipped';
-            $newOrder->delivered_at = null;
-            $newOrder->packed_image_path = null;
-            $newOrder->delivered_image_path = null;
-            $newOrder->amount_paid = 0;
-            $newOrder->amount_due = 0;
-            $newOrder->payment_method = null;
-            $newOrder->collected_amount = null;
-            $newOrder->proof_images = null;
-            $newOrder->return_reason = null;
-            $newOrder->shipping_fee_transaction_id = null;
+            $newOrder->resetForCopiedOrder($oldOrder->id);
             $newOrder->created_at = now();
             $newOrder->updated_at = now();
-            if ($this->hasOrderColumn('copied_from_order_id')) {
-                $newOrder->copied_from_order_id = $oldOrder->id;
-            }
-            if ($this->hasOrderColumn('daily_sequence')) {
-                $newOrder->daily_sequence = null;
-            }
-            if ($this->hasOrderColumn('stock_sufficient')) {
-                $newOrder->stock_sufficient = null;
-            }
-            if ($this->hasOrderColumn('stock_shortage_detail')) {
-                $newOrder->stock_shortage_detail = null;
-            }
-            $newOrder->clearWarehouseAdjustmentState();
             $newOrder->save();
 
             $copiedOrderDate = $newOrder->created_at ?: now();
@@ -4107,18 +4192,11 @@ public function apiTruckRoutes(Request $request)
             }
 
             $this->refreshCopiedOrderPrices($newOrder);
-
-            // Nếu đơn gốc là order_placed → kích hoạt luồng duyệt ngay, không cần bước "Xác nhận copy"
-            if ($oldOrder->status === Order::STATUS_ORDER_PLACED) {
-                app(\App\Services\ApprovalService::class)->initOrderApproval($newOrder->fresh());
-            }
         });
 
         app(OrderController::class)->syncDailySequenceAndStockSufficiency($copiedOrderDate);
 
-        $successMsg = $oldOrder->status === Order::STATUS_ORDER_PLACED
-            ? 'Đã copy đơn #' . $oldOrder->code . ' và gửi lên leader duyệt.'
-            : 'Đã copy đơn #' . $oldOrder->code . '. Vui lòng xem lại và bấm "Xác Nhận" để gửi duyệt.';
+        $successMsg = 'Đã copy đơn #' . $oldOrder->code . '. Vui lòng xem lại và bấm "Xác Nhận" để gửi duyệt.';
 
         return redirect()->route('pages.my_orders')
             ->with('success', $successMsg);

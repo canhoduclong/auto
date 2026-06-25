@@ -1,6 +1,9 @@
 <?php
 namespace App\Models;
 
+use App\Enums\DeliveryStatus;
+use App\Enums\OrderStatus;
+use App\Enums\PaymentStatus;
 use App\Models\ApprovalOrder;
 use App\Models\OrderHistory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -239,6 +242,38 @@ class Order extends Model
         ]);
 
         return $this;
+    }
+
+    public function resetForCopiedOrder(?int $sourceOrderId = null): self
+    {
+        $this->forceFill([
+            'status' => OrderStatus::Pending->value,
+            'payment_status' => PaymentStatus::Unpaid->value,
+            'delivery_status' => DeliveryStatus::NotShipped->value,
+            'delivered_at' => null,
+            'packed_image_path' => null,
+            'delivered_image_path' => null,
+            'amount_paid' => 0,
+            'amount_due' => 0,
+            'payment_method' => null,
+            'collected_amount' => null,
+            'proof_images' => null,
+            'return_reason' => null,
+            'shipping_fee_transaction_id' => null,
+            'copied_from_order_id' => $sourceOrderId,
+            'warehouse_id' => null,
+            'daily_sequence' => null,
+            'stock_sufficient' => null,
+            'stock_shortage_detail' => null,
+            'stock_alert_status' => null,
+            'cancelled_by' => null,
+            'cancelled_at' => null,
+            'cancel_reason' => null,
+            'cancel_images' => null,
+            'trash_at' => null,
+        ]);
+
+        return $this->clearWarehouseAdjustmentState();
     }
 
     public function customer() { return $this->belongsTo(Customer::class); }

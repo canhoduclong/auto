@@ -1586,6 +1586,7 @@ class OrderController extends Controller
             'pending_leader_approval',
             'pending_manager_approval',
             'pending_warehouse_approval',
+            Order::STATUS_ORDER_PLACED,
             'approved',
             Order::STATUS_READY_TO_PACK,
             Order::STATUS_PACKING,
