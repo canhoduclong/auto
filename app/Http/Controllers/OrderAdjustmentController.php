@@ -15,19 +15,31 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
+use App\Models\Setting;
+use Illuminate\Support\Facades\Cache;
+
 
 class OrderAdjustmentController extends Controller
 {
+    protected $settings;
+
+    public function __construct()
+    {
+        $this->settings = Cache::remember('settings', 60, function () {
+            return Setting::all()->keyBy('key');
+        });
+    }
     public function create(Order $order): View
     {
         $this->authorizeCreate($order);
-
+        $settings   = $this->settings;
         $order->load(['customer', 'items.variant.product']);
         $warehouses = Warehouse::query()->orderBy('name')->get();
 
         return view('site.orders.adjustments.create', [
             'order' => $order,
             'warehouses' => $warehouses,
+            'settings' => $settings,
         ]);
     }
 
@@ -126,6 +138,7 @@ class OrderAdjustmentController extends Controller
 
     public function show(OrderAdjustment $orderAdjustment): View
     {
+        $settings   = $this->settings;
         $this->authorizeView($orderAdjustment);
 
         $orderAdjustment->load([
@@ -147,6 +160,7 @@ class OrderAdjustmentController extends Controller
             'adjustment' => $orderAdjustment,
             'canApprove' => $user ? $this->canApprove($user, $orderAdjustment) : false,
             'canWarehouseConfirm' => $user ? $this->canWarehouseConfirm($user, $orderAdjustment) : false,
+            'settings' => $settings,
         ]);
     }
 
