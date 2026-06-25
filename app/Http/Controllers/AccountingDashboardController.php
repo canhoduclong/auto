@@ -635,13 +635,20 @@ class AccountingDashboardController extends Controller
             'account:id,name,type,balance',
             'destinationAccount:id,name,type,balance,account_number,bank_name',
             'approvalSteps.approver:id,name',
+            'approvalSteps.step:id,role_slug,step_order',
         ]);
 
         $user = auth()->user();
         $approvalService = app(\App\Services\ApprovalService::class);
+        if ($transaction->status === Transaction::STATUS_PENDING_APPROVAL && $transaction->request_source) {
+            $approvalService->ensureTransactionApprovalFlow($transaction);
+            $transaction->load([
+                'approvalSteps.approver:id,name',
+                'approvalSteps.step:id,role_slug,step_order',
+            ]);
+        }
         $canReview = $transaction->status === Transaction::STATUS_PENDING_APPROVAL && (
             $user->hasRole('admin') ||
-            $user->hasRole('accountant') ||
             $approvalService->canApproveTransactionStep($transaction, $user)
         );
 
@@ -1699,10 +1706,15 @@ class AccountingDashboardController extends Controller
     {
         $user = auth()->user();
         $approvalService = app(\App\Services\ApprovalService::class);
+        if ($transaction->status === Transaction::STATUS_PENDING_APPROVAL && $transaction->request_source) {
+            $approvalService->ensureTransactionApprovalFlow($transaction);
+        }
+        $currentStep = $approvalService->getCurrentPendingTransactionStep($transaction);
+        $currentRole = strtolower((string) ($currentStep?->step?->role_slug ?? ''));
+        $isAccountingStep = in_array($currentRole, $approvalService->financeAccountingRoleSlugs(), true);
 
         abort_unless(
             $user->hasRole('admin') ||
-            $user->hasRole('accountant') ||
             $approvalService->canApproveTransactionStep($transaction, $user),
             403
         );
@@ -1713,7 +1725,7 @@ class AccountingDashboardController extends Controller
 
         $note = trim((string) $request->input('note', ''));
 
-        if ($transaction->request_source) {
+        if ($transaction->request_source && $isAccountingStep) {
             $validated = $request->validate([
                 'account_id' => ['required', 'integer', 'exists:accounts,id'],
             ]);
@@ -1757,10 +1769,12 @@ class AccountingDashboardController extends Controller
     {
         $user = auth()->user();
         $approvalService = app(\App\Services\ApprovalService::class);
+        if ($transaction->status === Transaction::STATUS_PENDING_APPROVAL && $transaction->request_source) {
+            $approvalService->ensureTransactionApprovalFlow($transaction);
+        }
 
         abort_unless(
             $user->hasRole('admin') ||
-            $user->hasRole('accountant') ||
             $approvalService->canApproveTransactionStep($transaction, $user),
             403
         );

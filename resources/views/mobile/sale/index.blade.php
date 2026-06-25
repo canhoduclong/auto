@@ -4,56 +4,38 @@
 
 @push('styles')
 <style>
-    .sale-order-card { position: relative; padding-top: 38px; }
-    .sale-status-badge {
-        position: absolute;
-        right: 12px;
-        top: 10px;
-        border-radius: 999px;
-        padding: 5px 9px;
-        background: #e0f2fe;
-        color: #0369a1;
-        font-size: .72rem;
-        font-weight: 800;
-    }
-    .sale-action-menu {
-        position: relative;
-        display: inline-block;
-    }
-    .sale-action-menu > summary {
-        list-style: none;
-        width: 34px;
-        height: 34px;
-        border-radius: 10px;
+    .sale-tabs {
         display: grid;
-        place-items: center;
-        background: #f1f5f9;
-        color: #0f172a;
-        font-size: 1.2rem;
-        font-weight: 900;
-        cursor: pointer;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        margin-bottom: 10px;
     }
-    .sale-action-menu > summary::-webkit-details-marker { display: none; }
-    .sale-action-pop {
-        position: absolute;
-        left: 0;
-        bottom: calc(100% + 6px);
-        width: 150px;
+    .sale-tab-btn {
+        border: 1px solid #cbd5e1;
         border-radius: 12px;
         background: #fff;
-        border: 1px solid #e2e8f0;
-        box-shadow: 0 12px 28px rgba(15, 23, 42, .18);
-        padding: 6px;
-        z-index: 5;
+        color: #334155;
+        padding: 11px 12px;
+        font: inherit;
+        font-weight: 800;
+        cursor: pointer;
     }
-    .sale-action-pop a {
-        display: block;
-        padding: 9px 10px;
-        border-radius: 8px;
-        color: #0f172a;
-        text-decoration: none;
-        font-size: .84rem;
-        font-weight: 700;
+    .sale-tab-btn.active {
+        background: #0f766e;
+        border-color: #0f766e;
+        color: #fff;
+    }
+    .sale-tab-panel[hidden] { display: none; }
+    .sale-section-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+    }
+    .sale-section-head .m-btn {
+        width: auto;
+        min-width: 142px;
+        padding: 10px 12px;
     }
     .sale-line-item {
         display: grid;
@@ -62,6 +44,141 @@
         align-items: center;
         padding: 8px 0;
         border-bottom: 1px solid #e2e8f0;
+    }
+    .sale-order-home-card {
+        padding: 14px 12px 62px;
+        padding-bottom: 62px;
+        border-radius: 18px;
+    }
+    .sale-order-home-card .m-mobile-status-badge {
+        top: 14px;
+        right: 14px;
+        max-width: 150px;
+        border-radius: 3px;
+        padding: 8px 10px;
+        background: #dcfce7;
+        color: #22c55e;
+        font-size: .95rem;
+        line-height: 1;
+        letter-spacing: 0;
+    }
+    .sale-order-header {
+        display: grid;
+        grid-template-columns: 54px minmax(0, 1fr);
+        gap: 10px;
+        align-items: start;
+        padding-right: 142px;
+        margin-bottom: 14px;
+    }
+    .sale-order-no {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        background: #64748b;
+        color: #fff;
+        font-size: 1.28rem;
+        font-weight: 900;
+    }
+    .sale-order-customer {
+        min-width: 0;
+        font-size: 1.18rem;
+        line-height: 1.15;
+        font-weight: 900;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+    }
+    .sale-order-date {
+        margin-top: 6px;
+        color: #64748b;
+        font-size: 1rem;
+    }
+    .sale-order-eye {
+        position: absolute;
+        top: 74px;
+        right: 80px;
+        width: 24px;
+        height: 16px;
+        border: 2px solid currentColor;
+        border-radius: 50%;
+        color: #0f969a;
+        text-decoration: none;
+    }
+    .sale-order-eye::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: currentColor;
+        transform: translate(-50%, -50%);
+    }
+    .sale-order-table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+    }
+    .sale-order-table th {
+        border: 0;
+        border-bottom: 1px solid #cbd5e1;
+        color: #64748b;
+        font-size: .78rem;
+        font-weight: 900;
+        text-align: left;
+        padding: 7px 4px;
+    }
+    .sale-order-table td {
+        border: 0;
+        padding: 10px 4px 4px;
+        font-size: .94rem;
+        font-weight: 800;
+        vertical-align: top;
+    }
+    .sale-order-table .num {
+        text-align: right;
+        white-space: nowrap;
+    }
+    .sale-order-product {
+        overflow-wrap: anywhere;
+    }
+    .sale-order-subline {
+        margin-top: 12px;
+        color: #475569;
+        font-size: 1rem;
+        font-weight: 700;
+        overflow-wrap: anywhere;
+    }
+    .sale-order-total {
+        margin-top: 20px;
+        text-align: right;
+        font-size: 1.62rem;
+        line-height: 1;
+        font-weight: 950;
+    }
+    .sale-create-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+    }
+    @media (max-width: 390px) {
+        .sale-order-header {
+            grid-template-columns: 44px minmax(0, 1fr);
+            padding-right: 118px;
+        }
+        .sale-order-no {
+            width: 42px;
+            height: 42px;
+            font-size: 1.05rem;
+        }
+        .sale-order-total { font-size: 1.28rem; }
+        .sale-order-table th,
+        .sale-order-table td { font-size: .78rem; }
+        .sale-order-home-card .m-mobile-status-badge { font-size: .82rem; }
+        .sale-order-eye { right: 62px; }
     }
 </style>
 @endpush
@@ -90,61 +207,83 @@
     </div>
 </div>
 
-<div class="m-card">
-    <div class="m-grid">
-        <button class="m-btn m-btn-primary" type="button" id="toggleCreateOrder">+ Tạo đơn nhanh</button>
-        <a class="m-btn m-btn-outline" href="{{ route('pages.my_orders') }}">Đơn đã tạo</a>
-    </div>
+<div class="sale-tabs" role="tablist" aria-label="Sale mobile">
+    <button class="sale-tab-btn active" type="button" data-sale-tab="customers">Khách hàng</button>
+    <button class="sale-tab-btn" type="button" data-sale-tab="orders">Đơn hàng</button>
 </div>
 
-<div class="m-card" id="saleCreateOrderBox" style="display:none">
-    <div class="m-row"><strong>Tạo đơn mới</strong><span class="m-label" id="createOrderTotal">0đ</span></div>
-    <label class="m-label">Khách hàng</label>
-    <select class="m-select" id="createCustomer"></select>
-    <div style="height:8px"></div>
-    <label class="m-label">Ngày giao</label>
-    <input class="m-input" id="createDeliveryDate" type="date" value="{{ now()->addDay()->toDateString() }}">
-    <div style="height:8px"></div>
-    <label class="m-label">Ghi chú</label>
-    <input class="m-input" id="createNote" placeholder="Ghi chú đơn hàng">
-    <div style="height:10px"></div>
-    <div class="m-row"><strong>Sản phẩm</strong></div>
-    <input class="m-input" id="productSearch" placeholder="Tìm sản phẩm / SKU">
-    <div style="height:8px"></div>
-    <select class="m-select" id="productSelect"></select>
-    <div style="height:8px"></div>
-    <div class="m-row">
-        <input class="m-input" id="productQty" type="number" min="1" value="1" style="max-width:110px">
-        <button class="m-btn m-btn-outline" type="button" id="addProductLine">Thêm</button>
+<section class="sale-tab-panel" data-sale-panel="customers">
+    <div class="m-card">
+        <div class="m-row">
+            <strong>Khách hàng</strong>
+        </div>
+        <input class="m-input" id="saleSearchCustomer" placeholder="Tìm tên / số điện thoại">
     </div>
-    <div id="createOrderItems"></div>
-    <div style="height:10px"></div>
-    <button class="m-btn m-btn-primary" type="button" id="submitCreateOrder">Tạo đơn</button>
-    <div id="createOrderMessage" style="margin-top:8px"></div>
-</div>
+    <div id="saleCustomerList"></div>
+</section>
 
-<div class="m-card">
-    <div class="m-row">
-        <strong>Khách hàng</strong>
+<section class="sale-tab-panel" data-sale-panel="orders" hidden>
+    <div class="m-card">
+        <div class="sale-section-head">
+            <strong>Đơn hàng</strong>
+            <button class="m-btn m-btn-primary" type="button" id="toggleCreateOrder">+ Tạo mới đơn hàng</button>
+        </div>
+        <div style="height:10px"></div>
+        <select class="m-select" id="saleOrderStatus">
+            <option value="">Tất cả trạng thái</option>
+            <option value="order_placed">Đã đặt</option>
+            <option value="pending">Chờ duyệt</option>
+            <option value="approved">Đã duyệt</option>
+            <option value="packing">Đang đóng gói</option>
+            <option value="delivering">Đang giao</option>
+            <option value="completed">Hoàn thành</option>
+        </select>
     </div>
-    <input class="m-input" id="saleSearchCustomer" placeholder="Tìm tên / số điện thoại">
-</div>
-<div id="saleCustomerList"></div>
 
-<div class="m-card">
-    <div class="m-row">
-        <strong>Đơn gần đây</strong>
+    <div class="m-card" id="saleCreateOrderBox" style="display:none">
+        <div class="m-row"><strong>Tạo đơn mới</strong><span class="m-label" id="createOrderTotal">0đ</span></div>
+        <label class="m-label">Khách hàng</label>
+        <select class="m-select" id="createCustomer"></select>
+        <div style="height:8px"></div>
+        <label class="m-label">Ngày giao</label>
+        <input class="m-input" id="createDeliveryDate" type="date" value="{{ now()->addDay()->toDateString() }}">
+        <div style="height:8px"></div>
+        <label class="m-label">Ghi chú</label>
+        <input class="m-input" id="createNote" placeholder="Ghi chú đơn hàng">
+        <div style="height:10px"></div>
+        <div class="m-row"><strong>Sản phẩm</strong></div>
+        <input class="m-input" id="productSearch" placeholder="Tìm sản phẩm / SKU">
+        <div style="height:8px"></div>
+        <div class="m-row">
+            <select class="m-select" id="productSort">
+                <option value="stock">Còn hàng nhiều trước</option>
+                <option value="name">Tên A-Z</option>
+                <option value="sku">SKU</option>
+                <option value="newest">Mới nhất</option>
+            </select>
+            <label class="m-label" style="display:flex;align-items:center;gap:6px;white-space:nowrap">
+                <input type="checkbox" id="productInStock" checked>
+                Còn hàng
+            </label>
+        </div>
+        <div style="height:8px"></div>
+        <select class="m-select" id="productSelect"></select>
+        <div style="height:8px"></div>
+        <div class="m-row">
+            <input class="m-input" id="productQty" type="number" min="1" value="1" style="max-width:110px">
+            <button class="m-btn m-btn-outline" type="button" id="addProductLine">Thêm</button>
+        </div>
+        <div id="createOrderItems"></div>
+        <div style="height:10px"></div>
+        <div class="sale-create-actions">
+            <button class="m-btn m-btn-outline" type="button" id="cancelCreateOrder">Đóng</button>
+            <button class="m-btn m-btn-primary" type="button" id="submitCreateOrder">Tạo đơn</button>
+        </div>
+        <div id="createOrderMessage" style="margin-top:8px"></div>
     </div>
-    <select class="m-select" id="saleOrderStatus">
-        <option value="">Tất cả trạng thái</option>
-        <option value="pending">Chờ duyệt</option>
-        <option value="approved">Đã duyệt</option>
-        <option value="packing">Đang đóng gói</option>
-        <option value="delivering">Đang giao</option>
-        <option value="completed">Hoàn thành</option>
-    </select>
-</div>
-<div id="saleOrderList"></div>
+
+    <div id="saleOrderList"></div>
+</section>
 @endsection
 
 @push('scripts')
@@ -157,16 +296,43 @@ document.addEventListener('DOMContentLoaded', function () {
     const createBox = document.getElementById('saleCreateOrderBox');
     const createCustomer = document.getElementById('createCustomer');
     const productSearch = document.getElementById('productSearch');
+    const productSort = document.getElementById('productSort');
+    const productInStock = document.getElementById('productInStock');
     const productSelect = document.getElementById('productSelect');
     const productQty = document.getElementById('productQty');
     const createOrderItems = document.getElementById('createOrderItems');
     const createOrderTotal = document.getElementById('createOrderTotal');
     const createOrderMessage = document.getElementById('createOrderMessage');
+    const tabButtons = document.querySelectorAll('[data-sale-tab]');
+    const tabPanels = document.querySelectorAll('[data-sale-panel]');
     let productRows = [];
     let selectedItems = [];
 
     const formatMoney = (value) => new Intl.NumberFormat('vi-VN').format(Number(value || 0)) + 'đ';
+    const formatCardMoney = (value) => new Intl.NumberFormat('vi-VN').format(Number(value || 0)) + ' đ';
     const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;', "'":'&#039;'}[char]));
+    const formatNumber = (value, digits = 2) => {
+        const number = Number(value || 0);
+        return new Intl.NumberFormat('vi-VN', {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: digits
+        }).format(number);
+    };
+    const formatFixed = (value, digits = 2) => {
+        const number = Number(value || 0);
+        return new Intl.NumberFormat('vi-VN', {
+            minimumFractionDigits: digits,
+            maximumFractionDigits: digits
+        }).format(number);
+    };
+
+    function switchTab(tab) {
+        tabButtons.forEach((button) => button.classList.toggle('active', button.dataset.saleTab === tab));
+        tabPanels.forEach((panel) => panel.hidden = panel.dataset.salePanel !== tab);
+        if (tab === 'orders') {
+            loadOrders();
+        }
+    }
 
     function customerCard(item) {
         return `<div class="m-card">
@@ -176,21 +342,57 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function orderCard(item) {
-        return `<div class="m-card sale-order-card">
-            <span class="sale-status-badge">${escapeHtml(item.status)}</span>
-            <div class="m-row"><div class="m-value">${escapeHtml(item.code)}</div><span>${escapeHtml(item.created_at || '')}</span></div>
-            <div class="m-row"><span>${escapeHtml(item.customer)}</span><span>${escapeHtml(item.phone || '')}</span></div>
-            <div class="m-row"><span class="m-label">Tổng</span><strong>${formatMoney(item.total)}</strong></div>
-            <div class="m-row"><span class="m-label">Còn nợ</span><strong>${formatMoney(item.amount_due)}</strong></div>
-            <div class="m-row" style="margin-bottom:0">
-                <details class="sale-action-menu">
+        const items = Array.isArray(item.items) ? item.items : [];
+        const firstItem = items[0] || {};
+        const itemRows = items.length
+            ? items.slice(0, 3).map((line) => `<tr>
+                <td class="sale-order-product">${escapeHtml(line.display_name || line.name || '-')}</td>
+                <td class="num">${formatNumber(line.quantity, 2)}</td>
+                <td class="num">${formatFixed(line.size, 2)}</td>
+                <td class="num">${escapeHtml(line.total_label || '')}</td>
+                <td class="num">${formatCardMoney(line.unit_price || 0)}</td>
+            </tr>`).join('')
+            : `<tr><td colspan="5" class="sale-order-product">Chưa có sản phẩm</td></tr>`;
+        const moreText = items.length > 3 ? `<div class="sale-order-subline">+${items.length - 3} sản phẩm khác</div>` : '';
+        const firstLineText = firstItem.display_name
+            ? `<div class="sale-order-subline">${escapeHtml(firstItem.display_name)}${firstItem.size ? ' - ' + formatFixed(firstItem.size, 2) : ''}</div>`
+            : '';
+
+        return `<div class="m-card m-mobile-order-card sale-order-home-card">
+            <span class="m-mobile-status-badge">${escapeHtml(item.status)}</span>
+            <a class="sale-order-eye" href="${item.detail_url}" aria-label="Xem chi tiết"></a>
+            <div class="sale-order-header">
+                <div class="sale-order-no">${escapeHtml(item.number || item.id || '')}</div>
+                <div>
+                    <div class="sale-order-customer">${escapeHtml(item.customer)}</div>
+                    <div class="sale-order-date">${escapeHtml(item.created_at || '')}</div>
+                </div>
+            </div>
+            <table class="sale-order-table">
+                <thead>
+                    <tr>
+                        <th>SẢN PHẨM</th>
+                        <th class="num" style="width:42px">SL</th>
+                        <th class="num" style="width:56px">SIZE</th>
+                        <th class="num" style="width:76px">TỔNG</th>
+                        <th class="num" style="width:92px">ĐƠN GIÁ</th>
+                    </tr>
+                </thead>
+                <tbody>${itemRows}</tbody>
+            </table>
+            ${firstLineText}
+            ${moreText}
+            <div class="sale-order-total">${formatCardMoney(item.total)}</div>
+            <div class="m-card-action-bottom">
+                <details class="m-card-menu">
                     <summary>⋯</summary>
-                    <div class="sale-action-pop">
+                    <div class="m-card-menu-pop">
                         <a href="${item.detail_url}">Xem chi tiết</a>
-                        <a href="{{ route('pages.my_orders') }}">Danh sách đơn</a>
+                        <a href="${item.edit_url}">Sửa đơn</a>
+                        <a href="${item.copy_url}">Sao chép đơn</a>
+                        <a href="{{ route('pages.my_orders') }}">Tất cả đơn</a>
                     </div>
                 </details>
-                <span class="m-label">Chức năng</span>
             </div>
         </div>`;
     }
@@ -235,7 +437,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
     async function loadProducts() {
         const q = encodeURIComponent(productSearch.value || '');
-        const res = await fetch(`{{ route('mobile.api.sale.products') }}?q=${q}`);
+        const sortBy = encodeURIComponent(productSort.value || 'stock');
+        const inStock = productInStock.checked ? 1 : 0;
+        const res = await fetch(`{{ route('mobile.api.sale.products') }}?q=${q}&sort_by=${sortBy}&in_stock=${inStock}`);
         const payload = await res.json();
         renderProducts(payload.data || []);
     }
@@ -254,15 +458,24 @@ document.addEventListener('DOMContentLoaded', function () {
         customerTimer = window.setTimeout(loadCustomers, 250);
     });
 
+    tabButtons.forEach((button) => button.addEventListener('click', () => switchTab(button.dataset.saleTab)));
+
     orderStatus.addEventListener('change', loadOrders);
     document.getElementById('toggleCreateOrder').addEventListener('click', function () {
         createBox.style.display = createBox.style.display === 'none' ? 'block' : 'none';
+        createOrderMessage.innerHTML = '';
+    });
+    document.getElementById('cancelCreateOrder').addEventListener('click', function () {
+        createBox.style.display = 'none';
+        createOrderMessage.innerHTML = '';
     });
     let productTimer = null;
     productSearch.addEventListener('input', function () {
         window.clearTimeout(productTimer);
         productTimer = window.setTimeout(loadProducts, 250);
     });
+    productSort.addEventListener('change', loadProducts);
+    productInStock.addEventListener('change', loadProducts);
     document.getElementById('addProductLine').addEventListener('click', function () {
         const product = productRows[Number(productSelect.value || 0)];
         if (!product) return;
@@ -273,6 +486,7 @@ document.addEventListener('DOMContentLoaded', function () {
             name: product.name,
             price: product.price,
             quantity,
+            kg: product.kg,
             line_total: product.price * quantity * factor
         });
         renderSelectedItems();
@@ -284,28 +498,45 @@ document.addEventListener('DOMContentLoaded', function () {
         renderSelectedItems();
     });
     document.getElementById('submitCreateOrder').addEventListener('click', async function () {
+        const submitButton = this;
         createOrderMessage.innerHTML = '';
         if (!createCustomer.value || selectedItems.length === 0) {
             createOrderMessage.innerHTML = '<div class="m-alert m-alert-danger">Vui lòng chọn khách hàng và sản phẩm.</div>';
             return;
         }
-        const res = await fetch('{{ route('mobile.api.sale.orders.store') }}', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content, 'Accept': 'application/json'},
-            body: JSON.stringify({
-                customer_id: createCustomer.value,
-                delivery_date: document.getElementById('createDeliveryDate').value,
-                note: document.getElementById('createNote').value,
-                items: selectedItems.map((item) => ({variant_id: item.variant_id, quantity: item.quantity}))
-            })
-        });
-        const payload = await res.json();
+        submitButton.disabled = true;
+        submitButton.textContent = 'Đang tạo...';
+        let res;
+        let payload = {};
+        try {
+            res = await fetch('{{ route('mobile.api.sale.orders.store') }}', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content, 'Accept': 'application/json'},
+                body: JSON.stringify({
+                    customer_id: createCustomer.value,
+                    delivery_date: document.getElementById('createDeliveryDate').value,
+                    note: document.getElementById('createNote').value,
+                    items: selectedItems.map((item) => ({variant_id: item.variant_id, quantity: item.quantity}))
+                })
+            });
+            payload = await res.json().catch(() => ({}));
+        } catch (error) {
+            createOrderMessage.innerHTML = '<div class="m-alert m-alert-danger">Mạng không ổn định, vui lòng thử lại.</div>';
+            submitButton.disabled = false;
+            submitButton.textContent = 'Tạo đơn';
+            return;
+        }
+        submitButton.disabled = false;
+        submitButton.textContent = 'Tạo đơn';
         if (!res.ok) {
-            createOrderMessage.innerHTML = `<div class="m-alert m-alert-danger">${escapeHtml(payload.message || 'Không tạo được đơn.')}</div>`;
+            const errors = payload.errors ? Object.values(payload.errors).flat().join(' ') : '';
+            createOrderMessage.innerHTML = `<div class="m-alert m-alert-danger">${escapeHtml(errors || payload.message || 'Không tạo được đơn.')}</div>`;
             return;
         }
         selectedItems = [];
         renderSelectedItems();
+        document.getElementById('createNote').value = '';
+        productQty.value = 1;
         createOrderMessage.innerHTML = `<div class="m-alert m-alert-success">${escapeHtml(payload.message || 'Đã tạo đơn.')}</div>`;
         loadMetrics();
         loadOrders();

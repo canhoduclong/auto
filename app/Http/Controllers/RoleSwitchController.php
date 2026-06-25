@@ -31,10 +31,20 @@ class RoleSwitchController extends Controller
             return redirect()->route('dashboard')->with('error', 'Không tìm thấy vai trò hợp lệ.');
         }
 
-        $workspace = collect($workspaceService->availableForUser($user))
-            ->first(function (array $workspace) use ($role): bool {
+        $preferredPlatform = $request->input('surface') === 'my_app' || $request->routeIs('mobile.*')
+            ? 'my_app'
+            : null;
+
+        $workspaces = collect($workspaceService->availableForUser($user))
+            ->filter(function (array $workspace) use ($role): bool {
                 return in_array($role, $workspace['matched_roles'], true);
             });
+
+        $workspace = $preferredPlatform
+            ? $workspaces->first(fn (array $workspace): bool => ($workspace['platform'] ?? null) === $preferredPlatform)
+            : null;
+
+        $workspace ??= $workspaces->first();
 
         $updateData = ['default_role_id' => $roleModel->id];
         if ($workspace !== null) {
@@ -44,6 +54,14 @@ class RoleSwitchController extends Controller
         $user->update($updateData);
 
         session(['active_role' => $role]);
+
+        if ($request->input('surface') === 'my_app') {
+            $mobileRoute = $this->mobileRouteForRole($role);
+
+            if (Route::has($mobileRoute)) {
+                return redirect()->route($mobileRoute);
+            }
+        }
 
         if ($workspace !== null) {
             $workspaceService->syncSession(array_replace($workspace, ['active_role' => $role]));
@@ -79,6 +97,25 @@ class RoleSwitchController extends Controller
             'package' => 'package.dashboard',
             'warehouse' => 'warehouse.dashboard',
             default => 'pages.my_profile',
+        };
+    }
+
+    private function mobileRouteForRole(string $role): string
+    {
+        if (in_array($role, ['account', 'accountant', 'accounting'], true)) {
+            return 'mobile.accounting.home';
+        }
+
+        if (in_array($role, ['sale', 'leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale'], true)) {
+            return 'mobile.sale.home';
+        }
+
+        return match ($role) {
+            'ceo' => 'mobile.ceo.home',
+            'manager_shipper', 'shipper', 'ship' => 'mobile.shipper.home',
+            'package' => 'mobile.package.home',
+            'warehouse' => 'mobile.warehouse.home',
+            default => 'mobile.home',
         };
     }
 

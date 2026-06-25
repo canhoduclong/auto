@@ -262,6 +262,9 @@ class SaleApiController extends BaseApiController
     {
         $this->ensureSaleRole($request);
         $search = trim((string) $request->query('search', ''));
+        $sortBy = (string) $request->query('sort_by', 'stock');
+        $sortDir = strtolower((string) $request->query('sort_dir', 'desc')) === 'asc' ? 'asc' : 'desc';
+        $inStock = $request->boolean('in_stock');
         $variants = ProductVariant::query()
             ->with(['product:id,name,unit,is_priced_by_kg', 'latestPriceRule'])
             ->withAvailableStock()
@@ -269,7 +272,21 @@ class SaleApiController extends BaseApiController
                 ->where('sku', 'like', "%{$search}%")
                 ->orWhere('name', 'like', "%{$search}%")
                 ->orWhereHas('product', fn ($product) => $product->where('name', 'like', "%{$search}%"))))
-            ->orderByDesc('id')
+            ->when($inStock, fn ($query) => $query->having('available_stock', '>', 0));
+
+        match ($sortBy) {
+            'name' => $variants
+                ->orderByRaw("LOWER(COALESCE(NULLIF(product_variants.name, ''), product_variants.sku, '')) {$sortDir}")
+                ->orderBy('id', 'desc'),
+            'sku' => $variants->orderBy('sku', $sortDir)->orderBy('id', 'desc'),
+            'newest' => $variants->orderByDesc('id'),
+            default => $variants
+                ->orderByRaw('CASE WHEN available_stock > 0 THEN 0 ELSE 1 END')
+                ->orderBy('available_stock', $sortDir)
+                ->orderByDesc('id'),
+        };
+
+        $variants = $variants
             ->paginate(30);
 
         $variants->getCollection()->transform(fn ($variant) => [

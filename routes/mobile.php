@@ -9,6 +9,10 @@ Route::middleware(['auth'])->prefix('m')->name('mobile.')->group(function () {
     Route::get('/', function () {
         $user = auth()->user();
 
+        if ($user?->hasRole('package')) {
+            return redirect()->route('mobile.package.home');
+        }
+
         if ($user?->hasRole('warehouse') || $user?->hasRole('admin')) {
             return redirect()->route('mobile.warehouse.home');
         }
@@ -48,8 +52,9 @@ Route::middleware(['auth'])->prefix('m')->name('mobile.')->group(function () {
         });
     });
 
-    Route::middleware('role:warehouse,admin')->group(function () {
+    Route::middleware('role:warehouse,package,admin')->group(function () {
         Route::get('/warehouse', [WarehouseMobileController::class, 'index'])->name('warehouse.home');
+        Route::get('/package', [WarehouseMobileController::class, 'index'])->name('package.home');
 
         Route::prefix('/api/warehouse')->name('api.warehouse.')->group(function () {
             Route::get('/orders', [WarehouseMobileController::class, 'orders'])->name('orders');

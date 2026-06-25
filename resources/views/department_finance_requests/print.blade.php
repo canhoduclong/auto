@@ -242,12 +242,12 @@
         }
         .signatures {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 18px;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
             margin-top: 34px;
             text-align: center;
             font-family: Arial, sans-serif;
-            font-size: 14px;
+            font-size: 13px;
         }
         .signature-box {
             min-height: 88px;
@@ -414,7 +414,11 @@
                 <div class="signature-hint">(Ký, ghi rõ họ tên)</div>
             </div>
             <div class="signature-box">
-                <div class="signature-title">Kế toán duyệt</div>
+                <div class="signature-title">Kế toán</div>
+                <div class="signature-hint">(Ký, ghi rõ họ tên)</div>
+            </div>
+            <div class="signature-box">
+                <div class="signature-title">Giám Đốc</div>
                 <div class="signature-hint">(Ký, ghi rõ họ tên)</div>
             </div>
         </div>

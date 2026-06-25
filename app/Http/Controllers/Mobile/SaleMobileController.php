@@ -62,8 +62,12 @@ class SaleMobileController extends Controller
         $status = trim((string) $request->query('status', ''));
 
         $query = Order::query()
-            ->with(['customer:id,name,phone'])
-            ->select(['id', 'code', 'customer_id', 'status', 'total', 'amount_due', 'created_at', 'user_id'])
+            ->with([
+                'customer:id,name,phone',
+                'items.product:id,name,unit,kg,is_priced_by_kg',
+                'items.variant:id,name,sku,kg,is_priced_by_kg',
+            ])
+            ->select(['id', 'code', 'customer_id', 'status', 'total', 'amount_due', 'created_at', 'user_id', 'daily_sequence'])
             ->orderByDesc('id');
 
         if (!$user->hasRole('admin')) {
@@ -75,16 +79,38 @@ class SaleMobileController extends Controller
         }
 
         $rows = $query->limit(60)->get()->map(function (Order $order) {
+            $items = $order->items->map(function ($item) {
+                $productName = (string) ($item->product?->name ?: $item->variant?->name ?: 'Sản phẩm');
+                $variantName = trim((string) ($item->variant?->name ?: $item->variant?->sku ?: ''));
+                $unitWeight = (float) ($item->effective_unit_weight ?? $item->unit_weight ?? 1);
+
+                return [
+                    'name' => $productName,
+                    'variant_name' => $variantName,
+                    'display_name' => trim($productName . ($variantName !== '' ? ' (' . $variantName . ')' : '')),
+                    'quantity' => (float) ($item->quantity ?? 0),
+                    'size' => $unitWeight,
+                    'total_label' => (string) ($item->display_total_label ?? ''),
+                    'unit_price' => (float) ($item->price ?? 0),
+                    'line_total' => (float) ($item->total ?? 0),
+                ];
+            })->values();
+
             return [
                 'id' => (int) $order->id,
                 'code' => (string) ($order->code ?: ('#' . $order->id)),
+                'number' => (int) ($order->daily_sequence ?: $order->id),
                 'customer' => (string) ($order->customer?->name ?? '—'),
                 'phone' => (string) ($order->customer?->phone ?? '—'),
                 'status' => (string) $order->status,
                 'total' => (float) ($order->total ?? 0),
                 'amount_due' => (float) ($order->amount_due ?? 0),
-                'created_at' => optional($order->created_at)->format('d/m H:i'),
+                'created_at' => optional($order->created_at)->format('d/m/Y H:i'),
+                'items' => $items,
                 'detail_url' => route('site.orders.show', $order),
+                'edit_url' => route('site.orders.edit', $order),
+                'copy_url' => route('site.orders.copy', $order),
+                'can_cancel' => $order->canBeCancelled(),
             ];
         });
 
@@ -94,8 +120,11 @@ class SaleMobileController extends Controller
     public function products(Request $request): JsonResponse
     {
         $search = trim((string) $request->query('q', ''));
+        $sortBy = (string) $request->query('sort_by', 'stock');
+        $sortDir = strtolower((string) $request->query('sort_dir', 'desc')) === 'asc' ? 'asc' : 'desc';
+        $inStock = $request->boolean('in_stock');
 
-        $rows = ProductVariant::query()
+        $query = ProductVariant::query()
             ->with(['product:id,name,unit,kg,is_priced_by_kg'])
             ->withAvailableStock()
             ->when($search !== '', function ($query) use ($search) {
@@ -105,7 +134,21 @@ class SaleMobileController extends Controller
                         ->orWhereHas('product', fn ($productQuery) => $productQuery->where('name', 'like', '%' . $search . '%'));
                 });
             })
-            ->orderByDesc('id')
+            ->when($inStock, fn ($query) => $query->having('available_stock', '>', 0));
+
+        match ($sortBy) {
+            'name' => $query
+                ->orderByRaw("LOWER(COALESCE(NULLIF(product_variants.name, ''), product_variants.sku, '')) {$sortDir}")
+                ->orderBy('id', 'desc'),
+            'sku' => $query->orderBy('sku', $sortDir)->orderBy('id', 'desc'),
+            'newest' => $query->orderByDesc('id'),
+            default => $query
+                ->orderByRaw('CASE WHEN available_stock > 0 THEN 0 ELSE 1 END')
+                ->orderBy('available_stock', $sortDir)
+                ->orderByDesc('id'),
+        };
+
+        $rows = $query
             ->limit(80)
             ->get()
             ->map(function (ProductVariant $variant) {
@@ -165,7 +208,7 @@ class SaleMobileController extends Controller
                 'user_id' => $user->id,
                 'shipper_id' => $customer->default_shipper_id,
                 'code' => 'ORD-' . strtoupper(substr(bin2hex(random_bytes(5)), 0, 10)),
-                'status' => Order::STATUS_APPROVED,
+                'status' => Order::STATUS_ORDER_PLACED,
                 'payment_status' => 'unpaid',
                 'delivery_date' => $validated['delivery_date'] ?? now()->addDay()->toDateString(),
                 'delivery_time' => $validated['delivery_time'] ?? $customer->delivery_time,
@@ -175,7 +218,7 @@ class SaleMobileController extends Controller
                 'note' => $validated['note'] ?? null,
                 'total' => $total,
                 'subtotal_amount' => $total,
-                'amount_due' => 0,
+                'amount_due' => $total,
                 'total_weight' => round($totalWeight, 3),
             ]);
 

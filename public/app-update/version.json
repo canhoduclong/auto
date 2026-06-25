@@ -1,8 +1,8 @@
 {
-  "version": "1.0.31",
-  "version_code": 32,
+  "version": "1.0.32",
+  "version_code": 33,
   "apk_url": "https://hoanglongtnt.com/app-update/app-release.apk",
   "ios_url": "",
   "force_update": false,
-  "message": "Bản cập nhật 1.0.31: cải thiện form sửa đơn mobile, chọn lại khách hàng, thông báo góc phải phía trên và cập nhật menu theo Android/iOS."
+  "message": "Bản cập nhật 1.0.32: cập nhật các thay đổi mới nhất cho phiếu đề nghị tài chính và ứng dụng mobile."
 }

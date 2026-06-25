@@ -115,8 +115,9 @@ document.addEventListener('DOMContentLoaded', function () {
         const canAction = order.status === 'delivering';
         const isDone = ['delivered', 'completed'].includes(order.status);
 
-        return `<div class="m-card sp-order-card ${isDone ? 'is-completed' : ''}" data-order-card="${order.id}">
-            <div class="m-row"><div class="m-value">${esc(order.code)}</div><span class="sp-status is-${statusClass(order.status)}" data-role="status">${esc(order.status)}</span></div>
+        return `<div class="m-card m-mobile-order-card sp-order-card ${isDone ? 'is-completed' : ''}" data-order-card="${order.id}">
+            <span class="m-mobile-status-badge sp-status is-${statusClass(order.status)}" data-role="status">${esc(order.status)}</span>
+            <div class="m-row"><div class="m-value">${esc(order.code)}</div></div>
             <div class="m-row"><span>${esc(order.customer)}</span><span>${esc(order.updated_at || '')}</span></div>
             <div class="m-label">${esc(order.phone)} - ${esc(order.address)}</div>
             <div class="m-row" style="margin-top:8px;"><span class="m-label">Tổng đơn</span><strong>${fmt(order.total)}</strong></div>
@@ -223,7 +224,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (statusEl) {
             statusEl.textContent = payload.data?.status || 'delivered';
-            statusEl.className = `sp-status is-${statusClass(payload.data?.status || 'delivered')}`;
+            statusEl.className = `m-mobile-status-badge sp-status is-${statusClass(payload.data?.status || 'delivered')}`;
         }
 
         if (card) {

@@ -3,6 +3,7 @@ namespace App\Services;
 
 use App\Enums\OrderStatus;
 use App\Models\ApprovalOrder;
+use App\Models\ApprovalStep;
 use App\Models\ApprovalWorkflow;
 use App\Models\Order;
 use App\Models\OrderAdjustment;
@@ -47,6 +48,31 @@ class ApprovalService
     private function managerRoleSlugs(): array
     {
         return ['manager_sale', 'manager', 'director'];
+    }
+
+    private function financeDepartmentHeadRoleSlugs(): array
+    {
+        return [
+            'leader_sale',
+            'leader',
+            'sale_manager',
+            'manager_sale',
+            'manager',
+            'manager_shipper',
+            'procurement_manager',
+            'warehouse',
+            'package',
+        ];
+    }
+
+    private function financeDirectorRoleSlugs(): array
+    {
+        return ['ceo', 'director'];
+    }
+
+    public function financeAccountingRoleSlugs(): array
+    {
+        return ['account', 'accountant', 'accounting'];
     }
 
     private function approverRoleSlugs(): array
@@ -349,7 +375,7 @@ class ApprovalService
             return false;
         }
 
-        $sortedSteps = $workflow->steps->sortBy('step_order')->values();
+        $sortedSteps = $this->resolveFinanceTransactionSteps($workflow);
 
         DB::transaction(function () use ($transaction, $sortedSteps): void {
             ApprovalOrder::where('transaction_id', $transaction->id)->delete();
@@ -367,13 +393,98 @@ class ApprovalService
         return true;
     }
 
+    public function ensureTransactionApprovalFlow(Transaction $transaction): bool
+    {
+        $workflow = $this->resolveActiveWorkflowForActivity(ApprovalWorkflow::ACTIVITY_TRANSACTION_CREATE);
+
+        if (!$workflow || $workflow->steps->isEmpty()) {
+            return false;
+        }
+
+        $sortedSteps = $this->resolveFinanceTransactionSteps($workflow);
+
+        DB::transaction(function () use ($transaction, $sortedSteps): void {
+            foreach ($sortedSteps as $step) {
+                ApprovalOrder::firstOrCreate(
+                    [
+                        'transaction_id' => $transaction->id,
+                        'approval_step_id' => $step->id,
+                    ],
+                    [
+                        'order_id' => $transaction->order_id ?: null,
+                        'status' => 'pending',
+                    ]
+                );
+            }
+        });
+
+        return true;
+    }
+
+    private function resolveFinanceTransactionSteps(ApprovalWorkflow $workflow)
+    {
+        $workflow->loadMissing('steps');
+        $sortedSteps = $this->ensureFinanceTransactionWorkflowSteps($workflow);
+
+        $financeSteps = collect([
+            $sortedSteps->first(fn ($step) => in_array(strtolower((string) $step->role_slug), $this->financeDepartmentHeadRoleSlugs(), true)),
+            $sortedSteps->first(fn ($step) => in_array(strtolower((string) $step->role_slug), $this->financeDirectorRoleSlugs(), true)),
+            $sortedSteps->first(fn ($step) => in_array(strtolower((string) $step->role_slug), $this->financeAccountingRoleSlugs(), true)),
+        ])->filter()->unique('id')->values();
+
+        return $financeSteps->isNotEmpty()
+            ? $financeSteps
+            : $sortedSteps;
+    }
+
+    private function ensureFinanceTransactionWorkflowSteps(ApprovalWorkflow $workflow)
+    {
+        $steps = $workflow->steps->sortBy('step_order')->values();
+        $maxOrder = (int) $steps->max('step_order');
+
+        $requiredStages = [
+            ['roles' => $this->financeDepartmentHeadRoleSlugs(), 'fallback' => 'manager'],
+            ['roles' => $this->financeDirectorRoleSlugs(), 'fallback' => 'CEO'],
+            ['roles' => $this->financeAccountingRoleSlugs(), 'fallback' => 'accountant'],
+        ];
+
+        foreach ($requiredStages as $stage) {
+            $exists = $steps->contains(fn ($step) => in_array(strtolower((string) $step->role_slug), $stage['roles'], true));
+
+            if ($exists) {
+                continue;
+            }
+
+            $steps->push(ApprovalStep::create([
+                'approval_flow_id' => $workflow->id,
+                'step_order' => ++$maxOrder,
+                'role_slug' => $stage['fallback'],
+                'can_skip' => false,
+            ]));
+        }
+
+        return $steps->sortBy('step_order')->values();
+    }
+
     public function getCurrentPendingTransactionStep(Transaction $transaction): ?ApprovalOrder
     {
+        $departmentHeadRoles = implode("','", $this->financeDepartmentHeadRoleSlugs());
+        $directorRoles = implode("','", $this->financeDirectorRoleSlugs());
+        $accountingRoles = implode("','", $this->financeAccountingRoleSlugs());
+
         return ApprovalOrder::query()
             ->where('transaction_id', $transaction->id)
             ->where('status', 'pending')
             ->with('step')
             ->join('approval_steps as aps', 'aps.id', '=', 'approval_orders.approval_step_id')
+            ->orderByRaw("
+                CASE
+                    WHEN LOWER(aps.role_slug) IN ('{$departmentHeadRoles}') THEN 10
+                    WHEN LOWER(aps.role_slug) IN ('{$directorRoles}') THEN 20
+                    WHEN LOWER(aps.role_slug) IN ('{$accountingRoles}') THEN 30
+                    ELSE 90
+                END
+            ")
             ->orderBy('aps.step_order')
             ->select('approval_orders.*')
             ->first();

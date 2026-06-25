@@ -49,8 +49,9 @@ document.addEventListener('DOMContentLoaded', function () {
         const canStart = !!order.can_start_packing;
         const isReady = ['approved', 'ready_to_pack'].includes(order.status);
 
-        return `<div class="m-card">
-            <div class="m-row"><div class="m-value">${order.code}</div><span class="m-label">${order.status}</span></div>
+        return `<div class="m-card m-mobile-order-card">
+            <span class="m-mobile-status-badge">${order.status}</span>
+            <div class="m-row"><div class="m-value">${order.code}</div></div>
             <div class="m-row"><span>${order.customer}</span><span>${order.created_at || ''}</span></div>
             <div class="m-label">${order.phone} - ${order.address}</div>
             <div class="m-row" style="margin-top:8px;"><span class="m-label">Sản phẩm</span><strong>${order.items_count}</strong></div>

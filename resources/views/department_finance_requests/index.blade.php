@@ -208,7 +208,7 @@
         <div class="fr-panel-head">
             <div>
                 <h2 class="fr-title">Tạo phiếu tài chính</h2>
-                <div class="fr-subtitle">{{ $config['label'] }} gửi Kế toán duyệt</div>
+                <div class="fr-subtitle">{{ $config['label'] }} gửi duyệt theo luồng Trưởng bộ phận → Giám đốc → Kế toán</div>
             </div>
             <span class="badge text-bg-light border px-3 py-2">{{ $config['label'] }}</span>
         </div>
@@ -389,7 +389,7 @@
 
                 <div class="fr-actions">
                     <button type="submit" class="btn btn-primary px-4">
-                        <i class="bi bi-send me-1"></i>Gửi Kế toán duyệt
+                        <i class="bi bi-send me-1"></i>Gửi duyệt
                     </button>
                 </div>
             </form>
@@ -402,7 +402,7 @@
         <div class="fr-panel-head">
             <div>
                 <h2 class="fr-title">Phiếu đã gửi</h2>
-                <div class="fr-subtitle">Theo dõi trạng thái duyệt từ phòng Kế toán</div>
+                <div class="fr-subtitle">Theo dõi trạng thái duyệt và xác nhận chuyển tiền</div>
             </div>
             <form method="GET" class="d-flex gap-2 align-items-end flex-wrap">
                 <div>
@@ -482,7 +482,7 @@
                                 @elseif($requestItem->status === \App\Models\Transaction::STATUS_REJECTED)
                                     {{ $requestItem->rejecter?->name ?: '-' }}
                                 @else
-                                    <span class="text-muted">Kế toán</span>
+                                    <span class="text-muted">Đang chờ duyệt</span>
                                 @endif
                             </td>
                             <td>{{ optional($requestItem->created_at)->format('d/m/Y H:i') }}</td>

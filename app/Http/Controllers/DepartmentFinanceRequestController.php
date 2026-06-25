@@ -346,7 +346,7 @@ class DepartmentFinanceRequestController extends Controller
 
         return redirect()
             ->route($config['route_prefix'] . '.index')
-            ->with('success', 'Đã gửi ' . ($transaction->request_form_type === Transaction::REQUEST_FORM_PAYMENT ? 'phiếu đề nghị thanh toán' : 'phiếu yêu cầu thu/chi') . ' #' . $transaction->id . ' sang phòng Kế toán duyệt.');
+            ->with('success', 'Đã gửi ' . ($transaction->request_form_type === Transaction::REQUEST_FORM_PAYMENT ? 'phiếu đề nghị thanh toán' : 'phiếu yêu cầu thu/chi') . ' #' . $transaction->id . ' vào luồng duyệt Trưởng bộ phận → Giám đốc → Kế toán.');
     }
 
     private function printRequest(Transaction $transaction, string $source)

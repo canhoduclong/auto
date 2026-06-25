@@ -148,6 +148,7 @@
         .m-title { margin: 0; font-size: 1.05rem; font-weight: 800; }
         .m-subtitle { margin: 4px 0 0; font-size: 0.83rem; opacity: .88; }
         .m-card {
+            position: relative;
             background: var(--card);
             border-radius: var(--radius);
             border: 1px solid #dbe3ef;
@@ -338,6 +339,8 @@
         .m-profile-menu > summary {
             list-style: none;
             cursor: pointer;
+            display: grid;
+            place-items: center;
         }
         .m-profile-menu > summary::-webkit-details-marker { display: none; }
         .m-top-avatar {
@@ -353,26 +356,37 @@
             position: absolute;
             right: 0;
             top: calc(100% + 8px);
-            width: min(82vw, 280px);
-            border-radius: 16px;
-            overflow: hidden;
+            width: min(88vw, 304px);
+            max-height: min(78vh, 620px);
+            border-radius: 14px;
+            overflow: hidden auto;
             background: #fff;
             box-shadow: 0 18px 45px rgba(15, 23, 42, .22);
             border: 1px solid #e2e8f0;
+            z-index: 100;
         }
         .m-profile-head {
             display: grid;
-            grid-template-columns: 52px minmax(0, 1fr);
+            grid-template-columns: 48px minmax(0, 1fr);
             gap: 10px;
-            padding: 12px;
+            padding: 10px 12px;
             border-bottom: 1px solid #e2e8f0;
             align-items: center;
         }
         .m-profile-head img {
-            width: 52px;
-            height: 52px;
+            width: 48px;
+            height: 48px;
             border-radius: 50%;
             object-fit: cover;
+        }
+        .m-profile-head strong {
+            font-size: .95rem;
+            line-height: 1.18;
+        }
+        .m-profile-head .m-profile-mail {
+            color: #475569;
+            font-size: .78rem;
+            margin-top: 2px;
         }
         .m-profile-head strong,
         .m-profile-head span {
@@ -385,40 +399,161 @@
             font-size: .78rem;
             color: #334155;
             display: grid;
-            gap: 4px;
+            gap: 3px;
+            line-height: 1.25;
+        }
+        .m-profile-current-role {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 4px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid #e2e8f0;
+            font-weight: 800;
+            color: #0f172a;
+        }
+        .m-role-pill {
+            max-width: 128px;
+            border-radius: 999px;
+            padding: 4px 8px;
+            background: #e0f2fe;
+            color: #0369a1;
+            font-size: .72rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         .m-menu-section {
             padding: 6px;
             border-bottom: 1px solid #e2e8f0;
         }
+        .m-menu-section:last-child { border-bottom: 0; }
+        .m-menu-section.m-menu-muted { background: #eef4f6; }
         .m-menu-title {
-            padding: 6px 10px;
-            font-size: .75rem;
+            padding: 7px 10px 6px;
+            font-size: .86rem;
             color: #64748b;
+            font-weight: 650;
         }
         .m-menu-item,
         .m-menu-section form button {
             width: 100%;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
             border: 0;
-            border-radius: 10px;
+            border-radius: 0;
             background: transparent;
             color: #0f172a;
-            padding: 9px 10px;
+            padding: 10px 12px;
             text-decoration: none;
-            font-size: .88rem;
+            font-size: .94rem;
             text-align: left;
+            font-family: inherit;
+            cursor: pointer;
+        }
+        .m-menu-icon {
+            width: 22px;
+            flex: 0 0 22px;
+            display: grid;
+            place-items: center;
+            color: #64748b;
         }
         .m-menu-item.active,
         .m-menu-section form button.active {
             background: #1677ff;
             color: #fff;
         }
+        .m-menu-item.active .m-menu-icon,
+        .m-menu-section form button.active .m-menu-icon {
+            color: #bfdbfe;
+        }
         .m-menu-item.danger,
         .m-menu-section form button.danger {
             color: #dc2626;
+        }
+        .m-menu-copy {
+            display: block;
+            margin-top: 2px;
+            color: #475569;
+            font-size: .78rem;
+            line-height: 1.15;
+        }
+        .m-mobile-order-card {
+            position: relative;
+            padding-top: 38px;
+            padding-bottom: 50px;
+        }
+        .m-mobile-status-badge {
+            position: absolute;
+            top: 10px;
+            right: 12px;
+            max-width: calc(100% - 112px);
+            border-radius: 6px;
+            padding: 5px 10px;
+            background: #dcfce7;
+            color: #16a34a;
+            font-size: .78rem;
+            line-height: 1.15;
+            font-weight: 900;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            text-transform: none;
+        }
+        .m-card-action-bottom {
+            position: absolute;
+            left: 12px;
+            bottom: 12px;
+            margin: 0;
+            z-index: 3;
+        }
+        .m-card-menu {
+            position: relative;
+            display: inline-block;
+        }
+        .m-card-menu > summary {
+            list-style: none;
+            width: 36px;
+            height: 36px;
+            border-radius: 2px;
+            border: 1px solid #f97316;
+            display: grid;
+            place-items: center;
+            background: #fff;
+            color: #334155;
+            cursor: pointer;
+            font-size: 1.24rem;
+            line-height: 1;
+            font-weight: 900;
+        }
+        .m-card-menu > summary::-webkit-details-marker { display: none; }
+        .m-card-menu-pop {
+            position: absolute;
+            left: 0;
+            bottom: calc(100% + 6px);
+            width: 166px;
+            border-radius: 10px;
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 12px 28px rgba(15, 23, 42, .18);
+            padding: 6px;
+            z-index: 10;
+        }
+        .m-card-menu-pop a,
+        .m-card-menu-pop button {
+            width: 100%;
+            display: block;
+            border: 0;
+            border-radius: 8px;
+            background: transparent;
+            color: #0f172a;
+            padding: 9px 10px;
+            text-align: left;
+            text-decoration: none;
+            font-size: .84rem;
+            font-weight: 700;
         }
         @media (max-width: 390px) {
             .m-profile-card {
@@ -446,9 +581,57 @@
 <body>
     @php
         $mobileUser = auth()->user();
-        $avatarUrl = $mobileUser?->google_avatar ?: ($mobileUser?->avatar ? asset('storage/' . $mobileUser->avatar) : 'https://ui-avatars.com/api/?name=' . urlencode($mobileUser?->name ?? 'User') . '&background=0f766e&color=fff');
-        $activeRole = session('active_role');
+        $rawAvatar = trim((string) ($mobileUser?->google_avatar ?: $mobileUser?->avatar));
+        $avatarUrl = $rawAvatar !== ''
+            ? (\Illuminate\Support\Str::startsWith($rawAvatar, ['http://', 'https://']) ? $rawAvatar : asset(ltrim($rawAvatar, '/')))
+            : 'https://ui-avatars.com/api/?name=' . urlencode($mobileUser?->name ?? 'User') . '&background=0f766e&color=fff';
+        $activeRole = strtolower((string) session('active_role', $mobileUser?->defaultRole?->name ?? ''));
         $topRoles = $mobileUser?->roles ?? collect();
+        $roleLabels = [
+            'sale' => 'Kinh doanh',
+            'leader' => 'Trưởng nhóm kinh doanh',
+            'leader_sale' => 'Trưởng nhóm kinh doanh',
+            'sale_manager' => 'Trưởng phòng kinh doanh',
+            'manager' => 'Quản lý',
+            'manager_sale' => 'Quản lý kinh doanh',
+            'account' => 'Kế toán',
+            'accountant' => 'Kế toán',
+            'accounting' => 'Kế toán',
+            'shipper' => 'Shipper',
+            'ship' => 'Shipper',
+            'manager_shipper' => 'Quản lý shipper',
+            'warehouse' => 'Kho',
+            'package' => 'Đóng hàng',
+            'ceo' => 'CEO',
+            'procurement_manager' => 'Thu mua',
+            'admin' => 'Admin',
+        ];
+        $roleIcons = [
+            'sale' => '◉',
+            'leader' => '◉',
+            'leader_sale' => '◉',
+            'sale_manager' => '◉',
+            'manager' => '◉',
+            'manager_sale' => '◉',
+            'account' => '▣',
+            'accountant' => '▣',
+            'accounting' => '▣',
+            'shipper' => '▱',
+            'ship' => '▱',
+            'manager_shipper' => '▱',
+            'warehouse' => '◇',
+            'package' => '▦',
+            'ceo' => '□',
+            'procurement_manager' => '▽',
+            'admin' => '◆',
+        ];
+        $activeRoleModel = $activeRole
+            ? $topRoles->first(fn ($role) => strcasecmp((string) $role->name, (string) $activeRole) === 0)
+            : null;
+        $activeRoleModel ??= $mobileUser?->defaultRole ?: $topRoles->first();
+        $activeRoleName = $activeRoleModel?->name;
+        $activeRoleKey = strtolower((string) $activeRoleName);
+        $currentRoleLabel = $roleLabels[$activeRoleKey] ?? $activeRoleModel?->display_name ?? $activeRoleName ?? $mobileUser?->job_title ?? 'Nhân sự';
         $unreadCount = (\Illuminate\Support\Facades\Schema::hasTable('notifications') && $mobileUser) ? $mobileUser->unreadNotifications()->count() : 0;
     @endphp
     <header class="m-topbar">
@@ -471,10 +654,15 @@
                         <img src="{{ $avatarUrl }}" alt="{{ $mobileUser?->name }}">
                         <div>
                             <strong>{{ $mobileUser?->name }}</strong>
-                            <span class="m-label">{{ $mobileUser?->job_title ?: 'Nhân sự' }}</span>
+                            <span class="m-profile-mail">{{ $mobileUser?->email ?: 'Chưa cập nhật email' }}</span>
                         </div>
                     </div>
                     <div class="m-profile-meta">
+                        <div class="m-profile-current-role">
+                            <span>Trạng thái</span>
+                            <span class="m-role-pill">{{ $currentRoleLabel }}</span>
+                        </div>
+                        <div><strong>Chức vụ:</strong> {{ $mobileUser?->job_title ?: $currentRoleLabel }}</div>
                         <div><strong>Email:</strong> {{ $mobileUser?->email ?: '—' }}</div>
                         <div><strong>Tel:</strong> {{ $mobileUser?->phone ?: '—' }}</div>
                         <div><strong>Ngày gia nhập:</strong> {{ optional($mobileUser?->created_at)->format('d/m/Y') }}</div>
@@ -482,22 +670,25 @@
                     <div class="m-menu-section">
                         <div class="m-menu-title">Chuyển vai trò</div>
                         @foreach($topRoles as $role)
+                            @php($roleKey = strtolower((string) $role->name))
                             <form action="{{ route('role.switch', $role->name) }}" method="POST">
                                 @csrf
-                                <button class="{{ $activeRole === $role->name ? 'active' : '' }}" type="submit">
-                                    <span>▣</span><span>{{ $role->display_name ?? $role->name }}</span>
+                                <input type="hidden" name="surface" value="my_app">
+                                <button class="{{ strcasecmp((string) ($activeRoleName ?? $activeRole), (string) $role->name) === 0 ? 'active' : '' }}" type="submit">
+                                    <span class="m-menu-icon">{{ $roleIcons[$roleKey] ?? '▣' }}</span><span>{{ $roleLabels[$roleKey] ?? $role->display_name ?? $role->name }}</span>
                                 </button>
                             </form>
                         @endforeach
                     </div>
-                    <div class="m-menu-section">
-                        <a class="m-menu-item" href="{{ route('pages.my_profile') }}">☰ Chỉnh sửa profile</a>
-                        <a class="m-menu-item" href="{{ route('mobile.home') }}">▣ Cập nhật ứng dụng</a>
+                    <div class="m-menu-section m-menu-muted">
+                        <a class="m-menu-item" href="{{ route('pages.my_profile') }}"><span class="m-menu-icon">♙</span><span>Chỉnh sửa profile</span></a>
+                        <a class="m-menu-item" href="{{ route('mobile.home') }}"><span class="m-menu-icon">⇩</span><span>Cập nhật iOS</span></a>
+                        <a class="m-menu-item" href="{{ route('mobile.home') }}"><span class="m-menu-icon">⇩</span><span>Cập nhật ứng dụng<span class="m-menu-copy">Kiểm tra và cập nhật bản mới</span></span></a>
                     </div>
                     <div class="m-menu-section">
                         <form action="{{ route('logout') }}" method="POST">
                             @csrf
-                            <button class="danger" type="submit">↪ Đăng xuất</button>
+                            <button class="danger" type="submit"><span class="m-menu-icon">↪</span><span>Đăng xuất</span></button>
                         </form>
                     </div>
                 </div>
@@ -518,7 +709,7 @@
         @if($mobileUser?->hasRole('ceo') || $mobileUser?->hasRole('admin'))
             <a href="{{ route('mobile.ceo.home') }}" class="{{ request()->routeIs('mobile.ceo.*') ? 'active' : '' }}">CEO</a>
         @endif
-        @if($mobileUser?->hasRole('warehouse') || $mobileUser?->hasRole('admin'))
+        @if($mobileUser?->hasRole('warehouse') || $mobileUser?->hasRole('package') || $mobileUser?->hasRole('admin'))
             <a href="{{ route('mobile.warehouse.home') }}" class="{{ request()->routeIs('mobile.warehouse.*') ? 'active' : '' }}">Warehouse</a>
         @endif
         @if($mobileUser?->hasRole('shipper') || $mobileUser?->hasRole('ship') || $mobileUser?->hasRole('manager_shipper') || $mobileUser?->hasRole('admin'))

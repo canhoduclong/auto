@@ -180,7 +180,7 @@
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <div>
                             <h5 class="mb-1">Chi tiết nội dung phiếu yêu cầu</h5>
-                            <div class="small text-muted">Kế toán kiểm tra nội dung, VAT và tổng cộng trước khi duyệt.</div>
+                            <div class="small text-muted">Kế toán kiểm tra hồ sơ và xác nhận chuyển tiền sau khi Giám đốc duyệt.</div>
                         </div>
                         <span class="badge text-bg-light border">{{ $transaction->request_department ?: $transaction->request_source }}</span>
                     </div>
@@ -231,14 +231,39 @@
     </div>
 </div>
 @if($canReview)
+@php
+    $rolePriority = [
+        'leader_sale' => 10,
+        'leader' => 10,
+        'sale_manager' => 10,
+        'manager_sale' => 10,
+        'manager' => 10,
+        'manager_shipper' => 10,
+        'procurement_manager' => 10,
+        'warehouse' => 10,
+        'package' => 10,
+        'ceo' => 20,
+        'director' => 20,
+        'account' => 30,
+        'accountant' => 30,
+        'accounting' => 30,
+    ];
+    $currentApproval = $transaction->approvalSteps
+        ->where('status', 'pending')
+        ->sortBy(fn ($approval) => ($rolePriority[strtolower((string) ($approval->step?->role_slug ?? ''))] ?? 90) * 1000 + (int) ($approval->step?->step_order ?? 999))
+        ->first();
+    $currentRole = strtolower((string) ($currentApproval?->step?->role_slug ?? ''));
+    $accountingRoles = ['account', 'accountant', 'accounting'];
+    $isAccountingStep = in_array($currentRole, $accountingRoles, true);
+@endphp
 <div class="row g-3">
     <div class="col-lg-6">
         <div class="acc-card h-100">
             <div class="card-body">
-                <h6 class="mb-3">Duyệt giao dịch</h6>
+                <h6 class="mb-3">{{ $isAccountingStep ? 'Xác nhận đã chuyển tiền' : 'Duyệt giao dịch' }}</h6>
                 <form method="POST" action="{{ accounting_route('transactions.approve', $transaction) }}">
                     @csrf
-                    @if($transaction->request_source)
+                    @if($transaction->request_source && $isAccountingStep)
                         <div class="mb-2">
                             <label class="form-label">{{ $transaction->transactionCategory?->flow_direction === 'in' ? 'Tài khoản nhận tiền' : 'Tài khoản thực hiện/nguồn' }} <span class="text-danger">*</span></label>
                             <select name="account_id" class="form-select" required>
@@ -256,7 +281,7 @@
                         <textarea name="note" class="form-control" rows="3" placeholder="Ghi chú phê duyệt..."></textarea>
                     </div>
                     <button type="submit" class="btn btn-success">
-                        <i class="bi bi-check-circle"></i> Duyệt
+                        <i class="bi bi-check-circle"></i> {{ $isAccountingStep ? 'Xác nhận chuyển tiền' : 'Duyệt' }}
                     </button>
                 </form>
             </div>
