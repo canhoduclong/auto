@@ -67,12 +67,17 @@ class ApprovalService
 
     private function financeDirectorRoleSlugs(): array
     {
-        return ['ceo', 'director'];
+        return ['director'];
     }
 
     public function financeAccountingRoleSlugs(): array
     {
         return ['account', 'accountant', 'accounting'];
+    }
+
+    private function financeApprovalRoleSlugs(): array
+    {
+        return array_merge($this->financeAccountingRoleSlugs(), $this->financeDirectorRoleSlugs());
     }
 
     private function approverRoleSlugs(): array
@@ -404,6 +409,14 @@ class ApprovalService
         $sortedSteps = $this->resolveFinanceTransactionSteps($workflow);
 
         DB::transaction(function () use ($transaction, $sortedSteps): void {
+            ApprovalOrder::query()
+                ->where('transaction_id', $transaction->id)
+                ->where('status', 'pending')
+                ->whereHas('step', function ($query): void {
+                    $query->whereNotIn(DB::raw('LOWER(role_slug)'), $this->financeApprovalRoleSlugs());
+                })
+                ->delete();
+
             foreach ($sortedSteps as $step) {
                 ApprovalOrder::firstOrCreate(
                     [
@@ -427,9 +440,8 @@ class ApprovalService
         $sortedSteps = $this->ensureFinanceTransactionWorkflowSteps($workflow);
 
         $financeSteps = collect([
-            $sortedSteps->first(fn ($step) => in_array(strtolower((string) $step->role_slug), $this->financeDepartmentHeadRoleSlugs(), true)),
-            $sortedSteps->first(fn ($step) => in_array(strtolower((string) $step->role_slug), $this->financeDirectorRoleSlugs(), true)),
             $sortedSteps->first(fn ($step) => in_array(strtolower((string) $step->role_slug), $this->financeAccountingRoleSlugs(), true)),
+            $sortedSteps->first(fn ($step) => in_array(strtolower((string) $step->role_slug), $this->financeDirectorRoleSlugs(), true)),
         ])->filter()->unique('id')->values();
 
         return $financeSteps->isNotEmpty()
@@ -443,9 +455,8 @@ class ApprovalService
         $maxOrder = (int) $steps->max('step_order');
 
         $requiredStages = [
-            ['roles' => $this->financeDepartmentHeadRoleSlugs(), 'fallback' => 'manager'],
-            ['roles' => $this->financeDirectorRoleSlugs(), 'fallback' => 'CEO'],
             ['roles' => $this->financeAccountingRoleSlugs(), 'fallback' => 'accountant'],
+            ['roles' => $this->financeDirectorRoleSlugs(), 'fallback' => 'Director'],
         ];
 
         foreach ($requiredStages as $stage) {
@@ -468,7 +479,6 @@ class ApprovalService
 
     public function getCurrentPendingTransactionStep(Transaction $transaction): ?ApprovalOrder
     {
-        $departmentHeadRoles = implode("','", $this->financeDepartmentHeadRoleSlugs());
         $directorRoles = implode("','", $this->financeDirectorRoleSlugs());
         $accountingRoles = implode("','", $this->financeAccountingRoleSlugs());
 
@@ -479,9 +489,8 @@ class ApprovalService
             ->join('approval_steps as aps', 'aps.id', '=', 'approval_orders.approval_step_id')
             ->orderByRaw("
                 CASE
-                    WHEN LOWER(aps.role_slug) IN ('{$departmentHeadRoles}') THEN 10
+                    WHEN LOWER(aps.role_slug) IN ('{$accountingRoles}') THEN 10
                     WHEN LOWER(aps.role_slug) IN ('{$directorRoles}') THEN 20
-                    WHEN LOWER(aps.role_slug) IN ('{$accountingRoles}') THEN 30
                     ELSE 90
                 END
             ")
@@ -527,6 +536,9 @@ class ApprovalService
 
         $hasPending = ApprovalOrder::where('transaction_id', $transaction->id)
             ->where('status', 'pending')
+            ->whereHas('step', function ($query): void {
+                $query->whereIn(DB::raw('LOWER(role_slug)'), $this->financeApprovalRoleSlugs());
+            })
             ->exists();
 
         return !$hasPending;

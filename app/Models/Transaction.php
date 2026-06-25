@@ -9,6 +9,7 @@ class Transaction extends Model
     use HasFactory;
 
     public const STATUS_PENDING_APPROVAL = 'pending_approval';
+    public const STATUS_APPROVED_PENDING_COMPLETION = 'approved_pending_completion';
     public const STATUS_APPROVED = 'approved';
     public const STATUS_REJECTED = 'rejected';
     public const REQUEST_FORM_CASH = 'cash_request';
@@ -27,6 +28,9 @@ class Transaction extends Model
         'destination_type',
         'destination_account_id',
         'external_recipient',
+        'external_account_number',
+        'external_bank_name',
+        'external_bank_branch',
         'method',
         'note',
         'receipt_image_path',

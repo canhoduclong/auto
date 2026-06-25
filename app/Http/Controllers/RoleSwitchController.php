@@ -81,6 +81,8 @@ class RoleSwitchController extends Controller
 
     private function fallbackRouteForRole(string $role): string
     {
+        $role = strtolower($role);
+
         if (in_array($role, ['account', 'accountant', 'accounting'], true)) {
             return 'accounting.dashboard';
         }
@@ -92,6 +94,7 @@ class RoleSwitchController extends Controller
         return match ($role) {
             'admin' => 'dashboard',
             'ceo' => 'ceo.dashboard',
+            'director' => 'director.dashboard',
             'manager_shipper', 'shipper', 'ship' => 'shipper.dashboard',
             'procurement_manager' => 'procurement.dashboard',
             'package' => 'package.dashboard',
@@ -102,6 +105,8 @@ class RoleSwitchController extends Controller
 
     private function mobileRouteForRole(string $role): string
     {
+        $role = strtolower($role);
+
         if (in_array($role, ['account', 'accountant', 'accounting'], true)) {
             return 'mobile.accounting.home';
         }
@@ -112,6 +117,7 @@ class RoleSwitchController extends Controller
 
         return match ($role) {
             'ceo' => 'mobile.ceo.home',
+            'director' => 'mobile.director.home',
             'manager_shipper', 'shipper', 'ship' => 'mobile.shipper.home',
             'package' => 'mobile.package.home',
             'warehouse' => 'mobile.warehouse.home',

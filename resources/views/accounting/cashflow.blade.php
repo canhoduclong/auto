@@ -23,8 +23,8 @@
     <div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-2">
             <div>
-                <div class="fw-bold">Phiếu tài chính chờ duyệt</div>
-                <div class="small text-muted">Phiếu yêu cầu thu/chi và đề nghị thanh toán từ các bộ phận</div>
+                <div class="fw-bold">Phiếu tài chính cần xử lý</div>
+                <div class="small text-muted">Phiếu chờ kế toán xác nhận hoặc đã được Director duyệt, chờ hoàn thành</div>
             </div>
             <span class="badge bg-warning text-dark">{{ $pendingRequests->count() }}</span>
         </div>
@@ -36,6 +36,7 @@
                         <th>Bộ phận</th>
                         <th>Phiếu</th>
                         <th>Dòng tiền</th>
+                        <th>Trạng thái</th>
                         <th class="text-end">Số tiền</th>
                         <th>Người gửi</th>
                         <th>Ngày gửi</th>
@@ -44,7 +45,12 @@
                 </thead>
                 <tbody>
                     @foreach($pendingRequests as $requestTx)
-                        @php $flow = $requestTx->transactionCategory?->flow_direction === 'in' ? 'in' : 'out'; @endphp
+                        @php
+                            $flow = $requestTx->transactionCategory?->flow_direction
+                                ?? (in_array((string) $requestTx->type, ['payment', 'extra_income'], true) ? 'in' : 'out');
+                            $canQuickApprove = $requestTx->status === \App\Models\Transaction::STATUS_PENDING_APPROVAL
+                                && (auth()->user()?->hasRole('admin') || app(\App\Services\ApprovalService::class)->canApproveTransactionStep($requestTx, auth()->user()));
+                        @endphp
                         <tr>
                             <td class="text-muted">#{{ $requestTx->id }}</td>
                             <td><span class="badge text-bg-light border">{{ $requestTx->request_department ?: $requestTx->request_source }}</span></td>
@@ -56,6 +62,13 @@
                             <td>
                                 <span class="badge bg-{{ $flow === 'in' ? 'success' : 'danger' }}">{{ $flow === 'in' ? 'Thu' : 'Chi' }}</span>
                             </td>
+                            <td>
+                                @if($requestTx->status === \App\Models\Transaction::STATUS_APPROVED_PENDING_COMPLETION)
+                                    <span class="badge text-bg-info">Chờ hoàn thành</span>
+                                @else
+                                    <span class="badge text-bg-warning">Chờ xác nhận</span>
+                                @endif
+                            </td>
                             <td class="text-end fw-bold">{{ number_format((float) $requestTx->amount) }} d</td>
                             <td>{{ $requestTx->submitter?->name ?: '-' }}</td>
                             <td>{{ optional($requestTx->created_at)->format('d/m/Y H:i') }}</td>
@@ -64,8 +77,16 @@
                                     <i class="bi bi-printer"></i>
                                 </a>
                                 <a href="{{ accounting_route('cashflow.show', $requestTx) }}" class="btn btn-sm btn-warning">
-                                    <i class="bi bi-eye me-1"></i>Xem/Duyệt
+                                    <i class="bi bi-eye me-1"></i>{{ $requestTx->status === \App\Models\Transaction::STATUS_APPROVED_PENDING_COMPLETION ? 'Hoàn thành' : 'Xem/Duyệt' }}
                                 </a>
+                                @if($canQuickApprove)
+                                    <form method="POST" action="{{ accounting_route('transactions.approve', $requestTx) }}" class="d-inline">
+                                        @csrf
+                                        <button type="submit" class="btn btn-sm btn-success" onclick="return confirm('Duyệt nhanh phiếu #{{ $requestTx->id }}?')">
+                                            <i class="bi bi-check2-circle me-1"></i>Duyệt nhanh
+                                        </button>
+                                    </form>
+                                @endif
                             </td>
                         </tr>
                     @endforeach
@@ -316,6 +337,8 @@
                     <td>
                         @if($tx->status === \App\Models\Transaction::STATUS_APPROVED)
                             <span class="badge text-bg-success">Da duyet</span>
+                        @elseif($tx->status === \App\Models\Transaction::STATUS_APPROVED_PENDING_COMPLETION)
+                            <span class="badge text-bg-info">Cho hoan thanh</span>
                         @elseif($tx->status === \App\Models\Transaction::STATUS_REJECTED)
                             <span class="badge text-bg-danger">Da tu choi</span>
                         @else

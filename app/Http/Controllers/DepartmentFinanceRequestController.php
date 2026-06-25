@@ -25,6 +25,12 @@ class DepartmentFinanceRequestController extends Controller
             'route_prefix' => 'ceo.finance-requests',
             'role' => 'ceo,CEO,admin',
         ],
+        'director' => [
+            'label' => 'Director',
+            'layout' => 'layouts.director',
+            'route_prefix' => 'director.finance-requests',
+            'role' => 'director,Director,admin',
+        ],
         'leader' => [
             'label' => 'Leader',
             'layout' => 'layouts.site',
@@ -35,7 +41,7 @@ class DepartmentFinanceRequestController extends Controller
             'label' => 'Manager',
             'layout' => 'layouts.site',
             'route_prefix' => 'manager.finance-requests',
-            'role' => 'manager,manager_sale,director,admin',
+            'role' => 'manager,manager_sale,admin',
         ],
         'shipper' => [
             'label' => 'Shipper',
@@ -91,6 +97,21 @@ class DepartmentFinanceRequestController extends Controller
     public function ceoPrint(Transaction $transaction)
     {
         return $this->printRequest($transaction, 'ceo');
+    }
+
+    public function directorIndex(Request $request)
+    {
+        return $this->index($request, 'director');
+    }
+
+    public function directorStore(Request $request)
+    {
+        return $this->store($request, 'director');
+    }
+
+    public function directorPrint(Transaction $transaction)
+    {
+        return $this->printRequest($transaction, 'director');
     }
 
     public function leaderIndex(Request $request)
@@ -157,7 +178,7 @@ class DepartmentFinanceRequestController extends Controller
         $config = $this->config($source);
         $this->authorizeSource($config);
 
-        $status = in_array($request->input('status'), ['all', Transaction::STATUS_PENDING_APPROVAL, Transaction::STATUS_APPROVED, Transaction::STATUS_REJECTED], true)
+        $status = in_array($request->input('status'), ['all', Transaction::STATUS_PENDING_APPROVAL, Transaction::STATUS_APPROVED_PENDING_COMPLETION, Transaction::STATUS_APPROVED, Transaction::STATUS_REJECTED], true)
             ? $request->input('status')
             : 'all';
         $formType = in_array($request->input('form_type'), ['all', Transaction::REQUEST_FORM_CASH, Transaction::REQUEST_FORM_PAYMENT], true)
@@ -225,18 +246,18 @@ class DepartmentFinanceRequestController extends Controller
             'request_form_type' => ['required', 'in:' . Transaction::REQUEST_FORM_CASH . ',' . Transaction::REQUEST_FORM_PAYMENT],
             'flow_direction' => ['required', 'in:in,out'],
             'request_title' => ['required', 'string', 'max:255'],
-            'transaction_category_id' => ['required', 'integer', 'exists:transaction_categories,id'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.content' => ['required', 'string', 'max:255'],
             'items.*.unit' => ['nullable', 'string', 'max:50'],
             'items.*.quantity' => ['required', 'numeric', 'min:0.01'],
             'items.*.unit_price' => ['required', 'numeric', 'min:0'],
             'request_vat' => ['nullable', 'numeric', 'min:0'],
-            'method' => ['nullable', 'string', 'max:50'],
-            'destination_type' => ['required', 'in:internal,external'],
-            'destination_account_id' => ['nullable', 'required_if:destination_type,internal', 'integer', 'exists:accounts,id'],
-            'external_recipient' => ['nullable', 'required_if:destination_type,external', 'string', 'max:255'],
-            'source_account_id' => ['nullable', 'integer', 'exists:accounts,id'],
+            'method' => ['required', 'in:cash,managed_transfer,bank_transfer'],
+            'destination_account_id' => ['nullable', 'required_if:method,managed_transfer', 'integer', 'exists:accounts,id'],
+            'external_recipient' => ['nullable', 'required_if:method,bank_transfer', 'string', 'max:255'],
+            'external_account_number' => ['nullable', 'required_if:method,bank_transfer', 'string', 'max:100'],
+            'external_bank_name' => ['nullable', 'required_if:method,bank_transfer', 'string', 'max:150'],
+            'external_bank_branch' => ['nullable', 'string', 'max:150'],
             'note' => ['required', 'string', 'max:1000'],
             'receipt_image' => ['nullable', 'image', 'max:5120'],
         ]);
@@ -245,36 +266,18 @@ class DepartmentFinanceRequestController extends Controller
             $validated['flow_direction'] = 'out';
         }
 
-        $category = TransactionCategory::query()
-            ->whereKey((int) $validated['transaction_category_id'])
-            ->where('flow_direction', $validated['flow_direction'])
-            ->firstOrFail();
-
         $managedAccountIds = auth()->user()->managedAccounts()
             ->where('accounts.is_active', true)
             ->pluck('accounts.id')
             ->map(fn ($id) => (int) $id);
-        $sourceAccountId = (int) ($validated['source_account_id'] ?? 0);
+        $destinationAccountId = (int) ($validated['destination_account_id'] ?? 0);
 
-        if ($category->flow_direction === 'out' && $managedAccountIds->isNotEmpty()) {
-            if ($sourceAccountId === 0 || !$managedAccountIds->contains($sourceAccountId)) {
+        if ($validated['method'] === 'managed_transfer') {
+            if ($destinationAccountId === 0 || !$managedAccountIds->contains($destinationAccountId)) {
                 throw ValidationException::withMessages([
-                    'source_account_id' => 'Vui lòng chọn tài khoản chi trong danh sách tài khoản bạn đang quản lý.',
+                    'destination_account_id' => 'Vui lòng chọn tài khoản chuyển khoản trong danh sách tài khoản bạn đang quản lý.',
                 ]);
             }
-        } else {
-            $sourceAccountId = 0;
-        }
-
-        if (
-            $category->flow_direction === 'out'
-            && $validated['destination_type'] === 'internal'
-            && $sourceAccountId > 0
-            && $sourceAccountId === (int) $validated['destination_account_id']
-        ) {
-            throw ValidationException::withMessages([
-                'destination_account_id' => 'Tài khoản đến phải khác tài khoản chi.',
-            ]);
         }
 
         $items = collect($validated['items'])
@@ -313,17 +316,30 @@ class DepartmentFinanceRequestController extends Controller
 
         $data = [
             'amount' => $total,
-            'type' => $category->flow_direction === 'in' ? 'extra_income' : 'extra_expense',
-            'transaction_category_id' => $category->id,
-            'account_id' => $sourceAccountId ?: null,
-            'destination_type' => $validated['destination_type'],
-            'destination_account_id' => $validated['destination_type'] === 'internal'
-                ? (int) $validated['destination_account_id']
+            'type' => $validated['flow_direction'] === 'in' ? 'extra_income' : 'extra_expense',
+            'transaction_category_id' => null,
+            'account_id' => null,
+            'destination_type' => match ($validated['method']) {
+                'cash' => 'cash',
+                'managed_transfer' => 'internal',
+                default => 'external',
+            },
+            'destination_account_id' => $validated['method'] === 'managed_transfer'
+                ? $destinationAccountId
                 : null,
-            'external_recipient' => $validated['destination_type'] === 'external'
+            'external_recipient' => $validated['method'] === 'bank_transfer'
                 ? trim((string) $validated['external_recipient'])
                 : null,
-            'method' => $validated['method'] ?? null,
+            'external_account_number' => $validated['method'] === 'bank_transfer'
+                ? trim((string) $validated['external_account_number'])
+                : null,
+            'external_bank_name' => $validated['method'] === 'bank_transfer'
+                ? trim((string) $validated['external_bank_name'])
+                : null,
+            'external_bank_branch' => $validated['method'] === 'bank_transfer'
+                ? trim((string) ($validated['external_bank_branch'] ?? ''))
+                : null,
+            'method' => $validated['method'],
             'note' => $validated['note'],
             'status' => Transaction::STATUS_PENDING_APPROVAL,
             'submitted_by' => auth()->id(),
@@ -346,7 +362,7 @@ class DepartmentFinanceRequestController extends Controller
 
         return redirect()
             ->route($config['route_prefix'] . '.index')
-            ->with('success', 'Đã gửi ' . ($transaction->request_form_type === Transaction::REQUEST_FORM_PAYMENT ? 'phiếu đề nghị thanh toán' : 'phiếu yêu cầu thu/chi') . ' #' . $transaction->id . ' vào luồng duyệt Trưởng bộ phận → Giám đốc → Kế toán.');
+            ->with('success', 'Đã gửi ' . ($transaction->request_form_type === Transaction::REQUEST_FORM_PAYMENT ? 'phiếu đề nghị thanh toán' : 'phiếu yêu cầu thu/chi') . ' #' . $transaction->id . ' vào luồng Kế toán xác nhận → Director duyệt → Kế toán hoàn thành.');
     }
 
     private function printRequest(Transaction $transaction, string $source)

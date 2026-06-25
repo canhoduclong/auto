@@ -709,6 +709,9 @@
         @if($mobileUser?->hasRole('ceo') || $mobileUser?->hasRole('admin'))
             <a href="{{ route('mobile.ceo.home') }}" class="{{ request()->routeIs('mobile.ceo.*') ? 'active' : '' }}">CEO</a>
         @endif
+        @if($mobileUser?->hasRole('director') || $mobileUser?->hasRole('Director') || $mobileUser?->hasRole('admin'))
+            <a href="{{ route('mobile.director.home') }}" class="{{ request()->routeIs('mobile.director.*') ? 'active' : '' }}">Director</a>
+        @endif
         @if($mobileUser?->hasRole('warehouse') || $mobileUser?->hasRole('package') || $mobileUser?->hasRole('admin'))
             <a href="{{ route('mobile.warehouse.home') }}" class="{{ request()->routeIs('mobile.warehouse.*') ? 'active' : '' }}">Warehouse</a>
         @endif

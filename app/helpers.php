@@ -208,6 +208,9 @@ if (!function_exists('current_accounting_route_prefix')) {
         if (str_starts_with($routeName, 'ceo.')) {
             return 'ceo.';
         }
+        if (str_starts_with($routeName, 'director.')) {
+            return 'director.';
+        }
         return 'accounting.';
     }
 }
@@ -235,6 +238,9 @@ if (!function_exists('accounting_layout')) {
         }
         if ($prefix === 'ceo.') {
             return 'layouts.ceo';
+        }
+        if ($prefix === 'director.') {
+            return 'layouts.director';
         }
         return 'layouts.accounting';
     }

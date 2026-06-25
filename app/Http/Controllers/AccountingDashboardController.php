@@ -27,7 +27,7 @@ class AccountingDashboardController extends Controller
 {
     public function __construct()
     {
-        $this->middleware(['auth', 'role:account,accountant,accounting,ceo,admin']);
+        $this->middleware(['auth', 'role:account,accountant,accounting,ceo,director,Director,admin']);
     }
 
     public function index(Request $request)
@@ -566,12 +566,23 @@ class AccountingDashboardController extends Controller
                 'submitter:id,name',
                 'transactionCategory:id,code,name,flow_direction',
                 'account:id,name,type',
+                'approvalSteps.step:id,role_slug,step_order',
             ])
-            ->where('status', Transaction::STATUS_PENDING_APPROVAL)
+            ->whereIn('status', [
+                Transaction::STATUS_PENDING_APPROVAL,
+                Transaction::STATUS_APPROVED_PENDING_COMPLETION,
+            ])
             ->whereNotNull('request_source')
             ->latest('created_at')
             ->limit(20)
             ->get();
+        $approvalService = app(\App\Services\ApprovalService::class);
+        $pendingRequests->each(function (Transaction $transaction) use ($approvalService): void {
+            if ($transaction->status === Transaction::STATUS_PENDING_APPROVAL) {
+                $approvalService->ensureTransactionApprovalFlow($transaction);
+            }
+        });
+        $pendingRequests->loadMissing('approvalSteps.step:id,role_slug,step_order');
 
         $transactions = (clone $baseQuery)
             ->with([
@@ -651,11 +662,20 @@ class AccountingDashboardController extends Controller
             $user->hasRole('admin') ||
             $approvalService->canApproveTransactionStep($transaction, $user)
         );
+        $canComplete = $transaction->request_source
+            && $transaction->status === Transaction::STATUS_APPROVED_PENDING_COMPLETION
+            && ($user->hasRole('admin') || $user->hasRole('account') || $user->hasRole('accountant') || $user->hasRole('accounting'));
 
         return view('accounting.cashflow_show', [
             'transaction' => $transaction,
             'canReview' => $canReview,
+            'canComplete' => $canComplete,
             'accounts' => Account::active()->orderBy('name')->get(['id', 'name', 'type', 'balance']),
+            'transactionCategories' => TransactionCategory::active()
+                ->orderBy('flow_direction')
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get(['id', 'code', 'name', 'flow_direction']),
         ]);
     }
 
@@ -1709,10 +1729,6 @@ class AccountingDashboardController extends Controller
         if ($transaction->status === Transaction::STATUS_PENDING_APPROVAL && $transaction->request_source) {
             $approvalService->ensureTransactionApprovalFlow($transaction);
         }
-        $currentStep = $approvalService->getCurrentPendingTransactionStep($transaction);
-        $currentRole = strtolower((string) ($currentStep?->step?->role_slug ?? ''));
-        $isAccountingStep = in_array($currentRole, $approvalService->financeAccountingRoleSlugs(), true);
-
         abort_unless(
             $user->hasRole('admin') ||
             $approvalService->canApproveTransactionStep($transaction, $user),
@@ -1724,24 +1740,42 @@ class AccountingDashboardController extends Controller
         }
 
         $note = trim((string) $request->input('note', ''));
+        $currentStep = $approvalService->getCurrentPendingTransactionStep($transaction);
+        $currentRole = strtolower((string) ($currentStep?->step?->role_slug ?? ''));
+        $isAccountingStep = in_array($currentRole, $approvalService->financeAccountingRoleSlugs(), true);
 
         if ($transaction->request_source && $isAccountingStep) {
             $validated = $request->validate([
+                'transaction_category_id' => ['required', 'integer', 'exists:transaction_categories,id'],
                 'account_id' => ['required', 'integer', 'exists:accounts,id'],
             ]);
 
+            $requestedFlow = in_array((string) $transaction->type, ['payment', 'extra_income'], true) ? 'in' : 'out';
+            $category = TransactionCategory::query()
+                ->whereKey((int) $validated['transaction_category_id'])
+                ->where('flow_direction', $requestedFlow)
+                ->first();
+
+            if (!$category) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'transaction_category_id' => 'Danh mục kế toán không phù hợp với dòng tiền của phiếu.',
+                ]);
+            }
+
             if (
-                $transaction->transactionCategory?->flow_direction === 'out'
+                $category->flow_direction === 'out'
                 && $transaction->destination_type === 'internal'
                 && (int) $validated['account_id'] === (int) $transaction->destination_account_id
             ) {
                 throw \Illuminate\Validation\ValidationException::withMessages([
-                    'account_id' => 'Tài khoản thực hiện phải khác tài khoản đến khi luân chuyển nội bộ.',
+                    'account_id' => 'Tài khoản thực hiện phải khác tài khoản nhận khi chuyển khoản nội bộ.',
                 ]);
             }
 
             $transaction->forceFill([
+                'transaction_category_id' => $category->id,
                 'account_id' => (int) $validated['account_id'],
+                'type' => $category->flow_direction === 'in' ? 'extra_income' : 'extra_expense',
             ])->save();
         }
 
@@ -1753,6 +1787,16 @@ class AccountingDashboardController extends Controller
         }
 
         if ($allApproved) {
+            if ($transaction->request_source) {
+                $transaction->update([
+                    'status' => Transaction::STATUS_APPROVED_PENDING_COMPLETION,
+                    'approved_by' => $user->id,
+                    'approved_at' => now(),
+                ]);
+
+                return back()->with('success', 'Director đã duyệt phiếu #' . $transaction->id . '. Phiếu đã chuyển về kế toán để hoàn thành chuyển tiền.');
+            }
+
             $transaction->update([
                 'status' => Transaction::STATUS_APPROVED,
                 'approved_by' => $user->id,
@@ -1763,6 +1807,42 @@ class AccountingDashboardController extends Controller
         }
 
         return back()->with('success', 'Da duyet buoc nay. Giao dich chuyen sang buoc tiep theo.');
+    }
+
+    public function transactionComplete(Request $request, Transaction $transaction)
+    {
+        $user = auth()->user();
+
+        abort_unless(
+            $user->hasRole('admin') || $user->hasRole('account') || $user->hasRole('accountant') || $user->hasRole('accounting'),
+            403
+        );
+
+        if (!$transaction->request_source || $transaction->status !== Transaction::STATUS_APPROVED_PENDING_COMPLETION) {
+            return back()->with('error', 'Phiếu không ở trạng thái chờ kế toán hoàn thành.');
+        }
+
+        $validated = $request->validate([
+            'note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        if (!$transaction->transaction_category_id || !$transaction->account_id) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'account_id' => 'Phiếu chưa có danh mục kế toán hoặc tài khoản thực hiện. Vui lòng quay lại bước kế toán xác nhận.',
+            ]);
+        }
+
+        $note = trim((string) ($validated['note'] ?? ''));
+        $currentNote = trim((string) $transaction->note);
+
+        $transaction->forceFill([
+            'note' => $note !== '' ? trim($currentNote . "\nKế toán hoàn thành: " . $note) : $transaction->note,
+            'status' => Transaction::STATUS_APPROVED,
+        ])->save();
+
+        $this->applyTransactionToOrder($transaction);
+
+        return back()->with('success', 'Đã hoàn thành phiếu #' . $transaction->id . ' và ghi nhận chuyển tiền thực tế.');
     }
 
     public function transactionReject(Request $request, Transaction $transaction)

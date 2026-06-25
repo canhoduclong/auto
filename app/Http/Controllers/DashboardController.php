@@ -56,6 +56,9 @@ class DashboardController extends Controller
             if ($activeRole === 'ceo' && $user?->hasRole('ceo')) {
                 return redirect()->route('ceo.dashboard');
             }
+            if ($activeRole === 'director' && $user?->hasRole('Director')) {
+                return redirect()->route('director.dashboard');
+            }
             if (in_array($activeRole, ['account', 'accountant', 'accounting'], true)
                 && ($user?->hasRole('account') || $user?->hasRole('accountant') || $user?->hasRole('accounting'))) {
                 return redirect()->route('accounting.dashboard');
@@ -82,6 +85,10 @@ class DashboardController extends Controller
 
         if ($user?->hasRole('ceo')) {
             return redirect()->route('ceo.dashboard');
+        }
+
+        if ($user?->hasRole('Director')) {
+            return redirect()->route('director.dashboard');
         }
 
         if ($user?->hasRole('account') || $user?->hasRole('accountant') || $user?->hasRole('accounting')) {

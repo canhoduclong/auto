@@ -7,14 +7,13 @@
 @php
     $statusLabels = [
         \App\Models\Transaction::STATUS_PENDING_APPROVAL => ['label' => 'Chờ duyệt', 'class' => 'warning text-dark'],
+        \App\Models\Transaction::STATUS_APPROVED_PENDING_COMPLETION => ['label' => 'Đã duyệt - chờ hoàn thành', 'class' => 'info text-dark'],
         \App\Models\Transaction::STATUS_APPROVED => ['label' => 'Đã duyệt', 'class' => 'success'],
         \App\Models\Transaction::STATUS_REJECTED => ['label' => 'Từ chối', 'class' => 'danger'],
     ];
-    $incomeCategories = $categories->where('flow_direction', 'in')->values();
-    $expenseCategories = $categories->where('flow_direction', 'out')->values();
-    $selectedCategory = $categories->firstWhere('id', (int) old('transaction_category_id'));
     $selectedFormType = old('request_form_type', \App\Models\Transaction::REQUEST_FORM_CASH);
     $oldItems = old('items', [['content' => '', 'unit' => '', 'quantity' => 1, 'unit_price' => 0]]);
+    $selectedMethod = old('method', 'cash');
     $currentUser = auth()->user();
     $currentDepartmentName = $currentUser?->department?->name;
     $currentBlockName = $currentUser?->department?->block?->name ?: $currentUser?->block?->name;
@@ -208,7 +207,7 @@
         <div class="fr-panel-head">
             <div>
                 <h2 class="fr-title">Tạo phiếu tài chính</h2>
-                <div class="fr-subtitle">{{ $config['label'] }} gửi duyệt theo luồng Trưởng bộ phận → Giám đốc → Kế toán</div>
+                <div class="fr-subtitle">{{ $config['label'] }} gửi duyệt theo luồng Kế toán xác nhận → Director duyệt → Kế toán hoàn thành</div>
             </div>
             <span class="badge text-bg-light border px-3 py-2">{{ $config['label'] }}</span>
         </div>
@@ -248,63 +247,46 @@
                         <input type="text" name="request_title" class="form-control" value="{{ old('request_title') }}" placeholder="VD: Mua vật tư đóng gói">
                     </div>
                     <div>
-                        <label class="form-label fw-semibold">Danh mục kế toán <span class="text-danger">*</span></label>
-                        <input type="hidden" name="transaction_category_id" id="transactionCategoryId" value="{{ old('transaction_category_id') }}" required>
-                        <button type="button" class="btn btn-outline-primary w-100 d-flex align-items-center justify-content-between" data-bs-toggle="modal" data-bs-target="#categoryPickerModal">
-                            <span id="selectedCategoryText">
-                                @if($selectedCategory)
-                                    {{ $selectedCategory->code }} - {{ $selectedCategory->name }}
-                                @else
-                                    Chọn danh mục
-                                @endif
-                            </span>
-                            <i class="bi bi-search"></i>
-                        </button>
-                    </div>
-                    <div>
-                        <label class="form-label fw-semibold">Phương thức dự kiến</label>
-                        <select name="method" class="form-select">
-                            <option value="">-- Chọn --</option>
-                            @foreach(['cash' => 'Tiền mặt', 'bank_transfer' => 'Chuyển khoản', 'other' => 'Khác'] as $value => $label)
-                                <option value="{{ $value }}" @selected(old('method') === $value)>{{ $label }}</option>
-                            @endforeach
+                        <label class="form-label fw-semibold">Hình thức chi trả <span class="text-danger">*</span></label>
+                        <select name="method" id="paymentMethod" class="form-select" required>
+                            <option value="cash" @selected($selectedMethod === 'cash')>Tiền mặt</option>
+                            @if($managedAccounts->isNotEmpty())
+                                <option value="managed_transfer" @selected($selectedMethod === 'managed_transfer')>Chuyển khoản đang quản lý</option>
+                            @endif
+                            <option value="bank_transfer" @selected($selectedMethod === 'bank_transfer')>Chuyển khoản</option>
                         </select>
                     </div>
                     @if($managedAccounts->isNotEmpty())
-                        <div id="sourceAccountGroup">
-                            <label class="form-label fw-semibold">Tài khoản chi <span class="text-danger">*</span></label>
-                            <select name="source_account_id" id="sourceAccountId" class="form-select">
+                        <div id="managedTransferGroup">
+                            <label class="form-label fw-semibold">Tài khoản chuyển khoản đang quản lý <span class="text-danger">*</span></label>
+                            <select name="destination_account_id" id="managedDestinationAccountId" class="form-select">
+                                <option value="">-- Chọn tài khoản --</option>
                                 @foreach($managedAccounts as $account)
-                                    <option value="{{ $account->id }}" @selected((string) old('source_account_id', $defaultManagedAccountId) === (string) $account->id)>
-                                        {{ $account->name }}{{ $account->account_number ? ' - ' . $account->account_number : '' }}
+                                    <option value="{{ $account->id }}" @selected((string) old('destination_account_id', $defaultManagedAccountId) === (string) $account->id)>
+                                        {{ $account->name }}{{ $account->account_number ? ' - ' . $account->account_number : '' }}{{ $account->bank_name ? ' (' . $account->bank_name . ')' : '' }}
                                     </option>
                                 @endforeach
                             </select>
-                            <div class="form-text">Chỉ hiển thị tài khoản bạn đang được giao quản lý.</div>
+                            <div class="form-text">Chỉ hiển thị tài khoản bạn được gán quản lý.</div>
                         </div>
                     @endif
-                    <div>
-                        <label class="form-label fw-semibold">Nơi nhận tiền <span class="text-danger">*</span></label>
-                        <select name="destination_type" id="destinationType" class="form-select" required>
-                            <option value="internal" @selected(old('destination_type', 'internal') === 'internal')>Tài khoản nội bộ</option>
-                            <option value="external" @selected(old('destination_type') === 'external')>Bên ngoài</option>
-                        </select>
-                    </div>
-                    <div id="destinationAccountGroup">
-                        <label class="form-label fw-semibold">Tài khoản đến <span class="text-danger">*</span></label>
-                        <select name="destination_account_id" id="destinationAccountId" class="form-select">
-                            <option value="">-- Chọn tài khoản đến --</option>
-                            @foreach($accounts as $account)
-                                <option value="{{ $account->id }}" @selected((string) old('destination_account_id') === (string) $account->id)>
-                                    {{ $account->name }}{{ $account->account_number ? ' - ' . $account->account_number : '' }}{{ $account->bank_name ? ' (' . $account->bank_name . ')' : '' }}
-                                </option>
-                            @endforeach
-                        </select>
-                        <div class="form-text">Dùng khi tiền được luân chuyển vào một tài khoản đang quản lý.</div>
-                    </div>
-                    <div id="externalRecipientGroup" class="d-none">
-                        <label class="form-label fw-semibold">Người/đơn vị nhận <span class="text-danger">*</span></label>
-                        <input type="text" name="external_recipient" id="externalRecipient" class="form-control" maxlength="255" value="{{ old('external_recipient') }}" placeholder="VD: Công ty ABC, Nguyễn Văn A...">
+                    <div id="externalBankGroup" class="fr-meta-grid">
+                        <div>
+                            <label class="form-label fw-semibold">Tên tài khoản <span class="text-danger">*</span></label>
+                            <input type="text" name="external_recipient" id="externalRecipient" class="form-control" maxlength="255" value="{{ old('external_recipient') }}" placeholder="VD: Công ty ABC, Nguyễn Văn A...">
+                        </div>
+                        <div>
+                            <label class="form-label fw-semibold">Số tài khoản <span class="text-danger">*</span></label>
+                            <input type="text" name="external_account_number" id="externalAccountNumber" class="form-control" maxlength="100" value="{{ old('external_account_number') }}">
+                        </div>
+                        <div>
+                            <label class="form-label fw-semibold">Ngân hàng <span class="text-danger">*</span></label>
+                            <input type="text" name="external_bank_name" id="externalBankName" class="form-control" maxlength="150" value="{{ old('external_bank_name') }}">
+                        </div>
+                        <div>
+                            <label class="form-label fw-semibold">Chi nhánh</label>
+                            <input type="text" name="external_bank_branch" id="externalBankBranch" class="form-control" maxlength="150" value="{{ old('external_bank_branch') }}">
+                        </div>
                     </div>
                 </div>
 
@@ -418,6 +400,7 @@
                     <select name="status" class="form-select form-select-sm">
                         <option value="all" @selected($status === 'all')>Tất cả</option>
                         <option value="{{ \App\Models\Transaction::STATUS_PENDING_APPROVAL }}" @selected($status === \App\Models\Transaction::STATUS_PENDING_APPROVAL)>Chờ duyệt</option>
+                        <option value="{{ \App\Models\Transaction::STATUS_APPROVED_PENDING_COMPLETION }}" @selected($status === \App\Models\Transaction::STATUS_APPROVED_PENDING_COMPLETION)>Đã duyệt - chờ hoàn thành</option>
                         <option value="{{ \App\Models\Transaction::STATUS_APPROVED }}" @selected($status === \App\Models\Transaction::STATUS_APPROVED)>Đã duyệt</option>
                         <option value="{{ \App\Models\Transaction::STATUS_REJECTED }}" @selected($status === \App\Models\Transaction::STATUS_REJECTED)>Từ chối</option>
                     </select>
@@ -477,7 +460,7 @@
                                 @endif
                             </td>
                             <td>
-                                @if($requestItem->status === \App\Models\Transaction::STATUS_APPROVED)
+                                @if(in_array($requestItem->status, [\App\Models\Transaction::STATUS_APPROVED, \App\Models\Transaction::STATUS_APPROVED_PENDING_COMPLETION], true))
                                     {{ $requestItem->approver?->name ?: '-' }}
                                 @elseif($requestItem->status === \App\Models\Transaction::STATUS_REJECTED)
                                     {{ $requestItem->rejecter?->name ?: '-' }}
@@ -507,74 +490,41 @@
         </div>
     </div>
 
-<div class="modal fade" id="categoryPickerModal" tabindex="-1" aria-labelledby="categoryPickerModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-scrollable">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="categoryPickerModalLabel">Danh mục kế toán</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
-            </div>
-            <div class="modal-body">
-                <div class="list-group" id="categoryPickerList">
-                    @foreach($categories as $category)
-                        <button type="button"
-                            class="list-group-item list-group-item-action d-flex justify-content-between align-items-start category-picker-item"
-                            data-category-id="{{ $category->id }}"
-                            data-category-label="{{ $category->code }} - {{ $category->name }}"
-                            data-flow="{{ $category->flow_direction }}">
-                            <span>
-                                <span class="fw-semibold">{{ $category->name }}</span>
-                                <span class="d-block small text-muted">{{ $category->code }}</span>
-                            </span>
-                            <span class="badge bg-{{ $category->flow_direction === 'in' ? 'success' : 'danger' }}">
-                                {{ $category->flow_direction === 'in' ? 'Thu' : 'Chi' }}
-                            </span>
-                        </button>
-                    @endforeach
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
 </div>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    const categoryInput = document.getElementById('transactionCategoryId');
-    const categoryText = document.getElementById('selectedCategoryText');
-    const categoryItems = Array.from(document.querySelectorAll('.category-picker-item'));
     const flowInputs = Array.from(document.querySelectorAll('input[name="flow_direction"]'));
     const formTypeInput = document.getElementById('requestFormType');
     const flowDirectionGroup = document.getElementById('flowDirectionGroup');
-    const modalElement = document.getElementById('categoryPickerModal');
     const requestItemsTable = document.getElementById('requestItemsTable');
     const addLineButton = document.getElementById('addRequestLine');
     const requestVatInput = document.getElementById('requestVat');
     const requestSubtotalText = document.getElementById('requestSubtotalText');
     const requestTotalText = document.getElementById('requestTotalText');
-    const destinationType = document.getElementById('destinationType');
-    const destinationAccountGroup = document.getElementById('destinationAccountGroup');
-    const destinationAccountId = document.getElementById('destinationAccountId');
-    const externalRecipientGroup = document.getElementById('externalRecipientGroup');
+    const paymentMethod = document.getElementById('paymentMethod');
+    const managedTransferGroup = document.getElementById('managedTransferGroup');
+    const managedDestinationAccountId = document.getElementById('managedDestinationAccountId');
+    const externalBankGroup = document.getElementById('externalBankGroup');
     const externalRecipient = document.getElementById('externalRecipient');
-    const sourceAccountGroup = document.getElementById('sourceAccountGroup');
-    const sourceAccountId = document.getElementById('sourceAccountId');
+    const externalAccountNumber = document.getElementById('externalAccountNumber');
+    const externalBankName = document.getElementById('externalBankName');
 
-    function syncDestinationFields() {
-        const isInternal = destinationType?.value === 'internal';
-        destinationAccountGroup?.classList.toggle('d-none', !isInternal);
-        externalRecipientGroup?.classList.toggle('d-none', isInternal);
-        if (destinationAccountId) destinationAccountId.required = isInternal;
-        if (externalRecipient) externalRecipient.required = !isInternal;
+    function syncPaymentMethod() {
+        const method = paymentMethod?.value || 'cash';
+        const isManagedTransfer = method === 'managed_transfer';
+        const isBankTransfer = method === 'bank_transfer';
+
+        managedTransferGroup?.classList.toggle('d-none', !isManagedTransfer);
+        externalBankGroup?.classList.toggle('d-none', !isBankTransfer);
+
+        if (managedDestinationAccountId) managedDestinationAccountId.required = isManagedTransfer;
+        if (externalRecipient) externalRecipient.required = isBankTransfer;
+        if (externalAccountNumber) externalAccountNumber.required = isBankTransfer;
+        if (externalBankName) externalBankName.required = isBankTransfer;
     }
 
-    function syncSourceAccount() {
-        const isExpense = currentFlow() === 'out';
-        sourceAccountGroup?.classList.toggle('d-none', !isExpense);
-        if (sourceAccountId) sourceAccountId.required = isExpense;
-    }
-
-    destinationType?.addEventListener('change', syncDestinationFields);
-    syncDestinationFields();
+    paymentMethod?.addEventListener('change', syncPaymentMethod);
+    syncPaymentMethod();
 
     function formatMoney(value) {
         return Math.round(Number(value) || 0).toLocaleString('vi-VN') + 'đ';
@@ -591,44 +541,13 @@ document.addEventListener('DOMContentLoaded', function () {
             const outInput = document.getElementById('requestOut');
             if (outInput) outInput.checked = true;
         }
-        syncCategoryList();
     }
-
-    function syncCategoryList() {
-        const flow = currentFlow();
-        const selectedItem = categoryItems.find((item) => item.dataset.categoryId === categoryInput.value);
-
-        if (selectedItem && selectedItem.dataset.flow !== flow) {
-            categoryInput.value = '';
-            categoryText.textContent = 'Chọn danh mục';
-        }
-
-        categoryItems.forEach((item) => {
-            item.classList.toggle('d-none', item.dataset.flow !== flow);
-            item.classList.toggle('active', item.dataset.categoryId === categoryInput.value);
-        });
-    }
-
-    categoryItems.forEach((item) => {
-        item.addEventListener('click', function () {
-            categoryInput.value = item.dataset.categoryId;
-            categoryText.textContent = item.dataset.categoryLabel;
-            syncCategoryList();
-
-            if (window.bootstrap && modalElement) {
-                const modal = window.bootstrap.Modal.getInstance(modalElement) || new window.bootstrap.Modal(modalElement);
-                modal.hide();
-            }
-        });
-    });
 
     flowInputs.forEach((input) => input.addEventListener('change', function () {
-        syncCategoryList();
-        syncSourceAccount();
+        syncPaymentMethod();
     }));
     formTypeInput?.addEventListener('change', syncFormType);
     syncFormType();
-    syncSourceAccount();
 
     function requestRows() {
         return Array.from(requestItemsTable.querySelectorAll('tbody tr.request-line'));

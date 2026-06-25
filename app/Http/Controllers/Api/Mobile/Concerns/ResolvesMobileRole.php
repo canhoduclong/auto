@@ -66,13 +66,14 @@ trait ResolvesMobileRole
         return match ($layoutSlug) {
             'my_app_accounting' => 'accounting',
             'my_app_ceo' => 'ceo',
+            'my_app_director' => 'director',
             'my_app_manager_shipper' => 'manager_shipper',
             'my_app_package' => 'package',
             'my_app_procurement' => 'procurement',
             'my_app_sales' => 'sale',
             'my_app_shipper' => 'shipper',
             'my_app_warehouse' => 'warehouse',
-            default => in_array($layoutSlug, ['accounting', 'ceo', 'manager_shipper', 'package', 'procurement', 'sale', 'shipper', 'warehouse'], true)
+            default => in_array($layoutSlug, ['accounting', 'ceo', 'director', 'manager_shipper', 'package', 'procurement', 'sale', 'shipper', 'warehouse'], true)
                 ? $layoutSlug
                 : 'unsupported',
         };
@@ -174,6 +175,18 @@ trait ResolvesMobileRole
                 ['group' => 'Khách hàng', 'key' => 'customers_list', 'label' => 'Danh sách khách hàng', 'route' => '/ceo/customers-list', 'api' => '/screens/ceo/customers_list', 'icon' => 'people'],
                 ['group' => 'Hoạt động', 'key' => 'debts', 'label' => 'Công nợ', 'route' => '/ceo/debts', 'api' => '/screens/ceo/debts', 'icon' => 'money_off'],
                 ['group' => 'Hoạt động', 'key' => 'inventory', 'label' => 'Tồn kho', 'route' => '/ceo/warehouse', 'api' => '/screens/ceo/inventory', 'icon' => 'inventory'],
+            ];
+        }
+
+        if ($layout === 'director') {
+            return [
+                ['group' => 'Tổng quan', 'key' => 'dashboard', 'label' => 'Director', 'route' => '/director', 'api' => '/screens/director/dashboard', 'icon' => 'query_stats'],
+                ['group' => 'Bán hàng', 'key' => 'daily_sales', 'label' => 'Thống kê bán hàng', 'route' => '/director/daily-sales', 'api' => '/screens/director/daily_sales', 'icon' => 'receipt_long'],
+                ['group' => 'Tài chính', 'key' => 'cashflow', 'label' => 'Thu chi', 'route' => '/director/cashflow', 'api' => '/screens/director/cashflow', 'icon' => 'payments'],
+                ['group' => 'Tài chính', 'key' => 'finance_requests', 'label' => 'Phiếu yêu cầu', 'route' => '/director/requests', 'api' => '/screens/director/finance_requests', 'icon' => 'approval'],
+                ['group' => 'Tài chính', 'key' => 'financial_reports', 'label' => 'Báo cáo tài chính', 'route' => '/director/financial-reports', 'api' => '/screens/director/financial_reports', 'icon' => 'account_balance'],
+                ['group' => 'Hoạt động', 'key' => 'debts', 'label' => 'Công nợ', 'route' => '/director/debts', 'api' => '/screens/director/debts', 'icon' => 'money_off'],
+                ['group' => 'Hoạt động', 'key' => 'inventory', 'label' => 'Tồn kho', 'route' => '/director/warehouse', 'api' => '/screens/director/inventory', 'icon' => 'inventory'],
             ];
         }
 

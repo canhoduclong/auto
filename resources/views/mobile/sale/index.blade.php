@@ -164,6 +164,67 @@
         grid-template-columns: 1fr 1fr;
         gap: 8px;
     }
+    .sale-action-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 90;
+        background: rgba(15, 23, 42, .55);
+        display: none;
+        align-items: flex-end;
+    }
+    .sale-action-overlay.open { display: flex; }
+    .sale-action-sheet {
+        width: 100%;
+        max-width: 720px;
+        margin: 0 auto;
+        border-radius: 28px 28px 0 0;
+        background: #f8ffff;
+        padding: 16px 16px calc(18px + env(safe-area-inset-bottom));
+        box-shadow: 0 -18px 38px rgba(15, 23, 42, .22);
+    }
+    .sale-action-handle {
+        width: 52px;
+        height: 5px;
+        border-radius: 999px;
+        background: #64748b;
+        margin: 0 auto 18px;
+    }
+    .sale-action-title {
+        margin: 0 0 14px;
+        font-size: 1.55rem;
+        font-weight: 950;
+    }
+    .sale-action-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+    }
+    .sale-action-btn {
+        min-height: 52px;
+        border-radius: 999px;
+        border: 1px solid #94a3b8;
+        background: #fff;
+        color: #334155;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 10px 12px;
+        font-size: 1rem;
+        font-weight: 900;
+        text-decoration: none;
+        cursor: pointer;
+    }
+    .sale-action-btn.teal { border-color: #0f969a; color: #0f766e; }
+    .sale-action-btn.orange { border-color: #f59e0b; color: #d97706; }
+    .sale-action-btn.yellow { border-color: #eab308; color: #ca8a04; }
+    .sale-action-btn.muted { color: #94a3b8; border-color: #dbe3ef; }
+    .sale-action-btn[disabled] {
+        opacity: .48;
+        pointer-events: none;
+    }
+    .sale-action-form { margin: 0; }
+    .sale-action-form .sale-action-btn { width: 100%; }
     @media (max-width: 390px) {
         .sale-order-header {
             grid-template-columns: 44px minmax(0, 1fr);
@@ -388,15 +449,34 @@ document.addEventListener('DOMContentLoaded', function () {
             ${moreText}
             <div class="sale-order-total">${formatCardMoney(item.total)}</div>
             <div class="m-card-action-bottom">
-                <details class="m-card-menu">
-                    <summary>⋯</summary>
-                    <div class="m-card-menu-pop">
-                        <a href="${item.detail_url}">Xem chi tiết</a>
-                        <a href="${item.edit_url}">Sửa đơn</a>
-                        <a href="${item.copy_url}">Sao chép đơn</a>
-                        <a href="{{ route('pages.my_orders') }}">Tất cả đơn</a>
-                    </div>
-                </details>
+                <button type="button" class="m-btn m-btn-outline js-sale-actions" data-order='${escapeHtml(JSON.stringify(item))}' style="width:auto;padding:9px 14px;">Chức năng</button>
+            </div>
+        </div>`;
+    }
+
+    function actionSheet(item) {
+        const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        const formButton = (url, label, cls, confirmText) => `<form method="POST" action="${escapeHtml(url)}" class="sale-action-form" onsubmit="return confirm('${escapeHtml(confirmText)}')">
+            <input type="hidden" name="_token" value="${escapeHtml(csrf)}">
+            <button type="submit" class="sale-action-btn ${cls}">${label}</button>
+        </form>`;
+
+        return `<div class="sale-action-overlay open" id="saleActionOverlay">
+            <div class="sale-action-sheet">
+                <div class="sale-action-handle"></div>
+                <h3 class="sale-action-title">Chức năng</h3>
+                <div class="sale-action-grid">
+                    <a class="sale-action-btn orange" href="${escapeHtml(item.edit_url)}">✎ Sửa đơn</a>
+                    <a class="sale-action-btn teal" href="${escapeHtml(item.detail_url)}">◉ Chi tiết</a>
+                    <a class="sale-action-btn" href="${escapeHtml(item.copy_url)}">▣ Copy Đơn</a>
+                    ${formButton(item.payment_url, '▣ Thanh toán', 'teal', 'Xác nhận thanh toán đơn này?')}
+                    <a class="sale-action-btn muted" href="${escapeHtml(item.feedback_url)}">▤ Feedback</a>
+                    <a class="sale-action-btn orange" href="${escapeHtml(item.return_url)}">↩ Trả hàng</a>
+                    <a class="sale-action-btn yellow" href="${escapeHtml(item.adjustment_url)}">↔ Điều chỉnh</a>
+                    ${formButton(item.cancel_url, '⊗ Hủy đơn hàng', 'muted', 'Xác nhận hủy đơn hàng này?')}
+                    ${formButton(item.trash_url, '♲ Xóa đơn', 'muted', 'Đưa đơn này vào thùng rác?')}
+                    ${formButton(item.confirm_copy_url, '✺ Xác nhận copy', 'teal', 'Xác nhận copy đơn này?')}
+                </div>
             </div>
         </div>`;
     }

@@ -194,7 +194,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/requests/{transaction}/print', [DepartmentFinanceRequestController::class, 'leaderPrint'])->name('finance-requests.print');
     });
 
-    Route::prefix('manager')->name('manager.')->middleware('role:manager,manager_sale,director,admin')->group(function () {
+    Route::prefix('manager')->name('manager.')->middleware('role:manager,manager_sale,admin')->group(function () {
         Route::get('/requests', [DepartmentFinanceRequestController::class, 'managerIndex'])->name('finance-requests.index');
         Route::post('/requests', [DepartmentFinanceRequestController::class, 'managerStore'])->name('finance-requests.store');
         Route::get('/requests/{transaction}/print', [DepartmentFinanceRequestController::class, 'managerPrint'])->name('finance-requests.print');
@@ -234,6 +234,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::put('/transactions/{transaction}', [AccountingDashboardController::class, 'transactionUpdate'])->name('transactions.update');
         Route::post('/transactions/{transaction}/approve', [AccountingDashboardController::class, 'transactionApprove'])->name('transactions.approve');
         Route::post('/transactions/{transaction}/reject', [AccountingDashboardController::class, 'transactionReject'])->name('transactions.reject');
+        Route::post('/transactions/{transaction}/complete', [AccountingDashboardController::class, 'transactionComplete'])->name('transactions.complete');
         Route::get('/api/orders-list', [AccountingDashboardController::class, 'apiOrdersList'])->name('api.orders-list');
         Route::get('/api/customers-list', [AccountingDashboardController::class, 'apiCustomersList'])->name('api.customers-list');
         Route::get('/api/order-detail/{order}', [AccountingDashboardController::class, 'apiOrderDetail'])->name('api.order-detail');
@@ -269,6 +270,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::put('/transactions/{transaction}', [AccountingDashboardController::class, 'transactionUpdate'])->name('transactions.update');
         Route::post('/transactions/{transaction}/approve', [AccountingDashboardController::class, 'transactionApprove'])->name('transactions.approve');
         Route::post('/transactions/{transaction}/reject', [AccountingDashboardController::class, 'transactionReject'])->name('transactions.reject');
+        Route::post('/transactions/{transaction}/complete', [AccountingDashboardController::class, 'transactionComplete'])->name('transactions.complete');
         Route::get('/api/orders-list', [AccountingDashboardController::class, 'apiOrdersList'])->name('api.orders-list');
         Route::get('/api/customers-list', [AccountingDashboardController::class, 'apiCustomersList'])->name('api.customers-list');
         Route::get('/api/order-detail/{order}', [AccountingDashboardController::class, 'apiOrderDetail'])->name('api.order-detail');
@@ -423,6 +425,53 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     });
 
     // ─── CEO module ────────────────────────────────────────────────────────
+    Route::prefix('director')->name('director.')->middleware('role:director,Director,admin')->group(function () {
+        Route::get('/', [CeoDashboardController::class, 'dashboard'])->name('dashboard');
+        Route::get('/revenue', [CeoDashboardController::class, 'revenue'])->name('revenue');
+        Route::get('/orders', [CeoDashboardController::class, 'orders'])->name('orders');
+        Route::get('/sales', [CeoDashboardController::class, 'sales'])->name('sales');
+        Route::get('/debts', [CeoDashboardController::class, 'debts'])->name('debts');
+        Route::get('/warehouse', [CeoDashboardController::class, 'warehouse'])->name('warehouse');
+        Route::get('/shipper', [CeoDashboardController::class, 'shipper'])->name('shipper');
+        Route::get('/shipper-costs', [CeoDashboardController::class, 'shipperCosts'])->name('shipper-costs');
+        Route::get('/customers', [CeoDashboardController::class, 'customers'])->name('customers');
+        Route::get('/customers-list', [CeoDashboardController::class, 'customersList'])->name('customers-list');
+        Route::get('/users-list', [CeoDashboardController::class, 'usersList'])->name('users-list');
+        Route::get('/alerts', [CeoDashboardController::class, 'alerts'])->name('alerts');
+        Route::get('/reports', [CeoDashboardController::class, 'reports'])->name('reports');
+        Route::get('/weekly-report', [CeoDashboardController::class, 'weeklyReport'])->name('weekly-report');
+        Route::get('/weekly-customer-report', [CeoDashboardController::class, 'weeklyCustomerReport'])->name('weekly-customer-report');
+        Route::get('/financial-reports', [CeoDashboardController::class, 'financialReports'])->name('financial-reports');
+        Route::get('/daily-sales', [CeoDashboardController::class, 'dailySales'])->name('daily-sales');
+        Route::get('/customer/{customer}/revenue', [CeoDashboardController::class, 'customerRevenueReport'])->name('customer-revenue-report');
+        Route::get('/price-management', [ProductPriceManagementController::class, 'index'])->name('price-management.index');
+        Route::get('/price-management/{product}', [ProductPriceManagementController::class, 'show'])->name('price-management.show');
+        Route::post('/price-management/{product}', [ProductPriceManagementController::class, 'update'])->name('price-management.update');
+        Route::get('/cashflow', [AccountingDashboardController::class, 'cashflow'])->name('cashflow');
+        Route::get('/cashflow/{transaction}/edit', [AccountingDashboardController::class, 'transactionEdit'])->name('transactions.edit');
+        Route::get('/cashflow/{transaction}/print', [AccountingDashboardController::class, 'cashflowPrint'])->name('cashflow.print');
+        Route::get('/cashflow/{transaction}', [AccountingDashboardController::class, 'cashflowShow'])->name('cashflow.show');
+        Route::get('/requests', [DepartmentFinanceRequestController::class, 'directorIndex'])->name('finance-requests.index');
+        Route::post('/requests', [DepartmentFinanceRequestController::class, 'directorStore'])->name('finance-requests.store');
+        Route::get('/requests/{transaction}/print', [DepartmentFinanceRequestController::class, 'directorPrint'])->name('finance-requests.print');
+        Route::get('/transactions/create', [AccountingDashboardController::class, 'transactionCreate'])->name('transactions.create');
+        Route::post('/transactions', [AccountingDashboardController::class, 'transactionStore'])->name('transactions.store');
+        Route::put('/transactions/{transaction}', [AccountingDashboardController::class, 'transactionUpdate'])->name('transactions.update');
+        Route::post('/transactions/{transaction}/approve', [AccountingDashboardController::class, 'transactionApprove'])->name('transactions.approve');
+        Route::post('/transactions/{transaction}/reject', [AccountingDashboardController::class, 'transactionReject'])->name('transactions.reject');
+        Route::post('/transactions/{transaction}/complete', [AccountingDashboardController::class, 'transactionComplete'])->name('transactions.complete');
+        Route::get('/task-management', [TaskManagementController::class, 'index'])->name('task-management.index');
+        Route::post('/task-management', [TaskManagementController::class, 'store'])->name('task-management.store');
+        Route::patch('/task-management/{task}', [TaskManagementController::class, 'update'])->name('task-management.update');
+        Route::delete('/task-management/{task}', [TaskManagementController::class, 'destroy'])->name('task-management.destroy');
+        Route::patch('/task-management/{task}/status', [TaskManagementController::class, 'updateStatus'])->name('task-management.update-status');
+        Route::get('/task-management/customers', [TaskManagementController::class, 'getCustomers'])->name('task-management.customers');
+        Route::get('/profile', [\App\Http\Controllers\CeoPageController::class, 'show'])->name('profile');
+        Route::post('/profile', [\App\Http\Controllers\CeoPageController::class, 'update'])->name('profile.update');
+        Route::get('/change-password', [\App\Http\Controllers\CeoChangePasswordController::class, 'show'])->name('password.change');
+        Route::post('/change-password', [\App\Http\Controllers\CeoChangePasswordController::class, 'update'])->name('password.update');
+    });
+
     Route::prefix('ceo')->name('ceo.')->middleware('role:ceo,admin')->group(function () {
         Route::get('/', [CeoDashboardController::class, 'dashboard'])->name('dashboard');
         Route::get('/revenue', [CeoDashboardController::class, 'revenue'])->name('revenue');
@@ -463,6 +512,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::put('/transactions/{transaction}', [AccountingDashboardController::class, 'transactionUpdate'])->name('transactions.update');
         Route::post('/transactions/{transaction}/approve', [AccountingDashboardController::class, 'transactionApprove'])->name('transactions.approve');
         Route::post('/transactions/{transaction}/reject', [AccountingDashboardController::class, 'transactionReject'])->name('transactions.reject');
+        Route::post('/transactions/{transaction}/complete', [AccountingDashboardController::class, 'transactionComplete'])->name('transactions.complete');
 
         // Task Management Routes
         Route::get('/task-management', [TaskManagementController::class, 'index'])->name('task-management.index');

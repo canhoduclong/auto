@@ -29,6 +29,10 @@ Route::middleware(['auth'])->prefix('m')->name('mobile.')->group(function () {
             return redirect()->route('mobile.ceo.home');
         }
 
+        if ($user?->hasRole('director') || $user?->hasRole('Director')) {
+            return redirect()->route('mobile.director.home');
+        }
+
         return redirect()->route('mobile.sale.home');
     })->name('home');
 
@@ -38,6 +42,10 @@ Route::middleware(['auth'])->prefix('m')->name('mobile.')->group(function () {
 
     Route::middleware('role:ceo,admin')->group(function () {
         Route::get('/ceo', fn () => view('mobile.ceo.index'))->name('ceo.home');
+    });
+
+    Route::middleware('role:director,Director,admin')->group(function () {
+        Route::get('/director', fn () => view('mobile.director.index'))->name('director.home');
     });
 
     Route::middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin')->group(function () {

@@ -19,6 +19,8 @@
         </a>
         @if($transaction->status === \App\Models\Transaction::STATUS_APPROVED)
             <span class="badge text-bg-success">Đã duyệt</span>
+        @elseif($transaction->status === \App\Models\Transaction::STATUS_APPROVED_PENDING_COMPLETION)
+            <span class="badge text-bg-info">Đã duyệt - chờ hoàn thành</span>
         @elseif($transaction->status === \App\Models\Transaction::STATUS_REJECTED)
             <span class="badge text-bg-danger">Đã từ chối</span>
         @else
@@ -120,9 +122,17 @@
                             @if($transaction->destination_type === 'internal')
                                 <span class="badge text-bg-info">Nội bộ</span>
                                 {{ $transaction->destinationAccount?->name ?: '-' }}
+                            @elseif($transaction->destination_type === 'cash')
+                                <span class="badge text-bg-light border">Tiền mặt</span>
                             @else
                                 <span class="badge text-bg-secondary">Bên ngoài</span>
                                 {{ $transaction->external_recipient ?: '-' }}
+                                @if($transaction->external_account_number)
+                                    <div class="small text-muted">STK: {{ $transaction->external_account_number }}</div>
+                                @endif
+                                @if($transaction->external_bank_name)
+                                    <div class="small text-muted">{{ $transaction->external_bank_name }}{{ $transaction->external_bank_branch ? ' - ' . $transaction->external_bank_branch : '' }}</div>
+                                @endif
                             @endif
                         </div>
                     </div>
@@ -180,7 +190,7 @@
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <div>
                             <h5 class="mb-1">Chi tiết nội dung phiếu yêu cầu</h5>
-                            <div class="small text-muted">Kế toán kiểm tra hồ sơ và xác nhận chuyển tiền sau khi Giám đốc duyệt.</div>
+                            <div class="small text-muted">Kế toán xác nhận lần 1 để gửi Director duyệt, sau đó hoàn thành khi đã chuyển tiền thực tế.</div>
                         </div>
                         <span class="badge text-bg-light border">{{ $transaction->request_department ?: $transaction->request_source }}</span>
                     </div>
@@ -242,11 +252,10 @@
         'procurement_manager' => 10,
         'warehouse' => 10,
         'package' => 10,
-        'ceo' => 20,
+        'account' => 10,
+        'accountant' => 10,
+        'accounting' => 10,
         'director' => 20,
-        'account' => 30,
-        'accountant' => 30,
-        'accounting' => 30,
     ];
     $currentApproval = $transaction->approvalSteps
         ->where('status', 'pending')
@@ -255,21 +264,34 @@
     $currentRole = strtolower((string) ($currentApproval?->step?->role_slug ?? ''));
     $accountingRoles = ['account', 'accountant', 'accounting'];
     $isAccountingStep = in_array($currentRole, $accountingRoles, true);
+    $requestedFlow = in_array((string) $transaction->type, ['payment', 'extra_income'], true) ? 'in' : 'out';
+    $availableCategories = ($transactionCategories ?? collect())->where('flow_direction', $requestedFlow)->values();
 @endphp
 <div class="row g-3">
     <div class="col-lg-6">
         <div class="acc-card h-100">
             <div class="card-body">
-                <h6 class="mb-3">{{ $isAccountingStep ? 'Xác nhận đã chuyển tiền' : 'Duyệt giao dịch' }}</h6>
+                <h6 class="mb-3">{{ $isAccountingStep ? 'Xác nhận hồ sơ' : 'Duyệt giao dịch' }}</h6>
                 <form method="POST" action="{{ accounting_route('transactions.approve', $transaction) }}">
                     @csrf
-                    @if($transaction->request_source && $isAccountingStep)
+                    @if($isAccountingStep)
                         <div class="mb-2">
-                            <label class="form-label">{{ $transaction->transactionCategory?->flow_direction === 'in' ? 'Tài khoản nhận tiền' : 'Tài khoản thực hiện/nguồn' }} <span class="text-danger">*</span></label>
+                            <label class="form-label">Danh mục kế toán <span class="text-danger">*</span></label>
+                            <select name="transaction_category_id" class="form-select" required>
+                                <option value="">-- Chọn danh mục --</option>
+                                @foreach($availableCategories as $category)
+                                    <option value="{{ $category->id }}" @selected((string) old('transaction_category_id', $transaction->transaction_category_id) === (string) $category->id)>
+                                        {{ $category->code }} - {{ $category->name }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">{{ $requestedFlow === 'in' ? 'Tài khoản nhận tiền' : 'Tài khoản thực hiện/nguồn' }} <span class="text-danger">*</span></label>
                             <select name="account_id" class="form-select" required>
                                 <option value="">-- Chọn tài khoản --</option>
                                 @foreach($accounts as $account)
-                                    <option value="{{ $account->id }}" @selected((string) old('account_id', $transaction->account_id ?: ($transaction->transactionCategory?->flow_direction === 'in' ? $transaction->destination_account_id : null)) === (string) $account->id)>
+                                    <option value="{{ $account->id }}" @selected((string) old('account_id', $transaction->account_id) === (string) $account->id)>
                                         {{ $account->name }} - {{ $account->type === 'cash' ? 'Tiền mặt' : 'Ngân hàng' }} ({{ number_format((float) $account->balance) }}đ)
                                     </option>
                                 @endforeach
@@ -278,10 +300,10 @@
                     @endif
                     <div class="mb-2">
                         <label class="form-label">Ghi Chú (Tùy chọn)</label>
-                        <textarea name="note" class="form-control" rows="3" placeholder="Ghi chú phê duyệt..."></textarea>
+                        <textarea name="note" class="form-control" rows="3" placeholder="{{ $isAccountingStep ? 'Ghi chú kiểm tra hồ sơ trước khi gửi Director...' : 'Ghi chú phê duyệt...' }}"></textarea>
                     </div>
                     <button type="submit" class="btn btn-success">
-                        <i class="bi bi-check-circle"></i> {{ $isAccountingStep ? 'Xác nhận chuyển tiền' : 'Duyệt' }}
+                        <i class="bi bi-check-circle"></i> {{ $isAccountingStep ? 'Xác nhận gửi Director' : 'Duyệt' }}
                     </button>
                 </form>
             </div>
@@ -299,6 +321,33 @@
                     </div>
                     <button type="submit" class="btn btn-danger" onclick="return confirm('ạn chắc chắn muốn từ chối giao dịch này?')">
                         <i class="bi bi-x-circle"></i> Từ chối
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+@endif
+@if($canComplete ?? false)
+<div class="row g-3 mt-1">
+    <div class="col-lg-6">
+        <div class="acc-card h-100 border-success">
+            <div class="card-body">
+                <h6 class="mb-3">Hoàn thành chuyển tiền</h6>
+                <form method="POST" action="{{ accounting_route('transactions.complete', $transaction) }}">
+                    @csrf
+                    <div class="mb-2 p-2 rounded border bg-light">
+                        <div class="small text-muted">Danh mục kế toán</div>
+                        <div class="fw-semibold">{{ $transaction->transactionCategory?->code }} - {{ $transaction->transactionCategory?->name }}</div>
+                        <div class="small text-muted mt-2">Tài khoản thực hiện</div>
+                        <div class="fw-semibold">{{ $transaction->account?->name ?: 'Chưa chọn' }}</div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Ghi chú thực thi</label>
+                        <textarea name="note" class="form-control" rows="3" placeholder="VD: Đã chuyển khoản mã GD..., đã chi tiền mặt..."></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-success" onclick="return confirm('Xác nhận đã thực thi chuyển tiền thực tế cho phiếu này?')">
+                        <i class="bi bi-check2-circle"></i> Hoàn thành
                     </button>
                 </form>
             </div>

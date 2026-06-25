@@ -112,6 +112,13 @@ class SaleMobileController extends Controller
                 'detail_url' => route('site.orders.show', $order),
                 'edit_url' => route('site.orders.edit', $order),
                 'copy_url' => route('site.orders.copy', $order),
+                'payment_url' => route('orders.complete-payment', $order),
+                'feedback_url' => route('site.orders.show', $order) . '#customer-feedback',
+                'return_url' => route('site.order-returns.create', $order),
+                'adjustment_url' => route('site.order-adjustments.create', $order),
+                'cancel_url' => route('site.orders.cancel', $order),
+                'trash_url' => route('site.orders.trash', $order),
+                'confirm_copy_url' => route('site.orders.confirm-copy', $order),
                 'can_cancel' => $order->canBeCancelled(),
             ];
         });

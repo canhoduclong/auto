@@ -16,6 +16,13 @@ return [
             'route' => 'ceo.dashboard',
             'role_hints' => ['ceo'],
         ],
+        'website_director' => [
+            'label' => 'Website / Director',
+            'description' => 'Dashboard dieu hanh Director.',
+            'platform' => 'website',
+            'route' => 'director.dashboard',
+            'role_hints' => ['director', 'Director'],
+        ],
         'website_accounting' => [
             'label' => 'Website / Accounting',
             'description' => 'Dashboard ke toan.',
@@ -97,6 +104,14 @@ return [
             'route' => 'mobile.ceo.home',
             'role_hints' => ['ceo'],
             'mobile_layout' => 'ceo',
+        ],
+        'my_app_director' => [
+            'label' => 'My_app / Director',
+            'description' => 'Giao dien my_app cho Director.',
+            'platform' => 'my_app',
+            'route' => 'mobile.director.home',
+            'role_hints' => ['director', 'Director'],
+            'mobile_layout' => 'director',
         ],
         'my_app_warehouse' => [
             'label' => 'My_app / Warehouse',
