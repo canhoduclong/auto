@@ -8,6 +8,8 @@ use App\Models\Page;
 use App\Models\Product;
 use App\Models\Category;
 use App\Models\ProductVariant;
+use App\Models\UserProductVariantPreference;
+use App\Support\ProductVariantSorter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Models\Customer;
@@ -707,6 +709,95 @@ class PageController extends Controller
         ]);
 
         return back()->with('success', 'Da dua don hang vao thung rac.');
+    }
+
+    public function myProducts(Request $request)
+    {
+        if (!auth()->check()) {
+            return redirect()->route('login');
+        }
+
+        $user = auth()->user();
+        $keyword = trim((string) $request->input('q', ''));
+        $pinned = $request->input('pinned', 'all');
+        $perPage = max(10, min((int) $request->input('per_page', 25), 100));
+
+        $query = ProductVariant::query()
+            ->with(['product.avatar.media', 'latestPriceRule', 'mediaLink.media'])
+            ->withAvailableStock()
+            ->where('product_variants.status', true)
+            ->whereHas('product', function ($productQuery): void {
+                $productQuery->where('products.status', true);
+            })
+            ->when($keyword !== '', function ($variantQuery) use ($keyword): void {
+                $variantQuery->where(function ($searchQuery) use ($keyword): void {
+                    $searchQuery->where('product_variants.sku', 'like', '%' . $keyword . '%')
+                        ->orWhere('product_variants.name', 'like', '%' . $keyword . '%')
+                        ->orWhere('product_variants.size', 'like', '%' . $keyword . '%')
+                        ->orWhereHas('product', function ($productQuery) use ($keyword): void {
+                            $productQuery->where('name', 'like', '%' . $keyword . '%');
+                        });
+                });
+            });
+
+        ProductVariantSorter::joinProductSort($query, (int) $user->id);
+
+        if ($pinned === 'yes') {
+            $query->whereRaw('COALESCE(user_variant_prefs.is_pinned, 0) = 1');
+        } elseif ($pinned === 'no') {
+            $query->whereRaw('COALESCE(user_variant_prefs.is_pinned, 0) = 0');
+        }
+
+        ProductVariantSorter::applyUserPreferencePrefix($query, (int) $user->id);
+        ProductVariantSorter::applyAdminFallback($query)
+            ->orderByRaw("LOWER(COALESCE(sort_products.name, '')) ASC")
+            ->orderByRaw("LOWER(COALESCE(NULLIF(product_variants.name, ''), product_variants.sku, '')) ASC")
+            ->orderBy('product_variants.id');
+
+        $variants = $query->paginate($perPage)->appends($request->query());
+
+        return view('site.sales.products', [
+            'settings' => $this->settings,
+            'user' => $user,
+            'variants' => $variants,
+            'keyword' => $keyword,
+            'pinned' => $pinned,
+            'perPage' => $perPage,
+        ]);
+    }
+
+    public function updateMyProductPreference(Request $request, ProductVariant $variant)
+    {
+        if (!auth()->check()) {
+            abort(403);
+        }
+
+        $validated = $request->validate([
+            'is_pinned' => ['nullable', 'boolean'],
+            'sort_order' => ['nullable', 'integer', 'min:0', 'max:999999'],
+        ]);
+
+        $preference = UserProductVariantPreference::query()->firstOrNew([
+            'user_id' => (int) auth()->id(),
+            'product_variant_id' => (int) $variant->id,
+        ]);
+
+        if (array_key_exists('is_pinned', $validated)) {
+            $preference->is_pinned = (bool) $validated['is_pinned'];
+        }
+        if (array_key_exists('sort_order', $validated)) {
+            $preference->sort_order = $validated['sort_order'] !== null ? (int) $validated['sort_order'] : null;
+        }
+
+        $preference->save();
+
+        return response()->json([
+            'success' => true,
+            'variant_id' => (int) $variant->id,
+            'is_pinned' => (bool) $preference->is_pinned,
+            'sort_order' => $preference->sort_order,
+            'message' => 'Đã cập nhật thứ tự hiển thị sản phẩm.',
+        ]);
     }
 
     public function storeOrderCustomerFeedback(Request $request, Order $order)
@@ -3980,9 +4071,15 @@ public function apiTruckRoutes(Request $request)
             $newOrder->payment_status = 'unpaid';
             $newOrder->delivery_status = 'not_shipped';
             $newOrder->delivered_at = null;
+            $newOrder->packed_image_path = null;
+            $newOrder->delivered_image_path = null;
+            $newOrder->amount_paid = 0;
+            $newOrder->amount_due = 0;
+            $newOrder->payment_method = null;
             $newOrder->collected_amount = null;
             $newOrder->proof_images = null;
             $newOrder->return_reason = null;
+            $newOrder->shipping_fee_transaction_id = null;
             $newOrder->created_at = now();
             $newOrder->updated_at = now();
             if ($this->hasOrderColumn('copied_from_order_id')) {
@@ -4029,7 +4126,7 @@ public function apiTruckRoutes(Request $request)
 
     private function refreshCopiedOrderPrices(Order $order): void
     {
-        $order->loadMissing(['items.variant.product']);
+        $order->load(['items.variant.product', 'items.variant.latestPriceRule']);
 
         $subtotalAmount = 0.0;
         $itemDiscountTotal = 0.0;
@@ -4042,27 +4139,25 @@ public function apiTruckRoutes(Request $request)
                 continue;
             }
 
-            $currentBasePrice = (float) $item->variant->final_price;
+            $currentBasePrice = (float) ($item->variant->latestPriceRule?->price ?? $item->variant->final_price ?? 0);
             if ($currentBasePrice <= 0) {
                 $currentBasePrice = (float) ($item->base_price ?? $item->price ?? 0);
             }
 
             $quantity = max(0, (float) ($item->quantity ?? 0));
             $pricingFactor = $item->effective_priced_by_kg ? $item->effective_unit_weight : 1;
-            $discountType = strtolower((string) ($item->discount_type ?? 'decrease')) === 'increase'
-                ? 'increase'
-                : 'decrease';
-            $unitDiscount = max(0, (float) ($item->unit_discount ?? 0));
-            $finalUnitPrice = $discountType === 'increase'
-                ? $currentBasePrice + $unitDiscount
-                : max($currentBasePrice - $unitDiscount, 0);
+            $discountType = 'decrease';
+            $unitDiscount = 0.0;
+            $finalUnitPrice = $currentBasePrice;
             $lineSubtotal = round($currentBasePrice * $quantity * $pricingFactor, 2);
-            $lineAdjustment = round(($discountType === 'increase' ? -1 : 1) * $unitDiscount * $quantity * $pricingFactor, 2);
+            $lineAdjustment = 0.0;
             $lineTotal = max(round($finalUnitPrice * $quantity * $pricingFactor, 2), 0);
 
             $item->update([
                 'price' => $finalUnitPrice,
                 'base_price' => $currentBasePrice,
+                'unit_discount' => $unitDiscount,
+                'discount_type' => $discountType,
                 'discount_total' => $lineAdjustment,
                 'total' => $lineTotal,
             ]);
@@ -4072,17 +4167,11 @@ public function apiTruckRoutes(Request $request)
             $itemsTotal += $lineTotal;
         }
 
-        $orderDiscount = max(0, (float) ($order->order_discount ?? 0));
-        $orderDiscountType = strtolower((string) ($order->order_discount_type ?? 'decrease')) === 'increase'
-            ? 'increase'
-            : 'decrease';
-        $orderDiscount = $orderDiscountType === 'decrease'
-            ? min($orderDiscount, $itemsTotal)
-            : $orderDiscount;
-        $orderAdjustment = $orderDiscountType === 'increase' ? -$orderDiscount : $orderDiscount;
+        $orderDiscount = 0.0;
+        $orderDiscountType = 'decrease';
+        $orderAdjustment = 0.0;
         $total = max(round($itemsTotal - $orderAdjustment, 2), 0);
-        $paid = (float) $order->transactions()->where('type', 'payment')->sum('amount')
-            - (float) $order->transactions()->where('type', 'refund')->sum('amount');
+        $paid = 0.0;
 
         $order->update(array_filter([
             'subtotal_amount' => round($subtotalAmount, 2),
@@ -4091,7 +4180,10 @@ public function apiTruckRoutes(Request $request)
             'order_discount' => round($orderDiscount, 2),
             'total_discount' => round($itemDiscountTotal + $orderAdjustment, 2),
             'total' => $total,
+            'amount_paid' => 0,
             'amount_due' => max(round($total - $paid, 2), 0),
+            'payment_status' => 'unpaid',
+            'delivery_status' => 'not_shipped',
         ], fn (string $column): bool => $this->hasOrderColumn($column), ARRAY_FILTER_USE_KEY));
     }
 

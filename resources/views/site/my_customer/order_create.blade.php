@@ -183,6 +183,136 @@
         border-color: #dc3545 !important;
         box-shadow: 0 0 0 .2rem rgba(220,53,69,.15) !important;
     }
+    .variant-picker-empty {
+        padding: 16px;
+        text-align: center;
+        color: #64748b;
+        background: #f8fafc;
+        border: 1px dashed rgba(148, 163, 184, .5);
+        border-radius: 10px;
+    }
+    .variant-picker-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin: 10px 0;
+    }
+    .variant-picker-toolbar #per-page-select {
+        width: 74px;
+    }
+    .variant-picker-list {
+        display: grid;
+        gap: 8px;
+    }
+    .variant-picker-item {
+        display: grid;
+        grid-template-columns: minmax(260px, 1fr) 150px auto;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 10px;
+        border: 1px solid rgba(148, 163, 184, .28);
+        border-radius: 10px;
+        background: #fff;
+    }
+    .variant-picker-main {
+        display: flex;
+        align-items: center;
+        min-width: 0;
+        gap: 9px;
+    }
+    .variant-picker-thumb {
+        width: 42px;
+        height: 42px;
+        border-radius: 8px;
+        object-fit: cover;
+        background: #e2e8f0;
+        border: 1px solid rgba(148, 163, 184, .35);
+        flex: 0 0 auto;
+    }
+    .variant-picker-copy {
+        min-width: 0;
+    }
+    .variant-picker-name {
+        color: #0f172a;
+        font-weight: 800;
+        line-height: 1.2;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .variant-picker-star {
+        color: #f59e0b;
+        margin-right: 3px;
+    }
+    .variant-picker-meta {
+        display: flex;
+        flex-wrap: nowrap;
+        gap: 5px;
+        margin-top: 4px;
+        color: #64748b;
+        font-size: .73rem;
+        overflow: hidden;
+    }
+    .variant-picker-meta span {
+        padding: 2px 6px;
+        border-radius: 999px;
+        background: #f1f5f9;
+        white-space: nowrap;
+    }
+    .variant-picker-stats {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px;
+    }
+    .variant-picker-stats > div {
+        padding: 6px 8px;
+        border-radius: 8px;
+        background: #f8fafc;
+        border: 1px solid rgba(148, 163, 184, .22);
+    }
+    .variant-picker-label {
+        display: block;
+        color: #64748b;
+        font-size: .66rem;
+        line-height: 1;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+    }
+    .variant-picker-stats strong {
+        display: block;
+        color: #0f172a;
+        font-size: .86rem;
+        white-space: nowrap;
+    }
+    .variant-picker-actions {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 6px;
+        flex-wrap: nowrap;
+    }
+    .variant-picker-actions .btn {
+        white-space: nowrap;
+        padding: .25rem .5rem;
+        font-size: .78rem;
+    }
+    @media (max-width: 992px) {
+        .variant-picker-item {
+            grid-template-columns: 1fr;
+            gap: 8px;
+        }
+        .variant-picker-actions {
+            justify-content: flex-start;
+            flex-wrap: wrap;
+        }
+        .variant-picker-name {
+            white-space: normal;
+        }
+        .variant-picker-meta {
+            flex-wrap: wrap;
+        }
+    }
 </style>
 @endpush
 

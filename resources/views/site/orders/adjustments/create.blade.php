@@ -1,14 +1,87 @@
 @extends('layouts.site')
 
+@php
+    use App\Models\Media;
+    use App\Models\Setting;
+
+    $adjustmentBrandName = Setting::get('brand_name', config('app.name', 'Hoàng Long TNT'));
+    $adjustmentSlogan = Setting::get('slogan', 'Chất lượng tạo niềm tin');
+    $adjustmentLogoId = Setting::get('logo');
+    $adjustmentLogo = $adjustmentLogoId ? Media::find($adjustmentLogoId) : null;
+@endphp
+
+@push('styles')
+<style>
+    .adjustment-brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+    }
+    .adjustment-brand-logo {
+        width: 54px;
+        height: 54px;
+        border-radius: 12px;
+        object-fit: contain;
+        background: #fff;
+        border: 1px solid rgba(148, 163, 184, .35);
+        padding: 5px;
+        flex: 0 0 auto;
+    }
+    .adjustment-brand-fallback {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 54px;
+        height: 54px;
+        border-radius: 12px;
+        background: #0f766e;
+        color: #fff;
+        font-weight: 900;
+        flex: 0 0 auto;
+    }
+    .adjustment-brand-title {
+        margin: 0;
+        color: #0f172a;
+        font-size: 1.35rem;
+        font-weight: 900;
+        line-height: 1.2;
+    }
+    .adjustment-brand-slogan {
+        color: #64748b;
+        font-size: .9rem;
+        font-weight: 600;
+    }
+    @media (max-width: 768px) {
+        .adjustment-brand-title {
+            font-size: 1.1rem;
+        }
+        .adjustment-brand-logo,
+        .adjustment-brand-fallback {
+            width: 46px;
+            height: 46px;
+        }
+    }
+</style>
+@endpush
+
 @section('content')
 <section class="py-4">
     <div class="container">
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <div>
-                <h3 class="mb-1">Yeu cau dieu chinh don hang</h3>
-                <div class="text-muted">Don goc: {{ $order->code ?: ('#' . $order->id) }} - {{ $order->customer?->name ?? '-' }}</div>
+            <div class="adjustment-brand">
+                @if($adjustmentLogo)
+                    <img src="{{ asset('storage/' . $adjustmentLogo->file_path) }}" alt="{{ $adjustmentBrandName }}" class="adjustment-brand-logo">
+                @else
+                    <span class="adjustment-brand-fallback">{{ mb_substr($adjustmentBrandName, 0, 2) }}</span>
+                @endif
+                <div>
+                    <div class="adjustment-brand-slogan">{{ $adjustmentSlogan }}</div>
+                    <h3 class="adjustment-brand-title">Yêu cầu điều chỉnh đơn hàng</h3>
+                    <div class="text-muted">Đơn gốc: {{ $order->code ?: ('#' . $order->id) }} - {{ $order->customer?->name ?? '-' }}</div>
+                </div>
             </div>
-            <a href="{{ route('site.orders.show', $order) }}" class="btn btn-outline-secondary btn-sm">Quay lai chi tiet don</a>
+            <a href="{{ route('site.orders.show', $order) }}" class="btn btn-outline-secondary btn-sm">Quay lại chi tiết đơn</a>
         </div>
 
         @if($errors->any())

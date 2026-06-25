@@ -934,6 +934,8 @@ Route::middleware(['auth', 'role:sale,leader,leader_sale,sale_manager,manager,ma
         ->middleware('permission:orders.monitoring');
     Route::get('/my-orders/daily-prices', [PageController::class, 'dailyProductPrices'])->name('pages.my_orders.daily_prices');
     Route::get('/my-orders/daily-inventories', [PageController::class, 'dailyInventories'])->name('pages.my_orders.daily_inventories');
+    Route::get('/my-products', [PageController::class, 'myProducts'])->name('pages.my_products');
+    Route::post('/my-products/{variant}/preference', [PageController::class, 'updateMyProductPreference'])->name('pages.my_products.preference');
     Route::get('/my-orders/customers/ajax', [PageController::class, 'myOrderCustomersAjax'])->name('site.orders.customers.ajax');
     // AJAX: Danh sách biến thể cho đơn hàng (my-orders/{order}/edit)
     Route::get('/my-orders/variants/ajax', [App\Http\Controllers\OrderAjaxController::class, 'variantsAjax'])->name('site.orders.variants.ajax');

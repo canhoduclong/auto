@@ -364,6 +364,9 @@
                         <li><a href="{{ route('pages.my_order_drafts') }}" class="d-block py-1"><i class="bi bi-file-earmark-text me-1"></i> Đơn nháp</a></li>
                     @endif
                     <li><a href="{{ route('pages.my_orders') }}" class="d-block py-1"><i class="bi bi-bag-check me-1"></i> {{ __('site.my_orders') }}</a></li>
+                    @if(Auth::user()->isSalesFlowRole())
+                        <li><a href="{{ route('pages.my_products') }}" class="d-block py-1"><i class="bi bi-box-seam me-1"></i> Sản phẩm</a></li>
+                    @endif
                     @if($offcanvasCanViewMonitoring)
                         <li><a href="{{ route('pages.my_orders.monitoring') }}" class="d-block py-1"><i class="bi bi-activity me-1"></i> Theo dõi đơn hàng</a></li>
                     @endif
@@ -610,6 +613,9 @@
                                         </a>
                                         <a class="dropdown-item" href="{{ route('pages.my_orders') }}">
                                             <i class="bi bi-bag-check"></i> {{ __('site.my_orders') }}
+                                        </a>
+                                        <a class="dropdown-item" href="{{ route('pages.my_products') }}">
+                                            <i class="bi bi-box-seam"></i> Sản phẩm
                                         </a>
                                         @endif
                                         @php

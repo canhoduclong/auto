@@ -191,6 +191,115 @@
         border-color: #dc3545 !important;
         box-shadow: 0 0 0 .2rem rgba(220,53,69,.15) !important;
     }
+    .variant-picker-empty {
+        padding: 22px;
+        text-align: center;
+        color: #64748b;
+        background: #f8fafc;
+        border: 1px dashed rgba(148, 163, 184, .5);
+        border-radius: 12px;
+    }
+    .variant-picker-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin: 12px 0;
+    }
+    .variant-picker-toolbar #per-page-select {
+        width: 78px;
+    }
+    .variant-picker-list {
+        display: grid;
+        gap: 10px;
+    }
+    .variant-picker-item {
+        display: grid;
+        grid-template-columns: minmax(280px, 1fr) 180px auto;
+        align-items: center;
+        gap: 14px;
+        padding: 12px;
+        border: 1px solid rgba(148, 163, 184, .28);
+        border-radius: 12px;
+        background: #fff;
+        box-shadow: 0 8px 22px rgba(15, 23, 42, .04);
+    }
+    .variant-picker-main {
+        display: flex;
+        align-items: center;
+        min-width: 0;
+        gap: 12px;
+    }
+    .variant-picker-thumb {
+        width: 58px;
+        height: 58px;
+        border-radius: 10px;
+        object-fit: cover;
+        background: #e2e8f0;
+        border: 1px solid rgba(148, 163, 184, .35);
+        flex: 0 0 auto;
+    }
+    .variant-picker-copy {
+        min-width: 0;
+    }
+    .variant-picker-name {
+        color: #0f172a;
+        font-weight: 900;
+        line-height: 1.25;
+    }
+    .variant-picker-star {
+        color: #f59e0b;
+        margin-right: 4px;
+    }
+    .variant-picker-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 5px;
+        color: #64748b;
+        font-size: .78rem;
+    }
+    .variant-picker-meta span {
+        padding: 3px 7px;
+        border-radius: 999px;
+        background: #f1f5f9;
+    }
+    .variant-picker-stats {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+    }
+    .variant-picker-stats > div {
+        padding: 8px 10px;
+        border-radius: 10px;
+        background: #f8fafc;
+        border: 1px solid rgba(148, 163, 184, .22);
+    }
+    .variant-picker-label {
+        display: block;
+        color: #64748b;
+        font-size: .72rem;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+    }
+    .variant-picker-stats strong {
+        color: #0f172a;
+    }
+    .variant-picker-actions {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    @media (max-width: 992px) {
+        .variant-picker-item {
+            grid-template-columns: 1fr;
+        }
+        .variant-picker-actions {
+            justify-content: flex-start;
+        }
+    }
 </style>
 @endpush
 
@@ -574,7 +683,9 @@ document.addEventListener('DOMContentLoaded', function () {
             // Gọi API /my-orders/variants/ajax, không truyền keyword, phân trang như search
             fetchVariantData(variantSearchButton.dataset.url, {
                 page: 1,
-                per_page: currentVariantSearchPerPage
+                per_page: currentVariantSearchPerPage,
+                show_all: 1,
+                exclude_ids: getCartVariantIds()
             });
             if (variantSearchInput) variantSearchInput.value = '';
         });
@@ -751,6 +862,7 @@ document.addEventListener('DOMContentLoaded', function () {
     let searchTimeout = null;
     let currentVariantSearchPage = 1;
     let currentVariantSearchPerPage = 5;
+    let currentVariantShowAll = false;
 
     function formatNumber(num) {
         return new Intl.NumberFormat('vi-VN').format(num);
@@ -916,6 +1028,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function fetchVariantData(url, data) {
         currentVariantSearchPage = Number(data.page || 1);
         currentVariantSearchPerPage = Number(data.per_page || currentVariantSearchPerPage || 5);
+        currentVariantShowAll = data.show_all === true || data.show_all === 1 || data.show_all === '1';
 
         const query = new URLSearchParams(data).toString();
         variantSearchResults.innerHTML = '<div class="text-center text-muted py-3">Đang tải...</div>';
@@ -934,17 +1047,33 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function performVariantSearch(page = 1) {
         const term = (variantSearchInput.value || '').trim();
+        currentVariantShowAll = false;
         if (term.length < 2) {
             variantSearchResults.innerHTML = '';
             return;
         }
 
-        fetchVariantData('{{ route('orders.ajax_variant_search') }}', {
+        fetchVariantData(variantSearchButton.dataset.url, {
             page: page,
             search: term,
             per_page: currentVariantSearchPerPage,
             exclude_ids: getCartVariantIds()
         });
+    }
+
+    function refreshVariantResults(page = currentVariantSearchPage) {
+        const term = (variantSearchInput.value || '').trim();
+        if (currentVariantShowAll || term.length < 2) {
+            fetchVariantData(variantSearchButton.dataset.url, {
+                page: page,
+                per_page: currentVariantSearchPerPage,
+                show_all: 1,
+                exclude_ids: getCartVariantIds()
+            });
+            return;
+        }
+
+        performVariantSearch(page);
     }
 
     variantSearchInput.addEventListener('input', function () {
@@ -1058,10 +1187,13 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         const parsedUrl = new URL(url, window.location.origin);
-        fetchVariantData('{{ route('orders.ajax_variant_search') }}', {
+        const search = parsedUrl.searchParams.get('search') || (variantSearchInput.value || '').trim();
+        const shouldShowAll = currentVariantShowAll || search.length < 2;
+        fetchVariantData(variantSearchButton.dataset.url, {
             page: parsedUrl.searchParams.get('page') || currentVariantSearchPage,
-            search: parsedUrl.searchParams.get('search') || (variantSearchInput.value || '').trim(),
+            search: search,
             per_page: parsedUrl.searchParams.get('per_page') || currentVariantSearchPerPage,
+            show_all: shouldShowAll ? 1 : 0,
             exclude_ids: getCartVariantIds()
         });
     });
@@ -1072,7 +1204,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         currentVariantSearchPerPage = Number(event.target.value || 5);
-        performVariantSearch(1);
+        refreshVariantResults(1);
     });
 
     cartContainer.addEventListener('click', function (event) {

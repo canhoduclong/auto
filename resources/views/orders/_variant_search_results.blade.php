@@ -1,13 +1,13 @@
 @if($variants->isEmpty())
-    <p class="text-center p-3">{{ __('orders.empty.no_products_found') }}</p>
+    <div class="variant-picker-empty">{{ __('orders.empty.no_products_found') }}</div>
 @else
-    <div class="d-flex justify-content-between align-items-center mt-2">
-        <p class="text-muted mb-0">
+    <div class="variant-picker-toolbar">
+        <p class="text-muted mb-0 small">
             {{ __('orders.variant_search.showing', ['from' => $variants->firstItem(), 'to' => $variants->lastItem(), 'total' => $variants->total()]) }}
         </p>
-        <div class="d-flex align-items-center">
-            <label for="per-page-select" class="form-label me-2 mb-0">{{ __('orders.variant_search.per_page') }}:</label>
-            <select class="form-select form-select-sm" id="per-page-select" style="width: auto;">
+        <div class="d-flex align-items-center gap-2">
+            <label for="per-page-select" class="form-label mb-0 small text-muted">{{ __('orders.variant_search.per_page') }}</label>
+            <select class="form-select form-select-sm" id="per-page-select">
                 <option value="5" {{ $variants->perPage() == 5 ? 'selected' : '' }}>5</option>
                 <option value="10" {{ $variants->perPage() == 10 ? 'selected' : '' }}>10</option>
                 <option value="25" {{ $variants->perPage() == 25 ? 'selected' : '' }}>25</option>
@@ -15,7 +15,7 @@
             </select>
         </div>
     </div>
-    <ul class="list-group mt-2">
+    <div class="variant-picker-list">
         @foreach($variants as $variant)
             @php
                 $unitValue = (string) ($variant->product->unit ?? 'cai');
@@ -41,48 +41,66 @@
                 if ($isPricedByKg) {
                     $weightUnitLabel = 'Kg';
                 }
+                $price = (float) ($variant->latestPriceRule?->price ?? $variant->final_price ?? 0);
+                $minPrice = (float) ($variant->latestPriceRule?->min_price ?? 0);
             @endphp
-            <li class="list-group-item d-flex justify-content-between align-items-center">
-                <div class="d-flex align-items-center">
-                    @php
-                        $imageUrl = 'https://via.placeholder.com/60'; // Default placeholder
-                        if ($variant->media) {
-                            $imageUrl = asset('storage/' . $variant->media->file_path);
-                        } elseif ($variant->product->avatar && $variant->product->avatar->media) {
-                            $imageUrl = asset('storage/' . $variant->product->avatar->media->file_path);
-                        }
-                    @endphp
-                    <img src="{{ $imageUrl }}" alt="{{ $variant->product->name }}" width="60" class="me-3 rounded">
-                    <div>
-                        <h6 class="my-0">
+            @php
+                $imageUrl = 'https://via.placeholder.com/72';
+                if ($variant->media) {
+                    $imageUrl = asset('storage/' . $variant->media->file_path);
+                } elseif ($variant->product?->avatar?->media) {
+                    $imageUrl = asset('storage/' . $variant->product->avatar->media->file_path);
+                }
+            @endphp
+            <div class="variant-picker-item">
+                <div class="variant-picker-main">
+                    <img src="{{ $imageUrl }}" alt="{{ $variant->product?->name ?? $variant->sku }}" class="variant-picker-thumb">
+                    <div class="variant-picker-copy">
+                        <div class="variant-picker-name">
                             @if($variant->is_pinned)
-                                <span class="text-warning me-1">★</span>
+                                <span class="variant-picker-star">★</span>
                             @endif
-                            {{ $variant->product->name }}
-                        </h6>
-                        <small class="text-muted">
-                            SKU: {{ $variant->sku }} | ĐVT: {{ $variant->product->unit_label ?? 'Cái' }} | {{ __('orders.labels.unit_price') }}: {{ number_format($variant->latestPriceRule?->price ?? 0) }} | {{ __('orders.labels.stock') }}: {{ number_format((float) $variant->available_stock, 0, ',', '.') }}
+                            {{ $variant->product?->name ?? 'Sản phẩm' }}
+                        </div>
+                        <div class="variant-picker-meta">
+                            <span>SKU {{ $variant->sku ?: '--' }}</span>
+                            @if($variant->size)
+                                <span>Size {{ $variant->size }}</span>
+                            @endif
+                            <span>{{ $variant->product->unit_label ?? 'Cái' }}</span>
                             @if($variant->user_sort_order !== null)
-                                | Thứ tự riêng: {{ $variant->user_sort_order }}
+                                <span>Thứ tự {{ $variant->user_sort_order }}</span>
                             @endif
-                        </small>
+                        </div>
                     </div>
                 </div>
-                <div class="d-flex align-items-center gap-1">
+
+                <div class="variant-picker-stats">
+                    <div>
+                        <span class="variant-picker-label">Giá bán</span>
+                        <strong>{{ number_format($price, 0, ',', '.') }}đ</strong>
+                    </div>
+                    <div>
+                        <span class="variant-picker-label">Tồn</span>
+                        <strong>{{ number_format((float) $variant->available_stock, 0, ',', '.') }}</strong>
+                    </div>
+                </div>
+
+                <div class="variant-picker-actions">
                     <button
                         type="button"
-                        class="btn btn-sm {{ $variant->is_pinned ? 'btn-warning' : 'btn-outline-warning' }} js-variant-pin"
+                        class="btn btn-sm {{ $variant->is_pinned ? 'btn-warning' : 'btn-outline-warning' }}"
                         data-variant-id="{{ $variant->id }}"
                         data-pinned="{{ $variant->is_pinned ? '1' : '0' }}"
-                        onclick="fetch('{{ route('orders.variant_preference', $variant) }}', {method: 'POST', headers: {'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]')?.content || '{{ csrf_token() }}'}, body: JSON.stringify({is_pinned: {{ $variant->is_pinned ? 'false' : 'true' }}})}).then(() => this.closest('.list-group-item')?.remove())">
+                        onclick="fetch('{{ route('orders.variant_preference', $variant) }}', {method: 'POST', headers: {'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]')?.content || '{{ csrf_token() }}'}, body: JSON.stringify({is_pinned: {{ $variant->is_pinned ? 'false' : 'true' }}})}).then(() => this.closest('.variant-picker-item')?.remove())">
                         {{ $variant->is_pinned ? 'Bỏ ghim' : 'Ghim' }}
                     </button>
                     <button
                         type="button"
-                        class="btn btn-sm btn-outline-secondary js-variant-sort"
+                        class="btn btn-sm btn-outline-secondary"
                         data-variant-id="{{ $variant->id }}"
                         data-sort-order="{{ $variant->user_sort_order ?? '' }}"
-                        onclick="const value = window.prompt('Nhập thứ tự riêng (số nhỏ hiển thị trước):', this.dataset.sortOrder || ''); if (value !== null) fetch('{{ route('orders.variant_preference', $variant) }}', {method: 'POST', headers: {'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]')?.content || '{{ csrf_token() }}'}, body: JSON.stringify({sort_order: Math.max(0, parseInt(value || '0', 10))})}).then(() => this.closest('.list-group-item')?.remove())">
+                        onclick="const value = window.prompt('Nhập thứ tự riêng (số nhỏ hiển thị trước):', this.dataset.sortOrder || ''); if (value !== null) fetch('{{ route('orders.variant_preference', $variant) }}', {method: 'POST', headers: {'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]')?.content || '{{ csrf_token() }}'}, body: JSON.stringify({sort_order: value === '' ? null : Math.max(0, parseInt(value || '0', 10))})}).then(() => this.closest('.variant-picker-item')?.remove())">
                         Thứ tự
                     </button>
                     <a
@@ -92,8 +110,8 @@
                         data-variant-name="{{ $variant->product->name }}"
                         data-variant-sku="{{ $variant->sku }}"
                         data-variant-size="{{ $variant->size ?: $variant->name ?? '' }}"
-                        data-variant-price="{{ $variant->latestPriceRule?->price ?? 0 }}"
-                        data-variant-min-price="{{ $variant->latestPriceRule?->min_price ?? 0 }}"
+                        data-variant-price="{{ $price }}"
+                        data-variant-min-price="{{ $minPrice }}"
                         data-variant-stock="{{ $variant->available_stock }}"
                         data-variant-unit="{{ $unitValue }}"
                         data-variant-unit-label="{{ $variant->product->unit_label ?? 'Cái' }}"
@@ -104,9 +122,9 @@
                         {{ __('inventory.buttons.add_item') }}
                     </a>
                 </div>
-            </li>
+            </div>
         @endforeach
-    </ul>
+    </div>
 
     <div class="d-flex justify-content-center mt-3">
         {{ $variants->appends(request()->query())->links() }}
