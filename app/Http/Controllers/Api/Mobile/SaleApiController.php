@@ -901,7 +901,10 @@ class SaleApiController extends BaseApiController
 
     private function bindWebAuth(Request $request): void
     {
-        Auth::setUser($request->user());
+        $user = $request->user();
+        Auth::setUser($user);
+        Auth::guard('web')->setUser($user);
+        $request->setUserResolver(fn () => $user);
         $request->headers->set('Accept', 'application/json');
         $request->headers->set('X-Requested-With', 'XMLHttpRequest');
     }

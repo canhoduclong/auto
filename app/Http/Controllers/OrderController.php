@@ -301,9 +301,9 @@ class OrderController extends Controller
         $query = ProductVariant::query()
             ->withAvailableStock()
             ->with(['product.avatar.media', 'latestPriceRule', 'mediaLink.media'])
-            ->where('status', true)
+            ->where('product_variants.status', true)
             ->whereHas('product', function ($productQuery) {
-                $productQuery->where('status', true);
+                $productQuery->where('products.status', true);
             });
 
         if (!$request->boolean('allow_backorder')) {
@@ -321,9 +321,16 @@ class OrderController extends Controller
             });
         }
 
-        // Exclude variants that are already in the cart
-        if ($request->has('exclude_ids') && is_array($request->input('exclude_ids'))) {
-            $query->whereNotIn('product_variants.id', $request->input('exclude_ids'));
+        // Exclude variants that are already in the cart.
+        $excludeIds = $request->input('exclude_ids', []);
+        if (is_string($excludeIds)) {
+            $excludeIds = array_filter(explode(',', $excludeIds));
+        }
+        if (is_array($excludeIds) && !empty($excludeIds)) {
+            $excludeIds = array_values(array_filter(array_map('intval', $excludeIds)));
+            if (!empty($excludeIds)) {
+                $query->whereNotIn('product_variants.id', $excludeIds);
+            }
         }
 
         $sortBy = (string) $request->input('sort_by', 'preferred');

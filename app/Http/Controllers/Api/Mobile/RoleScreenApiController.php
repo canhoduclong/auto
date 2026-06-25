@@ -36,6 +36,7 @@ class RoleScreenApiController extends BaseApiController
             'sale' => $this->sale($request, $key),
             'accounting' => $this->accounting($request, $key),
             'ceo' => $this->ceo($request, $key),
+            'director' => $this->director($request, $key),
             'procurement' => $this->procurement($request, $key),
             default => $this->fail('Layout khong duoc ho tro.', 404),
         };
@@ -285,6 +286,46 @@ class RoleScreenApiController extends BaseApiController
                 ['label' => 'Dang giao', 'value' => Order::query()->where('status', Order::STATUS_DELIVERING)->count()],
             ],
             'items' => $todayOrders->values(),
+        ]);
+    }
+
+    private function director(Request $request, string $key): JsonResponse
+    {
+        if ($key !== 'finance_requests') {
+            return $this->ceo($request, $key);
+        }
+
+        $transactions = Transaction::query()
+            ->with(['submitter:id,name', 'account:id,name', 'transactionCategory:id,name,flow_direction'])
+            ->whereNotNull('request_form_type')
+            ->whereIn('status', [
+                Transaction::STATUS_PENDING_APPROVAL,
+            ])
+            ->latest('created_at')
+            ->limit(100)
+            ->get()
+            ->filter(function (Transaction $transaction) use ($request): bool {
+                app(\App\Services\ApprovalService::class)->ensureTransactionApprovalFlow($transaction);
+
+                return $request->user()?->hasRole('admin')
+                    || app(\App\Services\ApprovalService::class)->canApproveTransactionStep($transaction, $request->user());
+            })
+            ->values();
+
+        return $this->ok([
+            'cards' => [
+                ['label' => 'Chờ Director duyệt', 'value' => $transactions->count()],
+                ['label' => 'Tổng giá trị', 'value' => (float) $transactions->sum('amount')],
+            ],
+            'items' => $transactions->map(fn (Transaction $transaction) => [
+                'id' => (int) $transaction->id,
+                'title' => (string) ($transaction->request_title ?: $transaction->transactionCategory?->name ?: 'Phiếu yêu cầu'),
+                'subtitle' => trim(($transaction->submitter?->name ?: 'Người gửi') . ' • ' . ($transaction->request_department ?: 'Bộ phận')),
+                'status' => 'Chờ Director duyệt',
+                'amount' => (float) $transaction->amount,
+                'created_at' => optional($transaction->created_at)->toIso8601String(),
+                'note' => $transaction->note,
+            ])->values(),
         ]);
     }
 
@@ -873,6 +914,7 @@ class RoleScreenApiController extends BaseApiController
             'sale' => $user->hasRole('sale') || $user->hasRole('leader') || $user->hasRole('leader_sale') || $user->hasRole('sale_manager') || $user->hasRole('manager') || $user->hasRole('manager_sale') || $user->hasRole('admin'),
             'accounting' => $user->hasRole('account') || $user->hasRole('accounting') || $user->hasRole('accountant') || $user->hasRole('admin'),
             'ceo' => $user->hasRole('ceo') || $user->hasRole('admin'),
+            'director' => $user->hasRole('director') || $user->hasRole('Director') || $user->hasRole('admin'),
             'manager_shipper' => $user->hasRole('manager_shipper') || $user->hasRole('admin'),
             'shipper' => $user->hasRole('shipper') || $user->hasRole('ship') || $user->hasRole('manager_shipper') || $user->hasRole('admin'),
             'procurement' => $user->hasRole('procurement_manager') || $user->hasRole('admin'),

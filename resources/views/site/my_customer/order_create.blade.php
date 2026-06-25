@@ -456,6 +456,7 @@ document.addEventListener('DOMContentLoaded', function () {
     let searchTimeout = null;
     let currentVariantSearchPage = 1;
     let currentVariantSearchPerPage = 5;
+    let currentVariantShowAll = false;
 
     function formatNumber(num) {
         return new Intl.NumberFormat('vi-VN').format(num);
@@ -636,6 +637,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function fetchVariantData(url, data) {
         currentVariantSearchPage = Number(data.page || 1);
         currentVariantSearchPerPage = Number(data.per_page || currentVariantSearchPerPage || 5);
+        currentVariantShowAll = data.allow_backorder === true || data.allow_backorder === 1 || data.allow_backorder === '1';
 
         const query = new URLSearchParams(data).toString();
         variantSearchResults.innerHTML = '<div class="text-center text-muted py-3">Đang tải...</div>';
@@ -654,6 +656,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function performVariantSearch(page = 1) {
         const term = (variantSearchInput.value || '').trim();
+        currentVariantShowAll = false;
         if (term.length < 2) {
             variantSearchResults.innerHTML = '';
             return;
@@ -666,6 +669,21 @@ document.addEventListener('DOMContentLoaded', function () {
             allow_backorder: 1,
             exclude_ids: getCartVariantIds()
         });
+    }
+
+    function refreshVariantResults(page = currentVariantSearchPage) {
+        const term = (variantSearchInput.value || '').trim();
+        if (currentVariantShowAll || term.length < 2) {
+            fetchVariantData('{{ route('orders.ajax_variant_search') }}', {
+                page: page,
+                per_page: currentVariantSearchPerPage,
+                allow_backorder: 1,
+                exclude_ids: getCartVariantIds()
+            });
+            return;
+        }
+
+        performVariantSearch(page);
     }
 
     if (variantShowAllButton) {
@@ -800,10 +818,13 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         const parsedUrl = new URL(url, window.location.origin);
+        const search = parsedUrl.searchParams.get('search') || (variantSearchInput.value || '').trim();
+        const shouldShowAll = currentVariantShowAll || search.length < 2;
         fetchVariantData('{{ route('orders.ajax_variant_search') }}', {
             page: parsedUrl.searchParams.get('page') || currentVariantSearchPage,
-            search: parsedUrl.searchParams.get('search') || (variantSearchInput.value || '').trim(),
+            search: search,
             per_page: parsedUrl.searchParams.get('per_page') || currentVariantSearchPerPage,
+            allow_backorder: shouldShowAll ? 1 : 0,
             exclude_ids: getCartVariantIds()
         });
     });
@@ -814,7 +835,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         currentVariantSearchPerPage = Number(event.target.value || 5);
-        performVariantSearch(1);
+        refreshVariantResults(1);
     });
 
     cartContainer.addEventListener('click', function (event) {

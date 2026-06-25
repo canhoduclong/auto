@@ -372,6 +372,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const tabPanels = document.querySelectorAll('[data-sale-panel]');
     let productRows = [];
     let selectedItems = [];
+    const orderActionRows = new Map();
 
     const formatMoney = (value) => new Intl.NumberFormat('vi-VN').format(Number(value || 0)) + 'đ';
     const formatCardMoney = (value) => new Intl.NumberFormat('vi-VN').format(Number(value || 0)) + ' đ';
@@ -407,6 +408,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function orderCard(item) {
+        orderActionRows.set(String(item.id), item);
         const items = Array.isArray(item.items) ? item.items : [];
         const firstItem = items[0] || {};
         const itemRows = items.length
@@ -449,7 +451,7 @@ document.addEventListener('DOMContentLoaded', function () {
             ${moreText}
             <div class="sale-order-total">${formatCardMoney(item.total)}</div>
             <div class="m-card-action-bottom">
-                <button type="button" class="m-btn m-btn-outline js-sale-actions" data-order='${escapeHtml(JSON.stringify(item))}' style="width:auto;padding:9px 14px;">Chức năng</button>
+                <button type="button" class="m-btn m-btn-outline js-sale-actions" data-order-id="${escapeHtml(item.id)}" style="width:auto;padding:9px 14px;">Chức năng</button>
             </div>
         </div>`;
     }
@@ -544,6 +546,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const res = await fetch(`{{ route('mobile.api.sale.orders') }}?status=${status}`);
         const payload = await res.json();
         const rows = payload.data || [];
+        orderActionRows.clear();
         orderList.innerHTML = rows.map(orderCard).join('') || '<div class="m-card"><span class="m-label">Chưa có đơn hàng.</span></div>';
     }
 
@@ -556,6 +559,21 @@ document.addEventListener('DOMContentLoaded', function () {
     tabButtons.forEach((button) => button.addEventListener('click', () => switchTab(button.dataset.saleTab)));
 
     orderStatus.addEventListener('change', loadOrders);
+    orderList.addEventListener('click', function (event) {
+        const button = event.target.closest('.js-sale-actions');
+        if (!button) return;
+        const item = orderActionRows.get(String(button.dataset.orderId || ''));
+        if (!item) return;
+        document.getElementById('saleActionOverlay')?.remove();
+        document.body.insertAdjacentHTML('beforeend', actionSheet(item));
+    });
+    document.addEventListener('click', function (event) {
+        const overlay = event.target.closest('#saleActionOverlay');
+        if (!overlay) return;
+        if (!event.target.closest('.sale-action-sheet')) {
+            overlay.remove();
+        }
+    });
     document.getElementById('toggleCreateOrder').addEventListener('click', function () {
         createBox.style.display = createBox.style.display === 'none' ? 'block' : 'none';
         createOrderMessage.innerHTML = '';

@@ -183,7 +183,7 @@ trait ResolvesMobileRole
                 ['group' => 'Tổng quan', 'key' => 'dashboard', 'label' => 'Director', 'route' => '/director', 'api' => '/screens/director/dashboard', 'icon' => 'query_stats'],
                 ['group' => 'Bán hàng', 'key' => 'daily_sales', 'label' => 'Thống kê bán hàng', 'route' => '/director/daily-sales', 'api' => '/screens/director/daily_sales', 'icon' => 'receipt_long'],
                 ['group' => 'Tài chính', 'key' => 'cashflow', 'label' => 'Thu chi', 'route' => '/director/cashflow', 'api' => '/screens/director/cashflow', 'icon' => 'payments'],
-                ['group' => 'Tài chính', 'key' => 'finance_requests', 'label' => 'Phiếu yêu cầu', 'route' => '/director/requests', 'api' => '/screens/director/finance_requests', 'icon' => 'approval'],
+                ['group' => 'Tài chính', 'key' => 'finance_requests', 'label' => 'Duyệt phiếu yêu cầu', 'route' => '/director/requests', 'api' => '/screens/director/finance_requests', 'icon' => 'approval'],
                 ['group' => 'Tài chính', 'key' => 'financial_reports', 'label' => 'Báo cáo tài chính', 'route' => '/director/financial-reports', 'api' => '/screens/director/financial_reports', 'icon' => 'account_balance'],
                 ['group' => 'Hoạt động', 'key' => 'debts', 'label' => 'Công nợ', 'route' => '/director/debts', 'api' => '/screens/director/debts', 'icon' => 'money_off'],
                 ['group' => 'Hoạt động', 'key' => 'inventory', 'label' => 'Tồn kho', 'route' => '/director/warehouse', 'api' => '/screens/director/inventory', 'icon' => 'inventory'],

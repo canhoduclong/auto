@@ -305,10 +305,10 @@
             <a href="{{ route('director.revenue') }}" class="director-nav-link {{ request()->routeIs('director.revenue') ? 'active' : '' }}">
                 <i class="bi bi-currency-dollar"></i> Doanh thu
             </a>
-            <a href="{{ route('director.cashflow') }}" class="director-nav-link {{ request()->routeIs('director.cashflow', 'director.cashflow.show', 'director.transactions.*') ? 'active' : '' }}">
+            <a href="{{ route('director.cashflow') }}" class="director-nav-link {{ request()->routeIs('director.cashflow') && request('focus') !== 'requests' ? 'active' : '' }}">
                 <i class="bi bi-arrow-left-right"></i> Thu chi
             </a>
-            <a href="{{ route('director.cashflow') }}" class="director-nav-link {{ request()->routeIs('director.cashflow', 'director.cashflow.show', 'director.transactions.*') ? 'active' : '' }}">
+            <a href="{{ route('director.cashflow', ['focus' => 'requests']) }}" class="director-nav-link {{ (request()->routeIs('director.cashflow') && request('focus') === 'requests') || request()->routeIs('director.cashflow.show', 'director.transactions.*') ? 'active' : '' }}">
                 <i class="bi bi-check2-square"></i> Duyệt phiếu yêu cầu
             </a>
             <a href="{{ route('director.financial-reports') }}" class="director-nav-link {{ request()->routeIs('director.financial-reports') ? 'active' : '' }}">

@@ -1,8 +1,8 @@
 {
-  "version": "1.0.33",
-  "version_code": 34,
+  "version": "1.0.34",
+  "version_code": 35,
   "apk_url": "https://hoanglongtnt.com/app-update/app-release.apk",
   "ios_url": "",
   "force_update": false,
-  "message": "Bản cập nhật 1.0.33: cập nhật menu điều hướng mobile theo layout, cải tiến chức năng đơn hàng sale và sắp xếp sản phẩm."
+  "message": "Bản cập nhật 1.0.34: sửa lỗi lưu chỉnh sửa đơn/khách hàng trong my_app, cải thiện thông báo lỗi quyền truy cập."
 }

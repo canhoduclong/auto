@@ -583,6 +583,13 @@ class AccountingDashboardController extends Controller
             }
         });
         $pendingRequests->loadMissing('approvalSteps.step:id,role_slug,step_order');
+        if (str_starts_with((string) $request->route()?->getName(), 'director.')) {
+            $user = $request->user();
+            $pendingRequests = $pendingRequests
+                ->filter(fn (Transaction $transaction) => $transaction->status === Transaction::STATUS_PENDING_APPROVAL
+                    && ($user?->hasRole('admin') || $approvalService->canApproveTransactionStep($transaction, $user)))
+                ->values();
+        }
 
         $transactions = (clone $baseQuery)
             ->with([
