@@ -256,6 +256,7 @@
         <div style="height:8px"></div>
         <div class="m-row">
             <select class="m-select" id="productSort">
+                <option value="preferred">Đã ghim / thứ tự riêng</option>
                 <option value="stock">Còn hàng nhiều trước</option>
                 <option value="name">Tên A-Z</option>
                 <option value="sku">SKU</option>
@@ -271,6 +272,9 @@
         <div style="height:8px"></div>
         <div class="m-row">
             <input class="m-input" id="productQty" type="number" min="1" value="1" style="max-width:110px">
+            <input class="m-input" id="productUserSort" type="number" min="0" placeholder="Thứ tự" style="max-width:96px">
+            <button class="m-btn m-btn-outline" type="button" id="pinProductLine">Ghim</button>
+            <button class="m-btn m-btn-outline" type="button" id="sortProductLine">Lưu thứ tự</button>
             <button class="m-btn m-btn-outline" type="button" id="addProductLine">Thêm</button>
         </div>
         <div id="createOrderItems"></div>
@@ -403,7 +407,18 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function renderProducts(rows) {
         productRows = rows;
-        productSelect.innerHTML = rows.map((item, index) => `<option value="${index}">${escapeHtml(item.name)} - ${formatMoney(item.price)} - tồn ${item.available_stock}</option>`).join('');
+        productSelect.innerHTML = rows.map((item, index) => {
+            const pinned = item.is_pinned ? '★ ' : '';
+            const userOrder = item.user_sort_order !== null && item.user_sort_order !== undefined ? ` #${item.user_sort_order}` : '';
+            return `<option value="${index}">${pinned}${escapeHtml(item.name)}${userOrder} - ${formatMoney(item.price)} - tồn ${item.available_stock}</option>`;
+        }).join('');
+        syncProductPreferenceInputs();
+    }
+
+    function syncProductPreferenceInputs() {
+        const product = productRows[Number(productSelect.value || 0)];
+        document.getElementById('productUserSort').value = product && product.user_sort_order !== null && product.user_sort_order !== undefined ? product.user_sort_order : '';
+        document.getElementById('pinProductLine').textContent = product && product.is_pinned ? 'Bỏ ghim' : 'Ghim';
     }
 
     function renderSelectedItems() {
@@ -437,7 +452,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     async function loadProducts() {
         const q = encodeURIComponent(productSearch.value || '');
-        const sortBy = encodeURIComponent(productSort.value || 'stock');
+        const sortBy = encodeURIComponent(productSort.value || 'preferred');
         const inStock = productInStock.checked ? 1 : 0;
         const res = await fetch(`{{ route('mobile.api.sale.products') }}?q=${q}&sort_by=${sortBy}&in_stock=${inStock}`);
         const payload = await res.json();
@@ -476,6 +491,30 @@ document.addEventListener('DOMContentLoaded', function () {
     });
     productSort.addEventListener('change', loadProducts);
     productInStock.addEventListener('change', loadProducts);
+    productSelect.addEventListener('change', syncProductPreferenceInputs);
+    async function saveProductPreference(data) {
+        const product = productRows[Number(productSelect.value || 0)];
+        if (!product) return;
+        await fetch(`{{ url('/mobile/api/sale/products') }}/${product.id}/preference`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '{{ csrf_token() }}',
+            },
+            body: JSON.stringify(data),
+        });
+        await loadProducts();
+    }
+    document.getElementById('pinProductLine').addEventListener('click', function () {
+        const product = productRows[Number(productSelect.value || 0)];
+        if (!product) return;
+        saveProductPreference({is_pinned: !product.is_pinned});
+    });
+    document.getElementById('sortProductLine').addEventListener('click', function () {
+        const sortOrder = Number(document.getElementById('productUserSort').value || 0);
+        saveProductPreference({sort_order: Math.max(0, sortOrder)});
+    });
     document.getElementById('addProductLine').addEventListener('click', function () {
         const product = productRows[Number(productSelect.value || 0)];
         if (!product) return;

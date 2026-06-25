@@ -18,8 +18,16 @@
             <input type="text" name="sku" class="form-control" required>
         </div>
         <div class="mb-3">
+            <label class="form-label">Tên biến thể</label>
+            <input type="text" name="name" class="form-control" value="{{ old('name') }}">
+        </div>
+        <div class="mb-3">
             <label class="form-label">Size</label>
             <input type="text" name="size" class="form-control">
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Thứ tự hiển thị</label>
+            <input type="number" name="sort_order" class="form-control" min="0" step="1" value="{{ old('sort_order', 0) }}">
         </div>
         <div class="mb-3">
             <label class="form-label">Kg quy đổi <span class="text-danger">*</span></label>

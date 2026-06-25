@@ -115,6 +115,11 @@ class User extends Authenticatable
         return $this->hasMany(Product::class);
     }
 
+    public function productVariantPreferences()
+    {
+        return $this->hasMany(UserProductVariantPreference::class);
+    }
+
     public function warehouse()
     {
         return $this->belongsTo(Warehouse::class);

@@ -15,10 +15,12 @@ use App\Models\Team;
 use App\Models\TextOrderDraft;
 use App\Models\TruckRoute;
 use App\Models\TruckStation;
+use App\Models\UserProductVariantPreference;
 use App\Models\Ward;
 use App\Services\ApprovalService;
 use App\Services\CustomerPriorityService;
 use App\Services\ZaloOrderTextParser;
+use App\Support\ProductVariantSorter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -261,29 +263,38 @@ class SaleApiController extends BaseApiController
     public function products(Request $request): JsonResponse
     {
         $this->ensureSaleRole($request);
+        $userId = (int) $request->user()->id;
         $search = trim((string) $request->query('search', ''));
-        $sortBy = (string) $request->query('sort_by', 'stock');
+        $sortBy = (string) $request->query('sort_by', 'preferred');
         $sortDir = strtolower((string) $request->query('sort_dir', 'desc')) === 'asc' ? 'asc' : 'desc';
         $inStock = $request->boolean('in_stock');
         $variants = ProductVariant::query()
-            ->with(['product:id,name,unit,is_priced_by_kg', 'latestPriceRule'])
+            ->with(['product:id,name,unit,is_priced_by_kg,sort_order', 'latestPriceRule'])
             ->withAvailableStock()
             ->when($search !== '', fn ($query) => $query->where(fn ($scope) => $scope
-                ->where('sku', 'like', "%{$search}%")
-                ->orWhere('name', 'like', "%{$search}%")
+                ->where('product_variants.sku', 'like', "%{$search}%")
+                ->orWhere('product_variants.name', 'like', "%{$search}%")
                 ->orWhereHas('product', fn ($product) => $product->where('name', 'like', "%{$search}%"))))
             ->when($inStock, fn ($query) => $query->having('available_stock', '>', 0));
+
+        ProductVariantSorter::joinProductSort($variants, $userId);
+        ProductVariantSorter::applyUserPreferencePrefix($variants, $userId);
 
         match ($sortBy) {
             'name' => $variants
                 ->orderByRaw("LOWER(COALESCE(NULLIF(product_variants.name, ''), product_variants.sku, '')) {$sortDir}")
-                ->orderBy('id', 'desc'),
-            'sku' => $variants->orderBy('sku', $sortDir)->orderBy('id', 'desc'),
-            'newest' => $variants->orderByDesc('id'),
+                ->orderBy('product_variants.id', 'desc'),
+            'sku' => $variants->orderBy('product_variants.sku', $sortDir)->orderBy('product_variants.id', 'desc'),
+            'newest' => $variants->orderByDesc('product_variants.id'),
             default => $variants
-                ->orderByRaw('CASE WHEN available_stock > 0 THEN 0 ELSE 1 END')
-                ->orderBy('available_stock', $sortDir)
-                ->orderByDesc('id'),
+                ->when($sortBy === 'stock', fn ($query) => $query
+                    ->orderByRaw('CASE WHEN available_stock > 0 THEN 0 ELSE 1 END')
+                    ->orderBy('available_stock', $sortDir))
+                ->orderByRaw('COALESCE(sort_products.sort_order, 0) ASC')
+                ->orderByRaw('COALESCE(product_variants.sort_order, 0) ASC')
+                ->orderByRaw("LOWER(COALESCE(sort_products.name, '')) ASC")
+                ->orderByRaw("LOWER(COALESCE(NULLIF(product_variants.name, ''), product_variants.sku, '')) ASC")
+                ->orderBy('product_variants.id'),
         };
 
         $variants = $variants
@@ -300,9 +311,42 @@ class SaleApiController extends BaseApiController
             'available_stock' => (int) ($variant->available_stock ?? 0),
             'is_priced_by_kg' => (bool) ($variant->effective_priced_by_kg ?? false),
             'kg' => (float) ($variant->effective_kg ?? 0),
+            'is_pinned' => (bool) ($variant->is_pinned ?? false),
+            'user_sort_order' => $variant->user_sort_order !== null ? (int) $variant->user_sort_order : null,
+            'sort_order' => (int) ($variant->sort_order ?? 0),
+            'product_sort_order' => (int) ($variant->product?->sort_order ?? 0),
         ]);
 
         return $this->paginated($variants);
+    }
+
+    public function updateProductPreference(Request $request, ProductVariant $variant): JsonResponse
+    {
+        $this->ensureSaleRole($request);
+        $validated = $request->validate([
+            'is_pinned' => ['nullable', 'boolean'],
+            'sort_order' => ['nullable', 'integer', 'min:0', 'max:999999'],
+        ]);
+
+        $preference = UserProductVariantPreference::query()->firstOrNew([
+            'user_id' => (int) $request->user()->id,
+            'product_variant_id' => (int) $variant->id,
+        ]);
+
+        if (array_key_exists('is_pinned', $validated)) {
+            $preference->is_pinned = (bool) $validated['is_pinned'];
+        }
+        if (array_key_exists('sort_order', $validated)) {
+            $preference->sort_order = $validated['sort_order'] !== null ? (int) $validated['sort_order'] : null;
+        }
+
+        $preference->save();
+
+        return $this->ok([
+            'variant_id' => (int) $variant->id,
+            'is_pinned' => (bool) $preference->is_pinned,
+            'sort_order' => $preference->sort_order,
+        ], 'Đã cập nhật sắp xếp sản phẩm.');
     }
 
     public function draftOrders(Request $request): JsonResponse

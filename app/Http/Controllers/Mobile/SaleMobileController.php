@@ -7,6 +7,8 @@ use App\Models\Customer;
 use App\Models\Order;
 use App\Models\OrderHistory;
 use App\Models\ProductVariant;
+use App\Models\UserProductVariantPreference;
+use App\Support\ProductVariantSorter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -120,32 +122,41 @@ class SaleMobileController extends Controller
     public function products(Request $request): JsonResponse
     {
         $search = trim((string) $request->query('q', ''));
-        $sortBy = (string) $request->query('sort_by', 'stock');
+        $userId = (int) $request->user()->id;
+        $sortBy = (string) $request->query('sort_by', 'preferred');
         $sortDir = strtolower((string) $request->query('sort_dir', 'desc')) === 'asc' ? 'asc' : 'desc';
         $inStock = $request->boolean('in_stock');
 
         $query = ProductVariant::query()
-            ->with(['product:id,name,unit,kg,is_priced_by_kg'])
+            ->with(['product:id,name,unit,kg,is_priced_by_kg,sort_order'])
             ->withAvailableStock()
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($subQuery) use ($search) {
-                    $subQuery->where('name', 'like', '%' . $search . '%')
-                        ->orWhere('sku', 'like', '%' . $search . '%')
+                    $subQuery->where('product_variants.name', 'like', '%' . $search . '%')
+                        ->orWhere('product_variants.sku', 'like', '%' . $search . '%')
                         ->orWhereHas('product', fn ($productQuery) => $productQuery->where('name', 'like', '%' . $search . '%'));
                 });
             })
             ->when($inStock, fn ($query) => $query->having('available_stock', '>', 0));
 
+        ProductVariantSorter::joinProductSort($query, $userId);
+        ProductVariantSorter::applyUserPreferencePrefix($query, $userId);
+
         match ($sortBy) {
             'name' => $query
                 ->orderByRaw("LOWER(COALESCE(NULLIF(product_variants.name, ''), product_variants.sku, '')) {$sortDir}")
-                ->orderBy('id', 'desc'),
-            'sku' => $query->orderBy('sku', $sortDir)->orderBy('id', 'desc'),
-            'newest' => $query->orderByDesc('id'),
+                ->orderBy('product_variants.id', 'desc'),
+            'sku' => $query->orderBy('product_variants.sku', $sortDir)->orderBy('product_variants.id', 'desc'),
+            'newest' => $query->orderByDesc('product_variants.id'),
             default => $query
-                ->orderByRaw('CASE WHEN available_stock > 0 THEN 0 ELSE 1 END')
-                ->orderBy('available_stock', $sortDir)
-                ->orderByDesc('id'),
+                ->when($sortBy === 'stock', fn ($sortQuery) => $sortQuery
+                    ->orderByRaw('CASE WHEN available_stock > 0 THEN 0 ELSE 1 END')
+                    ->orderBy('available_stock', $sortDir))
+                ->orderByRaw('COALESCE(sort_products.sort_order, 0) ASC')
+                ->orderByRaw('COALESCE(product_variants.sort_order, 0) ASC')
+                ->orderByRaw("LOWER(COALESCE(sort_products.name, '')) ASC")
+                ->orderByRaw("LOWER(COALESCE(NULLIF(product_variants.name, ''), product_variants.sku, '')) ASC")
+                ->orderBy('product_variants.id'),
         };
 
         $rows = $query
@@ -160,10 +171,44 @@ class SaleMobileController extends Controller
                     'kg' => (float) $variant->effective_kg,
                     'is_priced_by_kg' => (bool) $variant->effective_priced_by_kg,
                     'available_stock' => (int) $variant->available_stock,
+                    'is_pinned' => (bool) ($variant->is_pinned ?? false),
+                    'user_sort_order' => $variant->user_sort_order !== null ? (int) $variant->user_sort_order : null,
+                    'sort_order' => (int) ($variant->sort_order ?? 0),
                 ];
             });
 
         return response()->json(['data' => $rows]);
+    }
+
+    public function updateProductPreference(Request $request, ProductVariant $variant): JsonResponse
+    {
+        $validated = $request->validate([
+            'is_pinned' => ['nullable', 'boolean'],
+            'sort_order' => ['nullable', 'integer', 'min:0', 'max:999999'],
+        ]);
+
+        $preference = UserProductVariantPreference::query()->firstOrNew([
+            'user_id' => (int) $request->user()->id,
+            'product_variant_id' => (int) $variant->id,
+        ]);
+
+        if (array_key_exists('is_pinned', $validated)) {
+            $preference->is_pinned = (bool) $validated['is_pinned'];
+        }
+        if (array_key_exists('sort_order', $validated)) {
+            $preference->sort_order = $validated['sort_order'] !== null ? (int) $validated['sort_order'] : null;
+        }
+
+        $preference->save();
+
+        return response()->json([
+            'data' => [
+                'variant_id' => (int) $variant->id,
+                'is_pinned' => (bool) $preference->is_pinned,
+                'sort_order' => $preference->sort_order,
+            ],
+            'message' => 'Đã cập nhật sắp xếp sản phẩm.',
+        ]);
     }
 
     public function storeOrder(Request $request): JsonResponse

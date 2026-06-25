@@ -15,6 +15,8 @@ use App\Models\ProductVariant;
 use App\Models\Team;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Models\UserProductVariantPreference;
+use App\Support\ProductVariantSorter;
 use App\Models\Setting;
 use App\Services\ApprovalService;
 use App\Services\CustomerPriorityService;
@@ -310,32 +312,69 @@ class OrderController extends Controller
 
         if ($request->has('search') && $request->input('search') != '') {
             $searchTerm = $request->input('search');
-            $query->where('sku', 'like', "%{$searchTerm}%")
-                  ->orWhereHas('product', function ($q) use ($searchTerm) {
-                      $q->where('name', 'like', "%{$searchTerm}%");
-                  });
+            $query->where(function ($searchQuery) use ($searchTerm) {
+                $searchQuery->where('product_variants.sku', 'like', "%{$searchTerm}%")
+                    ->orWhere('product_variants.name', 'like', "%{$searchTerm}%")
+                    ->orWhereHas('product', function ($q) use ($searchTerm) {
+                        $q->where('name', 'like', "%{$searchTerm}%");
+                    });
+            });
         }
 
         // Exclude variants that are already in the cart
         if ($request->has('exclude_ids') && is_array($request->input('exclude_ids'))) {
-            $query->whereNotIn('id', $request->input('exclude_ids'));
+            $query->whereNotIn('product_variants.id', $request->input('exclude_ids'));
         }
 
-        $sortBy = (string) $request->input('sort_by', 'id');
+        $sortBy = (string) $request->input('sort_by', 'preferred');
         $sortDir = strtolower((string) $request->input('sort_dir', 'desc')) === 'asc' ? 'asc' : 'desc';
+        ProductVariantSorter::joinProductSort($query, auth()->id());
+        ProductVariantSorter::applyUserPreferencePrefix($query, auth()->id());
 
         if ($sortBy === 'sku') {
-            $query->orderBy('sku', $sortDir)->orderBy('id', 'desc');
+            $query->orderBy('product_variants.sku', $sortDir)->orderBy('product_variants.id', 'desc');
         } elseif ($sortBy === 'stock') {
-            $query->orderBy('available_stock', $sortDir)->orderBy('id', 'desc');
+            $query->orderBy('available_stock', $sortDir)->orderBy('product_variants.id', 'desc');
         } else {
-            $query->orderBy('id', $sortDir);
+            ProductVariantSorter::applyAdminFallback($query)
+                ->orderByRaw("LOWER(COALESCE(sort_products.name, '')) ASC")
+                ->orderByRaw("LOWER(COALESCE(NULLIF(product_variants.name, ''), product_variants.sku, '')) ASC")
+                ->orderBy('product_variants.id');
         }
 
         $variants = $query->paginate($perPage);
 
         return response()->json([
             'html' => view('orders._variant_search_results', compact('variants'))->render()
+        ]);
+    }
+
+    public function updateVariantPreference(Request $request, ProductVariant $variant)
+    {
+        $validated = $request->validate([
+            'is_pinned' => ['nullable', 'boolean'],
+            'sort_order' => ['nullable', 'integer', 'min:0', 'max:999999'],
+        ]);
+
+        $preference = UserProductVariantPreference::query()->firstOrNew([
+            'user_id' => (int) auth()->id(),
+            'product_variant_id' => (int) $variant->id,
+        ]);
+
+        if (array_key_exists('is_pinned', $validated)) {
+            $preference->is_pinned = (bool) $validated['is_pinned'];
+        }
+        if (array_key_exists('sort_order', $validated)) {
+            $preference->sort_order = $validated['sort_order'] !== null ? (int) $validated['sort_order'] : null;
+        }
+
+        $preference->save();
+
+        return response()->json([
+            'success' => true,
+            'variant_id' => (int) $variant->id,
+            'is_pinned' => (bool) $preference->is_pinned,
+            'sort_order' => $preference->sort_order,
         ]);
     }
 

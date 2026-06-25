@@ -27,6 +27,10 @@
             <input type="text" name="size" class="form-control" value="{{ $variant->size }}">
         </div>
         <div class="mb-3">
+            <label class="form-label">Thứ tự hiển thị</label>
+            <input type="number" name="sort_order" class="form-control" min="0" step="1" value="{{ old('sort_order', $variant->sort_order ?? 0) }}">
+        </div>
+        <div class="mb-3">
             <label class="form-label">Kg quy đổi <span class="text-danger">*</span></label>
             <input type="number" name="kg" class="form-control" value="{{ old('kg', $variant->kg ?? 1) }}" min="0.01" step="0.01" required>
         </div>

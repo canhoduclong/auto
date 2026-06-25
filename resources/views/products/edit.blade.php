@@ -126,7 +126,7 @@
 
     .variant-grid {
         display: grid;
-        grid-template-columns: 1.2fr .8fr .9fr .7fr 1fr 1.1fr;
+        grid-template-columns: 1.2fr .8fr .7fr .9fr .7fr 1fr 1.1fr;
         gap: 10px;
         align-items: start;
     }
@@ -296,6 +296,19 @@
                                         <div class="invalid-feedback">{{ $message }}</div>
                                     @enderror
                                 </div>
+                                <div class="col-lg-6">
+                                    <label for="sort_order" class="form-label">Thứ tự hiển thị</label>
+                                    <input type="number"
+                                           name="sort_order"
+                                           id="sort_order"
+                                           class="form-control @error('sort_order') is-invalid @enderror"
+                                           min="0"
+                                           step="1"
+                                           value="{{ old('sort_order', $product->sort_order ?? 0) }}">
+                                    @error('sort_order')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
+                                </div>
                             </div>
                         </div>
                         <div class="col-xl-5">
@@ -375,6 +388,10 @@
                                     <div class="variant-cell">
                                         <label class="variant-cell-label">Size</label>
                                         <input type="text" name="variants[{{ $variant->id }}][size]" class="form-control" value="{{ old('variants.'.$variant->id.'.size', $variant->size) }}">
+                                    </div>
+                                    <div class="variant-cell">
+                                        <label class="variant-cell-label">Thứ tự</label>
+                                        <input type="number" name="variants[{{ $variant->id }}][sort_order]" class="form-control" min="0" step="1" value="{{ old('variants.'.$variant->id.'.sort_order', $variant->sort_order ?? 0) }}">
                                     </div>
                                     <div class="variant-cell">
                                         <label class="variant-cell-label">Số Kg quy đổi</label>
@@ -572,6 +589,10 @@ document.addEventListener('DOMContentLoaded', function () {
                         <div class="variant-cell">
                             <label class="variant-cell-label">Size</label>
                             <input type="text" name="variants[new_${index}][size]" class="form-control">
+                        </div>
+                        <div class="variant-cell">
+                            <label class="variant-cell-label">Thứ tự</label>
+                            <input type="number" name="variants[new_${index}][sort_order]" class="form-control" min="0" step="1" value="0">
                         </div>
                         <div class="variant-cell">
                             <label class="variant-cell-label">Số Kg quy đổi</label>

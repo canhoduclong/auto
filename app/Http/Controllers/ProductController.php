@@ -57,7 +57,7 @@ class ProductController extends Controller
             $sortOrder = $request->input('order', 'asc');
             $query->orderBy($request->input('sort'), $sortOrder);
         } else {
-            $query->orderBy('created_at', 'desc'); // Sắp xếp mặc định
+            $query->orderBy('sort_order')->orderBy('created_at', 'desc'); // Sắp xếp mặc định
         }
 
         $page =(int) $request->get('page', 1);
@@ -90,9 +90,11 @@ class ProductController extends Controller
             'category_id' => 'required|numeric',
             'brand_id' => 'nullable|numeric',
             'unit' => ['required', Rule::in(ProductUnit::values())],
+            'sort_order' => 'nullable|integer|min:0|max:999999',
             'media_id' => 'nullable|integer|exists:media,id',
         ]);
         $data['user_id'] = Auth::id();
+        $data['sort_order'] = (int) ($data['sort_order'] ?? 0);
 
         $product = Product::create($data);
 
@@ -137,6 +139,7 @@ class ProductController extends Controller
             'brand',
             'avatar.media',
             'gallery.media',
+            'variants' => fn ($query) => $query->orderBy('sort_order')->orderBy('id'),
             'variants.avatar.media',
         ])->findOrFail($id);
         $categories = Category::all();
@@ -165,6 +168,7 @@ class ProductController extends Controller
                 'price' => 'nullable|numeric',
                 'stock' => 'nullable|numeric',
                 'unit'  => ['required', Rule::in(ProductUnit::values())],
+                'sort_order' => 'nullable|integer|min:0|max:999999',
                 'media_id' => 'nullable|integer|exists:media,id',
             ]);
 
@@ -176,6 +180,7 @@ class ProductController extends Controller
                 $product->stock = $validated['stock'];
             }
             $product->unit = $validated['unit'];
+            $product->sort_order = (int) ($validated['sort_order'] ?? 0);
 
             if ($request->filled('media_id')) {
                 MediaLink::where('model_id', $product->id)
@@ -218,6 +223,7 @@ class ProductController extends Controller
                 'category_id' => 'required|numeric',
                 'brand_id' => 'nullable|numeric',
                 'unit' => ['required', Rule::in(ProductUnit::values())],
+                'sort_order' => 'nullable|integer|min:0|max:999999',
                 'media_id'    => 'nullable|integer|exists:media,id',
                 'gallery'     => 'nullable|array',
                 'gallery.*'   => 'integer|exists:media,id',
@@ -229,6 +235,7 @@ class ProductController extends Controller
                 'variants.*.quality' => 'nullable|string|max:255',
                 'variants.*.production_date' => 'nullable|date',
                 'variants.*.stock' => 'nullable|integer|min:0',
+                'variants.*.sort_order' => 'nullable|integer|min:0|max:999999',
                 'variants.*.media_id' => 'nullable|integer|exists:media,id',
             ]);
 
@@ -238,6 +245,7 @@ class ProductController extends Controller
                 'category_id' => $validated['category_id'],
                 'brand_id' => $validated['brand_id'],
                 'unit' => $validated['unit'],
+                'sort_order' => (int) ($validated['sort_order'] ?? 0),
                 'description' => $validated['description'] ?? $product->description,
             ]);
 
@@ -293,6 +301,7 @@ class ProductController extends Controller
                             'quality'         => array_key_exists('quality', $variantData) ? $variantData['quality'] : ProductVariant::where('id', $variantId)->value('quality'),
                             'production_date' => array_key_exists('production_date', $variantData) ? $variantData['production_date'] : ProductVariant::where('id', $variantId)->value('production_date'),
                             'stock'           => $variantData['stock'] ?? 0,
+                            'sort_order'      => (int) ($variantData['sort_order'] ?? 0),
                         ]
                     );
                     $keepIds[] = $variant->id;
@@ -307,6 +316,7 @@ class ProductController extends Controller
                         'quality'          => $variantData['quality'] ?? null,
                         'production_date'  => $variantData['production_date'] ?? null,
                         'stock'            => $variantData['stock'] ?? 0,
+                        'sort_order'       => (int) ($variantData['sort_order'] ?? 0),
                     ]);
                     $keepIds[] = $variant->id;
                 }

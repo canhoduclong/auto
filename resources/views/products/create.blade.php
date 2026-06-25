@@ -78,6 +78,20 @@
                             @enderror
                         </div>
 
+                        <div class="mb-3">
+                            <label for="sort_order" class="form-label">Thứ tự hiển thị</label>
+                            <input type="number"
+                                   name="sort_order"
+                                   id="sort_order"
+                                   class="form-control @error('sort_order') is-invalid @enderror"
+                                   min="0"
+                                   step="1"
+                                   value="{{ old('sort_order', 0) }}">
+                            @error('sort_order')
+                                <div class="invalid-feedback">{{ $message }}</div>
+                            @enderror
+                        </div>
+
 
 
                         {{-- Hình ảnh --}}

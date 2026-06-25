@@ -567,6 +567,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::post('/orders/store-new', [OrderController::class, 'storeNewOrder'])->name('orders.store_new');
     Route::get('/orders/ajax-customer-search', [OrderController::class, 'ajaxCustomerSearch'])->name('orders.ajax_customer_search');
     Route::get('/orders/ajax-variant-search', [OrderController::class, 'ajaxVariantSearch'])->name('orders.ajax_variant_search');
+    Route::post('/orders/product-variants/{variant}/preference', [OrderController::class, 'updateVariantPreference'])->name('orders.variant_preference');
     Route::post('orders/{order}/add-variant', [OrderController::class, 'addVariant']);
     Route::post('orders/{order}/remove-variant', [OrderController::class, 'removeVariant']);
     Route::post('/orders/{order}/confirm', [OrderController::class, 'confirm'])->name('orders.confirm');

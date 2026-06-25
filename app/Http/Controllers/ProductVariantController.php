@@ -44,7 +44,7 @@ class ProductVariantController extends Controller
     {
         $variant = \App\Models\ProductVariant::with('mediaLink.media', 'product')->findOrFail($id);
         
-        $products = \App\Models\Product::orderBy('name')->get();
+        $products = \App\Models\Product::orderBy('sort_order')->orderBy('name')->get();
         return view('product_variants.edit', compact('variant', 'products'));
     }
 
@@ -53,13 +53,15 @@ class ProductVariantController extends Controller
         $variant = \App\Models\ProductVariant::findOrFail($id);
         $data = $request->validate([
             'product_id' => 'sometimes|exists:products,id',
+            'name' => 'nullable|string|max:255',
             'sku' => 'required|string|unique:product_variants,sku,' . $variant->id,
             'size' => 'nullable',
-            'kg' => 'required|numeric|gt:0',
+            'kg' => 'nullable|numeric|gt:0',
             'is_priced_by_kg' => 'nullable|boolean',
             'quality' => 'nullable|string',
             'production_date' => 'nullable|date',
             'stock' => 'nullable|integer',
+            'sort_order' => 'nullable|integer|min:0|max:999999',
             'media_id' => 'nullable|integer|exists:media,id',
             'price' => 'nullable|numeric|min:0',
         ]);
@@ -67,7 +69,11 @@ class ProductVariantController extends Controller
         if (isset($data['size']) && is_string($data['size'])) {
             $data['size'] = str_replace(',', '.', $data['size']);
         }
-        $data['is_priced_by_kg'] = $request->boolean('is_priced_by_kg');
+        if ($request->has('is_priced_by_kg')) {
+            $data['is_priced_by_kg'] = $request->boolean('is_priced_by_kg');
+        } else {
+            unset($data['is_priced_by_kg']);
+        }
         // Ensure SKU is updated correctly
         if (isset($data['sku'])) {
             $variant->sku = $data['sku'];
@@ -146,7 +152,12 @@ class ProductVariantController extends Controller
         if ($sortBy === 'stock') {
             $query->orderBy('product_id')->orderBy('stock', $sortDir);
         } else {
-            $query->orderByDesc('id');
+            $query
+                ->join('products as sort_products', 'sort_products.id', '=', 'product_variants.product_id')
+                ->select('product_variants.*')
+                ->orderBy('sort_products.sort_order')
+                ->orderBy('product_variants.sort_order')
+                ->orderBy('product_variants.id');
         }
         $variants = $query->paginate($perPage)->appends($request->query());
         $groupedVariants = $variants->getCollection()->groupBy('product_id');
@@ -155,7 +166,7 @@ class ProductVariantController extends Controller
             return view('product_variants._variants_table', compact('variants'))->render();
         }
 
-        $products = \App\Models\Product::orderBy('name')->get();
+        $products = \App\Models\Product::orderBy('sort_order')->orderBy('name')->get();
         return view('product_variants.index', compact('groupedVariants', 'variants', 'products'));
     }
 
@@ -174,7 +185,7 @@ class ProductVariantController extends Controller
 
     public function create()
     {
-        $products = \App\Models\Product::orderBy('name')->get();
+        $products = \App\Models\Product::orderBy('sort_order')->orderBy('name')->get();
         return view('product_variants.create', compact('products'));
     }
 
@@ -182,16 +193,19 @@ class ProductVariantController extends Controller
     {
         $data = $request->validate([
             'product_id' => 'required|exists:products,id',
+            'name' => 'nullable|string|max:255',
             'sku' => 'required|string|unique:product_variants,sku',
             'size' => 'nullable|string',
-            'kg' => 'required|numeric|gt:0',
+            'kg' => 'nullable|numeric|gt:0',
             'is_priced_by_kg' => 'nullable|boolean',
             'quality' => 'nullable|string',
             'production_date' => 'nullable|date',
             'stock' => 'nullable|integer',
+            'sort_order' => 'nullable|integer|min:0|max:999999',
             'media_id' => 'nullable|integer|exists:media,id',
             'price' => 'nullable|numeric|min:0',
         ]);
+        $data['kg'] = $data['kg'] ?? 1;
         $data['is_priced_by_kg'] = $request->boolean('is_priced_by_kg');
         $variant = ProductVariant::create($data);
         // Gán media nếu có

@@ -15,6 +15,7 @@ class Product extends Model
         'user_id',
         'category_id',
         'status',
+        'sort_order',
         'name',
         'unit',
         'kg',
@@ -28,6 +29,7 @@ class Product extends Model
         'kg' => 'float',
         'is_priced_by_kg' => 'boolean',
         'status' => 'boolean',
+        'sort_order' => 'integer',
     ];
 
     public function getUnitLabelAttribute(): string

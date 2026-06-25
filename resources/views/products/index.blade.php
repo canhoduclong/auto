@@ -84,6 +84,7 @@
                     </span>
                 </th> 
                         <th>Sản phẩm</th>
+                        <th width="100">Thứ tự</th>
                         <th>Đơn vị tính</th>
                         <th>Trạng thái</th>
                 
@@ -112,6 +113,7 @@
                         </a>
                         <div class="text-muted small">{{ $product->brand->name ?? '' }}{{ ($product->brand->name ?? '') && ($product->category->name ?? '') ? ' / ' : '' }}{{ $product->category->name ?? '' }}</div>
                     </td>
+                    <td><span class="badge bg-light text-dark border">{{ $product->sort_order ?? 0 }}</span></td>
                     <td>{{ $product->unit_label }}</td>
                 <td>
                     @if($product->status)

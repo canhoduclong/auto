@@ -70,6 +70,7 @@
                         <th width="180">Tên biến thể</th>
                         <th>SKU</th>
                         <th width="90">Size</th>
+                        <th width="80">Thứ tự</th>
                         <th width="110">Giá bán</th>
                         <th width="90" style="cursor:pointer; user-select:none;">
                             @php
@@ -98,7 +99,7 @@
                             <td>
                                 <input type="checkbox" class="group-select" data-product-id="{{ $productId }}">
                             </td>
-                            <td colspan="8" class="fw-semibold text-primary bg-light">
+                            <td colspan="10" class="fw-semibold text-primary bg-light">
                                 {{ $product->name ?? 'Không xác định' }}
                                 <span class="text-muted ms-2">({{ $productVariants->count() }} biến thể)</span>
                             </td>
@@ -129,6 +130,7 @@
                                 <td>{{ $variant->name ?: '-' }}</td>
                                 <td class="fw-semibold">{{ $variant->sku }}</td>
                                 <td>{{ $variant->size ?: '-' }}</td>
+                                <td><span class="badge bg-light text-dark border">{{ $variant->sort_order ?? 0 }}</span></td>
                                 <td>
                                     @php
                                         $latestPrice = $variant->latestPriceRule ? $variant->latestPriceRule->price : $variant->final_price;
@@ -154,7 +156,7 @@
                         @endforeach
                     @empty
                         <tr>
-                            <td colspan="9" class="text-center text-muted py-4">Không có dữ liệu phù hợp</td>
+                            <td colspan="11" class="text-center text-muted py-4">Không có dữ liệu phù hợp</td>
                         </tr>
                     @endforelse
                 </tbody>
@@ -227,14 +229,15 @@ $(document).ready(function() {
         if (!variantId || tr.next().hasClass('quick-edit-row')) return;
 
         const tds = tr.find('td');
-        const sku = $(tds[4]).text().trim() || '';
-        const size = $(tds[5]).text().trim() || '';
-        const price = $(tds[6]).text().trim().replace(/[^0-9]/g, '') || '0';
-        const stock = $(tds[7]).text().trim().replace(/[^0-9]/g, '') || '0';
+        const sku = $(tds[5]).text().trim() || '';
+        const size = $(tds[6]).text().trim() || '';
+        const sortOrder = $(tds[7]).text().trim().replace(/[^0-9]/g, '') || '0';
+        const price = $(tds[8]).text().trim().replace(/[^0-9]/g, '') || '0';
+        const stock = $(tds[9]).text().trim().replace(/[^0-9]/g, '') || '0';
 
         const html = `
             <tr class="quick-edit-row">
-                <td colspan="9" class="bg-light">
+                <td colspan="11" class="bg-light">
                     <form method="POST" action="/product-variants/${variantId}" class="quick-edit-form d-flex flex-wrap gap-2 align-items-end p-2">
                         <input type="hidden" name="_token" value="${$('meta[name="csrf-token"]').attr('content')}">
                         <input type="hidden" name="_method" value="PUT">
@@ -245,6 +248,10 @@ $(document).ready(function() {
                         <div>
                             <label class="form-label small mb-1">Size</label>
                             <input type="text" name="size" value="${size === '-' ? '' : size}" class="form-control form-control-sm" style="width: 90px;">
+                        </div>
+                        <div>
+                            <label class="form-label small mb-1">Thứ tự</label>
+                            <input type="number" min="0" name="sort_order" value="${sortOrder}" class="form-control form-control-sm" style="width: 90px;">
                         </div>
                         <div>
                             <label class="form-label small mb-1">Giá</label>
