@@ -6,6 +6,8 @@
 @section('content')
 {{-- KPI Cards --}}
 
+@include('layouts.partials.department_broadcasts')
+
  
     <style>
        

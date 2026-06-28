@@ -585,6 +585,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::post('/ai/generate-description', [AIController::class, 'generateDescription'])->name('ai.generateDescription');
 
     Route::get('admin/notifications', [AdminNotificationController::class, 'index'])->name('admin.notifications.index');
+    Route::post('admin/notifications/department-broadcast', [AdminNotificationController::class, 'storeDepartmentBroadcast'])->name('admin.notifications.department_broadcast');
     Route::post('admin/notifications/read-all', [AdminNotificationController::class, 'markAllAsRead'])->name('admin.notifications.read_all');
     Route::post('admin/notifications/{notificationId}/read', [AdminNotificationController::class, 'markAsRead'])->name('admin.notifications.read');
     Route::get('admin/events', [AdminEventController::class, 'index'])->name('admin.events.index');

@@ -187,6 +187,30 @@
     .warehouse-contact-action:hover {
         opacity: .9;
     }
+    .price-update-card {
+        border: 1px solid #fde68a;
+        border-left: 4px solid #f59e0b;
+        border-radius: 14px;
+        background: #fffbeb;
+    }
+    .price-update-item {
+        border-bottom: 1px dashed #fcd34d;
+        padding: 8px 0;
+    }
+    .price-update-item:last-child {
+        border-bottom: 0;
+    }
+    .price-update-price {
+        color: #b45309;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+    .price-update-note {
+        border-top: 1px solid #fde68a;
+        margin-top: 8px;
+        padding-top: 8px;
+        color: #92400e;
+    }
 
     @media (max-width: 1200px) {
         .stats-grid {
@@ -518,6 +542,49 @@
                         @endforeach
                     </div>
                 @endif
+
+                @if(($recentPriceUpdates ?? collect())->isNotEmpty())
+                    <div class="price-update-card p-3 mb-3">
+                        <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+                            <h6 class="mb-0 text-uppercase" style="color:#b45309;">Thông báo điều chỉnh giá</h6>
+                            <span class="badge text-bg-warning">Mới</span>
+                        </div>
+                        @foreach($recentPriceUpdates as $priceUpdate)
+                            @php
+                                $size = $priceUpdate['size'] ?? null;
+                                $sizeLabel = (is_numeric($size) && (float) $size > 0)
+                                    ? rtrim(rtrim(number_format((float) $size, 2, ',', '.'), '0'), ',')
+                                    : null;
+                                $startDate = !empty($priceUpdate['start_date'])
+                                    ? \Carbon\Carbon::parse($priceUpdate['start_date'])->format('d/m/Y')
+                                    : null;
+                            @endphp
+                            <div class="price-update-item small">
+                                <div class="d-flex justify-content-between gap-2">
+                                    <div class="fw-semibold text-dark">
+                                        {{ $priceUpdate['variant_name'] ?: $priceUpdate['product_name'] }}
+                                        @if($sizeLabel)
+                                            <span class="text-muted fw-normal">size {{ $sizeLabel }}</span>
+                                        @endif
+                                    </div>
+                                    <div class="price-update-price">{{ number_format((float) ($priceUpdate['price'] ?? 0), 0, ',', '.') }}đ</div>
+                                </div>
+                                <div class="text-muted">
+                                    Áp dụng từ {{ $startDate ?: 'ngày cập nhật' }}
+                                    @if(!empty($priceUpdate['sku']))
+                                        · SKU: {{ $priceUpdate['sku'] }}
+                                    @endif
+                                </div>
+                            </div>
+                        @endforeach
+                        <div class="price-update-note small">
+                            <div>Giá bán chưa bao gồm VAT.</div>
+                            <div>Miễn phí vận chuyển nội thành 5kg từ 20 con.</div>
+                        </div>
+                    </div>
+                @endif
+
+                @include('layouts.partials.department_broadcasts')
 
                 {{-- Activity Timeline Section --}}
                 <div class="section-card p-3" id="activity-timeline">

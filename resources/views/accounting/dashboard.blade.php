@@ -4,6 +4,8 @@
 @section('subtitle', 'Tong quan cong no, thu chi va thanh toan')
 
 @section('accounting_content')
+@include('layouts.partials.department_broadcasts')
+
 <div class="acc-card mb-3">
     <div class="card-body">
         <form method="GET" class="acc-filter">

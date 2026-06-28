@@ -182,6 +182,32 @@ if (!function_exists('getWarehouseNotifications')) {
     }
 }
 
+if (!function_exists('getDepartmentBroadcastNotifications')) {
+    function getDepartmentBroadcastNotifications($user, int $limit = 5)
+    {
+        if (!$user || !\Illuminate\Support\Facades\Schema::hasTable('notifications')) {
+            return collect();
+        }
+
+        return $user->notifications()
+            ->where('type', \App\Notifications\DepartmentBroadcastNotification::class)
+            ->latest()
+            ->limit($limit)
+            ->get()
+            ->map(function ($notification) {
+                return [
+                    'id' => $notification->id,
+                    'title' => $notification->data['title'] ?? 'Thông báo',
+                    'message' => $notification->data['message'] ?? '',
+                    'url' => $notification->data['url'] ?? null,
+                    'read_at' => $notification->read_at,
+                    'created_at' => $notification->created_at,
+                    'target_roles' => $notification->data['target_roles'] ?? [],
+                ];
+            });
+    }
+}
+
 
 if (!function_exists('format_kg')) {
     /**

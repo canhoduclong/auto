@@ -10,6 +10,43 @@
         </form>
     </div>
 
+    <div class="card mb-3">
+        <div class="card-header bg-light fw-semibold">Tạo thông báo tới phòng ban</div>
+        <div class="card-body">
+            <form action="{{ route('admin.notifications.department_broadcast') }}" method="POST" class="row g-3">
+                @csrf
+                <div class="col-md-6">
+                    <label class="form-label">Tiêu đề</label>
+                    <input type="text" name="title" class="form-control" maxlength="160" value="{{ old('title') }}" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Link khi bấm vào thông báo</label>
+                    <input type="text" name="url" class="form-control" maxlength="500" value="{{ old('url') }}" placeholder="/dashboard hoặc https://...">
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Phòng ban nhận</label>
+                    <div class="d-flex flex-wrap gap-3">
+                        @foreach($departmentRoleOptions as $role => $label)
+                            <label class="form-check">
+                                <input class="form-check-input" type="checkbox" name="target_roles[]" value="{{ $role }}" @checked(in_array($role, old('target_roles', []), true))>
+                                <span class="form-check-label">{{ $label }}</span>
+                            </label>
+                        @endforeach
+                    </div>
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Nội dung</label>
+                    <textarea name="message" class="form-control" rows="3" maxlength="2000" required>{{ old('message') }}</textarea>
+                </div>
+                <div class="col-12 text-end">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-send me-1"></i>Gửi thông báo
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <div class="card">
         <div class="card-body p-0">
             <div class="table-responsive">

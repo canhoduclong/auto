@@ -7,6 +7,7 @@ use App\Models\TaskAssignment;
 use App\Models\User;
 use App\Models\Customer;
 use App\Models\OrderHistory;
+use App\Models\ProductPriceLog;
 use App\Models\ProductVariant;
 use App\Notifications\WarehouseOrderAdjustmentConfirmed;
 use App\Notifications\WarehouseOrderAdjustmentRejected;
@@ -400,6 +401,8 @@ class MyDashboardController extends Controller
             ->limit(10)
             ->get();
 
+        $recentPriceUpdates = $this->buildRecentPriceUpdates();
+
         $timeline = DB::table('task_status_logs as l')
             ->join('task_assignments as t', 't.id', '=', 'l.task_id')
             ->leftJoin('users as u', 'u.id', '=', 'l.changed_by')
@@ -464,7 +467,38 @@ class MyDashboardController extends Controller
             'timeline' => $timeline,
             'assignedCustomers' => $assignedCustomers,
             'pendingWarehouseAdjustments' => $pendingWarehouseAdjustments,
+            'recentPriceUpdates' => $recentPriceUpdates,
         ];
+    }
+
+    private function buildRecentPriceUpdates(): Collection
+    {
+        if (!Schema::hasTable('product_price_logs') || !Schema::hasTable('product_price_rules')) {
+            return collect();
+        }
+
+        return ProductPriceLog::query()
+            ->with(['variant.product', 'priceRule'])
+            ->whereNotNull('product_variant_id')
+            ->where('applied_at', '>=', now()->subDays(7))
+            ->orderByDesc('applied_at')
+            ->limit(12)
+            ->get()
+            ->map(function (ProductPriceLog $log) {
+                $variant = $log->variant;
+                $product = $variant?->product;
+                $startDate = $log->priceRule?->start_date ?: optional($log->applied_at)->toDateString();
+
+                return [
+                    'product_name' => $product?->name ?: 'Sản phẩm',
+                    'variant_name' => $variant?->name ?: null,
+                    'sku' => $variant?->sku,
+                    'size' => $variant?->size,
+                    'price' => (float) $log->new_price,
+                    'start_date' => $startDate,
+                    'applied_at' => $log->applied_at,
+                ];
+            });
     }
 
     private function resolveScopedUserIds(User $user): array

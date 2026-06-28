@@ -199,6 +199,8 @@
     ];
 @endphp
 
+@include('layouts.partials.department_broadcasts')
+
 <div class="row g-3 mb-4">
     <!-- Cột trái: Nhiệm vụ hàng ngày và Thống kê tồn kho -->
     <div class="col-md-12 col-lg-6"> 

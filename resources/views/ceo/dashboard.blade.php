@@ -84,6 +84,8 @@
 @endpush
 
 @section('content')
+@include('layouts.partials.department_broadcasts')
+
 <div class="ceo-card mb-3">
     <form method="GET" action="{{ route('ceo.dashboard') }}" class="ceo-filter-grid">
         <div>
