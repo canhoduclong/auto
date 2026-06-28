@@ -1,10 +1,10 @@
-@extends('layouts.admin')
+@extends($notificationLayout ?? 'layouts.admin')
 
-@section('content')
+@section($notificationSection ?? 'content')
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <h4 class="mb-0">Thong bao admin</h4>
-        <form action="{{ route('admin.notifications.read_all') }}" method="POST">
+        <h4 class="mb-0">Tạo thông báo phòng ban</h4>
+        <form action="{{ route($notificationReadAllRouteName ?? 'admin.notifications.read_all', ['layout' => $notificationLayoutKey ?? null]) }}" method="POST">
             @csrf
             <button type="submit" class="btn btn-sm btn-outline-primary">Danh dau tat ca da doc</button>
         </form>
@@ -13,7 +13,7 @@
     <div class="card mb-3">
         <div class="card-header bg-light fw-semibold">Tạo thông báo tới phòng ban</div>
         <div class="card-body">
-            <form action="{{ route('admin.notifications.department_broadcast') }}" method="POST" class="row g-3">
+            <form action="{{ route($notificationBroadcastRouteName ?? 'admin.notifications.department_broadcast', ['layout' => $notificationLayoutKey ?? null]) }}" method="POST" class="row g-3">
                 @csrf
                 <div class="col-md-6">
                     <label class="form-label">Tiêu đề</label>
@@ -74,7 +74,7 @@
                                     @endif
                                 </td>
                                 <td class="text-end">
-                                    <form action="{{ route('admin.notifications.read', $notification->id) }}" method="POST" class="d-inline">
+                                    <form action="{{ route($notificationReadRouteName ?? 'admin.notifications.read', ['notificationId' => $notification->id, 'layout' => $notificationLayoutKey ?? null]) }}" method="POST" class="d-inline">
                                         @csrf
                                         <button type="submit" class="btn btn-sm btn-primary">Xem su kien</button>
                                     </form>

@@ -188,6 +188,13 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         ->name('pages.my_dashboard.order_adjustments.reject')
         ->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
 
+    Route::middleware('role:admin,CEO,ceo,Director,director,leader,leader_sale,sale_manager,manager,manager_sale,warehouse,account,accountant,accounting,Shipper,shipper,manager_shipper')->group(function () {
+        Route::get('/department-notifications', [AdminNotificationController::class, 'index'])->name('department-notifications.index');
+        Route::post('/department-notifications', [AdminNotificationController::class, 'storeDepartmentBroadcast'])->name('department-notifications.department_broadcast');
+        Route::post('/department-notifications/read-all', [AdminNotificationController::class, 'markAllAsRead'])->name('department-notifications.read_all');
+        Route::post('/department-notifications/{notificationId}/read', [AdminNotificationController::class, 'markAsRead'])->name('department-notifications.read');
+    });
+
     Route::prefix('leader')->name('leader.')->middleware('role:leader,leader_sale,sale_manager,admin')->group(function () {
         Route::get('/requests', [DepartmentFinanceRequestController::class, 'leaderIndex'])->name('finance-requests.index');
         Route::post('/requests', [DepartmentFinanceRequestController::class, 'leaderStore'])->name('finance-requests.store');

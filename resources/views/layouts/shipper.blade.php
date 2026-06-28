@@ -224,6 +224,9 @@
             <a href="{{ route('shipper.dashboard') }}" class="sp-nav-link {{ request()->routeIs('shipper.dashboard') ? 'active' : '' }}">
                 <i class="bi bi-speedometer2"></i> Dashboard
             </a>
+            <a href="{{ route('department-notifications.index', ['layout' => 'shipper']) }}" class="sp-nav-link {{ request()->routeIs('department-notifications.*') && request('layout') === 'shipper' ? 'active' : '' }}">
+                <i class="bi bi-megaphone"></i> Tạo thông báo
+            </a>
 
             <div class="sp-nav-section">Nhận đơn</div>
             <a href="{{ route('shipper.available') }}" class="sp-nav-link {{ request()->routeIs('shipper.available') ? 'active' : '' }}">

@@ -353,6 +353,9 @@
             <a href="{{ route('ceo.task-management.index') }}" class="ceo-nav-link {{ request()->routeIs('ceo.task-management.*') ? 'active' : '' }}">
                 <i class="bi bi-checklist-rtl"></i> Giao việc
             </a>
+            <a href="{{ route('department-notifications.index', ['layout' => 'ceo']) }}" class="ceo-nav-link {{ request()->routeIs('department-notifications.*') && request('layout') === 'ceo' ? 'active' : '' }}">
+                <i class="bi bi-megaphone"></i> Tạo thông báo
+            </a>
         </nav>
         <div class="ceo-nav-footer">
             <form method="POST" action="{{ route('logout') }}" class="ceo-nav-form">

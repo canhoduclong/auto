@@ -343,6 +343,9 @@
             <a href="{{ route('accounting.dashboard') }}" class="{{ request()->routeIs('accounting.dashboard') ? 'active' : '' }}">
                 <i class="bi bi-speedometer2"></i> Dashboard
             </a>
+            <a href="{{ route('department-notifications.index', ['layout' => 'accounting']) }}" class="{{ request()->routeIs('department-notifications.*') && request('layout') === 'accounting' ? 'active' : '' }}">
+                <i class="bi bi-megaphone"></i> Tạo thông báo
+            </a>
 
             <div class="nav-section">Đơn hàng</div>
             <a href="{{ route('accounting.orders') }}" class="{{ request()->routeIs('accounting.orders*') ? 'active' : '' }}">

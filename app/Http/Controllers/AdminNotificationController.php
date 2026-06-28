@@ -12,6 +12,26 @@ use Illuminate\View\View;
 
 class AdminNotificationController extends Controller
 {
+    private const NOTIFICATION_MANAGER_ROLES = [
+        'admin',
+        'CEO',
+        'ceo',
+        'Director',
+        'director',
+        'leader',
+        'leader_sale',
+        'sale_manager',
+        'manager',
+        'manager_sale',
+        'warehouse',
+        'account',
+        'accountant',
+        'accounting',
+        'Shipper',
+        'shipper',
+        'manager_shipper',
+    ];
+
     private const DEPARTMENT_ROLE_OPTIONS = [
         'CEO' => 'CEO',
         'warehouse' => 'Warehouse',
@@ -25,7 +45,7 @@ class AdminNotificationController extends Controller
 
     public function index(Request $request): View
     {
-        abort_unless($request->user()?->hasRole('admin'), 403);
+        abort_unless($this->canManageDepartmentNotifications($request), 403);
 
         $notifications = $request->user()
             ->notifications()
@@ -33,13 +53,17 @@ class AdminNotificationController extends Controller
             ->paginate(20);
 
         $departmentRoleOptions = self::DEPARTMENT_ROLE_OPTIONS;
+        $viewContext = $this->resolveNotificationViewContext($request);
 
-        return view('admin.notifications.index', compact('notifications', 'departmentRoleOptions'));
+        return view('admin.notifications.index', array_merge(
+            compact('notifications', 'departmentRoleOptions'),
+            $viewContext
+        ));
     }
 
     public function storeDepartmentBroadcast(Request $request): RedirectResponse
     {
-        abort_unless($request->user()?->hasRole('admin'), 403);
+        abort_unless($this->canManageDepartmentNotifications($request), 403);
 
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:160'],
@@ -73,7 +97,7 @@ class AdminNotificationController extends Controller
 
     public function markAsRead(Request $request, string $notificationId): RedirectResponse
     {
-        abort_unless($request->user()?->hasRole('admin'), 403);
+        abort_unless($this->canManageDepartmentNotifications($request), 403);
 
         $notification = $request->user()
             ->notifications()
@@ -84,17 +108,62 @@ class AdminNotificationController extends Controller
             $notification->markAsRead();
         }
 
-        $targetUrl = $notification->data['url'] ?? route('admin.events.index');
+        $targetUrl = $notification->data['url'] ?? route('dashboard');
 
         return redirect($targetUrl);
     }
 
     public function markAllAsRead(Request $request): RedirectResponse
     {
-        abort_unless($request->user()?->hasRole('admin'), 403);
+        abort_unless($this->canManageDepartmentNotifications($request), 403);
 
         $request->user()->unreadNotifications->markAsRead();
 
         return back()->with('success', 'Da danh dau tat ca thong bao la da doc.');
+    }
+
+    private function canManageDepartmentNotifications(Request $request): bool
+    {
+        return (bool) $request->user()?->hasRole(self::NOTIFICATION_MANAGER_ROLES);
+    }
+
+    private function resolveNotificationViewContext(Request $request): array
+    {
+        $layout = (string) $request->query('layout', '');
+
+        $map = [
+            'ceo' => ['layouts.ceo', 'content', 'ceo'],
+            'director' => ['layouts.director', 'content', 'director'],
+            'accounting' => ['layouts.accounting', 'accounting_content', 'accounting'],
+            'warehouse' => ['layouts.warehouse', 'content', 'warehouse'],
+            'shipper' => ['layouts.shipper', 'content', 'shipper'],
+            'site' => ['layouts.site', 'content', 'site'],
+            'admin' => ['layouts.admin', 'content', 'admin'],
+        ];
+
+        if (!isset($map[$layout])) {
+            $user = $request->user();
+            $layout = match (true) {
+                $user?->hasRole(['CEO', 'ceo']) => 'ceo',
+                $user?->hasRole(['Director', 'director']) => 'director',
+                $user?->hasRole(['account', 'accountant', 'accounting']) => 'accounting',
+                $user?->hasRole('warehouse') => 'warehouse',
+                $user?->hasRole(['Shipper', 'shipper', 'manager_shipper']) => 'shipper',
+                $user?->hasRole('admin') => 'admin',
+                default => 'site',
+            };
+        }
+
+        [$viewLayout, $section, $layoutKey] = $map[$layout];
+
+        return [
+            'notificationLayout' => $viewLayout,
+            'notificationSection' => $section,
+            'notificationLayoutKey' => $layoutKey,
+            'notificationIndexRouteName' => $layoutKey === 'admin' ? 'admin.notifications.index' : 'department-notifications.index',
+            'notificationBroadcastRouteName' => $layoutKey === 'admin' ? 'admin.notifications.department_broadcast' : 'department-notifications.department_broadcast',
+            'notificationReadAllRouteName' => $layoutKey === 'admin' ? 'admin.notifications.read_all' : 'department-notifications.read_all',
+            'notificationReadRouteName' => $layoutKey === 'admin' ? 'admin.notifications.read' : 'department-notifications.read',
+        ];
     }
 }

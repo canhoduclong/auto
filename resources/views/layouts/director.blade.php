@@ -353,6 +353,9 @@
             <a href="{{ route('director.task-management.index') }}" class="director-nav-link {{ request()->routeIs('director.task-management.*') ? 'active' : '' }}">
                 <i class="bi bi-checklist-rtl"></i> Giao việc
             </a>
+            <a href="{{ route('department-notifications.index', ['layout' => 'director']) }}" class="director-nav-link {{ request()->routeIs('department-notifications.*') && request('layout') === 'director' ? 'active' : '' }}">
+                <i class="bi bi-megaphone"></i> Tạo thông báo
+            </a>
         </nav>
         <div class="director-nav-footer">
             <form method="POST" action="{{ route('logout') }}" class="director-nav-form">

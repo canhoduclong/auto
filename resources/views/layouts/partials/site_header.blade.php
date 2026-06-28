@@ -346,6 +346,7 @@
                         $offcanvasCanViewMonitoring = Auth::user()->isAdmin() || Auth::user()->hasPermission('orders.monitoring');
                         $offcanvasCanApproveTeamOrders = Auth::user()->hasRole('leader') || Auth::user()->hasRole('leader_sale') || Auth::user()->hasRole('sale_manager');
                         $offcanvasCanApproveDepartmentOrders = Auth::user()->hasRole('manager') || Auth::user()->hasRole('manager_sale') || Auth::user()->hasRole('director');
+                        $offcanvasCanCreateDepartmentNotifications = Auth::user()->hasRole(['admin', 'leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale']);
                         $offcanvasCanManageAppointments = Auth::user()->isAdmin() || Auth::user()->isSalesFlowRole();
                         $offcanvasMyTasksRoute = Auth::user()->isSalesFlowRole() ? 'my-tasks' : 'tasks.my-tasks';
                         $offcanvasFinanceRequestRoute = null;
@@ -356,6 +357,9 @@
                         }
                     @endphp
                     <li><a href="{{ route('pages.my_dashboard') }}" class="d-block py-1"><i class="bi bi-speedometer2 me-1"></i> My Dashboard</a></li>
+                    @if($offcanvasCanCreateDepartmentNotifications)
+                        <li><a href="{{ route('department-notifications.index', ['layout' => 'site']) }}" class="d-block py-1"><i class="bi bi-megaphone me-1"></i> Tạo thông báo</a></li>
+                    @endif
                     <li><a href="{{ route('pages.my_profile') }}" class="d-block py-1"><i class="bi bi-person-circle me-1"></i> {{ __('site.profile') }}</a></li>
                     @if(Auth::user()->hasPermission('task.create') || Auth::user()->hasPermission('task.assign') || \App\Services\TaskMenuService::canAssignTasks(Auth::user()) || \App\Services\TaskMenuService::canCompleteTasks(Auth::user()))
                         <li><a href="{{ route($offcanvasMyTasksRoute) }}" class="d-block py-1"><i class="bi bi-list-task me-1"></i> Nhiệm vụ được giao</a></li>
@@ -588,6 +592,11 @@
                                         <a class="dropdown-item" href="{{ route('pages.my_dashboard') }}">
                                             <i class="bi bi-speedometer2"></i> My Dashboard
                                         </a>
+                                        @if(Auth::user()->hasRole(['admin', 'leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale']))
+                                            <a class="dropdown-item" href="{{ route('department-notifications.index', ['layout' => 'site']) }}">
+                                                <i class="bi bi-megaphone"></i> Tạo thông báo
+                                            </a>
+                                        @endif
                                         <a class="dropdown-item" href="{{ route('pages.my_profile') }}">
                                             <i class="bi bi-person-circle"></i> {{ __('site.profile') }}
                                         </a>

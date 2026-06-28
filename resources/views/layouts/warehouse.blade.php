@@ -237,6 +237,9 @@
             <a href="{{ route('warehouse.dashboard') }}" class="wh-nav-link {{ request()->routeIs('warehouse.dashboard') ? 'active' : '' }}">
                 <i class="bi bi-speedometer2"></i> Dashboard
             </a>
+            <a href="{{ route('department-notifications.index', ['layout' => 'warehouse']) }}" class="wh-nav-link {{ request()->routeIs('department-notifications.*') && request('layout') === 'warehouse' ? 'active' : '' }}">
+                <i class="bi bi-megaphone"></i> Tạo thông báo
+            </a>
             <a href="{{ route('warehouse.orders') }}" class="wh-nav-link {{ request()->routeIs('warehouse.orders') ? 'active' : '' }}">
                 <i class="bi bi-box2-fill"></i> Đơn cần đóng gói
             </a>
