@@ -180,6 +180,22 @@
         a:hover {
             color: var(--theme-primary-hover);
         }
+        .wh-notification-menu {
+            width: min(560px, calc(100vw - var(--sidebar-width) - 2rem));
+            max-width: min(560px, calc(100vw - var(--sidebar-width) - 2rem));
+            max-height: min(70vh, 620px);
+            overflow-y: auto;
+            overflow-x: hidden;
+            white-space: normal;
+        }
+        .wh-notification-menu .dropdown-item {
+            white-space: normal;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+        }
+        .wh-notification-menu .wh-notification-content {
+            min-width: 0;
+        }
         @media (max-width: 768px) {
             .wh-sidebar {
                 width: min(86vw, 320px);
@@ -192,6 +208,10 @@
             .wh-content {
                 padding: .9rem;
                 padding-bottom: calc(.9rem + env(safe-area-inset-bottom, 0px));
+            }
+            .wh-notification-menu {
+                width: calc(100vw - 1rem);
+                max-width: calc(100vw - 1rem);
             }
         }
         .wh-sidebar nav {
@@ -364,7 +384,7 @@
                             <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size:0.7rem;" id="notification-badge">{{ $recentWarehouseNotifications->count() }}</span>
                         @endif
                     </a>
-                    <ul class="dropdown-menu dropdown-menu-end shadow-sm" aria-labelledby="dropdownNotification" style="min-width:320px;">
+                    <ul class="dropdown-menu dropdown-menu-end shadow-sm wh-notification-menu" aria-labelledby="dropdownNotification">
                         <li class="dropdown-header">Thông báo gần đây</li>
                         @if($recentWarehouseNotifications->count())
                             @foreach($recentWarehouseNotifications as $noti)
@@ -380,7 +400,7 @@
                                             };
                                         @endphp
                                         <i class="bi {{ $icon }} flex-shrink-0 mt-1"></i>
-                                        <div>
+                                        <div class="wh-notification-content">
                                             <div class="fw-semibold small">{!! $noti['title'] !!}</div>
                                             <div class="text-muted small">{{ $noti['meta'] ?? '' }} &middot; <span>{{ $noti['time'] ?? '' }}</span></div>
                                             @if(!empty($noti['details']))
