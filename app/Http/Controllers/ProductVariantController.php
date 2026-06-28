@@ -1,5 +1,7 @@
 <?php namespace App\Http\Controllers;
 
+use App\Models\Product;
+use App\Models\ProductComponentRatio;
 use App\Models\ProductVariant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -42,7 +44,11 @@ class ProductVariantController extends Controller
     }
     public function edit($id)
     {
-        $variant = \App\Models\ProductVariant::with('mediaLink.media', 'product')->findOrFail($id);
+        $variant = \App\Models\ProductVariant::with([
+            'mediaLink.media',
+            'componentRatios',
+            'product.cuttingComponents.componentVariant.product',
+        ])->findOrFail($id);
         
         $products = \App\Models\Product::orderBy('sort_order')->orderBy('name')->get();
         return view('product_variants.edit', compact('variant', 'products'));
@@ -64,6 +70,8 @@ class ProductVariantController extends Controller
             'sort_order' => 'nullable|integer|min:0|max:999999',
             'media_id' => 'nullable|integer|exists:media,id',
             'price' => 'nullable|numeric|min:0',
+            'component_weights' => 'nullable|array',
+            'component_percentages' => 'nullable|array',
         ]);
         // Chuyển size từ 2,5 thành 2.5 nếu là string
         if (isset($data['size']) && is_string($data['size'])) {
@@ -74,6 +82,7 @@ class ProductVariantController extends Controller
         } else {
             unset($data['is_priced_by_kg']);
         }
+        unset($data['component_weights'], $data['component_percentages']);
         // Ensure SKU is updated correctly
         if (isset($data['sku'])) {
             $variant->sku = $data['sku'];
@@ -111,11 +120,81 @@ class ProductVariantController extends Controller
                 'role'       => 'variant',
             ])->delete();
         }
+        $variant->refresh()->load('product.cuttingComponents');
+        $this->syncCuttingComponentRatios($request, $variant);
         return redirect()->route('product-variants.index')->with('success', 'Đã cập nhật biến thể thành công!');
     }
+
+    private function syncCuttingComponentRatios(Request $request, ProductVariant $variant): void
+    {
+        if (!$request->has('component_weights') && !$request->has('component_percentages')) {
+            return;
+        }
+
+        if ((string) ($variant->product?->product_type ?? '') !== Product::TYPE_WHOLE) {
+            return;
+        }
+
+        $templateComponentIds = $variant->product->cuttingComponents
+            ->pluck('component_product_variant_id')
+            ->map(fn ($id) => (int) $id)
+            ->filter()
+            ->values();
+
+        ProductComponentRatio::query()
+            ->where('source_product_variant_id', $variant->id)
+            ->whereNotIn('component_product_variant_id', $templateComponentIds->all())
+            ->delete();
+
+        foreach ($templateComponentIds as $componentId) {
+            ProductComponentRatio::updateOrCreate(
+                [
+                    'source_product_variant_id' => $variant->id,
+                    'component_product_variant_id' => $componentId,
+                ],
+                [
+                    'standard_weight' => (float) data_get($request->input('component_weights', []), (string) $componentId, 0),
+                    'percentage' => (float) data_get($request->input('component_percentages', []), (string) $componentId, 0),
+                ]
+            );
+        }
+    }
+
+    public function quickUpdateCuttingComponents(Request $request, ProductVariant $variant)
+    {
+        $data = $request->validate([
+            'component_weights' => 'nullable|array',
+            'component_percentages' => 'nullable|array',
+            'component_weights.*' => 'nullable|numeric|min:0',
+            'component_percentages.*' => 'nullable|numeric|min:0|max:100',
+        ]);
+
+        $variant->load('product.cuttingComponents');
+        if ((string) ($variant->product?->product_type ?? '') !== Product::TYPE_WHOLE) {
+            abort(422, 'Chỉ biến thể thuộc sản phẩm nguyên con mới có thành phần pha lóc.');
+        }
+
+        if ($variant->product->cuttingComponents->isEmpty()) {
+            abort(422, 'Sản phẩm này chưa có mẫu thành phần pha lóc.');
+        }
+
+        $this->syncCuttingComponentRatios($request->merge($data), $variant);
+
+        if ($request->expectsJson()) {
+            return response()->json(['ok' => true, 'message' => 'Đã cập nhật thành phần pha lóc.']);
+        }
+
+        return back()->with('success', 'Đã cập nhật thành phần pha lóc.');
+    }
+
     public function index(Request $request)
     {
-        $query = ProductVariant::with(['product.avatar.media', 'mediaLink.media']);
+        $query = ProductVariant::with([
+            'product.avatar.media',
+            'product.cuttingComponents.componentVariant.product',
+            'componentRatios',
+            'mediaLink.media',
+        ]);
         if ($request->filled('q')) {
             $q = $request->input('q');
             $query->where('sku', 'like', "%$q%")

@@ -18,24 +18,24 @@ class Inventory extends Model
     ];
 
     protected $casts = [
-        'quantity' => 'integer',
-        'reserved_quantity' => 'integer',
-        'low_stock_threshold' => 'integer',
+        'quantity' => 'float',
+        'reserved_quantity' => 'float',
+        'low_stock_threshold' => 'float',
     ];
 
-    public function getOnHandAttribute(): int
+    public function getOnHandAttribute(): float
     {
-        return (int) $this->quantity;
+        return (float) $this->quantity;
     }
 
-    public function getReservedAttribute(): int
+    public function getReservedAttribute(): float
     {
-        return (int) $this->reserved_quantity;
+        return (float) $this->reserved_quantity;
     }
 
-    public function getAvailableAttribute(): int
+    public function getAvailableAttribute(): float
     {
-        return max(0, (int) $this->quantity - (int) $this->reserved_quantity);
+        return max(0, (float) $this->quantity - (float) $this->reserved_quantity);
     }
 
     public function productVariant()

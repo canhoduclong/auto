@@ -344,7 +344,47 @@
         <div class="underline mb-4">
             <span class="fw-semibold progress-title-underline d-flex align-items-center text-uppercase">Thống kê tồn kho</span>
         </div>
-        @include('warehouse._consolidated_inventory_summary')
+        @include('warehouse._inventory_summary', [
+            'title' => 'Tồn kho hôm nay - kho đang quản lý',
+            'rows' => $inventorySummary['rows'],
+            'targetPrefix' => 'managed'
+        ])
+
+        <div class="inv-summary-list mb-4">
+            <div class="inv-summary-head my-2 d-flex align-items-center justify-content-between gap-2">
+                <span class="fw-semibold text-uppercase">Hàng pha lóc</span> 
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Tên sản phẩm</th>
+                            <th class="text-end">Tồn kho hiện tại</th>
+                            <th class="text-end">Nhu cầu</th>
+                            <th class="text-end">Thiếu</th>
+                            <th style="width:120px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse($cuttingShortages as $shortage)
+                            <tr>
+                                <td class="fw-semibold">{{ $shortage['name'] }}</td>
+                                <td class="text-end">{{ format_kg($shortage['current_stock']) }}</td>
+                                <td class="text-end">{{ format_kg($shortage['demand']) }}</td>
+                                <td class="text-end text-danger fw-bold">{{ format_kg($shortage['shortage']) }}</td>
+                                <td class="text-end">
+                                    <a class="btn btn-sm btn-primary" href="{{ route('warehouse.cutting.form', ['variant' => $shortage['variant_id'], 'demand' => $shortage['demand']]) }}">
+                                        Pha lóc
+                                    </a>
+                                </td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="5" class="text-center text-muted py-3">Chưa có hàng pha lóc còn thiếu.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
 
     </div> 
 </div>
@@ -380,3 +420,20 @@
 </div>
 @endif
 @endsection
+
+@push('scripts')
+<script>
+document.querySelectorAll('.js-inv-toggle').forEach(function (button) {
+    button.addEventListener('click', function () {
+        const target = document.getElementById(button.dataset.target);
+        if (!target) return;
+        const open = target.style.display !== 'none';
+        target.style.display = open ? 'none' : 'block';
+        const plus = button.querySelector('.icon-plus');
+        const minus = button.querySelector('.icon-minus');
+        if (plus) plus.style.display = open ? 'inline' : 'none';
+        if (minus) minus.style.display = open ? 'none' : 'inline';
+    });
+});
+</script>
+@endpush

@@ -297,6 +297,17 @@
                                     @enderror
                                 </div>
                                 <div class="col-lg-6">
+                                    <label for="product_type" class="form-label">Loại hình <span class="text-danger">*</span></label>
+                                    <select name="product_type" id="product_type" class="form-select @error('product_type') is-invalid @enderror" required>
+                                        @foreach($typeOptions as $value => $label)
+                                            <option value="{{ $value }}" {{ old('product_type', $product->product_type ?? \App\Models\Product::TYPE_WHOLE) === $value ? 'selected' : '' }}>{{ $label }}</option>
+                                        @endforeach
+                                    </select>
+                                    @error('product_type')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
+                                </div>
+                                <div class="col-lg-6">
                                     <label for="sort_order" class="form-label">Thứ tự hiển thị</label>
                                     <input type="number"
                                            name="sort_order"
@@ -456,6 +467,50 @@
                                                         </div>
                                                     </div>
                 </div>
+
+                @if(($product->product_type ?? \App\Models\Product::TYPE_WHOLE) === \App\Models\Product::TYPE_WHOLE)
+                    <div class="form-section" id="cutting-components">
+                        <div class="section-title">Thành Phần Pha Lóc</div>
+                        <div class="text-muted small mb-3">
+                            Chọn các sản phẩm thuộc loại Pha lóc để làm mẫu thành phần cho sản phẩm nguyên con này.
+                            Số liệu khối lượng thực tế sẽ nhập riêng cho từng biến thể tại trang biến thể sản phẩm.
+                        </div>
+
+                        @if($cutComponentVariants->isEmpty())
+                            <div class="alert alert-warning mb-0">
+                                Chưa có sản phẩm nào được khai báo Loại hình = Pha lóc.
+                            </div>
+                        @else
+                            @php
+                                $selectedCutComponentIds = $product->cuttingComponents
+                                    ->pluck('component_product_variant_id')
+                                    ->map(fn($id) => (int) $id)
+                                    ->all();
+                            @endphp
+                            <div class="row g-2">
+                                @foreach($cutComponentVariants as $componentVariant)
+                                    <div class="col-lg-4 col-md-6">
+                                        <label class="border rounded p-2 d-flex gap-2 align-items-start h-100">
+                                            <input type="checkbox"
+                                                   class="form-check-input mt-1"
+                                                   name="cutting_component_variant_ids[]"
+                                                   value="{{ $componentVariant->id }}"
+                                                   @checked(in_array((int) $componentVariant->id, $selectedCutComponentIds, true))>
+                                            <span>
+                                                <span class="fw-semibold d-block">{{ $componentVariant->product?->name }}</span>
+                                                <span class="text-muted small">{{ $componentVariant->name ?: 'Mặc định' }}</span>
+                                            </span>
+                                        </label>
+                                    </div>
+                                @endforeach
+                            </div>
+                            <div class="mt-3 small text-muted">
+                                Sau khi lưu, vào <a href="{{ route('product-variants.index', ['product_id' => $product->id]) }}">Biến thể sản phẩm</a>
+                                để nhập khối lượng chuẩn và tỷ lệ % cho từng size.
+                            </div>
+                        @endif
+                    </div>
+                @endif
 
                 {{-- Nút submit --}}
                 <div class="action-bar">

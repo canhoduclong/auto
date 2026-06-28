@@ -59,7 +59,15 @@
                     <option value="out_of_stock" @selected(request('status') === 'out_of_stock')>Hết hàng</option>
                 </select>
             </div>
-            <div class="col-lg-3 d-flex gap-2">
+            <div class="col-lg-1 col-md-3 col-6">
+                <label class="form-label small fw-semibold mb-1">Số dòng</label>
+                <select name="per_page" class="form-select">
+                    @foreach([25, 50, 100, 200] as $perPageOption)
+                        <option value="{{ $perPageOption }}" @selected((int) request('per_page', 50) === $perPageOption)>{{ $perPageOption }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="col-lg-2 d-flex gap-2">
                 <button class="btn btn-primary flex-fill">Xem tồn kho</button>
                 <a href="{{ route('warehouse.inventory') }}" class="btn btn-outline-secondary">Đặt lại</a>
             </div>
@@ -94,7 +102,9 @@
                         </td>
                         <td class="unit">{{ $row['unit'] }}</td>
                         @foreach($warehouses as $warehouse)
-                            @php($values = $row['warehouses'][(string) $warehouse->id])
+                            @php
+                                $values = $row['warehouses'][(string) $warehouse->id];
+                            @endphp
                             <td>{{ number_format($values['opening']) }}</td><td>{{ number_format($values['import']) }}</td><td>{{ number_format($values['export']) }}</td><td class="warehouse-end">{{ number_format($values['closing']) }}</td>
                         @endforeach
                         <td class="available">{{ number_format($row['available']) }}</td>
@@ -107,7 +117,9 @@
                             <td class="identity ps-4">{{ $variant['name'] }} <span class="text-muted">({{ $variant['sku'] }})</span></td>
                             <td class="unit">{{ $variant['unit'] }}</td>
                             @foreach($warehouses as $warehouse)
-                                @php($values = $variant['warehouses'][(string) $warehouse->id])
+                                @php
+                                    $values = $variant['warehouses'][(string) $warehouse->id];
+                                @endphp
                                 <td>{{ number_format($values['opening']) }}</td><td>{{ number_format($values['import']) }}</td><td>{{ number_format($values['export']) }}</td><td class="warehouse-end">{{ number_format($values['closing']) }}</td>
                             @endforeach
                             <td class="available">{{ number_format($variant['available']) }}</td>
@@ -124,7 +136,9 @@
                 <tfoot><tr>
                     <td class="identity">Tổng toàn bộ</td><td class="unit"></td>
                     @foreach($warehouses as $warehouse)
-                        @php($values = $summaryTotals['warehouses'][(string) $warehouse->id])
+                        @php
+                            $values = $summaryTotals['warehouses'][(string) $warehouse->id];
+                        @endphp
                         <td>{{ number_format($values['opening']) }}</td><td>{{ number_format($values['import']) }}</td><td>{{ number_format($values['export']) }}</td><td class="warehouse-end">{{ number_format($values['closing']) }}</td>
                     @endforeach
                     <td>{{ number_format($summaryTotals['available']) }}</td><td>{{ number_format($summaryTotals['book']) }}</td><td>{{ number_format($summaryTotals['total_export']) }}</td><td>{{ number_format($summaryTotals['total_closing']) }}</td>

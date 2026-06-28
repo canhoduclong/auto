@@ -130,7 +130,9 @@
                         <td class="identity sku sticky-col col-sku">{{ $row['sku'] }}</td>
                         <td class="identity unit sticky-col col-unit">{{ $row['unit'] }}</td>
                         @foreach($dates as $date)
-                            @php($day = $row['days'][$date['date']])
+                            @php
+                                $day = $row['days'][$date['date']];
+                            @endphp
                             <td data-daily-column="opening" data-width-key="opening">{{ number_format($day['opening']) }}</td>
                             <td class="import" data-daily-column="import" data-width-key="import">{{ number_format($day['import']) }}</td>
                             <td class="total" data-daily-column="total" data-width-key="total">{{ number_format($day['total']) }}</td>
@@ -152,7 +154,9 @@
                         <td class="identity sku sticky-col col-sku"></td>
                         <td class="identity unit sticky-col col-unit"></td>
                         @foreach($dates as $date)
-                            @php($total = $pageTotals[$date['date']])
+                            @php
+                                $total = $pageTotals[$date['date']];
+                            @endphp
                             <td data-daily-column="opening" data-width-key="opening">{{ number_format($total['opening']) }}</td>
                             <td data-daily-column="import" data-width-key="import">{{ number_format($total['import']) }}</td>
                             <td data-daily-column="total" data-width-key="total">{{ number_format($total['total']) }}</td>

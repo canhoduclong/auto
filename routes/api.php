@@ -62,6 +62,8 @@ Route::prefix('mobile')->group(function () {
             Route::post('/orders/{order}/logistics', [WarehouseApiController::class, 'updateLogistics']);
             Route::post('/orders/{order}/request-adjustment', [WarehouseApiController::class, 'requestAdjustment']);
             Route::get('/inventory', [WarehouseApiController::class, 'inventory']);
+            Route::get('/cutting/{variant}', [WarehouseApiController::class, 'cuttingOptions']);
+            Route::post('/cutting/{variant}', [WarehouseApiController::class, 'executeCutting']);
             Route::get('/products', [WarehouseApiController::class, 'products']);
             Route::get('/returns', [WarehouseApiController::class, 'returns']);
             Route::post('/returns/{orderReturn}/receive', [WarehouseApiController::class, 'receiveReturn']);

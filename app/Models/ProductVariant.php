@@ -129,6 +129,16 @@ class ProductVariant extends Model
             ->orderByDesc('id');
     }
 
+    public function componentRatios()
+    {
+        return $this->hasMany(ProductComponentRatio::class, 'source_product_variant_id');
+    }
+
+    public function asComponentRatios()
+    {
+        return $this->hasMany(ProductComponentRatio::class, 'component_product_variant_id');
+    }
+
     // helper: lấy giá cuối cùng
     public function getFinalPriceAttribute()
     {

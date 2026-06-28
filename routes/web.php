@@ -299,6 +299,8 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::delete('/order-transfers/{id}', [\App\Http\Controllers\Warehouse\OrderTransferController::class, 'destroy'])->name('order-transfers.destroy');
         Route::post('/order-transfers/{transfer}/orders/{order}/detach', [\App\Http\Controllers\Warehouse\OrderTransferController::class, 'detachWaitingTransfer'])->name('order-transfers.orders.detach');
         Route::get('/',            [WarehouseDashboardController::class, 'index'])->name('dashboard');
+        Route::get('/cutting/{variant}', [WarehouseDashboardController::class, 'cuttingForm'])->name('cutting.form');
+        Route::post('/cutting/{variant}', [WarehouseDashboardController::class, 'executeCutting'])->name('cutting.execute');
         Route::get('/orders',      [WarehouseDashboardController::class, 'orders'])->name('orders');
         Route::post('/orders/{order}/logistics',        [WarehouseDashboardController::class, 'updateLogistics'])->name('orders.logistics');
         Route::post('/orders/{order}/start-packing',    [WarehouseDashboardController::class, 'startPacking'])->name('orders.start-packing');
@@ -559,6 +561,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     // Quản trị biến thể sản phẩm
     Route::resource('product-variants', ProductVariantController::class)->only(['index', 'create', 'store', 'edit', 'update'])->middleware('permission');
     Route::post('product-variants/bulk-delete', [ProductVariantController::class, 'bulkDelete'])->name('product-variants.bulk-delete')->middleware('permission');
+    Route::post('product-variants/{variant}/cutting-components', [ProductVariantController::class, 'quickUpdateCuttingComponents'])->name('product-variants.cutting-components.quick-update')->middleware('permission');
     Route::post('product-variants/{variant}/duplicate', [ProductVariantController::class, 'duplicate'])->name('product-variants.duplicate')->middleware('permission');
 
     // AJAX popup chọn khách hàng

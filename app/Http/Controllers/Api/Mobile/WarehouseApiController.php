@@ -15,6 +15,7 @@ use App\Models\WarehouseInventoryTransfer;
 use App\Models\WarehouseTransfer;
 use App\Models\Warehouse;
 use App\Services\WarehouseInventorySummaryService;
+use App\Services\ProductCuttingService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -173,34 +174,7 @@ class WarehouseApiController extends BaseApiController
                 return $row;
             })
             ->values();
-        $otherWarehouseSummaries = $warehouseId
-            ? Warehouse::query()
-                ->whereKeyNot($warehouseId)
-                ->where('status', true)
-                ->orderBy('name')
-                ->get(['id', 'name'])
-                ->map(function (Warehouse $warehouse) use ($inventorySummaryService) {
-                    $summary = $inventorySummaryService->build((int) $warehouse->id);
-                    $rows = $summary['rows']
-                        ->filter(fn ($row) => (int) $row['closing'] > 0)
-                        ->map(function ($row) {
-                            $row['variants'] = $row['variants']->filter(fn ($variant) => (int) $variant['closing'] > 0)->values();
-
-                            return $row;
-                        })
-                        ->values();
-
-                    return [
-                        'warehouse_id' => (int) $warehouse->id,
-                        'warehouse_name' => (string) $warehouse->name,
-                        'title' => 'Tồn kho của kho khác (' . $warehouse->name . ')',
-                        'totals' => $summary['totals'],
-                        'rows' => $rows,
-                    ];
-                })
-                ->filter(fn ($summary) => $summary['rows']->isNotEmpty())
-                ->values()
-            : collect();
+        $cuttingShortages = app(ProductCuttingService::class)->missingCutProducts($warehouseId);
 
         $recentPacked = $applyWarehouseScope(Order::with('customer:id,name'))
             ->whereIn('status', $packedStatuses)
@@ -261,7 +235,8 @@ class WarehouseApiController extends BaseApiController
                 ],
                 'rows' => $summaryRows,
             ],
-            'other_warehouse_summaries' => $otherWarehouseSummaries,
+            'other_warehouse_summaries' => [],
+            'cutting_shortages' => $cuttingShortages,
             'recent_packed' => $recentPacked,
         ]);
     }
@@ -354,24 +329,89 @@ class WarehouseApiController extends BaseApiController
     public function inventory(Request $request): JsonResponse
     {
         $this->ensureWarehouseRole($request);
+        $warehouseId = $request->user()->warehouse_id ? (int) $request->user()->warehouse_id : null;
         $date = $request->filled('date')
             ? Carbon::parse($request->query('date'))->toDateString()
             : now()->toDateString();
-        $summary = app(WarehouseInventorySummaryService::class)->buildConsolidated(
-            $date,
-            trim((string) $request->query('search', '')),
-            $request->query('status')
-        );
+        $summary = app(WarehouseInventorySummaryService::class)->build($warehouseId);
+        $rows = $summary['rows'];
+        $search = mb_strtolower(trim((string) $request->query('search', '')));
+        if ($search !== '') {
+            $rows = $rows->filter(fn ($row) => str_contains(mb_strtolower((string) $row['name']), $search)
+                || $row['variants']->contains(fn ($variant) => str_contains(mb_strtolower((string) $variant['name']), $search)));
+        }
 
         return $this->ok([
-            'selected_date' => $summary['selectedDate'],
-            'warehouses' => $summary['warehouses']->map(fn (Warehouse $warehouse) => [
-                'id' => (int) $warehouse->id,
-                'name' => (string) $warehouse->name,
-            ])->values(),
-            'rows' => $summary['rows'],
+            'selected_date' => $date,
+            'warehouses' => Warehouse::query()
+                ->when($warehouseId, fn ($query) => $query->whereKey($warehouseId))
+                ->get(['id', 'name'])
+                ->map(fn (Warehouse $warehouse) => ['id' => (int) $warehouse->id, 'name' => (string) $warehouse->name])
+                ->values(),
+            'rows' => $rows->values(),
             'totals' => $summary['totals'],
+            'cutting_shortages' => app(ProductCuttingService::class)->missingCutProducts($warehouseId),
         ]);
+    }
+
+    public function cuttingOptions(Request $request, ProductVariant $variant): JsonResponse
+    {
+        $this->ensureWarehouseRole($request);
+        $warehouseId = $request->user()->warehouse_id ? (int) $request->user()->warehouse_id : null;
+        $variant->loadMissing('product');
+        if ($variant->product?->product_type !== \App\Models\Product::TYPE_CUT) {
+            return $this->fail('Sản phẩm không phải hàng pha lóc.', 422);
+        }
+
+        $service = app(ProductCuttingService::class);
+        $materials = $service->sourceMaterials($variant, $warehouseId);
+        $selectedMaterials = collect($request->query('materials', []))->map(fn ($row) => [
+            'variant_id' => (int) ($row['variant_id'] ?? 0),
+            'quantity' => max(0, (float) ($row['quantity'] ?? 0)),
+        ])->filter(fn ($row) => $row['variant_id'] > 0 && $row['quantity'] > 0)->values()->all();
+
+        return $this->ok([
+            'target_variant_id' => (int) $variant->id,
+            'materials' => $materials,
+            'preview' => $service->preview($variant, $selectedMaterials),
+        ]);
+    }
+
+    public function executeCutting(Request $request, ProductVariant $variant): JsonResponse
+    {
+        $this->ensureWarehouseRole($request);
+        $user = $request->user();
+        $warehouseId = $user->warehouse_id ? (int) $user->warehouse_id : null;
+        if (!$warehouseId) {
+            return $this->fail('Tài khoản chưa được gán kho thực hiện.', 422);
+        }
+
+        $data = $request->validate([
+            'materials' => ['required', 'array', 'min:1'],
+            'materials.*.variant_id' => ['required', 'exists:product_variants,id'],
+            'materials.*.quantity' => ['required', 'numeric', 'min:0'],
+            'actual_finished_weight' => ['required', 'numeric', 'min:0.001'],
+            'components' => ['nullable', 'array'],
+            'components.*.variant_id' => ['required_with:components', 'exists:product_variants,id'],
+            'components.*.weight' => ['nullable', 'numeric', 'min:0'],
+            'note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        try {
+            $batch = app(ProductCuttingService::class)->execute(
+                $warehouseId,
+                $variant,
+                $data['materials'],
+                (float) $data['actual_finished_weight'],
+                $data['components'] ?? [],
+                (string) ($data['note'] ?? 'Xuất kho để thực hiện pha lóc.'),
+                (int) $user->id
+            );
+        } catch (\Throwable $e) {
+            return $this->fail($e->getMessage(), 422);
+        }
+
+        return $this->ok(['batch_id' => (int) $batch->id], 'Đã thực hiện pha lóc và cập nhật tồn kho.');
     }
 
     public function returns(Request $request): JsonResponse

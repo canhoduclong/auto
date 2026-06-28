@@ -30,10 +30,13 @@ class WarehouseInventorySummaryService
                         'inventories.warehouse:id,name',
                         'inventories.movements' => fn ($movementQuery) => $movementQuery
                             ->whereBetween('created_at', [$dayStart, $dayEnd]),
-                    ])->orderBy('name')->orderBy('sku');
+                    ])
+                        ->where('status', true)
+                        ->orderBy('sort_order')
+                        ->orderBy('id');
                 },
             ])
-            ->whereHas('variants.inventories')
+            ->whereHas('variants', fn ($variantQuery) => $variantQuery->where('status', true))
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($searchQuery) use ($search) {
                     $searchQuery->where('name', 'like', "%{$search}%")
@@ -42,7 +45,8 @@ class WarehouseInventorySummaryService
                             ->orWhere('sku', 'like', "%{$search}%"));
                 });
             })
-            ->orderBy('name')
+            ->orderBy('sort_order')
+            ->orderByDesc('created_at')
             ->get();
 
         $inventoryIds = $products->flatMap(fn ($product) => $product->variants)
@@ -71,7 +75,6 @@ class WarehouseInventorySummaryService
 
         $rows = $products->map(function ($product) use ($warehouses, $movementsAfterDate, $isToday, $emptyWarehouseValues) {
             $variantRows = $product->variants
-                ->filter(fn ($variant) => $variant->inventories->isNotEmpty())
                 ->map(function ($variant) use ($warehouses, $movementsAfterDate, $isToday, $emptyWarehouseValues) {
                     $warehouseValues = $emptyWarehouseValues();
                     $book = 0;
@@ -157,34 +160,59 @@ class WarehouseInventorySummaryService
         return compact('warehouses', 'rows', 'totals', 'selectedDate');
     }
 
-    public function build(?int $warehouseId): array
+    public function build(?int $warehouseId, ?string $date = null): array
     {
+        $selectedDate = Carbon::parse($date ?: Carbon::today())->toDateString();
+        $dayStart = Carbon::parse($selectedDate)->startOfDay();
+        $dayEnd = Carbon::parse($selectedDate)->endOfDay();
+        $isToday = $selectedDate === Carbon::today()->toDateString();
+
         $products = Product::with([
-            'variants.inventories' => function ($query) use ($warehouseId) {
+            'variants.inventories' => function ($query) use ($warehouseId, $dayStart, $dayEnd) {
                 if ($warehouseId) {
                     $query->where('warehouse_id', $warehouseId);
                 }
 
-                $query->with('movements');
+                $query->with([
+                    'movements' => fn ($movementQuery) => $movementQuery
+                        ->whereBetween('created_at', [$dayStart, $dayEnd]),
+                ]);
             },
             'variants.product',
         ])
             ->orderBy('name')
             ->get();
 
-        $rows = $products->map(function ($product) {
+        $inventoryIds = $products->flatMap(fn ($product) => $product->variants)
+            ->flatMap(fn ($variant) => $variant->inventories)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->values();
+
+        $movementsAfterDate = $inventoryIds->isEmpty()
+            ? collect()
+            : InventoryMovement::query()
+                ->whereIn('inventory_id', $inventoryIds->all())
+                ->where('created_at', '>', $dayEnd)
+                ->selectRaw('inventory_id, COALESCE(SUM(quantity), 0) as quantity')
+                ->groupBy('inventory_id')
+                ->pluck('quantity', 'inventory_id');
+
+        $rows = $products->map(function ($product) use ($movementsAfterDate, $isToday) {
             $variants = $product->variants
                 ->filter(fn ($variant) => $variant->inventories->isNotEmpty())
                 ->sortBy(fn ($variant) => mb_strtolower((string) ($variant->name ?? '')))
                 ->values();
 
-            $variantRows = $variants->map(function ($variant) {
-                $closing = (int) $variant->inventories->sum('quantity');
-                $import = (int) $variant->inventories->sum(
+            $variantRows = $variants->map(function ($variant) use ($movementsAfterDate, $isToday) {
+                $closing = (float) $variant->inventories->sum(
+                    fn ($inventory) => (float) $inventory->quantity - (float) ($movementsAfterDate[$inventory->id] ?? 0)
+                );
+                $import = (float) $variant->inventories->sum(
                     fn ($inventory) => $inventory->movements->where('quantity', '>', 0)->sum('quantity')
                 );
-                $reserved = (int) $variant->inventories->sum('reserved_quantity');
-                $export = (int) abs($variant->inventories->sum(
+                $reserved = $isToday ? (float) $variant->inventories->sum('reserved_quantity') : 0;
+                $export = (float) abs($variant->inventories->sum(
                     fn ($inventory) => $inventory->movements->where('quantity', '<', 0)->sum('quantity')
                 ));
 
@@ -212,11 +240,11 @@ class WarehouseInventorySummaryService
                     ? (string) $unitLabels->first()
                     : ($unitLabels->count() > 1 ? 'Nhiều DVT' : '—'),
                 'variant_count' => (int) $variants->count(),
-                'opening' => (int) $variantRows->sum('opening'),
-                'import' => (int) $variantRows->sum('import'),
-                'reserved' => (int) $variantRows->sum('reserved'),
-                'export' => (int) $variantRows->sum('export'),
-                'closing' => (int) $variantRows->sum('closing'),
+                'opening' => (float) $variantRows->sum('opening'),
+                'import' => (float) $variantRows->sum('import'),
+                'reserved' => (float) $variantRows->sum('reserved'),
+                'export' => (float) $variantRows->sum('export'),
+                'closing' => (float) $variantRows->sum('closing'),
                 'variants' => $variantRows,
             ];
         })->sortBy(fn ($row) => mb_strtolower((string) $row['name']))->values();
@@ -224,17 +252,18 @@ class WarehouseInventorySummaryService
         return [
             'rows' => $rows,
             'totals' => $this->totals($rows),
+            'selectedDate' => $selectedDate,
         ];
     }
 
     private function totals(Collection $rows): array
     {
         return [
-            'opening' => (int) $rows->sum('opening'),
-            'import' => (int) $rows->sum('import'),
-            'reserved' => (int) $rows->sum('reserved'),
-            'export' => (int) $rows->sum('export'),
-            'closing' => (int) $rows->sum('closing'),
+            'opening' => (float) $rows->sum('opening'),
+            'import' => (float) $rows->sum('import'),
+            'reserved' => (float) $rows->sum('reserved'),
+            'export' => (float) $rows->sum('export'),
+            'closing' => (float) $rows->sum('closing'),
         ];
     }
 }

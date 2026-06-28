@@ -25,7 +25,9 @@
                     <tr>
                         <td class="fw-semibold">{{ $row['name'] }}</td>
                         @foreach($consolidatedInventory['warehouses'] as $warehouse)
-                            @php($values = $row['warehouses'][(string) $warehouse->id])
+                            @php
+                                $values = $row['warehouses'][(string) $warehouse->id];
+                            @endphp
                             <td class="text-end">{{ number_format($values['opening']) }}</td>
                             <td class="text-end">{{ number_format($values['import']) }}</td>
                             <td class="text-end">{{ number_format($values['export']) }}</td>
@@ -44,7 +46,9 @@
                 <tr style="background:#d1fae5;" class="fw-bold">
                     <td>Tổng toàn bộ</td>
                     @foreach($consolidatedInventory['warehouses'] as $warehouse)
-                        @php($values = $consolidatedInventory['totals']['warehouses'][(string) $warehouse->id])
+                        @php
+                            $values = $consolidatedInventory['totals']['warehouses'][(string) $warehouse->id];
+                        @endphp
                         <td class="text-end">{{ number_format($values['opening']) }}</td>
                         <td class="text-end">{{ number_format($values['import']) }}</td>
                         <td class="text-end">{{ number_format($values['export']) }}</td>

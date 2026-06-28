@@ -14,6 +14,7 @@ use App\Models\Media;
 use App\Models\MediaLink;
 use App\Models\ProductPriceLog;
 use App\Models\ProductPriceRule;
+use App\Models\ProductCuttingComponent;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\DB;
@@ -76,8 +77,9 @@ class ProductController extends Controller
         $categories = Category::all();
         $brands = Brand::all();
         $unitOptions = ProductUnit::options();
+        $typeOptions = Product::typeOptions();
 
-        return view('products.create', compact('categories', 'brands', 'unitOptions'));
+        return view('products.create', compact('categories', 'brands', 'unitOptions', 'typeOptions'));
     }
 
     public function store(Request $request)
@@ -90,11 +92,13 @@ class ProductController extends Controller
             'category_id' => 'required|numeric',
             'brand_id' => 'nullable|numeric',
             'unit' => ['required', Rule::in(ProductUnit::values())],
+            'product_type' => ['required', Rule::in(array_keys(Product::typeOptions()))],
             'sort_order' => 'nullable|integer|min:0|max:999999',
             'media_id' => 'nullable|integer|exists:media,id',
         ]);
         $data['user_id'] = Auth::id();
         $data['sort_order'] = (int) ($data['sort_order'] ?? 0);
+        $data['product_type'] = $data['product_type'] ?? Product::TYPE_WHOLE;
 
         $product = Product::create($data);
 
@@ -125,8 +129,9 @@ class ProductController extends Controller
         $categories = Category::all();
         $brands = Brand::all();
         $unitOptions = ProductUnit::options();
+        $typeOptions = Product::typeOptions();
 
-        return view('products.show', compact('product', 'categories', 'brands', 'unitOptions'));
+        return view('products.show', compact('product', 'categories', 'brands', 'unitOptions', 'typeOptions'));
     }
 
     public function edit(Request $request, $id)
@@ -141,12 +146,22 @@ class ProductController extends Controller
             'gallery.media',
             'variants' => fn ($query) => $query->orderBy('sort_order')->orderBy('id'),
             'variants.avatar.media',
+            'variants.componentRatios',
+            'cuttingComponents.componentVariant.product',
         ])->findOrFail($id);
         $categories = Category::all();
         $brands = Brand::all();
         $unitOptions = ProductUnit::options();
+        $typeOptions = Product::typeOptions();
+        $cutComponentVariants = ProductVariant::query()
+            ->with('product')
+            ->whereHas('product', fn ($query) => $query->where('product_type', Product::TYPE_CUT))
+            ->where('status', true)
+            ->orderBy('product_id')
+            ->orderBy('name')
+            ->get();
 
-        return view('products.edit', compact('product','page','perPage','categories', 'brands', 'unitOptions'));
+        return view('products.edit', compact('product','page','perPage','categories', 'brands', 'unitOptions', 'typeOptions', 'cutComponentVariants'));
 
     }
 
@@ -168,6 +183,7 @@ class ProductController extends Controller
                 'price' => 'nullable|numeric',
                 'stock' => 'nullable|numeric',
                 'unit'  => ['required', Rule::in(ProductUnit::values())],
+                'product_type' => ['nullable', Rule::in(array_keys(Product::typeOptions()))],
                 'sort_order' => 'nullable|integer|min:0|max:999999',
                 'media_id' => 'nullable|integer|exists:media,id',
             ]);
@@ -180,6 +196,9 @@ class ProductController extends Controller
                 $product->stock = $validated['stock'];
             }
             $product->unit = $validated['unit'];
+            if (isset($validated['product_type'])) {
+                $product->product_type = $validated['product_type'];
+            }
             $product->sort_order = (int) ($validated['sort_order'] ?? 0);
 
             if ($request->filled('media_id')) {
@@ -223,6 +242,7 @@ class ProductController extends Controller
                 'category_id' => 'required|numeric',
                 'brand_id' => 'nullable|numeric',
                 'unit' => ['required', Rule::in(ProductUnit::values())],
+                'product_type' => ['required', Rule::in(array_keys(Product::typeOptions()))],
                 'sort_order' => 'nullable|integer|min:0|max:999999',
                 'media_id'    => 'nullable|integer|exists:media,id',
                 'gallery'     => 'nullable|array',
@@ -237,6 +257,8 @@ class ProductController extends Controller
                 'variants.*.stock' => 'nullable|integer|min:0',
                 'variants.*.sort_order' => 'nullable|integer|min:0|max:999999',
                 'variants.*.media_id' => 'nullable|integer|exists:media,id',
+                'cutting_component_variant_ids' => 'nullable|array',
+                'cutting_component_variant_ids.*' => 'integer|exists:product_variants,id',
             ]);
 
             // ===== Cập nhật thông tin cơ bản =====
@@ -245,9 +267,12 @@ class ProductController extends Controller
                 'category_id' => $validated['category_id'],
                 'brand_id' => $validated['brand_id'],
                 'unit' => $validated['unit'],
+                'product_type' => $validated['product_type'],
                 'sort_order' => (int) ($validated['sort_order'] ?? 0),
                 'description' => $validated['description'] ?? $product->description,
             ]);
+
+            $this->syncCuttingComponentTemplate($validated, $product);
 
             // ===== Cập nhật avatar =====
             if (!empty($validated['media_id'])) {
@@ -407,6 +432,32 @@ class ProductController extends Controller
         }
 
         return $sku;
+    }
+
+    private function syncCuttingComponentTemplate(array $validated, Product $product): void
+    {
+        if ((string) $product->product_type !== Product::TYPE_WHOLE) {
+            ProductCuttingComponent::query()->where('product_id', $product->id)->delete();
+            return;
+        }
+
+        $componentIds = collect($validated['cutting_component_variant_ids'] ?? [])
+            ->map(fn ($id) => (int) $id)
+            ->filter()
+            ->unique()
+            ->values();
+
+        ProductCuttingComponent::query()
+            ->where('product_id', $product->id)
+            ->whereNotIn('component_product_variant_id', $componentIds->all())
+            ->delete();
+
+        foreach ($componentIds as $componentId) {
+            ProductCuttingComponent::firstOrCreate([
+                'product_id' => $product->id,
+                'component_product_variant_id' => $componentId,
+            ]);
+        }
     }
 
 

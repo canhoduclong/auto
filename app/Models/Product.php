@@ -18,6 +18,7 @@ class Product extends Model
         'sort_order',
         'name',
         'unit',
+        'product_type',
         'kg',
         'is_priced_by_kg',
         'slug',
@@ -31,6 +32,22 @@ class Product extends Model
         'status' => 'boolean',
         'sort_order' => 'integer',
     ];
+
+    public const TYPE_WHOLE = 'whole';
+    public const TYPE_CUT = 'cut';
+
+    public static function typeOptions(): array
+    {
+        return [
+            self::TYPE_WHOLE => 'Nguyên con',
+            self::TYPE_CUT => 'Pha lóc',
+        ];
+    }
+
+    public function getProductTypeLabelAttribute(): string
+    {
+        return self::typeOptions()[(string) ($this->product_type ?: self::TYPE_WHOLE)] ?? 'Nguyên con';
+    }
 
     public function getUnitLabelAttribute(): string
     {
@@ -109,6 +126,33 @@ class Product extends Model
     public function variants()
     {
         return $this->hasMany(ProductVariant::class);
+    }
+
+    public function componentRatios()
+    {
+        return $this->hasManyThrough(
+            ProductComponentRatio::class,
+            ProductVariant::class,
+            'product_id',
+            'source_product_variant_id',
+            'id',
+            'id'
+        );
+    }
+
+    public function cuttingComponents()
+    {
+        return $this->hasMany(ProductCuttingComponent::class);
+    }
+
+    public function cuttingComponentVariants()
+    {
+        return $this->belongsToMany(
+            ProductVariant::class,
+            'product_cutting_components',
+            'product_id',
+            'component_product_variant_id'
+        )->withTimestamps();
     }
 
     public function supplierProducts()

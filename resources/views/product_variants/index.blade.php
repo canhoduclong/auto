@@ -148,6 +148,17 @@
                                     <div class="d-flex flex-wrap gap-1">
                                         <a href="{{ route('product-variants.edit', $variant->id) }}" class="btn btn-outline-warning btn-sm">Sửa</a>
                                         <a href="{{ route('variants.edit-price', $variant->id) }}?from=product-variants" class="btn btn-outline-info btn-sm">Giá</a>
+                                        @if(($variant->product?->product_type ?? '') === \App\Models\Product::TYPE_WHOLE)
+                                            <a href="{{ route('product-variants.edit', $variant->id) }}#cutting-components" class="btn btn-outline-secondary btn-sm">Thành phần</a>
+                                            @if($variant->product?->cuttingComponents?->isNotEmpty())
+                                                <button type="button"
+                                                        class="btn btn-outline-dark btn-sm"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#quickCuttingComponents{{ $variant->id }}">
+                                                    Pha lóc nhanh
+                                                </button>
+                                            @endif
+                                        @endif
                                         <button type="button" class="btn btn-outline-primary btn-sm clone-variant-index" data-variant-id="{{ $variant->id }}">Nhân bản</button>
                                         <button type="button" class="btn btn-outline-success btn-sm quick-edit-variant-index" data-variant-id="{{ $variant->id }}">Sửa nhanh</button>
                                     </div>
@@ -163,6 +174,89 @@
             </table>
         </div>
     </div>
+
+    @foreach($groupedVariants->flatten(1) as $variant)
+        @if(($variant->product?->product_type ?? '') === \App\Models\Product::TYPE_WHOLE && $variant->product?->cuttingComponents?->isNotEmpty())
+            @php
+                $ratiosByComponent = $variant->componentRatios->keyBy('component_product_variant_id');
+            @endphp
+            <div class="modal fade" id="quickCuttingComponents{{ $variant->id }}" tabindex="-1" aria-labelledby="quickCuttingComponents{{ $variant->id }}Label" aria-hidden="true">
+                <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                    <div class="modal-content">
+                        <form method="POST"
+                              action="{{ route('product-variants.cutting-components.quick-update', $variant) }}"
+                              class="quick-cutting-components-form">
+                            @csrf
+                            <div class="modal-header">
+                                <div>
+                                    <h5 class="modal-title" id="quickCuttingComponents{{ $variant->id }}Label">Sửa nhanh thành phần pha lóc</h5>
+                                    <div class="small text-muted">{{ $variant->product?->name }} - {{ $variant->name ?: 'Mặc định' }}</div>
+                                </div>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="table-responsive">
+                                    <table class="table table-sm align-middle mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th>Sản phẩm pha lóc</th>
+                                                <th style="width:180px;">Khối lượng chuẩn</th>
+                                                <th style="width:160px;">Tỷ lệ %</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach($variant->product->cuttingComponents as $component)
+                                                @php
+                                                    $componentVariant = $component->componentVariant;
+                                                    $ratio = $ratiosByComponent->get($component->component_product_variant_id);
+                                                @endphp
+                                                <tr>
+                                                    <td>
+                                                        <div class="fw-semibold">{{ $componentVariant?->product?->name ?? 'Sản phẩm' }}</div>
+                                                        <div class="text-muted small">{{ $componentVariant?->name ?: 'Mặc định' }}</div>
+                                                    </td>
+                                                    <td>
+                                                        <div class="input-group input-group-sm">
+                                                            <input type="number"
+                                                                   name="component_weights[{{ $component->component_product_variant_id }}]"
+                                                                   class="form-control"
+                                                                   min="0"
+                                                                   step="0.001"
+                                                                   value="{{ $ratio?->standard_weight ?? '' }}">
+                                                            <span class="input-group-text">kg</span>
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <div class="input-group input-group-sm">
+                                                            <input type="number"
+                                                                   name="component_percentages[{{ $component->component_product_variant_id }}]"
+                                                                   class="form-control"
+                                                                   min="0"
+                                                                   max="100"
+                                                                   step="0.001"
+                                                                   value="{{ $ratio?->percentage ?? '' }}">
+                                                            <span class="input-group-text">%</span>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div class="small text-muted mt-2">
+                                    Số liệu này dùng để tính thành phần pha lóc thực tế cho riêng biến thể này.
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Đóng</button>
+                                <button type="submit" class="btn btn-primary">Lưu nhanh</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        @endif
+    @endforeach
 
     <div class="mt-3">
         {{ $variants->links() }}
@@ -290,6 +384,32 @@ $(document).ready(function() {
             },
             error: function() {
                 alert('Có lỗi xảy ra khi cập nhật.');
+            }
+        });
+    });
+
+    $(document).on('submit', '.quick-cutting-components-form', function(e) {
+        e.preventDefault();
+        const form = $(this);
+        const submitBtn = form.find('button[type="submit"]');
+        submitBtn.prop('disabled', true);
+
+        $.ajax({
+            url: form.attr('action'),
+            method: 'POST',
+            data: form.serialize(),
+            headers: {
+                'Accept': 'application/json'
+            },
+            success: function(response) {
+                alert(response.message || 'Đã cập nhật thành phần pha lóc.');
+                location.reload();
+            },
+            error: function(xhr) {
+                alert(xhr.responseJSON?.message || 'Có lỗi xảy ra khi cập nhật thành phần pha lóc.');
+            },
+            complete: function() {
+                submitBtn.prop('disabled', false);
             }
         });
     });

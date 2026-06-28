@@ -79,6 +79,23 @@
                         </div>
 
                         <div class="mb-3">
+                            <label for="product_type" class="form-label">Loại hình <span class="text-danger">*</span></label>
+                            <select
+                                name="product_type"
+                                id="product_type"
+                                class="form-select @error('product_type') is-invalid @enderror"
+                                required
+                            >
+                                @foreach($typeOptions as $value => $label)
+                                    <option value="{{ $value }}" {{ old('product_type', \App\Models\Product::TYPE_WHOLE) === $value ? 'selected' : '' }}>{{ $label }}</option>
+                                @endforeach
+                            </select>
+                            @error('product_type')
+                                <div class="invalid-feedback">{{ $message }}</div>
+                            @enderror
+                        </div>
+
+                        <div class="mb-3">
                             <label for="sort_order" class="form-label">Thứ tự hiển thị</label>
                             <input type="number"
                                    name="sort_order"

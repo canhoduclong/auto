@@ -15,7 +15,9 @@
                 $filteredRows = $rows->filter(fn ($row) => $row['closing'] > 0);
             @endphp
             @forelse($filteredRows as $row)
-                @php($targetId = 'inv-child-' . $targetPrefix . '-' . $row['product_id'])
+                @php
+                    $targetId = 'inv-child-' . $targetPrefix . '-' . $row['product_id'];
+                @endphp
                 <div class="product-row-div border-bottom" style="background:#fffbe7;">
                     <div class="d-flex align-items-center px-2 py-2">
                         <div class="inv-col-name flex-grow-1">

@@ -33,7 +33,12 @@ class OrderAdjustmentController extends Controller
     {
         $this->authorizeCreate($order);
         $settings   = $this->settings;
-        $order->load(['customer', 'items.variant.product']);
+        $order->load([
+            'customer.addresses',
+            'items.product.avatar.media',
+            'items.variant.avatar.media',
+            'items.variant.product',
+        ]);
         $warehouses = Warehouse::query()->orderBy('name')->get();
 
         return view('site.orders.adjustments.create', [

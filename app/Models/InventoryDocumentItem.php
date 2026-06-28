@@ -17,6 +17,11 @@ class InventoryDocumentItem extends Model
         'source_price_id',
     ];
 
+    protected $casts = [
+        'quantity' => 'float',
+        'unit_cost' => 'float',
+    ];
+
     public function document()
     {
         return $this->belongsTo(InventoryDocument::class, 'inventory_document_id');

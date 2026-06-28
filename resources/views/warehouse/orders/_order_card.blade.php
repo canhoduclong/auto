@@ -24,6 +24,7 @@
                 $hasStockShortage = (bool) ($stockGuard['has_shortage'] ?? false);
                 $canStartPacking = (bool) ($stockGuard['can_start_packing'] ?? true);
                 $stockShortages = collect($stockGuard['shortages'] ?? []);
+                $orderCuttingPlans = collect($cuttingPlansByOrder[$order->id] ?? []);
                 $isPendingSaleConfirmation = $order->warehouse_adjustment_status === \App\Models\Order::WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION;
                 $isConfirmedBySale = $order->warehouse_adjustment_status === \App\Models\Order::WAREHOUSE_ADJUSTMENT_STATUS_SALE_CONFIRMED;
                 $isRejectedBySale = $order->warehouse_adjustment_status === \App\Models\Order::WAREHOUSE_ADJUSTMENT_STATUS_SALE_REJECTED;
@@ -306,12 +307,24 @@
                                         <summary>Không đủ tồn kho để đóng hàng</summary>
                                         <ul>
                                             @foreach($stockShortages as $shortage)
+                                                @php
+                                                    $cuttingPlan = $orderCuttingPlans->get((int) ($shortage['variant_id'] ?? 0));
+                                                    $cuttingModalId = $cuttingPlan ? 'cutting-order-modal-' . $order->id . '-' . (int) ($shortage['variant_id'] ?? 0) : null;
+                                                @endphp
                                                 <li>
                                                     {{ $shortage['variant_name'] ?? 'Sản phẩm' }}:
                                                     cần {{ number_format((int) ($shortage['required_qty'] ?? 0)) }},
                                                     khả dụng {{ number_format((int) ($shortage['available_qty'] ?? 0)) }}
                                                     @if(($shortage['reason'] ?? '') === 'blocked_by_prior_order')
                                                         (bị ảnh hưởng bởi đơn ưu tiên trước)
+                                                    @endif
+                                                    @if($cuttingPlan)
+                                                        <button type="button"
+                                                                class="btn btn-sm btn-outline-primary ms-1 py-0"
+                                                                data-bs-toggle="modal"
+                                                                data-bs-target="#{{ $cuttingModalId }}">
+                                                            Thêm hàng pha lóc
+                                                        </button>
                                                     @endif
                                                 </li>
                                             @endforeach
@@ -654,6 +667,10 @@
                                                     <summary>Chi tiết thiếu hàng ({{ $stockShortages->count() }} sản phẩm)</summary>
                                                     <ul>
                                                         @foreach($stockShortages as $shortage)
+                                                            @php
+                                                                $cuttingPlan = $orderCuttingPlans->get((int) ($shortage['variant_id'] ?? 0));
+                                                                $cuttingModalId = $cuttingPlan ? 'cutting-order-modal-' . $order->id . '-' . (int) ($shortage['variant_id'] ?? 0) : null;
+                                                            @endphp
                                                             <li>
                                                                 <strong>{{ $shortage['variant_name'] ?? 'Sản phẩm' }}</strong>:
                                                                 cần {{ number_format((float)($shortage['required_qty'] ?? 0), 0) }},
@@ -664,6 +681,16 @@
                                                                 @endif
                                                                 @if(($shortage['reason'] ?? '') === 'blocked_by_prior_order')
                                                                     <span class="text-warning">– bị chặn bởi đơn ưu tiên trước</span>
+                                                                @endif
+                                                                @if($cuttingPlan)
+                                                                    <div class="mt-1">
+                                                                        <button type="button"
+                                                                                class="btn btn-sm btn-primary"
+                                                                                data-bs-toggle="modal"
+                                                                                data-bs-target="#{{ $cuttingModalId }}">
+                                                                            <i class="bi bi-scissors me-1"></i>Thêm hàng pha lóc
+                                                                        </button>
+                                                                    </div>
                                                                 @endif
                                                             </li>
                                                         @endforeach
@@ -715,6 +742,9 @@
                     </div>
                 </div>
                 </div>
+                @foreach($orderCuttingPlans as $cuttingPlan)
+                    @include('warehouse.cutting._order_modal', ['cuttingOrder' => $order, 'cuttingPlan' => $cuttingPlan, 'selectedDate' => $selectedDate ?? now()->toDateString()])
+                @endforeach
                 @if($hasCustomerFeedback)
                 <div class="wh-customer-feedback-panel is-alert">
                     <div class="d-flex justify-content-between align-items-start gap-2 mb-2">

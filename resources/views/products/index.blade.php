@@ -86,6 +86,7 @@
                         <th>Sản phẩm</th>
                         <th width="100">Thứ tự</th>
                         <th>Đơn vị tính</th>
+                        <th>Loại hình</th>
                         <th>Trạng thái</th>
                 
                 <th class="text-center" >
@@ -115,6 +116,11 @@
                     </td>
                     <td><span class="badge bg-light text-dark border">{{ $product->sort_order ?? 0 }}</span></td>
                     <td>{{ $product->unit_label }}</td>
+                    <td>
+                        <span class="badge {{ ($product->product_type ?? \App\Models\Product::TYPE_WHOLE) === \App\Models\Product::TYPE_CUT ? 'bg-info text-dark' : 'bg-secondary' }}">
+                            {{ $product->product_type_label }}
+                        </span>
+                    </td>
                 <td>
                     @if($product->status)
                         <span class="badge bg-success">Đang hoạt động</span>
@@ -137,6 +143,12 @@
 
                         @can('update', $product)
                             <a href="{{ route('products.price-management.show', $product) }}" class="btn btn-outline-info btn-sm ms-1">Cập nhật giá</a>
+                        @endcan
+
+                        @can('update', $product)
+                            @if(($product->product_type ?? \App\Models\Product::TYPE_WHOLE) === \App\Models\Product::TYPE_WHOLE)
+                                <a href="{{ route('products.edit', ['product' => $product->id, 'page' => request()->page, 'perPage' => $perPage]) }}#cutting-components" class="btn btn-outline-primary btn-sm ms-1">Thành phần pha lóc</a>
+                            @endif
                         @endcan
 
                         @can('delete', $product)

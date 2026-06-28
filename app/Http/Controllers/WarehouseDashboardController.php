@@ -23,6 +23,7 @@ use App\Models\WarehouseTransfer;
 use App\Notifications\WarehouseOrderAdjustmentRequested;
 use App\Services\WarehouseInventorySummaryService;
 use App\Services\WarehouseOrderAdjustmentService;
+use App\Services\ProductCuttingService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -332,8 +333,10 @@ class WarehouseDashboardController extends Controller
             ->get();
 
 
-        $consolidatedInventory = app(WarehouseInventorySummaryService::class)
-            ->buildConsolidated($dateString);
+        $inventorySummary = app(WarehouseInventorySummaryService::class)
+            ->build($managedWarehouseId, Carbon::today()->toDateString());
+        $cuttingShortages = app(ProductCuttingService::class)
+            ->missingCutProducts($managedWarehouseId);
 
         return view('warehouse.dashboard', compact(
             'stats',
@@ -341,8 +344,93 @@ class WarehouseDashboardController extends Controller
             'selectedDate',
             'dailyOrders',
             'approvalStats',
-            'consolidatedInventory'
+            'inventorySummary',
+            'cuttingShortages'
         ));
+    }
+
+    public function cuttingForm(Request $request, ProductVariant $variant)
+    {
+        $managedWarehouseId = Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
+        $variant->loadMissing('product');
+        abort_unless($variant->product?->product_type === Product::TYPE_CUT, 404);
+
+        $service = app(ProductCuttingService::class);
+        $materials = $service->sourceMaterials($variant, $managedWarehouseId);
+        $selectedMaterials = collect($request->input('materials', []))
+            ->map(fn ($row) => ['variant_id' => (int) ($row['variant_id'] ?? 0), 'quantity' => max(0, (float) ($row['quantity'] ?? 0))])
+            ->filter(fn ($row) => $row['variant_id'] > 0 && $row['quantity'] > 0)
+            ->values()
+            ->all();
+        $preview = $service->preview($variant, $selectedMaterials);
+        $openOrders = $this->cuttingOrdersForVariant($variant, $managedWarehouseId, Carbon::today()->toDateString());
+        $guardResult = $this->buildPackingQueueStockGuards($openOrders, $managedWarehouseId, Carbon::today()->toDateString());
+        $cuttingPlansByOrder = $this->buildCuttingPlansForGuards($guardResult['guards'] ?? [], $managedWarehouseId);
+        $cuttingOrders = $openOrders
+            ->filter(function (Order $order) use ($cuttingPlansByOrder, $variant) {
+                return isset($cuttingPlansByOrder[(int) $order->id][(int) $variant->id]);
+            })
+            ->values();
+
+        return view('warehouse.cutting.form', [
+            'targetVariant' => $variant,
+            'materials' => $materials,
+            'selectedMaterials' => collect($selectedMaterials)->keyBy('variant_id'),
+            'preview' => $preview,
+            'demand' => (float) $request->query('demand', 0),
+            'cuttingOrders' => $cuttingOrders,
+            'cuttingPlansByOrder' => $cuttingPlansByOrder,
+        ]);
+    }
+
+    public function executeCutting(Request $request, ProductVariant $variant)
+    {
+        $user = Auth::user();
+        $warehouseId = $user?->warehouse_id ? (int) $user->warehouse_id : null;
+        if (!$warehouseId && !$user?->hasRole('admin')) {
+            return back()->with('error', 'Tài khoản chưa được gán kho thực hiện.');
+        }
+
+        $variant->loadMissing('product');
+        abort_unless($variant->product?->product_type === Product::TYPE_CUT, 404);
+
+        $data = $request->validate([
+            'materials' => ['required', 'array', 'min:1'],
+            'materials.*.variant_id' => ['required', 'exists:product_variants,id'],
+            'materials.*.quantity' => ['required', 'numeric', 'min:0'],
+            'actual_finished_weight' => ['required', 'numeric', 'min:0.001'],
+            'components' => ['nullable', 'array'],
+            'components.*.variant_id' => ['required_with:components', 'exists:product_variants,id'],
+            'components.*.weight' => ['nullable', 'numeric', 'min:0'],
+            'note' => ['nullable', 'string', 'max:1000'],
+            'order_id' => ['nullable', 'exists:orders,id'],
+            'selected_date' => ['nullable', 'date'],
+        ]);
+
+        try {
+            app(ProductCuttingService::class)->execute(
+                (int) $warehouseId,
+                $variant,
+                $data['materials'],
+                (float) $data['actual_finished_weight'],
+                $data['components'] ?? [],
+                (string) ($data['note'] ?? 'Xuất kho để thực hiện pha lóc.'),
+                (int) $user->id
+            );
+        } catch (\Throwable $e) {
+            return back()->withInput()->with('error', $e->getMessage());
+        }
+
+        if (!empty($data['order_id'])) {
+            return redirect()
+                ->route('warehouse.orders', [
+                    'date' => $data['selected_date'] ?? now()->toDateString(),
+                    'highlight' => (int) $data['order_id'],
+                ])
+                ->with('success', 'Đã thực hiện pha lóc và cập nhật tồn kho.');
+        }
+
+        return redirect()->route('warehouse.dashboard')->with('success', 'Đã thực hiện pha lóc và cập nhật tồn kho.');
     }
     /**
      * Show the form for creating a new stock-in document.
@@ -642,6 +730,7 @@ class WarehouseDashboardController extends Controller
                 'shortages' => [],
             ]);
         });
+        $cuttingPlansByOrder = $this->buildCuttingPlansForGuards($stockGuardMap, $managedWarehouseId);
 
         $orderIds = $orders->pluck('id')->all();
         $activeTransfersByOrder = WarehouseTransfer::query()
@@ -683,7 +772,8 @@ class WarehouseDashboardController extends Controller
             'ordersLayout',
             'orderRoutePrefix',
             'packingInventoryRoute',
-            'packingDashboardRoute'
+            'packingDashboardRoute',
+            'cuttingPlansByOrder'
         ));
     }
 
@@ -1221,6 +1311,80 @@ class WarehouseDashboardController extends Controller
             'message' => null,
             'shortages' => [],
         ];
+    }
+
+    private function cuttingOrdersForVariant(ProductVariant $variant, ?int $warehouseId, string $forDate): Collection
+    {
+        $queueStatuses = array_merge(self::READY_TO_PACK_STATUSES, [Order::STATUS_PACKING]);
+
+        return Order::query()
+            ->with(['customer', 'items.product', 'items.variant.product'])
+            ->where(function ($query) {
+                $query->whereNull('is_return_order')
+                    ->orWhere('is_return_order', false);
+            })
+            ->whereIn('status', $queueStatuses)
+            ->whereDate('created_at', $forDate)
+            ->when($warehouseId, fn ($query) => $query->where(function ($scope) use ($warehouseId) {
+                $scope->where('warehouse_id', $warehouseId)->orWhereNull('warehouse_id');
+            }))
+            ->whereHas('items', fn ($query) => $query->where('product_variant_id', $variant->id))
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get();
+    }
+
+    private function buildCuttingPlansForGuards(array $guards, ?int $warehouseId): array
+    {
+        $shortages = collect($guards)
+            ->flatMap(function (array $guard, int|string $orderId) {
+                return collect($guard['shortages'] ?? [])->map(function (array $shortage) use ($orderId) {
+                    $shortage['order_id'] = (int) ($shortage['order_id'] ?? $orderId);
+                    return $shortage;
+                });
+            })
+            ->filter(fn (array $shortage) => (float) ($shortage['short_qty'] ?? 0) > 0)
+            ->values();
+
+        if ($shortages->isEmpty()) {
+            return [];
+        }
+
+        $variantIds = $shortages
+            ->pluck('variant_id')
+            ->map(fn ($id) => (int) $id)
+            ->filter()
+            ->unique()
+            ->values();
+
+        $cutVariants = ProductVariant::query()
+            ->with('product')
+            ->whereIn('id', $variantIds->all())
+            ->whereHas('product', fn ($query) => $query->where('product_type', Product::TYPE_CUT))
+            ->get()
+            ->keyBy('id');
+
+        if ($cutVariants->isEmpty()) {
+            return [];
+        }
+
+        $service = app(ProductCuttingService::class);
+        $plans = [];
+
+        foreach ($shortages as $shortage) {
+            $variantId = (int) ($shortage['variant_id'] ?? 0);
+            $orderId = (int) ($shortage['order_id'] ?? 0);
+            $targetVariant = $cutVariants->get($variantId);
+            if (!$targetVariant || $orderId <= 0) {
+                continue;
+            }
+
+            $plan = $service->planForDemand($targetVariant, $warehouseId, (float) ($shortage['short_qty'] ?? 0));
+            $plan['shortage'] = $shortage;
+            $plans[$orderId][$variantId] = $plan;
+        }
+
+        return $plans;
     }
 
     private function buildPackingQueueStockGuards(Collection $orders, ?int $warehouseId, string $forDate = null): array
@@ -3705,7 +3869,10 @@ class WarehouseDashboardController extends Controller
         $summary = app(WarehouseInventorySummaryService::class)
             ->buildConsolidated($selectedDate, $search, $status);
         $page = max(1, (int) $request->input('page', 1));
-        $perPage = 12;
+        $perPage = (int) $request->input('per_page', 50);
+        if (!in_array($perPage, [25, 50, 100, 200], true)) {
+            $perPage = 50;
+        }
         $products = new LengthAwarePaginator(
             $summary['rows']->forPage($page, $perPage)->values(),
             $summary['rows']->count(),
