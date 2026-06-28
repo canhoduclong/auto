@@ -183,7 +183,7 @@ if (!function_exists('getWarehouseNotifications')) {
 }
 
 if (!function_exists('getDepartmentBroadcastNotifications')) {
-    function getDepartmentBroadcastNotifications($user, int $limit = 5)
+    function getDepartmentBroadcastNotifications($user, int $limit = 5, ?string $layoutKey = null)
     {
         if (!$user || !\Illuminate\Support\Facades\Schema::hasTable('notifications')) {
             return collect();
@@ -192,8 +192,15 @@ if (!function_exists('getDepartmentBroadcastNotifications')) {
         $notifications = $user->notifications()
             ->where('type', \App\Notifications\DepartmentBroadcastNotification::class)
             ->latest()
-            ->limit($limit)
+            ->limit($layoutKey !== null ? max($limit * 6, 30) : $limit)
             ->get();
+
+        if ($layoutKey !== null && function_exists('departmentBroadcastMatchesLayout')) {
+            $notifications = $notifications
+                ->filter(fn ($notification) => departmentBroadcastMatchesLayout($notification->data ?? [], $layoutKey))
+                ->take($limit)
+                ->values();
+        }
 
         $senderIds = $notifications
             ->pluck('data.sender_id')
@@ -226,12 +233,83 @@ if (!function_exists('getDepartmentBroadcastNotifications')) {
                     'read_at' => $notification->read_at,
                     'created_at' => $notification->created_at,
                     'target_roles' => $notification->data['target_roles'] ?? [],
+                    'target_role_names' => $notification->data['target_role_names'] ?? [],
                     'sender_id' => $notification->data['sender_id'] ?? null,
                     'sender_name' => $sender?->name ?: 'Hệ thống',
                     'sender_department' => $sender?->department?->name ?: ($senderRoles ? implode(', ', $senderRoles) : 'Hệ thống'),
                     'sender_roles' => $senderRoles,
                 ];
             });
+    }
+}
+
+if (!function_exists('departmentBroadcastRoleAliases')) {
+    function departmentBroadcastRoleAliases(): array
+    {
+        return [
+            'CEO' => ['CEO', 'ceo'],
+            'warehouse' => ['warehouse'],
+            'accountant' => ['account', 'accountant', 'accounting'],
+            'Shipper' => ['Shipper', 'shipper', 'manager_shipper'],
+            'leader' => ['leader', 'leader_sale', 'sale_manager'],
+            'manager' => ['manager', 'manager_sale'],
+            'Director' => ['Director', 'director'],
+            'sale' => ['sale'],
+        ];
+    }
+}
+
+if (!function_exists('departmentBroadcastExpandTargetRoles')) {
+    function departmentBroadcastExpandTargetRoles(array $targetRoles): array
+    {
+        $aliases = departmentBroadcastRoleAliases();
+
+        return collect($targetRoles)
+            ->flatMap(fn ($role) => $aliases[(string) $role] ?? [(string) $role])
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+}
+
+if (!function_exists('departmentBroadcastLayoutRoles')) {
+    function departmentBroadcastLayoutRoles(?string $layoutKey): array
+    {
+        return match (strtolower((string) $layoutKey)) {
+            'ceo' => ['CEO', 'ceo'],
+            'director' => ['Director', 'director'],
+            'accounting' => ['account', 'accountant', 'accounting'],
+            'warehouse' => ['warehouse'],
+            'shipper' => ['Shipper', 'shipper', 'manager_shipper'],
+            'site' => ['sale', 'leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale'],
+            'admin' => ['*'],
+            default => [],
+        };
+    }
+}
+
+if (!function_exists('departmentBroadcastMatchesLayout')) {
+    function departmentBroadcastMatchesLayout(array $data, ?string $layoutKey): bool
+    {
+        $layoutRoles = departmentBroadcastLayoutRoles($layoutKey);
+        if (in_array('*', $layoutRoles, true) || $layoutRoles === []) {
+            return true;
+        }
+
+        $targetRoles = $data['target_role_names'] ?? departmentBroadcastExpandTargetRoles((array) ($data['target_roles'] ?? []));
+        $targetRoles = collect($targetRoles)
+            ->map(fn ($role) => strtolower((string) $role))
+            ->filter();
+
+        if ($targetRoles->isEmpty()) {
+            return true;
+        }
+
+        $layoutRoles = collect($layoutRoles)
+            ->map(fn ($role) => strtolower((string) $role));
+
+        return $targetRoles->intersect($layoutRoles)->isNotEmpty();
     }
 }
 

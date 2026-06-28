@@ -13,6 +13,7 @@ class DepartmentBroadcastNotification extends Notification
         private readonly string $title,
         private readonly string $message,
         private readonly array $targetRoles,
+        private readonly array $targetRoleNames = [],
         private readonly ?string $url = null,
         private readonly ?int $senderId = null,
     ) {
@@ -31,6 +32,7 @@ class DepartmentBroadcastNotification extends Notification
             'message' => $this->message,
             'url' => $this->url,
             'target_roles' => $this->targetRoles,
+            'target_role_names' => $this->targetRoleNames,
             'sender_id' => $this->senderId,
         ];
     }

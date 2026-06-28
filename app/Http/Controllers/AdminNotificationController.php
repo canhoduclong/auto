@@ -7,6 +7,7 @@ use App\Notifications\DepartmentBroadcastNotification;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -43,17 +44,51 @@ class AdminNotificationController extends Controller
         'sale' => 'Sale',
     ];
 
+    private const TARGET_ROLE_ALIASES = [
+        'CEO' => ['CEO', 'ceo'],
+        'warehouse' => ['warehouse'],
+        'accountant' => ['account', 'accountant', 'accounting'],
+        'Shipper' => ['Shipper', 'shipper', 'manager_shipper'],
+        'leader' => ['leader', 'leader_sale', 'sale_manager'],
+        'manager' => ['manager', 'manager_sale'],
+        'Director' => ['Director', 'director'],
+        'sale' => ['sale'],
+    ];
+
+    private const LAYOUT_ROLE_SCOPE = [
+        'ceo' => ['CEO', 'ceo'],
+        'director' => ['Director', 'director'],
+        'accounting' => ['account', 'accountant', 'accounting'],
+        'warehouse' => ['warehouse'],
+        'shipper' => ['Shipper', 'shipper', 'manager_shipper'],
+        'site' => ['sale', 'leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale'],
+    ];
+
     public function index(Request $request): View
     {
         abort_unless($this->canManageDepartmentNotifications($request), 403);
 
-        $notifications = $request->user()
+        $viewContext = $this->resolveNotificationViewContext($request);
+        $layoutKey = $viewContext['notificationLayoutKey'] ?? null;
+
+        $filteredNotifications = $request->user()
             ->notifications()
+            ->where('type', DepartmentBroadcastNotification::class)
             ->latest()
-            ->paginate(20);
+            ->get()
+            ->filter(fn ($notification) => $this->notificationMatchesLayout($notification->data ?? [], $layoutKey))
+            ->values();
+        $page = LengthAwarePaginator::resolveCurrentPage();
+        $perPage = 20;
+        $notifications = new LengthAwarePaginator(
+            $filteredNotifications->forPage($page, $perPage)->values(),
+            $filteredNotifications->count(),
+            $perPage,
+            $page,
+            ['path' => $request->url(), 'query' => $request->query()]
+        );
 
         $departmentRoleOptions = self::DEPARTMENT_ROLE_OPTIONS;
-        $viewContext = $this->resolveNotificationViewContext($request);
 
         return view('admin.notifications.index', array_merge(
             compact('notifications', 'departmentRoleOptions'),
@@ -74,9 +109,10 @@ class AdminNotificationController extends Controller
         ]);
 
         $targetRoles = array_values(array_unique($validated['target_roles']));
+        $targetRoleNames = $this->expandTargetRoles($targetRoles);
         $users = User::query()
-            ->whereHas('roles', function ($query) use ($targetRoles) {
-                $query->whereIn('name', $targetRoles);
+            ->whereHas('roles', function ($query) use ($targetRoleNames) {
+                $query->whereIn('name', $targetRoleNames);
             })
             ->get();
 
@@ -88,6 +124,7 @@ class AdminNotificationController extends Controller
             trim($validated['title']),
             trim($validated['message']),
             $targetRoles,
+            $targetRoleNames,
             !empty($validated['url']) ? trim($validated['url']) : null,
             $request->user()->id,
         ));
@@ -103,6 +140,9 @@ class AdminNotificationController extends Controller
             ->notifications()
             ->where('id', $notificationId)
             ->firstOrFail();
+
+        $viewContext = $this->resolveNotificationViewContext($request);
+        abort_unless($this->notificationMatchesLayout($notification->data ?? [], $viewContext['notificationLayoutKey'] ?? null), 403);
 
         if (is_null($notification->read_at)) {
             $notification->markAsRead();
@@ -122,11 +162,12 @@ class AdminNotificationController extends Controller
             ->where('id', $notificationId)
             ->firstOrFail();
 
+        $viewContext = $this->resolveNotificationViewContext($request);
+        abort_unless($this->notificationMatchesLayout($notification->data ?? [], $viewContext['notificationLayoutKey'] ?? null), 403);
+
         if (is_null($notification->read_at)) {
             $notification->markAsRead();
         }
-
-        $viewContext = $this->resolveNotificationViewContext($request);
 
         return view('admin.notifications.show', array_merge(
             compact('notification'),
@@ -187,5 +228,42 @@ class AdminNotificationController extends Controller
             'notificationReadRouteName' => $layoutKey === 'admin' ? 'admin.notifications.read' : 'department-notifications.read',
             'notificationShowRouteName' => $layoutKey === 'admin' ? 'admin.notifications.show' : 'department-notifications.show',
         ];
+    }
+
+    private function expandTargetRoles(array $targetRoles): array
+    {
+        return collect($targetRoles)
+            ->flatMap(fn (string $role) => self::TARGET_ROLE_ALIASES[$role] ?? [$role])
+            ->map(fn ($role) => (string) $role)
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function notificationMatchesLayout(array $data, ?string $layoutKey): bool
+    {
+        if ($layoutKey === 'admin') {
+            return true;
+        }
+
+        $layoutRoles = self::LAYOUT_ROLE_SCOPE[strtolower((string) $layoutKey)] ?? [];
+        if ($layoutRoles === []) {
+            return true;
+        }
+
+        $targetRoles = $data['target_role_names'] ?? $this->expandTargetRoles((array) ($data['target_roles'] ?? []));
+        $targetRoles = collect($targetRoles)
+            ->map(fn ($role) => strtolower((string) $role))
+            ->filter()
+            ->values();
+
+        if ($targetRoles->isEmpty()) {
+            return true;
+        }
+
+        $layoutRoles = collect($layoutRoles)->map(fn ($role) => strtolower((string) $role))->all();
+
+        return $targetRoles->intersect($layoutRoles)->isNotEmpty();
     }
 }

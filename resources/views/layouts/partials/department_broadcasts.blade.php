@@ -1,5 +1,4 @@
 @php
-    $departmentBroadcasts = getDepartmentBroadcastNotifications(auth()->user(), $limit ?? 5);
     $departmentNotificationLayoutKey = request('layout');
     if (!$departmentNotificationLayoutKey) {
         $routeName = request()->route()?->getName() ?? '';
@@ -13,6 +12,7 @@
             default => 'site',
         };
     }
+    $departmentBroadcasts = getDepartmentBroadcastNotifications(auth()->user(), $limit ?? 5, $departmentNotificationLayoutKey);
     $departmentNotificationShowRoute = $departmentNotificationLayoutKey === 'admin'
         ? 'admin.notifications.show'
         : 'department-notifications.show';
