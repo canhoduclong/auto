@@ -255,8 +255,8 @@ class WarehouseApiController extends BaseApiController
                 'customer:id,name,phone,address,delivery_time',
                 'warehouse:id,name',
                 'histories:id,order_id,action,user_id',
-                'items.product:id,name,unit',
-                'items.variant' => fn ($q) => $q->withAvailableStock()->with('product:id,name,unit'),
+            'items.product:id,name,unit,product_type',
+            'items.variant' => fn ($q) => $q->withAvailableStock()->with('product:id,name,unit,product_type'),
             ])
             ->where(function ($q) {
                 $q->whereNull('is_return_order')->orWhere('is_return_order', false);
@@ -412,6 +412,56 @@ class WarehouseApiController extends BaseApiController
         }
 
         return $this->ok(['batch_id' => (int) $batch->id], 'Đã thực hiện pha lóc và cập nhật tồn kho.');
+    }
+
+    public function orderCuttingOptions(Request $request, Order $order, ProductVariant $variant): JsonResponse
+    {
+        $this->ensureWarehouseRole($request);
+        $warehouseId = $request->user()->warehouse_id ? (int) $request->user()->warehouse_id : null;
+        if ($warehouseId && (int) ($order->warehouse_id ?? 0) > 0 && (int) $order->warehouse_id !== $warehouseId) {
+            return $this->fail('Đơn không thuộc kho bạn quản lý.', 403);
+        }
+
+        $order->loadMissing(['customer:id,name,phone,address', 'items.product:id,name,unit,product_type', 'items.variant' => fn ($q) => $q->withAvailableStock()->with('product:id,name,unit,product_type')]);
+        $variant->loadMissing('product');
+        if ($variant->product?->product_type !== \App\Models\Product::TYPE_CUT) {
+            return $this->fail('Sản phẩm không phải hàng pha lóc.', 422);
+        }
+
+        $item = $order->items->first(fn ($row) => (int) $row->product_variant_id === (int) $variant->id);
+        if (!$item) {
+            return $this->fail('Đơn không có sản phẩm pha lóc này.', 404);
+        }
+
+        $needed = (float) ($item->quantity ?? 0);
+        $available = (float) ($item->variant?->available_stock ?? 0);
+        $shortage = max(0, $needed - $available);
+        $demand = (float) $request->query('demand', $shortage);
+        if ($demand <= 0) {
+            $demand = $shortage;
+        }
+
+        $service = app(ProductCuttingService::class);
+        $plan = $service->planForDemand($variant, $warehouseId, $demand);
+
+        return $this->ok([
+            'order' => $this->warehouseOrderPayload($order),
+            'target_item' => [
+                'variant_id' => (int) $variant->id,
+                'name' => trim(($variant->product?->name ?? '') . ' ' . ($variant->name ?? '')),
+                'needed' => $needed,
+                'available' => $available,
+                'shortage' => $shortage,
+            ],
+            'plan' => $this->cuttingPlanPayload($plan),
+        ]);
+    }
+
+    public function executeOrderCutting(Request $request, Order $order, ProductVariant $variant): JsonResponse
+    {
+        $this->ensureWarehouseRole($request);
+
+        return $this->executeCutting($request, $variant);
     }
 
     public function returns(Request $request): JsonResponse
@@ -681,6 +731,73 @@ class WarehouseApiController extends BaseApiController
             'can_request_adjustment' => in_array((string) $order->status, ['approved', Order::STATUS_READY_TO_PACK], true)
                 && $order->created_at?->isToday(),
             'items' => $items,
+            'cutting_plans' => $this->orderCuttingPlans($order),
+        ];
+    }
+
+    private function orderCuttingPlans(Order $order): array
+    {
+        return $order->items
+            ->filter(function ($item) {
+                $variant = $item->variant;
+                $product = $item->product ?: $variant?->product;
+
+                return $variant && $product?->product_type === \App\Models\Product::TYPE_CUT;
+            })
+            ->map(function ($item) {
+                $needed = (float) ($item->quantity ?? 0);
+                $available = (float) ($item->variant?->available_stock ?? 0);
+                $shortage = max(0, $needed - $available);
+                if ($shortage <= 0) {
+                    return null;
+                }
+
+                return [
+                    'target_variant_id' => (int) $item->product_variant_id,
+                    'order_item_id' => (int) $item->id,
+                    'target_name' => (string) ($item->variant?->name ?? $item->product?->name ?? 'Hàng pha lóc'),
+                    'needed' => $needed,
+                    'available' => $available,
+                    'shortage' => $shortage,
+                    'unit' => (string) ($item->product?->weight_unit_label ?? $item->product?->unit_label ?? 'kg'),
+                ];
+            })
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    private function cuttingPlanPayload(array $plan): array
+    {
+        return [
+            'target_variant_id' => (int) ($plan['target_variant_id'] ?? 0),
+            'target_name' => (string) ($plan['target_name'] ?? ''),
+            'demand' => (float) ($plan['demand'] ?? 0),
+            'materials' => collect($plan['materials'] ?? [])->map(fn ($material) => [
+                'variant_id' => (int) ($material['variant_id'] ?? 0),
+                'label' => (string) ($material['label'] ?? ''),
+                'size' => (float) ($material['size'] ?? 0),
+                'available' => (float) ($material['available'] ?? 0),
+                'unit_weight' => (float) ($material['unit_weight'] ?? 0),
+                'output_per_unit' => (float) ($material['output_per_unit'] ?? 0),
+                'suggested_quantity' => (float) ($material['suggested_quantity'] ?? 0),
+                'components' => collect($material['components'] ?? [])->map(fn ($component) => [
+                    'variant_id' => (int) ($component['variant_id'] ?? 0),
+                    'name' => (string) ($component['name'] ?? ''),
+                    'standard_weight' => (float) ($component['standard_weight'] ?? 0),
+                ])->values()->all(),
+            ])->values()->all(),
+            'selected_materials' => collect($plan['selected_materials'] ?? [])->values()->all(),
+            'preview' => [
+                'input_weight' => (float) data_get($plan, 'preview.input_weight', 0),
+                'finished_weight' => (float) data_get($plan, 'preview.finished_weight', 0),
+                'components' => collect(data_get($plan, 'preview.components', []))->map(fn ($component) => [
+                    'variant_id' => (int) ($component['variant_id'] ?? 0),
+                    'name' => (string) ($component['name'] ?? ''),
+                    'weight' => (float) ($component['weight'] ?? 0),
+                ])->values()->all(),
+            ],
+            'can_execute' => (bool) ($plan['can_execute'] ?? false),
         ];
     }
 

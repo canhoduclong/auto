@@ -193,7 +193,11 @@ if (!function_exists('getDepartmentBroadcastNotifications')) {
             ->where('type', \App\Notifications\DepartmentBroadcastNotification::class)
             ->latest()
             ->limit($layoutKey !== null ? max($limit * 6, 30) : $limit)
-            ->get();
+            ->get()
+            ->filter(fn ($notification) => function_exists('departmentBroadcastIsExpired')
+                ? !departmentBroadcastIsExpired($notification->data ?? [])
+                : true)
+            ->values();
 
         if ($layoutKey !== null && function_exists('departmentBroadcastMatchesLayout')) {
             $notifications = $notifications
@@ -234,6 +238,8 @@ if (!function_exists('getDepartmentBroadcastNotifications')) {
                     'created_at' => $notification->created_at,
                     'target_roles' => $notification->data['target_roles'] ?? [],
                     'target_role_names' => $notification->data['target_role_names'] ?? [],
+                    'expires_at' => $notification->data['expires_at'] ?? null,
+                    'broadcast_id' => $notification->data['broadcast_id'] ?? null,
                     'sender_id' => $notification->data['sender_id'] ?? null,
                     'sender_name' => $sender?->name ?: 'Hệ thống',
                     'sender_department' => $sender?->department?->name ?: ($senderRoles ? implode(', ', $senderRoles) : 'Hệ thống'),
@@ -297,7 +303,10 @@ if (!function_exists('departmentBroadcastMatchesLayout')) {
             return true;
         }
 
-        $targetRoles = $data['target_role_names'] ?? departmentBroadcastExpandTargetRoles((array) ($data['target_roles'] ?? []));
+        $targetRoles = $data['target_role_names'] ?? [];
+        if (empty($targetRoles)) {
+            $targetRoles = departmentBroadcastExpandTargetRoles((array) ($data['target_roles'] ?? []));
+        }
         $targetRoles = collect($targetRoles)
             ->map(fn ($role) => strtolower((string) $role))
             ->filter();
@@ -310,6 +319,22 @@ if (!function_exists('departmentBroadcastMatchesLayout')) {
             ->map(fn ($role) => strtolower((string) $role));
 
         return $targetRoles->intersect($layoutRoles)->isNotEmpty();
+    }
+}
+
+if (!function_exists('departmentBroadcastIsExpired')) {
+    function departmentBroadcastIsExpired(array $data): bool
+    {
+        $expiresAt = $data['expires_at'] ?? null;
+        if (blank($expiresAt)) {
+            return false;
+        }
+
+        try {
+            return \Carbon\Carbon::parse($expiresAt)->isPast();
+        } catch (\Throwable) {
+            return false;
+        }
     }
 }
 

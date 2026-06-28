@@ -24,6 +24,9 @@ Route::prefix('mobile')->group(function () {
         Route::get('/auth/sessions', [AuthApiController::class, 'sessions']);
         Route::delete('/auth/sessions/{sessionId}', [AuthApiController::class, 'revokeSession']);
         Route::get('/notifications', [NotificationApiController::class, 'index']);
+        Route::post('/department-notifications', [NotificationApiController::class, 'storeDepartmentBroadcast']);
+        Route::put('/department-notifications/{broadcastId}', [NotificationApiController::class, 'updateDepartmentBroadcast']);
+        Route::delete('/department-notifications/{broadcastId}', [NotificationApiController::class, 'destroyDepartmentBroadcast']);
         Route::post('/notifications/read-all', [NotificationApiController::class, 'markAllAsRead']);
         Route::post('/notifications/{notificationId}/read', [NotificationApiController::class, 'markAsRead']);
         Route::get('/screens/{layout}/{key}', [RoleScreenApiController::class, 'show']);
@@ -61,6 +64,8 @@ Route::prefix('mobile')->group(function () {
             Route::post('/orders/{order}/complete-packing', [WarehouseApiController::class, 'completePacking']);
             Route::post('/orders/{order}/logistics', [WarehouseApiController::class, 'updateLogistics']);
             Route::post('/orders/{order}/request-adjustment', [WarehouseApiController::class, 'requestAdjustment']);
+            Route::get('/orders/{order}/cutting/{variant}', [WarehouseApiController::class, 'orderCuttingOptions']);
+            Route::post('/orders/{order}/cutting/{variant}', [WarehouseApiController::class, 'executeOrderCutting']);
             Route::get('/inventory', [WarehouseApiController::class, 'inventory']);
             Route::get('/cutting/{variant}', [WarehouseApiController::class, 'cuttingOptions']);
             Route::post('/cutting/{variant}', [WarehouseApiController::class, 'executeCutting']);

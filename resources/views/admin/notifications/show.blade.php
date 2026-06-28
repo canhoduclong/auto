@@ -7,6 +7,7 @@
     $message = trim((string) ($data['message'] ?? ''));
     $targetRoles = collect($data['target_roles'] ?? [])->filter()->values();
     $externalUrl = trim((string) ($data['url'] ?? ''));
+    $expiresAt = !empty($data['expires_at']) ? \Carbon\Carbon::parse($data['expires_at']) : null;
     $sender = !empty($data['sender_id'])
         ? \App\Models\User::with(['department', 'roles'])->find((int) $data['sender_id'])
         : null;
@@ -52,6 +53,10 @@
                 <div class="col-md-4">
                     <div class="small text-muted">Người nhận</div>
                     <div class="fw-semibold">{{ auth()->user()?->name }}</div>
+                </div>
+                <div class="col-md-4">
+                    <div class="small text-muted">Thời hạn hiển thị</div>
+                    <div class="fw-semibold">{{ $expiresAt ? $expiresAt->format('d/m/Y H:i') : 'Không hết hạn' }}</div>
                 </div>
             </div>
 
