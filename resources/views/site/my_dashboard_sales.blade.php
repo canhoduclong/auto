@@ -220,6 +220,54 @@
         white-space: nowrap;
         font-size: .95rem;
     }
+    .price-product-row {
+        background: #fff8df;
+        border: 1px solid #f8e5b1;
+        border-radius: 8px;
+        padding: 9px 11px;
+        margin-top: 8px;
+    }
+    .price-product-main,
+    .price-variant-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 10px;
+        align-items: center;
+    }
+    .price-product-main {
+        font-weight: 700;
+        color: #111827;
+    }
+    .price-product-title {
+        min-width: 0;
+    }
+    .price-variant-list {
+        margin-top: 8px;
+        border-top: 1px solid #f3dfaa;
+    }
+    .price-variant-row {
+        min-height: 34px;
+        padding: 7px 0 7px 22px;
+        border-bottom: 1px solid #edf2f7;
+        background: #f8fafc;
+    }
+    .price-variant-row:last-child {
+        border-bottom: 0;
+    }
+    .price-variant-name {
+        color: #111827;
+        min-width: 0;
+    }
+    .price-variant-meta {
+        color: #64748b;
+        font-size: .75rem;
+    }
+    .price-common-label {
+        color: #92400e;
+        font-size: .75rem;
+        font-weight: 600;
+        margin-right: 4px;
+    }
     .price-update-note {
         border-top: 1px solid #fde68a;
         margin-top: 6px;
@@ -313,6 +361,8 @@
                     </div>
                     <canvas id="salesChart" height="120"></canvas>
                 </div>
+
+                @include('layouts.partials.department_broadcasts')
 
             </div>
 
@@ -558,10 +608,9 @@
                     </div>
                 @endif
 
-                @if(($recentPriceUpdates ?? collect())->isNotEmpty())
+                @if(($productPriceBoard ?? collect())->isNotEmpty())
                     @php
-                        $priceUpdateDates = collect($recentPriceUpdates)
-                            ->pluck('start_date')
+                        $priceBoardDates = collect($productPriceAppliedDates ?? [])
                             ->filter()
                             ->map(fn ($date) => \Carbon\Carbon::parse($date)->format('d/m/Y'))
                             ->unique()
@@ -569,43 +618,49 @@
                     @endphp
                     <div class="price-update-card p-3 mb-3">
                         <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
-                            <h6 class="mb-0 text-uppercase" style="color:#b45309;">Thông báo điều chỉnh giá</h6>
+                            <h6 class="mb-0 text-uppercase" style="color:#b45309;">Bảng báo giá sản phẩm</h6>
                             <span class="badge text-bg-warning">Mới</span>
                         </div>
-                        @foreach($recentPriceUpdates as $priceUpdate)
-                            @php
-                                $size = $priceUpdate['size'] ?? null;
-                                $sizeLabel = (is_numeric($size) && (float) $size > 0)
-                                    ? rtrim(rtrim(number_format((float) $size, 2, ',', '.'), '0'), ',')
-                                    : null;
-                            @endphp
-                            <div class="price-update-item small">
-                                <div>
-                                    <div class="price-update-name">
-                                        {{ $priceUpdate['variant_name'] ?: $priceUpdate['product_name'] }}
-                                        @if($sizeLabel)
-                                            <span class="text-muted fw-normal">size {{ $sizeLabel }}</span>
+                        @foreach($productPriceBoard as $priceProduct)
+                            <div class="price-product-row small">
+                                <div class="price-product-main {{ !empty($priceProduct['has_mixed_prices']) ? 'is-tree' : '' }}">
+                                    <div class="price-product-title">
+                                        @if(!empty($priceProduct['has_mixed_prices']))
+                                            <span class="text-warning-emphasis me-1">-</span>
+                                        @endif
+                                        {{ $priceProduct['product_name'] }}
+                                        @if(!empty($priceProduct['has_mixed_prices']))
+                                            <span class="price-common-label">giá chung</span>
                                         @endif
                                     </div>
-                                    @if(!empty($priceUpdate['sku']))
-                                        <div class="price-update-meta">SKU: {{ $priceUpdate['sku'] }}</div>
-                                    @endif
+                                    <div class="price-update-price">{{ number_format((float) ($priceProduct['representative_price'] ?? 0), 0, ',', '.') }}đ</div>
                                 </div>
-                                <div class="price-update-price">{{ number_format((float) ($priceUpdate['price'] ?? 0), 0, ',', '.') }}đ</div>
+                                @if(!empty($priceProduct['has_mixed_prices']))
+                                    <div class="price-variant-list">
+                                        @foreach($priceProduct['variants'] as $priceVariant)
+                                            <div class="price-variant-row">
+                                                <div class="price-variant-name">
+                                                    {{ $priceVariant['size_label'] ? $priceVariant['size_label'] . ' kg' : $priceVariant['name'] }}
+                                                    @if(!empty($priceVariant['sku']))
+                                                        <div class="price-variant-meta">SKU: {{ $priceVariant['sku'] }}</div>
+                                                    @endif
+                                                </div>
+                                                <div class="price-update-price">{{ number_format((float) ($priceVariant['price'] ?? 0), 0, ',', '.') }}đ</div>
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                @endif
                             </div>
                         @endforeach
                         <div class="price-update-note small">
-                            @if($priceUpdateDates->isNotEmpty())
-                                <div class="fw-semibold">Áp dụng từ {{ $priceUpdateDates->join(', ') }}</div>
+                            @if($priceBoardDates->isNotEmpty())
+                                <div class="fw-semibold">Áp dụng từ {{ $priceBoardDates->join(', ') }}</div>
                             @endif
                             <div>Giá bán chưa bao gồm VAT.</div>
                             <div>Miễn phí vận chuyển nội thành 5kg từ 20 con.</div>
                         </div>
                     </div>
                 @endif
-
-                @include('layouts.partials.department_broadcasts')
-
                 {{-- Activity Timeline Section --}}
                 <div class="section-card p-3" id="activity-timeline">
                     <h6 class="mb-2">Timeline hoạt động task</h6>

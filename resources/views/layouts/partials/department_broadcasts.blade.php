@@ -1,5 +1,21 @@
 @php
     $departmentBroadcasts = getDepartmentBroadcastNotifications(auth()->user(), $limit ?? 5);
+    $departmentNotificationLayoutKey = request('layout');
+    if (!$departmentNotificationLayoutKey) {
+        $routeName = request()->route()?->getName() ?? '';
+        $departmentNotificationLayoutKey = match (true) {
+            str_starts_with($routeName, 'ceo.') => 'ceo',
+            str_starts_with($routeName, 'director.') => 'director',
+            str_starts_with($routeName, 'accounting.') => 'accounting',
+            str_starts_with($routeName, 'warehouse.') => 'warehouse',
+            str_starts_with($routeName, 'shipper.') => 'shipper',
+            str_starts_with($routeName, 'admin.') => 'admin',
+            default => 'site',
+        };
+    }
+    $departmentNotificationShowRoute = $departmentNotificationLayoutKey === 'admin'
+        ? 'admin.notifications.show'
+        : 'department-notifications.show';
 @endphp
 
 @if($departmentBroadcasts->isNotEmpty())
@@ -7,7 +23,7 @@
         <div class="dept-broadcast-head">
             <div>
                 <div class="dept-broadcast-title">Thông báo phòng ban</div>
-                <div class="dept-broadcast-subtitle">Cập nhật mới từ ban quản trị</div>
+                <div class="dept-broadcast-subtitle">Cập nhật theo vai trò của bạn</div>
             </div>
             <span class="badge text-bg-warning">{{ $departmentBroadcasts->whereNull('read_at')->count() }} mới</span>
         </div>
@@ -15,20 +31,24 @@
             @foreach($departmentBroadcasts as $broadcast)
                 @php
                     $message = trim((string) ($broadcast['message'] ?? ''));
-                    $href = $broadcast['url'] ?: null;
+                    $href = route($departmentNotificationShowRoute, [
+                        'notificationId' => $broadcast['id'],
+                        'layout' => $departmentNotificationLayoutKey,
+                    ]);
                 @endphp
                 <div class="dept-broadcast-item {{ empty($broadcast['read_at']) ? 'is-unread' : '' }}">
-                    @if($href)
-                        <a href="{{ $href }}" class="dept-broadcast-link">
-                    @endif
+                    <a href="{{ $href }}" class="dept-broadcast-link">
                             <div class="dept-broadcast-item-title">{{ $broadcast['title'] }}</div>
+                            <div class="dept-broadcast-sender">
+                                Từ: <strong>{{ $broadcast['sender_name'] ?? 'Hệ thống' }}</strong>
+                                <span>·</span>
+                                Phòng ban/Vai trò: <strong>{{ $broadcast['sender_department'] ?? 'Hệ thống' }}</strong>
+                            </div>
                             @if($message !== '')
                                 <div class="dept-broadcast-message">{{ \Illuminate\Support\Str::limit($message, 180) }}</div>
                             @endif
                             <div class="dept-broadcast-time">{{ optional($broadcast['created_at'])->format('d/m/Y H:i') }}</div>
-                    @if($href)
-                        </a>
-                    @endif
+                    </a>
                 </div>
             @endforeach
         </div>
@@ -101,6 +121,14 @@
                 font-size: .9rem;
                 margin-top: 2px;
                 overflow-wrap: anywhere;
+            }
+            .dept-broadcast-sender {
+                color: #92400e;
+                font-size: .78rem;
+                margin-top: 2px;
+                display: flex;
+                flex-wrap: wrap;
+                gap: 4px;
             }
             .dept-broadcast-time {
                 color: #92400e;

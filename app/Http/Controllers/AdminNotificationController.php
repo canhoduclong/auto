@@ -113,6 +113,27 @@ class AdminNotificationController extends Controller
         return redirect($targetUrl);
     }
 
+    public function show(Request $request, string $notificationId): View
+    {
+        abort_unless($this->canManageDepartmentNotifications($request), 403);
+
+        $notification = $request->user()
+            ->notifications()
+            ->where('id', $notificationId)
+            ->firstOrFail();
+
+        if (is_null($notification->read_at)) {
+            $notification->markAsRead();
+        }
+
+        $viewContext = $this->resolveNotificationViewContext($request);
+
+        return view('admin.notifications.show', array_merge(
+            compact('notification'),
+            $viewContext
+        ));
+    }
+
     public function markAllAsRead(Request $request): RedirectResponse
     {
         abort_unless($this->canManageDepartmentNotifications($request), 403);
@@ -164,6 +185,7 @@ class AdminNotificationController extends Controller
             'notificationBroadcastRouteName' => $layoutKey === 'admin' ? 'admin.notifications.department_broadcast' : 'department-notifications.department_broadcast',
             'notificationReadAllRouteName' => $layoutKey === 'admin' ? 'admin.notifications.read_all' : 'department-notifications.read_all',
             'notificationReadRouteName' => $layoutKey === 'admin' ? 'admin.notifications.read' : 'department-notifications.read',
+            'notificationShowRouteName' => $layoutKey === 'admin' ? 'admin.notifications.show' : 'department-notifications.show',
         ];
     }
 }

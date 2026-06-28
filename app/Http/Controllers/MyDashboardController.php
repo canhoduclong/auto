@@ -7,7 +7,7 @@ use App\Models\TaskAssignment;
 use App\Models\User;
 use App\Models\Customer;
 use App\Models\OrderHistory;
-use App\Models\ProductPriceLog;
+use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Notifications\WarehouseOrderAdjustmentConfirmed;
 use App\Notifications\WarehouseOrderAdjustmentRejected;
@@ -401,7 +401,13 @@ class MyDashboardController extends Controller
             ->limit(10)
             ->get();
 
-        $recentPriceUpdates = $this->buildRecentPriceUpdates();
+        $productPriceBoard = $this->buildProductPriceBoard();
+        $productPriceAppliedDates = $productPriceBoard
+            ->pluck('applied_dates')
+            ->flatten()
+            ->filter()
+            ->unique()
+            ->values();
 
         $timeline = DB::table('task_status_logs as l')
             ->join('task_assignments as t', 't.id', '=', 'l.task_id')
@@ -467,38 +473,113 @@ class MyDashboardController extends Controller
             'timeline' => $timeline,
             'assignedCustomers' => $assignedCustomers,
             'pendingWarehouseAdjustments' => $pendingWarehouseAdjustments,
-            'recentPriceUpdates' => $recentPriceUpdates,
+            'productPriceBoard' => $productPriceBoard,
+            'productPriceAppliedDates' => $productPriceAppliedDates,
         ];
     }
 
-    private function buildRecentPriceUpdates(): Collection
+    private function buildProductPriceBoard(): Collection
     {
-        if (!Schema::hasTable('product_price_logs') || !Schema::hasTable('product_price_rules')) {
+        if (!Schema::hasTable('products') || !Schema::hasTable('product_variants')) {
             return collect();
         }
 
-        return ProductPriceLog::query()
-            ->with(['variant.product', 'priceRule'])
-            ->whereNotNull('product_variant_id')
-            ->where('applied_at', '>=', now()->subDays(7))
-            ->orderByDesc('applied_at')
-            ->limit(12)
+        return Product::query()
+            ->with(['variants' => function ($query) {
+                $query->with('latestPriceRule')
+                    ->when(Schema::hasColumn('product_variants', 'status'), fn ($q) => $q->where('status', true))
+                    ->orderByRaw('COALESCE(sort_order, 0) ASC')
+                    ->orderBy('id');
+            }])
+            ->when(Schema::hasColumn('products', 'status'), fn ($query) => $query->where('status', true))
+            ->orderByRaw('COALESCE(sort_order, 0) ASC')
+            ->orderBy('id')
             ->get()
-            ->map(function (ProductPriceLog $log) {
-                $variant = $log->variant;
-                $product = $variant?->product;
-                $startDate = $log->priceRule?->start_date ?: optional($log->applied_at)->toDateString();
+            ->map(function (Product $product) {
+                $variants = $product->variants
+                    ->map(function (ProductVariant $variant) use ($product) {
+                        $rule = $variant->latestPriceRule;
+                        $publishedRule = $this->resolvePublishedPriceRule($variant, $rule);
+                        $price = (float) ($publishedRule?->price ?? $rule?->price ?? $variant->final_price ?? $product->price ?? 0);
+
+                        if ($price <= 0) {
+                            return null;
+                        }
+
+                        $sizeLabel = $this->formatVariantSizeLabel($variant->size);
+
+                        return [
+                            'id' => $variant->id,
+                            'name' => $variant->name ?: ($sizeLabel ? "{$sizeLabel} kg" : ($variant->sku ?: 'Biến thể')),
+                            'size_label' => $sizeLabel,
+                            'sku' => $variant->sku,
+                            'price' => $price,
+                            'price_key' => number_format($price, 2, '.', ''),
+                            'start_date' => $publishedRule?->start_date ?? $rule?->start_date,
+                        ];
+                    })
+                    ->filter()
+                    ->values();
+
+                if ($variants->isEmpty()) {
+                    return null;
+                }
+
+                $priceGroups = $variants->groupBy('price_key');
+                $representativeKey = $priceGroups
+                    ->map(fn (Collection $items) => $items->count())
+                    ->sortDesc()
+                    ->keys()
+                    ->first();
+                $representativeVariant = $priceGroups->get($representativeKey)->first();
+                $hasMixedPrices = $priceGroups->count() > 1;
 
                 return [
-                    'product_name' => $product?->name ?: 'Sản phẩm',
-                    'variant_name' => $variant?->name ?: null,
-                    'sku' => $variant?->sku,
-                    'size' => $variant?->size,
-                    'price' => (float) $log->new_price,
-                    'start_date' => $startDate,
-                    'applied_at' => $log->applied_at,
+                    'product_id' => $product->id,
+                    'product_name' => $product->name ?: 'Sản phẩm',
+                    'representative_price' => (float) ($representativeVariant['price'] ?? 0),
+                    'representative_price_key' => $representativeKey,
+                    'has_mixed_prices' => $hasMixedPrices,
+                    'variants' => $hasMixedPrices ? $variants : collect(),
+                    'applied_dates' => $variants->pluck('start_date')->filter()->unique()->values(),
                 ];
-            });
+            })
+            ->filter()
+            ->values();
+    }
+
+    private function resolvePublishedPriceRule(ProductVariant $variant, mixed $latestRule): mixed
+    {
+        if ($latestRule && (float) $latestRule->price > 0) {
+            return $latestRule;
+        }
+
+        if (!Schema::hasTable('product_price_rules')) {
+            return $latestRule;
+        }
+
+        return $variant->priceRules()
+            ->where('price', '>', 0)
+            ->where(function ($query) {
+                $query->whereNull('start_date')
+                    ->orWhereDate('start_date', '<=', now()->toDateString());
+            })
+            ->where(function ($query) {
+                $query->whereNull('end_date')
+                    ->orWhereDate('end_date', '>=', now()->toDateString());
+            })
+            ->orderByDesc('start_date')
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    private function formatVariantSizeLabel(mixed $size): ?string
+    {
+        if (!is_numeric($size) || (float) $size <= 0) {
+            return null;
+        }
+
+        return rtrim(rtrim(number_format((float) $size, 2, ',', '.'), '0'), ',');
     }
 
     private function resolveScopedUserIds(User $user): array

@@ -192,6 +192,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/department-notifications', [AdminNotificationController::class, 'index'])->name('department-notifications.index');
         Route::post('/department-notifications', [AdminNotificationController::class, 'storeDepartmentBroadcast'])->name('department-notifications.department_broadcast');
         Route::post('/department-notifications/read-all', [AdminNotificationController::class, 'markAllAsRead'])->name('department-notifications.read_all');
+        Route::get('/department-notifications/{notificationId}', [AdminNotificationController::class, 'show'])->name('department-notifications.show');
         Route::post('/department-notifications/{notificationId}/read', [AdminNotificationController::class, 'markAsRead'])->name('department-notifications.read');
     });
 
@@ -594,6 +595,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::get('admin/notifications', [AdminNotificationController::class, 'index'])->name('admin.notifications.index');
     Route::post('admin/notifications/department-broadcast', [AdminNotificationController::class, 'storeDepartmentBroadcast'])->name('admin.notifications.department_broadcast');
     Route::post('admin/notifications/read-all', [AdminNotificationController::class, 'markAllAsRead'])->name('admin.notifications.read_all');
+    Route::get('admin/notifications/{notificationId}', [AdminNotificationController::class, 'show'])->name('admin.notifications.show');
     Route::post('admin/notifications/{notificationId}/read', [AdminNotificationController::class, 'markAsRead'])->name('admin.notifications.read');
     Route::get('admin/events', [AdminEventController::class, 'index'])->name('admin.events.index');
     Route::get('admin/organization-units', [OrganizationUnitController::class, 'index'])->name('admin.organization-units.index')->middleware('role:admin');

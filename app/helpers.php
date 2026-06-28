@@ -189,12 +189,35 @@ if (!function_exists('getDepartmentBroadcastNotifications')) {
             return collect();
         }
 
-        return $user->notifications()
+        $notifications = $user->notifications()
             ->where('type', \App\Notifications\DepartmentBroadcastNotification::class)
             ->latest()
             ->limit($limit)
-            ->get()
-            ->map(function ($notification) {
+            ->get();
+
+        $senderIds = $notifications
+            ->pluck('data.sender_id')
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        $senders = $senderIds->isNotEmpty()
+            ? \App\Models\User::query()
+                ->with(['department', 'roles'])
+                ->whereIn('id', $senderIds->all())
+                ->get()
+                ->keyBy('id')
+            : collect();
+
+        return $notifications
+            ->map(function ($notification) use ($senders) {
+                $senderId = (int) ($notification->data['sender_id'] ?? 0);
+                $sender = $senderId > 0 ? $senders->get($senderId) : null;
+                $senderRoles = $sender
+                    ? $sender->roles->pluck('name')->filter()->values()->all()
+                    : [];
+
                 return [
                     'id' => $notification->id,
                     'title' => $notification->data['title'] ?? 'Thông báo',
@@ -203,6 +226,10 @@ if (!function_exists('getDepartmentBroadcastNotifications')) {
                     'read_at' => $notification->read_at,
                     'created_at' => $notification->created_at,
                     'target_roles' => $notification->data['target_roles'] ?? [],
+                    'sender_id' => $notification->data['sender_id'] ?? null,
+                    'sender_name' => $sender?->name ?: 'Hệ thống',
+                    'sender_department' => $sender?->department?->name ?: ($senderRoles ? implode(', ', $senderRoles) : 'Hệ thống'),
+                    'sender_roles' => $senderRoles,
                 ];
             });
     }

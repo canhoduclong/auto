@@ -74,10 +74,9 @@
                                     @endif
                                 </td>
                                 <td class="text-end">
-                                    <form action="{{ route($notificationReadRouteName ?? 'admin.notifications.read', ['notificationId' => $notification->id, 'layout' => $notificationLayoutKey ?? null]) }}" method="POST" class="d-inline">
-                                        @csrf
-                                        <button type="submit" class="btn btn-sm btn-primary">Xem su kien</button>
-                                    </form>
+                                    <a href="{{ route($notificationShowRouteName ?? 'admin.notifications.show', ['notificationId' => $notification->id, 'layout' => $notificationLayoutKey ?? null]) }}" class="btn btn-sm btn-primary">
+                                        Xem chi tiết
+                                    </a>
                                 </td>
                             </tr>
                         @empty
