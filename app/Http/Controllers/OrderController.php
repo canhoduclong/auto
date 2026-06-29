@@ -16,6 +16,7 @@ use App\Models\Team;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Models\UserProductVariantPreference;
+use App\Models\Warehouse;
 use App\Support\ProductVariantSorter;
 use App\Models\Setting;
 use App\Services\ApprovalService;
@@ -887,7 +888,19 @@ class OrderController extends Controller
 
     public function edit(Order $order)
     {
-        $order->load('items.variant.product');
+        $order->load([
+            'customer.assignedTo',
+            'customer.currentOwner',
+            'customer.defaultShipper',
+            'items.product',
+            'items.variant.product',
+            'user.roles',
+            'shipper',
+            'warehouse',
+            'returnWarehouse',
+            'histories.user',
+            'accountingReconciliation',
+        ]);
 
         $authUser = auth()->user();
         $customerQuery = Customer::query()->orderBy('name');
@@ -904,11 +917,31 @@ class OrderController extends Controller
 
         $customers = $customerQuery->get();
         $users = User::orderBy('name')->get();
+        $shippers = User::query()
+            ->whereHas('roles', fn ($query) => $query->whereIn('name', ['shipper', 'manager_shipper']))
+            ->orderBy('name')
+            ->get();
+        $warehouses = Warehouse::query()->orderBy('name')->get();
         $statusOptions = collect(OrderStatus::cases())->mapWithKeys(function ($case) {
             return [$case->value => __('orders.statuses.' . $case->value)];
         });
+        $paymentStatusOptions = collect(PaymentStatus::cases())->mapWithKeys(function ($case) {
+            return [$case->value => __('orders.payment_statuses.' . $case->value)];
+        });
+        $deliveryStatusOptions = collect(DeliveryStatus::cases())->mapWithKeys(function ($case) {
+            return [$case->value => __('orders.delivery_statuses.' . $case->value)];
+        });
 
-        return view('orders.edit', compact('order', 'customers', 'users', 'statusOptions'));
+        return view('orders.edit', compact(
+            'order',
+            'customers',
+            'users',
+            'shippers',
+            'warehouses',
+            'statusOptions',
+            'paymentStatusOptions',
+            'deliveryStatusOptions'
+        ));
     }
 
     public function update(Request $request, Order $order)
@@ -929,16 +962,62 @@ class OrderController extends Controller
         $validated = $request->validate([
             'customer_id' => ['required', $customerRule],
             'user_id' => ['required', 'exists:users,id'],
+            'shipper_id' => ['nullable', 'exists:users,id'],
+            'warehouse_id' => ['nullable', 'exists:warehouses,id'],
+            'return_warehouse_id' => ['nullable', 'exists:warehouses,id'],
             'status' => ['nullable', 'string'],
+            'payment_status' => ['nullable', Rule::in(array_column(PaymentStatus::cases(), 'value'))],
+            'delivery_status' => ['nullable', Rule::in(array_column(DeliveryStatus::cases(), 'value'))],
+            'recipient_name' => ['nullable', 'string', 'max:255'],
+            'recipient_phone' => ['nullable', 'string', 'max:50'],
+            'recipient_email' => ['nullable', 'email', 'max:255'],
+            'recipient_address' => ['nullable', 'string', 'max:1000'],
+            'note' => ['nullable', 'string', 'max:2000'],
+            'delivery_date' => ['nullable', 'date'],
+            'delivery_time' => ['nullable', 'string', 'max:255'],
+            'actual_weight' => ['nullable', 'numeric', 'min:0'],
+            'charge_shipping_fee' => ['nullable', 'boolean'],
+            'shipping_fee' => ['nullable', 'numeric', 'min:0'],
+            'charge_foam_box_fee' => ['nullable', 'boolean'],
+            'foam_box_price' => ['nullable', 'numeric', 'min:0'],
+            'amount_paid' => ['nullable', 'numeric', 'min:0'],
+            'collected_amount' => ['nullable', 'numeric', 'min:0'],
+            'payment_method' => ['nullable', 'string', 'max:100'],
+            'return_reason' => ['nullable', 'string', 'max:500'],
+            'shipper_note' => ['nullable', 'string', 'max:1000'],
         ]);
 
         $statusBefore = (string) $order->status;
 
-        $order->update([
+        $updates = [
             'customer_id' => (int) $validated['customer_id'],
             'user_id' => (int) $validated['user_id'],
+            'shipper_id' => $validated['shipper_id'] ?? null,
+            'warehouse_id' => $validated['warehouse_id'] ?? null,
+            'return_warehouse_id' => $validated['return_warehouse_id'] ?? null,
             'status' => $validated['status'] ?? $order->status,
-        ]);
+            'payment_status' => $validated['payment_status'] ?? $order->payment_status,
+            'delivery_status' => $validated['delivery_status'] ?? $order->delivery_status,
+            'recipient_name' => $validated['recipient_name'] ?? null,
+            'recipient_phone' => $validated['recipient_phone'] ?? null,
+            'recipient_email' => $validated['recipient_email'] ?? null,
+            'recipient_address' => $validated['recipient_address'] ?? null,
+            'note' => $validated['note'] ?? null,
+            'delivery_date' => $validated['delivery_date'] ?? null,
+            'delivery_time' => $validated['delivery_time'] ?? null,
+            'actual_weight' => $validated['actual_weight'] ?? null,
+            'charge_shipping_fee' => $request->boolean('charge_shipping_fee'),
+            'shipping_fee' => $validated['shipping_fee'] ?? null,
+            'charge_foam_box_fee' => $request->boolean('charge_foam_box_fee'),
+            'foam_box_price' => $validated['foam_box_price'] ?? null,
+            'amount_paid' => $validated['amount_paid'] ?? 0,
+            'collected_amount' => $validated['collected_amount'] ?? null,
+            'payment_method' => $validated['payment_method'] ?? null,
+            'return_reason' => $validated['return_reason'] ?? null,
+            'shipper_note' => $validated['shipper_note'] ?? null,
+        ];
+
+        $order->forceFill($this->filterExistingColumns('orders', $updates))->save();
 
         $this->recalculateOrderTotals($order->fresh('items.variant.product'));
         $this->logOrderHistory($order->fresh(), 'update_order', $statusBefore, (string) $order->fresh()->status, 'Cap nhat thong tin don hang');

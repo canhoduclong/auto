@@ -323,11 +323,11 @@ class ShipperApiController extends BaseApiController
             'date' => ['nullable', 'date'],
             'notes' => ['nullable', 'string', 'max:500'],
         ]);
-        $date = (string) ($validated['date'] ?? now()->addDay()->toDateString());
+        $date = Carbon::parse($validated['date'] ?? now()->toDateString())->toDateString();
         $groups = Order::query()
             ->whereNotNull('shipper_id')
             ->whereIn('status', $this->assignmentStatuses())
-            ->forDeliveryDate($date)
+            ->whereDate('created_at', $date)
             ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
             ->orderBy('daily_sequence')
             ->orderBy('delivery_time')
@@ -704,7 +704,7 @@ class ShipperApiController extends BaseApiController
             ->with(['customer:id,name,phone,address', 'items.product:id,name,unit', 'items.variant:id,name,sku,size,product_id'])
             ->where('shipper_id', $shipperId)
             ->whereIn('status', $this->assignmentStatuses())
-            ->forDeliveryDate($selectedDate)
+            ->whereDate('created_at', $selectedDate)
             ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
             ->orderBy('daily_sequence', 'asc')
             ->orderBy('delivery_time', 'asc')
@@ -745,7 +745,7 @@ class ShipperApiController extends BaseApiController
         return OrderHistory::query()
             ->join('orders', 'orders.id', '=', 'order_histories.order_id')
             ->where('orders.shipper_id', $shipperId)
-            ->whereDate('orders.delivery_date', $selectedDate)
+            ->whereDate('orders.created_at', $selectedDate)
             ->whereIn('order_histories.action', ['schedule_created', 'schedule_confirmed', 'schedule_rejected'])
             ->orderByDesc('order_histories.created_at')
             ->orderByDesc('order_histories.id')

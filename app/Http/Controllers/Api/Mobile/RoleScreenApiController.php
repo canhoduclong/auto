@@ -139,10 +139,10 @@ class RoleScreenApiController extends BaseApiController
     private function managerShipper(Request $request, string $key): JsonResponse
     {
         $today = now()->toDateString();
-        $deliveryDate = (string) $request->query('date', now()->addDay()->toDateString());
+        $assignmentDate = Carbon::parse($request->query('date', $today))->toDateString();
 
         return match ($key) {
-            'manage_assignments' => $this->managerAssignments($deliveryDate),
+            'manage_assignments' => $this->managerAssignments($assignmentDate),
             'warehouse_transfers' => $this->shipperWarehouseTransfers($request, (string) $request->query('date', $today)),
             'shipper_team', 'team_report' => $this->ok([
                 'cards' => [
@@ -805,14 +805,29 @@ class RoleScreenApiController extends BaseApiController
         $shippers = User::query()
             ->whereHas('roles', fn ($query) => $query->whereIn('name', ['shipper', 'manager_shipper']))
             ->orderBy('name')
-            ->get(['id', 'name'])
-            ->map(fn (User $shipper) => ['id' => (int) $shipper->id, 'name' => (string) $shipper->name])
+            ->get(['id', 'name', 'phone'])
+            ->map(fn (User $shipper) => [
+                'id' => (int) $shipper->id,
+                'name' => (string) $shipper->name,
+                'phone' => (string) ($shipper->phone ?? ''),
+            ])
             ->values();
         $orders = Order::query()
-            ->with(['customer:id,name,phone,address,default_shipper_id', 'customer.defaultShipper:id,name', 'shipper:id,name'])
+            ->with([
+                'customer:id,name,phone,address,default_shipper_id,delivery_time,truck_station_id,truck_route_id',
+                'customer.defaultShipper:id,name,phone',
+                'customer.truckStation:id,name,address,phone',
+                'customer.truckRoute:id,name',
+                'items.product:id,name,unit',
+                'items.variant:id,name,sku,size,product_id',
+                'shipper:id,name,phone',
+                'warehouse:id,name',
+            ])
             ->whereIn('status', $statuses)
-            ->forDeliveryDate($date)
+            ->whereDate('created_at', $date)
             ->orderByRaw('CASE WHEN shipper_id IS NULL THEN 0 ELSE 1 END')
+            ->orderByRaw("CASE WHEN delivery_time IS NULL OR delivery_time = '' THEN 1 ELSE 0 END")
+            ->orderBy('delivery_time')
             ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
             ->orderBy('daily_sequence')
             ->orderBy('created_at')
@@ -823,35 +838,93 @@ class RoleScreenApiController extends BaseApiController
             ->unique()
             ->contains(fn ($shipperId) => app(\App\Services\ShipperAssignmentService::class)
                 ->hasUnpublishedDailySchedule((int) $shipperId, $date));
+        $payloadItems = $orders->map(fn (Order $order) => $this->managerAssignmentOrderPayload($order, $shippers))->values();
 
         return $this->ok([
             'can_publish_schedule' => $canPublishSchedule,
             'selected_date' => $date,
+            'date_field' => 'created_at',
+            'available_shippers' => $shippers,
+            'actions' => [
+                'assign' => '/mobile/shipper/assignments/{order}/assign/{shipper}',
+                'unassign' => '/mobile/shipper/assignments/{order}/unassign',
+                'set_default_shipper' => '/mobile/shipper/customers/{customer}/default-shipper',
+                'publish_schedule' => '/mobile/shipper/assignments/create-schedules',
+            ],
             'cards' => [
                 ['label' => 'Tổng đơn điều phối', 'value' => $orders->count()],
                 ['label' => 'Chưa phân công', 'value' => $orders->whereNull('shipper_id')->count()],
                 ['label' => 'Đã phân công', 'value' => $orders->whereNotNull('shipper_id')->count()],
                 ['label' => 'Shipper sẵn sàng', 'value' => $shippers->count()],
             ],
-            'items' => $orders->map(fn (Order $order) => [
-                'id' => (int) $order->id,
-                'title' => 'Đơn #' . ($order->daily_sequence ?: $order->code ?: $order->id),
-                'subtitle' => (string) ($order->customer?->name ?? 'Khách hàng'),
-                'status' => (string) $order->status,
-                'total' => (float) ($order->total ?? 0),
-                'shipper_id' => $order->shipper_id ? (int) $order->shipper_id : null,
-                'shipper_name' => (string) ($order->shipper?->name ?? ''),
-                'customer_id' => $order->customer_id ? (int) $order->customer_id : null,
-                'customer_address' => (string) ($order->customer?->address ?? ''),
-                'daily_sequence' => $order->daily_sequence ? (int) $order->daily_sequence : null,
-                'default_shipper_id' => $order->customer?->default_shipper_id ? (int) $order->customer->default_shipper_id : null,
-                'default_shipper_name' => (string) ($order->customer?->defaultShipper?->name ?? ''),
-                'delivery_time' => (string) ($order->delivery_time ?? ''),
-                'delivery_date' => optional($order->delivery_date)->toDateString(),
-                'available_shippers' => $shippers,
-                'updated_at' => optional($order->updated_at)->toIso8601String(),
-            ])->values(),
+            'items' => $payloadItems,
+            'unassigned' => $payloadItems->whereNull('shipper_id')->values(),
+            'assigned_groups' => $payloadItems
+                ->whereNotNull('shipper_id')
+                ->groupBy('shipper_id')
+                ->map(fn ($items, $shipperId) => [
+                    'shipper_id' => (int) $shipperId,
+                    'shipper_name' => (string) ($items->first()['shipper_name'] ?? ''),
+                    'orders_count' => $items->count(),
+                    'total' => (float) $items->sum('total'),
+                    'items' => $items->values(),
+                ])
+                ->values(),
         ]);
+    }
+
+    private function managerAssignmentOrderPayload(Order $order, $shippers): array
+    {
+        $customer = $order->customer;
+        $deliveryTime = $order->delivery_time ?: $customer?->delivery_time;
+
+        return [
+            'id' => (int) $order->id,
+            'title' => 'Đơn #' . ($order->daily_sequence ?: $order->code ?: $order->id),
+            'subtitle' => trim(($customer?->name ?? 'Khách hàng') . ' · ' . ($customer?->phone ?? ''), ' ·'),
+            'status' => (string) $order->status,
+            'code' => (string) ($order->code ?? ''),
+            'total' => (float) ($order->total ?? 0),
+            'amount_due' => (float) ($order->amount_due ?? 0),
+            'shipping_fee' => (float) ($order->shipping_fee ?? 0),
+            'shipper_id' => $order->shipper_id ? (int) $order->shipper_id : null,
+            'shipper_name' => (string) ($order->shipper?->name ?? ''),
+            'shipper_phone' => (string) ($order->shipper?->phone ?? ''),
+            'customer_id' => $order->customer_id ? (int) $order->customer_id : null,
+            'customer_name' => (string) ($customer?->name ?? ''),
+            'customer_phone' => (string) ($customer?->phone ?? ''),
+            'customer_address' => (string) ($customer?->address ?? ''),
+            'truck_station' => $customer?->truckStation ? [
+                'id' => (int) $customer->truckStation->id,
+                'name' => (string) $customer->truckStation->name,
+                'address' => (string) ($customer->truckStation->address ?? ''),
+                'phone' => (string) ($customer->truckStation->phone ?? ''),
+            ] : null,
+            'truck_route' => $customer?->truckRoute ? [
+                'id' => (int) $customer->truckRoute->id,
+                'name' => (string) $customer->truckRoute->name,
+            ] : null,
+            'daily_sequence' => $order->daily_sequence ? (int) $order->daily_sequence : null,
+            'default_shipper_id' => $customer?->default_shipper_id ? (int) $customer->default_shipper_id : null,
+            'default_shipper_name' => (string) ($customer?->defaultShipper?->name ?? ''),
+            'delivery_time' => (string) ($deliveryTime ?? ''),
+            'delivery_date' => optional($order->delivery_date)->toDateString(),
+            'created_date' => optional($order->created_at)->toDateString(),
+            'warehouse_name' => (string) ($order->warehouse?->name ?? ''),
+            'items_count' => (int) $order->items->sum('quantity'),
+            'items' => $order->items->map(fn ($item) => [
+                'id' => (int) $item->id,
+                'name' => (string) ($item->variant?->name ?? $item->product?->name ?? 'Sản phẩm'),
+                'sku' => (string) ($item->variant?->sku ?? ''),
+                'size' => (string) ($item->variant?->size ?? ''),
+                'quantity' => (float) ($item->quantity ?? 0),
+                'total_weight' => (float) ($item->total_weight ?? 0),
+            ])->values(),
+            'available_shippers' => $shippers,
+            'assign_url' => '/mobile/shipper/assignments/' . $order->id . '/assign/{shipper}',
+            'unassign_url' => '/mobile/shipper/assignments/' . $order->id . '/unassign',
+            'updated_at' => optional($order->updated_at)->toIso8601String(),
+        ];
     }
 
     private function warehouseReturns(?int $warehouseId): JsonResponse

@@ -80,6 +80,10 @@ Route::middleware(['auth'])->prefix('m')->name('mobile.')->group(function () {
             Route::get('/orders/{order}', [ShipperMobileController::class, 'orderDetail'])->name('orders.detail');
             Route::post('/orders/{order}/complete', [ShipperMobileController::class, 'completeOrder'])->name('orders.complete');
             Route::post('/orders/{order}/failed', [ShipperMobileController::class, 'failOrder'])->name('orders.failed');
+            Route::get('/assignments', [ShipperMobileController::class, 'assignments'])->name('assignments');
+            Route::post('/assignments/{order}/assign', [ShipperMobileController::class, 'assignOrder'])->name('assignments.assign');
+            Route::post('/assignments/{order}/unassign', [ShipperMobileController::class, 'unassignOrder'])->name('assignments.unassign');
+            Route::post('/assignments/create-schedules', [ShipperMobileController::class, 'createSchedules'])->name('assignments.create-schedules');
         });
     });
 });
