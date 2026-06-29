@@ -17,6 +17,8 @@
             --acc-text: #0f172a;
             --acc-muted: #64748b;
             --acc-brand: #0ea5e9;
+            --theme-primary: var(--acc-brand);
+            --theme-primary-hover: #0284c7;
         }
         body {
             margin: 0;
@@ -359,6 +361,14 @@
             </a>
             <a href="{{ route('accounting.reconciliation') }}" class="{{ request()->routeIs('accounting.reconciliation') ? 'active' : '' }}">
                 <i class="bi bi-check2-square"></i> Đối soát đơn hàng
+            </a>
+
+            <div class="nav-section">Ship</div>
+            <a href="{{ route('accounting.shippers') }}" class="{{ request()->routeIs('accounting.shippers*') ? 'active' : '' }}">
+                <i class="bi bi-person-badge"></i> Quản lý Shipper
+            </a>
+            <a href="{{ route('accounting.shipping-costs') }}" class="{{ request()->routeIs('accounting.shipping-costs*') ? 'active' : '' }}">
+                <i class="bi bi-cash-coin"></i> Quản lý chi phí ship
             </a>
 
             <div class="nav-section">Tài chính</div>

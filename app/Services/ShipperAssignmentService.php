@@ -70,6 +70,7 @@ class ShipperAssignmentService
         ?int $actorId = null,
         string $actorRole = 'system',
         ?string $notes = null,
+        array $routePlan = [],
     ): bool {
         $dateString = $date instanceof Carbon
             ? $date->toDateString()
@@ -90,6 +91,9 @@ class ShipperAssignmentService
             return false;
         }
 
+        $shipperRoutePlan = collect($routePlan)
+            ->first(fn ($shipperPlan) => (int) ($shipperPlan['shipper_id'] ?? 0) === $shipperId);
+
         $snapshot = $orders->map(fn (Order $order) => [
             'order_id' => (int) $order->id,
             'daily_sequence' => $order->daily_sequence !== null ? (int) $order->daily_sequence : null,
@@ -97,6 +101,11 @@ class ShipperAssignmentService
             'delivery_time' => $order->delivery_time,
             'updated_at' => optional($order->updated_at)->toDateTimeString(),
         ])->values()->all();
+        if ($shipperRoutePlan) {
+            $snapshot[] = [
+                'route_plan' => $shipperRoutePlan,
+            ];
+        }
         $snapshotJson = json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         $snapshotHash = hash('sha256', $snapshotJson);
 

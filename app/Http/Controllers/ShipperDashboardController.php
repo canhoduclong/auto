@@ -28,7 +28,7 @@ class ShipperDashboardController extends Controller
 {
     public function __construct()
     {
-        $this->middleware(['auth', 'role:shipper,manager_shipper,admin']);
+        $this->middleware(['auth', 'role:shipper,manager_shipper,account,accountant,accounting,admin']);
     }
     /**
      * Chuyển đơn sang kho khác (cập nhật warehouse_id)
@@ -1546,7 +1546,11 @@ class ShipperDashboardController extends Controller
         $hasUnpublishedSchedules = collect($shipperScheduleStatuses)->contains('draft');
 
         $warehouses = Warehouse::query()->orderBy('name')->get();
-        return view('shipper.manage-assignments', compact(
+        $view = $request->routeIs('accounting.*')
+            ? 'accounting.ship.manage-assignments'
+            : 'shipper.manage-assignments';
+
+        return view($view, compact(
             'unassignedOrders',
             'assignedOrders',
             'shippers',
@@ -1874,6 +1878,28 @@ class ShipperDashboardController extends Controller
     /**
      * Tạo lịch trình giao hàng - Hoàn thành & Gửi xác nhận
      */
+    public function reviewDeliverySchedule(Request $request)
+    {
+        $this->authorizeManagerShipper();
+
+        $validated = $request->validate([
+            'date' => ['required', 'date'],
+            'notes' => ['nullable', 'string', 'max:500'],
+            'route_plan' => ['required', 'string'],
+        ]);
+
+        $selectedDate = Carbon::parse($validated['date'])->toDateString();
+        $routePlan = $this->decodeRoutePlan($validated['route_plan']);
+        abort_if(empty($routePlan), 422, 'Vui lòng tạo ít nhất một chuyến trước khi xem lại.');
+
+        return view('shipper.manage-assignments-review', [
+            'selectedDate' => $selectedDate,
+            'notes' => $validated['notes'] ?? '',
+            'routePlan' => $routePlan,
+            'routePlanJson' => json_encode($routePlan, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        ]);
+    }
+
     public function createDeliverySchedule(Request $request)
     {
         $this->authorizeManagerShipper();
@@ -1881,9 +1907,12 @@ class ShipperDashboardController extends Controller
         $validated = $request->validate([
             'notes' => ['nullable', 'string', 'max:500'],
             'date' => ['nullable', 'date'],
+            'route_plan' => ['nullable', 'string'],
         ]);
 
         $date = $this->assignmentOrderingDate($request);
+        $routePlan = $this->decodeRoutePlan($validated['route_plan'] ?? null);
+        $this->applyRoutePlanFees($routePlan, $date);
 
         // Lấy danh sách tất cả shippers có đơn đã gán trong ngày
         $shipperIds = Order::query()
@@ -1907,8 +1936,9 @@ class ShipperDashboardController extends Controller
                 (int) $shipperId,
                 $date,
                 (int) Auth::id(),
-                'manager_shipper',
+                Auth::user()?->hasRole(['account', 'accountant', 'accounting']) ? 'accounting' : 'manager_shipper',
                 $validated['notes'] ?? null,
+                $routePlan,
             )) {
                 $totalOrdersCount += $ordersCount;
                 $processedShippers[] = $shipper->name . ' (' . $ordersCount . ' đơn)';
@@ -1924,6 +1954,84 @@ class ShipperDashboardController extends Controller
         $message = 'Đã gửi lịch trình giao hàng cho ' . count($processedShippers) . ' shipper (' . $totalOrdersCount . ' đơn): ' . $shipperList . '. Các shipper sẽ nhận được thông báo xác nhận.';
 
         return $this->assignmentMutationResponse($request, $message);
+    }
+
+    private function decodeRoutePlan(?string $routePlanJson): array
+    {
+        if (!filled($routePlanJson)) {
+            return [];
+        }
+
+        $decoded = json_decode($routePlanJson, true);
+        abort_if(json_last_error() !== JSON_ERROR_NONE || !is_array($decoded), 422, 'Dữ liệu lộ trình không hợp lệ.');
+
+        return $decoded;
+    }
+
+    private function applyRoutePlanFees(array $routePlan, string $date): void
+    {
+        if (empty($routePlan)) {
+            return;
+        }
+
+        $plannedOrders = collect($routePlan)
+            ->flatMap(fn ($shipperPlan) => $shipperPlan['routes'] ?? [])
+            ->flatMap(fn ($route) => $route['orders'] ?? [])
+            ->filter(fn ($order) => !empty($order['order_id']))
+            ->keyBy(fn ($order) => (int) $order['order_id']);
+
+        if ($plannedOrders->isEmpty()) {
+            return;
+        }
+
+        $orders = Order::with(['items', 'accountingReconciliation'])
+            ->whereIn('id', $plannedOrders->keys()->all())
+            ->whereIn('status', $this->assignmentStatuses())
+            ->whereDate('created_at', $date)
+            ->get()
+            ->keyBy('id');
+
+        abort_if($orders->count() !== $plannedOrders->count(), 422, 'Có đơn trong lộ trình không còn hợp lệ. Vui lòng tải lại trang.');
+        abort_if($orders->contains(fn (Order $order) => $order->accountingReconciliation?->status === \App\Models\AccountingReconciliation::STATUS_CONFIRMED), 422, 'Có đơn đã được kế toán xác nhận, không thể đổi phí ship.');
+
+        DB::transaction(function () use ($plannedOrders, $orders): void {
+            foreach ($plannedOrders as $orderId => $plannedOrder) {
+                $order = $orders->get((int) $orderId);
+                if (!$order) {
+                    continue;
+                }
+
+                $newFee = max(0, (float) ($plannedOrder['final_fee'] ?? $order->shipping_fee ?? 0));
+                $oldFee = (float) ($order->shipping_fee ?? 0);
+                if (abs($oldFee - $newFee) < 0.01) {
+                    continue;
+                }
+
+                $itemsSubtotal = (float) $order->items->sum(function ($item) {
+                    return (float) ($item->total ?? (($item->price ?? 0) * ($item->display_total_value ?? $item->quantity ?? 0)));
+                });
+                $foamBoxFee = (float) (($order->charge_foam_box_fee ?? false) ? ($order->foam_box_price ?? 0) : 0);
+
+                $order->update([
+                    'shipping_fee' => $newFee,
+                    'total' => $itemsSubtotal + $newFee + $foamBoxFee,
+                ]);
+
+                OrderHistory::create([
+                    'order_id' => $order->id,
+                    'action' => 'shipping_fee_updated',
+                    'user_id' => Auth::id(),
+                    'role' => Auth::user()?->hasRole(['account', 'accountant', 'accounting']) ? 'accounting' : 'manager_shipper',
+                    'status_before' => $order->status,
+                    'status_after' => $order->status,
+                    'note' => 'Cập nhật phí ship theo lộ trình ghép chuyến từ '
+                        . number_format($oldFee, 0, ',', '.') . ' đ thành '
+                        . number_format($newFee, 0, ',', '.') . ' đ',
+                ]);
+
+                $this->syncCustomerShippingFeeHistory($order, $oldFee, $newFee, $plannedOrder['note'] ?? null);
+            }
+        });
     }
 
     /**
@@ -2240,7 +2348,11 @@ class ShipperDashboardController extends Controller
             'pending_total' => (float) $feeRequestOrders->whereNull('shipping_fee_transaction_id')->sum('shipping_fee'),
         ];
 
-        return view('shipper.manage-fees', compact('orders', 'selectedDate', 'orderReturns', 'feeRequestSummary'));
+        $view = $request->routeIs('accounting.*')
+            ? 'accounting.ship.manage-fees'
+            : 'shipper.manage-fees';
+
+        return view($view, compact('orders', 'selectedDate', 'orderReturns', 'feeRequestSummary'));
     }
 
     /**
@@ -2346,6 +2458,38 @@ class ShipperDashboardController extends Controller
         });
 
         return back()->with('success', 'Cập nhật phí ship cho ' . count($orders) . ' đơn hàng thành công!');
+    }
+
+    public function updateReturnFee(Request $request, OrderReturn $orderReturn)
+    {
+        $this->authorizeManagerShipper();
+
+        $validated = $request->validate([
+            'return_shipping_fee' => ['required', 'numeric', 'min:0'],
+            'notes' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $oldFee = (float) ($orderReturn->return_shipping_fee ?? 0);
+        $newFee = (float) $validated['return_shipping_fee'];
+
+        $orderReturn->update([
+            'return_shipping_fee' => $newFee,
+            'note' => trim((string) ($orderReturn->note ?? '') . (!empty($validated['notes']) ? ' | ' . $validated['notes'] : ''), ' |'),
+        ]);
+
+        if ($orderReturn->order_id) {
+            OrderHistory::create([
+                'order_id' => $orderReturn->order_id,
+                'action' => 'return_shipping_fee_updated',
+                'user_id' => Auth::id(),
+                'role' => Auth::user()?->hasRole(['account', 'accountant', 'accounting']) ? 'accounting' : 'manager_shipper',
+                'note' => 'Cập nhật phí ship trả về từ ' . number_format($oldFee, 0, ',', '.') . ' đ thành '
+                    . number_format($newFee, 0, ',', '.') . ' đ'
+                    . (!empty($validated['notes']) ? ' - ' . $validated['notes'] : ''),
+            ]);
+        }
+
+        return back()->with('success', 'Đã cập nhật phí ship trả về.');
     }
 
     public function createShippingFeeRequest(Request $request)
@@ -2733,7 +2877,7 @@ class ShipperDashboardController extends Controller
 
     protected function authorizeManagerShipper(): void
     {
-        if (!(Auth::user()->hasRole('manager_shipper') || Auth::user()->hasRole('admin'))) {
+        if (!Auth::user()->hasRole(['manager_shipper', 'account', 'accountant', 'accounting', 'admin'])) {
             abort(403, 'Bạn không có quyền truy cập tính năng này.');
         }
     }
