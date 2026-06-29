@@ -40,7 +40,15 @@
                 @foreach($customers as $customer)
                     <tr class="{{ in_array((int) $customer->id, $selectedCustomerIds ?? [], true) ? 'table-primary' : '' }}">
                         <td>
-                            <strong>{{ $customer->name }}</strong>
+                            <strong>
+                                @if($customer->is_pinned)
+                                    <span class="text-warning me-1">★</span>
+                                @endif
+                                @if((int) ($customer->sort_order ?? 0) > 0)
+                                    <span class="badge bg-light text-dark border me-1">{{ (int) $customer->sort_order }}</span>
+                                @endif
+                                {{ $customer->name }}
+                            </strong>
                         </td>
                         <td>{{ $customer->phone ?: '—' }}</td>
                         <td class="text-muted small">{{ $customer->email ?: '—' }}</td>

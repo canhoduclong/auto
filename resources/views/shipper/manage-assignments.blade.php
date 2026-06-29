@@ -346,6 +346,24 @@
         font-weight: 800;
         color: #111827;
     }
+    .trip-order-time {
+        color: #0f766e;
+        font-weight: 900;
+        margin-right: 6px;
+        white-space: nowrap;
+    }
+    .order-meta-line {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 10px;
+        margin-top: 3px;
+        color: #64748b;
+        font-size: .73rem;
+        font-weight: 600;
+    }
+    .quick-products-btn {
+        white-space: nowrap;
+    }
     .trip-order-address {
         color: #475569;
     }
@@ -484,6 +502,21 @@
                                         $customerName = $customer?->name ?? $order->recipient_name ?? 'Khách hàng';
                                         $shippingFee = (float) ($order->shipping_fee ?? $customer?->shipping_fee ?? 0);
                                         $deliveryTime = $order->delivery_time ?: $customer?->delivery_time ?: '';
+                                        $saleName = $order->user?->name ?: 'Chưa có sale';
+                                        $originName = $order->warehouse?->name ?: 'Chưa chọn kho';
+                                        $productPayload = $order->items->map(function ($item) {
+                                            $variant = $item->variant;
+                                            $productName = $item->product?->name ?: $variant?->product?->name ?: 'Sản phẩm';
+                                            $variantName = $variant?->name ?: $variant?->variant_name ?: $variant?->sku;
+
+                                            return [
+                                                'name' => trim($productName . ($variantName ? ' - ' . $variantName : '')),
+                                                'quantity' => (float) ($item->quantity ?? 0),
+                                                'weight' => (float) ($item->total_weight ?? $item->actual_weight ?? 0),
+                                                'price' => (float) ($item->price ?? 0),
+                                                'total' => (float) ($item->total ?? 0),
+                                            ];
+                                        })->values();
                                     @endphp
                                     <tr id="order-{{ $order->id }}"
                                         class="js-unassigned-order"
@@ -497,6 +530,10 @@
                                         <td>
                                             <div class="fw-bold text-dark">{{ $customerName }}</div>
                                             <div class="text-muted small">#{{ $order->code ?: $order->id }}</div>
+                                            <div class="order-meta-line">
+                                                <span><i class="bi bi-person-badge me-1"></i>{{ $saleName }}</span>
+                                                <span><i class="bi bi-box-arrow-up-right me-1"></i>{{ $originName }}</span>
+                                            </div>
                                         </td>
                                         <td class="text-muted">{{ \Illuminate\Support\Str::limit($address, 48) }}</td>
                                         <td class="text-end fw-bold text-muted">{{ number_format($shippingFee, 0, ',', '.') }} đ</td>
@@ -511,6 +548,15 @@
                                                 data-customer-name="{{ $customerName }}"
                                                 data-set-default="{{ $customer?->default_shipper_id ? '0' : '1' }}">
                                                 <i class="bi bi-person-plus me-1"></i>Chọn shipper
+                                            </button>
+                                            <button type="button"
+                                                class="btn btn-sm btn-outline-secondary mt-1 quick-products-btn js-open-products-preview"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#productsPreviewModal"
+                                                data-order-code="{{ $order->code ?: $order->id }}"
+                                                data-customer-name="{{ $customerName }}"
+                                                data-products="{{ e($productPayload->toJson(JSON_UNESCAPED_UNICODE)) }}">
+                                                <i class="bi bi-list-ul me-1"></i>Sản phẩm
                                             </button>
                                         </td>
                                     </tr>
@@ -652,6 +698,22 @@
                                                                 ? (float) ($order->shipping_fee ?? 0)
                                                                 : 0;
                                                             $customerName = $customer?->name ?? $order->recipient_name ?? 'Khách hàng';
+                                                            $deliveryTime = $order->delivery_time ?: $customer?->delivery_time ?: '';
+                                                            $saleName = $order->user?->name ?: 'Chưa có sale';
+                                                            $originName = $order->warehouse?->name ?: 'Chưa chọn kho';
+                                                            $productPayload = $order->items->map(function ($item) {
+                                                                $variant = $item->variant;
+                                                                $productName = $item->product?->name ?: $variant?->product?->name ?: 'Sản phẩm';
+                                                                $variantName = $variant?->name ?: $variant?->variant_name ?: $variant?->sku;
+
+                                                                return [
+                                                                    'name' => trim($productName . ($variantName ? ' - ' . $variantName : '')),
+                                                                    'quantity' => (float) ($item->quantity ?? 0),
+                                                                    'weight' => (float) ($item->total_weight ?? $item->actual_weight ?? 0),
+                                                                    'price' => (float) ($item->price ?? 0),
+                                                                    'total' => (float) ($item->total ?? 0),
+                                                                ];
+                                                            })->values();
                                                         @endphp
                                                         <tr id="order-{{ $order->id }}"
                                                             class="js-trip-order"
@@ -666,7 +728,14 @@
                                                                 <span class="priority-dot is-routed" style="width:28px;height:28px;font-size:.78rem;">{{ $order->daily_sequence ?: $loop->iteration }}</span>
                                                             </td>
                                                             <td class="trip-order-customer">
+                                                                @if($deliveryTime)
+                                                                    <span class="trip-order-time">{{ $deliveryTime }}</span>
+                                                                @endif
                                                                 {{ $customerName }}
+                                                                <div class="order-meta-line">
+                                                                    <span><i class="bi bi-person-badge me-1"></i>{{ $saleName }}</span>
+                                                                    <span><i class="bi bi-box-arrow-up-right me-1"></i>{{ $originName }}</span>
+                                                                </div>
                                                                 <input type="hidden" class="js-order-trip" value="{{ $defaultTripCode }}">
                                                             </td>
                                                             <td class="trip-order-address" title="{{ $destination }}">{{ $destination }}</td>
@@ -676,7 +745,16 @@
                                                             <td class="text-end fw-bold js-order-final-fee">{{ number_format($baseFee, 0, ',', '.') }}</td>
                                                             <td>
                                                                 <input type="hidden" class="js-order-trip-note" value="">
-                                                                <div class="d-flex gap-1">
+                                                                <div class="d-flex gap-1 flex-wrap">
+                                                                    <button type="button"
+                                                                        class="btn btn-sm btn-outline-secondary quick-products-btn js-open-products-preview"
+                                                                        data-bs-toggle="modal"
+                                                                        data-bs-target="#productsPreviewModal"
+                                                                        data-order-code="{{ $order->code ?: $order->id }}"
+                                                                        data-customer-name="{{ $customerName }}"
+                                                                        data-products="{{ e($productPayload->toJson(JSON_UNESCAPED_UNICODE)) }}">
+                                                                        <i class="bi bi-list-ul me-1"></i>SP
+                                                                    </button>
                                                                     <button type="button"
                                                                         class="btn btn-sm btn-outline-success js-open-shipper-picker"
                                                                         data-bs-toggle="modal"
@@ -775,6 +853,40 @@
         </div>
     </div>
 </div>
+
+<div class="modal fade" id="productsPreviewModal" tabindex="-1" aria-labelledby="productsPreviewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title" id="productsPreviewModalLabel">Sản phẩm trong đơn</h5>
+                    <div class="small text-muted" id="productsPreviewOrderInfo"></div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+            </div>
+            <div class="modal-body">
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Sản phẩm</th>
+                                <th class="text-end" style="width:90px;">SL</th>
+                                <th class="text-end" style="width:100px;">Kg</th>
+                                <th class="text-end" style="width:120px;">Đơn giá</th>
+                                <th class="text-end" style="width:130px;">Thành tiền</th>
+                            </tr>
+                        </thead>
+                        <tbody id="productsPreviewBody">
+                            <tr>
+                                <td colspan="5" class="text-muted text-center py-3">Chưa có sản phẩm.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 </div>
 
 @push('scripts')
@@ -794,6 +906,18 @@ document.addEventListener('DOMContentLoaded', function () {
     const availableShippers = @json($availableShippersForPicker);
     const tripStorageKey = 'shipperTripPlan:' + @json($selectedDate);
     let isRestoringTrips = false;
+
+    function escapeHtml(value) {
+        return String(value ?? '').replace(/[&<>"']/g, function (char) {
+            return {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;',
+            }[char];
+        });
+    }
 
     function loadTripState() {
         try {
@@ -1221,6 +1345,48 @@ document.addEventListener('DOMContentLoaded', function () {
                 notify('Đã tạo lộ trình mới cho shipper.');
             } else {
                 notify('Shipper này chưa có đơn trong ngày. Hãy chọn shipper để gán đơn trước.', true);
+            }
+            return;
+        }
+
+        const productsPreviewButton = event.target.closest('.js-open-products-preview');
+        if (productsPreviewButton) {
+            const orderInfo = document.getElementById('productsPreviewOrderInfo');
+            const body = document.getElementById('productsPreviewBody');
+            const money = new Intl.NumberFormat('vi-VN');
+            let products = [];
+
+            try {
+                products = JSON.parse(productsPreviewButton.dataset.products || '[]');
+            } catch (error) {
+                products = [];
+            }
+
+            if (orderInfo) {
+                orderInfo.textContent = 'Đơn ' + (productsPreviewButton.dataset.orderCode || '') + ' - ' + (productsPreviewButton.dataset.customerName || '');
+            }
+
+            if (body) {
+                if (!products.length) {
+                    body.innerHTML = '<tr><td colspan="5" class="text-muted text-center py-3">Chưa có sản phẩm.</td></tr>';
+                } else {
+                    body.innerHTML = products.map(function (item) {
+                        const quantity = Number(item.quantity || 0);
+                        const weight = Number(item.weight || 0);
+                        const price = Number(item.price || 0);
+                        const total = Number(item.total || 0);
+
+                        return `
+                            <tr>
+                                <td class="fw-semibold">${escapeHtml(item.name || 'Sản phẩm')}</td>
+                                <td class="text-end">${money.format(quantity)}</td>
+                                <td class="text-end">${weight ? money.format(weight) : '-'}</td>
+                                <td class="text-end">${price ? money.format(price) + ' đ' : '-'}</td>
+                                <td class="text-end fw-bold">${money.format(total)} đ</td>
+                            </tr>
+                        `;
+                    }).join('');
+                }
             }
             return;
         }

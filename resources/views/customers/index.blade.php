@@ -79,6 +79,23 @@
 .assign-form select { height: 32px; font-size: .8rem; border-radius: 6px; border-color: #d8deea; min-width: 160px; }
 .assign-form .btn-assign { height: 32px; font-size: .78rem; padding: 0 10px; border-radius: 6px; white-space: nowrap; }
 .cust-actions .btn { font-size: .75rem; padding: 4px 9px; border-radius: 5px; }
+.cust-pin-btn {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border-radius: 8px;
+}
+.cust-pin-btn.is-pinned {
+    background: #f59e0b;
+    border-color: #f59e0b;
+    color: #fff;
+}
+.cust-sort-input {
+    width: 72px;
+    height: 32px;
+    border-radius: 8px;
+    font-size: .8rem;
+}
 .cust-empty { padding: 52px 0; text-align: center; color: #94a3b8; }
 .cust-empty i { font-size: 2.8rem; margin-bottom: 12px; opacity: .4; }
 .cust-pagination { padding: 16px 20px; border-top: 1px solid #eef2f7; }
@@ -286,6 +303,7 @@
                     <tr>
                         <th style="width:36px;"><input type="checkbox" id="checkAll" class="row-check"></th>
                         <th style="width:48px;">#</th>
+                        <th style="width:120px;">Ưu tiên</th>
                         <th style="min-width:360px;">Khách hàng</th>
                         <th>Mã Code cũ</th>
                         <th class="cust-manage">Phụ trách &amp; hạn giữ</th>
@@ -300,6 +318,24 @@
                     <tr>
                         <td><input type="checkbox" class="row-check" value="{{ $customer->id }}"></td>
                         <td class="text-muted" style="font-size:.78rem;">{{ $customer->id }}</td>
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                <button type="button"
+                                    class="btn btn-sm btn-outline-warning cust-pin-btn js-customer-pin {{ $customer->is_pinned ? 'is-pinned' : '' }}"
+                                    data-url="{{ route('customers.sort-settings', $customer) }}"
+                                    data-pinned="{{ $customer->is_pinned ? '1' : '0' }}"
+                                    title="{{ $customer->is_pinned ? 'Bỏ ghim khách hàng' : 'Ghim khách hàng' }}">
+                                    <i class="ph {{ $customer->is_pinned ? 'ph-star-fill' : 'ph-star' }}"></i>
+                                </button>
+                                <input type="number"
+                                    class="form-control form-control-sm cust-sort-input js-customer-sort-order"
+                                    data-url="{{ route('customers.sort-settings', $customer) }}"
+                                    min="0"
+                                    max="999999"
+                                    value="{{ (int) ($customer->sort_order ?? 0) }}"
+                                    title="Thứ tự nhỏ hơn sẽ lên trước">
+                            </div>
+                        </td>
 
                         <td>
                             <div class="cust-name">{{ $customer->name }}</div>
@@ -411,7 +447,7 @@
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="{{ $isAdmin ? 8 : 7 }}">
+                        <td colspan="{{ $isAdmin ? 9 : 8 }}">
                             <div class="cust-empty">
                                 <div><i class="ph ph-users"></i></div>
                                 <div style="font-weight:600;">{{ __('customers.index.empty') }}</div>
@@ -439,6 +475,7 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '{{ csrf_token() }}';
     const checkAll  = document.getElementById('checkAll');
     const rowChecks = document.querySelectorAll('.row-check:not(#checkAll)');
 
@@ -497,6 +534,56 @@ document.addEventListener('DOMContentLoaded', function () {
             document.getElementById('bulkAssignSaleIds').value = ids.join(',');
         });
     }
+
+    async function saveCustomerSort(url, payload) {
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': csrf,
+            },
+            body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+            throw new Error('Không thể lưu ưu tiên khách hàng.');
+        }
+        return res.json();
+    }
+
+    document.addEventListener('click', async function (event) {
+        const pinButton = event.target.closest('.js-customer-pin');
+        if (!pinButton) return;
+
+        const nextPinned = pinButton.dataset.pinned !== '1';
+        pinButton.disabled = true;
+        try {
+            const data = await saveCustomerSort(pinButton.dataset.url, { is_pinned: nextPinned });
+            const pinned = data.is_pinned === true;
+            pinButton.dataset.pinned = pinned ? '1' : '0';
+            pinButton.classList.toggle('is-pinned', pinned);
+            pinButton.innerHTML = `<i class="ph ${pinned ? 'ph-star-fill' : 'ph-star'}"></i>`;
+            pinButton.title = pinned ? 'Bỏ ghim khách hàng' : 'Ghim khách hàng';
+        } catch (error) {
+            alert(error.message);
+        } finally {
+            pinButton.disabled = false;
+        }
+    });
+
+    document.addEventListener('change', async function (event) {
+        const input = event.target.closest('.js-customer-sort-order');
+        if (!input) return;
+
+        input.disabled = true;
+        try {
+            await saveCustomerSort(input.dataset.url, { sort_order: Number(input.value || 0) });
+        } catch (error) {
+            alert(error.message);
+        } finally {
+            input.disabled = false;
+        }
+    });
 });
 </script>
 @endsection

@@ -154,6 +154,29 @@
         color: #64748b;
         vertical-align: middle;
     }
+    .mc-priority-controls {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 8px;
+    }
+    .mc-pin-btn {
+        width: 34px;
+        height: 34px;
+        padding: 0;
+        border-radius: 10px;
+    }
+    .mc-pin-btn.is-pinned {
+        background: #f59e0b;
+        border-color: #f59e0b;
+        color: #fff;
+    }
+    .mc-sort-input {
+        width: 78px;
+        height: 34px;
+        border-radius: 10px;
+        font-size: .82rem;
+    }
     .mc-table-wrap {
         padding: 0 18px 18px;
     }
@@ -685,6 +708,22 @@
                                     <div class="d-flex align-items-start gap-3">
                                         
                                         <div>
+                                            <div class="mc-priority-controls">
+                                                <button type="button"
+                                                    class="btn btn-sm btn-outline-warning mc-pin-btn js-mc-pin {{ $customer->is_pinned ? 'is-pinned' : '' }}"
+                                                    data-id="{{ $customer->id }}"
+                                                    data-pinned="{{ $customer->is_pinned ? '1' : '0' }}"
+                                                    title="{{ $customer->is_pinned ? 'Bỏ ghim khách hàng' : 'Ghim khách hàng' }}">
+                                                    <i class="bi {{ $customer->is_pinned ? 'bi-star-fill' : 'bi-star' }}"></i>
+                                                </button>
+                                                <input type="number"
+                                                    class="form-control form-control-sm mc-sort-input js-mc-sort-order"
+                                                    data-id="{{ $customer->id }}"
+                                                    min="0"
+                                                    max="999999"
+                                                    value="{{ (int) ($customer->sort_order ?? 0) }}"
+                                                    title="Thứ tự nhỏ hơn sẽ lên trước">
+                                            </div>
                                             <h6 class="mb-1 fw-bold fs-5">{{ $customer->name }}</h6>
                                             @if($customer->updated_at)
                                                 <small class="text-muted fst-italic"><i class="bi bi-clock me-1"></i>Cập nhật: {{ $customer->updated_at->format('d/m/Y') }}</small><br>
@@ -877,6 +916,7 @@
         destroy:     "{{ route('my_customer.destroy', ':id') }}",
         restore:     "{{ route('my_customer.restore', ':id') }}",
         forceDelete: "{{ route('my_customer.force_delete', ':id') }}",
+        sortSettings: "{{ route('my_customer.sort_settings', ':id') }}",
     };
     function mcUrl(key, id) { return _mcUrls[key].replace(':id', id); }
 
@@ -974,6 +1014,26 @@
             : 'Đưa vào thùng rác';
     }
 
+    async function saveCustomerSortSettings(id, payload) {
+        const res = await fetch(mcUrl('sortSettings', id), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': csrfToken,
+            },
+            body: JSON.stringify(payload),
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data.success === false) {
+            alert(data.message || 'Không thể lưu ưu tiên khách hàng.');
+            throw new Error(data.message || 'Không thể lưu ưu tiên khách hàng.');
+        }
+
+        return data;
+    }
+
     function bindRowActions() {
         document.querySelectorAll('.customer-checkbox').forEach(cb => {
             cb.addEventListener('change', updateBulkDeleteButton);
@@ -1046,6 +1106,35 @@
                 }
             });
         });
+
+        document.querySelectorAll('.js-mc-pin').forEach(btn => {
+            btn.addEventListener('click', async function () {
+                const id = this.dataset.id;
+                const pinned = this.dataset.pinned !== '1';
+                this.disabled = true;
+                try {
+                    const data = await saveCustomerSortSettings(id, { is_pinned: pinned });
+                    const isPinned = data.is_pinned === true;
+                    this.dataset.pinned = isPinned ? '1' : '0';
+                    this.classList.toggle('is-pinned', isPinned);
+                    this.innerHTML = `<i class="bi ${isPinned ? 'bi-star-fill' : 'bi-star'}"></i>`;
+                    this.title = isPinned ? 'Bỏ ghim khách hàng' : 'Ghim khách hàng';
+                } finally {
+                    this.disabled = false;
+                }
+            });
+        });
+
+        document.querySelectorAll('.js-mc-sort-order').forEach(input => {
+            input.addEventListener('change', async function () {
+                this.disabled = true;
+                try {
+                    await saveCustomerSortSettings(this.dataset.id, { sort_order: Number(this.value || 0) });
+                } finally {
+                    this.disabled = false;
+                }
+            });
+        });
     }
 
     function updateCustomerList(customers) {
@@ -1090,6 +1179,8 @@
             const customerStatusRaw = customer.customer_status || '';
             const statusLabel = isFreeCustomer ? 'Khách tự do' : (customerStatusRaw === 'ordered' ? 'Đã đặt đơn' : 'Đang được chăm sóc');
             const statusClass = isFreeCustomer ? 'mc-status-free' : (customerStatusRaw === 'ordered' ? 'mc-status-ordered' : 'mc-status-active');
+            const isPinned = customer.is_pinned === true || customer.is_pinned === 1 || customer.is_pinned === '1';
+            const sortOrder = Number(customer.sort_order || 0);
 
             // Transport info (nhà xe)
             let transportHtml = '';
@@ -1134,6 +1225,12 @@
                         <div class="col-md-6">
                             <div class="d-flex align-items-start gap-3">
                                 <div>
+                                    <div class="mc-priority-controls">
+                                        <button type="button" class="btn btn-sm btn-outline-warning mc-pin-btn js-mc-pin ${isPinned ? 'is-pinned' : ''}" data-id="${customer.id}" data-pinned="${isPinned ? '1' : '0'}" title="${isPinned ? 'Bỏ ghim khách hàng' : 'Ghim khách hàng'}">
+                                            <i class="bi ${isPinned ? 'bi-star-fill' : 'bi-star'}"></i>
+                                        </button>
+                                        <input type="number" class="form-control form-control-sm mc-sort-input js-mc-sort-order" data-id="${customer.id}" min="0" max="999999" value="${sortOrder}" title="Thứ tự nhỏ hơn sẽ lên trước">
+                                    </div>
                                     <div class="mb-1"><span class="fw-bold fs-5 text-uppercase">${name}</span></div>
                                     <div class="mb-2">
                                         ${updatedAt ? `<small class="text-muted fst-italic"><i class="bi bi-clock me-1"></i>Cập nhật: ${updatedAt}</small>` : ''}

@@ -505,7 +505,8 @@
                         <div class="input-group input-group-sm">
                             <label class="input-group-text" for="customer-sort-select">Sắp xếp</label>
                             <select id="customer-sort-select" class="form-select form-select-sm">
-                                <option value="name|asc" selected>Tên A → Z</option>
+                                <option value="manual|asc" selected>Ghim / thứ tự ưu tiên</option>
+                                <option value="name|asc">Tên A → Z</option>
                                 <option value="name|desc">Tên Z → A</option>
                                 <option value="phone|asc">SĐT tăng dần</option>
                                 <option value="phone|desc">SĐT giảm dần</option>
@@ -642,8 +643,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function loadCustomers(page) {
         cpCurrentPage = page || 1;
-        const sortParts = (customerSortSelect?.value || 'name|asc').split('|');
-        const sortBy = sortParts[0] || 'name';
+        const sortParts = (customerSortSelect?.value || 'manual|asc').split('|');
+        const sortBy = sortParts[0] || 'manual';
         const sortDir = sortParts[1] || 'asc';
 
         if (customerPickerResults) {

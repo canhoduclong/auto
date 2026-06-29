@@ -13,7 +13,15 @@
                 <td>
                     <input class="form-check-input" type="radio" name="customer_id" id="customer_{{ $customer->id }}" value="{{ $customer->id }}" required>
                 </td>
-                <td>{{ $customer->name }}</td>
+                <td>
+                    @if($customer->is_pinned)
+                        <span class="text-warning me-1">★</span>
+                    @endif
+                    @if((int) ($customer->sort_order ?? 0) > 0)
+                        <span class="badge bg-light text-dark border me-1">{{ (int) $customer->sort_order }}</span>
+                    @endif
+                    {{ $customer->name }}
+                </td>
                 <td>{{ $customer->email }}</td>
                 <td>{{ $customer->phone }}</td>
             </tr>

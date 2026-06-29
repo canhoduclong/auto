@@ -746,6 +746,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::post('customers/import', [CustomerController::class, 'import'])->name('customers.import')->middleware('permission');
     Route::post('customers/{customer}/assign-sale', [CustomerController::class, 'assignSale'])->name('customers.assign-sale')->middleware('permission');
     Route::post('customers/{customer}/payments', [CustomerController::class, 'storePayment'])->name('customers.payments.store')->middleware('permission');
+    Route::post('customers/{customer}/sort-settings', [CustomerController::class, 'updateSortSettings'])->name('customers.sort-settings')->middleware('permission');
     Route::get('customers/{customer}/report', [CustomerController::class, 'report'])->name('customers.report')->middleware('permission');
     Route::resource('customers', CustomerController::class)->middleware('permission');
     Route::resource('truck-stations', TruckStationController::class)
@@ -856,6 +857,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::delete('/my-customer/{customerId}/force-delete', [PageController::class, 'myCustomerForceDelete'])->name('my_customer.force_delete');
     Route::post('/my-customer/bulk-delete', [PageController::class, 'myCustomerBulkDelete'])->name('my_customer.bulk_delete');
     Route::post('/my-customer/{customer}/takeover', [PageController::class, 'myCustomerTakeover'])->name('my_customer.takeover');
+    Route::post('/my-customer/{customer}/sort-settings', [PageController::class, 'myCustomerSortSettings'])->name('my_customer.sort_settings');
     Route::get('/my-customer/import', [PageController::class, 'myCustomerImportForm'])->name('my_customer.import_form');
     Route::post('/my-customer/import', [PageController::class, 'myCustomerImport'])->name('my_customer.import');
     Route::get('/my-customer/schedules', [OrderScheduleController::class, 'index'])->name('my_customer.schedules.index');

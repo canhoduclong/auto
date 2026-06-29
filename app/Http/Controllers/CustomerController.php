@@ -194,6 +194,13 @@ class CustomerController extends Controller
         }
 
     $perPage = $request->input('per_page', 15);
+    if (Schema::hasColumn('customers', 'is_pinned')) {
+        $query->orderByDesc('is_pinned');
+    }
+    if (Schema::hasColumn('customers', 'sort_order')) {
+        $query->orderByRaw('CASE WHEN sort_order IS NULL OR sort_order = 0 THEN 1 ELSE 0 END')
+            ->orderBy('sort_order');
+    }
     $customers = $query->orderBy('name')
                ->paginate($perPage)
                ->appends($request->query()); // giữ query string khi phân trang
@@ -217,6 +224,34 @@ class CustomerController extends Controller
         $customerFreeDays = Customer::freeCustomerDays();
 
         return view('customers.index', compact('customers', 'types', 'users', 'creatorUsers', 'customerFreeDays'));
+    }
+
+    public function updateSortSettings(Request $request, Customer $customer)
+    {
+        $this->authorize('update', $customer);
+
+        $validated = $request->validate([
+            'is_pinned' => ['nullable', 'boolean'],
+            'sort_order' => ['nullable', 'integer', 'min:0', 'max:999999'],
+        ]);
+
+        $updates = [];
+        if (array_key_exists('is_pinned', $validated) && Schema::hasColumn('customers', 'is_pinned')) {
+            $updates['is_pinned'] = (bool) $validated['is_pinned'];
+        }
+        if (array_key_exists('sort_order', $validated) && Schema::hasColumn('customers', 'sort_order')) {
+            $updates['sort_order'] = (int) ($validated['sort_order'] ?? 0);
+        }
+
+        if ($updates) {
+            $customer->forceFill($updates)->save();
+        }
+
+        return response()->json([
+            'ok' => true,
+            'is_pinned' => (bool) ($customer->fresh()->is_pinned ?? false),
+            'sort_order' => (int) ($customer->fresh()->sort_order ?? 0),
+        ]);
     }
 
     public function report(Request $request, Customer $customer)

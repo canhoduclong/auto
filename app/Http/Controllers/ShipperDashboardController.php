@@ -1500,7 +1500,16 @@ class ShipperDashboardController extends Controller
 
         $this->applyDefaultShipperAssignmentsForDate($selectedDate);
 
-        $ordersQuery = Order::with(['customer.defaultShipper', 'customer.truckStation', 'customer.truckRoute.stops.station', 'items.variant', 'shipper', 'warehouse'])
+        $ordersQuery = Order::with([
+                'customer.defaultShipper',
+                'customer.truckStation',
+                'customer.truckRoute.stops.station',
+                'items.product',
+                'items.variant.product',
+                'shipper',
+                'user',
+                'warehouse',
+            ])
             ->whereIn('status', $this->assignmentStatuses())
             ->whereDate('created_at', $selectedDate)
             ->orderByRaw("CASE WHEN delivery_time IS NULL OR delivery_time = '' THEN 1 ELSE 0 END")

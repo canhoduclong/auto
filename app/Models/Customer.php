@@ -114,6 +114,8 @@ class Customer extends Model
         'commission_percent',
         'is_employee',
         'customer_card_codes',
+        'is_pinned',
+        'sort_order',
         'deleted_by',
     ];
 
@@ -128,6 +130,8 @@ class Customer extends Model
         'shipping_fee' => 'decimal:2',
         'is_employee' => 'boolean',
         'customer_card_codes' => 'array',
+        'is_pinned' => 'boolean',
+        'sort_order' => 'integer',
     ];
 
     public static function freeCustomerDays(): int

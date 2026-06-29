@@ -68,6 +68,20 @@ class PageController extends Controller
         return in_array($column, $this->orderColumns(), true);
     }
 
+    private function applyCustomerPinnedSort(Builder $query): Builder
+    {
+        if (Schema::hasColumn('customers', 'is_pinned')) {
+            $query->orderByDesc('is_pinned');
+        }
+
+        if (Schema::hasColumn('customers', 'sort_order')) {
+            $query->orderByRaw('CASE WHEN sort_order IS NULL OR sort_order = 0 THEN 1 ELSE 0 END')
+                ->orderBy('sort_order');
+        }
+
+        return $query;
+    }
+
     private function myOrderCustomersBaseQuery(int $userId): Builder
     {
         return Customer::query()->whereIn('id', function ($q) use ($userId) {
@@ -1172,10 +1186,10 @@ class PageController extends Controller
         $mode = $request->input('mode', 'multi'); // 'single' or 'multi'
         $perPage = min((int) $request->input('per_page', 15), 50);
         $perPage = max($perPage, 5);
-        $allowedSortBy = ['name', 'phone', 'email'];
-        $sortBy = in_array($request->input('sort_by', 'name'), $allowedSortBy, true)
-            ? $request->input('sort_by', 'name')
-            : 'name';
+        $allowedSortBy = ['manual', 'name', 'phone', 'email'];
+        $sortBy = in_array($request->input('sort_by', 'manual'), $allowedSortBy, true)
+            ? $request->input('sort_by', 'manual')
+            : 'manual';
         $sortDir = $request->input('sort_dir', 'asc') === 'desc' ? 'desc' : 'asc';
 
         $selectedCustomerIds = collect(explode(',', (string) $request->input('selected_ids', '')))
@@ -1204,7 +1218,8 @@ class PageController extends Controller
                         ->orWhere('email', 'like', "%{$search}%");
                 });
             })
-            ->orderBy($sortBy, $sortDir)
+            ->when($sortBy === 'manual', fn ($q) => $this->applyCustomerPinnedSort($q)->orderBy('name'))
+            ->when($sortBy !== 'manual', fn ($q) => $this->applyCustomerPinnedSort($q)->orderBy($sortBy, $sortDir))
             ->paginate($perPage, ['*'], 'page');
 
         $partial = $mode === 'single'
@@ -2384,6 +2399,7 @@ public function apiTruckRoutes(Request $request)
             ->when($sortBy, function ($q) use ($sortBy, $sortDir) {
                 $q->orderBy($sortBy, $sortDir);
             })
+            ->when(!$sortBy, fn ($q) => $this->applyCustomerPinnedSort($q))
             ->orderByDesc('id')
             ->paginate($request->input('per_page', 10));
 
@@ -2589,6 +2605,10 @@ public function apiTruckRoutes(Request $request)
                     }
                 });
             })
+            ->when($sortBy, function ($q) use ($sortBy, $sortDir) {
+                $q->orderBy($sortBy, $sortDir);
+            })
+            ->when(!$sortBy, fn ($q) => $this->applyCustomerPinnedSort($q))
             // Sắp xếp theo priority_level (ưu tiên) tăng dần, sau đó theo updated_at của priority giảm dần, ưu tiên ID 46
             ->orderByRaw('CASE WHEN customers.id = 46 THEN 0 ELSE 1 END')
             ->orderByRaw('(
@@ -2630,6 +2650,8 @@ public function apiTruckRoutes(Request $request)
                 ?? $customer->assignedTo?->name
                 ?? $customer->user?->name;
             $customer->is_free_customer = (string) $customer->customer_status === 'free' || $customer->isFree();
+            $customer->is_pinned = (bool) ($customer->is_pinned ?? false);
+            $customer->sort_order = (int) ($customer->sort_order ?? 0);
             $customer->truck_route = $route ? $route->toArray() : null;
             $customer->truck_station = $customer->truckStation ? $customer->truckStation->toArray() : null;
             return $customer;
@@ -3063,6 +3085,48 @@ public function apiTruckRoutes(Request $request)
         $priorityService->takeover($customer, $user->id, 'free_takeover');
 
         return response()->json(['success' => true, 'message' => 'Đã nhận khách hàng "' . $customer->name . '" về danh sách của bạn.']);
+    }
+
+    public function myCustomerSortSettings(Request $request, Customer $customer)
+    {
+        $user = auth()->user();
+        abort_unless($user, 403);
+
+        $canManage = $user->isAdmin()
+            || (int) $customer->assigned_to === (int) $user->id
+            || (int) $customer->current_owner_sale_id === (int) $user->id
+            || (int) $customer->user_id === (int) $user->id
+            || $customer->priorities()
+                ->where('sale_id', $user->id)
+                ->where('is_active', true)
+                ->exists();
+
+        abort_unless($canManage, 403);
+
+        $validated = $request->validate([
+            'is_pinned' => ['nullable', 'boolean'],
+            'sort_order' => ['nullable', 'integer', 'min:0', 'max:999999'],
+        ]);
+
+        $updates = [];
+        if (array_key_exists('is_pinned', $validated) && Schema::hasColumn('customers', 'is_pinned')) {
+            $updates['is_pinned'] = (bool) $validated['is_pinned'];
+        }
+        if (array_key_exists('sort_order', $validated) && Schema::hasColumn('customers', 'sort_order')) {
+            $updates['sort_order'] = (int) ($validated['sort_order'] ?? 0);
+        }
+
+        if ($updates) {
+            $customer->forceFill($updates)->save();
+        }
+
+        $fresh = $customer->fresh();
+
+        return response()->json([
+            'success' => true,
+            'is_pinned' => (bool) ($fresh->is_pinned ?? false),
+            'sort_order' => (int) ($fresh->sort_order ?? 0),
+        ]);
     }
 
     public function myCustomerImportForm()

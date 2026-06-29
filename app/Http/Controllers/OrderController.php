@@ -263,7 +263,15 @@ class OrderController extends Controller
             ]));
         }
 
-        $customers = Customer::paginate(10);
+        $customerQuery = Customer::query();
+        if (Schema::hasColumn('customers', 'is_pinned')) {
+            $customerQuery->orderByDesc('is_pinned');
+        }
+        if (Schema::hasColumn('customers', 'sort_order')) {
+            $customerQuery->orderByRaw('CASE WHEN sort_order IS NULL OR sort_order = 0 THEN 1 ELSE 0 END')
+                ->orderBy('sort_order');
+        }
+        $customers = $customerQuery->orderBy('name')->paginate(10);
 
         // IMPORTANT: Set the base path for the pagination links to our AJAX endpoint.
         $customers->setPath(route('orders.ajax_customer_search'));
@@ -284,7 +292,15 @@ class OrderController extends Controller
             });
         }
 
-        $customers = $query->paginate(10);
+        if (Schema::hasColumn('customers', 'is_pinned')) {
+            $query->orderByDesc('is_pinned');
+        }
+        if (Schema::hasColumn('customers', 'sort_order')) {
+            $query->orderByRaw('CASE WHEN sort_order IS NULL OR sort_order = 0 THEN 1 ELSE 0 END')
+                ->orderBy('sort_order');
+        }
+
+        $customers = $query->orderBy('name')->paginate(10);
 
         return response()->json([
             'html' => view('orders._customer_list', compact('customers'))->render()
