@@ -67,6 +67,7 @@ use App\Http\Controllers\TruckStationController;
 use App\Http\Controllers\CustomerAppointmentController;
 use App\Http\Controllers\OrderScheduleController;
 use App\Http\Controllers\MyDashboardController;
+use App\Http\Controllers\HoangLongProfileController;
 
 
 
@@ -174,6 +175,9 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/my-dashboard', [MyDashboardController::class, 'index'])
         ->name('pages.my_dashboard')
+        ->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
+    Route::get('/hoang-long-tnt-profile', [HoangLongProfileController::class, 'show'])
+        ->name('pages.hoang_long_profile')
         ->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
     Route::get('/my-dashboard/stats', [MyDashboardController::class, 'stats'])
         ->name('pages.my_dashboard.stats')
@@ -816,6 +820,8 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::get('/logout', [AuthController::class, 'logout']);
 
     Route::group(['prefix' => 'admin', 'as' => 'admin.'], function () {
+        Route::get('hoang-long-profile', [HoangLongProfileController::class, 'edit'])->name('hoang-long-profile.edit')->middleware('role:admin');
+        Route::put('hoang-long-profile', [HoangLongProfileController::class, 'update'])->name('hoang-long-profile.update')->middleware('role:admin');
         Route::get('settings', [SettingController::class, 'index'])->name('settings.index');
         Route::get('settings/reset-data', [SettingController::class, 'resetDataIndex'])->name('settings.reset-data.index')->middleware('role:admin');
         Route::post('settings', [SettingController::class, 'update'])->name('settings.update');

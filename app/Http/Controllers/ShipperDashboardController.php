@@ -1514,6 +1514,8 @@ class ShipperDashboardController extends Controller
             ->whereDate('created_at', $selectedDate)
             ->orderByRaw("CASE WHEN delivery_time IS NULL OR delivery_time = '' THEN 1 ELSE 0 END")
             ->orderBy('delivery_time', 'asc')
+            ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
+            ->orderBy('daily_sequence', 'asc')
             ->orderBy('created_at', 'asc');
 
         $assignedOrdersCount = (clone $ordersQuery)->whereNotNull('shipper_id')->count();
@@ -1533,8 +1535,8 @@ class ShipperDashboardController extends Controller
                 return $orders
                     ->sortBy(function ($order) {
                         return [
-                            $order->daily_sequence ?? PHP_INT_MAX,
                             $order->delivery_time ?: '23:59:59',
+                            $order->daily_sequence ?? PHP_INT_MAX,
                             $order->created_at?->timestamp ?? 0,
                             $order->id,
                         ];

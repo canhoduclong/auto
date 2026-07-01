@@ -133,13 +133,22 @@ class ShipperMobileController extends Controller
     {
         $this->authorizeManager($request);
 
-        $date = \Carbon\Carbon::parse($request->query('date', now()->addDay()->toDateString()))->toDateString();
+        $date = \Carbon\Carbon::parse($request->query('date', now()->toDateString()))->toDateString();
         $statuses = $this->assignmentStatuses();
         $shippers = $this->availableShippers();
         $orders = Order::query()
-            ->with(['customer:id,name,phone,address,default_shipper_id,delivery_time', 'customer.defaultShipper:id,name', 'shipper:id,name'])
+            ->with([
+                'customer.defaultShipper:id,name',
+                'customer.truckStation',
+                'customer.truckRoute.stops.station',
+                'shipper:id,name',
+                'user:id,name',
+                'warehouse:id,name',
+                'items.product',
+                'items.variant.product',
+            ])
             ->whereIn('status', $statuses)
-            ->forDeliveryDate($date)
+            ->whereDate('created_at', $date)
             ->orderByRaw('CASE WHEN shipper_id IS NULL THEN 0 ELSE 1 END')
             ->orderByRaw("CASE WHEN delivery_time IS NULL OR delivery_time = '' THEN 1 ELSE 0 END")
             ->orderBy('delivery_time')
@@ -240,11 +249,11 @@ class ShipperMobileController extends Controller
             'notes' => ['nullable', 'string', 'max:500'],
         ]);
 
-        $date = \Carbon\Carbon::parse($validated['date'] ?? now()->addDay()->toDateString())->toDateString();
+        $date = \Carbon\Carbon::parse($validated['date'] ?? now()->toDateString())->toDateString();
         $groups = Order::query()
             ->whereNotNull('shipper_id')
             ->whereIn('status', $this->assignmentStatuses())
-            ->forDeliveryDate($date)
+            ->whereDate('created_at', $date)
             ->get()
             ->groupBy('shipper_id');
 
@@ -311,16 +320,32 @@ class ShipperMobileController extends Controller
 
     private function assignmentOrderPayload(Order $order, $shippers): array
     {
+        $customer = $order->customer;
+        $selectedRoute = $customer?->truckRoute;
+        if (!$selectedRoute && $customer?->truck_station_id) {
+            $selectedRoute = $customer?->truckRouteByStation;
+        }
+        $truckStation = $customer?->truckStation ?: ($selectedRoute?->stops?->last()?->station);
+        $truckStationText = trim(collect([$truckStation?->name, $truckStation?->address])->filter()->join(' - '));
+        $defaultShippingFee = (bool) ($order->charge_shipping_fee ?? true)
+            ? (float) ($order->shipping_fee ?? $customer?->shipping_fee ?? 0)
+            : 0;
+
         return [
             'id' => (int) $order->id,
             'code' => (string) ($order->code ?: ('#' . $order->id)),
             'title' => 'Đơn #' . ($order->daily_sequence ?: $order->code ?: $order->id),
-            'status' => (string) $order->status,
+            'status' => (string) (\App\Models\Order::statusOptions()[$order->status] ?? $order->status),
+            'status_code' => (string) $order->status,
             'customer_id' => $order->customer_id ? (int) $order->customer_id : null,
             'customer' => (string) ($order->customer?->name ?? 'Khách hàng'),
             'phone' => (string) ($order->customer?->phone ?? ''),
             'address' => (string) ($order->customer?->address ?? ''),
+            'origin' => (string) ($order->warehouse?->name ?? 'Chưa chọn kho'),
+            'destination' => (string) ($truckStationText ?: $order->recipient_address ?: $customer?->truck_station_address ?: $customer?->address ?: ''),
+            'sale_name' => (string) ($order->user?->name ?? 'Chưa có sale'),
             'total' => (float) ($order->total ?? 0),
+            'default_shipping_fee' => $defaultShippingFee,
             'shipper_id' => $order->shipper_id ? (int) $order->shipper_id : null,
             'shipper_name' => (string) ($order->shipper?->name ?? ''),
             'default_shipper_id' => $order->customer?->default_shipper_id ? (int) $order->customer->default_shipper_id : null,
@@ -331,6 +356,21 @@ class ShipperMobileController extends Controller
             'created_date' => optional($order->created_at)->toDateString(),
             'available_shippers' => $shippers,
             'updated_at' => optional($order->updated_at)->format('d/m H:i'),
+            'items' => $order->items->map(function ($item) {
+                $variant = $item->variant;
+                $productName = $item->product?->name ?: $variant?->product?->name ?: 'Sản phẩm';
+                $variantName = $variant?->name ?: $variant?->variant_name ?: $variant?->sku;
+                $quantity = (float) ($item->quantity ?? 0);
+                $price = (float) ($item->price ?? 0);
+
+                return [
+                    'name' => trim($productName . ($variantName ? ' - ' . $variantName : '')),
+                    'sku' => (string) ($variant?->sku ?? ''),
+                    'quantity' => $quantity,
+                    'price' => $price,
+                    'total' => (float) ($item->total ?? ($quantity * $price)),
+                ];
+            })->values(),
         ];
     }
 

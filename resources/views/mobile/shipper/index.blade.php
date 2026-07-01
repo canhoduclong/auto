@@ -26,7 +26,7 @@
 @if($isManagerShipper)
     <div id="spAssignmentsPanel" hidden>
         <div class="m-card sp-assignment-tools">
-            <input type="date" id="spAssignmentDate" class="sp-date-input" value="{{ now()->addDay()->toDateString() }}">
+            <input type="date" id="spAssignmentDate" class="sp-date-input" value="{{ now()->toDateString() }}">
             <button type="button" class="m-btn m-btn-primary" id="spReloadAssignments">Tải lại</button>
             <button type="button" class="m-btn" id="spPublishSchedule">Gửi lịch</button>
         </div>
@@ -159,6 +159,45 @@
     }
     .sp-assignment-card.is-assigned {
         border-color: #99f6e4;
+    }
+    .sp-assignment-seq {
+        width: 32px;
+        height: 32px;
+        border: 1px solid #0f766e;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #0f766e;
+        font-weight: 900;
+        background: #fff;
+        flex: 0 0 auto;
+    }
+    .sp-assignment-card.is-assigned .sp-assignment-seq {
+        background: #ff8a1c;
+        color: #fff;
+    }
+    .sp-assignment-title {
+        display: flex;
+        gap: 9px;
+        align-items: flex-start;
+    }
+    .sp-assignment-products {
+        margin-top: 10px;
+        border-top: 1px solid #e2e8f0;
+        padding-top: 8px;
+    }
+    .sp-assignment-products summary {
+        font-weight: 800;
+        color: #0f766e;
+    }
+    .sp-assignment-product-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+        padding: 6px 0;
+        border-bottom: 1px solid #f1f5f9;
+        font-size: .86rem;
     }
     @media (max-width: 380px) {
         .sp-assignment-tools,
@@ -364,14 +403,29 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function assignmentCard(order, shippers) {
         const options = shippers.map((shipper) => `<option value="${shipper.id}" ${Number(order.shipper_id || 0) === Number(shipper.id) ? 'selected' : ''}>${esc(shipper.name)}</option>`).join('');
-        const defaultText = order.default_shipper_name ? ` · Cố định: ${esc(order.default_shipper_name)}` : '';
+        const defaultText = order.default_shipper_name ? `<div class="m-label">Shipper cố định: ${esc(order.default_shipper_name)}</div>` : '';
+        const items = Array.isArray(order.items) ? order.items : [];
+        const productHtml = items.length
+            ? `<details class="sp-assignment-products"><summary>SP (${items.length})</summary>${items.map((item) => `<div class="sp-assignment-product-row"><span>${esc(item.name)}${item.sku ? ` <span class="m-label">${esc(item.sku)}</span>` : ''}</span><strong>${Number(item.quantity || 0)} · ${fmt(item.total)}</strong></div>`).join('')}</details>`
+            : '';
 
         return `<div class="m-card sp-assignment-card ${order.shipper_id ? 'is-assigned' : ''}" data-assignment-card="${order.id}">
-            <span class="m-mobile-status-badge sp-status is-${statusClass(order.status)}">${esc(order.status)}</span>
-            <div class="m-row"><div class="m-value">${esc(order.title || order.code)}</div><strong>${fmt(order.total)}</strong></div>
-            <div class="m-row"><span>${esc(order.customer)}</span><span>${esc(order.delivery_time || '')}</span></div>
-            <div class="m-label">${esc(order.phone)} - ${esc(order.address)}</div>
-            <div class="m-label" style="margin-top:6px;">Hiện tại: ${esc(order.shipper_name || 'Chưa gán')}${defaultText}</div>
+            <span class="m-mobile-status-badge sp-status is-${statusClass(order.status_code || order.status)}">${esc(order.status)}</span>
+            <div class="sp-assignment-title">
+                <span class="sp-assignment-seq">${esc(order.daily_sequence || '-')}</span>
+                <div>
+                    <div class="m-value">${esc(order.delivery_time || '-')} - ${esc(order.customer)}</div>
+                    <div class="m-label">${esc(order.code)}${order.default_shipper_name ? `, ${esc(order.default_shipper_name)}` : ''}</div>
+                    ${defaultText}
+                </div>
+            </div>
+            <div class="m-row" style="margin-top:8px;"><span class="m-label">Điểm đi</span><strong>${esc(order.origin || '-')}</strong></div>
+            <div class="m-label"><strong>Điểm giao:</strong> ${esc(order.destination || order.address || '-')}</div>
+            <div class="m-row"><span class="m-label">Sale</span><strong>${esc(order.sale_name || '-')}</strong></div>
+            <div class="m-row"><span class="m-label">Giá ship điều chỉnh</span><strong>0đ</strong></div>
+            <div class="m-row"><span class="m-label">Giá mặc định</span><strong>${fmt(order.default_shipping_fee)}</strong></div>
+            <div class="m-row"><span class="m-label">Hiện tại</span><strong>${esc(order.shipper_name || 'Chưa gán')}</strong></div>
+            ${productHtml}
             <div class="sp-assignment-actions">
                 <select class="sp-select js-sp-shipper-select">
                     <option value="">Chọn shipper</option>

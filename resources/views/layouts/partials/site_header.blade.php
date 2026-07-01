@@ -357,6 +357,9 @@
                         }
                     @endphp
                     <li><a href="{{ route('pages.my_dashboard') }}" class="d-block py-1"><i class="bi bi-speedometer2 me-1"></i> My Dashboard</a></li>
+                    @if(Auth::user()->isSalesFlowRole())
+                        <li><a href="{{ route('pages.hoang_long_profile') }}" class="d-block py-1"><i class="bi bi-file-earmark-person me-1"></i> Hoàng Long TNT Profile</a></li>
+                    @endif
                     @if($offcanvasCanCreateDepartmentNotifications)
                         <li><a href="{{ route('department-notifications.index', ['layout' => 'site']) }}" class="d-block py-1"><i class="bi bi-megaphone me-1"></i> Tạo thông báo</a></li>
                     @endif
@@ -592,6 +595,11 @@
                                         <a class="dropdown-item" href="{{ route('pages.my_dashboard') }}">
                                             <i class="bi bi-speedometer2"></i> My Dashboard
                                         </a>
+                                        @if(Auth::user()->isSalesFlowRole())
+                                            <a class="dropdown-item" href="{{ route('pages.hoang_long_profile') }}">
+                                                <i class="bi bi-file-earmark-person"></i> Hoàng Long TNT Profile
+                                            </a>
+                                        @endif
                                         @if(Auth::user()->hasRole(['admin', 'leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale']))
                                             <a class="dropdown-item" href="{{ route('department-notifications.index', ['layout' => 'site']) }}">
                                                 <i class="bi bi-megaphone"></i> Tạo thông báo

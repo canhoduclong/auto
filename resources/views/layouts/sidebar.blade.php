@@ -377,6 +377,12 @@
 							</a>
 						</li>
 						<li class="nav-item">
+							<a href="{{ route('admin.hoang-long-profile.edit') }}" class="nav-link{{ request()->routeIs('admin.hoang-long-profile.*') ? ' active' : '' }}">
+								<i class="ph-buildings"></i>
+								<span>Profile Hoàng Long</span>
+							</a>
+						</li>
+						<li class="nav-item">
 							<a href="{{ route('admin.post-categories.index') }}" class="nav-link{{ request()->routeIs('admin.post-categories.*') ? ' active' : '' }}">
 								<i class="ph-folder-notch-open"></i>
 								<span>Danh mục bài viết</span>

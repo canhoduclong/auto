@@ -113,11 +113,15 @@
         flex-wrap: wrap;
         gap: 7px;
         align-items: center;
+        position: sticky;
+        top: 72px;
+        z-index: 40;
         border: 1px solid #dbe4ea;
         border-radius: 8px;
         background: #fff;
         padding: 6px 18px;
         margin-bottom: 18px;
+        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
     }
     .priority-dot {
         width: 31px;
@@ -279,6 +283,7 @@
         font-size: .82rem;
         border-collapse: separate;
         border-spacing: 0 7px;
+        min-width: 1280px;
     }
     .trip-order-table thead {
         display: none;
@@ -367,6 +372,32 @@
     .trip-order-address {
         color: #475569;
     }
+    .trip-order-main {
+        min-width: 260px;
+    }
+    .trip-order-code {
+        color: #2563eb;
+        font-size: .74rem;
+        font-weight: 700;
+        margin-top: 2px;
+    }
+    .trip-default-shipper {
+        color: #64748b;
+        font-size: .72rem;
+        font-weight: 600;
+        margin-top: 2px;
+    }
+    .trip-origin-cell,
+    .trip-sale-cell {
+        color: #475569;
+        font-size: .78rem;
+        font-weight: 600;
+    }
+    .trip-status-text {
+        color: #ff5a00;
+        font-weight: 800;
+        white-space: nowrap;
+    }
     .trip-order-table input,
     .trip-order-table select {
         min-width: 86px;
@@ -423,12 +454,32 @@
 </div> 
 
 @php
+    $assignmentProductPayload = function ($order) {
+        return $order->items->map(function ($item) {
+            $variant = $item->variant;
+            $productName = $item->product?->name ?: $variant?->product?->name ?: 'Sản phẩm';
+            $variantName = $variant?->name ?: $variant?->variant_name ?: $variant?->sku;
+            $quantity = (float) ($item->quantity ?? 0);
+            $price = (float) ($item->price ?? 0);
+            $total = (float) ($item->total ?? ($quantity * $price));
+
+            return [
+                'name' => trim($productName . ($variantName ? ' - ' . $variantName : '')),
+                'sku' => (string) ($variant?->sku ?? ''),
+                'quantity' => $quantity,
+                'weight' => (float) ($item->total_weight ?? $item->actual_weight ?? $item->packed_weight ?? 0),
+                'price' => $price,
+                'total' => $total,
+            ];
+        })->values();
+    };
+
     $priorityOrders = collect($assignedOrders)
         ->flatten(1)
         ->merge($unassignedOrders->getCollection())
         ->sortBy([
-            fn ($order) => $order->daily_sequence ?? PHP_INT_MAX,
             fn ($order) => $order->delivery_time ?: '23:59:59',
+            fn ($order) => $order->daily_sequence ?? PHP_INT_MAX,
             fn ($order) => $order->created_at?->timestamp ?? 0,
         ])
         ->values();
@@ -504,19 +555,7 @@
                                         $deliveryTime = $order->delivery_time ?: $customer?->delivery_time ?: '';
                                         $saleName = $order->user?->name ?: 'Chưa có sale';
                                         $originName = $order->warehouse?->name ?: 'Chưa chọn kho';
-                                        $productPayload = $order->items->map(function ($item) {
-                                            $variant = $item->variant;
-                                            $productName = $item->product?->name ?: $variant?->product?->name ?: 'Sản phẩm';
-                                            $variantName = $variant?->name ?: $variant?->variant_name ?: $variant?->sku;
-
-                                            return [
-                                                'name' => trim($productName . ($variantName ? ' - ' . $variantName : '')),
-                                                'quantity' => (float) ($item->quantity ?? 0),
-                                                'weight' => (float) ($item->total_weight ?? $item->actual_weight ?? 0),
-                                                'price' => (float) ($item->price ?? 0),
-                                                'total' => (float) ($item->total ?? 0),
-                                            ];
-                                        })->values();
+                                        $productPayload = $assignmentProductPayload($order);
                                     @endphp
                                     <tr id="order-{{ $order->id }}"
                                         class="js-unassigned-order"
@@ -555,6 +594,7 @@
                                                 data-bs-target="#productsPreviewModal"
                                                 data-order-code="{{ $order->code ?: $order->id }}"
                                                 data-customer-name="{{ $customerName }}"
+                                                data-order-total="{{ $order->total ?? 0 }}"
                                                 data-products="{{ e($productPayload->toJson(JSON_UNESCAPED_UNICODE)) }}">
                                                 <i class="bi bi-list-ul me-1"></i>Sản phẩm
                                             </button>
@@ -671,11 +711,14 @@
                                                 <thead>
                                                     <tr>
                                                         <th style="width: 58px;" class="trip-head-strong">STT</th>
-                                                        <th style="width: 220px;" class="trip-head-strong">Khách hàng</th>
-                                                        <th>Địa chỉ</th>
-                                                        <th style="width: 104px;">Điều chỉnh</th>
-                                                        <th style="width: 104px;">Phí cuối</th>
-                                                        <th style="width: 150px;">Thao tác</th>
+                                                        <th style="width: 290px;" class="trip-head-strong">Giờ giao - Khách hàng</th>
+                                                        <th style="width: 130px;">Điểm đi</th>
+                                                        <th>Điểm giao</th>
+                                                        <th style="width: 128px;">Nhân viên sale</th>
+                                                        <th style="width: 112px;">Giá ship điều chỉnh</th>
+                                                        <th style="width: 100px;">Giá mặc định</th>
+                                                        <th style="width: 124px;">Trạng thái</th>
+                                                        <th style="width: 174px;">Tính năng</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
@@ -687,33 +730,23 @@
                                                                 $selectedRoute = $customer?->truckRouteByStation;
                                                             }
                                                             $truckStation = $customer?->truckStation ?: ($selectedRoute?->stops?->last()?->station);
-                                                            $destination = $order->recipient_address
+                                                            $truckStationText = trim(collect([$truckStation?->name, $truckStation?->address])->filter()->join(' - '));
+                                                            $destination = $truckStationText
+                                                                ?: $order->recipient_address
                                                                 ?: $customer?->truck_station_address
-                                                                ?: $truckStation?->address
-                                                                ?: $truckStation?->name
                                                                 ?: $customer?->address
                                                                 ?: 'Chưa cập nhật';
                                                             $quantity = (float) $order->items->sum('quantity');
                                                             $baseFee = (bool) ($order->charge_shipping_fee ?? true)
-                                                                ? (float) ($order->shipping_fee ?? 0)
+                                                                ? (float) ($order->shipping_fee ?? $customer?->shipping_fee ?? 0)
                                                                 : 0;
                                                             $customerName = $customer?->name ?? $order->recipient_name ?? 'Khách hàng';
                                                             $deliveryTime = $order->delivery_time ?: $customer?->delivery_time ?: '';
                                                             $saleName = $order->user?->name ?: 'Chưa có sale';
                                                             $originName = $order->warehouse?->name ?: 'Chưa chọn kho';
-                                                            $productPayload = $order->items->map(function ($item) {
-                                                                $variant = $item->variant;
-                                                                $productName = $item->product?->name ?: $variant?->product?->name ?: 'Sản phẩm';
-                                                                $variantName = $variant?->name ?: $variant?->variant_name ?: $variant?->sku;
-
-                                                                return [
-                                                                    'name' => trim($productName . ($variantName ? ' - ' . $variantName : '')),
-                                                                    'quantity' => (float) ($item->quantity ?? 0),
-                                                                    'weight' => (float) ($item->total_weight ?? $item->actual_weight ?? 0),
-                                                                    'price' => (float) ($item->price ?? 0),
-                                                                    'total' => (float) ($item->total ?? 0),
-                                                                ];
-                                                            })->values();
+                                                            $defaultShipperName = $customer?->defaultShipper?->name;
+                                                            $productPayload = $assignmentProductPayload($order);
+                                                            $statusLabel = \App\Models\Order::statusOptions()[$order->status] ?? $order->status;
                                                         @endphp
                                                         <tr id="order-{{ $order->id }}"
                                                             class="js-trip-order"
@@ -727,24 +760,30 @@
                                                             <td class="text-center">
                                                                 <span class="priority-dot is-routed" style="width:28px;height:28px;font-size:.78rem;">{{ $order->daily_sequence ?: $loop->iteration }}</span>
                                                             </td>
-                                                            <td class="trip-order-customer">
+                                                            <td class="trip-order-main">
                                                                 @if($deliveryTime)
                                                                     <span class="trip-order-time">{{ $deliveryTime }}</span>
                                                                 @endif
-                                                                {{ $customerName }}
-                                                                <div class="order-meta-line">
-                                                                    <span><i class="bi bi-person-badge me-1"></i>{{ $saleName }}</span>
-                                                                    <span><i class="bi bi-box-arrow-up-right me-1"></i>{{ $originName }}</span>
+                                                                <span class="trip-order-customer">{{ $customerName }}</span>
+                                                                <div class="trip-order-code">
+                                                                    <i class="bi bi-receipt me-1"></i>{{ $order->code ?: ('ORD-' . $order->id) }}
                                                                 </div>
+                                                                @if($defaultShipperName)
+                                                                    <div class="trip-default-shipper">Cố định: {{ $defaultShipperName }}</div>
+                                                                @endif
                                                                 <input type="hidden" class="js-order-trip" value="{{ $defaultTripCode }}">
                                                             </td>
+                                                            <td class="trip-origin-cell">{{ $originName }}</td>
                                                             <td class="trip-order-address" title="{{ $destination }}">{{ $destination }}</td>
+                                                            <td class="trip-sale-cell">{{ $saleName }}</td>
                                                             <td>
                                                                 <input type="number" step="1000" class="form-control form-control-sm js-order-extra-fee" value="0">
                                                             </td>
-                                                            <td class="text-end fw-bold js-order-final-fee">{{ number_format($baseFee, 0, ',', '.') }}</td>
+                                                            <td class="text-end fw-bold">{{ number_format($baseFee, 0, ',', '.') }}</td>
+                                                            <td><span class="trip-status-text">{{ $statusLabel }}</span></td>
                                                             <td>
                                                                 <input type="hidden" class="js-order-trip-note" value="">
+                                                                <span class="js-order-final-fee d-none">{{ number_format($baseFee, 0, ',', '.') }}</span>
                                                                 <div class="d-flex gap-1 flex-wrap">
                                                                     <button type="button"
                                                                         class="btn btn-sm btn-outline-secondary quick-products-btn js-open-products-preview"
@@ -752,6 +791,7 @@
                                                                         data-bs-target="#productsPreviewModal"
                                                                         data-order-code="{{ $order->code ?: $order->id }}"
                                                                         data-customer-name="{{ $customerName }}"
+                                                                        data-order-total="{{ $order->total ?? 0 }}"
                                                                         data-products="{{ e($productPayload->toJson(JSON_UNESCAPED_UNICODE)) }}">
                                                                         <i class="bi bi-list-ul me-1"></i>SP
                                                                     </button>
@@ -1093,7 +1133,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const groupRow = document.createElement('tr');
             groupRow.className = 'trip-group-row';
             groupRow.innerHTML = `
-                <td colspan="6">
+                <td colspan="9">
                     <div class="trip-group-line">
                         <div class="trip-group-title">
                             ${trip.name}
@@ -1363,7 +1403,8 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             if (orderInfo) {
-                orderInfo.textContent = 'Đơn ' + (productsPreviewButton.dataset.orderCode || '') + ' - ' + (productsPreviewButton.dataset.customerName || '');
+                const orderTotal = Number(productsPreviewButton.dataset.orderTotal || 0);
+                orderInfo.textContent = 'Đơn ' + (productsPreviewButton.dataset.orderCode || '') + ' - ' + (productsPreviewButton.dataset.customerName || '') + (orderTotal ? ' - Tổng: ' + money.format(orderTotal) + ' đ' : '');
             }
 
             if (body) {
@@ -1378,7 +1419,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
                         return `
                             <tr>
-                                <td class="fw-semibold">${escapeHtml(item.name || 'Sản phẩm')}</td>
+                                <td>
+                                    <div class="fw-semibold">${escapeHtml(item.name || 'Sản phẩm')}</div>
+                                    ${item.sku ? `<div class="text-muted small">SKU: ${escapeHtml(item.sku)}</div>` : ''}
+                                </td>
                                 <td class="text-end">${money.format(quantity)}</td>
                                 <td class="text-end">${weight ? money.format(weight) : '-'}</td>
                                 <td class="text-end">${price ? money.format(price) + ' đ' : '-'}</td>

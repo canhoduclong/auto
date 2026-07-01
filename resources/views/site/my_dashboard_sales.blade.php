@@ -57,6 +57,11 @@
         text-decoration: none;
     }
 
+    .shortcut-btn.secondary {
+        background: #f59e0b;
+        color: #0f172a;
+    }
+
     .section-card {
         border: 1px solid #dbe4ea;
         border-radius: 14px;
@@ -298,10 +303,16 @@
                     <h4 class="mb-1">My Dashboard</h4>
                     <div class="small opacity-75">Thống kê nhanh doanh số, hoa hồng và công việc</div>
                 </div>
-                <a href="{{ route('my-tasks') }}" class="shortcut-btn">
-                    <i class="bi bi-list-task"></i>
-                    Nhiệm vụ được giao
-                </a>
+                <div class="d-flex flex-wrap gap-2">
+                    <a href="{{ route('pages.hoang_long_profile') }}" class="shortcut-btn secondary">
+                        <i class="bi bi-file-earmark-text"></i>
+                        Hoàng Long TNT Profile
+                    </a>
+                    <a href="{{ route('my-tasks') }}" class="shortcut-btn">
+                        <i class="bi bi-list-task"></i>
+                        Nhiệm vụ được giao
+                    </a>
+                </div>
             </div>
         </div>
 
