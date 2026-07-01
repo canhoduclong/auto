@@ -375,17 +375,20 @@
     .trip-order-main {
         min-width: 260px;
     }
-    .trip-order-code {
-        color: #2563eb;
+    .trip-order-subline {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 10px;
+        align-items: center;
         font-size: .74rem;
         font-weight: 700;
         margin-top: 2px;
     }
+    .trip-order-code {
+        color: #2563eb;
+    }
     .trip-default-shipper {
         color: #64748b;
-        font-size: .72rem;
-        font-weight: 600;
-        margin-top: 2px;
     }
     .trip-origin-cell,
     .trip-sale-cell {
@@ -765,12 +768,14 @@
                                                                     <span class="trip-order-time">{{ $deliveryTime }}</span>
                                                                 @endif
                                                                 <span class="trip-order-customer">{{ $customerName }}</span>
-                                                                <div class="trip-order-code">
-                                                                    <i class="bi bi-receipt me-1"></i>{{ $order->code ?: ('ORD-' . $order->id) }}
+                                                                <div class="trip-order-subline">
+                                                                    <span class="trip-order-code">
+                                                                        <i class="bi bi-receipt me-1"></i>{{ $order->code ?: ('ORD-' . $order->id) }}
+                                                                    </span>
+                                                                    @if($defaultShipperName)
+                                                                        <span class="trip-default-shipper">Cố định: {{ $defaultShipperName }}</span>
+                                                                    @endif
                                                                 </div>
-                                                                @if($defaultShipperName)
-                                                                    <div class="trip-default-shipper">Cố định: {{ $defaultShipperName }}</div>
-                                                                @endif
                                                                 <input type="hidden" class="js-order-trip" value="{{ $defaultTripCode }}">
                                                             </td>
                                                             <td class="trip-origin-cell">{{ $originName }}</td>
