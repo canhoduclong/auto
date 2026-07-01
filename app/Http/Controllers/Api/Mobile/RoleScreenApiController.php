@@ -927,15 +927,21 @@ class RoleScreenApiController extends BaseApiController
             'delivery_date' => optional($order->delivery_date)->toDateString(),
             'created_date' => optional($order->created_at)->toDateString(),
             'items_count' => (int) $order->items->sum('quantity'),
+            'product_summary' => $this->managerAssignmentProductSummary($order),
             'items' => $order->items->map(function ($item) {
                 $quantity = (float) ($item->quantity ?? 0);
                 $price = (float) ($item->price ?? 0);
+                $variant = $item->variant;
+                $product = $item->product ?: $variant?->product;
 
                 return [
                     'id' => (int) $item->id,
-                    'name' => (string) ($item->variant?->name ?? $item->product?->name ?? 'Sản phẩm'),
-                    'sku' => (string) ($item->variant?->sku ?? ''),
-                    'size' => (string) ($item->variant?->size ?? ''),
+                    'name' => (string) ($variant?->name ?? $product?->name ?? 'Sản phẩm'),
+                    'product_name' => (string) ($product?->name ?? ''),
+                    'variant_name' => (string) ($variant?->name ?? ''),
+                    'sku' => (string) ($variant?->sku ?? ''),
+                    'size' => (string) ($variant?->size ?? ''),
+                    'unit' => (string) ($item->display_total_unit ?? $product?->unit_label ?? 'Cái'),
                     'quantity' => $quantity,
                     'price' => $price,
                     'total' => (float) ($item->total ?? ($quantity * $price)),
@@ -947,6 +953,50 @@ class RoleScreenApiController extends BaseApiController
             'unassign_url' => '/mobile/shipper/assignments/' . $order->id . '/unassign',
             'updated_at' => optional($order->updated_at)->toIso8601String(),
         ];
+    }
+
+    private function managerAssignmentProductSummary(Order $order): string
+    {
+        return $order->items
+            ->map(function ($item) {
+                $variant = $item->variant;
+                $product = $item->product ?: $variant?->product;
+                $productName = (string) ($product?->name ?: 'Sản phẩm');
+                $variantName = (string) ($variant?->name ?: $variant?->variant_name ?: $variant?->sku ?: '');
+                $displayName = $productName;
+
+                if ($variantName !== '' && !str_contains(mb_strtolower($variantName), mb_strtolower($productName))) {
+                    $displayName = trim($productName . ' ' . $variantName);
+                } elseif ($variantName !== '') {
+                    $displayName = trim($variantName);
+                }
+
+                $unit = (string) ($item->display_total_unit ?? $product?->unit_label ?? 'Cái');
+
+                return [
+                    'key' => mb_strtolower($displayName . '|' . $unit),
+                    'name' => $displayName,
+                    'unit' => $unit,
+                    'quantity' => (float) ($item->quantity ?? 0),
+                ];
+            })
+            ->groupBy('key')
+            ->map(function ($items) {
+                $first = $items->first();
+
+                return trim($first['name'] . ' - ' . $this->formatAssignmentQuantity((float) $items->sum('quantity')) . ' ' . $first['unit']);
+            })
+            ->values()
+            ->join(' | ');
+    }
+
+    private function formatAssignmentQuantity(float $value): string
+    {
+        if (abs($value - round($value)) < 0.00001) {
+            return number_format($value, 0, ',', '.');
+        }
+
+        return rtrim(rtrim(number_format($value, 2, ',', '.'), '0'), ',');
     }
 
     private function warehouseReturns(?int $warehouseId): JsonResponse

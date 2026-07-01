@@ -1,8 +1,8 @@
 {
-  "version": "1.0.37",
-  "version_code": 38,
+  "version": "1.0.38",
+  "version_code": 39,
   "apk_url": "https://hoanglongtnt.com/app-update/app-release.apk",
   "ios_url": "",
   "force_update": false,
-  "message": "Bản cập nhật 1.0.37: đồng bộ thêm hàng pha lóc cho đơn kho, quản trị thông báo theo user/vai trò/layout và lọc thông báo đúng từng màn hình mobile."
+  "message": "Bản cập nhật 1.0.38: hiển thị tổng hợp hàng trong điều phối đơn shipper trên mobile."
 }
