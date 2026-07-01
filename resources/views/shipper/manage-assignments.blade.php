@@ -283,7 +283,7 @@
         font-size: .82rem;
         border-collapse: separate;
         border-spacing: 0 7px;
-        min-width: 1280px;
+        min-width: 1450px;
     }
     .trip-order-table thead {
         display: none;
@@ -401,6 +401,14 @@
         font-weight: 800;
         white-space: nowrap;
     }
+    .trip-products-cell {
+        color: #334155;
+        font-size: .76rem;
+        font-weight: 800;
+        line-height: 1.35;
+        min-width: 150px;
+        white-space: normal;
+    }
     .trip-order-table input,
     .trip-order-table select {
         min-width: 86px;
@@ -457,6 +465,16 @@
 </div> 
 
 @php
+    $formatAssignmentQuantity = function ($value) {
+        $value = (float) $value;
+
+        if (abs($value - round($value)) < 0.00001) {
+            return number_format($value, 0, ',', '.');
+        }
+
+        return rtrim(rtrim(number_format($value, 2, ',', '.'), '0'), ',');
+    };
+
     $assignmentProductPayload = function ($order) {
         return $order->items->map(function ($item) {
             $variant = $item->variant;
@@ -475,6 +493,43 @@
                 'total' => $total,
             ];
         })->values();
+    };
+
+    $assignmentProductSummary = function ($order) use ($formatAssignmentQuantity) {
+        return $order->items
+            ->map(function ($item) {
+                $variant = $item->variant;
+                $productName = $item->product?->name ?: $variant?->product?->name ?: 'Sản phẩm';
+                $variantName = $variant?->name ?: $variant?->variant_name ?: $variant?->sku;
+                $displayName = $productName;
+
+                if ($variantName && !str_contains(mb_strtolower($variantName), mb_strtolower($productName))) {
+                    $displayName = trim($productName . ' ' . $variantName);
+                } elseif ($variantName) {
+                    $displayName = trim($variantName);
+                }
+
+                $unit = $item->display_total_unit
+                    ?? $item->product?->unit_label
+                    ?? $variant?->product?->unit_label
+                    ?? 'Cái';
+
+                return [
+                    'key' => mb_strtolower($displayName . '|' . $unit),
+                    'name' => $displayName,
+                    'unit' => $unit,
+                    'quantity' => (float) ($item->quantity ?? 0),
+                ];
+            })
+            ->groupBy('key')
+            ->map(function ($items) use ($formatAssignmentQuantity) {
+                $first = $items->first();
+                $quantity = $items->sum('quantity');
+
+                return trim($first['name'] . ' - ' . $formatAssignmentQuantity($quantity) . ' ' . $first['unit']);
+            })
+            ->values()
+            ->join(' | ');
     };
 
     $priorityOrders = collect($assignedOrders)
@@ -721,6 +776,7 @@
                                                         <th style="width: 112px;">Giá ship điều chỉnh</th>
                                                         <th style="width: 100px;">Giá mặc định</th>
                                                         <th style="width: 124px;">Trạng thái</th>
+                                                        <th style="width: 170px;">Hàng</th>
                                                         <th style="width: 174px;">Tính năng</th>
                                                     </tr>
                                                 </thead>
@@ -749,6 +805,7 @@
                                                             $originName = $order->warehouse?->name ?: 'Chưa chọn kho';
                                                             $defaultShipperName = $customer?->defaultShipper?->name;
                                                             $productPayload = $assignmentProductPayload($order);
+                                                            $productSummary = $assignmentProductSummary($order);
                                                             $statusLabel = \App\Models\Order::statusOptions()[$order->status] ?? $order->status;
                                                         @endphp
                                                         <tr id="order-{{ $order->id }}"
@@ -786,6 +843,7 @@
                                                             </td>
                                                             <td class="text-end fw-bold">{{ number_format($baseFee, 0, ',', '.') }}</td>
                                                             <td><span class="trip-status-text">{{ $statusLabel }}</span></td>
+                                                            <td class="trip-products-cell">{{ $productSummary ?: '-' }}</td>
                                                             <td>
                                                                 <input type="hidden" class="js-order-trip-note" value="">
                                                                 <span class="js-order-final-fee d-none">{{ number_format($baseFee, 0, ',', '.') }}</span>
@@ -1138,7 +1196,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const groupRow = document.createElement('tr');
             groupRow.className = 'trip-group-row';
             groupRow.innerHTML = `
-                <td colspan="9">
+                <td colspan="10">
                     <div class="trip-group-line">
                         <div class="trip-group-title">
                             ${trip.name}

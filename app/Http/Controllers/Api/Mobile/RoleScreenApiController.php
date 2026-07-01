@@ -814,13 +814,14 @@ class RoleScreenApiController extends BaseApiController
             ->values();
         $orders = Order::query()
             ->with([
-                'customer:id,name,phone,address,default_shipper_id,delivery_time,truck_station_id,truck_route_id',
+                'customer:id,name,phone,address,default_shipper_id,delivery_time,truck_station_id,truck_route_id,shipping_fee',
                 'customer.defaultShipper:id,name,phone',
                 'customer.truckStation:id,name,address,phone',
                 'customer.truckRoute:id,name',
                 'items.product:id,name,unit',
                 'items.variant:id,name,sku,size,product_id',
                 'shipper:id,name,phone',
+                'user:id,name',
                 'warehouse:id,name',
             ])
             ->whereIn('status', $statuses)
@@ -877,16 +878,27 @@ class RoleScreenApiController extends BaseApiController
     {
         $customer = $order->customer;
         $deliveryTime = $order->delivery_time ?: $customer?->delivery_time;
+        $truckStation = $customer?->truckStation;
+        $destination = trim(collect([$truckStation?->name, $truckStation?->address])->filter()->join(' - '));
+        if ($destination === '') {
+            $destination = (string) ($order->recipient_address ?: $customer?->address ?: '');
+        }
+        $defaultShippingFee = (bool) ($order->charge_shipping_fee ?? true)
+            ? (float) ($order->shipping_fee ?? $customer?->shipping_fee ?? 0)
+            : 0;
 
         return [
             'id' => (int) $order->id,
             'title' => 'Đơn #' . ($order->daily_sequence ?: $order->code ?: $order->id),
             'subtitle' => trim(($customer?->name ?? 'Khách hàng') . ' · ' . ($customer?->phone ?? ''), ' ·'),
             'status' => (string) $order->status,
+            'status_label' => (string) (Order::statusOptions()[$order->status] ?? $order->status),
             'code' => (string) ($order->code ?? ''),
             'total' => (float) ($order->total ?? 0),
             'amount_due' => (float) ($order->amount_due ?? 0),
-            'shipping_fee' => (float) ($order->shipping_fee ?? 0),
+            'shipping_fee' => $defaultShippingFee,
+            'default_shipping_fee' => $defaultShippingFee,
+            'adjusted_shipping_fee' => 0,
             'shipper_id' => $order->shipper_id ? (int) $order->shipper_id : null,
             'shipper_name' => (string) ($order->shipper?->name ?? ''),
             'shipper_phone' => (string) ($order->shipper?->phone ?? ''),
@@ -894,6 +906,10 @@ class RoleScreenApiController extends BaseApiController
             'customer_name' => (string) ($customer?->name ?? ''),
             'customer_phone' => (string) ($customer?->phone ?? ''),
             'customer_address' => (string) ($customer?->address ?? ''),
+            'destination' => $destination,
+            'origin' => (string) ($order->warehouse?->name ?? 'Chưa chọn kho'),
+            'warehouse_name' => (string) ($order->warehouse?->name ?? ''),
+            'sale_name' => (string) ($order->user?->name ?? 'Chưa có sale'),
             'truck_station' => $customer?->truckStation ? [
                 'id' => (int) $customer->truckStation->id,
                 'name' => (string) $customer->truckStation->name,
@@ -910,16 +926,22 @@ class RoleScreenApiController extends BaseApiController
             'delivery_time' => (string) ($deliveryTime ?? ''),
             'delivery_date' => optional($order->delivery_date)->toDateString(),
             'created_date' => optional($order->created_at)->toDateString(),
-            'warehouse_name' => (string) ($order->warehouse?->name ?? ''),
             'items_count' => (int) $order->items->sum('quantity'),
-            'items' => $order->items->map(fn ($item) => [
-                'id' => (int) $item->id,
-                'name' => (string) ($item->variant?->name ?? $item->product?->name ?? 'Sản phẩm'),
-                'sku' => (string) ($item->variant?->sku ?? ''),
-                'size' => (string) ($item->variant?->size ?? ''),
-                'quantity' => (float) ($item->quantity ?? 0),
-                'total_weight' => (float) ($item->total_weight ?? 0),
-            ])->values(),
+            'items' => $order->items->map(function ($item) {
+                $quantity = (float) ($item->quantity ?? 0);
+                $price = (float) ($item->price ?? 0);
+
+                return [
+                    'id' => (int) $item->id,
+                    'name' => (string) ($item->variant?->name ?? $item->product?->name ?? 'Sản phẩm'),
+                    'sku' => (string) ($item->variant?->sku ?? ''),
+                    'size' => (string) ($item->variant?->size ?? ''),
+                    'quantity' => $quantity,
+                    'price' => $price,
+                    'total' => (float) ($item->total ?? ($quantity * $price)),
+                    'total_weight' => (float) ($item->total_weight ?? $item->actual_weight ?? 0),
+                ];
+            })->values(),
             'available_shippers' => $shippers,
             'assign_url' => '/mobile/shipper/assignments/' . $order->id . '/assign/{shipper}',
             'unassign_url' => '/mobile/shipper/assignments/' . $order->id . '/unassign',
