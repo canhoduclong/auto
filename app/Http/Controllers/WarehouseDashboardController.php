@@ -13,6 +13,7 @@ use App\Models\InventoryDocumentTemplate;
 use App\Models\InventoryMovement;
 use App\Models\InventoryReservation;
 use App\Models\ProductVariant;
+use App\Models\ProductCuttingBatch;
 use App\Models\Product;
 use App\Models\ReturnItem;
 use App\Models\Setting;
@@ -445,6 +446,101 @@ class WarehouseDashboardController extends Controller
         return redirect()->route('warehouse.dashboard')->with('success', 'Đã thực hiện pha lóc và cập nhật tồn kho.');
     }
 
+    public function confirmCuttingMaterials(Request $request, ProductVariant $variant)
+    {
+        $user = Auth::user();
+        $warehouseId = $user?->warehouse_id ? (int) $user->warehouse_id : null;
+        if (!$warehouseId && !$user?->hasRole('admin')) {
+            return back()->with('error', 'Tài khoản chưa được gán kho thực hiện.');
+        }
+
+        $variant->loadMissing('product');
+        abort_unless($variant->product?->product_type === Product::TYPE_CUT, 404);
+
+        $data = $request->validate([
+            'materials' => ['required', 'array', 'min:1'],
+            'materials.*.variant_id' => ['required', 'exists:product_variants,id'],
+            'materials.*.quantity' => ['required', 'numeric', 'min:0'],
+            'note' => ['nullable', 'string', 'max:1000'],
+            'order_id' => ['nullable', 'exists:orders,id'],
+            'selected_date' => ['nullable', 'date'],
+        ]);
+
+        try {
+            app(ProductCuttingService::class)->start(
+                (int) $warehouseId,
+                $variant,
+                $data['materials'],
+                (string) ($data['note'] ?? 'Xuất kho nguyên con để pha lóc.'),
+                (int) $user->id,
+                !empty($data['order_id']) ? (int) $data['order_id'] : null
+            );
+        } catch (\Throwable $e) {
+            return back()->withInput()->with('error', $e->getMessage());
+        }
+
+        return redirect()
+            ->route('warehouse.orders', [
+                'date' => $data['selected_date'] ?? now()->toDateString(),
+                'highlight' => $data['order_id'] ?? null,
+            ])
+            ->with('success', 'Đã xác nhận lấy hàng pha lóc. Đơn sẽ chuyển sang bước đóng hàng hoàn thiện.');
+    }
+
+    public function revertCuttingBatch(ProductCuttingBatch $batch)
+    {
+        $user = Auth::user();
+        $managedWarehouseId = $user?->warehouse_id ? (int) $user->warehouse_id : null;
+        if (!$managedWarehouseId && !$user?->hasRole('admin')) {
+            return back()->with('error', 'Tài khoản chưa được gán kho thực hiện.');
+        }
+        if ($managedWarehouseId && (int) $batch->warehouse_id !== $managedWarehouseId) {
+            abort(403, 'Bạn không có quyền quay lại mẻ pha lóc của kho khác.');
+        }
+
+        try {
+            app(ProductCuttingService::class)->revert($batch, (int) $user->id);
+        } catch (\Throwable $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('success', 'Đã quay lại xác nhận lấy hàng pha lóc và hoàn nguyên tồn nguyên liệu.');
+    }
+
+    public function completeCuttingBatch(Request $request, ProductCuttingBatch $batch)
+    {
+        $user = Auth::user();
+        $managedWarehouseId = $user?->warehouse_id ? (int) $user->warehouse_id : null;
+        if (!$managedWarehouseId && !$user?->hasRole('admin')) {
+            return back()->with('error', 'Tài khoản chưa được gán kho thực hiện.');
+        }
+        if ($managedWarehouseId && (int) $batch->warehouse_id !== $managedWarehouseId) {
+            abort(403, 'Bạn không có quyền hoàn thiện mẻ pha lóc của kho khác.');
+        }
+
+        $data = $request->validate([
+            'actual_finished_weight' => ['required', 'numeric', 'min:0.001'],
+            'components' => ['nullable', 'array'],
+            'components.*.variant_id' => ['required_with:components', 'exists:product_variants,id'],
+            'components.*.weight' => ['nullable', 'numeric', 'min:0'],
+            'defer_components' => ['nullable', 'boolean'],
+        ]);
+
+        try {
+            app(ProductCuttingService::class)->complete(
+                $batch,
+                (float) $data['actual_finished_weight'],
+                $data['components'] ?? [],
+                (int) $user->id,
+                $request->boolean('defer_components')
+            );
+        } catch (\Throwable $e) {
+            return back()->withInput()->with('error', $e->getMessage());
+        }
+
+        return back()->with('success', 'Đã hoàn thiện pha lóc, nhập kho thực tế và ghi nhận hao hụt.');
+    }
+
     public function receiveCuttingComponentImportRequest(CuttingComponentImportRequest $componentImportRequest)
     {
         $user = Auth::user();
@@ -828,6 +924,13 @@ class WarehouseDashboardController extends Controller
         $cuttingPlansByOrder = $this->buildCuttingPlansForGuards($stockGuardMap, $managedWarehouseId);
 
         $orderIds = $orders->pluck('id')->all();
+        $activeCuttingBatchesByOrder = ProductCuttingBatch::query()
+            ->with(['targetVariant.product', 'performer:id,name'])
+            ->whereIn('order_id', $orderIds)
+            ->where('status', ProductCuttingBatch::STATUS_IN_PROGRESS)
+            ->orderBy('id')
+            ->get()
+            ->groupBy('order_id');
         $activeTransfersByOrder = WarehouseTransfer::query()
             ->with(['targetWarehouse:id,name', 'shipper:id,name'])
             ->whereIn('order_id', $orderIds)
@@ -868,7 +971,8 @@ class WarehouseDashboardController extends Controller
             'orderRoutePrefix',
             'packingInventoryRoute',
             'packingDashboardRoute',
-            'cuttingPlansByOrder'
+            'cuttingPlansByOrder',
+            'activeCuttingBatchesByOrder'
         ));
     }
 

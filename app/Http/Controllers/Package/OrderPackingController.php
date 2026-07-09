@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Package;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\WarehouseDashboardController;
 use App\Models\Order;
+use App\Models\ProductCuttingBatch;
 use Illuminate\Http\Request;
 
 class OrderPackingController extends Controller
@@ -51,6 +52,11 @@ class OrderPackingController extends Controller
     public function reopenPacking(Request $request, Order $order)
     {
         return $this->warehouseOrders->reopenPacking($request, $order);
+    }
+
+    public function completeCuttingBatch(Request $request, ProductCuttingBatch $batch)
+    {
+        return $this->warehouseOrders->completeCuttingBatch($request, $batch);
     }
 
     public function show(Order $order)

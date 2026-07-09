@@ -310,7 +310,18 @@ class ProductCuttingService
     ): ProductCuttingBatch
     {
         return DB::transaction(function () use ($warehouseId, $targetVariant, $materials, $actualFinishedWeight, $actualComponents, $note, $userId, $deferComponents, $orderId) {
+            $batch = $this->start($warehouseId, $targetVariant, $materials, $note, $userId, $orderId);
+            return $this->complete($batch, $actualFinishedWeight, $actualComponents, $userId, $deferComponents);
+        });
+    }
+
+    public function start(int $warehouseId, ProductVariant $targetVariant, array $materials, string $note, int $userId, ?int $orderId = null): ProductCuttingBatch
+    {
+        return DB::transaction(function () use ($warehouseId, $targetVariant, $materials, $note, $userId, $orderId) {
             $preview = $this->preview($targetVariant, $materials);
+            if ((float) ($preview['input_weight'] ?? 0) <= 0 || (float) ($preview['finished_weight'] ?? 0) <= 0) {
+                throw new \RuntimeException('Vui lòng chọn nguyên liệu pha lóc có khối lượng hợp lệ.');
+            }
 
             $exportDocument = InventoryDocument::create([
                 'type' => 'export',
@@ -353,6 +364,37 @@ class ProductCuttingService
                 $this->syncVariantStock($variantId);
             }
 
+            return ProductCuttingBatch::create([
+                'warehouse_id' => $warehouseId,
+                'target_product_variant_id' => (int) $targetVariant->id,
+                'order_id' => $orderId,
+                'status' => ProductCuttingBatch::STATUS_IN_PROGRESS,
+                'source_materials' => collect($materials)
+                    ->map(fn ($row) => ['variant_id' => (int) ($row['variant_id'] ?? 0), 'quantity' => max(0, (float) ($row['quantity'] ?? 0))])
+                    ->filter(fn ($row) => $row['variant_id'] > 0 && $row['quantity'] > 0)
+                    ->values()
+                    ->all(),
+                'performed_by' => $userId,
+                'export_document_id' => $exportDocument->id,
+                'input_weight' => (float) ($preview['input_weight'] ?? 0),
+                'planned_finished_weight' => (float) ($preview['finished_weight'] ?? 0),
+                'planned_components' => $preview['components']->all(),
+                'note' => $note,
+            ]);
+        });
+    }
+
+    public function complete(ProductCuttingBatch $batch, float $actualFinishedWeight, array $actualComponents, int $userId, bool $deferComponents = false): ProductCuttingBatch
+    {
+        return DB::transaction(function () use ($batch, $actualFinishedWeight, $actualComponents, $userId, $deferComponents) {
+            $batch->refresh();
+            if ($batch->status !== ProductCuttingBatch::STATUS_IN_PROGRESS) {
+                throw new \RuntimeException('Mẻ pha lóc này không còn ở trạng thái đang thực hiện.');
+            }
+
+            $warehouseId = (int) $batch->warehouse_id;
+            $targetVariant = ProductVariant::query()->findOrFail((int) $batch->target_product_variant_id);
+
             $finishedDocument = $this->importRows($warehouseId, [
                 ['variant_id' => (int) $targetVariant->id, 'quantity' => $actualFinishedWeight],
             ], 'Nhập kho thành phẩm pha lóc.', $userId);
@@ -362,37 +404,76 @@ class ProductCuttingService
                 ->filter(fn ($row) => $row['variant_id'] > 0 && $row['quantity'] > 0)
                 ->values()
                 ->all();
-            $inputWeight = (float) ($preview['input_weight'] ?? 0);
+            $inputWeight = (float) ($batch->input_weight ?? 0);
             $actualComponentWeight = round((float) collect($componentRows)->sum('quantity'), 3);
+            if (round($actualFinishedWeight + $actualComponentWeight, 3) > round($inputWeight, 3)) {
+                throw new \RuntimeException('Tổng kg thành phẩm và thành phần còn lại không được lớn hơn kg nguyên liệu đã lấy.');
+            }
+
             $lossWeight = round(max(0, $inputWeight - $actualFinishedWeight - $actualComponentWeight), 3);
             $lossPercent = $inputWeight > 0 ? round($lossWeight / $inputWeight * 100, 3) : 0;
             $componentDocument = $deferComponents
                 ? null
                 : $this->importRows($warehouseId, $componentRows, 'Nhập kho thành phần phát sinh từ pha lóc.', $userId);
 
-            $batch = ProductCuttingBatch::create([
-                'warehouse_id' => $warehouseId,
-                'target_product_variant_id' => (int) $targetVariant->id,
-                'performed_by' => $userId,
-                'export_document_id' => $exportDocument->id,
+            $batch->update([
+                'status' => ProductCuttingBatch::STATUS_COMPLETED,
+                'completed_by' => $userId,
+                'completed_at' => now(),
                 'finished_import_document_id' => $finishedDocument->id,
                 'component_import_document_id' => $componentDocument?->id,
                 'input_weight' => $inputWeight,
-                'planned_finished_weight' => (float) $preview['finished_weight'],
                 'actual_finished_weight' => $actualFinishedWeight,
                 'actual_component_weight' => $actualComponentWeight,
                 'loss_weight' => $lossWeight,
                 'loss_percent' => $lossPercent,
-                'planned_components' => $preview['components']->all(),
                 'actual_components' => $componentRows,
-                'note' => $note,
             ]);
 
             if ($deferComponents && !empty($componentRows)) {
-                $this->appendDeferredComponentImportRequest($warehouseId, $componentRows, $batch, $userId, $orderId);
+                $this->appendDeferredComponentImportRequest($warehouseId, $componentRows, $batch, $userId, $batch->order_id ? (int) $batch->order_id : null);
             }
 
-            return $batch;
+            return $batch->refresh();
+        });
+    }
+
+    public function revert(ProductCuttingBatch $batch, int $userId): void
+    {
+        DB::transaction(function () use ($batch, $userId): void {
+            $batch->refresh();
+            if ($batch->status !== ProductCuttingBatch::STATUS_IN_PROGRESS) {
+                throw new \RuntimeException('Chỉ có thể quay lại mẻ pha lóc đang thực hiện.');
+            }
+
+            $exportDocument = $batch->export_document_id
+                ? InventoryDocument::query()->with('items')->find($batch->export_document_id)
+                : null;
+
+            foreach ($exportDocument?->items ?? [] as $item) {
+                $inventory = Inventory::query()->firstOrCreate(
+                    ['warehouse_id' => (int) $batch->warehouse_id, 'product_variant_id' => (int) $item->product_variant_id],
+                    ['quantity' => 0, 'reserved_quantity' => 0, 'low_stock_threshold' => 10]
+                );
+                $inventory = Inventory::query()->whereKey($inventory->id)->lockForUpdate()->firstOrFail();
+
+                InventoryMovement::create([
+                    'inventory_id' => $inventory->id,
+                    'quantity' => (float) $item->quantity,
+                    'type' => 'cutting_revert',
+                    'reference_id' => $exportDocument->id,
+                    'reference_type' => InventoryDocument::class,
+                    'user_id' => $userId,
+                ]);
+
+                $inventory->increment('quantity', (float) $item->quantity);
+                $this->syncVariantStock((int) $item->product_variant_id);
+            }
+
+            $batch->update([
+                'status' => ProductCuttingBatch::STATUS_CANCELLED,
+                'note' => trim((string) $batch->note . "\nQuay lại xác nhận lấy hàng lúc " . now()->format('d/m/Y H:i')),
+            ]);
         });
     }
 

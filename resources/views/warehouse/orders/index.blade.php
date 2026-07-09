@@ -22,6 +22,14 @@
         height: 100%;
         scroll-margin-top: 140px;
     }
+    .wh-order-card.has-cutting-in-progress {
+        border: 2px solid #f59e0b;
+        background: #fffbeb;
+        box-shadow: 0 0 0 3px rgba(245, 158, 11, .12), 0 10px 24px rgba(15, 23, 42, 0.07);
+    }
+    .wh-order-card.has-cutting-in-progress > .card-header {
+        background: #fef3c7 !important;
+    }
     .wh-order-index {
         border-radius: 50px;
         width: 40px;

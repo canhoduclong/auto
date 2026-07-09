@@ -134,7 +134,7 @@
          data-plan='@json($planJson, $planJsonOptions)'>
         <div class="modal-dialog modal-xl modal-dialog-scrollable cutting-order-dialog">
             <div class="modal-content">
-                <form method="POST" action="{{ route('warehouse.cutting.execute', ['variant' => $targetVariantId]) }}" class="js-cutting-execute-form">
+                <form method="POST" action="{{ route('warehouse.cutting.confirm', ['variant' => $targetVariantId]) }}" class="js-cutting-execute-form">
                     @csrf
                     <input type="hidden" name="order_id" value="{{ $modalOrder->id }}">
                     <input type="hidden" name="selected_date" value="{{ $selectedDateValue }}">
@@ -331,11 +331,8 @@
                         <button type="button" class="btn btn-primary js-cutting-build-preview">
                             Tính lại
                         </button>
-                        <button type="button" class="btn btn-warning js-cutting-confirm d-none">
+                        <button type="submit" class="btn btn-warning js-cutting-confirm d-none">
                             Xác nhận lấy hàng
-                        </button>
-                        <button type="submit" class="btn btn-success js-cutting-complete d-none">
-                            Hoàn thiện nhập kho
                         </button>
                     </div>
                 </form>
@@ -664,35 +661,6 @@
 
                     modal.querySelector('.js-cutting-build-preview')?.addEventListener('click', function () {
                         refreshCuttingPreview();
-                    });
-
-                    modal.querySelector('.js-cutting-confirm')?.addEventListener('click', function () {
-                        refreshCuttingPreview();
-                        modal.classList.add('is-cutting-in-progress');
-                        modal.querySelector('.js-cutting-actual-panel')?.classList.remove('d-none');
-                        modal.querySelector('.js-cutting-build-preview')?.classList.add('d-none');
-                        modal.querySelector('.js-cutting-confirm')?.classList.add('d-none');
-                        modal.querySelector('.js-cutting-complete')?.classList.remove('d-none');
-                        modal.querySelector('.js-cutting-material-select')?.setAttribute('disabled', 'disabled');
-                        modal.querySelector('.js-cutting-material-add')?.setAttribute('disabled', 'disabled');
-                        modal.querySelectorAll('.js-cutting-material-check').forEach((checkbox) => checkbox.setAttribute('disabled', 'disabled'));
-                        modal.querySelectorAll('.js-cutting-material-qty').forEach((input) => input.setAttribute('readonly', 'readonly'));
-                        modal.querySelectorAll('.js-cutting-material-remove').forEach((button) => button.setAttribute('disabled', 'disabled'));
-                        updateCuttingLossPreview(modal);
-                    });
-
-                    modal.querySelector('.js-cutting-execute-form')?.addEventListener('submit', function (event) {
-                        if (!modal.classList.contains('is-cutting-in-progress')) {
-                            event.preventDefault();
-                            refreshCuttingPreview();
-                            return;
-                        }
-
-                        const actualFinished = cuttingNumber(modal.querySelector('.js-cutting-actual-finished-input')?.value);
-                        if (actualFinished <= 0) {
-                            event.preventDefault();
-                            alert('Vui lòng nhập kg thành phẩm thực tế lớn hơn 0.');
-                        }
                     });
 
                     modal.addEventListener('shown.bs.modal', function () {

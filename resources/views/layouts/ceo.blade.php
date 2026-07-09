@@ -336,6 +336,9 @@
             <a href="{{ route('ceo.reports') }}" class="ceo-nav-link {{ request()->routeIs('ceo.reports') ? 'active' : '' }}">
                 <i class="bi bi-journal-text"></i> Báo cáo điều hành
             </a>
+            <a href="{{ route('ceo.loss-report') }}" class="ceo-nav-link {{ request()->routeIs('ceo.loss-report') ? 'active' : '' }}">
+                <i class="bi bi-droplet-half"></i> Báo cáo hao hụt
+            </a>
             <a href="{{ route('ceo.weekly-report') }}" class="ceo-nav-link {{ request()->routeIs('ceo.weekly-report') ? 'active' : '' }}">
                 <i class="bi bi-calendar-week"></i> Báo cáo tuần
             </a>

@@ -104,6 +104,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::prefix('package')->name('package.')->middleware('role:package,admin')->group(function () {
         Route::get('/', [PackageDashboardController::class, 'index'])->name('dashboard');
         Route::get('/orders', [OrderPackingController::class, 'index'])->name('orders');
+        Route::post('/cutting-batches/{batch}/complete', [OrderPackingController::class, 'completeCuttingBatch'])->name('cutting-batches.complete');
         Route::post('/orders/{order}/start-packing', [OrderPackingController::class, 'startPacking'])->name('orders.start-packing');
         Route::post('/orders/{order}/logistics', [OrderPackingController::class, 'updateLogistics'])->name('orders.logistics');
         Route::post('/orders/{order}/complete-packing', [OrderPackingController::class, 'completePacking'])->name('orders.complete-packing');
@@ -328,6 +329,8 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/',            [WarehouseDashboardController::class, 'index'])->name('dashboard');
         Route::get('/cutting/{variant}', [WarehouseDashboardController::class, 'cuttingForm'])->name('cutting.form');
         Route::post('/cutting/{variant}', [WarehouseDashboardController::class, 'executeCutting'])->name('cutting.execute');
+        Route::post('/cutting/{variant}/confirm', [WarehouseDashboardController::class, 'confirmCuttingMaterials'])->name('cutting.confirm');
+        Route::post('/cutting-batches/{batch}/revert', [WarehouseDashboardController::class, 'revertCuttingBatch'])->name('cutting-batches.revert');
         Route::post('/cutting-component-import-requests/{componentImportRequest}/receive', [WarehouseDashboardController::class, 'receiveCuttingComponentImportRequest'])->name('cutting-component-import-requests.receive');
         Route::get('/orders',      [WarehouseDashboardController::class, 'orders'])->name('orders');
         Route::post('/orders/{order}/logistics',        [WarehouseDashboardController::class, 'updateLogistics'])->name('orders.logistics');
@@ -471,6 +474,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/users-list', [CeoDashboardController::class, 'usersList'])->name('users-list');
         Route::get('/alerts', [CeoDashboardController::class, 'alerts'])->name('alerts');
         Route::get('/reports', [CeoDashboardController::class, 'reports'])->name('reports');
+        Route::get('/loss-report', [CeoDashboardController::class, 'lossReport'])->name('loss-report');
         Route::get('/weekly-report', [CeoDashboardController::class, 'weeklyReport'])->name('weekly-report');
         Route::get('/weekly-customer-report', [CeoDashboardController::class, 'weeklyCustomerReport'])->name('weekly-customer-report');
         Route::get('/financial-reports', [CeoDashboardController::class, 'financialReports'])->name('financial-reports');
@@ -518,6 +522,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/users-list', [CeoDashboardController::class, 'usersList'])->name('users-list');
         Route::get('/alerts', [CeoDashboardController::class, 'alerts'])->name('alerts');
         Route::get('/reports', [CeoDashboardController::class, 'reports'])->name('reports');
+        Route::get('/loss-report', [CeoDashboardController::class, 'lossReport'])->name('loss-report');
         Route::get('/weekly-report', [CeoDashboardController::class, 'weeklyReport'])->name('weekly-report');
         Route::get('/weekly-customer-report', [CeoDashboardController::class, 'weeklyCustomerReport'])->name('weekly-customer-report');
         Route::get('/financial-reports', [CeoDashboardController::class, 'financialReports'])->name('financial-reports');

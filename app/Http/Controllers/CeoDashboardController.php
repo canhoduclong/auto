@@ -11,6 +11,7 @@ use App\Models\OrderAdjustment;
 use App\Models\OrderItem;
 use App\Models\OrderReturn;
 use App\Models\ProductPriceLog;
+use App\Models\ProductCuttingBatch;
 use App\Models\Role;
 use App\Models\Team;
 use App\Models\Transaction;
@@ -635,6 +636,99 @@ class CeoDashboardController extends Controller
                 number_format((float) $row->total_amount) . ' đ',
             ])->all(),
         ]);
+    }
+
+    public function lossReport(Request $request)
+    {
+        $mode = in_array((string) $request->input('mode'), ['day', 'range'], true)
+            ? (string) $request->input('mode')
+            : 'day';
+
+        $selectedDate = $request->filled('date')
+            ? Carbon::parse((string) $request->input('date'))->toDateString()
+            : Carbon::today()->toDateString();
+
+        $fromDate = $mode === 'range' && $request->filled('from_date')
+            ? Carbon::parse((string) $request->input('from_date'))->toDateString()
+            : $selectedDate;
+
+        $toDate = $mode === 'range' && $request->filled('to_date')
+            ? Carbon::parse((string) $request->input('to_date'))->toDateString()
+            : $selectedDate;
+
+        if (Carbon::parse($fromDate)->gt(Carbon::parse($toDate))) {
+            [$fromDate, $toDate] = [$toDate, $fromDate];
+        }
+
+        $from = Carbon::parse($fromDate)->startOfDay();
+        $to = Carbon::parse($toDate)->endOfDay();
+
+        $batchQuery = ProductCuttingBatch::query()
+            ->with(['warehouse:id,name', 'targetVariant.product:id,name', 'performer:id,name'])
+            ->where('status', ProductCuttingBatch::STATUS_COMPLETED)
+            ->whereBetween('created_at', [$from, $to]);
+
+        $batches = (clone $batchQuery)
+            ->orderByDesc('created_at')
+            ->paginate(30)
+            ->appends($request->query());
+
+        $summary = (clone $batchQuery)
+            ->selectRaw('COUNT(*) as batch_count')
+            ->selectRaw('COALESCE(SUM(input_weight), 0) as input_weight')
+            ->selectRaw('COALESCE(SUM(actual_finished_weight), 0) as finished_weight')
+            ->selectRaw('COALESCE(SUM(actual_component_weight), 0) as component_weight')
+            ->selectRaw('COALESCE(SUM(loss_weight), 0) as loss_weight')
+            ->first();
+
+        $inputWeight = (float) ($summary?->input_weight ?? 0);
+        $lossWeight = (float) ($summary?->loss_weight ?? 0);
+        $summary->loss_percent = $inputWeight > 0 ? round($lossWeight / $inputWeight * 100, 3) : 0;
+
+        $dailyRows = (clone $batchQuery)
+            ->selectRaw('DATE(created_at) as day_key')
+            ->selectRaw('COUNT(*) as batch_count')
+            ->selectRaw('COALESCE(SUM(input_weight), 0) as input_weight')
+            ->selectRaw('COALESCE(SUM(actual_finished_weight), 0) as finished_weight')
+            ->selectRaw('COALESCE(SUM(actual_component_weight), 0) as component_weight')
+            ->selectRaw('COALESCE(SUM(loss_weight), 0) as loss_weight')
+            ->groupBy('day_key')
+            ->orderBy('day_key')
+            ->get()
+            ->map(function ($row) {
+                $input = (float) $row->input_weight;
+                $loss = (float) $row->loss_weight;
+                $row->loss_percent = $input > 0 ? round($loss / $input * 100, 3) : 0;
+                return $row;
+            });
+
+        $warehouseRows = (clone $batchQuery)
+            ->leftJoin('warehouses', 'warehouses.id', '=', 'product_cutting_batches.warehouse_id')
+            ->selectRaw('product_cutting_batches.warehouse_id')
+            ->selectRaw("COALESCE(warehouses.name, 'Kho') as warehouse_name")
+            ->selectRaw('COUNT(*) as batch_count')
+            ->selectRaw('COALESCE(SUM(input_weight), 0) as input_weight')
+            ->selectRaw('COALESCE(SUM(loss_weight), 0) as loss_weight')
+            ->groupBy('product_cutting_batches.warehouse_id', 'warehouses.name')
+            ->orderByDesc('loss_weight')
+            ->get()
+            ->map(function ($row) {
+                $input = (float) $row->input_weight;
+                $loss = (float) $row->loss_weight;
+                $row->loss_percent = $input > 0 ? round($loss / $input * 100, 3) : 0;
+                return $row;
+            });
+
+        return view('ceo.loss_report', compact(
+            'mode',
+            'selectedDate',
+            'fromDate',
+            'toDate',
+            'summary',
+            'dailyRows',
+            'warehouseRows',
+            'batches'
+        ));
     }
 
     private function resolveRange(Request $request): array

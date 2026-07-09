@@ -25,6 +25,9 @@
                 $canStartPacking = (bool) ($stockGuard['can_start_packing'] ?? true);
                 $stockShortages = collect($stockGuard['shortages'] ?? []);
                 $orderCuttingPlans = collect($cuttingPlansByOrder[$order->id] ?? []);
+                $activeCuttingBatches = collect($activeCuttingBatchesByOrder[$order->id] ?? []);
+                $hasActiveCuttingBatch = $activeCuttingBatches->isNotEmpty();
+                $isPackageOrderLayout = ($orderRoutePrefix ?? 'warehouse') === 'package';
                 $isPendingSaleConfirmation = $order->warehouse_adjustment_status === \App\Models\Order::WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION;
                 $isConfirmedBySale = $order->warehouse_adjustment_status === \App\Models\Order::WAREHOUSE_ADJUSTMENT_STATUS_SALE_CONFIRMED;
                 $isRejectedBySale = $order->warehouse_adjustment_status === \App\Models\Order::WAREHOUSE_ADJUSTMENT_STATUS_SALE_REJECTED;
@@ -51,7 +54,7 @@
             <div class="col-12" id="order-card-{{ $order->id }}">
                 <div class="wh-order-card-grid {{ $hasCustomerFeedback ? 'has-feedback' : 'no-feedback' }}">
                 <div class="wh-order-main">
-                <div class="card wh-order-card js-order-card" data-order-id="{{ $order->id }}">
+                <div class="card wh-order-card js-order-card {{ $hasActiveCuttingBatch ? 'has-cutting-in-progress' : '' }}" data-order-id="{{ $order->id }}">
                     <div class="d-flex align-items-center card-header bg-white">
                         @php
                             $isPacked = in_array($order->status, ['packed', 'packed_waiting_pickup', 'delivering', 'delivered', 'completed'], true);
@@ -78,6 +81,42 @@
                     </div>
 
                     <div class="card-body">
+                        @if($hasActiveCuttingBatch)
+                            <div class="alert alert-warning py-2 px-3 mb-2">
+                                <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
+                                    <div>
+                                        <div class="fw-semibold">
+                                            <i class="bi bi-scissors me-1"></i>Đã xác nhận lấy hàng pha lóc
+                                        </div>
+                                        <div class="small text-muted">Đơn đang chờ bộ phận đóng hàng hoàn thiện kg thực tế và nhập kho.</div>
+                                    </div>
+                                    <div class="d-flex gap-2 flex-wrap">
+                                        @foreach($activeCuttingBatches as $batch)
+                                            @php
+                                                $batchModalId = 'complete-cutting-batch-' . (int) $batch->id;
+                                            @endphp
+                                            @if($isPackageOrderLayout)
+                                                <button type="button"
+                                                        class="btn btn-sm btn-warning"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#{{ $batchModalId }}">
+                                                    <i class="bi bi-play-fill me-1"></i>Thực hiện
+                                                </button>
+                                            @else
+                                                <form method="POST"
+                                                      action="{{ route('warehouse.cutting-batches.revert', $batch) }}"
+                                                      onsubmit="return confirm('Quay lại xác nhận lấy hàng pha lóc và hoàn nguyên tồn nguyên liệu?')">
+                                                    @csrf
+                                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                                        <i class="bi bi-arrow-counterclockwise me-1"></i>Quay lại
+                                                    </button>
+                                                </form>
+                                            @endif
+                                        @endforeach
+                                    </div>
+                                </div>
+                            </div>
+                        @endif
                         <div class="wh-section">
                             @if($isConfirmedBySale)
                                 <div class="alert alert-success py-2 px-3 mb-2">
@@ -745,6 +784,83 @@
                 @foreach($orderCuttingPlans as $cuttingPlan)
                     @include('warehouse.cutting._order_modal', ['cuttingOrder' => $order, 'cuttingPlan' => $cuttingPlan, 'selectedDate' => $selectedDate ?? now()->toDateString()])
                 @endforeach
+                @if($isPackageOrderLayout)
+                    @foreach($activeCuttingBatches as $batch)
+                        @php
+                            $batchModalId = 'complete-cutting-batch-' . (int) $batch->id;
+                            $plannedComponents = collect($batch->planned_components ?? []);
+                            $targetName = trim(($batch->targetVariant?->product?->name ?? 'Sản phẩm') . ' ' . ($batch->targetVariant?->name ?: ''));
+                        @endphp
+                        <div class="modal fade" id="{{ $batchModalId }}" tabindex="-1" aria-hidden="true">
+                            <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                                <div class="modal-content border-warning">
+                                    <form method="POST" action="{{ route('package.cutting-batches.complete', $batch) }}">
+                                        @csrf
+                                        <div class="modal-header bg-warning-subtle">
+                                            <div>
+                                                <h5 class="modal-title">Hoàn thiện pha lóc</h5>
+                                                <div class="small text-muted">{{ $order->code }} · {{ $targetName }}</div>
+                                            </div>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <div class="alert alert-warning py-2">
+                                                Nguyên liệu đã lấy: <strong>{{ format_kg((float) $batch->input_weight) }}</strong>.
+                                                Nhập kg thực tế để ghi nhận nhập kho và tính hao hụt.
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label fw-semibold">Thành phẩm thực tế</label>
+                                                <div class="input-group">
+                                                    <input type="number" name="actual_finished_weight" class="form-control" min="0.001" step="0.001" value="{{ number_format((float) $batch->planned_finished_weight, 3, '.', '') }}" required>
+                                                    <span class="input-group-text">kg</span>
+                                                </div>
+                                            </div>
+                                            <div class="fw-semibold mb-2">Thành phần còn lại thực tế</div>
+                                            <div class="table-responsive">
+                                                <table class="table table-sm align-middle mb-0">
+                                                    <thead class="table-light">
+                                                        <tr>
+                                                            <th>Thành phần</th>
+                                                            <th class="text-end" style="width:180px;">Kg thực tế</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @forelse($plannedComponents as $index => $component)
+                                                            <tr>
+                                                                <td>
+                                                                    <div class="fw-semibold">{{ $component['name'] ?? 'Thành phần' }}</div>
+                                                                    <input type="hidden" name="components[{{ $index }}][variant_id]" value="{{ (int) ($component['variant_id'] ?? 0) }}">
+                                                                </td>
+                                                                <td>
+                                                                    <div class="input-group input-group-sm">
+                                                                        <input type="number" name="components[{{ $index }}][weight]" class="form-control text-end" min="0" step="0.001" value="{{ number_format((float) ($component['weight'] ?? 0), 3, '.', '') }}">
+                                                                        <span class="input-group-text">kg</span>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        @empty
+                                                            <tr><td colspan="2" class="text-center text-muted py-3">Không có thành phần còn lại.</td></tr>
+                                                        @endforelse
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                            <div class="form-check mt-3">
+                                                <input class="form-check-input" type="checkbox" value="1" name="defer_components" id="{{ $batchModalId }}-defer">
+                                                <label class="form-check-label" for="{{ $batchModalId }}-defer">Nhập sau các thành phần còn lại</label>
+                                            </div>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Đóng</button>
+                                            <button type="submit" class="btn btn-success">
+                                                <i class="bi bi-check2-circle me-1"></i>Hoàn thiện nhập kho
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    @endforeach
+                @endif
                 @if($hasCustomerFeedback)
                 <div class="wh-customer-feedback-panel is-alert">
                     <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
