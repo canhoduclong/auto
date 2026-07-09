@@ -362,6 +362,10 @@ class ProductCuttingService
                 ->filter(fn ($row) => $row['variant_id'] > 0 && $row['quantity'] > 0)
                 ->values()
                 ->all();
+            $inputWeight = (float) ($preview['input_weight'] ?? 0);
+            $actualComponentWeight = round((float) collect($componentRows)->sum('quantity'), 3);
+            $lossWeight = round(max(0, $inputWeight - $actualFinishedWeight - $actualComponentWeight), 3);
+            $lossPercent = $inputWeight > 0 ? round($lossWeight / $inputWeight * 100, 3) : 0;
             $componentDocument = $deferComponents
                 ? null
                 : $this->importRows($warehouseId, $componentRows, 'Nhập kho thành phần phát sinh từ pha lóc.', $userId);
@@ -373,8 +377,12 @@ class ProductCuttingService
                 'export_document_id' => $exportDocument->id,
                 'finished_import_document_id' => $finishedDocument->id,
                 'component_import_document_id' => $componentDocument?->id,
+                'input_weight' => $inputWeight,
                 'planned_finished_weight' => (float) $preview['finished_weight'],
                 'actual_finished_weight' => $actualFinishedWeight,
+                'actual_component_weight' => $actualComponentWeight,
+                'loss_weight' => $lossWeight,
+                'loss_percent' => $lossPercent,
                 'planned_components' => $preview['components']->all(),
                 'actual_components' => $componentRows,
                 'note' => $note,

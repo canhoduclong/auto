@@ -100,6 +100,20 @@
                 .cutting-order-dialog .modal-header {
                     flex-shrink: 0;
                 }
+                .js-cutting-modal.is-cutting-in-progress .modal-content {
+                    border: 2px solid #f59e0b;
+                    background: #fffbeb;
+                }
+                .js-cutting-modal.is-cutting-in-progress .modal-header,
+                .js-cutting-modal.is-cutting-in-progress .modal-footer {
+                    background: #fef3c7;
+                }
+                .cutting-actual-panel {
+                    border: 1px solid #facc15;
+                    background: #fff7ed;
+                    border-radius: 8px;
+                    padding: 12px;
+                }
                 @media (max-width: 575.98px) {
                     .cutting-order-dialog .modal-content {
                         max-height: calc(100vh - 12px);
@@ -124,7 +138,7 @@
                     @csrf
                     <input type="hidden" name="order_id" value="{{ $modalOrder->id }}">
                     <input type="hidden" name="selected_date" value="{{ $selectedDateValue }}">
-                    <input type="hidden" name="actual_finished_weight" class="js-cutting-actual-finished" value="{{ (float) data_get($plan, 'preview.finished_weight', 0) }}">
+                    <input type="hidden" class="js-cutting-actual-finished" value="{{ (float) data_get($plan, 'preview.finished_weight', 0) }}">
                     <div class="js-cutting-components-hidden"></div>
                     <textarea name="note" class="d-none">Xuất kho nguyên con để pha lóc bổ sung cho đơn {{ $modalOrder->code }}.</textarea>
 
@@ -275,6 +289,32 @@
                         </div>
 
                         <div class="alert alert-info mt-3 mb-0 js-cutting-summary d-none"></div>
+                        <div class="cutting-actual-panel mt-3 js-cutting-actual-panel d-none">
+                            <div class="fw-semibold mb-2">4. Hoàn thiện: nhập kg thực tế sau pha lóc</div>
+                            <div class="row g-2 mb-2">
+                                <div class="col-md-4">
+                                    <label class="form-label small mb-1">Thành phẩm thực tế</label>
+                                    <div class="input-group input-group-sm">
+                                        <input type="number" name="actual_finished_weight" step="0.001" min="0.001" class="form-control js-cutting-actual-finished-input" value="{{ (float) data_get($plan, 'preview.finished_weight', 0) }}">
+                                        <span class="input-group-text">kg</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-8">
+                                    <div class="small text-muted mt-md-4 js-cutting-loss-preview"></div>
+                                </div>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Thành phần còn lại</th>
+                                            <th class="text-end" style="width:180px;">Kg thực tế</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="js-cutting-actual-components"></tbody>
+                                </table>
+                            </div>
+                        </div>
                         <div class="form-check mt-3">
                             <input class="form-check-input" type="checkbox" value="1" name="defer_components" id="{{ $modalId }}-defer-components">
                             <label class="form-check-label fw-semibold" for="{{ $modalId }}-defer-components">
@@ -291,8 +331,11 @@
                         <button type="button" class="btn btn-primary js-cutting-build-preview">
                             Tính lại
                         </button>
-                        <button type="submit" class="btn btn-success js-cutting-confirm d-none">
-                            Xác nhận thực hiện
+                        <button type="button" class="btn btn-warning js-cutting-confirm d-none">
+                            Xác nhận lấy hàng
+                        </button>
+                        <button type="submit" class="btn btn-success js-cutting-complete d-none">
+                            Hoàn thiện nhập kho
                         </button>
                     </div>
                 </form>
@@ -308,6 +351,15 @@
                 function formatKg(value) {
                     const num = Number(value || 0);
                     return num.toLocaleString('vi-VN', { minimumFractionDigits: 0, maximumFractionDigits: 3 }) + ' kg';
+                }
+
+                function escapeHtml(value) {
+                    return String(value ?? '')
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/"/g, '&quot;')
+                        .replace(/'/g, '&#039;');
                 }
 
                 function renderCuttingPreview(modal) {
@@ -373,15 +425,41 @@
                         finishedWeight = Math.max(0, inputWeight - removedWeight);
                     }
                     modal.querySelector('.js-cutting-actual-finished').value = finishedWeight.toFixed(3);
+                    modal.dataset.inputWeight = inputWeight.toFixed(3);
+                    modal.dataset.plannedFinishedWeight = finishedWeight.toFixed(3);
 
                     const hidden = modal.querySelector('.js-cutting-components-hidden');
                     hidden.innerHTML = '';
-                    Array.from(components.values()).forEach((component, index) => {
-                        hidden.insertAdjacentHTML('beforeend', `
-                            <input type="hidden" name="components[${index}][variant_id]" value="${component.variant_id}">
-                            <input type="hidden" name="components[${index}][weight]" value="${component.weight.toFixed(3)}">
-                        `);
-                    });
+
+                    const actualFinishedInput = modal.querySelector('.js-cutting-actual-finished-input');
+                    if (actualFinishedInput && !modal.classList.contains('is-cutting-in-progress')) {
+                        actualFinishedInput.value = finishedWeight.toFixed(3);
+                    }
+
+                    const actualComponentsBody = modal.querySelector('.js-cutting-actual-components');
+                    if (actualComponentsBody && !modal.classList.contains('is-cutting-in-progress')) {
+                        actualComponentsBody.innerHTML = '';
+                        if (components.size) {
+                            Array.from(components.values()).forEach((component, index) => {
+                                actualComponentsBody.insertAdjacentHTML('beforeend', `
+                                    <tr>
+                                        <td>
+                                            <div class="fw-semibold">${escapeHtml(component.name || 'Thành phần')}</div>
+                                            <input type="hidden" name="components[${index}][variant_id]" value="${component.variant_id}">
+                                        </td>
+                                        <td>
+                                            <div class="input-group input-group-sm">
+                                                <input type="number" name="components[${index}][weight]" class="form-control text-end js-cutting-actual-component-weight" min="0" step="0.001" value="${component.weight.toFixed(3)}">
+                                                <span class="input-group-text">kg</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                `);
+                            });
+                        } else {
+                            actualComponentsBody.innerHTML = '<tr><td colspan="2" class="text-muted text-center py-2">Không có thành phần còn lại.</td></tr>';
+                        }
+                    }
 
                     const sourceHtml = selectedRows.length
                         ? selectedRows.map((row) => `<li>${row.quantity} ${row.label} size ${formatKg(row.size)}</li>`).join('')
@@ -434,6 +512,8 @@
                         confirmButton.classList.toggle('d-none', !canConfirm);
                         confirmButton.disabled = !canConfirm;
                     }
+
+                    updateCuttingLossPreview(modal);
                 }
 
                 function formatCompactNumber(value) {
@@ -442,6 +522,31 @@
                         minimumFractionDigits: 0,
                         maximumFractionDigits: 3,
                     });
+                }
+
+                function cuttingNumber(value) {
+                    const parsed = Number(String(value ?? '').replace(',', '.'));
+                    return Number.isFinite(parsed) ? parsed : 0;
+                }
+
+                function actualComponentWeight(modal) {
+                    return Array.from(modal.querySelectorAll('.js-cutting-actual-component-weight'))
+                        .reduce((sum, input) => sum + cuttingNumber(input.value), 0);
+                }
+
+                function updateCuttingLossPreview(modal) {
+                    const inputWeight = cuttingNumber(modal.dataset.inputWeight);
+                    const finishedWeight = cuttingNumber(modal.querySelector('.js-cutting-actual-finished-input')?.value);
+                    const componentWeight = actualComponentWeight(modal);
+                    const lossWeight = Math.max(0, inputWeight - finishedWeight - componentWeight);
+                    const lossPercent = inputWeight > 0 ? lossWeight / inputWeight * 100 : 0;
+                    const preview = modal.querySelector('.js-cutting-loss-preview');
+                    if (preview) {
+                        preview.innerHTML = `
+                            Tổng nguyên liệu ${formatKg(inputWeight)} · đầu ra thực tế ${formatKg(finishedWeight + componentWeight)}
+                            · hao hụt <strong class="${lossWeight > 0 ? 'text-danger' : 'text-success'}">${formatKg(lossWeight)} (${formatCompactNumber(lossPercent)}%)</strong>
+                        `;
+                    }
                 }
 
                 document.querySelectorAll('.js-cutting-modal').forEach((modal) => {
@@ -518,16 +623,13 @@
                         `;
                     }
 
-                    function escapeHtml(value) {
-                        return String(value ?? '')
-                            .replace(/&/g, '&amp;')
-                            .replace(/</g, '&lt;')
-                            .replace(/>/g, '&gt;')
-                            .replace(/"/g, '&quot;')
-                            .replace(/'/g, '&#039;');
-                    }
-
                     modal.querySelectorAll('.js-cutting-material-body tr').forEach(bindMaterialRow);
+
+                    modal.addEventListener('input', function (event) {
+                        if (event.target.matches('.js-cutting-actual-finished-input, .js-cutting-actual-component-weight')) {
+                            updateCuttingLossPreview(modal);
+                        }
+                    });
 
                     modal.querySelector('.js-cutting-material-add')?.addEventListener('click', function () {
                         const select = modal.querySelector('.js-cutting-material-select');
@@ -562,6 +664,35 @@
 
                     modal.querySelector('.js-cutting-build-preview')?.addEventListener('click', function () {
                         refreshCuttingPreview();
+                    });
+
+                    modal.querySelector('.js-cutting-confirm')?.addEventListener('click', function () {
+                        refreshCuttingPreview();
+                        modal.classList.add('is-cutting-in-progress');
+                        modal.querySelector('.js-cutting-actual-panel')?.classList.remove('d-none');
+                        modal.querySelector('.js-cutting-build-preview')?.classList.add('d-none');
+                        modal.querySelector('.js-cutting-confirm')?.classList.add('d-none');
+                        modal.querySelector('.js-cutting-complete')?.classList.remove('d-none');
+                        modal.querySelector('.js-cutting-material-select')?.setAttribute('disabled', 'disabled');
+                        modal.querySelector('.js-cutting-material-add')?.setAttribute('disabled', 'disabled');
+                        modal.querySelectorAll('.js-cutting-material-check').forEach((checkbox) => checkbox.setAttribute('disabled', 'disabled'));
+                        modal.querySelectorAll('.js-cutting-material-qty').forEach((input) => input.setAttribute('readonly', 'readonly'));
+                        modal.querySelectorAll('.js-cutting-material-remove').forEach((button) => button.setAttribute('disabled', 'disabled'));
+                        updateCuttingLossPreview(modal);
+                    });
+
+                    modal.querySelector('.js-cutting-execute-form')?.addEventListener('submit', function (event) {
+                        if (!modal.classList.contains('is-cutting-in-progress')) {
+                            event.preventDefault();
+                            refreshCuttingPreview();
+                            return;
+                        }
+
+                        const actualFinished = cuttingNumber(modal.querySelector('.js-cutting-actual-finished-input')?.value);
+                        if (actualFinished <= 0) {
+                            event.preventDefault();
+                            alert('Vui lòng nhập kg thành phẩm thực tế lớn hơn 0.');
+                        }
                     });
 
                     modal.addEventListener('shown.bs.modal', function () {
