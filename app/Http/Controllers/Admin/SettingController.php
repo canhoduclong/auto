@@ -294,7 +294,7 @@ class SettingController extends Controller
         return back()->with('error', 'Sai key deploy.');
     }
 
-    $deployPath = '/home/hltntc/public_html';
+    $deployPath = '/home/hoanglongtnt/web';
     $branch = 'hoanglong';
     $logs = [];
 

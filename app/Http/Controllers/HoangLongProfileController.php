@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Product;
+use App\Models\ProductVariant;
 use App\Models\Setting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -73,11 +75,74 @@ class HoangLongProfileController extends Controller
     {
         $profileInfo = Setting::get(self::INFO_KEY, '');
         $documents = $this->documents();
+        $priceProducts = $this->dailyPriceProducts();
+        $totalPriceVariants = (int) $priceProducts->sum(fn (Product $product) => (int) ($product->total_variants_count ?? 0));
         $settings = Cache::remember('settings', 60, function () {
             return Setting::all()->keyBy('key');
         });
 
-        return view('site.hoang-long-profile', compact('profileInfo', 'documents', 'settings'));
+        return view('site.hoang-long-profile', compact(
+            'profileInfo',
+            'documents',
+            'settings',
+            'priceProducts',
+            'totalPriceVariants'
+        ));
+    }
+
+    private function dailyPriceProducts()
+    {
+        return Product::query()
+            ->with([
+                'avatar.media',
+                'variants.latestPriceLog',
+            ])
+            ->where('status', true)
+            ->whereHas('variants', function ($variantQuery) {
+                $variantQuery->whereHas('latestPriceLog', function ($priceLogQuery) {
+                    $priceLogQuery->where('new_price', '>', 0);
+                });
+            })
+            ->orderBy('name')
+            ->get()
+            ->map(function (Product $product) {
+                $variantRows = $product->variants
+                    ->map(function (ProductVariant $variant) {
+                        $price = (float) ($variant->latestPriceLog?->new_price ?? 0);
+
+                        $variant->setAttribute('current_price', $price);
+                        $variant->setAttribute('price_key', number_format($price, 4, '.', ''));
+
+                        return $variant;
+                    })
+                    ->filter(fn (ProductVariant $variant) => (float) ($variant->current_price ?? 0) > 0)
+                    ->values();
+
+                if ($variantRows->isEmpty()) {
+                    return null;
+                }
+
+                $groupedByPrice = $variantRows->groupBy(fn ($variant) => (string) $variant->price_key);
+                $representativeGroup = $groupedByPrice
+                    ->sortByDesc(fn ($items) => $items->count())
+                    ->first();
+
+                $representativePrice = (float) ($representativeGroup?->first()?->current_price ?? 0);
+                $representativePriceKey = (string) ($representativeGroup?->first()?->price_key ?? number_format(0, 4, '.', ''));
+
+                $differentVariants = $variantRows
+                    ->filter(fn ($variant) => (string) $variant->price_key !== $representativePriceKey)
+                    ->sortBy('name')
+                    ->values();
+
+                $product->setAttribute('current_price', $representativePrice);
+                $product->setAttribute('total_variants_count', $variantRows->count());
+                $product->setRelation('priceDiffVariants', $differentVariants);
+
+                return $product;
+            })
+            ->filter()
+            ->values();
     }
 
     private function documents(): array
