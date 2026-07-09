@@ -79,6 +79,33 @@
         color: #fff;
         border-radius: 8px;
     }
+    .wh-orders-scroll-modal .modal-content {
+        max-height: calc(100vh - 32px);
+    }
+    .wh-orders-scroll-modal .modal-content > form {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        max-height: calc(100vh - 32px);
+    }
+    .wh-orders-scroll-modal .modal-header,
+    .wh-orders-scroll-modal .modal-footer {
+        flex-shrink: 0;
+    }
+    .wh-orders-scroll-modal .modal-body {
+        overflow-y: auto;
+        min-height: 0;
+        max-height: calc(100vh - 170px);
+    }
+    @media (max-width: 575.98px) {
+        .wh-orders-scroll-modal .modal-content,
+        .wh-orders-scroll-modal .modal-content > form {
+            max-height: calc(100vh - 12px);
+        }
+        .wh-orders-scroll-modal .modal-body {
+            max-height: calc(100vh - 150px);
+        }
+    }
     .wh-order-index {
         border-radius: 50px;
         width: 40px;
@@ -1068,7 +1095,7 @@
 </div>
 
 <div class="modal fade" id="warehouseAdjustmentProductModal" tabindex="-1" aria-labelledby="warehouseAdjustmentProductModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable wh-orders-scroll-modal">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="warehouseAdjustmentProductModalLabel">Chọn sản phẩm thêm vào đơn</h5>

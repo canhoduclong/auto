@@ -823,7 +823,7 @@
                             $targetName = trim(($batch->targetVariant?->product?->name ?? 'Sản phẩm') . ' ' . ($batch->targetVariant?->name ?: ''));
                         @endphp
                         <div class="modal fade" id="{{ $batchModalId }}" tabindex="-1" aria-hidden="true">
-                            <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                            <div class="modal-dialog modal-lg modal-dialog-scrollable wh-orders-scroll-modal">
                                 <div class="modal-content border-warning">
                                     <form method="POST" action="{{ route('package.cutting-batches.complete', $batch) }}">
                                         @csrf
