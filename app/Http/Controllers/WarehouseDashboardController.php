@@ -1380,6 +1380,7 @@ class WarehouseDashboardController extends Controller
             }
 
             $plan = $service->planForDemand($targetVariant, $warehouseId, (float) ($shortage['short_qty'] ?? 0));
+            $plan['material_options'] = $service->sourceMaterialOptions($targetVariant, $warehouseId);
             $plan['shortage'] = $shortage;
             $plans[$orderId][$variantId] = $plan;
         }

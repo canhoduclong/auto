@@ -5,6 +5,7 @@
     $modalId = 'cutting-order-modal-' . (int) ($modalOrder?->id ?? 0) . '-' . $targetVariantId;
     $selectedDateValue = $selectedDate ?? now()->toDateString();
     $materials = collect($plan['materials'] ?? []);
+    $materialOptions = collect($plan['material_options'] ?? $materials);
     $selectedMaterials = collect($plan['selected_materials'] ?? []);
     $shortage = $plan['shortage'] ?? [];
     $orderItems = collect($modalOrder?->items ?? []);
@@ -38,6 +39,26 @@
             ];
         })->values()->all(),
         'materials' => $materials->map(function ($material) {
+            $removedIds = collect($material['removed_component_ids'] ?? [])->map(fn ($id) => (int) $id)->all();
+            $targetIds = collect($material['target_component_ids'] ?? [])->map(fn ($id) => (int) $id)->all();
+
+            return [
+                'variant_id' => (int) ($material['variant_id'] ?? 0),
+                'label' => (string) ($material['label'] ?? 'Nguyên con'),
+                'size' => (float) ($material['size'] ?? 0),
+                'available' => (float) ($material['available'] ?? 0),
+                'unit_weight' => (float) ($material['unit_weight'] ?? 0),
+                'output_per_unit' => (float) ($material['output_per_unit'] ?? 0),
+                'target_component_ids' => $targetIds,
+                'removed_component_ids' => $removedIds,
+                'components' => collect($material['components'] ?? [])->map(fn ($component) => [
+                    'variant_id' => (int) ($component['variant_id'] ?? 0),
+                    'name' => (string) ($component['name'] ?? 'Thành phần'),
+                    'standard_weight' => (float) ($component['standard_weight'] ?? 0),
+                ])->values()->all(),
+            ];
+        })->values()->all(),
+        'material_options' => $materialOptions->map(function ($material) {
             $removedIds = collect($material['removed_component_ids'] ?? [])->map(fn ($id) => (int) $id)->all();
             $targetIds = collect($material['target_component_ids'] ?? [])->map(fn ($id) => (int) $id)->all();
 
@@ -175,7 +196,27 @@
                         </div>
 
                         <div class="fw-semibold mb-1">2. Danh sách sản phẩm/biến thể dùng để pha lóc</div>
-                        <div class="small text-muted mb-2">Chỉ hiển thị sản phẩm không thuộc loại Pha lóc và đã có cấu hình thành phần phù hợp.</div>
+                        <div class="small text-muted mb-2">Danh sách bên dưới là gợi ý phù hợp; có thể thêm biến thể nguyên con khác đã có cấu hình thành phần.</div>
+                        <div class="row g-2 align-items-end mb-2">
+                            <div class="col-md-8">
+                                <label class="form-label small mb-1">Thêm biến thể nguyên con</label>
+                                <select class="form-select form-select-sm js-cutting-material-select">
+                                    <option value="">Chọn biến thể nguyên con...</option>
+                                    @foreach($materialOptions as $option)
+                                        <option value="{{ (int) ($option['variant_id'] ?? 0) }}">
+                                            {{ $option['label'] ?? 'Nguyên con' }}
+                                            - tồn {{ rtrim(rtrim(number_format((float) ($option['available'] ?? 0), 3, '.', ''), '0'), '.') }}
+                                            - dự kiến {{ format_kg((float) ($option['output_per_unit'] ?? 0)) }}/con
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <button type="button" class="btn btn-outline-primary btn-sm w-100 js-cutting-material-add">
+                                    Thêm vào danh sách
+                                </button>
+                            </div>
+                        </div>
                         <div class="table-responsive">
                             <table class="table table-sm align-middle mb-0">
                                 <thead>
@@ -189,7 +230,7 @@
                                         <th class="text-end" style="width:70px;"></th>
                                     </tr>
                                 </thead>
-                                <tbody>
+                                <tbody class="js-cutting-material-body">
                                     @forelse($materials as $index => $material)
                                         @php
                                             $materialId = (int) ($material['variant_id'] ?? 0);
@@ -262,7 +303,8 @@
 
                 function renderCuttingPreview(modal) {
                     const plan = JSON.parse(modal.dataset.plan || '{}');
-                    const materialsById = new Map((plan.materials || []).map((material) => [String(material.variant_id), material]));
+                    const materialOptions = plan.material_options || plan.materials || [];
+                    const materialsById = new Map(materialOptions.map((material) => [String(material.variant_id), material]));
                     const selectedRows = [];
                     const components = new Map();
                     let inputWeight = 0;
@@ -395,33 +437,118 @@
 
                 document.querySelectorAll('.js-cutting-modal').forEach((modal) => {
                     const refreshCuttingPreview = () => renderCuttingPreview(modal);
+                    const plan = JSON.parse(modal.dataset.plan || '{}');
+                    const materialOptions = plan.material_options || plan.materials || [];
+                    const materialsById = new Map(materialOptions.map((material) => [String(material.variant_id), material]));
 
-                    modal.querySelectorAll('.js-cutting-material-check').forEach((checkbox) => {
-                        checkbox.addEventListener('change', function () {
-                            const qtyInput = checkbox.closest('tr')?.querySelector('.js-cutting-material-qty');
-                            if (!qtyInput) return;
-                            if (checkbox.checked && Number(qtyInput.value || 0) <= 0) qtyInput.value = '1';
-                            if (!checkbox.checked) qtyInput.value = '0';
+                    function bindMaterialRow(row) {
+                        if (!row || row.dataset.bound === '1') {
+                            return;
+                        }
+                        row.dataset.bound = '1';
+
+                        const checkbox = row.querySelector('.js-cutting-material-check');
+                        if (checkbox) {
+                            checkbox.addEventListener('change', function () {
+                                const qtyInput = checkbox.closest('tr')?.querySelector('.js-cutting-material-qty');
+                                if (!qtyInput) return;
+                                if (checkbox.checked && Number(qtyInput.value || 0) <= 0) qtyInput.value = '1';
+                                if (!checkbox.checked) qtyInput.value = '0';
+                                refreshCuttingPreview();
+                            });
+                        }
+
+                        const input = row.querySelector('.js-cutting-material-qty');
+                        if (input) {
+                            const syncQty = function () {
+                                const rowCheckbox = input.closest('tr')?.querySelector('.js-cutting-material-check');
+                                if (rowCheckbox) rowCheckbox.checked = Number(input.value || 0) > 0;
+                                refreshCuttingPreview();
+                            };
+
+                            input.addEventListener('input', syncQty);
+                            input.addEventListener('change', syncQty);
+                        }
+
+                        row.querySelector('.js-cutting-material-remove')?.addEventListener('click', function () {
+                            row.remove();
                             refreshCuttingPreview();
                         });
-                    });
+                    }
 
-                    modal.querySelectorAll('.js-cutting-material-qty').forEach((input) => {
-                        const syncQty = function () {
-                            const checkbox = input.closest('tr')?.querySelector('.js-cutting-material-check');
-                            if (checkbox) checkbox.checked = Number(input.value || 0) > 0;
+                    function materialRowHtml(material) {
+                        const rowIndex = Date.now() + '-' + String(material.variant_id || 0);
+                        return `
+                            <tr>
+                                <td>
+                                    <input type="checkbox" class="form-check-input js-cutting-material-check" checked>
+                                </td>
+                                <td>
+                                    <input type="hidden" name="materials[${rowIndex}][variant_id]" value="${material.variant_id}">
+                                    <div class="fw-semibold">${escapeHtml(material.label || 'Nguyên con')}</div>
+                                </td>
+                                <td class="text-end">${formatKg(material.size || 0)}</td>
+                                <td class="text-end">${formatCompactNumber(material.available || 0)}</td>
+                                <td class="text-end">${formatKg(material.output_per_unit || 0)}</td>
+                                <td>
+                                    <input type="number"
+                                           name="materials[${rowIndex}][quantity]"
+                                           class="form-control form-control-sm js-cutting-material-qty"
+                                           min="0"
+                                           max="${Number(material.available || 0)}"
+                                           step="1"
+                                           value="1"
+                                           data-variant-id="${material.variant_id}">
+                                </td>
+                                <td class="text-end">
+                                    <button type="button" class="btn btn-sm btn-outline-danger js-cutting-material-remove" title="Xóa biến thể khỏi danh sách">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                    }
+
+                    function escapeHtml(value) {
+                        return String(value ?? '')
+                            .replace(/&/g, '&amp;')
+                            .replace(/</g, '&lt;')
+                            .replace(/>/g, '&gt;')
+                            .replace(/"/g, '&quot;')
+                            .replace(/'/g, '&#039;');
+                    }
+
+                    modal.querySelectorAll('.js-cutting-material-body tr').forEach(bindMaterialRow);
+
+                    modal.querySelector('.js-cutting-material-add')?.addEventListener('click', function () {
+                        const select = modal.querySelector('.js-cutting-material-select');
+                        const variantId = String(select?.value || '');
+                        if (!variantId) {
+                            return;
+                        }
+
+                        const existingInput = Array.from(modal.querySelectorAll('.js-cutting-material-qty'))
+                            .find((input) => String(input.dataset.variantId || '') === variantId);
+                        if (existingInput) {
+                            existingInput.value = Math.max(1, Number(existingInput.value || 0));
+                            const existingCheckbox = existingInput.closest('tr')?.querySelector('.js-cutting-material-check');
+                            if (existingCheckbox) existingCheckbox.checked = true;
                             refreshCuttingPreview();
-                        };
+                            select.value = '';
+                            return;
+                        }
 
-                        input.addEventListener('input', syncQty);
-                        input.addEventListener('change', syncQty);
-                    });
+                        const material = materialsById.get(variantId);
+                        const body = modal.querySelector('.js-cutting-material-body');
+                        if (!material || !body) {
+                            return;
+                        }
 
-                    modal.querySelectorAll('.js-cutting-material-remove').forEach((button) => {
-                        button.addEventListener('click', function () {
-                            button.closest('tr')?.remove();
-                            refreshCuttingPreview();
-                        });
+                        body.querySelector('td[colspan]')?.closest('tr')?.remove();
+                        body.insertAdjacentHTML('beforeend', materialRowHtml(material));
+                        bindMaterialRow(body.lastElementChild);
+                        refreshCuttingPreview();
+                        select.value = '';
                     });
 
                     modal.querySelector('.js-cutting-build-preview')?.addEventListener('click', function () {

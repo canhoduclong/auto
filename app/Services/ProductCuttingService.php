@@ -48,6 +48,29 @@ class ProductCuttingService
 
     public function sourceMaterials(ProductVariant $targetVariant, ?int $warehouseId): Collection
     {
+        return $this->sourceMaterialRows($targetVariant, $warehouseId)
+            ->filter(fn (array $row) => $row['output_component_ids']->isNotEmpty())
+            ->values();
+    }
+
+    public function sourceMaterialOptions(ProductVariant $targetVariant, ?int $warehouseId): Collection
+    {
+        return $this->sourceMaterialRows($targetVariant, $warehouseId)
+            ->filter(fn (array $row) => collect($row['components'] ?? [])->isNotEmpty() && (float) ($row['available'] ?? 0) > 0)
+            ->map(function (array $material) use ($targetVariant) {
+                $singlePreview = $this->preview($targetVariant, [
+                    ['variant_id' => (int) $material['variant_id'], 'quantity' => 1],
+                ]);
+
+                $material['output_per_unit'] = (float) ($singlePreview['finished_weight'] ?? 0);
+
+                return $material;
+            })
+            ->values();
+    }
+
+    private function sourceMaterialRows(ProductVariant $targetVariant, ?int $warehouseId): Collection
+    {
         $targetVariant->loadMissing('product');
         $removedNames = $this->removedComponentNames($targetVariant);
         $targetVariantId = (int) $targetVariant->id;
@@ -92,9 +115,7 @@ class ProductCuttingService
                         ? $targetComponentIds
                         : $removedComponentIds,
                 ];
-            })
-            ->filter(fn (array $row) => $row['output_component_ids']->isNotEmpty())
-            ->values();
+            });
     }
 
     public function planForDemand(ProductVariant $targetVariant, ?int $warehouseId, float $demand): array
