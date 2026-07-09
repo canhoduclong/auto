@@ -179,13 +179,18 @@
         @if(($variant->product?->product_type ?? '') === \App\Models\Product::TYPE_WHOLE && $variant->product?->cuttingComponents?->isNotEmpty())
             @php
                 $ratiosByComponent = $variant->componentRatios->keyBy('component_product_variant_id');
+                $componentCount = max(1, $variant->product->cuttingComponents->count());
+                $variantKg = (float) $variant->effective_kg;
+                $defaultComponentWeight = round($variantKg / $componentCount, 3);
+                $defaultComponentPercentage = round(100 / $componentCount, 3);
             @endphp
             <div class="modal fade" id="quickCuttingComponents{{ $variant->id }}" tabindex="-1" aria-labelledby="quickCuttingComponents{{ $variant->id }}Label" aria-hidden="true">
                 <div class="modal-dialog modal-lg modal-dialog-scrollable">
                     <div class="modal-content">
                         <form method="POST"
                               action="{{ route('product-variants.cutting-components.quick-update', $variant) }}"
-                              class="quick-cutting-components-form">
+                              class="quick-cutting-components-form"
+                              data-variant-kg="{{ number_format($variantKg, 3, '.', '') }}">
                             @csrf
                             <div class="modal-header">
                                 <div>
@@ -209,6 +214,14 @@
                                                 @php
                                                     $componentVariant = $component->componentVariant;
                                                     $ratio = $ratiosByComponent->get($component->component_product_variant_id);
+                                                    $defaultWeight = $loop->last
+                                                        ? max(0, $variantKg - ($defaultComponentWeight * ($componentCount - 1)))
+                                                        : $defaultComponentWeight;
+                                                    $defaultPercentage = $loop->last
+                                                        ? max(0, 100 - ($defaultComponentPercentage * ($componentCount - 1)))
+                                                        : $defaultComponentPercentage;
+                                                    $weightValue = $ratio ? (float) $ratio->standard_weight : $defaultWeight;
+                                                    $percentageValue = $ratio ? (float) $ratio->percentage : $defaultPercentage;
                                                 @endphp
                                                 <tr>
                                                     <td>
@@ -222,7 +235,7 @@
                                                                    class="form-control"
                                                                    min="0"
                                                                    step="0.001"
-                                                                   value="{{ $ratio?->standard_weight ?? '' }}">
+                                                                   value="{{ number_format($weightValue, 3, '.', '') }}">
                                                             <span class="input-group-text">kg</span>
                                                         </div>
                                                     </td>
@@ -234,7 +247,7 @@
                                                                    min="0"
                                                                    max="100"
                                                                    step="0.001"
-                                                                   value="{{ $ratio?->percentage ?? '' }}">
+                                                                   value="{{ number_format($percentageValue, 3, '.', '') }}">
                                                             <span class="input-group-text">%</span>
                                                         </div>
                                                     </td>
@@ -243,6 +256,11 @@
                                         </tbody>
                                     </table>
                                 </div>
+                                <div class="d-flex flex-wrap gap-3 small mt-2">
+                                    <div>Tổng kg: <strong class="quick-cutting-total-weight">0</strong> / {{ rtrim(rtrim(number_format($variantKg, 3, '.', ''), '0'), '.') }} kg</div>
+                                    <div>Tổng tỷ lệ: <strong class="quick-cutting-total-percentage">0</strong>%</div>
+                                </div>
+                                <div class="quick-cutting-components-error text-danger small mt-1 d-none"></div>
                                 <div class="small text-muted mt-2">
                                     Số liệu này dùng để tính thành phần pha lóc thực tế cho riêng biến thể này.
                                 </div>
@@ -391,6 +409,9 @@ $(document).ready(function() {
     $(document).on('submit', '.quick-cutting-components-form', function(e) {
         e.preventDefault();
         const form = $(this);
+        if (!validateQuickCuttingComponents(form)) {
+            return;
+        }
         const submitBtn = form.find('button[type="submit"]');
         submitBtn.prop('disabled', true);
 
@@ -412,6 +433,68 @@ $(document).ready(function() {
                 submitBtn.prop('disabled', false);
             }
         });
+    });
+
+    function parseQuickCuttingNumber(value) {
+        const number = parseFloat(String(value || '').replace(',', '.'));
+        return Number.isFinite(number) ? number : 0;
+    }
+
+    function formatQuickCuttingNumber(value) {
+        return new Intl.NumberFormat('vi-VN', {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 3
+        }).format(value);
+    }
+
+    function updateQuickCuttingTotals(form) {
+        const variantKg = parseQuickCuttingNumber(form.data('variant-kg'));
+        let totalWeight = 0;
+        let totalPercentage = 0;
+
+        form.find('input[name^="component_weights"]').each(function() {
+            totalWeight += parseQuickCuttingNumber($(this).val());
+        });
+
+        form.find('input[name^="component_percentages"]').each(function() {
+            totalPercentage += parseQuickCuttingNumber($(this).val());
+        });
+
+        form.find('.quick-cutting-total-weight').text(formatQuickCuttingNumber(totalWeight));
+        form.find('.quick-cutting-total-percentage').text(formatQuickCuttingNumber(totalPercentage));
+
+        const errorBox = form.find('.quick-cutting-components-error');
+        const errors = [];
+        if (Math.abs(totalPercentage - 100) > 0.001) {
+            errors.push('Tổng tỷ lệ thành phần phải bằng 100%.');
+        }
+        if (totalWeight - variantKg > 0.001) {
+            errors.push(`Tổng kg thành phần không được lớn hơn ${formatQuickCuttingNumber(variantKg)} kg của biến thể.`);
+        }
+
+        if (errors.length > 0) {
+            errorBox.text(errors.join(' ')).removeClass('d-none');
+        } else {
+            errorBox.text('').addClass('d-none');
+        }
+
+        return errors.length === 0;
+    }
+
+    function validateQuickCuttingComponents(form) {
+        return updateQuickCuttingTotals(form);
+    }
+
+    $(document).on('input', '.quick-cutting-components-form input[name^="component_weights"], .quick-cutting-components-form input[name^="component_percentages"]', function() {
+        updateQuickCuttingTotals($(this).closest('.quick-cutting-components-form'));
+    });
+
+    $(document).on('shown.bs.modal', '[id^="quickCuttingComponents"]', function() {
+        updateQuickCuttingTotals($(this).find('.quick-cutting-components-form'));
+    });
+
+    $('.quick-cutting-components-form').each(function() {
+        updateQuickCuttingTotals($(this));
     });
 
     $('#bulk-delete-btn').on('click', function() {

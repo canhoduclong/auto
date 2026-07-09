@@ -83,6 +83,10 @@
                     @else
                         @php
                             $ratiosByComponent = $variant->componentRatios->keyBy('component_product_variant_id');
+                            $componentCount = max(1, $variant->product->cuttingComponents->count());
+                            $variantKg = (float) $variant->effective_kg;
+                            $defaultComponentWeight = round($variantKg / $componentCount, 3);
+                            $defaultComponentPercentage = round(100 / $componentCount, 3);
                         @endphp
                         <div class="table-responsive">
                             <table class="table table-sm align-middle mb-0">
@@ -98,6 +102,20 @@
                                         @php
                                             $componentVariant = $component->componentVariant;
                                             $ratio = $ratiosByComponent->get($component->component_product_variant_id);
+                                            $defaultWeight = $loop->last
+                                                ? max(0, $variantKg - ($defaultComponentWeight * ($componentCount - 1)))
+                                                : $defaultComponentWeight;
+                                            $defaultPercentage = $loop->last
+                                                ? max(0, 100 - ($defaultComponentPercentage * ($componentCount - 1)))
+                                                : $defaultComponentPercentage;
+                                            $weightValue = old(
+                                                'component_weights.'.$component->component_product_variant_id,
+                                                $ratio ? (float) $ratio->standard_weight : $defaultWeight
+                                            );
+                                            $percentageValue = old(
+                                                'component_percentages.'.$component->component_product_variant_id,
+                                                $ratio ? (float) $ratio->percentage : $defaultPercentage
+                                            );
                                         @endphp
                                         <tr>
                                             <td>
@@ -111,7 +129,7 @@
                                                            class="form-control"
                                                            min="0"
                                                            step="0.001"
-                                                           value="{{ old('component_weights.'.$component->component_product_variant_id, $ratio?->standard_weight ?? '') }}">
+                                                           value="{{ number_format((float) $weightValue, 3, '.', '') }}">
                                                     <span class="input-group-text">kg</span>
                                                 </div>
                                             </td>
@@ -123,7 +141,7 @@
                                                            min="0"
                                                            max="100"
                                                            step="0.001"
-                                                           value="{{ old('component_percentages.'.$component->component_product_variant_id, $ratio?->percentage ?? '') }}">
+                                                           value="{{ number_format((float) $percentageValue, 3, '.', '') }}">
                                                     <span class="input-group-text">%</span>
                                                 </div>
                                             </td>

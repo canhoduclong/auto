@@ -6,6 +6,7 @@ use App\Models\ProductVariant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\ValidationException;
 
 class ProductVariantController extends Controller
 {
@@ -72,6 +73,8 @@ class ProductVariantController extends Controller
             'price' => 'nullable|numeric|min:0',
             'component_weights' => 'nullable|array',
             'component_percentages' => 'nullable|array',
+            'component_weights.*' => 'nullable|numeric|min:0',
+            'component_percentages.*' => 'nullable|numeric|min:0|max:100',
         ]);
         // Chuyển size từ 2,5 thành 2.5 nếu là string
         if (isset($data['size']) && is_string($data['size'])) {
@@ -121,8 +124,52 @@ class ProductVariantController extends Controller
             ])->delete();
         }
         $variant->refresh()->load('product.cuttingComponents');
+        $this->validateCuttingComponentTotals($request, $variant);
         $this->syncCuttingComponentRatios($request, $variant);
         return redirect()->route('product-variants.index')->with('success', 'Đã cập nhật biến thể thành công!');
+    }
+
+    private function validateCuttingComponentTotals(Request $request, ProductVariant $variant): void
+    {
+        if (!$request->has('component_weights') && !$request->has('component_percentages')) {
+            return;
+        }
+
+        if ((string) ($variant->product?->product_type ?? '') !== Product::TYPE_WHOLE) {
+            return;
+        }
+
+        $variant->loadMissing('product.cuttingComponents');
+
+        $templateComponentIds = $variant->product->cuttingComponents
+            ->pluck('component_product_variant_id')
+            ->map(fn ($id) => (int) $id)
+            ->filter()
+            ->values();
+
+        if ($templateComponentIds->isEmpty()) {
+            return;
+        }
+
+        $weights = collect($request->input('component_weights', []));
+        $percentages = collect($request->input('component_percentages', []));
+
+        $totalWeight = $templateComponentIds->sum(fn ($componentId) => (float) $weights->get((string) $componentId, 0));
+        $totalPercentage = $templateComponentIds->sum(fn ($componentId) => (float) $percentages->get((string) $componentId, 0));
+        $variantKg = (float) $variant->effective_kg;
+
+        $errors = [];
+        if (abs($totalPercentage - 100) > 0.001) {
+            $errors['component_percentages'] = 'Tổng tỷ lệ thành phần pha lóc phải bằng 100%.';
+        }
+
+        if ($totalWeight - $variantKg > 0.001) {
+            $errors['component_weights'] = 'Tổng kg thành phần pha lóc không được lớn hơn ' . rtrim(rtrim(number_format($variantKg, 3, '.', ''), '0'), '.') . ' kg của biến thể.';
+        }
+
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
     }
 
     private function syncCuttingComponentRatios(Request $request, ProductVariant $variant): void
@@ -178,6 +225,7 @@ class ProductVariantController extends Controller
             abort(422, 'Sản phẩm này chưa có mẫu thành phần pha lóc.');
         }
 
+        $this->validateCuttingComponentTotals($request->merge($data), $variant);
         $this->syncCuttingComponentRatios($request->merge($data), $variant);
 
         if ($request->expectsJson()) {
