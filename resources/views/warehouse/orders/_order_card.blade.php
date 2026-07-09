@@ -115,6 +115,57 @@
                                         @endforeach
                                     </div>
                                 </div>
+                                @if($isPackageOrderLayout)
+                                    <div class="mt-3">
+                                        @foreach($activeCuttingBatches as $batch)
+                                            @php
+                                                $sourceItems = collect($batch->exportDocument?->items ?? []);
+                                                $verifications = collect($batch->picked_material_verifications ?? [])->keyBy(fn ($row) => (int) ($row['variant_id'] ?? 0));
+                                                $targetName = trim(($batch->targetVariant?->product?->name ?? 'Sản phẩm') . ' ' . ($batch->targetVariant?->name ?: ''));
+                                            @endphp
+                                            <div class="small fw-semibold mb-2">Kho đã lấy cho: {{ $targetName }}</div>
+                                            <div class="wh-picked-material-list">
+                                                @forelse($sourceItems as $sourceItem)
+                                                    @php
+                                                        $sourceVariant = $sourceItem->productVariant;
+                                                        $sourceVariantId = (int) ($sourceItem->product_variant_id ?? 0);
+                                                        $sourceName = trim(($sourceVariant?->product?->name ?? 'Sản phẩm') . ' ' . ($sourceVariant?->name ?: ''));
+                                                        $pickedVerification = $verifications->get($sourceVariantId);
+                                                        $isPickedVerified = !empty($pickedVerification);
+                                                    @endphp
+                                                    <div class="wh-picked-material-row {{ $isPickedVerified ? 'is-verified' : '' }}">
+                                                        <div>
+                                                            <div class="fw-semibold">{{ $sourceName }}</div>
+                                                            <div class="wh-picked-material-meta">
+                                                                Kho xuất {{ rtrim(rtrim(number_format((float) $sourceItem->quantity, 3, '.', ''), '0'), '.') }} con
+                                                                @if($sourceVariant?->sku)
+                                                                    · {{ $sourceVariant->sku }}
+                                                                @endif
+                                                                @if($isPickedVerified)
+                                                                    · Verify bởi {{ $pickedVerification['verified_by_name'] ?? 'Package' }}
+                                                                @endif
+                                                            </div>
+                                                        </div>
+                                                        @if($isPickedVerified)
+                                                            <span class="badge bg-success">
+                                                                <i class="bi bi-check2-circle me-1"></i>Đã lấy
+                                                            </span>
+                                                        @else
+                                                            <form method="POST" action="{{ route('package.cutting-batches.materials.picked', ['batch' => $batch, 'variant' => $sourceVariantId]) }}">
+                                                                @csrf
+                                                                <button type="submit" class="btn btn-sm btn-outline-success">
+                                                                    <i class="bi bi-check2 me-1"></i>Đã lấy
+                                                                </button>
+                                                            </form>
+                                                        @endif
+                                                    </div>
+                                                @empty
+                                                    <div class="small text-muted">Chưa có dữ liệu nguyên liệu kho đã xuất.</div>
+                                                @endforelse
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                @endif
                             </div>
                         @endif
                         <div class="wh-section">
@@ -752,6 +803,10 @@
                         @php
                             $batchModalId = 'complete-cutting-batch-' . (int) $batch->id;
                             $plannedComponents = collect($batch->planned_components ?? []);
+                            $sourceItems = collect($batch->exportDocument?->items ?? []);
+                            $verifications = collect($batch->picked_material_verifications ?? [])->keyBy(fn ($row) => (int) ($row['variant_id'] ?? 0));
+                            $sourceVariantIds = $sourceItems->pluck('product_variant_id')->map(fn ($id) => (int) $id)->filter()->unique()->values();
+                            $allMaterialsPicked = $sourceVariantIds->isEmpty() || $sourceVariantIds->every(fn ($id) => $verifications->has((int) $id));
                             $targetName = trim(($batch->targetVariant?->product?->name ?? 'Sản phẩm') . ' ' . ($batch->targetVariant?->name ?: ''));
                         @endphp
                         <div class="modal fade" id="{{ $batchModalId }}" tabindex="-1" aria-hidden="true">
@@ -770,6 +825,46 @@
                                             <div class="alert alert-warning py-2">
                                                 Nguyên liệu đã lấy: <strong>{{ format_kg((float) $batch->input_weight) }}</strong>.
                                                 Nhập kg thực tế để ghi nhận nhập kho và tính hao hụt.
+                                            </div>
+                                            <div class="mb-3">
+                                                <div class="fw-semibold mb-2">Kho đã xác nhận lấy các mặt hàng</div>
+                                                <div class="wh-picked-material-list">
+                                                    @forelse($sourceItems as $sourceItem)
+                                                        @php
+                                                            $sourceVariant = $sourceItem->productVariant;
+                                                            $sourceVariantId = (int) ($sourceItem->product_variant_id ?? 0);
+                                                            $sourceName = trim(($sourceVariant?->product?->name ?? 'Sản phẩm') . ' ' . ($sourceVariant?->name ?: ''));
+                                                            $pickedVerification = $verifications->get($sourceVariantId);
+                                                            $isPickedVerified = !empty($pickedVerification);
+                                                            $pickedFormId = 'picked-material-form-' . (int) $batch->id . '-' . $sourceVariantId;
+                                                        @endphp
+                                                        <div class="wh-picked-material-row {{ $isPickedVerified ? 'is-verified' : '' }}">
+                                                            <div>
+                                                                <div class="fw-semibold">{{ $sourceName }}</div>
+                                                                <div class="wh-picked-material-meta">
+                                                                    Kho xuất {{ rtrim(rtrim(number_format((float) $sourceItem->quantity, 3, '.', ''), '0'), '.') }} con
+                                                                    @if($sourceVariant?->sku)
+                                                                        · {{ $sourceVariant->sku }}
+                                                                    @endif
+                                                                    @if($isPickedVerified)
+                                                                        · Verify bởi {{ $pickedVerification['verified_by_name'] ?? 'Package' }}
+                                                                    @endif
+                                                                </div>
+                                                            </div>
+                                                            @if($isPickedVerified)
+                                                                <span class="badge bg-success">
+                                                                    <i class="bi bi-check2-circle me-1"></i>Đã lấy
+                                                                </span>
+                                                            @else
+                                                                <button type="submit" form="{{ $pickedFormId }}" class="btn btn-sm btn-outline-success">
+                                                                    <i class="bi bi-check2 me-1"></i>Đã lấy
+                                                                </button>
+                                                            @endif
+                                                        </div>
+                                                    @empty
+                                                        <div class="small text-muted">Chưa có dữ liệu nguyên liệu kho đã xuất.</div>
+                                                    @endforelse
+                                                </div>
                                             </div>
                                             <div class="mb-3">
                                                 <label class="form-label fw-semibold">Thành phẩm thực tế</label>
@@ -813,12 +908,26 @@
                                             </div>
                                         </div>
                                         <div class="modal-footer">
+                                            @if(!$allMaterialsPicked)
+                                                <div class="me-auto small text-danger fw-semibold">
+                                                    Cần bấm Đã lấy cho tất cả mặt hàng kho đã xuất.
+                                                </div>
+                                            @endif
                                             <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Đóng</button>
-                                            <button type="submit" class="btn btn-success">
+                                            <button type="submit" class="btn btn-success" {{ $allMaterialsPicked ? '' : 'disabled' }}>
                                                 <i class="bi bi-check2-circle me-1"></i>Hoàn thiện nhập kho
                                             </button>
                                         </div>
                                     </form>
+                                    @foreach($sourceItems as $sourceItem)
+                                        @php
+                                            $sourceVariantId = (int) ($sourceItem->product_variant_id ?? 0);
+                                            $pickedFormId = 'picked-material-form-' . (int) $batch->id . '-' . $sourceVariantId;
+                                        @endphp
+                                        <form id="{{ $pickedFormId }}" method="POST" action="{{ route('package.cutting-batches.materials.picked', ['batch' => $batch, 'variant' => $sourceVariantId]) }}" class="d-none">
+                                            @csrf
+                                        </form>
+                                    @endforeach
                                 </div>
                             </div>
                         </div>

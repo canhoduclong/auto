@@ -16,6 +16,7 @@ class ProductCuttingBatch extends Model
         'order_id',
         'status',
         'source_materials',
+        'picked_material_verifications',
         'performed_by',
         'completed_by',
         'completed_at',
@@ -41,6 +42,7 @@ class ProductCuttingBatch extends Model
         'loss_weight' => 'float',
         'loss_percent' => 'float',
         'source_materials' => 'array',
+        'picked_material_verifications' => 'array',
         'planned_components' => 'array',
         'actual_components' => 'array',
         'completed_at' => 'datetime',
@@ -64,6 +66,11 @@ class ProductCuttingBatch extends Model
     public function performer()
     {
         return $this->belongsTo(User::class, 'performed_by');
+    }
+
+    public function exportDocument()
+    {
+        return $this->belongsTo(InventoryDocument::class, 'export_document_id');
     }
 
     public function completer()

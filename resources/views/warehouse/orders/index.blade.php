@@ -35,6 +35,32 @@
         background: #f5f3ff;
         color: #4c1d95;
     }
+    .wh-picked-material-list {
+        display: grid;
+        gap: 8px;
+    }
+    .wh-picked-material-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 10px;
+        border: 1px solid #ddd6fe;
+        border-radius: 8px;
+        background: #fff;
+    }
+    .wh-picked-material-row.is-verified {
+        border-color: #86efac;
+        background: #f0fdf4;
+        color: #14532d;
+    }
+    .wh-picked-material-meta {
+        font-size: .78rem;
+        color: #64748b;
+    }
+    .wh-picked-material-row.is-verified .wh-picked-material-meta {
+        color: #166534;
+    }
     .wh-order-index {
         border-radius: 50px;
         width: 40px;

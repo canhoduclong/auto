@@ -925,7 +925,11 @@ class WarehouseDashboardController extends Controller
 
         $orderIds = $orders->pluck('id')->all();
         $activeCuttingBatchesByOrder = ProductCuttingBatch::query()
-            ->with(['targetVariant.product', 'performer:id,name'])
+            ->with([
+                'targetVariant.product',
+                'performer:id,name',
+                'exportDocument.items.productVariant.product',
+            ])
             ->whereIn('order_id', $orderIds)
             ->where('status', ProductCuttingBatch::STATUS_IN_PROGRESS)
             ->orderBy('id')
