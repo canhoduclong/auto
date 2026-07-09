@@ -79,40 +79,86 @@ class OrderPackingController extends Controller
 
     public function markCuttingMaterialPicked(Request $request, ProductCuttingBatch $batch, ProductVariant $variant)
     {
+        return $this->setCuttingMaterialPicked($request, $batch, $variant, true);
+    }
+
+    public function unmarkCuttingMaterialPicked(Request $request, ProductCuttingBatch $batch, ProductVariant $variant)
+    {
+        return $this->setCuttingMaterialPicked($request, $batch, $variant, false);
+    }
+
+    private function setCuttingMaterialPicked(Request $request, ProductCuttingBatch $batch, ProductVariant $variant, bool $picked)
+    {
         $user = $request->user();
         $managedWarehouseId = $user?->warehouse_id ? (int) $user->warehouse_id : null;
         if (!$managedWarehouseId && !$user?->hasRole('admin')) {
-            return back()->with('error', 'Tài khoản chưa được gán kho thực hiện.');
+            return $this->pickedMaterialResponse($request, false, 'Tài khoản chưa được gán kho thực hiện.', [], 422);
         }
         if ($managedWarehouseId && (int) $batch->warehouse_id !== $managedWarehouseId) {
             abort(403, 'Bạn không có quyền xác nhận mặt hàng của kho khác.');
         }
         if ($batch->status !== ProductCuttingBatch::STATUS_IN_PROGRESS) {
-            return back()->with('error', 'Mẻ pha lóc này không còn ở trạng thái đang thực hiện.');
+            return $this->pickedMaterialResponse($request, false, 'Mẻ pha lóc này không còn ở trạng thái đang thực hiện.', [], 422);
         }
 
         $batch->loadMissing('exportDocument.items');
         $sourceItem = $batch->exportDocument?->items
             ?->first(fn ($item) => (int) $item->product_variant_id === (int) $variant->id);
         if (!$sourceItem) {
-            return back()->with('error', 'Mặt hàng này không nằm trong danh sách kho đã lấy cho mẻ pha lóc.');
+            return $this->pickedMaterialResponse($request, false, 'Mặt hàng này không nằm trong danh sách kho đã lấy cho mẻ pha lóc.', [], 422);
         }
 
         $verifications = collect($batch->picked_material_verifications ?? [])
             ->keyBy(fn ($row) => (int) ($row['variant_id'] ?? 0));
-        $verifications->put((int) $variant->id, [
-            'variant_id' => (int) $variant->id,
-            'quantity' => (float) $sourceItem->quantity,
-            'verified_by' => (int) $user->id,
-            'verified_by_name' => (string) ($user->name ?? 'Package'),
-            'verified_at' => now()->toDateTimeString(),
-        ]);
+
+        if ($picked) {
+            $verifications->put((int) $variant->id, [
+                'variant_id' => (int) $variant->id,
+                'quantity' => (float) $sourceItem->quantity,
+                'verified_by' => (int) $user->id,
+                'verified_by_name' => (string) ($user->name ?? 'Package'),
+                'verified_at' => now()->toDateTimeString(),
+            ]);
+        } else {
+            $verifications->forget((int) $variant->id);
+        }
 
         $batch->update([
             'picked_material_verifications' => $verifications->values()->all(),
         ]);
 
-        return back()->with('success', 'Đã xác nhận đã lấy mặt hàng pha lóc.');
+        $sourceVariantIds = $batch->exportDocument?->items
+            ?->pluck('product_variant_id')
+            ->map(fn ($id) => (int) $id)
+            ->filter()
+            ->unique()
+            ->values() ?? collect();
+        $verifiedVariantIds = $verifications
+            ->keys()
+            ->map(fn ($id) => (int) $id)
+            ->filter()
+            ->unique();
+        $allMaterialsPicked = $sourceVariantIds->isEmpty() || $sourceVariantIds->diff($verifiedVariantIds)->isEmpty();
+
+        return $this->pickedMaterialResponse($request, true, $picked ? 'Đã xác nhận đã lấy mặt hàng pha lóc.' : 'Đã quay lại trạng thái chưa lấy.', [
+            'batch_id' => (int) $batch->id,
+            'variant_id' => (int) $variant->id,
+            'picked' => $picked,
+            'verified_by_name' => (string) ($user->name ?? 'Package'),
+            'all_materials_picked' => $allMaterialsPicked,
+        ]);
+    }
+
+    private function pickedMaterialResponse(Request $request, bool $ok, string $message, array $payload = [], int $status = 200)
+    {
+        if ($request->expectsJson()) {
+            return response()->json(array_merge([
+                'ok' => $ok,
+                'message' => $message,
+            ], $payload), $status);
+        }
+
+        return back()->with($ok ? 'success' : 'error', $message);
     }
 
     public function show(Order $order)

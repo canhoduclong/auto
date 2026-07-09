@@ -133,31 +133,30 @@
                                                         $pickedVerification = $verifications->get($sourceVariantId);
                                                         $isPickedVerified = !empty($pickedVerification);
                                                     @endphp
-                                                    <div class="wh-picked-material-row {{ $isPickedVerified ? 'is-verified' : '' }}">
+                                                    <div class="wh-picked-material-row {{ $isPickedVerified ? 'is-verified' : '' }}"
+                                                         data-picked-material-row
+                                                         data-batch-id="{{ (int) $batch->id }}"
+                                                         data-variant-id="{{ $sourceVariantId }}"
+                                                         data-picked-url="{{ route('package.cutting-batches.materials.picked', ['batch' => $batch, 'variant' => $sourceVariantId]) }}"
+                                                         data-unpicked-url="{{ route('package.cutting-batches.materials.unpicked', ['batch' => $batch, 'variant' => $sourceVariantId]) }}">
                                                         <div>
                                                             <div class="fw-semibold">{{ $sourceName }}</div>
-                                                            <div class="wh-picked-material-meta">
-                                                                Kho xuất {{ rtrim(rtrim(number_format((float) $sourceItem->quantity, 3, '.', ''), '0'), '.') }} con
-                                                                @if($sourceVariant?->sku)
-                                                                    · {{ $sourceVariant->sku }}
-                                                                @endif
-                                                                @if($isPickedVerified)
-                                                                    · Verify bởi {{ $pickedVerification['verified_by_name'] ?? 'Package' }}
-                                                                @endif
+                                                            <div class="wh-picked-material-meta" data-picked-material-meta-base="Kho xuất {{ rtrim(rtrim(number_format((float) $sourceItem->quantity, 3, '.', ''), '0'), '.') }} con{{ $sourceVariant?->sku ? ' · ' . $sourceVariant->sku : '' }}">
+                                                                Kho xuất {{ rtrim(rtrim(number_format((float) $sourceItem->quantity, 3, '.', ''), '0'), '.') }} con{{ $sourceVariant?->sku ? ' · ' . $sourceVariant->sku : '' }}
+                                                                <span data-picked-material-verify-text>{{ $isPickedVerified ? ' · Verify bởi ' . ($pickedVerification['verified_by_name'] ?? 'Package') : '' }}</span>
                                                             </div>
                                                         </div>
-                                                        @if($isPickedVerified)
-                                                            <span class="badge bg-success">
+                                                        <div class="wh-picked-material-actions">
+                                                            <span class="badge wh-picked-material-badge {{ $isPickedVerified ? '' : 'd-none' }}" data-picked-material-badge>
                                                                 <i class="bi bi-check2-circle me-1"></i>Đã lấy
                                                             </span>
-                                                        @else
-                                                            <form method="POST" action="{{ route('package.cutting-batches.materials.picked', ['batch' => $batch, 'variant' => $sourceVariantId]) }}">
-                                                                @csrf
-                                                                <button type="submit" class="btn btn-sm btn-outline-success">
-                                                                    <i class="bi bi-check2 me-1"></i>Đã lấy
-                                                                </button>
-                                                            </form>
-                                                        @endif
+                                                            <button type="button" class="btn btn-sm btn-success js-picked-material-action {{ $isPickedVerified ? 'd-none' : '' }}" data-picked-action="pick">
+                                                                <i class="bi bi-check2-circle me-1"></i>Đã lấy
+                                                            </button>
+                                                            <button type="button" class="btn btn-sm btn-outline-danger js-picked-material-action {{ $isPickedVerified ? '' : 'd-none' }}" data-picked-action="unpick">
+                                                                <i class="bi bi-arrow-counterclockwise me-1"></i>Quay lại
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 @empty
                                                     <div class="small text-muted">Chưa có dữ liệu nguyên liệu kho đã xuất.</div>
@@ -503,78 +502,6 @@
                                 </ul>
                             </div> 
 
-                            @if(!$isPackedReadonly && $canProcessThisOrder && !$isPacking)
-                                <details class="mt-3 border rounded p-2 bg-light">
-                                    <summary class="fw-semibold">
-                                        {{ $warehouseCanAdjust ? 'Điều chỉnh mặt hàng' : 'Điều chỉnh mặt hàng (gửi sale xác nhận)' }}
-                                    </summary>
-                                    <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.request-adjustment', $order) }}" method="POST" class="mt-2">
-                                        @csrf
-                                        <div class="small text-muted mb-2">Đặt số lượng = 0 để xóa sản phẩm khỏi đơn.</div>
-                                        <div class="d-grid gap-2 mb-2">
-                                            @foreach($order->items as $item)
-                                                @php
-                                                    $adjustmentSize = $item->variant?->size;
-                                                    $formattedAdjustmentSize = (is_numeric($adjustmentSize) && (float) $adjustmentSize > 0)
-                                                        ? rtrim(rtrim(number_format((float) $adjustmentSize, 2, '.', ''), '0'), '.')
-                                                        : null;
-                                                @endphp
-                                                <div class="wh-adjustment-pending-item">
-                                                    <div class="d-flex justify-content-between align-items-end gap-2 flex-wrap">
-                                                        <div class="flex-grow-1">
-                                                            <div class="fw-semibold">{{ $item->variant?->name ?? $item->product?->name ?? 'Sản phẩm' }}</div>
-                                                            <div class="small text-muted">
-                                                                SKU: {{ $item->variant?->sku ?: '---' }}
-                                                                @if($formattedAdjustmentSize)
-                                                                    | Size: {{ $formattedAdjustmentSize }}
-                                                                @endif
-                                                            </div>
-                                                        </div>
-                                                        <div class="d-flex align-items-end gap-2">
-                                                            <div style="min-width: 140px;">
-                                                                <label class="form-label small mb-1">Số lượng mới</label>
-                                                                <input type="hidden" name="items[{{ $item->id }}][order_item_id]" value="{{ $item->id }}">
-                                                                <input type="number" min="0" step="1"
-                                                                       name="items[{{ $item->id }}][quantity]"
-                                                                       class="form-control form-control-sm js-existing-adjustment-qty"
-                                                                       value="{{ (int) ($item->quantity ?? 0) }}">
-                                                            </div>
-                                                            <button type="button"
-                                                                    class="btn btn-outline-danger btn-sm mb-1 js-mark-adjustment-item-remove"
-                                                                    data-target-name="items[{{ $item->id }}][quantity]"
-                                                                    title="Đặt số lượng về 0 để xóa sản phẩm">
-                                                                <i class="bi bi-trash"></i>
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            @endforeach
-                                        </div>
-                                        <div class="border rounded p-2 mb-2 bg-white">
-                                            <div class="d-grid gap-2 js-new-adjustment-items mb-2" id="new-adjustment-items-{{ $order->id }}" data-next-index="0"></div>
-                                            <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
-                                                <div class="small fw-semibold mb-0">Thêm sản phẩm mới vào đơn</div>
-                                                <button type="button"
-                                                        class="btn btn-outline-primary btn-sm js-open-adjustment-product-picker"
-                                                        data-order-id="{{ $order->id }}"
-                                                        data-bs-toggle="modal"
-                                                        data-bs-target="#warehouseAdjustmentProductModal">
-                                                    <i class="bi bi-plus-circle me-1"></i>Thêm sản phẩm
-                                                </button>
-                                            </div>
-                                            <div class="small text-muted mb-0">Chọn sản phẩm từ popup. Popup hỗ trợ tìm kiếm, sắp xếp và phân trang.</div>
-                                        </div>
-                                        <div class="mb-2">
-                                            <label class="form-label small fw-semibold">Lý do thay đổi</label>
-                                            <textarea class="form-control form-control-sm" name="reason" rows="2" required>{{ old('reason') }}</textarea>
-                                        </div>
-                                        <button class="btn btn-outline-warning btn-sm" type="submit">
-                                            <i class="bi {{ $warehouseCanAdjust ? 'bi-save2' : 'bi-send' }} me-1"></i>
-                                            {{ $warehouseCanAdjust ? 'Lưu điều chỉnh' : 'Lưu thay đổi và gửi sale xác nhận' }}
-                                        </button>
-                                    </form>
-                                </details>
-                            @endif
                         </div>
                     </div>
 
@@ -698,47 +625,6 @@
                         @endif
 
                         @if($canProcessThisOrder && ($isReadyToPack || $isPacking))
-                            <div class="wh-order-actions">
-                                @if($isReadyToPack)
-                                    @if($canStartPacking && !$isPendingSaleConfirmation)
-                                        <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.start-packing', $order) }}" method="POST" class="js-start-packing-form">
-                                            @csrf
-                                            <button class="btn btn-primary btn-sm js-start-packing-btn" type="submit">
-                                                <i class="bi bi-box2 me-1"></i>Đóng hàng
-                                            </button>
-                                        </form>
-                                    @elseif($isPendingSaleConfirmation)
-                                        <button class="btn btn-warning btn-sm" type="button" disabled>
-                                            <i class="bi bi-hourglass-split me-1"></i>Đang chờ sale xác nhận thay đổi đơn
-                                        </button>
-                                    @else
-                                        <button class="btn btn-danger btn-sm" type="button" disabled>
-                                            <i class="bi bi-exclamation-triangle-fill me-1"></i>Không đủ hàng – Chờ nhập kho
-                                        </button>
-                                    @endif
-                                @endif
-
-                                <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.return-to-ready', $order) }}" method="POST" class="js-undo-packing-form {{ $canUndoStartPacking ? '' : 'd-none' }}">
-                                    @csrf
-                                    <button class="btn btn-outline-warning btn-sm js-undo-packing-btn" type="submit">
-                                        <i class="bi bi-arrow-counterclockwise me-1"></i>Undo nhận đơn
-                                    </button>
-                                </form>
-
-                                <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.complete-packing', $order) }}" method="POST" class="js-complete-packing-form {{ $isPacking ? '' : 'd-none' }}">
-                                    @csrf
-                                    <button class="btn btn-sm wh-warning-action-btn" {{ $isPendingSaleConfirmation ? 'disabled' : '' }}>
-                                        <i class="bi bi-check2-all me-1"></i>Hoàn thành đóng gói
-                                    </button>
-                                </form>
-                            </div>
-
-                            @if($isPacking)
-                                <div class="small text-muted mb-2">
-                                    {{ $canUndoStartPacking ? 'Bạn có thể Undo để trả đơn về hàng chờ.' : 'Đơn đang được user khác nhận đóng hàng.' }}
-                                </div>
-                            @endif
-
                             @if($isReadyToPack && !$isPendingSaleConfirmation && $stockShortages->isNotEmpty())
                                 <div class="wh-stock-alert mt-2">
                                     <details open>
@@ -760,21 +646,148 @@
                                                     @if(($shortage['reason'] ?? '') === 'blocked_by_prior_order')
                                                         <span class="text-warning">- bị chặn bởi đơn ưu tiên trước</span>
                                                     @endif
-                                                    @if($cuttingPlan && !$hasActiveCuttingBatch)
-                                                        <button type="button"
-                                                                class="btn btn-sm btn-primary ms-1"
-                                                                data-bs-toggle="modal"
-                                                                data-bs-target="#{{ $cuttingModalId }}">
-                                                            <i class="bi bi-scissors me-1"></i>Thêm hàng pha lóc
-                                                        </button>
-                                                    @endif
                                                 </li>
                                             @endforeach
                                         </ul>
-                                        <div class="mt-1">
-                                            <a href="{{ route($packingInventoryRoute ?? 'warehouse.stock-in') }}">Nhập kho để tiếp tục</a>
-                                        </div>
                                     </details>
+                                </div>
+                            @endif
+
+                            <div class="wh-order-actions mt-3">
+                                @if(!$isPackedReadonly && $canProcessThisOrder && !$isPacking)
+                                    <details class="wh-footer-adjustment">
+                                        <summary>
+                                            <i class="bi bi-pencil-square me-1"></i>
+                                            {{ $warehouseCanAdjust ? 'Yêu cầu Điều chỉnh' : 'Yêu cầu Điều chỉnh' }}
+                                        </summary>
+                                        <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.request-adjustment', $order) }}" method="POST" class="mt-2">
+                                            @csrf
+                                            <div class="small text-muted mb-2">Đặt số lượng = 0 để xóa sản phẩm khỏi đơn.</div>
+                                            <div class="d-grid gap-2 mb-2">
+                                                @foreach($order->items as $item)
+                                                    @php
+                                                        $adjustmentSize = $item->variant?->size;
+                                                        $formattedAdjustmentSize = (is_numeric($adjustmentSize) && (float) $adjustmentSize > 0)
+                                                            ? rtrim(rtrim(number_format((float) $adjustmentSize, 2, '.', ''), '0'), '.')
+                                                            : null;
+                                                    @endphp
+                                                    <div class="wh-adjustment-pending-item">
+                                                        <div class="d-flex justify-content-between align-items-end gap-2 flex-wrap">
+                                                            <div class="flex-grow-1">
+                                                                <div class="fw-semibold">{{ $item->variant?->name ?? $item->product?->name ?? 'Sản phẩm' }}</div>
+                                                                <div class="small text-muted">
+                                                                    SKU: {{ $item->variant?->sku ?: '---' }}
+                                                                    @if($formattedAdjustmentSize)
+                                                                        | Size: {{ $formattedAdjustmentSize }}
+                                                                    @endif
+                                                                </div>
+                                                            </div>
+                                                            <div class="d-flex align-items-end gap-2">
+                                                                <div style="min-width: 140px;">
+                                                                    <label class="form-label small mb-1">Số lượng mới</label>
+                                                                    <input type="hidden" name="items[{{ $item->id }}][order_item_id]" value="{{ $item->id }}">
+                                                                    <input type="number" min="0" step="1"
+                                                                           name="items[{{ $item->id }}][quantity]"
+                                                                           class="form-control form-control-sm js-existing-adjustment-qty"
+                                                                           value="{{ (int) ($item->quantity ?? 0) }}">
+                                                                </div>
+                                                                <button type="button"
+                                                                        class="btn btn-outline-danger btn-sm mb-1 js-mark-adjustment-item-remove"
+                                                                        data-target-name="items[{{ $item->id }}][quantity]"
+                                                                        title="Đặt số lượng về 0 để xóa sản phẩm">
+                                                                    <i class="bi bi-trash"></i>
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                @endforeach
+                                            </div>
+                                            <div class="border rounded p-2 mb-2 bg-white">
+                                                <div class="d-grid gap-2 js-new-adjustment-items mb-2" id="new-adjustment-items-{{ $order->id }}" data-next-index="0"></div>
+                                                <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
+                                                    <div class="small fw-semibold mb-0">Thêm sản phẩm mới vào đơn</div>
+                                                    <button type="button"
+                                                            class="btn btn-outline-primary btn-sm js-open-adjustment-product-picker"
+                                                            data-order-id="{{ $order->id }}"
+                                                            data-bs-toggle="modal"
+                                                            data-bs-target="#warehouseAdjustmentProductModal">
+                                                        <i class="bi bi-plus-circle me-1"></i>Thêm sản phẩm
+                                                    </button>
+                                                </div>
+                                                <div class="small text-muted mb-0">Chọn sản phẩm từ popup. Popup hỗ trợ tìm kiếm, sắp xếp và phân trang.</div>
+                                            </div>
+                                            <div class="mb-2">
+                                                <label class="form-label small fw-semibold">Lý do thay đổi</label>
+                                                <textarea class="form-control form-control-sm" name="reason" rows="2" required>{{ old('reason') }}</textarea>
+                                            </div>
+                                            <button class="btn btn-outline-warning btn-sm" type="submit">
+                                                <i class="bi {{ $warehouseCanAdjust ? 'bi-save2' : 'bi-send' }} me-1"></i>
+                                                {{ $warehouseCanAdjust ? 'Lưu điều chỉnh' : 'Lưu thay đổi và gửi sale xác nhận' }}
+                                            </button>
+                                        </form>
+                                    </details>
+                                @endif
+
+                                @if($isReadyToPack && !$isPendingSaleConfirmation && $stockShortages->isNotEmpty() && !$hasActiveCuttingBatch)
+                                    @foreach($stockShortages as $shortage)
+                                        @php
+                                            $cuttingPlan = $orderCuttingPlans->get((int) ($shortage['variant_id'] ?? 0));
+                                            $cuttingModalId = $cuttingPlan ? 'cutting-order-modal-' . $order->id . '-' . (int) ($shortage['variant_id'] ?? 0) : null;
+                                        @endphp
+                                        @if($cuttingPlan)
+                                            <button type="button"
+                                                    class="btn btn-sm btn-primary"
+                                                    data-bs-toggle="modal"
+                                                    data-bs-target="#{{ $cuttingModalId }}">
+                                                <i class="bi bi-scissors me-1"></i>Thêm hàng pha lóc
+                                            </button>
+                                        @endif
+                                    @endforeach
+                                @endif
+
+                                @if($isReadyToPack && !$isPendingSaleConfirmation && $stockShortages->isNotEmpty())
+                                    <a class="btn btn-outline-danger btn-sm wh-inventory-action-btn" href="{{ route($packingInventoryRoute ?? 'warehouse.stock-in') }}">
+                                        <i class="bi bi-box-arrow-in-down me-1"></i>Nhập kho
+                                    </a>
+                                @endif
+
+                                @if($isReadyToPack)
+                                    @if($canStartPacking && !$isPendingSaleConfirmation)
+                                        <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.start-packing', $order) }}" method="POST" class="js-start-packing-form">
+                                            @csrf
+                                            <button class="btn btn-primary btn-sm js-start-packing-btn" type="submit">
+                                                <i class="bi bi-box2 me-1"></i>Đóng hàng
+                                            </button>
+                                        </form>
+                                    @elseif($isPendingSaleConfirmation)
+                                        <button class="btn btn-warning btn-sm" type="button" disabled>
+                                            <i class="bi bi-hourglass-split me-1"></i>Đang chờ sale xác nhận thay đổi đơn
+                                        </button>
+                                    @else
+                                        <button class="btn btn-danger btn-sm" type="button" disabled>
+                                            <i class="bi bi-exclamation-triangle-fill me-1"></i>Không đủ hàng - Chờ nhập kho
+                                        </button>
+                                    @endif
+                                @endif
+
+                                <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.return-to-ready', $order) }}" method="POST" class="js-undo-packing-form {{ $canUndoStartPacking ? '' : 'd-none' }}">
+                                    @csrf
+                                    <button class="btn btn-outline-warning btn-sm js-undo-packing-btn" type="submit">
+                                        <i class="bi bi-arrow-counterclockwise me-1"></i>Undo nhận đơn
+                                    </button>
+                                </form>
+
+                                <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.complete-packing', $order) }}" method="POST" class="js-complete-packing-form {{ $isPacking ? '' : 'd-none' }}">
+                                    @csrf
+                                    <button class="btn btn-sm wh-warning-action-btn" {{ $isPendingSaleConfirmation ? 'disabled' : '' }}>
+                                        <i class="bi bi-check2-all me-1"></i>Hoàn thành đóng gói
+                                    </button>
+                                </form>
+                            </div>
+
+                            @if($isPacking)
+                                <div class="small text-muted mt-2">
+                                    {{ $canUndoStartPacking ? 'Bạn có thể Undo để trả đơn về hàng chờ.' : 'Đơn đang được user khác nhận đóng hàng.' }}
                                 </div>
                             @endif
                         @else
@@ -836,30 +849,31 @@
                                                             $sourceName = trim(($sourceVariant?->product?->name ?? 'Sản phẩm') . ' ' . ($sourceVariant?->name ?: ''));
                                                             $pickedVerification = $verifications->get($sourceVariantId);
                                                             $isPickedVerified = !empty($pickedVerification);
-                                                            $pickedFormId = 'picked-material-form-' . (int) $batch->id . '-' . $sourceVariantId;
                                                         @endphp
-                                                        <div class="wh-picked-material-row {{ $isPickedVerified ? 'is-verified' : '' }}">
+                                                        <div class="wh-picked-material-row {{ $isPickedVerified ? 'is-verified' : '' }}"
+                                                             data-picked-material-row
+                                                             data-batch-id="{{ (int) $batch->id }}"
+                                                             data-variant-id="{{ $sourceVariantId }}"
+                                                             data-picked-url="{{ route('package.cutting-batches.materials.picked', ['batch' => $batch, 'variant' => $sourceVariantId]) }}"
+                                                             data-unpicked-url="{{ route('package.cutting-batches.materials.unpicked', ['batch' => $batch, 'variant' => $sourceVariantId]) }}">
                                                             <div>
                                                                 <div class="fw-semibold">{{ $sourceName }}</div>
-                                                                <div class="wh-picked-material-meta">
-                                                                    Kho xuất {{ rtrim(rtrim(number_format((float) $sourceItem->quantity, 3, '.', ''), '0'), '.') }} con
-                                                                    @if($sourceVariant?->sku)
-                                                                        · {{ $sourceVariant->sku }}
-                                                                    @endif
-                                                                    @if($isPickedVerified)
-                                                                        · Verify bởi {{ $pickedVerification['verified_by_name'] ?? 'Package' }}
-                                                                    @endif
+                                                                <div class="wh-picked-material-meta" data-picked-material-meta-base="Kho xuất {{ rtrim(rtrim(number_format((float) $sourceItem->quantity, 3, '.', ''), '0'), '.') }} con{{ $sourceVariant?->sku ? ' · ' . $sourceVariant->sku : '' }}">
+                                                                    Kho xuất {{ rtrim(rtrim(number_format((float) $sourceItem->quantity, 3, '.', ''), '0'), '.') }} con{{ $sourceVariant?->sku ? ' · ' . $sourceVariant->sku : '' }}
+                                                                    <span data-picked-material-verify-text>{{ $isPickedVerified ? ' · Verify bởi ' . ($pickedVerification['verified_by_name'] ?? 'Package') : '' }}</span>
                                                                 </div>
                                                             </div>
-                                                            @if($isPickedVerified)
-                                                                <span class="badge bg-success">
+                                                            <div class="wh-picked-material-actions">
+                                                                <span class="badge wh-picked-material-badge {{ $isPickedVerified ? '' : 'd-none' }}" data-picked-material-badge>
                                                                     <i class="bi bi-check2-circle me-1"></i>Đã lấy
                                                                 </span>
-                                                            @else
-                                                                <button type="submit" form="{{ $pickedFormId }}" class="btn btn-sm btn-outline-success">
-                                                                    <i class="bi bi-check2 me-1"></i>Đã lấy
+                                                                <button type="button" class="btn btn-sm btn-success js-picked-material-action {{ $isPickedVerified ? 'd-none' : '' }}" data-picked-action="pick">
+                                                                    <i class="bi bi-check2-circle me-1"></i>Đã lấy
                                                                 </button>
-                                                            @endif
+                                                                <button type="button" class="btn btn-sm btn-outline-danger js-picked-material-action {{ $isPickedVerified ? '' : 'd-none' }}" data-picked-action="unpick">
+                                                                    <i class="bi bi-arrow-counterclockwise me-1"></i>Quay lại
+                                                                </button>
+                                                            </div>
                                                         </div>
                                                     @empty
                                                         <div class="small text-muted">Chưa có dữ liệu nguyên liệu kho đã xuất.</div>
@@ -908,26 +922,15 @@
                                             </div>
                                         </div>
                                         <div class="modal-footer">
-                                            @if(!$allMaterialsPicked)
-                                                <div class="me-auto small text-danger fw-semibold">
-                                                    Cần bấm Đã lấy cho tất cả mặt hàng kho đã xuất.
-                                                </div>
-                                            @endif
+                                            <div class="me-auto small text-danger fw-semibold js-cutting-picked-warning {{ $allMaterialsPicked ? 'd-none' : '' }}" data-batch-id="{{ (int) $batch->id }}">
+                                                Cần bấm Đã lấy cho tất cả mặt hàng kho đã xuất.
+                                            </div>
                                             <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Đóng</button>
-                                            <button type="submit" class="btn btn-success" {{ $allMaterialsPicked ? '' : 'disabled' }}>
+                                            <button type="submit" class="btn btn-success js-complete-cutting-batch-btn" data-batch-id="{{ (int) $batch->id }}" {{ $allMaterialsPicked ? '' : 'disabled' }}>
                                                 <i class="bi bi-check2-circle me-1"></i>Hoàn thiện nhập kho
                                             </button>
                                         </div>
                                     </form>
-                                    @foreach($sourceItems as $sourceItem)
-                                        @php
-                                            $sourceVariantId = (int) ($sourceItem->product_variant_id ?? 0);
-                                            $pickedFormId = 'picked-material-form-' . (int) $batch->id . '-' . $sourceVariantId;
-                                        @endphp
-                                        <form id="{{ $pickedFormId }}" method="POST" action="{{ route('package.cutting-batches.materials.picked', ['batch' => $batch, 'variant' => $sourceVariantId]) }}" class="d-none">
-                                            @csrf
-                                        </form>
-                                    @endforeach
                                 </div>
                             </div>
                         </div>

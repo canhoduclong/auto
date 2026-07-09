@@ -44,7 +44,7 @@
         justify-content: space-between;
         align-items: center;
         gap: 10px;
-        padding: 8px 10px;
+        padding: 10px 12px;
         border: 1px solid #ddd6fe;
         border-radius: 8px;
         background: #fff;
@@ -60,6 +60,24 @@
     }
     .wh-picked-material-row.is-verified .wh-picked-material-meta {
         color: #166534;
+    }
+    .wh-picked-material-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+    .wh-picked-material-actions .btn,
+    .wh-picked-material-badge {
+        font-size: .9rem;
+        font-weight: 800;
+        padding: 7px 12px;
+    }
+    .wh-picked-material-badge {
+        background: #16a34a;
+        color: #fff;
+        border-radius: 8px;
     }
     .wh-order-index {
         border-radius: 50px;
@@ -294,17 +312,50 @@
     .wh-order-actions {
         display: flex;
         flex-wrap: wrap;
-        align-items: center;
+        align-items: flex-start;
         gap: 8px;
     }
     .wh-order-actions > form,
     .wh-order-actions > button,
-    .wh-order-actions > span {
+    .wh-order-actions > span,
+    .wh-order-actions > a,
+    .wh-order-actions > details {
         width: auto;
         margin: 0 !important;
     }
     .wh-order-actions .btn {
         white-space: nowrap;
+    }
+    .wh-footer-adjustment > summary {
+        display: inline-flex;
+        align-items: center;
+        min-height: 31px;
+        padding: 5px 12px;
+        border: 1px solid #d6dce5;
+        border-radius: 6px;
+        background: #f8fafc;
+        color: #0f172a;
+        font-weight: 700;
+        cursor: pointer;
+        list-style: none;
+    }
+    .wh-footer-adjustment > summary::-webkit-details-marker {
+        display: none;
+    }
+    .wh-footer-adjustment[open] {
+        flex-basis: 100%;
+        order: 10;
+        border: 1px solid #d6dce5;
+        border-radius: 8px;
+        background: #f8fafc;
+        padding: 8px;
+    }
+    .wh-footer-adjustment[open] > summary {
+        margin-bottom: 8px;
+    }
+    .wh-inventory-action-btn {
+        min-width: 166px;
+        font-weight: 700;
     }
     .wh-compact-form {
         display: flex;
@@ -1577,6 +1628,88 @@
                     if (submitBtn) {
                         submitBtn.disabled = false;
                     }
+                }
+            });
+        });
+
+        document.querySelectorAll('.js-picked-material-action').forEach(function (button) {
+            button.addEventListener('click', async function () {
+                const row = button.closest('[data-picked-material-row]');
+                if (!row) return;
+
+                const action = button.dataset.pickedAction === 'unpick' ? 'unpick' : 'pick';
+                const url = action === 'unpick' ? row.dataset.unpickedUrl : row.dataset.pickedUrl;
+                if (!url) return;
+
+                const batchId = row.dataset.batchId || '';
+                const variantId = row.dataset.variantId || '';
+                const relatedRows = document.querySelectorAll(`[data-picked-material-row][data-batch-id="${batchId}"][data-variant-id="${variantId}"]`);
+                relatedRows.forEach(function (relatedRow) {
+                    relatedRow.querySelectorAll('.js-picked-material-action').forEach(function (btn) {
+                        btn.disabled = true;
+                    });
+                });
+
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                    });
+
+                    let payload = {};
+                    try {
+                        payload = await response.json();
+                    } catch (e) {
+                        payload = {};
+                    }
+
+                    if (!response.ok || payload.ok === false) {
+                        throw new Error(payload.message || 'Không thể cập nhật trạng thái đã lấy.');
+                    }
+
+                    const picked = !!payload.picked;
+                    const verifiedBy = payload.verified_by_name || 'Package';
+
+                    relatedRows.forEach(function (relatedRow) {
+                        relatedRow.classList.toggle('is-verified', picked);
+                        relatedRow.querySelector('[data-picked-material-badge]')?.classList.toggle('d-none', !picked);
+                        relatedRow.querySelectorAll('[data-picked-action="pick"]').forEach(function (btn) {
+                            btn.classList.toggle('d-none', picked);
+                        });
+                        relatedRow.querySelectorAll('[data-picked-action="unpick"]').forEach(function (btn) {
+                            btn.classList.toggle('d-none', !picked);
+                        });
+
+                        const verifyText = relatedRow.querySelector('[data-picked-material-verify-text]');
+                        if (verifyText) {
+                            verifyText.textContent = picked ? ` · Verify bởi ${verifiedBy}` : '';
+                        }
+                    });
+
+                    document.querySelectorAll(`.js-complete-cutting-batch-btn[data-batch-id="${batchId}"]`).forEach(function (btn) {
+                        btn.disabled = !payload.all_materials_picked;
+                    });
+                    document.querySelectorAll(`.js-cutting-picked-warning[data-batch-id="${batchId}"]`).forEach(function (warning) {
+                        warning.classList.toggle('d-none', !!payload.all_materials_picked);
+                    });
+
+                    if (typeof showToast === 'function') {
+                        showToast(payload.message || 'Đã cập nhật trạng thái đã lấy.', 'success');
+                    }
+                } catch (error) {
+                    if (typeof showToast === 'function') {
+                        showToast(error.message || 'Không thể cập nhật trạng thái đã lấy.', 'error');
+                    }
+                } finally {
+                    relatedRows.forEach(function (relatedRow) {
+                        relatedRow.querySelectorAll('.js-picked-material-action').forEach(function (btn) {
+                            btn.disabled = false;
+                        });
+                    });
                 }
             });
         });
