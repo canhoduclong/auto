@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Inventory;
+use App\Models\CuttingComponentImportRequest;
 use App\Models\Order;
 use App\Models\OrderHistory;
 use App\Models\OrderReturn;
@@ -337,6 +338,13 @@ class WarehouseDashboardController extends Controller
             ->build($managedWarehouseId, Carbon::today()->toDateString());
         $cuttingShortages = app(ProductCuttingService::class)
             ->missingCutProducts($managedWarehouseId);
+        $deferredComponentImportRequests = CuttingComponentImportRequest::query()
+            ->with(['items.productVariant.product', 'warehouse'])
+            ->where('status', CuttingComponentImportRequest::STATUS_OPEN)
+            ->when($managedWarehouseId, fn ($query) => $query->where('warehouse_id', $managedWarehouseId))
+            ->whereDate('request_date', Carbon::today()->toDateString())
+            ->orderByDesc('id')
+            ->get();
 
         return view('warehouse.dashboard', compact(
             'stats',
@@ -345,7 +353,8 @@ class WarehouseDashboardController extends Controller
             'dailyOrders',
             'approvalStats',
             'inventorySummary',
-            'cuttingShortages'
+            'cuttingShortages',
+            'deferredComponentImportRequests'
         ));
     }
 
@@ -402,6 +411,7 @@ class WarehouseDashboardController extends Controller
             'components' => ['nullable', 'array'],
             'components.*.variant_id' => ['required_with:components', 'exists:product_variants,id'],
             'components.*.weight' => ['nullable', 'numeric', 'min:0'],
+            'defer_components' => ['nullable', 'boolean'],
             'note' => ['nullable', 'string', 'max:1000'],
             'order_id' => ['nullable', 'exists:orders,id'],
             'selected_date' => ['nullable', 'date'],
@@ -415,7 +425,9 @@ class WarehouseDashboardController extends Controller
                 (float) $data['actual_finished_weight'],
                 $data['components'] ?? [],
                 (string) ($data['note'] ?? 'Xuất kho để thực hiện pha lóc.'),
-                (int) $user->id
+                (int) $user->id,
+                $request->boolean('defer_components'),
+                !empty($data['order_id']) ? (int) $data['order_id'] : null
             );
         } catch (\Throwable $e) {
             return back()->withInput()->with('error', $e->getMessage());
@@ -432,6 +444,89 @@ class WarehouseDashboardController extends Controller
 
         return redirect()->route('warehouse.dashboard')->with('success', 'Đã thực hiện pha lóc và cập nhật tồn kho.');
     }
+
+    public function receiveCuttingComponentImportRequest(CuttingComponentImportRequest $componentImportRequest)
+    {
+        $user = Auth::user();
+        $managedWarehouseId = $user?->warehouse_id ? (int) $user->warehouse_id : null;
+        if ($managedWarehouseId && (int) $componentImportRequest->warehouse_id !== $managedWarehouseId) {
+            abort(403, 'Bạn không có quyền xử lý phiếu yêu cầu của kho khác.');
+        }
+
+        if ($componentImportRequest->status !== CuttingComponentImportRequest::STATUS_OPEN) {
+            return back()->with('error', 'Phiếu yêu cầu này đã được xử lý.');
+        }
+
+        $componentImportRequest->load('items.productVariant.product');
+        if ($componentImportRequest->items->isEmpty()) {
+            return back()->with('error', 'Phiếu yêu cầu chưa có thành phần cần nhập.');
+        }
+        if ((float) $componentImportRequest->items->sum('quantity') <= 0) {
+            return back()->with('error', 'Phiếu yêu cầu chưa có khối lượng hợp lệ để nhập kho.');
+        }
+
+        DB::transaction(function () use ($componentImportRequest, $user): void {
+            $rows = $componentImportRequest->items
+                ->groupBy('product_variant_id')
+                ->map(fn ($items, $variantId) => [
+                    'variant_id' => (int) $variantId,
+                    'quantity' => round((float) $items->sum('quantity'), 3),
+                ])
+                ->filter(fn ($row) => $row['variant_id'] > 0 && $row['quantity'] > 0)
+                ->values();
+
+            $document = InventoryDocument::create([
+                'type' => 'import',
+                'warehouse_id' => (int) $componentImportRequest->warehouse_id,
+                'document_date' => now()->toDateString(),
+                'notes' => 'Nhập kho thành phần còn lại từ phiếu yêu cầu pha lóc #' . $componentImportRequest->id,
+                'shipping_fee' => 0,
+                'user_id' => (int) $user->id,
+            ]);
+
+            foreach ($rows as $row) {
+                $document->items()->create([
+                    'product_variant_id' => $row['variant_id'],
+                    'quantity' => $row['quantity'],
+                    'unit_cost' => 0,
+                ]);
+
+                $inventory = Inventory::query()->firstOrCreate(
+                    [
+                        'warehouse_id' => (int) $componentImportRequest->warehouse_id,
+                        'product_variant_id' => $row['variant_id'],
+                    ],
+                    ['quantity' => 0, 'reserved_quantity' => 0, 'low_stock_threshold' => 10]
+                );
+
+                InventoryMovement::create([
+                    'inventory_id' => $inventory->id,
+                    'quantity' => $row['quantity'],
+                    'type' => 'cutting_component_deferred_import',
+                    'reference_id' => $document->id,
+                    'reference_type' => InventoryDocument::class,
+                    'user_id' => (int) $user->id,
+                ]);
+
+                $inventory->increment('quantity', $row['quantity']);
+                ProductVariant::whereKey($row['variant_id'])->update([
+                    'stock' => Inventory::query()->where('product_variant_id', $row['variant_id'])->sum('quantity'),
+                ]);
+            }
+
+            $componentImportRequest->update([
+                'status' => CuttingComponentImportRequest::STATUS_RECEIVED,
+                'received_by' => (int) $user->id,
+                'received_at' => now(),
+                'inventory_document_id' => (int) $document->id,
+            ]);
+        });
+
+        $this->syncAllQueuedOrdersStockSufficiency($managedWarehouseId);
+
+        return back()->with('success', 'Đã nhập kho các thành phần còn lại từ pha lóc.');
+    }
+
     /**
      * Show the form for creating a new stock-in document.
      */

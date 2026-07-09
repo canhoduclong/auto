@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Inventory;
+use App\Models\CuttingComponentImportRequest;
 use App\Models\InventoryDocument;
 use App\Models\InventoryMovement;
 use App\Models\Order;
@@ -296,9 +297,19 @@ class ProductCuttingService
         $plannedComponents[$componentId]['weight'] += $componentWeight;
     }
 
-    public function execute(int $warehouseId, ProductVariant $targetVariant, array $materials, float $actualFinishedWeight, array $actualComponents, string $note, int $userId): ProductCuttingBatch
+    public function execute(
+        int $warehouseId,
+        ProductVariant $targetVariant,
+        array $materials,
+        float $actualFinishedWeight,
+        array $actualComponents,
+        string $note,
+        int $userId,
+        bool $deferComponents = false,
+        ?int $orderId = null
+    ): ProductCuttingBatch
     {
-        return DB::transaction(function () use ($warehouseId, $targetVariant, $materials, $actualFinishedWeight, $actualComponents, $note, $userId) {
+        return DB::transaction(function () use ($warehouseId, $targetVariant, $materials, $actualFinishedWeight, $actualComponents, $note, $userId, $deferComponents, $orderId) {
             $preview = $this->preview($targetVariant, $materials);
 
             $exportDocument = InventoryDocument::create([
@@ -351,9 +362,11 @@ class ProductCuttingService
                 ->filter(fn ($row) => $row['variant_id'] > 0 && $row['quantity'] > 0)
                 ->values()
                 ->all();
-            $componentDocument = $this->importRows($warehouseId, $componentRows, 'Nhập kho thành phần phát sinh từ pha lóc.', $userId);
+            $componentDocument = $deferComponents
+                ? null
+                : $this->importRows($warehouseId, $componentRows, 'Nhập kho thành phần phát sinh từ pha lóc.', $userId);
 
-            return ProductCuttingBatch::create([
+            $batch = ProductCuttingBatch::create([
                 'warehouse_id' => $warehouseId,
                 'target_product_variant_id' => (int) $targetVariant->id,
                 'performed_by' => $userId,
@@ -366,7 +379,45 @@ class ProductCuttingService
                 'actual_components' => $componentRows,
                 'note' => $note,
             ]);
+
+            if ($deferComponents && !empty($componentRows)) {
+                $this->appendDeferredComponentImportRequest($warehouseId, $componentRows, $batch, $userId, $orderId);
+            }
+
+            return $batch;
         });
+    }
+
+    private function appendDeferredComponentImportRequest(int $warehouseId, array $componentRows, ProductCuttingBatch $batch, int $userId, ?int $orderId = null): void
+    {
+        $order = $orderId ? Order::query()->find($orderId) : null;
+        $request = CuttingComponentImportRequest::query()->firstOrCreate(
+            [
+                'warehouse_id' => $warehouseId,
+                'request_date' => now()->toDateString(),
+                'status' => CuttingComponentImportRequest::STATUS_OPEN,
+            ],
+            [
+                'created_by' => $userId,
+                'note' => 'Yêu cầu nhập kho thành phần còn lại từ pha lóc trong ngày.',
+            ]
+        );
+
+        foreach ($componentRows as $row) {
+            $quantity = round(max(0, (float) ($row['quantity'] ?? 0)), 3);
+            $variantId = (int) ($row['variant_id'] ?? 0);
+            if ($variantId <= 0 || $quantity <= 0) {
+                continue;
+            }
+
+            $request->items()->create([
+                'cutting_batch_id' => (int) $batch->id,
+                'order_id' => $order?->id,
+                'product_variant_id' => $variantId,
+                'quantity' => $quantity,
+                'source_order_code' => $order?->code,
+            ]);
+        }
     }
 
     private function importRows(int $warehouseId, array $rows, string $note, int $userId): ?InventoryDocument

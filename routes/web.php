@@ -328,6 +328,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/',            [WarehouseDashboardController::class, 'index'])->name('dashboard');
         Route::get('/cutting/{variant}', [WarehouseDashboardController::class, 'cuttingForm'])->name('cutting.form');
         Route::post('/cutting/{variant}', [WarehouseDashboardController::class, 'executeCutting'])->name('cutting.execute');
+        Route::post('/cutting-component-import-requests/{componentImportRequest}/receive', [WarehouseDashboardController::class, 'receiveCuttingComponentImportRequest'])->name('cutting-component-import-requests.receive');
         Route::get('/orders',      [WarehouseDashboardController::class, 'orders'])->name('orders');
         Route::post('/orders/{order}/logistics',        [WarehouseDashboardController::class, 'updateLogistics'])->name('orders.logistics');
         Route::post('/orders/{order}/start-packing',    [WarehouseDashboardController::class, 'startPacking'])->name('orders.start-packing');

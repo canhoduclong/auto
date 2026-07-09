@@ -275,6 +275,15 @@
                         </div>
 
                         <div class="alert alert-info mt-3 mb-0 js-cutting-summary d-none"></div>
+                        <div class="form-check mt-3">
+                            <input class="form-check-input" type="checkbox" value="1" name="defer_components" id="{{ $modalId }}-defer-components">
+                            <label class="form-check-label fw-semibold" for="{{ $modalId }}-defer-components">
+                                Nhập sau các thành phần còn lại
+                            </label>
+                            <div class="small text-muted">
+                                Khi chọn, các thành phần phát sinh sẽ được gom vào phiếu yêu cầu nhập kho trên dashboard kho trong ngày.
+                            </div>
+                        </div>
                     </div>
 
                     <div class="modal-footer">
