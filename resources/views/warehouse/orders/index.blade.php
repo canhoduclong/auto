@@ -23,12 +23,17 @@
         scroll-margin-top: 140px;
     }
     .wh-order-card.has-cutting-in-progress {
-        border: 2px solid #f59e0b;
-        background: #fffbeb;
-        box-shadow: 0 0 0 3px rgba(245, 158, 11, .12), 0 10px 24px rgba(15, 23, 42, 0.07);
+        border: 2px solid #7c3aed;
+        background: #f5f3ff;
+        box-shadow: 0 0 0 3px rgba(124, 58, 237, .14), 0 10px 24px rgba(15, 23, 42, 0.07);
     }
     .wh-order-card.has-cutting-in-progress > .card-header {
-        background: #fef3c7 !important;
+        background: #ede9fe !important;
+    }
+    .wh-cutting-progress-alert {
+        border-color: #c4b5fd;
+        background: #f5f3ff;
+        color: #4c1d95;
     }
     .wh-order-index {
         border-radius: 50px;

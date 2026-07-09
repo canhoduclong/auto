@@ -82,7 +82,7 @@
 
                     <div class="card-body">
                         @if($hasActiveCuttingBatch)
-                            <div class="alert alert-warning py-2 px-3 mb-2">
+                            <div class="alert wh-cutting-progress-alert py-2 px-3 mb-2">
                                 <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
                                     <div>
                                         <div class="fw-semibold">
@@ -709,7 +709,7 @@
                                                     @if(($shortage['reason'] ?? '') === 'blocked_by_prior_order')
                                                         <span class="text-warning">- bị chặn bởi đơn ưu tiên trước</span>
                                                     @endif
-                                                    @if($cuttingPlan)
+                                                    @if($cuttingPlan && !$hasActiveCuttingBatch)
                                                         <button type="button"
                                                                 class="btn btn-sm btn-primary ms-1"
                                                                 data-bs-toggle="modal"
