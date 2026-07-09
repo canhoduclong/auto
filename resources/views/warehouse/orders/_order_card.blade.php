@@ -340,40 +340,6 @@
                         </div>
 
                         <div class="wh-section pb-0"> 
-                            @if($hasStockShortage && $isReadyToPack)
-                                <div class="wh-stock-alert" title="Không thể bắt đầu đóng hàng khi tồn kho chưa đáp ứng.">
-                                    <details>
-                                        <summary>Không đủ tồn kho để đóng hàng</summary>
-                                        <ul>
-                                            @foreach($stockShortages as $shortage)
-                                                @php
-                                                    $cuttingPlan = $orderCuttingPlans->get((int) ($shortage['variant_id'] ?? 0));
-                                                    $cuttingModalId = $cuttingPlan ? 'cutting-order-modal-' . $order->id . '-' . (int) ($shortage['variant_id'] ?? 0) : null;
-                                                @endphp
-                                                <li>
-                                                    {{ $shortage['variant_name'] ?? 'Sản phẩm' }}:
-                                                    cần {{ number_format((int) ($shortage['required_qty'] ?? 0)) }},
-                                                    khả dụng {{ number_format((int) ($shortage['available_qty'] ?? 0)) }}
-                                                    @if(($shortage['reason'] ?? '') === 'blocked_by_prior_order')
-                                                        (bị ảnh hưởng bởi đơn ưu tiên trước)
-                                                    @endif
-                                                    @if($cuttingPlan)
-                                                        <button type="button"
-                                                                class="btn btn-sm btn-outline-primary ms-1 py-0"
-                                                                data-bs-toggle="modal"
-                                                                data-bs-target="#{{ $cuttingModalId }}">
-                                                            Thêm hàng pha lóc
-                                                        </button>
-                                                    @endif
-                                                </li>
-                                            @endforeach
-                                        </ul>
-                                        <div class="mt-1">
-                                            <a href="{{ route($packingInventoryRoute ?? 'warehouse.stock-in') }}">Bạn cần Nhập kho để thực hiện công việc tiếp</a>
-                                        </div>
-                                    </details>
-                                </div>
-                            @endif
                             <div class="wh-item-table-wrap mt-2">
                                 <div class="wh-item-table-head">
                                     <div>Ảnh</div>
@@ -681,75 +647,40 @@
                         @endif
 
                         @if($canProcessThisOrder && ($isReadyToPack || $isPacking))
-                            @if($isReadyToPack)
-                                @if($canStartPacking && !$isPendingSaleConfirmation)
-                                    <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.start-packing', $order) }}" method="POST" class="d-grid js-start-packing-form">
-                                        @csrf
-                                        <button class="btn btn-primary btn-sm js-start-packing-btn" type="submit">
-                                            <i class="bi bi-box2 me-1"></i>Đóng hàng
+                            <div class="wh-order-actions">
+                                @if($isReadyToPack)
+                                    @if($canStartPacking && !$isPendingSaleConfirmation)
+                                        <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.start-packing', $order) }}" method="POST" class="js-start-packing-form">
+                                            @csrf
+                                            <button class="btn btn-primary btn-sm js-start-packing-btn" type="submit">
+                                                <i class="bi bi-box2 me-1"></i>Đóng hàng
+                                            </button>
+                                        </form>
+                                    @elseif($isPendingSaleConfirmation)
+                                        <button class="btn btn-warning btn-sm" type="button" disabled>
+                                            <i class="bi bi-hourglass-split me-1"></i>Đang chờ sale xác nhận thay đổi đơn
                                         </button>
-                                    </form>
-                                @else
-                                    <div class="d-grid gap-1">
-                                        @if($isPendingSaleConfirmation)
-                                            <button class="btn btn-warning btn-sm" type="button" disabled>
-                                                <i class="bi bi-hourglass-split me-1"></i>Đang chờ sale xác nhận thay đổi đơn
-                                            </button>
-                                        @else
-                                            <button class="btn btn-danger btn-sm" type="button" disabled>
-                                                <i class="bi bi-exclamation-triangle-fill me-1"></i>Không đủ hàng – Chờ nhập kho
-                                            </button>
-                                        @endif
-                                        @if(!$isPendingSaleConfirmation && $stockShortages->isNotEmpty())
-                                            <div class="wh-stock-alert mt-1">
-                                                <details>
-                                                    <summary>Chi tiết thiếu hàng ({{ $stockShortages->count() }} sản phẩm)</summary>
-                                                    <ul>
-                                                        @foreach($stockShortages as $shortage)
-                                                            @php
-                                                                $cuttingPlan = $orderCuttingPlans->get((int) ($shortage['variant_id'] ?? 0));
-                                                                $cuttingModalId = $cuttingPlan ? 'cutting-order-modal-' . $order->id . '-' . (int) ($shortage['variant_id'] ?? 0) : null;
-                                                            @endphp
-                                                            <li>
-                                                                <strong>{{ $shortage['variant_name'] ?? 'Sản phẩm' }}</strong>:
-                                                                cần {{ number_format((float)($shortage['required_qty'] ?? 0), 0) }},
-                                                                còn {{ number_format((float)($shortage['available_qty'] ?? 0), 0) }}
-                                                                @php $shortQty = (float)($shortage['short_qty'] ?? 0); @endphp
-                                                                @if($shortQty > 0)
-                                                                    <span class="text-danger">(thiếu {{ number_format($shortQty, 0) }})</span>
-                                                                @endif
-                                                                @if(($shortage['reason'] ?? '') === 'blocked_by_prior_order')
-                                                                    <span class="text-warning">– bị chặn bởi đơn ưu tiên trước</span>
-                                                                @endif
-                                                                @if($cuttingPlan)
-                                                                    <div class="mt-1">
-                                                                        <button type="button"
-                                                                                class="btn btn-sm btn-primary"
-                                                                                data-bs-toggle="modal"
-                                                                                data-bs-target="#{{ $cuttingModalId }}">
-                                                                            <i class="bi bi-scissors me-1"></i>Thêm hàng pha lóc
-                                                                        </button>
-                                                                    </div>
-                                                                @endif
-                                                            </li>
-                                                        @endforeach
-                                                    </ul>
-                                                    <div class="mt-1">
-                                                        <a href="{{ route($packingInventoryRoute ?? 'warehouse.stock-in') }}">Nhập kho để tiếp tục</a>
-                                                    </div>
-                                                </details>
-                                            </div>
-                                        @endif
-                                    </div>
+                                    @else
+                                        <button class="btn btn-danger btn-sm" type="button" disabled>
+                                            <i class="bi bi-exclamation-triangle-fill me-1"></i>Không đủ hàng – Chờ nhập kho
+                                        </button>
+                                    @endif
                                 @endif
-                            @endif
 
-                            <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.return-to-ready', $order) }}" method="POST" class="d-grid mb-2 js-undo-packing-form {{ $canUndoStartPacking ? '' : 'd-none' }}">
-                                @csrf
-                                <button class="btn btn-outline-warning btn-sm js-undo-packing-btn" type="submit">
-                                    <i class="bi bi-arrow-counterclockwise me-1"></i>Undo nhận đơn
-                                </button>
-                            </form>
+                                <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.return-to-ready', $order) }}" method="POST" class="js-undo-packing-form {{ $canUndoStartPacking ? '' : 'd-none' }}">
+                                    @csrf
+                                    <button class="btn btn-outline-warning btn-sm js-undo-packing-btn" type="submit">
+                                        <i class="bi bi-arrow-counterclockwise me-1"></i>Undo nhận đơn
+                                    </button>
+                                </form>
+
+                                <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.complete-packing', $order) }}" method="POST" class="js-complete-packing-form {{ $isPacking ? '' : 'd-none' }}">
+                                    @csrf
+                                    <button class="btn btn-sm wh-warning-action-btn" {{ $isPendingSaleConfirmation ? 'disabled' : '' }}>
+                                        <i class="bi bi-check2-all me-1"></i>Hoàn thành đóng gói
+                                    </button>
+                                </form>
+                            </div>
 
                             @if($isPacking)
                                 <div class="small text-muted mb-2">
@@ -757,12 +688,44 @@
                                 </div>
                             @endif
 
-                            <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.complete-packing', $order) }}" method="POST" class="d-grid js-complete-packing-form {{ $isPacking ? '' : 'd-none' }}">
-                                @csrf
-                                <button class="btn btn-sm wh-warning-action-btn" {{ $isPendingSaleConfirmation ? 'disabled' : '' }}>
-                                    <i class="bi bi-check2-all me-1"></i>Hoàn thành đóng gói
-                                </button>
-                            </form>
+                            @if($isReadyToPack && !$isPendingSaleConfirmation && $stockShortages->isNotEmpty())
+                                <div class="wh-stock-alert mt-2">
+                                    <details open>
+                                        <summary>Chi tiết thiếu hàng ({{ $stockShortages->count() }} sản phẩm)</summary>
+                                        <ul>
+                                            @foreach($stockShortages as $shortage)
+                                                @php
+                                                    $cuttingPlan = $orderCuttingPlans->get((int) ($shortage['variant_id'] ?? 0));
+                                                    $cuttingModalId = $cuttingPlan ? 'cutting-order-modal-' . $order->id . '-' . (int) ($shortage['variant_id'] ?? 0) : null;
+                                                @endphp
+                                                <li>
+                                                    <strong>{{ $shortage['variant_name'] ?? 'Sản phẩm' }}</strong>:
+                                                    cần {{ number_format((float)($shortage['required_qty'] ?? 0), 0) }},
+                                                    còn {{ number_format((float)($shortage['available_qty'] ?? 0), 0) }}
+                                                    @php $shortQty = (float)($shortage['short_qty'] ?? 0); @endphp
+                                                    @if($shortQty > 0)
+                                                        <span class="text-danger">(thiếu {{ number_format($shortQty, 0) }})</span>
+                                                    @endif
+                                                    @if(($shortage['reason'] ?? '') === 'blocked_by_prior_order')
+                                                        <span class="text-warning">- bị chặn bởi đơn ưu tiên trước</span>
+                                                    @endif
+                                                    @if($cuttingPlan)
+                                                        <button type="button"
+                                                                class="btn btn-sm btn-primary ms-1"
+                                                                data-bs-toggle="modal"
+                                                                data-bs-target="#{{ $cuttingModalId }}">
+                                                            <i class="bi bi-scissors me-1"></i>Thêm hàng pha lóc
+                                                        </button>
+                                                    @endif
+                                                </li>
+                                            @endforeach
+                                        </ul>
+                                        <div class="mt-1">
+                                            <a href="{{ route($packingInventoryRoute ?? 'warehouse.stock-in') }}">Nhập kho để tiếp tục</a>
+                                        </div>
+                                    </details>
+                                </div>
+                            @endif
                         @else
                             @php
                                 $isNotReceived = in_array($order->status, [

@@ -260,6 +260,21 @@
         border-color: rgba(var(--bs-warning-rgb), var(--bs-bg-opacity)) !important;
         color: #212529 !important;
     }
+    .wh-order-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+    }
+    .wh-order-actions > form,
+    .wh-order-actions > button,
+    .wh-order-actions > span {
+        width: auto;
+        margin: 0 !important;
+    }
+    .wh-order-actions .btn {
+        white-space: nowrap;
+    }
     .wh-compact-form {
         display: flex;
         gap: 6px;
