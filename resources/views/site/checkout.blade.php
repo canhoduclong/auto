@@ -169,6 +169,66 @@
         border: 1px solid rgba(148, 163, 184, 0.25);
     }
 
+    .checkout-recipient-card {
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        border-radius: 16px;
+        background:
+            linear-gradient(180deg, rgba(236, 254, 255, .45), rgba(255, 255, 255, .92)),
+            #fff;
+        padding: 16px;
+    }
+
+    .checkout-customer-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 14px;
+        padding: 12px;
+        border: 1px dashed rgba(15, 118, 110, .28);
+        border-radius: 14px;
+        background: rgba(236, 254, 255, .6);
+    }
+
+    .checkout-customer-actions__text {
+        flex: 1 1 220px;
+        min-width: 0;
+    }
+
+    .checkout-customer-actions__title {
+        margin: 0;
+        font-size: .9rem;
+        font-weight: 800;
+        color: var(--checkout-ink);
+    }
+
+    .checkout-customer-actions__subtitle {
+        margin: 2px 0 0;
+        color: var(--checkout-muted);
+        font-size: .78rem;
+    }
+
+    .checkout-selected-customer {
+        display: none;
+        border: 1px solid rgba(14, 165, 233, .24);
+        border-radius: 12px;
+        background: #eff6ff;
+        color: #0f172a;
+        margin: -4px 0 14px;
+        padding: 10px 12px;
+    }
+
+    .checkout-form-label {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .checkout-form-label i {
+        color: var(--checkout-accent);
+        font-size: .95rem;
+    }
+
     .checkout-table-wrap {
         border: 1px solid var(--checkout-line);
         border-radius: 14px;
@@ -242,6 +302,7 @@
     .discount-switch {
         display: inline-flex;
         width: 100%;
+        margin-top: 6px;
     }
 
     .discount-switch .btn {
@@ -468,11 +529,17 @@
                             </div>
 
                             @auth
-                            <div class="mb-3">
-                                <button type="button" class="btn btn-outline-primary btn-sm" id="btnToggleCustomerPicker">Chọn khách hàng</button>
+                            <div class="checkout-customer-actions">
+                                <div class="checkout-customer-actions__text">
+                                    <p class="checkout-customer-actions__title">Khách hàng có sẵn</p>
+                                    <p class="checkout-customer-actions__subtitle">Chọn nhanh khách đã chăm sóc để tự điền thông tin nhận hàng.</p>
+                                </div>
+                                <button type="button" class="btn btn-outline-primary btn-sm" id="btnToggleCustomerPicker">
+                                    <i class="bi bi-person-search"></i> Chọn khách hàng
+                                </button>
                                 <button type="button" class="btn btn-outline-secondary btn-sm" id="btnClearCustomer" style="display:none;">Bỏ chọn</button>
-                                <div id="selectedCustomerPreview" class="alert alert-info mt-2 mb-0 py-2 px-3" style="display:none;"></div>
                             </div>
+                            <div id="selectedCustomerPreview" class="checkout-selected-customer"></div>
 
                             <div class="modal fade" id="customerPickerModal" tabindex="-1" aria-labelledby="customerPickerModalLabel" aria-hidden="true">
                                 <div class="modal-dialog modal-xl modal-dialog-scrollable">
@@ -550,9 +617,10 @@
                             </div>
                             @endauth
 
+                            <div class="checkout-recipient-card">
                             <div class="row">
                                 <div class="col-md-6 checkout-form-group">
-                                    <label for="recipient_name" class="checkout-form-label">Họ tên người nhận</label>
+                                    <label for="recipient_name" class="checkout-form-label"><i class="bi bi-person"></i> Họ tên người nhận</label>
                                     <input type="text" class="form-control @error('recipient_name') is-invalid @enderror"
                                         id="recipient_name" name="recipient_name" value="{{ old('recipient_name', auth()->user()->name ?? '') }}" required>
                                     @error('recipient_name')
@@ -561,7 +629,7 @@
                                 </div>
 
                                 <div class="col-md-6 checkout-form-group">
-                                    <label for="recipient_phone" class="checkout-form-label">Số điện thoại</label>
+                                    <label for="recipient_phone" class="checkout-form-label"><i class="bi bi-telephone"></i> Số điện thoại</label>
                                     <input type="text" class="form-control @error('recipient_phone') is-invalid @enderror"
                                         id="recipient_phone" name="recipient_phone" value="{{ old('recipient_phone') }}" required>
                                     @error('recipient_phone')
@@ -570,7 +638,7 @@
                                 </div>
 
                                 <div class="col-md-6 checkout-form-group">
-                                    <label for="recipient_email" class="checkout-form-label">Email</label>
+                                    <label for="recipient_email" class="checkout-form-label"><i class="bi bi-envelope"></i> Email</label>
                                     <input type="email" class="form-control @error('recipient_email') is-invalid @enderror"
                                         id="recipient_email" name="recipient_email" value="{{ old('recipient_email', auth()->user()->email ?? '') }}">
                                     @error('recipient_email')
@@ -579,7 +647,7 @@
                                 </div>
 
                                 <div class="col-md-6 checkout-form-group">
-                                    <label for="delivery_time" class="checkout-form-label">Giờ giao hàng</label>
+                                    <label for="delivery_time" class="checkout-form-label"><i class="bi bi-clock"></i> Giờ giao hàng</label>
                                     <input type="text" class="form-control @error('delivery_time') is-invalid @enderror"
                                         id="delivery_time" name="delivery_time" value="{{ old('delivery_time') }}"
                                         placeholder="Ví dụ: 9h-11h hoặc sau 17h">
@@ -589,7 +657,7 @@
                                 </div>
 
                                 <div class="col-12 checkout-form-group">
-                                    <label for="recipient_address" class="checkout-form-label">Địa chỉ nhận hàng</label>
+                                    <label for="recipient_address" class="checkout-form-label"><i class="bi bi-geo-alt"></i> Địa chỉ nhận hàng</label>
                                     <textarea class="form-control @error('recipient_address') is-invalid @enderror"
                                         id="recipient_address" name="recipient_address" rows="3" required>{{ old('recipient_address') }}</textarea>
                                     @error('recipient_address')
@@ -598,9 +666,10 @@
                                 </div>
 
                                 <div class="col-12 checkout-form-group mb-0">
-                                    <label for="note" class="checkout-form-label">Ghi chú</label>
+                                    <label for="note" class="checkout-form-label"><i class="bi bi-chat-left-text"></i> Ghi chú</label>
                                     <textarea class="form-control" id="note" name="note" rows="3">{{ old('note') }}</textarea>
                                 </div>
+                            </div>
                             </div>
                         </div>
                     </div>
@@ -666,12 +735,6 @@
                                                     <td class="checkout-price">{{ number_format($unitPrice, 0, ',', '.') }}đ</td>
                                                     
                                                     <td>
-                                                        <div class="btn-group discount-switch mb-1" role="group" aria-label="Loai chiet khau">
-                                                            <input class="btn-check checkout-discount-type" type="radio" name="item_discount_type[{{ $id }}]" id="checkout-discount-decrease-{{ $id }}" value="decrease" data-discount-type-input {{ $inputDiscountType === 'decrease' ? 'checked' : '' }}>
-                                                            <label class="btn btn-outline-secondary" for="checkout-discount-decrease-{{ $id }}">Giảm</label>
-                                                            <input class="btn-check checkout-discount-type" type="radio" name="item_discount_type[{{ $id }}]" id="checkout-discount-increase-{{ $id }}" value="increase" data-discount-type-input {{ $inputDiscountType === 'increase' ? 'checked' : '' }}>
-                                                            <label class="btn btn-outline-secondary" for="checkout-discount-increase-{{ $id }}">Tăng</label>
-                                                        </div>
                                                         <input
                                                             type="number"
                                                             min="0"
@@ -681,6 +744,12 @@
                                                             name="item_discount[{{ $id }}]"
                                                             value="{{ old('item_discount.' . $id, 0) }}"
                                                             data-discount-input>
+                                                        <div class="btn-group discount-switch" role="group" aria-label="Loai chiet khau">
+                                                            <input class="btn-check checkout-discount-type" type="radio" name="item_discount_type[{{ $id }}]" id="checkout-discount-decrease-{{ $id }}" value="decrease" data-discount-type-input {{ $inputDiscountType === 'decrease' ? 'checked' : '' }}>
+                                                            <label class="btn btn-outline-secondary" for="checkout-discount-decrease-{{ $id }}">Giảm</label>
+                                                            <input class="btn-check checkout-discount-type" type="radio" name="item_discount_type[{{ $id }}]" id="checkout-discount-increase-{{ $id }}" value="increase" data-discount-type-input {{ $inputDiscountType === 'increase' ? 'checked' : '' }}>
+                                                            <label class="btn btn-outline-secondary" for="checkout-discount-increase-{{ $id }}">Tăng</label>
+                                                        </div>
                                                         <div class="selling-price-feedback"></div>
                                                     </td>
                                                     <td class="checkout-qty">{{ $quantity }}</td>

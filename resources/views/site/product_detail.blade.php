@@ -38,11 +38,10 @@
 
 @section('content')
 <div class="container py-4 product-detail-page">
-    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+    <div class="d-flex flex-wrap align-items-center gap-3 mb-4">
         <a href="{{ route('pages.product_list') }}" class="btn btn-outline-primary btn-sm">
             <i class="bi bi-arrow-left"></i> Danh sách sản phẩm
         </a>
-        <x-cart-widget :cartCount="count(session('cart', []))" />
     </div>
 
     <div class="row g-4">
