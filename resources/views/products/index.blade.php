@@ -114,7 +114,40 @@
                         </a>
                         <div class="text-muted small">{{ $product->brand->name ?? '' }}{{ ($product->brand->name ?? '') && ($product->category->name ?? '') ? ' / ' : '' }}{{ $product->category->name ?? '' }}</div>
                     </td>
-                    <td><span class="badge bg-light text-dark border">{{ $product->sort_order ?? 0 }}</span></td>
+                    <td>
+                        @can('update', $product)
+                            <div class="product-sort-control" data-product-id="{{ $product->id }}">
+                                <input
+                                    type="number"
+                                    min="0"
+                                    max="999999"
+                                    step="1"
+                                    class="form-control form-control-sm product-sort-input"
+                                    value="{{ $product->sort_order ?? 0 }}"
+                                    data-original-value="{{ $product->sort_order ?? 0 }}"
+                                    aria-label="Thứ tự hiển thị {{ $product->name }}"
+                                >
+                                <button
+                                    type="button"
+                                    class="btn btn-sm btn-outline-secondary product-sort-save"
+                                    title="Lưu thứ tự"
+                                    data-url="{{ route('products.sort-order', $product) }}"
+                                >
+                                    Lưu
+                                </button>
+                                <button
+                                    type="button"
+                                    class="btn btn-sm btn-outline-primary product-sort-top"
+                                    title="Đưa sản phẩm lên đầu danh sách"
+                                    data-url="{{ route('products.sort-order', $product) }}"
+                                >
+                                    Top
+                                </button>
+                            </div>
+                        @else
+                            <span class="badge bg-light text-dark border">{{ $product->sort_order ?? 0 }}</span>
+                        @endcan
+                    </td>
                     <td>{{ $product->unit_label }}</td>
                     <td>
                         <span class="badge {{ ($product->product_type ?? \App\Models\Product::TYPE_WHOLE) === \App\Models\Product::TYPE_CUT ? 'bg-info text-dark' : 'bg-secondary' }}">
@@ -231,6 +264,87 @@
 @push('scripts')
 <script>
     $(function() {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '{{ csrf_token() }}';
+
+        function setSortControlState(control, disabled) {
+            control.querySelectorAll('input, button').forEach((element) => {
+                element.disabled = disabled;
+            });
+        }
+
+        async function updateProductSort(control, payload) {
+            const saveButton = control.querySelector('.product-sort-save');
+            const url = (payload.top ? control.querySelector('.product-sort-top') : saveButton).dataset.url;
+
+            setSortControlState(control, true);
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                    },
+                    body: JSON.stringify(payload),
+                });
+
+                const data = await response.json();
+                if (!response.ok || !data.success) {
+                    throw new Error(data.message || 'Không thể cập nhật thứ tự sản phẩm.');
+                }
+
+                if (payload.top) {
+                    window.location.reload();
+                    return;
+                }
+
+                const input = control.querySelector('.product-sort-input');
+                input.value = data.sort_order;
+                input.dataset.originalValue = data.sort_order;
+                saveButton.classList.remove('btn-warning');
+                saveButton.classList.add('btn-outline-secondary');
+
+                if (window.showToast) {
+                    window.showToast(data.message || 'Đã cập nhật thứ tự sản phẩm.', 'success');
+                }
+            } catch (error) {
+                if (window.showToast) {
+                    window.showToast(error.message || 'Không thể cập nhật thứ tự sản phẩm.', 'error');
+                } else {
+                    alert(error.message || 'Không thể cập nhật thứ tự sản phẩm.');
+                }
+            } finally {
+                setSortControlState(control, false);
+            }
+        }
+
+        document.querySelectorAll('.product-sort-input').forEach((input) => {
+            input.addEventListener('input', function () {
+                const control = input.closest('.product-sort-control');
+                const saveButton = control.querySelector('.product-sort-save');
+                const changed = String(input.value) !== String(input.dataset.originalValue);
+                saveButton.classList.toggle('btn-warning', changed);
+                saveButton.classList.toggle('btn-outline-secondary', !changed);
+            });
+        });
+
+        document.addEventListener('click', function (event) {
+            const saveButton = event.target.closest('.product-sort-save');
+            if (saveButton) {
+                const control = saveButton.closest('.product-sort-control');
+                const input = control.querySelector('.product-sort-input');
+                updateProductSort(control, { sort_order: Number(input.value || 0) });
+                return;
+            }
+
+            const topButton = event.target.closest('.product-sort-top');
+            if (topButton) {
+                const control = topButton.closest('.product-sort-control');
+                updateProductSort(control, { top: true });
+            }
+        });
+
         $(document).on('click', '.choose-image-btn', function() {
             let productId = $(this).data('product-id');
             var url = "{{ route('media.library.popup') }}?callback=selectProductImage&product_id=" + productId;
@@ -243,6 +357,22 @@
         };
     });
 </script>
+@endpush
+
+@push('styles')
+<style>
+    .product-sort-control {
+        display: grid;
+        grid-template-columns: 72px auto auto;
+        gap: 6px;
+        align-items: center;
+        min-width: 172px;
+    }
+
+    .product-sort-control .btn {
+        white-space: nowrap;
+    }
+</style>
 @endpush
 
 @endsection

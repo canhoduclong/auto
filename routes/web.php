@@ -592,6 +592,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         ->middleware('permission');
 
     // Quản lý sản phẩm
+    Route::post('products/{product}/sort-order', [ProductController::class, 'updateSortOrder'])->name('products.sort-order')->middleware('permission');
     Route::resource('products', ProductController::class)->middleware('permission');
     Route::post('products/{product}/restore', [ProductController::class, 'restore'])->name('products.restore')->middleware('permission');
     Route::get('products/{product}/quick-edit-form', [ProductController::class, 'getQuickEditForm'])->name('products.getQuickEditForm');

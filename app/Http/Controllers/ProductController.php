@@ -461,6 +461,37 @@ class ProductController extends Controller
     }
 
 
+    public function updateSortOrder(Request $request, Product $product)
+    {
+        $this->authorize('update', $product);
+
+        $validated = $request->validate([
+            'sort_order' => ['nullable', 'integer', 'min:0', 'max:999999'],
+            'top' => ['nullable', 'boolean'],
+        ]);
+
+        if ($request->boolean('top')) {
+            DB::transaction(function () use ($product): void {
+                Product::query()
+                    ->whereKeyNot($product->id)
+                    ->increment('sort_order');
+
+                $product->forceFill(['sort_order' => 0])->save();
+            });
+        } else {
+            $product->forceFill([
+                'sort_order' => (int) ($validated['sort_order'] ?? 0),
+            ])->save();
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã cập nhật thứ tự sản phẩm.',
+            'sort_order' => (int) $product->fresh()->sort_order,
+        ]);
+    }
+
+
     public function destroy(Product $product)
     {
         $this->authorize('delete', $product);

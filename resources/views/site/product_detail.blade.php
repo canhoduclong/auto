@@ -681,6 +681,18 @@ document.addEventListener('DOMContentLoaded', function () {
     orderNowButton?.addEventListener('click', async function () {
         await addSelectedItems({ redirectToCheckout: true });
     });
+
+    const defaultVariant = variants.reduce((best, variant) => {
+        if (!best) {
+            return variant;
+        }
+
+        return Number(variant.stock || 0) > Number(best.stock || 0) ? variant : best;
+    }, null);
+
+    if (defaultVariant) {
+        toggleVariant(defaultVariant.id);
+    }
 });
 </script>
 @endpush
