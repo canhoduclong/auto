@@ -323,21 +323,6 @@ class CartController extends Controller
             ->with('latestPriceRule', 'product.avatar.media')
             ->findOrFail($validated['variant_id']);
         $quantity = (int) ($validated['quantity'] ?? 1);
-        $availableStock = max(0, (int) ($variant->available_stock ?? 0));
-
-        if ($availableStock < 1) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Sản phẩm này hiện đã hết hàng.',
-            ], 422);
-        }
-
-        if ($quantity > $availableStock) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Số lượng vượt quá tồn kho hiện có.',
-            ], 422);
-        }
 
         $cart = session()->get('cart', []);
 
@@ -354,14 +339,6 @@ class CartController extends Controller
             : (bool) ($variant->product?->is_priced_by_kg ?? true);
 
         if (isset($cart[$variant->id])) {
-            $currentQuantity = (int) ($cart[$variant->id]['quantity'] ?? 0);
-            if (($currentQuantity + $quantity) > $availableStock) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Tổng số lượng trong giỏ vượt quá tồn kho hiện có.',
-                ], 422);
-            }
-
             $cart[$variant->id]['quantity'] += $quantity;
             $cart[$variant->id]['min_price'] = (float) ($variant->latestPriceRule?->min_price ?? ($cart[$variant->id]['min_price'] ?? 0));
             $cart[$variant->id]['unit_weight'] = $resolvedKg;

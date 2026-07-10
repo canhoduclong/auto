@@ -96,14 +96,13 @@
                                 type="button"
                                 class="variant-option"
                                 data-variant-id="{{ $variant['id'] }}"
-                                @disabled($variant['stock'] < 1)
                             >
                                 <span class="variant-option__size">{{ $variant['size'] }}</span>
                                 @if($showVariantPrice)
                                     <span class="variant-option__price">{{ $variant['price'] > 0 ? number_format($variant['price'], 0, ',', '.') . 'đ' : 'Liên hệ' }}</span>
                                 @endif
                                 <span class="variant-option__stock">
-                                    {{ $variant['stock'] > 0 ? 'Còn ' . $variant['stock'] . ' ' . $variant['unit_label'] : 'Hết hàng' }}
+                                    {{ $variant['stock'] > 0 ? 'Còn ' . $variant['stock'] . ' ' . $variant['unit_label'] : 'Hết hàng - vẫn lên đơn' }}
                                 </span>
                             </button>
                         @empty
@@ -502,7 +501,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function sanitizeQuantity(input, variant) {
         const max = Math.max(Number(variant.stock || 0), 0);
         let quantity = parseInt(input.value, 10) || 1;
-        quantity = Math.min(Math.max(quantity, 1), max);
+        quantity = max > 0 ? Math.min(Math.max(quantity, 1), max) : Math.max(quantity, 1);
         input.value = quantity;
         return quantity;
     }
@@ -548,11 +547,11 @@ document.addEventListener('DOMContentLoaded', function () {
                     <div class="selected-variant-row__title">${escapeHtml(variant.size)}</div>
                     <div class="selected-variant-row__meta">
                         ${variant.sku ? 'SKU: ' + escapeHtml(variant.sku) + ' | ' : ''}
-                        Tồn: ${escapeHtml(variant.stock)} ${escapeHtml(variant.unit_label)}
+                        ${Number(variant.stock || 0) > 0 ? 'Tồn: ' + escapeHtml(variant.stock) + ' ' + escapeHtml(variant.unit_label) : 'Hết hàng - vẫn lên đơn'}
                         ${variantPriceLabel ? ' | Giá: ' + escapeHtml(variantPriceLabel) : ''}
                     </div>
                 </div>
-                <input type="number" class="form-control selected-variant-qty" data-variant-id="${escapeHtml(variant.id)}" value="1" min="1" max="${escapeHtml(variant.stock)}" step="1" aria-label="Số lượng ${escapeHtml(variant.size)}">
+                <input type="number" class="form-control selected-variant-qty" data-variant-id="${escapeHtml(variant.id)}" value="1" min="1" ${Number(variant.stock || 0) > 0 ? 'max="' + escapeHtml(variant.stock) + '"' : ''} step="1" aria-label="Số lượng ${escapeHtml(variant.size)}">
                 <button type="button" class="selected-variant-remove" data-variant-id="${escapeHtml(variant.id)}" aria-label="Bỏ chọn ${escapeHtml(variant.size)}">
                     <i class="bi bi-x-lg"></i>
                 </button>
@@ -566,7 +565,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function toggleVariant(variantId) {
         const key = String(variantId);
         const variant = variantMap.get(key);
-        if (!variant || Number(variant.stock || 0) < 1) {
+        if (!variant) {
             return;
         }
 

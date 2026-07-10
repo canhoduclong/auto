@@ -61,14 +61,11 @@ class HomeController extends Controller
                     ->withAvailableStock()
                     ->where('status', true)
                     ->with(['values.attribute', 'latestPriceRule'])
-                    ->orderByRaw('CASE WHEN sort_order IS NULL OR sort_order = 0 THEN 1 ELSE 0 END')
                     ->orderBy('sort_order')
-                    ->orderBy('size')
                     ->orderBy('id'),
             ])
-            ->orderByRaw('CASE WHEN sort_order IS NULL OR sort_order = 0 THEN 1 ELSE 0 END')
             ->orderBy('sort_order')
-            ->orderBy('name')
+            ->orderBy('created_at', 'desc')
             ->take(8)
             ->get();
         $posts = Post::latest()->take(5)->get();
