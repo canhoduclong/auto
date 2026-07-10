@@ -493,7 +493,7 @@
                             <li><a href="{{ route('home') }}" class="nav-link px-2 link-secondary">{{ __('site.home') }}</a></li>
                             <li><a href="{{ route('pages.about') }}" class="nav-link px-2 link-dark">{{ __('site.about') }}</a></li>
                             <li class="nav-item">
-                                <a class="nav-link" href="{{ route('pages.products_by_category') }}" >
+                                <a class="nav-link" href="{{ route('pages.product_list') }}" >
                                     {{ __('site.products') }}
                                 </a> 
                             </li>

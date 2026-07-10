@@ -52,19 +52,27 @@ class HomeController extends Controller
         }
 
         $categories = Category::all();
-        $variants = \App\Models\ProductVariant::query()
-            ->withAvailableStock()
-            ->inStock()
+        $featuredProducts = Product::query()
             ->where('status', true)
-            ->whereHas('product', function ($query) {
-                $query->where('status', true);
-            })
-            ->with(['product.avatar.media', 'product.gallery.media', 'latestPriceRule', 'avatar.media'])
-            ->latest()
-            ->take(12)
+            ->with([
+                'category',
+                'avatar.media',
+                'variants' => fn ($variantQuery) => $variantQuery
+                    ->withAvailableStock()
+                    ->where('status', true)
+                    ->with(['values.attribute', 'latestPriceRule'])
+                    ->orderByRaw('CASE WHEN sort_order IS NULL OR sort_order = 0 THEN 1 ELSE 0 END')
+                    ->orderBy('sort_order')
+                    ->orderBy('size')
+                    ->orderBy('id'),
+            ])
+            ->orderByRaw('CASE WHEN sort_order IS NULL OR sort_order = 0 THEN 1 ELSE 0 END')
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->take(8)
             ->get();
         $posts = Post::latest()->take(5)->get();
-        return view('welcome', compact('settings', 'categories', 'variants', 'posts', 'sliderMedia'));
+        return view('welcome', compact('settings', 'categories', 'featuredProducts', 'posts', 'sliderMedia'));
     }
 
     public function variants(Request $request)

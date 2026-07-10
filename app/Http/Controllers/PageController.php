@@ -376,12 +376,23 @@ class PageController extends Controller
             $query->where('category_id', $category->id);
         }
 
-        $products = $query->with([
-            'avatar.media',
-            'variants.values.attribute',
-            'variants.mediaLink.media',
-            'variants.latestPriceRule',
-        ])->paginate(10);
+        $products = $query
+            ->with([
+                'category',
+                'avatar.media',
+                'variants' => fn ($variantQuery) => $variantQuery
+                    ->withAvailableStock()
+                    ->where('status', true)
+                    ->with(['values.attribute', 'latestPriceRule'])
+                    ->orderByRaw('CASE WHEN sort_order IS NULL OR sort_order = 0 THEN 1 ELSE 0 END')
+                    ->orderBy('sort_order')
+                    ->orderBy('size')
+                    ->orderBy('id'),
+            ])
+            ->orderByRaw('CASE WHEN sort_order IS NULL OR sort_order = 0 THEN 1 ELSE 0 END')
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->paginate(12);
 
         return view('site.product_list', [
             'products' => $products,
@@ -394,12 +405,18 @@ class PageController extends Controller
     public function productDetail(Product $product)
     {
         $product->load([
+            'category',
+            'avatar.media',
             'brand',
             'gallery.media', 
-            'variants.values.attribute', 
-            'variants.mediaLink.media', 
-            'variants.latestPriceRule',
-            'variants.inventories'
+            'variants' => fn ($variantQuery) => $variantQuery
+                ->withAvailableStock()
+                ->where('status', true)
+                ->with(['values.attribute', 'mediaLink.media', 'latestPriceRule', 'inventories'])
+                ->orderByRaw('CASE WHEN sort_order IS NULL OR sort_order = 0 THEN 1 ELSE 0 END')
+                ->orderBy('sort_order')
+                ->orderBy('size')
+                ->orderBy('id'),
         ]);
 
         $product->variants->each(function ($variant) {
@@ -411,10 +428,33 @@ class PageController extends Controller
             ->unique('id')
             ->groupBy('attribute.name');
 
+        $relatedProducts = Product::query()
+            ->where('status', true)
+            ->whereKeyNot($product->id)
+            ->when($product->category_id, fn ($query) => $query->where('category_id', $product->category_id))
+            ->with([
+                'category',
+                'avatar.media',
+                'variants' => fn ($variantQuery) => $variantQuery
+                    ->withAvailableStock()
+                    ->where('status', true)
+                    ->with('latestPriceRule')
+                    ->orderByRaw('CASE WHEN sort_order IS NULL OR sort_order = 0 THEN 1 ELSE 0 END')
+                    ->orderBy('sort_order')
+                    ->orderBy('size')
+                    ->orderBy('id'),
+            ])
+            ->orderByRaw('CASE WHEN sort_order IS NULL OR sort_order = 0 THEN 1 ELSE 0 END')
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->limit(4)
+            ->get();
+
         return view('site.product_detail', [
             'product' => $product,
             'settings' => $this->settings,
-            'attributes' => $attributes
+            'attributes' => $attributes,
+            'relatedProducts' => $relatedProducts,
         ]);
     }
 

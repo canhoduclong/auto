@@ -9,6 +9,7 @@ use App\Models\InventoryDocumentItem;
 use App\Models\Order;
 use App\Models\OrderHistory;
 use App\Models\OrderReturn;
+use App\Models\ProductCuttingBatch;
 use App\Models\ProductVariant;
 use App\Models\TaskAssignment;
 use App\Models\WarehouseInventoryTransfer;
@@ -460,8 +461,117 @@ class WarehouseApiController extends BaseApiController
     public function executeOrderCutting(Request $request, Order $order, ProductVariant $variant): JsonResponse
     {
         $this->ensureWarehouseRole($request);
+        $user = $request->user();
+        $warehouseId = $user->warehouse_id ? (int) $user->warehouse_id : null;
+        if (!$warehouseId) {
+            return $this->fail('Tài khoản chưa được gán kho thực hiện.', 422);
+        }
+        if ($warehouseId && (int) ($order->warehouse_id ?? 0) > 0 && (int) $order->warehouse_id !== $warehouseId) {
+            return $this->fail('Đơn không thuộc kho bạn quản lý.', 403);
+        }
 
-        return $this->executeCutting($request, $variant);
+        $variant->loadMissing('product');
+        if ($variant->product?->product_type !== \App\Models\Product::TYPE_CUT) {
+            return $this->fail('Sản phẩm không phải hàng pha lóc.', 422);
+        }
+
+        $data = $request->validate([
+            'materials' => ['required', 'array', 'min:1'],
+            'materials.*.variant_id' => ['required', 'exists:product_variants,id'],
+            'materials.*.quantity' => ['required', 'numeric', 'min:0'],
+            'note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        try {
+            $batch = app(ProductCuttingService::class)->start(
+                $warehouseId,
+                $variant,
+                $data['materials'],
+                (string) ($data['note'] ?? 'Mobile xác nhận lấy hàng nguyên con để pha lóc.'),
+                (int) $user->id,
+                (int) $order->id
+            );
+        } catch (\Throwable $e) {
+            return $this->fail($e->getMessage(), 422);
+        }
+
+        return $this->ok(['batch_id' => (int) $batch->id], 'Đã xác nhận lấy hàng pha lóc. Đơn chuyển sang đóng hàng hoàn thiện.');
+    }
+
+    public function revertCuttingBatch(Request $request, ProductCuttingBatch $batch): JsonResponse
+    {
+        $this->ensureWarehouseRole($request);
+        $user = $request->user();
+        $warehouseId = $user->warehouse_id ? (int) $user->warehouse_id : null;
+        if ($warehouseId && (int) $batch->warehouse_id !== $warehouseId) {
+            return $this->fail('Bạn không có quyền quay lại mẻ pha lóc của kho khác.', 403);
+        }
+
+        try {
+            app(ProductCuttingService::class)->revert($batch, (int) $user->id);
+        } catch (\Throwable $e) {
+            return $this->fail($e->getMessage(), 422);
+        }
+
+        return $this->ok(['batch_id' => (int) $batch->id], 'Đã quay lại xác nhận lấy hàng pha lóc.');
+    }
+
+    public function completeCuttingBatch(Request $request, ProductCuttingBatch $batch): JsonResponse
+    {
+        $this->ensurePackingRole($request);
+        $user = $request->user();
+        $warehouseId = $user->warehouse_id ? (int) $user->warehouse_id : null;
+        if ($warehouseId && (int) $batch->warehouse_id !== $warehouseId) {
+            return $this->fail('Bạn không có quyền hoàn thiện mẻ pha lóc của kho khác.', 403);
+        }
+
+        $batch->loadMissing('exportDocument.items');
+        $sourceVariantIds = $batch->exportDocument?->items
+            ?->pluck('product_variant_id')
+            ->map(fn ($id) => (int) $id)
+            ->filter()
+            ->unique()
+            ->values() ?? collect();
+        $verifiedVariantIds = collect($batch->picked_material_verifications ?? [])
+            ->pluck('variant_id')
+            ->map(fn ($id) => (int) $id)
+            ->filter()
+            ->unique();
+        if ($sourceVariantIds->isNotEmpty() && $sourceVariantIds->diff($verifiedVariantIds)->isNotEmpty()) {
+            return $this->fail('Vui lòng bấm Đã lấy cho tất cả mặt hàng kho đã xuất trước khi hoàn thiện pha lóc.', 422);
+        }
+
+        $data = $request->validate([
+            'actual_finished_weight' => ['required', 'numeric', 'min:0.001'],
+            'components' => ['nullable', 'array'],
+            'components.*.variant_id' => ['required_with:components', 'exists:product_variants,id'],
+            'components.*.weight' => ['nullable', 'numeric', 'min:0'],
+            'defer_components' => ['nullable', 'boolean'],
+        ]);
+
+        try {
+            app(ProductCuttingService::class)->complete(
+                $batch,
+                (float) $data['actual_finished_weight'],
+                $data['components'] ?? [],
+                (int) $user->id,
+                $request->boolean('defer_components')
+            );
+        } catch (\Throwable $e) {
+            return $this->fail($e->getMessage(), 422);
+        }
+
+        return $this->ok(['batch_id' => (int) $batch->id], 'Đã hoàn thiện pha lóc, nhập kho thực tế và ghi nhận hao hụt.');
+    }
+
+    public function markCuttingMaterialPicked(Request $request, ProductCuttingBatch $batch, ProductVariant $variant): JsonResponse
+    {
+        return $this->setCuttingMaterialPicked($request, $batch, $variant, true);
+    }
+
+    public function unmarkCuttingMaterialPicked(Request $request, ProductCuttingBatch $batch, ProductVariant $variant): JsonResponse
+    {
+        return $this->setCuttingMaterialPicked($request, $batch, $variant, false);
     }
 
     public function returns(Request $request): JsonResponse
@@ -732,7 +842,52 @@ class WarehouseApiController extends BaseApiController
                 && $order->created_at?->isToday(),
             'items' => $items,
             'cutting_plans' => $this->orderCuttingPlans($order),
+            'active_cutting_batches' => $this->activeCuttingBatchesPayload($order),
         ];
+    }
+
+    private function activeCuttingBatchesPayload(Order $order): array
+    {
+        return ProductCuttingBatch::query()
+            ->with(['targetVariant.product', 'performer:id,name', 'exportDocument.items.productVariant.product'])
+            ->where('order_id', (int) $order->id)
+            ->where('status', ProductCuttingBatch::STATUS_IN_PROGRESS)
+            ->orderBy('id')
+            ->get()
+            ->map(function (ProductCuttingBatch $batch) {
+                $verifications = collect($batch->picked_material_verifications ?? [])->keyBy(fn ($row) => (int) ($row['variant_id'] ?? 0));
+                $sourceItems = collect($batch->exportDocument?->items ?? []);
+                $sourceVariantIds = $sourceItems->pluck('product_variant_id')->map(fn ($id) => (int) $id)->filter()->unique()->values();
+
+                return [
+                    'id' => (int) $batch->id,
+                    'target_name' => trim(($batch->targetVariant?->product?->name ?? 'Sản phẩm') . ' ' . ($batch->targetVariant?->name ?: '')),
+                    'input_weight' => (float) ($batch->input_weight ?? 0),
+                    'planned_finished_weight' => (float) ($batch->planned_finished_weight ?? 0),
+                    'planned_components' => collect($batch->planned_components ?? [])->map(fn ($component) => [
+                        'variant_id' => (int) ($component['variant_id'] ?? 0),
+                        'name' => (string) ($component['name'] ?? 'Thành phần'),
+                        'weight' => (float) ($component['weight'] ?? 0),
+                    ])->values()->all(),
+                    'source_materials' => $sourceItems->map(function ($item) use ($verifications) {
+                        $variant = $item->productVariant;
+                        $variantId = (int) ($item->product_variant_id ?? 0);
+                        $verification = $verifications->get($variantId);
+
+                        return [
+                            'variant_id' => $variantId,
+                            'name' => trim(($variant?->product?->name ?? 'Sản phẩm') . ' ' . ($variant?->name ?: '')),
+                            'sku' => (string) ($variant?->sku ?? ''),
+                            'quantity' => (float) ($item->quantity ?? 0),
+                            'picked' => !empty($verification),
+                            'verified_by_name' => (string) ($verification['verified_by_name'] ?? ''),
+                        ];
+                    })->values()->all(),
+                    'all_materials_picked' => $sourceVariantIds->isEmpty() || $sourceVariantIds->diff($verifications->keys()->map(fn ($id) => (int) $id))->isEmpty(),
+                ];
+            })
+            ->values()
+            ->all();
     }
 
     private function orderCuttingPlans(Order $order): array
@@ -939,5 +1094,54 @@ class WarehouseApiController extends BaseApiController
         }
 
         return $this->ok(null, 'Thao tac thanh cong');
+    }
+
+    private function setCuttingMaterialPicked(Request $request, ProductCuttingBatch $batch, ProductVariant $variant, bool $picked): JsonResponse
+    {
+        $this->ensurePackingRole($request);
+        $user = $request->user();
+        $warehouseId = $user->warehouse_id ? (int) $user->warehouse_id : null;
+        if ($warehouseId && (int) $batch->warehouse_id !== $warehouseId) {
+            return $this->fail('Bạn không có quyền xác nhận mặt hàng của kho khác.', 403);
+        }
+        if ($batch->status !== ProductCuttingBatch::STATUS_IN_PROGRESS) {
+            return $this->fail('Mẻ pha lóc này không còn ở trạng thái đang thực hiện.', 422);
+        }
+
+        $batch->loadMissing('exportDocument.items');
+        $sourceItem = $batch->exportDocument?->items
+            ?->first(fn ($item) => (int) $item->product_variant_id === (int) $variant->id);
+        if (!$sourceItem) {
+            return $this->fail('Mặt hàng này không nằm trong danh sách kho đã lấy cho mẻ pha lóc.', 422);
+        }
+
+        $verifications = collect($batch->picked_material_verifications ?? [])->keyBy(fn ($row) => (int) ($row['variant_id'] ?? 0));
+        if ($picked) {
+            $verifications->put((int) $variant->id, [
+                'variant_id' => (int) $variant->id,
+                'quantity' => (float) $sourceItem->quantity,
+                'verified_by' => (int) $user->id,
+                'verified_by_name' => (string) ($user->name ?? 'Package'),
+                'verified_at' => now()->toDateTimeString(),
+            ]);
+        } else {
+            $verifications->forget((int) $variant->id);
+        }
+
+        $batch->update(['picked_material_verifications' => $verifications->values()->all()]);
+        $sourceVariantIds = $batch->exportDocument?->items
+            ?->pluck('product_variant_id')
+            ->map(fn ($id) => (int) $id)
+            ->filter()
+            ->unique()
+            ->values() ?? collect();
+
+        return $this->ok([
+            'batch_id' => (int) $batch->id,
+            'variant_id' => (int) $variant->id,
+            'picked' => $picked,
+            'verified_by_name' => (string) ($user->name ?? 'Package'),
+            'all_materials_picked' => $sourceVariantIds->isEmpty() || $sourceVariantIds->diff($verifications->keys()->map(fn ($id) => (int) $id))->isEmpty(),
+        ], $picked ? 'Đã xác nhận đã lấy mặt hàng pha lóc.' : 'Đã quay lại trạng thái chưa lấy.');
     }
 }

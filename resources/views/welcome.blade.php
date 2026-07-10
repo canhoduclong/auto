@@ -149,6 +149,184 @@
     padding: 8px 10px;
 }
 
+.featured-products-section {
+    background: linear-gradient(180deg, #fffaf2, #ffffff);
+}
+
+.featured-products-head {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 18px;
+    margin: 34px 0 22px;
+}
+
+.featured-products-eyebrow {
+    color: #7c5b3f;
+    font-size: .82rem;
+    font-weight: 800;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+}
+
+.featured-products-head h4 {
+    margin: 4px 0 0;
+    color: #2f1f17;
+    font-size: clamp(1.45rem, 2vw, 2rem);
+    font-weight: 900;
+}
+
+.featured-products-head p {
+    margin: 6px 0 0;
+    color: #5f4633;
+}
+
+.featured-products-link {
+    border: 1px solid #56292d;
+    border-radius: 8px;
+    color: #56292d;
+    font-weight: 800;
+    padding: 9px 14px;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.featured-products-link:hover {
+    background: #56292d;
+    color: #fff;
+}
+
+.home-product-card {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    border: 1px solid #ead8bf;
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 10px 22px rgba(86, 41, 45, .07);
+    transition: transform .15s ease, box-shadow .15s ease;
+}
+
+.home-product-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 18px 32px rgba(86, 41, 45, .13);
+}
+
+.home-product-card__image {
+    display: block;
+    aspect-ratio: 4 / 3;
+    overflow: hidden;
+    background: #fff7e6;
+}
+
+.home-product-card__image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform .2s ease;
+}
+
+.home-product-card:hover .home-product-card__image img {
+    transform: scale(1.03);
+}
+
+.home-product-card__body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    padding: 15px;
+}
+
+.home-product-card__category {
+    color: #7c5b3f;
+    font-size: .78rem;
+    margin-bottom: 4px;
+}
+
+.home-product-card h5 {
+    min-height: 42px;
+    margin: 0 0 10px;
+    font-size: 1rem;
+    line-height: 1.3;
+    font-weight: 900;
+}
+
+.home-product-card h5 a {
+    color: #2f1f17;
+    text-decoration: none;
+}
+
+.home-product-card h5 a:hover {
+    color: #56292d;
+}
+
+.home-product-card__meta {
+    display: grid;
+    gap: 5px;
+    margin-bottom: 10px;
+    color: #5f4633;
+    font-size: .86rem;
+}
+
+.home-product-card__sizes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-height: 34px;
+    margin-bottom: 14px;
+}
+
+.home-product-card__sizes span {
+    display: inline-flex;
+    align-items: center;
+    min-height: 25px;
+    padding: 3px 8px;
+    border: 1px solid #f0dfc7;
+    border-radius: 6px;
+    background: #fffaf2;
+    color: #5f4633;
+    font-size: .8rem;
+    font-weight: 800;
+    line-height: 1.2;
+}
+
+.home-product-card__sizes .is-muted {
+    color: #9a7a5f;
+    font-weight: 500;
+}
+
+.home-product-card__footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: auto;
+    padding-top: 12px;
+    border-top: 1px solid #f0dfc7;
+}
+
+.home-product-card__price {
+    color: #b45309;
+    font-size: 1.05rem;
+    font-weight: 900;
+}
+
+.home-product-card__button {
+    border: 0;
+    border-radius: 7px;
+    background: #56292d;
+    color: #fff;
+    font-size: .85rem;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.home-product-card__button:hover {
+    background: #3f1e21;
+    color: #fff;
+}
+
 .site-btn {
 	font-size: 15px;
 	color: #ffffff;
@@ -785,54 +963,76 @@
         </div>
     </div>
 </section> 
-<section  class="product my-0">
+<section  class="product featured-products-section my-0">
 <div class="container"> 
-    <div class="row mt-5"> 
-        <div class="col-md-12">
-            <!-- Sản phẩm mới -->
-            <div class="my-2 py-4 text-center">
-                <h4 class="brand-color text-uppercase fw-bold  text-center">Sản phẩm chủ đạo</h4>
-                <!--a href="{{ route('pages.product_list') }}" class="btn btn-outline-dark btn-sm">Xem tất cả</a-->
-            </div> 
-            <div class="row">
-                @foreach($variants as $variant)
-                @if(!$variant->product)
-                    @continue
-                @endif
-                <div class="col-lg-3 col-md-3">
-                    <div class="car__item product-card">
-                        <div class="car__item__pic__slider owl-carousel">
-                            @if(!empty($variant->product->avatar) && $variant->product->avatar->media)
-                               <img src="{{ asset('storage/'.$variant->product->avatar->media->file_path) }}" >
-                            @endif
-                            @foreach(($variant->product->gallery ?? collect()) as $link)
-                               @if($link->media)
-                                   <img src="{{ asset('storage/' . $link->media->file_path) }}">
-                               @endif
-                           @endforeach
-                        </div>
-                        <div class="car__item__text">
-                            <div class="car__item__text__inner"> 
-                                <h5><a href="{{ route('pages.variant_detail', $variant) }}" class="text-uppercase">{{ $variant->product->name }} - {{ $variant->name }}</a></h5>
-                                 @if($variant->sku)
-                                    <p class="product-meta">{{ $variant->sku }}</p>
-                                @endif
-                                <p class="product-price">{{ number_format($variant->final_price, 0, '.', ',') }} VNĐ</p>
-                                <div class="btn-group"> 
-                                    <a href="{{ route('pages.variant_detail', $variant) }}" class="btn  btn-brand btn-sm">Chi tiết</a>
-                                    <button class="btn btn-warning btn-sm add-to-cart" data-variant-id="{{ $variant->id }}">
-                                        <i class="bi bi-cart-plus"></i> Thêm vào giỏ
-                                    </button>  
+    <div class="row pb-4"> 
+        <div class="col-md-12 pb-4">
+            <div class="featured-products-head">
+                <div>
+                    <div class="featured-products-eyebrow">Sản phẩm tươi sạch</div>
+                    <h4>Sản phẩm chủ đạo</h4>
+                    <p>Chọn sản phẩm để xem đầy đủ size, tồn kho và lên đơn nhanh.</p>
+                </div>
+                <a href="{{ route('pages.product_list') }}" class="featured-products-link">Xem tất cả</a>
+            </div>
+
+            <div class="row g-3">
+                @foreach($featuredProducts as $product)
+                    @php
+                        $image = $product->avatar?->media?->file_path
+                            ? asset('storage/' . $product->avatar->media->file_path)
+                            : 'https://via.placeholder.com/420x320?text=San+pham';
+                        $availableVariants = $product->variants->filter(fn ($variant) => (int) ($variant->available_stock ?? 0) > 0);
+                        $prices = $product->variants->map(fn ($variant) => (float) ($variant->latestPriceRule?->price ?? $variant->final_price ?? 0))->filter(fn ($price) => $price > 0);
+                        $minPrice = $prices->min();
+                        $sizeLabels = $availableVariants->map(function ($variant) {
+                            $attributeSize = $variant->values->firstWhere('attribute.code', 'size')?->value;
+                            return $variant->size ?: $attributeSize;
+                        })->filter()->unique()->values();
+                    @endphp
+                    <div class="col-sm-6 col-lg-3">
+                        <article class="home-product-card">
+                            <a href="{{ route('pages.product_detail', $product->slug) }}" class="home-product-card__image">
+                                <img src="{{ $image }}" alt="{{ $product->name }}">
+                            </a>
+                            <div class="home-product-card__body">
+                                <div class="home-product-card__category">{{ $product->category?->name ?? 'Chưa phân loại' }}</div>
+                                <h5>
+                                    <a href="{{ route('pages.product_detail', $product->slug) }}">{{ $product->name }}</a>
+                                </h5>
+
+                                <div class="home-product-card__meta">
+                                    <span><i class="bi bi-rulers"></i> {{ $sizeLabels->count() }} size còn hàng</span>
+                                    <span><i class="bi bi-box-seam"></i> {{ $availableVariants->sum('available_stock') }} {{ strtolower($product->unit_label) }}</span>
+                                </div>
+
+                                <div class="home-product-card__sizes">
+                                    @forelse($sizeLabels->take(5) as $size)
+                                        <span>{{ $size }}</span>
+                                    @empty
+                                        <span class="is-muted">Chưa có size còn hàng</span>
+                                    @endforelse
+                                    @if($sizeLabels->count() > 5)
+                                        <span>+{{ $sizeLabels->count() - 5 }}</span>
+                                    @endif
+                                </div>
+
+                                <div class="home-product-card__footer">
+                                    <div>
+                                        <div class="small text-muted">Giá từ</div>
+                                        <div class="home-product-card__price">
+                                            {{ $minPrice ? number_format($minPrice, 0, ',', '.') . 'đ' : 'Liên hệ' }}
+                                        </div>
+                                    </div>
+                                    <a href="{{ route('pages.product_detail', $product->slug) }}" class="btn home-product-card__button">
+                                        Chọn sản phẩm
+                                    </a>
                                 </div>
                             </div>
-                        </div>
+                        </article>
                     </div>
-                </div>
                 @endforeach
             </div>
-            
-                      
-
         </div>
     </div>
 </div>
@@ -992,5 +1192,3 @@
     </div>
 
 @endsection
-
- 
