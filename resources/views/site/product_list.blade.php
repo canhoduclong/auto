@@ -8,7 +8,6 @@
             <h1>Danh sách sản phẩm</h1>
             <p>Chọn sản phẩm để xem size, tồn kho, thêm vào giỏ hoặc lên đơn ngay.</p>
         </div>
-        <x-cart-widget :cartCount="count(session('cart', []))" />
     </div>
 
     <div class="row g-4">

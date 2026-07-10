@@ -38,6 +38,19 @@
 
 @section('content')
 <div class="container py-4 product-detail-page">
+    <nav class="product-breadcrumb-card mb-4" aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0">
+            <li class="breadcrumb-item"><a href="{{ route('home') }}">Trang chủ</a></li>
+            <li class="breadcrumb-item"><a href="{{ route('pages.product_list') }}">Danh sách sản phẩm</a></li>
+            @if($product->category)
+                <li class="breadcrumb-item">
+                    <a href="{{ route('pages.product_list', ['category' => $product->category->slug]) }}">{{ $product->category->name }}</a>
+                </li>
+            @endif
+            <li class="breadcrumb-item active" aria-current="page">{{ $product->name }}</li>
+        </ol>
+    </nav>
+
     <div class="d-flex flex-wrap align-items-center gap-3 mb-4">
         <a href="{{ route('pages.product_list') }}" class="btn btn-outline-primary btn-sm">
             <i class="bi bi-arrow-left"></i> Danh sách sản phẩm
@@ -201,6 +214,33 @@
         background:
             linear-gradient(180deg, rgba(255, 247, 230, .8), rgba(255, 255, 255, .98) 330px),
             #fffaf2;
+    }
+    .product-breadcrumb-card {
+        border: 1px solid var(--warm-line);
+        border-radius: 10px;
+        background: #fff;
+        padding: 13px 16px;
+        box-shadow: 0 12px 28px rgba(86, 41, 45, .07);
+    }
+    .product-breadcrumb-card .breadcrumb {
+        align-items: center;
+        gap: 2px;
+        font-size: .9rem;
+    }
+    .product-breadcrumb-card .breadcrumb-item,
+    .product-breadcrumb-card .breadcrumb-item a {
+        color: var(--warm-muted);
+        text-decoration: none;
+    }
+    .product-breadcrumb-card .breadcrumb-item a:hover {
+        color: var(--earth);
+    }
+    .product-breadcrumb-card .breadcrumb-item.active {
+        color: #2f1f17;
+        font-weight: 800;
+    }
+    .product-breadcrumb-card .breadcrumb-item + .breadcrumb-item::before {
+        color: #b08a64;
     }
     .product-gallery__main {
         display: grid;
