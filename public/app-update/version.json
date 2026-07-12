@@ -1,8 +1,8 @@
 {
-  "version": "1.0.38",
-  "version_code": 39,
+  "version": "1.0.39",
+  "version_code": 40,
   "apk_url": "https://hoanglongtnt.com/app-update/app-release.apk",
   "ios_url": "",
   "force_update": false,
-  "message": "Bản cập nhật 1.0.38: hiển thị tổng hợp hàng trong điều phối đơn shipper trên mobile."
+  "message": "Bản cập nhật 1.0.39: đồng bộ cỡ chữ và tỷ lệ hiển thị đơn hàng tại tab Đơn hàng của Sale theo trang Home."
 }
