@@ -10,15 +10,21 @@ use App\Models\Order;
 use App\Models\OrderAdjustment;
 use App\Models\OrderItem;
 use App\Models\OrderReturn;
-use App\Models\ProductPriceLog;
 use App\Models\ProductCuttingBatch;
+use App\Models\ProductPriceLog;
+use App\Models\ProductPriceRule;
+use App\Models\ProductVariant;
+use App\Models\ReturnItem;
 use App\Models\Role;
 use App\Models\Team;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Models\Warehouse;
+use App\Models\WarehouseTransfer;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -43,6 +49,7 @@ class CeoDashboardController extends Controller
 
         return view('ceo.customer_revenue_report', compact('customer', 'orders', 'totalRevenue', 'orderCount', 'firstOrder', 'lastOrder'));
     }
+
     public function __construct()
     {
         $this->middleware(['auth', 'role:ceo,admin']);
@@ -95,9 +102,9 @@ class CeoDashboardController extends Controller
             'from' => $from,
             'to' => $to,
             'cards' => [
-                ['label' => 'Thu tiền', 'value' => number_format((float) $payments) . ' đ'],
-                ['label' => 'Hoàn tiền', 'value' => number_format((float) $refunds) . ' đ'],
-                ['label' => 'Doanh thu thuần', 'value' => number_format($netRevenue) . ' đ'],
+                ['label' => 'Thu tiền', 'value' => number_format((float) $payments).' đ'],
+                ['label' => 'Hoàn tiền', 'value' => number_format((float) $refunds).' đ'],
+                ['label' => 'Doanh thu thuần', 'value' => number_format($netRevenue).' đ'],
             ],
             'tableTitle' => 'Diễn biến doanh thu theo ngày',
             'columns' => ['Ngày', 'Thu tiền', 'Hoàn tiền', 'Doanh thu thuần'],
@@ -106,9 +113,9 @@ class CeoDashboardController extends Controller
 
                 return [
                     Carbon::parse($row->day_key)->format('d/m/Y'),
-                    number_format((float) $row->income) . ' đ',
-                    number_format((float) $row->refund) . ' đ',
-                    number_format($net) . ' đ',
+                    number_format((float) $row->income).' đ',
+                    number_format((float) $row->refund).' đ',
+                    number_format($net).' đ',
                 ];
             })->all(),
         ]);
@@ -146,7 +153,7 @@ class CeoDashboardController extends Controller
                 return [
                     (string) $row->status,
                     number_format((int) $row->total),
-                    $rate . '%',
+                    $rate.'%',
                 ];
             })->all(),
         ]);
@@ -166,7 +173,7 @@ class CeoDashboardController extends Controller
             'to' => $to,
             'cards' => [
                 ['label' => 'Số sale có phát sinh', 'value' => number_format($rows->count())],
-                ['label' => 'Tổng doanh số', 'value' => number_format((float) $rows->sum('total_amount')) . ' đ'],
+                ['label' => 'Tổng doanh số', 'value' => number_format((float) $rows->sum('total_amount')).' đ'],
                 ['label' => 'Tổng số đơn', 'value' => number_format((int) $rows->sum('total_orders'))],
             ],
             'tableTitle' => 'Top sale theo doanh số',
@@ -174,7 +181,7 @@ class CeoDashboardController extends Controller
             'rows' => $rows->map(fn ($row) => [
                 (string) $row->name,
                 number_format((int) $row->total_orders),
-                number_format((float) $row->total_amount) . ' đ',
+                number_format((float) $row->total_amount).' đ',
             ])->all(),
         ]);
     }
@@ -213,7 +220,7 @@ class CeoDashboardController extends Controller
             'from' => $from,
             'to' => $to,
             'cards' => [
-                ['label' => 'Tổng công nợ', 'value' => number_format($totalDebt) . ' đ'],
+                ['label' => 'Tổng công nợ', 'value' => number_format($totalDebt).' đ'],
                 ['label' => 'Khách có nợ', 'value' => number_format($rows->count())],
                 ['label' => 'Đơn còn nợ', 'value' => number_format((int) $rows->sum('total_orders'))],
             ],
@@ -223,7 +230,7 @@ class CeoDashboardController extends Controller
                 (string) ($row->customer?->name ?? 'N/A'),
                 (string) ($row->customer?->phone ?? '-'),
                 number_format((int) $row->total_orders),
-                number_format((float) $row->debt_total) . ' đ',
+                number_format((float) $row->debt_total).' đ',
             ])->all(),
         ]);
     }
@@ -314,7 +321,7 @@ class CeoDashboardController extends Controller
                     number_format($total),
                     number_format($success),
                     number_format((int) $row->return_orders),
-                    $rate . '%',
+                    $rate.'%',
                 ];
             })->all(),
         ]);
@@ -371,19 +378,19 @@ class CeoDashboardController extends Controller
             'from' => $from,
             'to' => $to,
             'cards' => [
-                ['label' => 'Phí giao hàng', 'value' => number_format((float) $rows->sum('delivery_fee')) . ' đ'],
-                ['label' => 'Phí hoàn trả', 'value' => number_format((float) $rows->sum('return_fee')) . ' đ'],
-                ['label' => 'Tổng chi phí Shipper', 'value' => number_format((float) $rows->sum('total_fee')) . ' đ'],
+                ['label' => 'Phí giao hàng', 'value' => number_format((float) $rows->sum('delivery_fee')).' đ'],
+                ['label' => 'Phí hoàn trả', 'value' => number_format((float) $rows->sum('return_fee')).' đ'],
+                ['label' => 'Tổng chi phí Shipper', 'value' => number_format((float) $rows->sum('total_fee')).' đ'],
             ],
             'tableTitle' => 'Chi phí theo shipper',
             'columns' => ['Shipper', 'Đơn giao', 'Phí giao', 'Đơn hoàn', 'Phí hoàn', 'Tổng chi phí'],
             'rows' => $rows->map(fn ($row) => [
                 $row['name'],
                 number_format($row['delivered_orders']),
-                number_format($row['delivery_fee']) . ' đ',
+                number_format($row['delivery_fee']).' đ',
                 number_format($row['return_orders']),
-                number_format($row['return_fee']) . ' đ',
-                number_format($row['total_fee']) . ' đ',
+                number_format($row['return_fee']).' đ',
+                number_format($row['total_fee']).' đ',
             ])->all(),
         ]);
     }
@@ -402,7 +409,7 @@ class CeoDashboardController extends Controller
             'to' => $to,
             'cards' => [
                 ['label' => 'Khách phát sinh đơn', 'value' => number_format($rows->count())],
-                ['label' => 'Tổng doanh số top', 'value' => number_format((float) $rows->sum('total_amount')) . ' đ'],
+                ['label' => 'Tổng doanh số top', 'value' => number_format((float) $rows->sum('total_amount')).' đ'],
                 ['label' => 'Tổng số đơn top', 'value' => number_format((int) $rows->sum('total_orders'))],
             ],
             'tableTitle' => 'Top khách hàng theo doanh số',
@@ -411,7 +418,7 @@ class CeoDashboardController extends Controller
                 (string) ($row->name ?? 'N/A'),
                 (string) ($row->phone ?? '-'),
                 number_format((int) $row->total_orders),
-                number_format((float) $row->total_amount) . ' đ',
+                number_format((float) $row->total_amount).' đ',
             ])->all(),
         ]);
     }
@@ -447,7 +454,7 @@ class CeoDashboardController extends Controller
             $query->where('is_employee', false);
         }
 
-        if (!$request->boolean('is_employee') && $request->filled('ownership_status')) {
+        if (! $request->boolean('is_employee') && $request->filled('ownership_status')) {
             if ($request->input('ownership_status') === 'free') {
                 $query->free();
             }
@@ -466,7 +473,7 @@ class CeoDashboardController extends Controller
         }
 
         $perPage = (int) $request->input('per_page', 15);
-        if (!in_array($perPage, [10, 15, 25, 50, 100], true)) {
+        if (! in_array($perPage, [10, 15, 25, 50, 100], true)) {
             $perPage = 15;
         }
 
@@ -517,9 +524,9 @@ class CeoDashboardController extends Controller
         // Exclude users from statistics
         if ($request->filled('exclude_users')) {
             $excludeIds = array_filter((array) $request->input('exclude_users'), 'is_numeric');
-            if (!empty($excludeIds)) {
+            if (! empty($excludeIds)) {
                 $employeeStats = $employeeStats->filter(function ($stat) use ($excludeIds) {
-                    return !in_array($stat['employee_id'], $excludeIds);
+                    return ! in_array($stat['employee_id'], $excludeIds);
                 })->values();
             }
         }
@@ -541,8 +548,8 @@ class CeoDashboardController extends Controller
         if ($request->filled('q')) {
             $search = $request->input('q');
             $query->where(function ($sub) use ($search) {
-                $sub->where('name', 'like', '%' . $search . '%')
-                    ->orWhere('email', 'like', '%' . $search . '%');
+                $sub->where('name', 'like', '%'.$search.'%')
+                    ->orWhere('email', 'like', '%'.$search.'%');
             });
         }
 
@@ -626,20 +633,27 @@ class CeoDashboardController extends Controller
             'cards' => [
                 ['label' => 'Số kỳ báo cáo', 'value' => number_format($monthly->count())],
                 ['label' => 'Tổng đơn 6 tháng', 'value' => number_format((int) $monthly->sum('total_orders'))],
-                ['label' => 'Tổng giá trị 6 tháng', 'value' => number_format((float) $monthly->sum('total_amount')) . ' đ'],
+                ['label' => 'Tổng giá trị 6 tháng', 'value' => number_format((float) $monthly->sum('total_amount')).' đ'],
             ],
             'tableTitle' => 'Tổng hợp theo tháng',
             'columns' => ['Tháng', 'Số đơn', 'Tổng giá trị'],
             'rows' => $monthly->map(fn ($row) => [
                 (string) $row->period,
                 number_format((int) $row->total_orders),
-                number_format((float) $row->total_amount) . ' đ',
+                number_format((float) $row->total_amount).' đ',
             ])->all(),
         ]);
     }
 
     public function lossReport(Request $request)
     {
+        $request->validate([
+            'mode' => ['nullable', 'in:day,range'],
+            'date' => ['nullable', 'date'],
+            'from_date' => ['nullable', 'date'],
+            'to_date' => ['nullable', 'date'],
+        ]);
+
         $mode = in_array((string) $request->input('mode'), ['day', 'range'], true)
             ? (string) $request->input('mode')
             : 'day';
@@ -663,61 +677,120 @@ class CeoDashboardController extends Controller
         $from = Carbon::parse($fromDate)->startOfDay();
         $to = Carbon::parse($toDate)->endOfDay();
 
-        $batchQuery = ProductCuttingBatch::query()
-            ->with(['warehouse:id,name', 'targetVariant.product:id,name', 'performer:id,name'])
+        $cuttingBatches = ProductCuttingBatch::query()
+            ->with([
+                'warehouse:id,name',
+                'order:id,code,customer_id',
+                'order.customer:id,name',
+                'targetVariant.product:id,name',
+                'performer:id,name',
+                'exportDocument.items.productVariant.product',
+            ])
             ->where('status', ProductCuttingBatch::STATUS_COMPLETED)
-            ->whereBetween('created_at', [$from, $to]);
+            ->where('loss_weight', '>', 0)
+            ->where(function ($query) use ($from, $to) {
+                $query->whereBetween('completed_at', [$from, $to])
+                    ->orWhere(function ($fallback) use ($from, $to) {
+                        $fallback->whereNull('completed_at')->whereBetween('created_at', [$from, $to]);
+                    });
+            })
+            ->get();
 
-        $batches = (clone $batchQuery)
-            ->orderByDesc('created_at')
-            ->paginate(30)
-            ->appends($request->query());
+        $transfers = WarehouseTransfer::query()
+            ->with([
+                'order:id,code,customer_id',
+                'order.customer:id,name',
+                'order.items.variant.product',
+                'sourceWarehouse:id,name',
+                'targetWarehouse:id,name',
+                'receiver:id,name',
+            ])
+            ->where('status', WarehouseTransfer::STATUS_RECEIVED_COMPLETED)
+            ->where('weight_loss', '>', 0)
+            ->whereBetween('received_at', [$from, $to])
+            ->get();
 
-        $summary = (clone $batchQuery)
-            ->selectRaw('COUNT(*) as batch_count')
-            ->selectRaw('COALESCE(SUM(input_weight), 0) as input_weight')
-            ->selectRaw('COALESCE(SUM(actual_finished_weight), 0) as finished_weight')
-            ->selectRaw('COALESCE(SUM(actual_component_weight), 0) as component_weight')
-            ->selectRaw('COALESCE(SUM(loss_weight), 0) as loss_weight')
-            ->first();
+        $returnItems = ReturnItem::query()
+            ->with([
+                'productVariant.product',
+                'orderReturn.order:id,code,customer_id',
+                'orderReturn.order.customer:id,name',
+                'orderReturn.warehouse:id,name',
+                'orderReturn.warehouseConfirmer:id,name',
+            ])
+            ->where('weight_loss', '>', 0)
+            ->whereBetween('weight_confirmed_at', [$from, $to])
+            ->get();
 
-        $inputWeight = (float) ($summary?->input_weight ?? 0);
-        $lossWeight = (float) ($summary?->loss_weight ?? 0);
-        $summary->loss_percent = $inputWeight > 0 ? round($lossWeight / $inputWeight * 100, 3) : 0;
+        $variantIds = $cuttingBatches
+            ->flatMap(fn (ProductCuttingBatch $batch) => collect($batch->source_materials ?? [])->pluck('variant_id')
+                ->push($batch->target_product_variant_id))
+            ->merge($transfers->flatMap(fn (WarehouseTransfer $transfer) => $transfer->order?->items?->pluck('product_variant_id') ?? collect()))
+            ->merge($returnItems->pluck('product_variant_id'))
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
 
-        $dailyRows = (clone $batchQuery)
-            ->selectRaw('DATE(created_at) as day_key')
-            ->selectRaw('COUNT(*) as batch_count')
-            ->selectRaw('COALESCE(SUM(input_weight), 0) as input_weight')
-            ->selectRaw('COALESCE(SUM(actual_finished_weight), 0) as finished_weight')
-            ->selectRaw('COALESCE(SUM(actual_component_weight), 0) as component_weight')
-            ->selectRaw('COALESCE(SUM(loss_weight), 0) as loss_weight')
-            ->groupBy('day_key')
-            ->orderBy('day_key')
+        $variants = ProductVariant::query()
+            ->with('product:id,name')
+            ->whereIn('id', $variantIds)
             ->get()
-            ->map(function ($row) {
-                $input = (float) $row->input_weight;
-                $loss = (float) $row->loss_weight;
-                $row->loss_percent = $input > 0 ? round($loss / $input * 100, 3) : 0;
-                return $row;
-            });
+            ->keyBy('id');
 
-        $warehouseRows = (clone $batchQuery)
-            ->leftJoin('warehouses', 'warehouses.id', '=', 'product_cutting_batches.warehouse_id')
-            ->selectRaw('product_cutting_batches.warehouse_id')
-            ->selectRaw("COALESCE(warehouses.name, 'Kho') as warehouse_name")
-            ->selectRaw('COUNT(*) as batch_count')
-            ->selectRaw('COALESCE(SUM(input_weight), 0) as input_weight')
-            ->selectRaw('COALESCE(SUM(loss_weight), 0) as loss_weight')
-            ->groupBy('product_cutting_batches.warehouse_id', 'warehouses.name')
-            ->orderByDesc('loss_weight')
+        $priceRules = ProductPriceRule::query()
+            ->whereIn('product_variant_id', $variantIds)
+            ->orderByDesc('start_date')
+            ->orderByDesc('id')
             ->get()
-            ->map(function ($row) {
-                $input = (float) $row->input_weight;
-                $loss = (float) $row->loss_weight;
-                $row->loss_percent = $input > 0 ? round($loss / $input * 100, 3) : 0;
-                return $row;
-            });
+            ->groupBy('product_variant_id');
+
+        $events = $this->buildLossEvents($cuttingBatches, $transfers, $returnItems, $variants, $priceRules)
+            ->sortByDesc('occurred_at')
+            ->values();
+
+        $totalInput = (float) $events->sum('input_weight');
+        $totalLoss = (float) $events->sum('loss_weight');
+        $summary = (object) [
+            'event_count' => $events->count(),
+            'order_count' => $events->pluck('order_id')->filter()->unique()->count(),
+            'input_weight' => $totalInput,
+            'output_weight' => (float) $events->sum('output_weight'),
+            'loss_weight' => $totalLoss,
+            'loss_percent' => $totalInput > 0 ? round($totalLoss / $totalInput * 100, 3) : 0,
+            'loss_value' => (float) $events->sum('loss_value'),
+            'unpriced_event_count' => $events->where('min_price', '<=', 0)->count(),
+        ];
+
+        $dailyRows = $events->groupBy(fn ($event) => $event['occurred_at']->toDateString())
+            ->map(function (Collection $rows, string $day) {
+                $input = (float) $rows->sum('input_weight');
+                $loss = (float) $rows->sum('loss_weight');
+
+                return (object) [
+                    'day_key' => $day,
+                    'event_count' => $rows->count(),
+                    'input_weight' => $input,
+                    'output_weight' => (float) $rows->sum('output_weight'),
+                    'loss_weight' => $loss,
+                    'loss_percent' => $input > 0 ? round($loss / $input * 100, 3) : 0,
+                    'loss_value' => (float) $rows->sum('loss_value'),
+                ];
+            })
+            ->sortKeys();
+
+        $stageRows = $this->summarizeLossEvents($events, 'stage_key', 'stage');
+        $orderRows = $this->summarizeLossEvents($events->filter(fn ($event) => $event['order_id']), 'order_id', 'order_label');
+
+        $currentPage = LengthAwarePaginator::resolveCurrentPage();
+        $perPage = 30;
+        $lossEvents = new LengthAwarePaginator(
+            $events->forPage($currentPage, $perPage)->values(),
+            $events->count(),
+            $perPage,
+            $currentPage,
+            ['path' => $request->url(), 'query' => $request->query()]
+        );
 
         return view('ceo.loss_report', compact(
             'mode',
@@ -726,9 +799,202 @@ class CeoDashboardController extends Controller
             'toDate',
             'summary',
             'dailyRows',
-            'warehouseRows',
-            'batches'
+            'stageRows',
+            'orderRows',
+            'lossEvents'
         ));
+    }
+
+    private function buildLossEvents(
+        Collection $cuttingBatches,
+        Collection $transfers,
+        Collection $returnItems,
+        Collection $variants,
+        Collection $priceRules
+    ): Collection {
+        $events = collect();
+
+        foreach ($cuttingBatches as $batch) {
+            $occurredAt = $batch->completed_at ?? $batch->created_at;
+            $materials = collect($batch->source_materials ?? [])
+                ->map(fn ($row) => [
+                    'variant_id' => (int) ($row['variant_id'] ?? 0),
+                    'weight' => max(0, (float) ($row['quantity'] ?? 0)),
+                ])
+                ->filter(fn ($row) => $row['variant_id'] > 0 && $row['weight'] > 0);
+
+            if ($materials->isEmpty()) {
+                $materials = collect([[
+                    'variant_id' => (int) $batch->target_product_variant_id,
+                    'weight' => max(0, (float) $batch->input_weight),
+                ]]);
+            }
+
+            [$minPrice, $lossValue] = $this->valueLossByMaterials(
+                $materials,
+                (float) $batch->loss_weight,
+                $occurredAt,
+                $priceRules
+            );
+
+            $sourceNames = $materials->pluck('variant_id')
+                ->map(fn ($id) => $this->variantName($variants->get($id)))
+                ->unique()
+                ->implode(', ');
+
+            $events->push([
+                'key' => 'cutting-'.$batch->id,
+                'occurred_at' => $occurredAt,
+                'stage_key' => 'cutting',
+                'stage' => 'Pha lóc',
+                'order_id' => $batch->order_id,
+                'order_label' => $this->orderLabel($batch->order),
+                'customer_name' => $batch->order?->customer?->name ?? '—',
+                'location' => $batch->warehouse?->name ?? '—',
+                'product_name' => $sourceNames ?: $this->variantName($batch->targetVariant),
+                'actor_name' => $batch->performer?->name ?? '—',
+                'input_weight' => (float) $batch->input_weight,
+                'output_weight' => (float) $batch->actual_finished_weight + (float) $batch->actual_component_weight,
+                'loss_weight' => (float) $batch->loss_weight,
+                'min_price' => $minPrice,
+                'loss_value' => $lossValue,
+            ]);
+        }
+
+        foreach ($transfers as $transfer) {
+            $occurredAt = $transfer->received_at;
+            $receivedByItem = collect($transfer->received_weights ?? [])->keyBy(fn ($row) => (int) ($row['order_item_id'] ?? 0));
+            $materials = collect($transfer->order?->items ?? [])->map(function ($item) use ($receivedByItem) {
+                $packed = max(0, (float) ($item->packed_weight ?? $item->total_weight ?? 0));
+                $received = max(0, (float) ($receivedByItem->get((int) $item->id)['received_weight'] ?? $packed));
+
+                return [
+                    'variant_id' => (int) $item->product_variant_id,
+                    'weight' => max(0, $packed - $received),
+                    'fallback_weight' => $packed,
+                ];
+            });
+            $lossMaterials = $materials->filter(fn ($row) => $row['weight'] > 0);
+            if ($lossMaterials->isEmpty()) {
+                $lossMaterials = $materials->map(fn ($row) => [
+                    'variant_id' => $row['variant_id'],
+                    'weight' => $row['fallback_weight'],
+                ])->filter(fn ($row) => $row['weight'] > 0);
+            }
+
+            [$minPrice, $lossValue] = $this->valueLossByMaterials(
+                $lossMaterials,
+                (float) $transfer->weight_loss,
+                $occurredAt,
+                $priceRules
+            );
+
+            $events->push([
+                'key' => 'transfer-'.$transfer->id,
+                'occurred_at' => $occurredAt,
+                'stage_key' => 'transfer',
+                'stage' => 'Điều chuyển kho',
+                'order_id' => $transfer->order_id,
+                'order_label' => $this->orderLabel($transfer->order),
+                'customer_name' => $transfer->order?->customer?->name ?? '—',
+                'location' => ($transfer->sourceWarehouse?->name ?? '—').' → '.($transfer->targetWarehouse?->name ?? '—'),
+                'product_name' => $materials->pluck('variant_id')->map(fn ($id) => $this->variantName($variants->get($id)))->unique()->implode(', ') ?: '—',
+                'actor_name' => $transfer->receiver?->name ?? '—',
+                'input_weight' => (float) $transfer->packed_total_weight,
+                'output_weight' => (float) $transfer->received_total_weight,
+                'loss_weight' => (float) $transfer->weight_loss,
+                'min_price' => $minPrice,
+                'loss_value' => $lossValue,
+            ]);
+        }
+
+        foreach ($returnItems as $item) {
+            $occurredAt = $item->weight_confirmed_at;
+            $variantId = (int) $item->product_variant_id;
+            $minPrice = $this->minPriceAt($variantId, $occurredAt, $priceRules);
+            $order = $item->orderReturn?->order;
+
+            $events->push([
+                'key' => 'return-'.$item->id,
+                'occurred_at' => $occurredAt,
+                'stage_key' => 'return',
+                'stage' => 'Nhận hàng trả',
+                'order_id' => $order?->id,
+                'order_label' => $this->orderLabel($order),
+                'customer_name' => $order?->customer?->name ?? '—',
+                'location' => $item->orderReturn?->warehouse?->name ?? '—',
+                'product_name' => $this->variantName($item->productVariant),
+                'actor_name' => $item->orderReturn?->warehouseConfirmer?->name ?? '—',
+                'input_weight' => (float) $item->original_weight,
+                'output_weight' => (float) $item->received_weight,
+                'loss_weight' => (float) $item->weight_loss,
+                'min_price' => $minPrice,
+                'loss_value' => round((float) $item->weight_loss * $minPrice, 2),
+            ]);
+        }
+
+        return $events;
+    }
+
+    private function valueLossByMaterials(Collection $materials, float $lossWeight, Carbon $occurredAt, Collection $priceRules): array
+    {
+        $totalWeight = (float) $materials->sum('weight');
+        if ($lossWeight <= 0 || $totalWeight <= 0) {
+            return [0.0, 0.0];
+        }
+
+        $weightedPrice = (float) $materials->sum(function ($material) use ($occurredAt, $priceRules) {
+            return (float) $material['weight']
+                * $this->minPriceAt((int) $material['variant_id'], $occurredAt, $priceRules);
+        }) / $totalWeight;
+
+        return [round($weightedPrice, 2), round($lossWeight * $weightedPrice, 2)];
+    }
+
+    private function minPriceAt(int $variantId, Carbon $occurredAt, Collection $priceRules): float
+    {
+        $date = $occurredAt->toDateString();
+        $rule = collect($priceRules->get($variantId, collect()))->first(function (ProductPriceRule $rule) use ($date, $occurredAt) {
+            return (! $rule->created_at || $rule->created_at->lte($occurredAt))
+                && (! $rule->start_date || $rule->start_date <= $date)
+                && (! $rule->end_date || $rule->end_date >= $date);
+        });
+
+        return max(0, (float) ($rule?->min_price ?? 0));
+    }
+
+    private function summarizeLossEvents(Collection $events, string $groupKey, string $labelKey): Collection
+    {
+        return $events->groupBy($groupKey)
+            ->map(function (Collection $rows) use ($labelKey) {
+                $input = (float) $rows->sum('input_weight');
+                $loss = (float) $rows->sum('loss_weight');
+
+                return (object) [
+                    'label' => (string) $rows->first()[$labelKey],
+                    'event_count' => $rows->count(),
+                    'input_weight' => $input,
+                    'loss_weight' => $loss,
+                    'loss_percent' => $input > 0 ? round($loss / $input * 100, 3) : 0,
+                    'loss_value' => (float) $rows->sum('loss_value'),
+                ];
+            })
+            ->sortByDesc('loss_weight')
+            ->values();
+    }
+
+    private function variantName(?ProductVariant $variant): string
+    {
+        if (! $variant) {
+            return 'Sản phẩm không xác định';
+        }
+
+        return trim(($variant->product?->name ?? 'Sản phẩm').' '.($variant->name ?: ''));
+    }
+
+    private function orderLabel(?Order $order): string
+    {
+        return $order ? ($order->code ?: ('#'.$order->id)) : 'Không gắn đơn';
     }
 
     private function resolveRange(Request $request): array
@@ -775,7 +1041,7 @@ class CeoDashboardController extends Controller
     {
         $groupBy = (string) $request->input('group_by', 'week');
 
-        if (!in_array($groupBy, ['day', 'week', 'month', 'quarter', 'year'], true)) {
+        if (! in_array($groupBy, ['day', 'week', 'month', 'quarter', 'year'], true)) {
             $groupBy = 'week';
         }
 
@@ -801,7 +1067,7 @@ class CeoDashboardController extends Controller
             'week' => str_replace('-', ' ', $periodKey),
             'month' => Carbon::createFromFormat('Y-m', $periodKey)->format('m/Y'),
             'quarter' => preg_match('/^(\d{4})-Q([1-4])$/', $periodKey, $matches)
-                ? ('Q' . $matches[2] . '/' . $matches[1])
+                ? ('Q'.$matches[2].'/'.$matches[1])
                 : $periodKey,
             'year' => $periodKey,
             default => $periodKey,
@@ -1000,7 +1266,7 @@ class CeoDashboardController extends Controller
                 $alerts[] = [
                     'level' => 'medium',
                     'title' => 'Tỷ lệ hoàn/trả tăng cao',
-                    'description' => 'Đơn hoàn/trả đạt ' . $returnRate . '%, cần kiểm tra nguyên nhân chất lượng hoặc vận chuyển.',
+                    'description' => 'Đơn hoàn/trả đạt '.$returnRate.'%, cần kiểm tra nguyên nhân chất lượng hoặc vận chuyển.',
                 ];
             }
         }
@@ -1009,7 +1275,7 @@ class CeoDashboardController extends Controller
             $alerts[] = [
                 'level' => 'medium',
                 'title' => 'Có SKU đã hết hàng',
-                'description' => 'Hiện có ' . number_format($overview['out_of_stock_count']) . ' SKU hết hàng, cần ưu tiên nhập kho.',
+                'description' => 'Hiện có '.number_format($overview['out_of_stock_count']).' SKU hết hàng, cần ưu tiên nhập kho.',
             ];
         }
 
@@ -1144,8 +1410,8 @@ class CeoDashboardController extends Controller
 
         $period = [
             'selected' => $startOfWeek->toDateString(),
-            'current_label' => $startOfWeek->format('d/m/Y') . ' - ' . $endOfWeek->format('d/m/Y'),
-            'previous_label' => $previousStart->format('d/m/Y') . ' - ' . $previousEnd->format('d/m/Y'),
+            'current_label' => $startOfWeek->format('d/m/Y').' - '.$endOfWeek->format('d/m/Y'),
+            'previous_label' => $previousStart->format('d/m/Y').' - '.$previousEnd->format('d/m/Y'),
         ];
 
         return view('ceo.weekly_report', compact(
@@ -1243,7 +1509,7 @@ class CeoDashboardController extends Controller
                 'T6' => 2800000,
                 'T7' => 3500000,
                 'CN' => 5200000,
-                'total' => 23100000
+                'total' => 23100000,
             ],
             'Cửa hàng XYZ' => [
                 'T2' => 1200000,
@@ -1253,7 +1519,7 @@ class CeoDashboardController extends Controller
                 'T6' => 1900000,
                 'T7' => 2600000,
                 'CN' => 3100000,
-                'total' => 13300000
+                'total' => 13300000,
             ],
             'Siêu thị DEF' => [
                 'T2' => 3500000,
@@ -1263,7 +1529,7 @@ class CeoDashboardController extends Controller
                 'T6' => 4600000,
                 'T7' => 5800000,
                 'CN' => 7200000,
-                'total' => 34200000
+                'total' => 34200000,
             ],
             'Khách lẻ Online' => [
                 'T2' => 800000,
@@ -1273,8 +1539,8 @@ class CeoDashboardController extends Controller
                 'T6' => 1100000,
                 'T7' => 1600000,
                 'CN' => 2100000,
-                'total' => 9150000
-            ]
+                'total' => 9150000,
+            ],
         ];
 
         // Tính tổng doanh thu theo ngày
@@ -1362,11 +1628,11 @@ class CeoDashboardController extends Controller
 
             $catStats->push((object) [
                 'transaction_category_id' => $transactions->first()?->transaction_category_id,
-                'transactionCategory'     => $transactions->first()?->transactionCategory,
-                'total_count'             => $totalCount,
-                'total_amount'            => $totalAmount,
-                'customers'               => $customers,
-                'accounts'                => $accounts,
+                'transactionCategory' => $transactions->first()?->transactionCategory,
+                'total_count' => $totalCount,
+                'total_amount' => $totalAmount,
+                'customers' => $customers,
+                'accounts' => $accounts,
             ]);
         }
 
@@ -1384,21 +1650,21 @@ class CeoDashboardController extends Controller
     public function dailySales(Request $request)
     {
         $fromDate = (string) $request->input('from_date', now()->toDateString());
-        $toDate   = (string) $request->input('to_date', now()->toDateString());
+        $toDate = (string) $request->input('to_date', now()->toDateString());
         $from = Carbon::parse($fromDate)->startOfDay();
-        $to   = Carbon::parse($toDate)->endOfDay();
+        $to = Carbon::parse($toDate)->endOfDay();
         if ($from->gt($to)) {
             [$from, $to] = [$to->copy()->startOfDay(), $from->copy()->endOfDay()];
             [$fromDate, $toDate] = [$toDate, $fromDate];
         }
 
-        $saleId     = (int) $request->input('sale_id', 0);
+        $saleId = (int) $request->input('sale_id', 0);
         $customerId = (int) $request->input('customer_id', 0);
-        $sort       = (string) $request->input('sort', 'date_desc');
+        $sort = (string) $request->input('sort', 'date_desc');
 
         $allowedPerPage = [10, 20, 50, 100, 200];
         $perPage = (int) $request->input('per_page', 20);
-        if (!in_array($perPage, $allowedPerPage, true)) {
+        if (! in_array($perPage, $allowedPerPage, true)) {
             $perPage = 20;
         }
 
@@ -1406,7 +1672,7 @@ class CeoDashboardController extends Controller
         $approvedAdjSub = DB::table('order_adjustment_items as oai_s')
             ->join('order_adjustments as oa_s', function ($j) {
                 $j->on('oa_s.id', '=', 'oai_s.order_adjustment_id')
-                  ->where('oa_s.status', '=', OrderAdjustment::STATUS_APPROVED);
+                    ->where('oa_s.status', '=', OrderAdjustment::STATUS_APPROVED);
             })
             ->selectRaw('oai_s.order_item_id, MAX(oai_s.id) as adj_item_id')
             ->groupBy('oai_s.order_item_id');
@@ -1446,40 +1712,40 @@ class CeoDashboardController extends Controller
             'order_items.total',
             'order_items.total_weight',
             'order_items.is_priced_by_kg',
-            DB::raw("COALESCE(adj.adjusted_quantity, order_items.quantity) as eff_qty"),
-            DB::raw("COALESCE(adj.adjusted_price,    order_items.price)    as eff_price"),
-            DB::raw("COALESCE(adj.adjusted_weight,   order_items.total_weight) as eff_weight"),
-            DB::raw("CASE WHEN adj.id IS NOT NULL THEN 1 ELSE 0 END as has_adj"),
-            DB::raw("CASE WHEN adj.id IS NOT NULL THEN
+            DB::raw('COALESCE(adj.adjusted_quantity, order_items.quantity) as eff_qty'),
+            DB::raw('COALESCE(adj.adjusted_price,    order_items.price)    as eff_price'),
+            DB::raw('COALESCE(adj.adjusted_weight,   order_items.total_weight) as eff_weight'),
+            DB::raw('CASE WHEN adj.id IS NOT NULL THEN 1 ELSE 0 END as has_adj'),
+            DB::raw('CASE WHEN adj.id IS NOT NULL THEN
                         CASE WHEN order_items.is_priced_by_kg = 1
                             THEN COALESCE(adj.adjusted_weight, order_items.total_weight) * COALESCE(adj.adjusted_price, order_items.price)
                             ELSE COALESCE(adj.adjusted_quantity, order_items.quantity)   * COALESCE(adj.adjusted_price, order_items.price)
                         END
-                     ELSE order_items.total END as eff_total"),
+                     ELSE order_items.total END as eff_total'),
         ]);
 
         match ($sort) {
-            'date_asc'     => $listQ->orderBy('orders.created_at'),
-            'product_asc'  => $listQ->orderBy('products.name')->orderByDesc('orders.created_at'),
+            'date_asc' => $listQ->orderBy('orders.created_at'),
+            'product_asc' => $listQ->orderBy('products.name')->orderByDesc('orders.created_at'),
             'product_desc' => $listQ->orderByDesc('products.name')->orderByDesc('orders.created_at'),
-            'amount_asc'   => $listQ->orderBy('order_items.total')->orderByDesc('orders.created_at'),
-            'amount_desc'  => $listQ->orderByDesc('order_items.total')->orderByDesc('orders.created_at'),
-            'qty_asc'      => $listQ->orderBy('order_items.quantity')->orderByDesc('orders.created_at'),
-            'qty_desc'     => $listQ->orderByDesc('order_items.quantity')->orderByDesc('orders.created_at'),
-            'weight_asc'   => $listQ->orderBy('order_items.total_weight')->orderByDesc('orders.created_at'),
-            'weight_desc'  => $listQ->orderByDesc('order_items.total_weight')->orderByDesc('orders.created_at'),
-            default        => $listQ->orderByDesc('orders.created_at'),
+            'amount_asc' => $listQ->orderBy('order_items.total')->orderByDesc('orders.created_at'),
+            'amount_desc' => $listQ->orderByDesc('order_items.total')->orderByDesc('orders.created_at'),
+            'qty_asc' => $listQ->orderBy('order_items.quantity')->orderByDesc('orders.created_at'),
+            'qty_desc' => $listQ->orderByDesc('order_items.quantity')->orderByDesc('orders.created_at'),
+            'weight_asc' => $listQ->orderBy('order_items.total_weight')->orderByDesc('orders.created_at'),
+            'weight_desc' => $listQ->orderByDesc('order_items.total_weight')->orderByDesc('orders.created_at'),
+            default => $listQ->orderByDesc('orders.created_at'),
         };
 
         $items = $listQ->paginate($perPage)->appends($request->query());
 
         // ── Grand summary (all pages) ──────────────────────────────────
-        $effTotalExpr = "CASE WHEN adj.id IS NOT NULL THEN
+        $effTotalExpr = 'CASE WHEN adj.id IS NOT NULL THEN
             CASE WHEN order_items.is_priced_by_kg = 1
                 THEN COALESCE(adj.adjusted_weight, order_items.total_weight) * COALESCE(adj.adjusted_price, order_items.price)
                 ELSE COALESCE(adj.adjusted_quantity, order_items.quantity)   * COALESCE(adj.adjusted_price, order_items.price)
             END
-         ELSE order_items.total END";
+         ELSE order_items.total END';
 
         $summary = $makeBase()->selectRaw("
             COUNT(DISTINCT order_items.id)                                                          as item_count,
@@ -1494,14 +1760,14 @@ class CeoDashboardController extends Controller
             'products.id as product_id',
             'products.name as product_name',
             'products.unit as product_unit',
-            DB::raw("SUM(COALESCE(adj.adjusted_quantity,  order_items.quantity))         as total_qty"),
-            DB::raw("SUM(COALESCE(adj.adjusted_weight,    order_items.total_weight))     as total_weight"),
+            DB::raw('SUM(COALESCE(adj.adjusted_quantity,  order_items.quantity))         as total_qty'),
+            DB::raw('SUM(COALESCE(adj.adjusted_weight,    order_items.total_weight))     as total_weight'),
             DB::raw("SUM({$effTotalExpr})                                                as total_amount"),
         ])->groupBy('products.id', 'products.name', 'products.unit')
-          ->orderByDesc('total_amount')
-          ->get();
+            ->orderByDesc('total_amount')
+            ->get();
 
-        $sales     = User::query()->orderBy('name')->select('id', 'name')->get();
+        $sales = User::query()->orderBy('name')->select('id', 'name')->get();
         $customers = Customer::query()->orderBy('name')->select('id', 'name', 'customer_code')->get();
 
         // Get sales statistics by employee:

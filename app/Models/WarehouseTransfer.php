@@ -10,9 +10,13 @@ class WarehouseTransfer extends Model
     use HasFactory;
 
     public const STATUS_PENDING_SHIPPER_PICKUP = 'pending_shipper_pickup';
+
     public const STATUS_IN_TRANSIT = 'in_transit';
+
     public const STATUS_DELIVERED_WAITING_RECEIVE = 'delivered_waiting_receive';
+
     public const STATUS_RECEIVED_COMPLETED = 'received_completed';
+
     public const STATUS_CANCELLED = 'cancelled';
 
     protected $fillable = [
@@ -67,5 +71,10 @@ class WarehouseTransfer extends Model
     public function shipper()
     {
         return $this->belongsTo(User::class, 'shipper_id');
+    }
+
+    public function receiver()
+    {
+        return $this->belongsTo(User::class, 'received_by');
     }
 }
