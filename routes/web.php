@@ -67,6 +67,7 @@ use App\Http\Controllers\TruckStationController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\WarehouseController;
 use App\Http\Controllers\WarehouseDashboardController;
+use App\Http\Controllers\WarehouseStocktakeController;
 
 // Public mobile update files. These routes are also a fallback when Nginx does
 // not serve public/app-update directly.
@@ -379,6 +380,8 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/inventory-transfers/incoming', [WarehouseDashboardController::class, 'incomingInventoryTransfers'])->name('inventory-transfers.incoming');
         Route::post('/inventory-transfers/{transfer}/confirm', [WarehouseDashboardController::class, 'confirmIncomingInventoryTransfer'])->name('inventory-transfers.confirm');
         Route::get('/inventory', [WarehouseDashboardController::class, 'inventory'])->name('inventory');
+        Route::get('/stocktakes', [WarehouseStocktakeController::class, 'index'])->name('stocktakes.index');
+        Route::post('/stocktakes', [WarehouseStocktakeController::class, 'store'])->name('stocktakes.store');
         Route::get('/inventory-daily', [WarehouseDashboardController::class, 'inventoryDaily'])->name('inventory-daily');
         Route::post('/inventory/cancel-overdue', [WarehouseDashboardController::class, 'cancelOverdueOrders'])->name('inventory.cancel-overdue');
         Route::get('/products', [WarehouseDashboardController::class, 'products'])->name('products');

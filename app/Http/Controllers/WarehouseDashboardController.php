@@ -2,19 +2,20 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Inventory;
 use App\Models\CuttingComponentImportRequest;
-use App\Models\Order;
-use App\Models\OrderHistory;
-use App\Models\OrderReturn;
+use App\Models\Inventory;
 use App\Models\InventoryDocument;
 use App\Models\InventoryDocumentItem;
 use App\Models\InventoryDocumentTemplate;
 use App\Models\InventoryMovement;
 use App\Models\InventoryReservation;
-use App\Models\ProductVariant;
-use App\Models\ProductCuttingBatch;
+use App\Models\InventoryStocktake;
+use App\Models\Order;
+use App\Models\OrderHistory;
+use App\Models\OrderReturn;
 use App\Models\Product;
+use App\Models\ProductCuttingBatch;
+use App\Models\ProductVariant;
 use App\Models\ReturnItem;
 use App\Models\Setting;
 use App\Models\User;
@@ -23,16 +24,16 @@ use App\Models\WarehouseInventoryTransfer;
 use App\Models\WarehouseInventoryTransferItem;
 use App\Models\WarehouseTransfer;
 use App\Notifications\WarehouseOrderAdjustmentRequested;
+use App\Services\ProductCuttingService;
 use App\Services\WarehouseInventorySummaryService;
 use App\Services\WarehouseOrderAdjustmentService;
-use App\Services\ProductCuttingService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Collection;
-use Illuminate\Pagination\LengthAwarePaginator;
 
 class WarehouseDashboardController extends Controller
 {
@@ -61,8 +62,8 @@ class WarehouseDashboardController extends Controller
         foreach ($newOrders as $order) {
             $notifications->push([
                 'type' => 'new_order',
-                'title' => 'Đơn mới: #' . ($order->daily_sequence ?: $order->id) . ' - ' . ($order->customer?->name ?: 'Khách hàng'),
-                'meta' => 'Sale: ' . ($order->user?->name ?: 'Chưa xác định') . ' • Giờ tạo: ' . optional($order->created_at)->format('H:i d/m/Y'),
+                'title' => 'Đơn mới: #'.($order->daily_sequence ?: $order->id).' - '.($order->customer?->name ?: 'Khách hàng'),
+                'meta' => 'Sale: '.($order->user?->name ?: 'Chưa xác định').' • Giờ tạo: '.optional($order->created_at)->format('H:i d/m/Y'),
                 'details' => $order->items->map(fn ($item) => [
                     'name' => $item->variant?->name ?? $item->product?->name ?? 'Sản phẩm',
                     'quantity' => (float) ($item->quantity ?? 0),
@@ -87,9 +88,9 @@ class WarehouseDashboardController extends Controller
         foreach ($packedOrders as $order) {
             $notifications->push([
                 'type' => 'warehouse',
-                'title' => 'Đơn ' . ($order->code ? '#' . $order->code : '#' . $order->id) . ' : đã hoàn thành đóng gói, chờ Shipper nhận',
+                'title' => 'Đơn '.($order->code ? '#'.$order->code : '#'.$order->id).' : đã hoàn thành đóng gói, chờ Shipper nhận',
                 'meta' => $order->customer?->name ?: 'Khách hàng',
-                'link' => route('pages.my_dashboard') . '#packed-orders',
+                'link' => route('pages.my_dashboard').'#packed-orders',
                 'time' => optional($order->updated_at)->format('d/m/Y H:i'),
             ]);
         }
@@ -106,8 +107,8 @@ class WarehouseDashboardController extends Controller
             $notifications->push([
                 'type' => 'sale',
                 'title' => 'Sale: Phản hồi yêu cầu thay đổi đơn hàng từ Nhà máy',
-                'meta' => ($order->code ? '#' . $order->code : '#' . $order->id) . ' - ' . ($order->customer?->name ?: 'Khách hàng'),
-                'link' => route('pages.my_dashboard') . '#sale-confirm-orders',
+                'meta' => ($order->code ? '#'.$order->code : '#'.$order->id).' - '.($order->customer?->name ?: 'Khách hàng'),
+                'link' => route('pages.my_dashboard').'#sale-confirm-orders',
                 'time' => optional($order->warehouse_adjustment_confirmed_at)->format('d/m/Y H:i'),
             ]);
         }
@@ -124,8 +125,8 @@ class WarehouseDashboardController extends Controller
             $notifications->push([
                 'type' => 'sale',
                 'title' => 'Sale: Gửi yêu cầu thay đổi đơn hàng tới kho, cần phê duyệt',
-                'meta' => ($order->code ? '#' . $order->code : '#' . $order->id) . ' - ' . ($order->customer?->name ?: 'Khách hàng'),
-                'link' => route('pages.my_dashboard') . '#pending-sale-confirm-orders',
+                'meta' => ($order->code ? '#'.$order->code : '#'.$order->id).' - '.($order->customer?->name ?: 'Khách hàng'),
+                'link' => route('pages.my_dashboard').'#pending-sale-confirm-orders',
                 'time' => optional($order->warehouse_adjustment_requested_at)->format('d/m/Y H:i'),
             ]);
         }
@@ -141,9 +142,9 @@ class WarehouseDashboardController extends Controller
         foreach ($returnOrders as $order) {
             $notifications->push([
                 'type' => 'shipper',
-                'title' => 'Shipper : ' . ($order->customer?->name ?: 'Khách') . ' trả hàng cần nhận hàng',
-                'meta' => ($order->code ? '#' . $order->code : '#' . $order->id),
-                'link' => route('pages.my_dashboard') . '#return-orders',
+                'title' => 'Shipper : '.($order->customer?->name ?: 'Khách').' trả hàng cần nhận hàng',
+                'meta' => ($order->code ? '#'.$order->code : '#'.$order->id),
+                'link' => route('pages.my_dashboard').'#return-orders',
                 'time' => optional($order->updated_at)->format('d/m/Y H:i'),
             ]);
         }
@@ -161,9 +162,9 @@ class WarehouseDashboardController extends Controller
             $customerName = $order->customer?->name ?: '';
             $notifications->push([
                 'type' => 'shipper',
-                'title' => 'Shipper: Đã nhận đơn ' . ($order->code ? '#' . $order->code : '#' . $order->id) . ($customerName ? ' - ' . $customerName : ''),
+                'title' => 'Shipper: Đã nhận đơn '.($order->code ? '#'.$order->code : '#'.$order->id).($customerName ? ' - '.$customerName : ''),
                 'meta' => $shipperName,
-                'link' => route('pages.my_dashboard') . '#shipper-orders',
+                'link' => route('pages.my_dashboard').'#shipper-orders',
                 'time' => optional($order->updated_at)->format('d/m/Y H:i'),
             ]);
         }
@@ -181,9 +182,9 @@ class WarehouseDashboardController extends Controller
             $sourceWarehouse = $transfer->sourceWarehouse?->name ?: 'Kho khác';
             $notifications->push([
                 'type' => 'shipper',
-                'title' => 'Shipper : ' . $sourceWarehouse . ' chuyển hàng tới, Cần tiếp nhận',
-                'meta' => $order ? (($order->code ? '#' . $order->code : '#' . $order->id) . ' - ' . ($order->customer?->name ?: '')) : '',
-                'link' => route('pages.my_dashboard') . '#warehouse-transfer-in',
+                'title' => 'Shipper : '.$sourceWarehouse.' chuyển hàng tới, Cần tiếp nhận',
+                'meta' => $order ? (($order->code ? '#'.$order->code : '#'.$order->id).' - '.($order->customer?->name ?: '')) : '',
+                'link' => route('pages.my_dashboard').'#warehouse-transfer-in',
                 'time' => optional($transfer->delivered_at)->format('d/m/Y H:i'),
             ]);
         }
@@ -201,9 +202,9 @@ class WarehouseDashboardController extends Controller
             $targetWarehouse = $transfer->targetWarehouse?->name ?: 'Kho khác';
             $notifications->push([
                 'type' => 'shipper',
-                'title' => 'Shipper : ' . $targetWarehouse . ' Chuyển tiếp đơn hàng, cần kiểm tra và Xác nhận',
-                'meta' => $order ? (($order->code ? '#' . $order->code : '#' . $order->id) . ' - ' . ($order->customer?->name ?: '')) : '',
-                'link' => route('pages.my_dashboard') . '#warehouse-transfer-out',
+                'title' => 'Shipper : '.$targetWarehouse.' Chuyển tiếp đơn hàng, cần kiểm tra và Xác nhận',
+                'meta' => $order ? (($order->code ? '#'.$order->code : '#'.$order->id).' - '.($order->customer?->name ?: '')) : '',
+                'link' => route('pages.my_dashboard').'#warehouse-transfer-out',
                 'time' => optional($transfer->delivered_at)->format('d/m/Y H:i'),
             ]);
         }
@@ -212,11 +213,13 @@ class WarehouseDashboardController extends Controller
             'notifications' => $notifications,
         ]);
     }
+
     public function orderTransfers(Request $request)
     {
         // Tạm thời chỉ render view trống
         return view('warehouse.order-transfers');
     }
+
     private const READY_TO_PACK_STATUSES = [
         'approved',
         Order::STATUS_READY_TO_PACK,
@@ -291,11 +294,11 @@ class WarehouseDashboardController extends Controller
             'packed' => $applyWarehouseScope(Order::query())
                 ->whereIn('status', self::PACKED_STATUSES)
                 ->whereDate('updated_at', $dateString)->count(),
-            'packing'       => $applyWarehouseScope(Order::query())
+            'packing' => $applyWarehouseScope(Order::query())
                 ->where('status', Order::STATUS_PACKING)
                 ->whereDate('created_at', $dateString)
                 ->count(),
-            'returning'     => $applyWarehouseScope(Order::query())
+            'returning' => $applyWarehouseScope(Order::query())
                 ->where('status', Order::STATUS_RETURNING)
                 ->whereDate('created_at', $dateString)
                 ->count(),
@@ -311,7 +314,7 @@ class WarehouseDashboardController extends Controller
                 ->where('status', \App\Models\WarehouseTransfer::STATUS_RECEIVED_COMPLETED)
                 ->whereDate('updated_at', $dateString)
                 ->count(),
-            'done_today'    => $applyWarehouseScope(Order::query())
+            'done_today' => $applyWarehouseScope(Order::query())
                 ->whereIn('status', self::PACKED_STATUSES)
                 ->whereDate('updated_at', $dateString)->count(),
             'orders_in_day' => (clone $dailyOrdersQuery)->count(),
@@ -325,6 +328,10 @@ class WarehouseDashboardController extends Controller
                 ->where('status', \App\Models\WarehouseInventoryTransfer::STATUS_RECEIVED_COMPLETED)
                 ->whereDate('updated_at', $dateString)
                 ->count(),
+            'stocktakes_completed' => InventoryStocktake::query()
+                ->when($managedWarehouseId, fn ($query) => $query->where('warehouse_id', $managedWarehouseId))
+                ->whereDate('counted_at', $dateString)
+                ->count(),
         ];
 
         $recentPacked = $applyWarehouseScope(Order::with('customer'))
@@ -333,7 +340,6 @@ class WarehouseDashboardController extends Controller
             ->orderByDesc('updated_at')
             ->take(5)
             ->get();
-
 
         $inventorySummary = app(WarehouseInventorySummaryService::class)
             ->build($managedWarehouseId, Carbon::today()->toDateString());
@@ -397,7 +403,7 @@ class WarehouseDashboardController extends Controller
     {
         $user = Auth::user();
         $warehouseId = $user?->warehouse_id ? (int) $user->warehouse_id : null;
-        if (!$warehouseId && !$user?->hasRole('admin')) {
+        if (! $warehouseId && ! $user?->hasRole('admin')) {
             return back()->with('error', 'Tài khoản chưa được gán kho thực hiện.');
         }
 
@@ -428,13 +434,13 @@ class WarehouseDashboardController extends Controller
                 (string) ($data['note'] ?? 'Xuất kho để thực hiện pha lóc.'),
                 (int) $user->id,
                 $request->boolean('defer_components'),
-                !empty($data['order_id']) ? (int) $data['order_id'] : null
+                ! empty($data['order_id']) ? (int) $data['order_id'] : null
             );
         } catch (\Throwable $e) {
             return back()->withInput()->with('error', $e->getMessage());
         }
 
-        if (!empty($data['order_id'])) {
+        if (! empty($data['order_id'])) {
             return redirect()
                 ->route('warehouse.orders', [
                     'date' => $data['selected_date'] ?? now()->toDateString(),
@@ -450,7 +456,7 @@ class WarehouseDashboardController extends Controller
     {
         $user = Auth::user();
         $warehouseId = $user?->warehouse_id ? (int) $user->warehouse_id : null;
-        if (!$warehouseId && !$user?->hasRole('admin')) {
+        if (! $warehouseId && ! $user?->hasRole('admin')) {
             return back()->with('error', 'Tài khoản chưa được gán kho thực hiện.');
         }
 
@@ -473,7 +479,7 @@ class WarehouseDashboardController extends Controller
                 $data['materials'],
                 (string) ($data['note'] ?? 'Xuất kho nguyên con để pha lóc.'),
                 (int) $user->id,
-                !empty($data['order_id']) ? (int) $data['order_id'] : null
+                ! empty($data['order_id']) ? (int) $data['order_id'] : null
             );
         } catch (\Throwable $e) {
             return back()->withInput()->with('error', $e->getMessage());
@@ -491,7 +497,7 @@ class WarehouseDashboardController extends Controller
     {
         $user = Auth::user();
         $managedWarehouseId = $user?->warehouse_id ? (int) $user->warehouse_id : null;
-        if (!$managedWarehouseId && !$user?->hasRole('admin')) {
+        if (! $managedWarehouseId && ! $user?->hasRole('admin')) {
             return back()->with('error', 'Tài khoản chưa được gán kho thực hiện.');
         }
         if ($managedWarehouseId && (int) $batch->warehouse_id !== $managedWarehouseId) {
@@ -511,7 +517,7 @@ class WarehouseDashboardController extends Controller
     {
         $user = Auth::user();
         $managedWarehouseId = $user?->warehouse_id ? (int) $user->warehouse_id : null;
-        if (!$managedWarehouseId && !$user?->hasRole('admin')) {
+        if (! $managedWarehouseId && ! $user?->hasRole('admin')) {
             return back()->with('error', 'Tài khoản chưa được gán kho thực hiện.');
         }
         if ($managedWarehouseId && (int) $batch->warehouse_id !== $managedWarehouseId) {
@@ -575,7 +581,7 @@ class WarehouseDashboardController extends Controller
                 'type' => 'import',
                 'warehouse_id' => (int) $componentImportRequest->warehouse_id,
                 'document_date' => now()->toDateString(),
-                'notes' => 'Nhập kho thành phần còn lại từ phiếu yêu cầu pha lóc #' . $componentImportRequest->id,
+                'notes' => 'Nhập kho thành phần còn lại từ phiếu yêu cầu pha lóc #'.$componentImportRequest->id,
                 'shipping_fee' => 0,
                 'user_id' => (int) $user->id,
             ]);
@@ -629,7 +635,7 @@ class WarehouseDashboardController extends Controller
     public function createStockIn(Request $request)
     {
         $suppliers = \App\Models\Supplier::all();
-        
+
         $managedWarehouseId = Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
         $stockInTemplates = InventoryDocumentTemplate::query()
             ->with(['supplier', 'items.productVariant.product'])
@@ -646,13 +652,12 @@ class WarehouseDashboardController extends Controller
                     'quantity' => (int) $item->quantity,
                     'label' => trim(
                         ($item->productVariant?->product?->name ?? 'Sản phẩm')
-                        . ' - '
-                        . ($item->productVariant?->name ?? 'Biến thể')
+                        .' - '
+                        .($item->productVariant?->name ?? 'Biến thể')
                     ),
                 ])->values()->all(),
             ])
             ->values();
-        
 
         $productVariants = ProductVariant::with([
             'product',
@@ -661,10 +666,10 @@ class WarehouseDashboardController extends Controller
                     $query->where('warehouse_id', $managedWarehouseId);
                 }
             },
-            'values.attribute' // lấy thuộc tính variant nếu có
+            'values.attribute', // lấy thuộc tính variant nếu có
         ])
-        ->where('status', true)
-        ->get();
+            ->where('status', true)
+            ->get();
 
         $availableVariants = $productVariants->map(function ($variant) {
             $totalQuantity = (int) $variant->inventories->sum('quantity');
@@ -673,13 +678,14 @@ class WarehouseDashboardController extends Controller
             $lowStockThreshold = (int) ($variant->inventories->min('low_stock_threshold') ?? 5);
             $weightPerUnit = (float) ($variant->effective_kg ?? 1);
             // Thuộc tính dạng: Size: M, Màu: Đỏ...
-            $attributes = $variant->values->map(function($val) {
-                return $val->attribute->name . ': ' . $val->value;
+            $attributes = $variant->values->map(function ($val) {
+                return $val->attribute->name.': '.$val->value;
             })->implode(', ');
             $label = ($variant->product->name ?? 'Sản phẩm')
-                . ' - ' . ($variant->name ?? 'Biến thể')
-                . ($variant->sku ? ' (' . $variant->sku . ')' : '')
-                . ($attributes ? ' [' . $attributes . ']' : '');
+                .' - '.($variant->name ?? 'Biến thể')
+                .($variant->sku ? ' ('.$variant->sku.')' : '')
+                .($attributes ? ' ['.$attributes.']' : '');
+
             return [
                 'variant_id' => (int) $variant->id,
                 'product_id' => (int) $variant->product_id,
@@ -754,6 +760,7 @@ class WarehouseDashboardController extends Controller
 
         return view('warehouse.stock-in.create', compact('suppliers', 'productVariants', 'availableVariants', 'lowStockVariants', 'stockInTemplates'));
     }
+
     /**
      * List orders awaiting packing or currently being packed.
      */
@@ -793,7 +800,7 @@ class WarehouseDashboardController extends Controller
             });
         }
 
-        if (!empty($status)) {
+        if (! empty($status)) {
             $dailyCountsQuery->where('status', $status);
         }
 
@@ -841,7 +848,7 @@ class WarehouseDashboardController extends Controller
             });
         }
 
-        if (!empty($status)) {
+        if (! empty($status)) {
             $ordersQuery->where('status', $status);
         }
 
@@ -865,13 +872,14 @@ class WarehouseDashboardController extends Controller
             ->map(function (Inventory $inventory) {
                 $variant = $inventory->productVariant;
                 $product = $variant?->product;
-                if (!$variant || !$product) {
+                if (! $variant || ! $product) {
                     return null;
                 }
                 // Lấy thuộc tính dạng: Size: M, Màu: Đỏ...
-                $attributes = $variant->values?->map(function($val) {
-                    return $val->attribute->name . ': ' . $val->value;
+                $attributes = $variant->values?->map(function ($val) {
+                    return $val->attribute->name.': '.$val->value;
                 })->implode(', ');
+
                 return [
                     'variant_id' => (int) $variant->id,
                     'variant_name' => $variant->name ?? '',
@@ -892,6 +900,7 @@ class WarehouseDashboardController extends Controller
         // Group by product_id
         $availableVariantsGrouped = $availableVariants->groupBy('product_id')->map(function ($variants, $productId) {
             $first = $variants->first();
+
             return [
                 'product' => [
                     'id' => $first['product_id'],
@@ -982,7 +991,7 @@ class WarehouseDashboardController extends Controller
 
     private function attachCustomerFeedbackContext(Collection $orders): void
     {
-        if ($orders->isEmpty() || !Schema::hasColumn('orders', 'customer_feedback_status')) {
+        if ($orders->isEmpty() || ! Schema::hasColumn('orders', 'customer_feedback_status')) {
             $orders->each(fn (Order $order) => $order->setAttribute('customer_feedback_context', [
                 'has_feedback' => false,
                 'highest_status' => null,
@@ -1021,14 +1030,14 @@ class WarehouseDashboardController extends Controller
                 'highest_meta' => Order::customerFeedbackMeta($highestStatus),
                 'recent' => $rows->map(fn (Order $feedbackOrder) => [
                     'order_id' => (int) $feedbackOrder->id,
-                    'code' => (string) ($feedbackOrder->code ?: '#' . $feedbackOrder->id),
+                    'code' => (string) ($feedbackOrder->code ?: '#'.$feedbackOrder->id),
                     'status' => (string) $feedbackOrder->customer_feedback_status,
                     'meta' => Order::customerFeedbackMeta((string) $feedbackOrder->customer_feedback_status),
                     'note' => (string) $feedbackOrder->customer_feedback_note,
                     'sale_review' => (string) ($feedbackOrder->customer_feedback_sale_review ?? ''),
                     'images' => collect($feedbackOrder->customer_feedback_images ?? [])->map(fn ($path) => [
                         'path' => (string) $path,
-                        'url' => asset('storage/' . ltrim((string) $path, '/')),
+                        'url' => asset('storage/'.ltrim((string) $path, '/')),
                     ])->values()->all(),
                     'user' => (string) ($feedbackOrder->customerFeedbackUser?->name ?? ''),
                     'at' => optional($feedbackOrder->customer_feedback_at ?? $feedbackOrder->updated_at)->format('d/m/Y H:i'),
@@ -1047,7 +1056,7 @@ class WarehouseDashboardController extends Controller
             'note' => ['nullable', 'string', 'max:1000'],
         ]);
 
-        if (!in_array($order->status, self::PACKED_STATUSES, true)) {
+        if (! in_array($order->status, self::PACKED_STATUSES, true)) {
             return back()->with('error', 'Chỉ có thể điều chuyển đơn đã đóng gói xong.');
         }
 
@@ -1092,7 +1101,7 @@ class WarehouseDashboardController extends Controller
             })
             ->first();
 
-        if (!$shipper) {
+        if (! $shipper) {
             return back()->with('error', 'Người nhận vận chuyển không phải shipper hợp lệ.');
         }
 
@@ -1133,9 +1142,9 @@ class WarehouseDashboardController extends Controller
             'role' => $this->packingActorRole(),
             'status_before' => $order->status,
             'status_after' => $order->status,
-            'note' => 'Tạo phiếu điều chuyển #' . $transfer->id
-                . ' đến kho ' . ($targetWarehouse?->name ?? ('ID ' . $targetWarehouseId))
-                . ' và giao shipper ' . $shipper->name,
+            'note' => 'Tạo phiếu điều chuyển #'.$transfer->id
+                .' đến kho '.($targetWarehouse?->name ?? ('ID '.$targetWarehouseId))
+                .' và giao shipper '.$shipper->name,
         ]);
 
         return back()->with('success', 'Đã tạo phiếu điều chuyển và chờ shipper nhận hàng.');
@@ -1200,7 +1209,7 @@ class WarehouseDashboardController extends Controller
 
         $transfer->loadMissing(['order.items']);
         $order = $transfer->order;
-        if (!$order) {
+        if (! $order) {
             return back()->with('error', 'Không tìm thấy đơn hàng của phiếu điều chuyển.');
         }
 
@@ -1224,7 +1233,7 @@ class WarehouseDashboardController extends Controller
                 'type' => 'import',
                 'document_date' => now()->toDateString(),
                 'warehouse_id' => $transfer->target_warehouse_id,
-                'notes' => 'Nhap kho dieu chuyen don #' . $order->code . ' [WHT#' . $transfer->id . ']',
+                'notes' => 'Nhap kho dieu chuyen don #'.$order->code.' [WHT#'.$transfer->id.']',
                 'shipping_fee' => 0,
                 'user_id' => Auth::id(),
             ]);
@@ -1233,7 +1242,7 @@ class WarehouseDashboardController extends Controller
                 $orderItemId = (int) $weightData['order_item_id'];
                 $receivedWeight = round((float) $weightData['received_weight'], 3);
                 $orderItem = $orderItemsById->get($orderItemId);
-                if (!$orderItem) {
+                if (! $orderItem) {
                     continue;
                 }
 
@@ -1308,7 +1317,7 @@ class WarehouseDashboardController extends Controller
                 'role' => 'warehouse',
                 'status_before' => $order->status,
                 'status_after' => $order->status,
-                'note' => 'Kho da tiep nhan dieu chuyen #' . $transfer->id . ' | Hao hụt KL: ' . $weightLoss . ' kg',
+                'note' => 'Kho da tiep nhan dieu chuyen #'.$transfer->id.' | Hao hụt KL: '.$weightLoss.' kg',
             ]);
         });
 
@@ -1340,7 +1349,7 @@ class WarehouseDashboardController extends Controller
         ];
 
         if ($reason !== '') {
-            $noteParts[] = 'Ly do: ' . $reason;
+            $noteParts[] = 'Ly do: '.$reason;
         }
 
         $transfer->update([
@@ -1356,10 +1365,10 @@ class WarehouseDashboardController extends Controller
                 'role' => 'warehouse',
                 'status_before' => $order->status,
                 'status_after' => $order->status,
-                'note' => 'Kho nhan tu choi phieu dieu chuyen #' . $transfer->id
-                    . ' truoc khi nhap kho. Kho gui: ' . ($transfer->sourceWarehouse?->name ?? 'N/A')
-                    . '; Kho nhan: ' . ($transfer->targetWarehouse?->name ?? 'N/A')
-                    . ($reason !== '' ? '; Ly do: ' . $reason : ''),
+                'note' => 'Kho nhan tu choi phieu dieu chuyen #'.$transfer->id
+                    .' truoc khi nhap kho. Kho gui: '.($transfer->sourceWarehouse?->name ?? 'N/A')
+                    .'; Kho nhan: '.($transfer->targetWarehouse?->name ?? 'N/A')
+                    .($reason !== '' ? '; Ly do: '.$reason : ''),
             ]);
         }
 
@@ -1399,7 +1408,7 @@ class WarehouseDashboardController extends Controller
             return back()->with('error', $message);
         }
 
-        if (!$order->created_at || !$order->created_at->isToday()) {
+        if (! $order->created_at || ! $order->created_at->isToday()) {
             $message = 'Chỉ được xử lý đơn có ngày hôm nay.';
 
             if ($request->expectsJson()) {
@@ -1412,7 +1421,7 @@ class WarehouseDashboardController extends Controller
             return back()->with('error', $message);
         }
 
-        if (!in_array($order->status, self::READY_TO_PACK_STATUSES, true)) {
+        if (! in_array($order->status, self::READY_TO_PACK_STATUSES, true)) {
             if ($request->expectsJson()) {
                 return response()->json([
                     'ok' => false,
@@ -1444,7 +1453,7 @@ class WarehouseDashboardController extends Controller
 
         $stockCheck = $this->evaluateSingleOrderStock($order, $managedWarehouseId);
 
-        if (!($stockCheck['can_start_packing'] ?? false)) {
+        if (! ($stockCheck['can_start_packing'] ?? false)) {
             $message = 'Không đủ tồn kho để đóng hàng';
 
             if ($request->expectsJson()) {
@@ -1475,20 +1484,20 @@ class WarehouseDashboardController extends Controller
         $order->update($updatePayload);
 
         OrderHistory::create([
-            'order_id'      => $order->id,
-            'action'        => 'start_packing',
-            'user_id'       => Auth::id(),
-            'role'          => $this->packingActorRole(),
+            'order_id' => $order->id,
+            'action' => 'start_packing',
+            'user_id' => Auth::id(),
+            'role' => $this->packingActorRole(),
             'status_before' => $statusBefore,
-            'status_after'  => Order::STATUS_PACKING,
-            'note'          => 'Bắt đầu đóng gói đơn hàng'
-                . ($assignedWarehouseOnStart ? ' [assigned_warehouse_on_start]' : ''),
+            'status_after' => Order::STATUS_PACKING,
+            'note' => 'Bắt đầu đóng gói đơn hàng'
+                .($assignedWarehouseOnStart ? ' [assigned_warehouse_on_start]' : ''),
         ]);
 
         if ($request->expectsJson()) {
             return response()->json([
                 'ok' => true,
-                'message' => 'Đã bắt đầu đóng gói đơn #' . $order->code,
+                'message' => 'Đã bắt đầu đóng gói đơn #'.$order->code,
                 'order' => [
                     'id' => $order->id,
                     'status' => Order::STATUS_PACKING,
@@ -1498,7 +1507,7 @@ class WarehouseDashboardController extends Controller
             ]);
         }
 
-        return back()->with('success', 'Đã bắt đầu đóng gói đơn #' . $order->code);
+        return back()->with('success', 'Đã bắt đầu đóng gói đơn #'.$order->code);
     }
 
     private function evaluateSingleOrderStock(Order $order, ?int $warehouseId): array
@@ -1543,6 +1552,7 @@ class WarehouseDashboardController extends Controller
             ->flatMap(function (array $guard, int|string $orderId) {
                 return collect($guard['shortages'] ?? [])->map(function (array $shortage) use ($orderId) {
                     $shortage['order_id'] = (int) ($shortage['order_id'] ?? $orderId);
+
                     return $shortage;
                 });
             })
@@ -1578,7 +1588,7 @@ class WarehouseDashboardController extends Controller
             $variantId = (int) ($shortage['variant_id'] ?? 0);
             $orderId = (int) ($shortage['order_id'] ?? 0);
             $targetVariant = $cutVariants->get($variantId);
-            if (!$targetVariant || $orderId <= 0) {
+            if (! $targetVariant || $orderId <= 0) {
                 continue;
             }
 
@@ -1591,7 +1601,7 @@ class WarehouseDashboardController extends Controller
         return $plans;
     }
 
-    private function buildPackingQueueStockGuards(Collection $orders, ?int $warehouseId, string $forDate = null): array
+    private function buildPackingQueueStockGuards(Collection $orders, ?int $warehouseId, ?string $forDate = null): array
     {
         $queueStatuses = array_merge(self::READY_TO_PACK_STATUSES, [Order::STATUS_PACKING]);
         $forDate = $forDate ?? now()->toDateString();
@@ -1680,12 +1690,12 @@ class WarehouseDashboardController extends Controller
         $guards = [];
 
         foreach ($allQueueOrders as $order) {
-            $shortages         = [];
+            $shortages = [];
             $pendingDeductions = [];  // staged; applied only if order has NO shortage
 
             foreach ($order->items as $item) {
-                $variantId   = (int) $item->product_variant_id;
-                $neededQty   = (float) $item->quantity;
+                $variantId = (int) $item->product_variant_id;
+                $neededQty = (float) $item->quantity;
 
                 if ($variantId <= 0 || $neededQty <= 0) {
                     continue;
@@ -1695,24 +1705,24 @@ class WarehouseDashboardController extends Controller
 
                 if ($remaining < $neededQty) {
                     $shortages[] = [
-                        'order_id'      => (int) $order->id,
-                        'order_code'    => (string) $order->code,
+                        'order_id' => (int) $order->id,
+                        'order_code' => (string) $order->code,
                         'order_item_id' => (int) $item->id,
-                        'variant_id'    => $variantId,
-                        'variant_name'  => (string) ($item->variant?->name ?? $item->product?->name ?? ('SP #' . $variantId)),
-                        'required_qty'  => $neededQty,
+                        'variant_id' => $variantId,
+                        'variant_name' => (string) ($item->variant?->name ?? $item->product?->name ?? ('SP #'.$variantId)),
+                        'required_qty' => $neededQty,
                         'available_qty' => $remaining,
-                        'short_qty'     => round($neededQty - $remaining, 3),
-                        'reason'        => $remaining <= 0 ? 'blocked_by_prior_order' : 'insufficient_stock',
+                        'short_qty' => round($neededQty - $remaining, 3),
+                        'reason' => $remaining <= 0 ? 'blocked_by_prior_order' : 'insufficient_stock',
                     ];
                 } else {
                     $pendingDeductions[$variantId] = ($pendingDeductions[$variantId] ?? 0.0) + $neededQty;
                 }
             }
 
-            $hasShortage = !empty($shortages);
+            $hasShortage = ! empty($shortages);
 
-            if (!$hasShortage) {
+            if (! $hasShortage) {
                 foreach ($pendingDeductions as $vid => $consume) {
                     $remainingByVariant[$vid] = max(0.0, ($remainingByVariant[$vid] ?? 0.0) - $consume);
                 }
@@ -1721,16 +1731,16 @@ class WarehouseDashboardController extends Controller
 
             if (isset($displayedOrderIds[$order->id])) {
                 $guards[$order->id] = [
-                    'has_shortage'      => $hasShortage,
-                    'can_start_packing' => !$hasShortage,
-                    'message'           => $hasShortage ? 'Không đủ tồn kho để đóng hàng' : null,
-                    'shortages'         => $shortages,
+                    'has_shortage' => $hasShortage,
+                    'can_start_packing' => ! $hasShortage,
+                    'message' => $hasShortage ? 'Không đủ tồn kho để đóng hàng' : null,
+                    'shortages' => $shortages,
                 ];
             }
         }
 
         return [
-            'guards'               => $guards,
+            'guards' => $guards,
             'remaining_by_variant' => $remainingByVariant,  // stock left after FIFO queue consumed
         ];
     }
@@ -1772,10 +1782,10 @@ class WarehouseDashboardController extends Controller
 
         $result = [];
         foreach ($inventories as $inv) {
-            $vid          = (int) $inv->product_variant_id;
-            $currentQty   = (int) $inv->quantity;
-            $afterDelta   = (int) ($movementsAfter[$inv->id] ?? 0);
-            $qtyAtDate    = $currentQty - $afterDelta;
+            $vid = (int) $inv->product_variant_id;
+            $currentQty = (int) $inv->quantity;
+            $afterDelta = (int) ($movementsAfter[$inv->id] ?? 0);
+            $qtyAtDate = $currentQty - $afterDelta;
 
             $result[$vid] = ($result[$vid] ?? 0) + max(0, $qtyAtDate);
         }
@@ -1816,12 +1826,12 @@ class WarehouseDashboardController extends Controller
             $sequence = 0;
             foreach ($allQueueOrders as $order) {
                 $sequence++;
-                $guard      = $guards[$order->id] ?? ['has_shortage' => false, 'shortages' => []];
+                $guard = $guards[$order->id] ?? ['has_shortage' => false, 'shortages' => []];
                 $hasShortage = (bool) ($guard['has_shortage'] ?? false);
 
                 $order->update([
-                    'daily_sequence'        => $sequence,
-                    'stock_sufficient'      => $hasShortage ? 0 : 1,
+                    'daily_sequence' => $sequence,
+                    'stock_sufficient' => $hasShortage ? 0 : 1,
                     'stock_shortage_detail' => $hasShortage ? ($guard['shortages'] ?? []) : null,
                 ]);
             }
@@ -1988,6 +1998,7 @@ class WarehouseDashboardController extends Controller
 
             if ($quantity <= 0) {
                 $outOfStock++;
+
                 continue;
             }
 
@@ -2036,7 +2047,7 @@ class WarehouseDashboardController extends Controller
 
         $expectsJson = $request->expectsJson();
 
-        if (!$order->created_at || !$order->created_at->isToday()) {
+        if (! $order->created_at || ! $order->created_at->isToday()) {
             $message = 'Chỉ được xử lý đơn có ngày hôm nay.';
 
             if ($expectsJson) {
@@ -2049,7 +2060,7 @@ class WarehouseDashboardController extends Controller
             return back()->with('error', $message);
         }
 
-        if (!in_array($order->status, self::EDITABLE_LOGISTICS_STATUSES, true)) {
+        if (! in_array($order->status, self::EDITABLE_LOGISTICS_STATUSES, true)) {
             if ($expectsJson) {
                 return response()->json([
                     'ok' => false,
@@ -2079,7 +2090,7 @@ class WarehouseDashboardController extends Controller
 
         if ($request->filled('item_id')) {
             $itemId = (int) $validated['item_id'];
-            if (!in_array($itemId, $itemIds, true)) {
+            if (! in_array($itemId, $itemIds, true)) {
                 if ($expectsJson) {
                     return response()->json([
                         'ok' => false,
@@ -2111,13 +2122,13 @@ class WarehouseDashboardController extends Controller
         ]);
 
         OrderHistory::create([
-            'order_id'      => $order->id,
-            'action'        => 'warehouse_update_logistics',
-            'user_id'       => Auth::id(),
-            'role'          => $this->packingActorRole(),
+            'order_id' => $order->id,
+            'action' => 'warehouse_update_logistics',
+            'user_id' => Auth::id(),
+            'role' => $this->packingActorRole(),
             'status_before' => $order->status,
-            'status_after'  => $order->status,
-            'note'          => sprintf(
+            'status_after' => $order->status,
+            'note' => sprintf(
                 'Cập nhật Kg thực tế đóng hàng: %s → %s',
                 number_format((float) $oldWeight, 3, '.', ''),
                 number_format($actualWeight, 3, '.', '')
@@ -2128,7 +2139,7 @@ class WarehouseDashboardController extends Controller
             if ($expectsJson) {
                 return response()->json([
                     'ok' => true,
-                    'message' => 'Đã lưu kg thực tế cho sản phẩm trong đơn #' . $order->code,
+                    'message' => 'Đã lưu kg thực tế cho sản phẩm trong đơn #'.$order->code,
                     'order' => [
                         'id' => $order->id,
                         'actual_weight' => (float) $actualWeight,
@@ -2136,13 +2147,13 @@ class WarehouseDashboardController extends Controller
                 ]);
             }
 
-            return back()->with('success', 'Đã lưu kg thực tế cho sản phẩm trong đơn #' . $order->code);
+            return back()->with('success', 'Đã lưu kg thực tế cho sản phẩm trong đơn #'.$order->code);
         }
 
         if ($expectsJson) {
             return response()->json([
                 'ok' => true,
-                'message' => 'Đã cập nhật Kg thực tế cho đơn #' . $order->code,
+                'message' => 'Đã cập nhật Kg thực tế cho đơn #'.$order->code,
                 'order' => [
                     'id' => $order->id,
                     'actual_weight' => (float) $actualWeight,
@@ -2150,17 +2161,18 @@ class WarehouseDashboardController extends Controller
             ]);
         }
 
-        return back()->with('success', 'Đã cập nhật Kg thực tế cho đơn #' . $order->code);
+        return back()->with('success', 'Đã cập nhật Kg thực tế cho đơn #'.$order->code);
     }
 
     public function requestAdjustment(Request $request, Order $order)
     {
         $this->authorizePackingOrderAccess($order);
 
-        if (!$order->created_at || !$order->created_at->isToday()) {
+        if (! $order->created_at || ! $order->created_at->isToday()) {
             if ($request->expectsJson()) {
                 return response()->json(['ok' => false, 'message' => 'Chỉ được điều chỉnh đơn có ngày hôm nay.'], 422);
             }
+
             return back()->with('error', 'Chỉ được điều chỉnh đơn có ngày hôm nay.');
         }
 
@@ -2168,6 +2180,7 @@ class WarehouseDashboardController extends Controller
             if ($request->expectsJson()) {
                 return response()->json(['ok' => false, 'message' => 'Đơn đang đóng hàng. Hãy đưa đơn về Chờ đóng gói trước khi gửi điều chỉnh.'], 422);
             }
+
             return back()->with('error', 'Đơn đang đóng hàng. Hãy đưa đơn về Chờ đóng gói trước khi gửi điều chỉnh.');
         }
 
@@ -2175,6 +2188,7 @@ class WarehouseDashboardController extends Controller
             if ($request->expectsJson()) {
                 return response()->json(['ok' => false, 'message' => 'Đơn đã đóng gói xong, không thể điều chỉnh lại sản phẩm.'], 422);
             }
+
             return back()->with('error', 'Đơn đã đóng gói xong, không thể điều chỉnh lại sản phẩm.');
         }
 
@@ -2212,7 +2226,7 @@ class WarehouseDashboardController extends Controller
             $newQuantity = (int) ($itemData['quantity'] ?? 0);
 
             $orderItem = $orderItemsById->get($orderItemId);
-            if (!$orderItem) {
+            if (! $orderItem) {
                 continue;
             }
 
@@ -2247,7 +2261,7 @@ class WarehouseDashboardController extends Controller
             }
 
             $variant = $variantsById->get($variantId);
-            if (!$variant) {
+            if (! $variant) {
                 continue;
             }
 
@@ -2276,6 +2290,7 @@ class WarehouseDashboardController extends Controller
             if ($request->expectsJson()) {
                 return response()->json(['ok' => false, 'message' => 'Đơn hàng phải còn ít nhất 1 sản phẩm sau khi điều chỉnh.'], 422);
             }
+
             return back()->with('error', 'Đơn hàng phải còn ít nhất 1 sản phẩm sau khi điều chỉnh.');
         }
 
@@ -2283,6 +2298,7 @@ class WarehouseDashboardController extends Controller
             if ($request->expectsJson()) {
                 return response()->json(['ok' => false, 'message' => 'Không có thay đổi nào về số lượng sản phẩm.'], 422);
             }
+
             return back()->with('error', 'Không có thay đổi nào về số lượng sản phẩm.');
         }
 
@@ -2298,7 +2314,7 @@ class WarehouseDashboardController extends Controller
                     'role' => $this->packingActorRole(),
                     'status_before' => $order->status,
                     'status_after' => $order->status,
-                    'note' => 'Kho đã trực tiếp điều chỉnh đơn: ' . trim((string) $validated['reason']),
+                    'note' => 'Kho đã trực tiếp điều chỉnh đơn: '.trim((string) $validated['reason']),
                 ]);
             });
 
@@ -2336,7 +2352,7 @@ class WarehouseDashboardController extends Controller
             'role' => $this->packingActorRole(),
             'status_before' => $order->status,
             'status_after' => $order->status,
-            'note' => 'Kho yeu cau sale xac nhan thay doi don (snapshot): ' . trim((string) $validated['reason']),
+            'note' => 'Kho yeu cau sale xac nhan thay doi don (snapshot): '.trim((string) $validated['reason']),
         ]);
 
         $order->refresh();
@@ -2361,7 +2377,7 @@ class WarehouseDashboardController extends Controller
     {
         $this->authorizePackingOrderAccess($order);
 
-        if (!$order->created_at || !$order->created_at->isToday()) {
+        if (! $order->created_at || ! $order->created_at->isToday()) {
             if ($request->expectsJson()) {
                 return response()->json(['ok' => false, 'message' => 'Chỉ được xử lý đơn có ngày hôm nay.'], 422);
             }
@@ -2382,7 +2398,7 @@ class WarehouseDashboardController extends Controller
             ->latest('id')
             ->first();
 
-        if (!$activePackingHistory || (int) $activePackingHistory->user_id !== (int) Auth::id()) {
+        if (! $activePackingHistory || (int) $activePackingHistory->user_id !== (int) Auth::id()) {
             $message = 'Bạn chỉ có thể hoàn tác đơn do chính mình vừa nhận.';
 
             if ($request->expectsJson()) {
@@ -2408,7 +2424,7 @@ class WarehouseDashboardController extends Controller
             'note' => 'Hoàn tác hoạt động nhận đơn đóng hàng của user hiện tại.',
         ]);
 
-        $message = 'Đã hoàn tác nhận đơn #' . $order->code;
+        $message = 'Đã hoàn tác nhận đơn #'.$order->code;
 
         if ($request->expectsJson()) {
             return response()->json([
@@ -2437,6 +2453,7 @@ class WarehouseDashboardController extends Controller
             if ($request->expectsJson()) {
                 return response()->json(['ok' => false, 'message' => 'Đơn đang chờ sale xác nhận thay đổi từ kho.'], 422);
             }
+
             return back()->with('error', 'Đơn đang chờ sale xác nhận thay đổi từ kho.');
         }
 
@@ -2444,13 +2461,15 @@ class WarehouseDashboardController extends Controller
             if ($request->expectsJson()) {
                 return response()->json(['ok' => false, 'message' => 'Sale đã từ chối yêu cầu điều chỉnh. Vui lòng xử lý lại thay đổi trước khi hoàn tất đóng gói.'], 422);
             }
+
             return back()->with('error', 'Sale đã từ chối yêu cầu điều chỉnh. Vui lòng xử lý lại thay đổi trước khi hoàn tất đóng gói.');
         }
 
-        if (!$order->created_at || !$order->created_at->isToday()) {
+        if (! $order->created_at || ! $order->created_at->isToday()) {
             if ($request->expectsJson()) {
                 return response()->json(['ok' => false, 'message' => 'Chỉ được xử lý đơn có ngày hôm nay.'], 422);
             }
+
             return back()->with('error', 'Chỉ được xử lý đơn có ngày hôm nay.');
         }
 
@@ -2458,6 +2477,7 @@ class WarehouseDashboardController extends Controller
             if ($request->expectsJson()) {
                 return response()->json(['ok' => false, 'message' => 'Đơn hàng không đang ở trạng thái Đang đóng gói.'], 422);
             }
+
             return back()->with('error', 'Đơn hàng không đang ở trạng thái Đang đóng gói.');
         }
 
@@ -2465,25 +2485,26 @@ class WarehouseDashboardController extends Controller
             if ($request->expectsJson()) {
                 return response()->json(['ok' => false, 'message' => 'Vui lòng cập nhật Kg thực tế trước khi hoàn thành đóng gói.'], 422);
             }
+
             return back()->with('error', 'Vui lòng cập nhật Kg thực tế trước khi hoàn thành đóng gói.');
         }
 
         $order->update(['status' => Order::STATUS_READY_TO_SHIP]);
 
         OrderHistory::create([
-            'order_id'      => $order->id,
-            'action'        => 'complete_packing',
-            'user_id'       => Auth::id(),
-            'role'          => $this->packingActorRole(),
+            'order_id' => $order->id,
+            'action' => 'complete_packing',
+            'user_id' => Auth::id(),
+            'role' => $this->packingActorRole(),
             'status_before' => Order::STATUS_PACKING,
-            'status_after'  => Order::STATUS_READY_TO_SHIP,
-            'note'          => 'Hoàn thành đóng gói – Sẵn sàng giao hàng',
+            'status_after' => Order::STATUS_READY_TO_SHIP,
+            'note' => 'Hoàn thành đóng gói – Sẵn sàng giao hàng',
         ]);
 
         if ($request->expectsJson()) {
             return response()->json([
                 'ok' => true,
-                'message' => 'Đơn #' . $order->code . ' đã đóng gói xong, sẵn sàng giao!',
+                'message' => 'Đơn #'.$order->code.' đã đóng gói xong, sẵn sàng giao!',
                 'order' => [
                     'id' => (int) $order->id,
                     'status' => Order::STATUS_READY_TO_SHIP,
@@ -2493,7 +2514,7 @@ class WarehouseDashboardController extends Controller
             ]);
         }
 
-        return back()->with('success', 'Đơn #' . $order->code . ' đã đóng gói xong, sẵn sàng giao!');
+        return back()->with('success', 'Đơn #'.$order->code.' đã đóng gói xong, sẵn sàng giao!');
     }
 
     private function recalculateOrderTotalsAfterWarehouseAdjustment(Order $order): void
@@ -2533,7 +2554,7 @@ class WarehouseDashboardController extends Controller
 
         $orderLevelDiscountAmount = (float) ($order->order_discount ?? 0);
         $orderLevelDiscountType = strtolower((string) ($order->order_discount_type ?? 'decrease'));
-        if (!in_array($orderLevelDiscountType, ['decrease', 'increase'], true)) {
+        if (! in_array($orderLevelDiscountType, ['decrease', 'increase'], true)) {
             $orderLevelDiscountType = 'decrease';
         }
 
@@ -2572,11 +2593,11 @@ class WarehouseDashboardController extends Controller
 
         abort_unless($user?->hasRole('admin'), 403);
 
-        if (!$order->created_at || !$order->created_at->isToday()) {
+        if (! $order->created_at || ! $order->created_at->isToday()) {
             return back()->with('error', 'Chỉ được xử lý đơn có ngày hôm nay.');
         }
 
-        if (!in_array($order->status, self::PACKED_STATUSES, true)) {
+        if (! in_array($order->status, self::PACKED_STATUSES, true)) {
             return back()->with('error', 'Chỉ có thể bỏ khóa các đơn đang ở bước hoàn tất kho.');
         }
 
@@ -2587,16 +2608,16 @@ class WarehouseDashboardController extends Controller
         ]);
 
         OrderHistory::create([
-            'order_id'      => $order->id,
-            'action'        => 'admin_reopen_packing',
-            'user_id'       => Auth::id(),
-            'role'          => 'admin',
+            'order_id' => $order->id,
+            'action' => 'admin_reopen_packing',
+            'user_id' => Auth::id(),
+            'role' => 'admin',
             'status_before' => $previousStatus,
-            'status_after'  => Order::STATUS_PACKING,
-            'note'          => 'Admin bỏ khóa chỉnh sửa và đưa đơn quay lại bước đóng gói của kho',
+            'status_after' => Order::STATUS_PACKING,
+            'note' => 'Admin bỏ khóa chỉnh sửa và đưa đơn quay lại bước đóng gói của kho',
         ]);
 
-        return back()->with('success', 'Admin đã bỏ khóa chỉnh sửa cho đơn #' . $order->code . '.');
+        return back()->with('success', 'Admin đã bỏ khóa chỉnh sửa cho đơn #'.$order->code.'.');
     }
 
     /**
@@ -2699,8 +2720,8 @@ class WarehouseDashboardController extends Controller
             'warehouse',
             'returnItems.productVariant.product',
         ])
-        ->whereIn('status', ['pending_warehouse', 'requested', 'ship_confirmed', 'warehouse_received'])
-        ->orderBy('updated_at', 'desc');
+            ->whereIn('status', ['pending_warehouse', 'requested', 'ship_confirmed', 'warehouse_received'])
+            ->orderBy('updated_at', 'desc');
 
         // Filter by managed warehouse if user is warehouse staff
         if ($managedWarehouseId) {
@@ -2720,10 +2741,12 @@ class WarehouseDashboardController extends Controller
         // Map OrderReturn records to Order-like structure for view
         $orderReturnsCollection = collect();
         foreach ($orderReturns as $orderReturn) {
-            if (!$orderReturn->order) continue;
+            if (! $orderReturn->order) {
+                continue;
+            }
 
             $order = $orderReturn->order;
-            
+
             // Set attributes from OrderReturn onto Order for view compatibility
             $order->setAttribute('order_return_id', $orderReturn->id);
             $order->setAttribute('order_return', $orderReturn);
@@ -2740,7 +2763,7 @@ class WarehouseDashboardController extends Controller
                 : 0;
             $order->setAttribute('return_ticket_age_days', $ageDays);
             $order->setAttribute('is_return_ticket_overdue', $warningDays > 0 && $ageDays >= $warningDays);
-            
+
             $orderReturnsCollection->push($order);
         }
 
@@ -2766,7 +2789,7 @@ class WarehouseDashboardController extends Controller
     {
         $activeOrderReturn = $this->resolveActiveOrderReturn($order);
         $canHandleByOrderStatus = $order->status === Order::STATUS_RETURNING;
-        if (!$activeOrderReturn && !$canHandleByOrderStatus) {
+        if (! $activeOrderReturn && ! $canHandleByOrderStatus) {
             return back()->with('error', 'Đơn hàng không đang ở trạng thái Đang trả hàng.');
         }
 
@@ -2775,11 +2798,11 @@ class WarehouseDashboardController extends Controller
             ?: $this->resolveReturnWarehouse($order);
         $returnWarehouseId = $resolvedReturnWarehouse?->id;
 
-        if ($managedWarehouseId && (!$returnWarehouseId || $managedWarehouseId !== $returnWarehouseId)) {
+        if ($managedWarehouseId && (! $returnWarehouseId || $managedWarehouseId !== $returnWarehouseId)) {
             return back()->with('error', 'Bạn chỉ có thể xác nhận đơn trả về đúng kho mình quản lý.');
         }
 
-        if (!$returnWarehouseId) {
+        if (! $returnWarehouseId) {
             return back()->with('error', 'Đơn trả này chưa xác định kho nhận. Vui lòng yêu cầu shipper chọn kho trả về.');
         }
 
@@ -2802,17 +2825,17 @@ class WarehouseDashboardController extends Controller
             }
 
             OrderHistory::create([
-                'order_id'      => $order->id,
-                'action'        => 'confirm_return',
-                'user_id'       => Auth::id(),
-                'role'          => 'warehouse',
+                'order_id' => $order->id,
+                'action' => 'confirm_return',
+                'user_id' => Auth::id(),
+                'role' => 'warehouse',
                 'status_before' => Order::STATUS_RETURNING,
-                'status_after'  => Order::STATUS_RETURNED_COMPLETED,
-                'note'          => 'Kho xác nhận đã nhận hàng trả vào kho ' . ($resolvedReturnWarehouse?->name ?? ('ID ' . $returnWarehouseId)) . ' – Tồn kho đã cập nhật',
+                'status_after' => Order::STATUS_RETURNED_COMPLETED,
+                'note' => 'Kho xác nhận đã nhận hàng trả vào kho '.($resolvedReturnWarehouse?->name ?? ('ID '.$returnWarehouseId)).' – Tồn kho đã cập nhật',
             ]);
         });
 
-        return back()->with('success', 'Đã xác nhận nhập kho hàng trả – Đơn #' . $order->code);
+        return back()->with('success', 'Đã xác nhận nhập kho hàng trả – Đơn #'.$order->code);
     }
 
     /**
@@ -2822,7 +2845,7 @@ class WarehouseDashboardController extends Controller
     {
         $activeOrderReturn = $this->resolveActiveOrderReturn($order);
         $canHandleByOrderStatus = $order->status === Order::STATUS_RETURNING;
-        if (!$activeOrderReturn && !$canHandleByOrderStatus) {
+        if (! $activeOrderReturn && ! $canHandleByOrderStatus) {
             return back()->with('error', 'Đơn hàng không đang ở trạng thái Đang trả hàng.');
         }
 
@@ -2831,7 +2854,7 @@ class WarehouseDashboardController extends Controller
             ?: $this->resolveReturnWarehouse($order);
         $returnWarehouseId = $resolvedReturnWarehouse?->id;
 
-        if ($managedWarehouseId && (!$returnWarehouseId || $managedWarehouseId !== $returnWarehouseId)) {
+        if ($managedWarehouseId && (! $returnWarehouseId || $managedWarehouseId !== $returnWarehouseId)) {
             return back()->with('error', 'Bạn chỉ có thể xác nhận đơn trả về đúng kho mình quản lý.');
         }
 
@@ -2847,7 +2870,7 @@ class WarehouseDashboardController extends Controller
         // Get or create OrderReturn for weight confirmation flow
         $orderReturn = $activeOrderReturn;
 
-        if (!$orderReturn) {
+        if (! $orderReturn) {
             $orderReturn = OrderReturn::create([
                 'order_id' => $order->id,
                 'customer_id' => $order->customer_id,
@@ -2875,7 +2898,7 @@ class WarehouseDashboardController extends Controller
         // Populate original_weight if not yet set
         if ($orderReturn) {
             foreach ($orderReturn->returnItems as $returnItem) {
-                if (!$returnItem->original_weight) {
+                if (! $returnItem->original_weight) {
                     // Find the corresponding order item
                     $orderItem = $order->items->where('product_variant_id', $returnItem->product_variant_id)->first();
                     if ($orderItem) {
@@ -2907,7 +2930,7 @@ class WarehouseDashboardController extends Controller
     {
         $activeOrderReturn = $this->resolveActiveOrderReturn($order);
         $canHandleByOrderStatus = $order->status === Order::STATUS_RETURNING;
-        if (!$activeOrderReturn && !$canHandleByOrderStatus) {
+        if (! $activeOrderReturn && ! $canHandleByOrderStatus) {
             return back()->with('error', 'Đơn hàng không đang ở trạng thái Đang trả hàng.');
         }
 
@@ -2916,7 +2939,7 @@ class WarehouseDashboardController extends Controller
             ?: $this->resolveReturnWarehouse($order);
         $returnWarehouseId = $resolvedReturnWarehouse?->id;
 
-        if ($managedWarehouseId && (!$returnWarehouseId || $managedWarehouseId !== $returnWarehouseId)) {
+        if ($managedWarehouseId && (! $returnWarehouseId || $managedWarehouseId !== $returnWarehouseId)) {
             return back()->with('error', 'Bạn chỉ có thể xác nhận đơn trả về đúng kho mình quản lý.');
         }
 
@@ -2925,7 +2948,7 @@ class WarehouseDashboardController extends Controller
             $orderReturn->loadMissing('returnItems');
         }
 
-        if (!$orderReturn || $orderReturn->returnItems->isEmpty()) {
+        if (! $orderReturn || $orderReturn->returnItems->isEmpty()) {
             return back()->with('error', 'Không tìm thấy chi tiết sản phẩm trả để cân ký lại.');
         }
 
@@ -2953,7 +2976,7 @@ class WarehouseDashboardController extends Controller
             // Update weight data for return items
             foreach ($validated['item_weights'] as $weightData) {
                 $returnItem = $returnItemsById->get((int) $weightData['item_id']);
-                if (!$returnItem) {
+                if (! $returnItem) {
                     continue;
                 }
 
@@ -3000,15 +3023,15 @@ class WarehouseDashboardController extends Controller
                 : 0;
 
             OrderHistory::create([
-                'order_id'      => $order->id,
-                'action'        => 'confirm_return',
-                'user_id'       => Auth::id(),
-                'role'          => 'warehouse',
+                'order_id' => $order->id,
+                'action' => 'confirm_return',
+                'user_id' => Auth::id(),
+                'role' => 'warehouse',
                 'status_before' => Order::STATUS_RETURNING,
-                'status_after'  => Order::STATUS_RETURNED_COMPLETED,
-                'note'          => sprintf(
+                'status_after' => Order::STATUS_RETURNED_COMPLETED,
+                'note' => sprintf(
                     'Kho xác nhận đã nhận hàng trả vào kho %s – Tồn kho đã cập nhật – Hao hụt KL: %.3f kg',
-                    $resolvedReturnWarehouse?->name ?? ('ID ' . $returnWarehouseId),
+                    $resolvedReturnWarehouse?->name ?? ('ID '.$returnWarehouseId),
                     $totalWeightLoss
                 ),
             ]);
@@ -3016,13 +3039,13 @@ class WarehouseDashboardController extends Controller
 
         return redirect()
             ->route('warehouse.returns')
-            ->with('success', 'Đã lưu cân nặng và xác nhận nhập kho hàng trả – Đơn #' . $order->code);
+            ->with('success', 'Đã lưu cân nặng và xác nhận nhập kho hàng trả – Đơn #'.$order->code);
     }
 
     public function transferReturnWarehouse(Request $request, Order $order)
     {
         $activeOrderReturn = $this->resolveActiveOrderReturn($order);
-        if (!$activeOrderReturn) {
+        if (! $activeOrderReturn) {
             return back()->with('error', 'Không tìm thấy phiếu trả đang chờ kho xử lý để chuyển kho.');
         }
 
@@ -3044,17 +3067,17 @@ class WarehouseDashboardController extends Controller
         }
 
         $newWarehouse = Warehouse::query()->findOrFail($newWarehouseId);
-        $oldWarehouseName = $activeOrderReturn->warehouse?->name ?? ('ID ' . $currentWarehouseId);
+        $oldWarehouseName = $activeOrderReturn->warehouse?->name ?? ('ID '.$currentWarehouseId);
         $extraNote = trim((string) ($validated['transfer_note'] ?? ''));
-        $transferNote = 'Chuyển kho tiếp nhận trả hàng từ ' . $oldWarehouseName . ' sang ' . $newWarehouse->name;
+        $transferNote = 'Chuyển kho tiếp nhận trả hàng từ '.$oldWarehouseName.' sang '.$newWarehouse->name;
         if ($extraNote !== '') {
-            $transferNote .= ' | Lý do: ' . $extraNote;
+            $transferNote .= ' | Lý do: '.$extraNote;
         }
 
-        DB::transaction(function () use ($activeOrderReturn, $order, $newWarehouseId, $transferNote, $newWarehouse) {
+        DB::transaction(function () use ($activeOrderReturn, $order, $newWarehouseId, $transferNote) {
             $activeOrderReturn->update([
                 'warehouse_id' => $newWarehouseId,
-                'note' => trim(((string) ($activeOrderReturn->note ?? '')) . ' | ' . $transferNote, ' |'),
+                'note' => trim(((string) ($activeOrderReturn->note ?? '')).' | '.$transferNote, ' |'),
             ]);
 
             if (Schema::hasColumn('orders', 'return_warehouse_id')) {
@@ -3076,7 +3099,7 @@ class WarehouseDashboardController extends Controller
             ]);
         });
 
-        return back()->with('success', 'Đã chuyển kho tiếp nhận trả hàng sang: ' . $newWarehouse->name);
+        return back()->with('success', 'Đã chuyển kho tiếp nhận trả hàng sang: '.$newWarehouse->name);
     }
 
     protected function resolveActiveOrderReturn(Order $order): ?OrderReturn
@@ -3096,7 +3119,7 @@ class WarehouseDashboardController extends Controller
             ->latest('id')
             ->value('warehouse_id');
 
-        if (!empty($latestOrderReturnWarehouseId)) {
+        if (! empty($latestOrderReturnWarehouseId)) {
             return Warehouse::find((int) $latestOrderReturnWarehouseId);
         }
 
@@ -3115,7 +3138,7 @@ class WarehouseDashboardController extends Controller
 
         $warehouseName = $this->extractReturnWarehouseName((string) ($order->shipper_note ?? ''));
 
-        if (!$warehouseName) {
+        if (! $warehouseName) {
             $returnHistoryNote = OrderHistory::query()
                 ->where('order_id', $order->id)
                 ->where('action', 'return_request')
@@ -3125,7 +3148,7 @@ class WarehouseDashboardController extends Controller
             $warehouseName = $this->extractReturnWarehouseName((string) ($returnHistoryNote ?? ''));
         }
 
-        if (!$warehouseName) {
+        if (! $warehouseName) {
             return null;
         }
 
@@ -3134,11 +3157,11 @@ class WarehouseDashboardController extends Controller
 
     protected function resolveReturnWarehouseId(Order $order): ?int
     {
-        if (Schema::hasColumn('orders', 'return_warehouse_id') && !empty($order->return_warehouse_id)) {
+        if (Schema::hasColumn('orders', 'return_warehouse_id') && ! empty($order->return_warehouse_id)) {
             return (int) $order->return_warehouse_id;
         }
 
-        if (Schema::hasColumn('orders', 'warehouse_id') && !empty($order->warehouse_id)) {
+        if (Schema::hasColumn('orders', 'warehouse_id') && ! empty($order->warehouse_id)) {
             return (int) $order->warehouse_id;
         }
 
@@ -3187,16 +3210,16 @@ class WarehouseDashboardController extends Controller
             ->with('items')
             ->where('type', 'import')
             ->where('warehouse_id', $orderReturn->warehouse_id)
-            ->where('notes', 'like', '%' . $marker . '%')
+            ->where('notes', 'like', '%'.$marker.'%')
             ->latest('id')
             ->first();
 
-        if (!$document) {
+        if (! $document) {
             $document = InventoryDocument::create([
                 'type' => 'import',
                 'warehouse_id' => $orderReturn->warehouse_id,
                 'document_date' => optional($orderReturn->warehouse_confirmed_at)->toDateString() ?: now()->toDateString(),
-                'notes' => 'Đơn nhập hàng từ trả hàng #' . $orderReturn->id . ' ' . $marker,
+                'notes' => 'Đơn nhập hàng từ trả hàng #'.$orderReturn->id.' '.$marker,
                 'shipping_fee' => 0,
                 'user_id' => $actorId,
             ]);
@@ -3211,13 +3234,14 @@ class WarehouseDashboardController extends Controller
             $expectedUnitCost = (float) ($unitCostByVariant[$variantId] ?? 0);
 
             $item = $currentItems->get($variantId);
-            if (!$item) {
+            if (! $item) {
                 InventoryDocumentItem::create([
                     'inventory_document_id' => $document->id,
                     'product_variant_id' => $variantId,
                     'quantity' => $expectedQty,
                     'unit_cost' => $expectedUnitCost,
                 ]);
+
                 continue;
             }
 
@@ -3230,7 +3254,7 @@ class WarehouseDashboardController extends Controller
         }
 
         $expectedVariantIds = $expectedItems->keys()->map(fn ($id) => (int) $id)->all();
-        $extraItems = $document->items->filter(fn ($item) => !in_array((int) $item->product_variant_id, $expectedVariantIds, true));
+        $extraItems = $document->items->filter(fn ($item) => ! in_array((int) $item->product_variant_id, $expectedVariantIds, true));
         if ($extraItems->isNotEmpty()) {
             InventoryDocumentItem::whereIn('id', $extraItems->pluck('id')->all())->delete();
         }
@@ -3240,7 +3264,7 @@ class WarehouseDashboardController extends Controller
 
     private function returnReceiptMarker(int $returnId): string
     {
-        return '[return_receipt:' . $returnId . ']';
+        return '[return_receipt:'.$returnId.']';
     }
 
     /**
@@ -3262,16 +3286,16 @@ class WarehouseDashboardController extends Controller
         }
 
         $from = $request->input('from_date', Carbon::now()->subDays(30)->toDateString());
-        $to   = $request->input('to_date',   Carbon::now()->toDateString());
+        $to = $request->input('to_date', Carbon::now()->toDateString());
         $query->whereBetween('document_date', [$from, $to]);
 
         $stockInDocuments = $query->latest('document_date')->paginate(15);
-        $warehouses       = $warehouseId
+        $warehouses = $warehouseId
             ? Warehouse::where('id', $warehouseId)->get()
             : Warehouse::all();
-        $productVariants  = ProductVariant::with('product')->orderBy('name')->get();
-        $maxEdits         = (int) (\App\Models\Setting::get('stock_in_max_edits', 3));
-        $suppliers        = \App\Models\Supplier::query()
+        $productVariants = ProductVariant::with('product')->orderBy('name')->get();
+        $maxEdits = (int) (\App\Models\Setting::get('stock_in_max_edits', 3));
+        $suppliers = \App\Models\Supplier::query()
             ->orderByDesc('is_active')
             ->orderBy('name')
             ->get();
@@ -3301,14 +3325,14 @@ class WarehouseDashboardController extends Controller
         }
 
         $from = $request->input('from_date', Carbon::now()->subDays(30)->toDateString());
-        $to   = $request->input('to_date',   Carbon::now()->toDateString());
+        $to = $request->input('to_date', Carbon::now()->toDateString());
         $query->whereBetween('document_date', [$from, $to]);
 
         $stockOutDocuments = $query->latest('document_date')->paginate(15);
-        $warehouses        = $warehouseId
+        $warehouses = $warehouseId
             ? Warehouse::where('id', $warehouseId)->get()
             : Warehouse::all();
-        $productVariants   = ProductVariant::with('product')->orderBy('name')->get();
+        $productVariants = ProductVariant::with('product')->orderBy('name')->get();
 
         return view('warehouse.stock-out.index', compact('stockOutDocuments', 'from', 'to', 'warehouses', 'productVariants'));
     }
@@ -3343,7 +3367,7 @@ class WarehouseDashboardController extends Controller
                 $orderCode = strtoupper(trim((string) ($matches[1] ?? '')));
             }
 
-            if (!$orderCode) {
+            if (! $orderCode) {
                 return null;
             }
 
@@ -3352,7 +3376,7 @@ class WarehouseDashboardController extends Controller
                 ->whereRaw('UPPER(code) = ?', [$orderCode])
                 ->first();
 
-            if (!$order) {
+            if (! $order) {
                 return null;
             }
 
@@ -3379,7 +3403,7 @@ class WarehouseDashboardController extends Controller
     public function inventoryTransfers(Request $request)
     {
         $managedWarehouseId = Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
-        if (!$managedWarehouseId) {
+        if (! $managedWarehouseId) {
             return redirect()->route('warehouse.dashboard')
                 ->with('error', 'Bạn chưa được gán kho quản lý để tạo phiếu điều chuyển.');
         }
@@ -3390,7 +3414,6 @@ class WarehouseDashboardController extends Controller
             ->orderBy('name')
             ->get(['id', 'name']);
 
-
         $availableVariants = Inventory::query()
             ->with(['productVariant.product', 'productVariant.values.attribute'])
             ->where('warehouse_id', $managedWarehouseId)
@@ -3400,12 +3423,13 @@ class WarehouseDashboardController extends Controller
             ->map(function (Inventory $inventory) {
                 $variant = $inventory->productVariant;
                 $product = $variant?->product;
-                if (!$variant || !$product) {
+                if (! $variant || ! $product) {
                     return null;
                 }
-                $attributes = $variant->values?->map(function($val) {
-                    return $val->attribute->name . ': ' . $val->value;
+                $attributes = $variant->values?->map(function ($val) {
+                    return $val->attribute->name.': '.$val->value;
                 })->implode(', ');
+
                 return [
                     'variant_id' => (int) $variant->id,
                     'variant_name' => $variant->name ?? '',
@@ -3425,6 +3449,7 @@ class WarehouseDashboardController extends Controller
 
         $availableVariantsGrouped = $availableVariants->groupBy('product_id')->map(function ($variants, $productId) {
             $first = $variants->first();
+
             return [
                 'product' => [
                     'id' => $first['product_id'],
@@ -3476,7 +3501,7 @@ class WarehouseDashboardController extends Controller
     public function storeInventoryTransfer(Request $request)
     {
         $managedWarehouseId = Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
-        if (!$managedWarehouseId) {
+        if (! $managedWarehouseId) {
             return back()->with('error', 'Bạn chưa được gán kho quản lý để tạo phiếu điều chuyển.');
         }
 
@@ -3533,8 +3558,8 @@ class WarehouseDashboardController extends Controller
                     'warehouse_id' => $managedWarehouseId,
                     'supplier_id' => null,
                     'shipping_fee' => 0,
-                    'notes' => 'Điều chuyển kho #' . ($transfer->transfer_code ?? $transfer->id)
-                        . ' sang ' . ($targetWarehouse?->name ?? ('Kho #' . $targetWarehouseId)),
+                    'notes' => 'Điều chuyển kho #'.($transfer->transfer_code ?? $transfer->id)
+                        .' sang '.($targetWarehouse?->name ?? ('Kho #'.$targetWarehouseId)),
                     'user_id' => Auth::id(),
                 ]);
 
@@ -3555,8 +3580,8 @@ class WarehouseDashboardController extends Controller
                     if ($available < $qty) {
                         $variant = ProductVariant::query()->find($variantId);
                         throw new \RuntimeException(
-                            'Không đủ tồn để điều chuyển cho ' . ($variant?->name ?? ('biến thể #' . $variantId))
-                            . '. Tồn khả dụng: ' . $available . ', yêu cầu: ' . $qty . '.'
+                            'Không đủ tồn để điều chuyển cho '.($variant?->name ?? ('biến thể #'.$variantId))
+                            .'. Tồn khả dụng: '.$available.', yêu cầu: '.$qty.'.'
                         );
                     }
 
@@ -3610,7 +3635,7 @@ class WarehouseDashboardController extends Controller
     public function incomingInventoryTransfers()
     {
         $managedWarehouseId = Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
-        if (!$managedWarehouseId) {
+        if (! $managedWarehouseId) {
             return redirect()->route('warehouse.dashboard')
                 ->with('error', 'Bạn chưa được gán kho quản lý để tiếp nhận điều chuyển.');
         }
@@ -3645,7 +3670,7 @@ class WarehouseDashboardController extends Controller
     public function confirmIncomingInventoryTransfer(WarehouseInventoryTransfer $transfer)
     {
         $managedWarehouseId = Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
-        if (!$managedWarehouseId || (int) $transfer->target_warehouse_id !== $managedWarehouseId) {
+        if (! $managedWarehouseId || (int) $transfer->target_warehouse_id !== $managedWarehouseId) {
             abort(403, 'Bạn không có quyền tiếp nhận phiếu điều chuyển này.');
         }
 
@@ -3662,8 +3687,8 @@ class WarehouseDashboardController extends Controller
                 'warehouse_id' => (int) $transfer->target_warehouse_id,
                 'supplier_id' => null,
                 'shipping_fee' => 0,
-                'notes' => 'Tiếp nhận điều chuyển kho #' . ($transfer->transfer_code ?? $transfer->id)
-                    . ' từ ' . ($transfer->sourceWarehouse?->name ?? ('Kho #' . $transfer->source_warehouse_id)),
+                'notes' => 'Tiếp nhận điều chuyển kho #'.($transfer->transfer_code ?? $transfer->id)
+                    .' từ '.($transfer->sourceWarehouse?->name ?? ('Kho #'.$transfer->source_warehouse_id)),
                 'user_id' => Auth::id(),
             ]);
 
@@ -3728,6 +3753,7 @@ class WarehouseDashboardController extends Controller
             abort(403, 'Bạn không có quyền xem phiếu kho này.');
         }
         $document->load('items.productVariant.product', 'warehouse', 'user', 'edits.user');
+
         return view('warehouse.document-show', compact('document'));
     }
 
@@ -3744,7 +3770,7 @@ class WarehouseDashboardController extends Controller
             abort(400, 'Chỉ hỗ trợ điều chỉnh phiếu nhập kho.');
         }
 
-        if (!$document->document_date->isToday()) {
+        if (! $document->document_date->isToday()) {
             return response()->json([
                 'ok' => false,
                 'message' => 'Chỉ được điều chỉnh phiếu nhập kho trong ngày hôm nay.',
@@ -3762,25 +3788,25 @@ class WarehouseDashboardController extends Controller
         $document->load('items.productVariant.product');
 
         return response()->json([
-            'ok'         => true,
-            'document'   => [
-                'id'            => $document->id,
-                'document_number' => $document->document_number ?? '#' . $document->id,
+            'ok' => true,
+            'document' => [
+                'id' => $document->id,
+                'document_number' => $document->document_number ?? '#'.$document->id,
                 'document_date' => $document->document_date->format('Y-m-d'),
-                'notes'         => $document->notes,
-                'shipping_fee'  => (float) $document->shipping_fee,
-                'edit_count'    => $document->edit_count,
-                'max_edits'     => $maxEdits,
+                'notes' => $document->notes,
+                'shipping_fee' => (float) $document->shipping_fee,
+                'edit_count' => $document->edit_count,
+                'max_edits' => $maxEdits,
             ],
             'items' => $document->items->map(fn ($item) => [
-                'id'                 => $item->id,
+                'id' => $item->id,
                 'product_variant_id' => $item->product_variant_id,
-                'variant_name'       => $item->productVariant?->name
+                'variant_name' => $item->productVariant?->name
                                         ?? $item->productVariant?->product?->name
-                                        ?? 'SP #' . $item->product_variant_id,
-                'sku'                => $item->productVariant?->sku ?? '',
-                'quantity'           => (int) $item->quantity,
-                'unit_cost'          => (float) $item->unit_cost,
+                                        ?? 'SP #'.$item->product_variant_id,
+                'sku' => $item->productVariant?->sku ?? '',
+                'quantity' => (int) $item->quantity,
+                'unit_cost' => (float) $item->unit_cost,
             ])->values(),
         ]);
     }
@@ -3798,7 +3824,7 @@ class WarehouseDashboardController extends Controller
             return back()->with('error', 'Chỉ hỗ trợ điều chỉnh phiếu nhập kho.');
         }
 
-        if (!$document->document_date->isToday()) {
+        if (! $document->document_date->isToday()) {
             return back()->with('error', 'Chỉ được điều chỉnh phiếu nhập kho trong ngày hôm nay.');
         }
 
@@ -3808,24 +3834,24 @@ class WarehouseDashboardController extends Controller
         }
 
         $validated = $request->validate([
-            'notes'                      => 'nullable|string|max:1000',
-            'edit_notes'                 => 'nullable|string|max:500',
-            'shipping_fee'               => 'nullable|numeric|min:0',
-            'items'                      => 'required|array|min:1',
-            'items.*.id'                 => 'required|integer|exists:inventory_document_items,id',
-            'items.*.quantity'           => 'required|integer|min:0',
-            'items.*.unit_cost'          => 'required|numeric|min:0',
+            'notes' => 'nullable|string|max:1000',
+            'edit_notes' => 'nullable|string|max:500',
+            'shipping_fee' => 'nullable|numeric|min:0',
+            'items' => 'required|array|min:1',
+            'items.*.id' => 'required|integer|exists:inventory_document_items,id',
+            'items.*.quantity' => 'required|integer|min:0',
+            'items.*.unit_cost' => 'required|numeric|min:0',
         ]);
 
         try {
-            DB::transaction(function () use ($validated, $document, $maxEdits) {
+            DB::transaction(function () use ($validated, $document) {
                 $document->load('items');
 
                 $itemMap = $document->items->keyBy('id');
 
                 // Ensure all submitted item IDs belong to this document.
                 foreach ($validated['items'] as $row) {
-                    if (!$itemMap->has((int) $row['id'])) {
+                    if (! $itemMap->has((int) $row['id'])) {
                         throw new \RuntimeException('Dòng sản phẩm không thuộc phiếu này.');
                     }
                 }
@@ -3833,12 +3859,12 @@ class WarehouseDashboardController extends Controller
                 $changes = [];
 
                 foreach ($validated['items'] as $row) {
-                    $item      = $itemMap[(int) $row['id']];
-                    $oldQty    = (int) $item->quantity;
-                    $newQty    = (int) $row['quantity'];
-                    $oldCost   = (float) $item->unit_cost;
-                    $newCost   = (float) $row['unit_cost'];
-                    $delta     = $newQty - $oldQty;
+                    $item = $itemMap[(int) $row['id']];
+                    $oldQty = (int) $item->quantity;
+                    $newQty = (int) $row['quantity'];
+                    $oldCost = (float) $item->unit_cost;
+                    $newCost = (float) $row['unit_cost'];
+                    $delta = $newQty - $oldQty;
 
                     if ($delta === 0 && $newCost === $oldCost) {
                         continue; // Nothing changed for this item
@@ -3851,9 +3877,9 @@ class WarehouseDashboardController extends Controller
                             ->where('warehouse_id', $document->warehouse_id)
                             ->first();
 
-                        if (!$inventory) {
+                        if (! $inventory) {
                             throw new \RuntimeException(
-                                'Không tìm thấy bản ghi tồn kho cho sản phẩm #' . $item->product_variant_id
+                                'Không tìm thấy bản ghi tồn kho cho sản phẩm #'.$item->product_variant_id
                             );
                         }
 
@@ -3891,12 +3917,12 @@ class WarehouseDashboardController extends Controller
 
                         // Record adjustment movement.
                         InventoryMovement::create([
-                            'inventory_id'   => $inventory->id,
-                            'quantity'       => $delta,
-                            'type'           => 'adjustment',
-                            'reference_id'   => $document->id,
+                            'inventory_id' => $inventory->id,
+                            'quantity' => $delta,
+                            'type' => 'adjustment',
+                            'reference_id' => $document->id,
                             'reference_type' => InventoryDocument::class,
-                            'user_id'        => Auth::id(),
+                            'user_id' => Auth::id(),
                         ]);
 
                         $inventory->increment('quantity', $delta);
@@ -3907,12 +3933,12 @@ class WarehouseDashboardController extends Controller
                     }
 
                     $changes[] = [
-                        'item_id'    => $item->id,
+                        'item_id' => $item->id,
                         'variant_id' => $item->product_variant_id,
-                        'old_qty'    => $oldQty,
-                        'new_qty'    => $newQty,
-                        'old_cost'   => $oldCost,
-                        'new_cost'   => $newCost,
+                        'old_qty' => $oldQty,
+                        'new_qty' => $newQty,
+                        'old_cost' => $oldCost,
+                        'new_cost' => $newCost,
                     ];
 
                     $item->update(['quantity' => $newQty, 'unit_cost' => $newCost]);
@@ -3920,18 +3946,18 @@ class WarehouseDashboardController extends Controller
 
                 // Update document header.
                 $document->update([
-                    'notes'        => $validated['notes'] ?? $document->notes,
+                    'notes' => $validated['notes'] ?? $document->notes,
                     'shipping_fee' => $validated['shipping_fee'] ?? $document->shipping_fee,
-                    'edit_count'   => $document->edit_count + 1,
+                    'edit_count' => $document->edit_count + 1,
                 ]);
 
                 // Record edit history.
                 \App\Models\InventoryDocumentEdit::create([
                     'inventory_document_id' => $document->id,
-                    'user_id'               => Auth::id(),
-                    'edit_number'           => $document->edit_count, // already incremented above
-                    'notes'                 => $validated['edit_notes'] ?? null,
-                    'changes'               => $changes ?: null,
+                    'user_id' => Auth::id(),
+                    'edit_number' => $document->edit_count, // already incremented above
+                    'notes' => $validated['edit_notes'] ?? null,
+                    'changes' => $changes ?: null,
                 ]);
             });
         } catch (\RuntimeException $e) {
@@ -3944,7 +3970,7 @@ class WarehouseDashboardController extends Controller
         );
 
         return redirect()->route('warehouse.stock-in')->with('success',
-            'Đã điều chỉnh phiếu ' . ($document->document_number ?? '#' . $document->id) . ' thành công.'
+            'Đã điều chỉnh phiếu '.($document->document_number ?? '#'.$document->id).' thành công.'
         );
     }
 
@@ -3957,34 +3983,33 @@ class WarehouseDashboardController extends Controller
         $isImport = $type === 'import';
 
         $userWarehouseId = Auth::user()->warehouse_id;
-        if (!$userWarehouseId) {
+        if (! $userWarehouseId) {
             return back()->withErrors(['warehouse_id' => 'Bạn chưa được gán kho quản lý, không thể tạo phiếu nhập kho.'])->withInput();
         }
 
         $validated = $request->validate([
             'document_date' => 'required|date',
             // 'warehouse_id'  => 'required|exists:warehouses,id', // bỏ không nhận từ request
-            'supplier_id'   => $isImport ? 'required|exists:suppliers,id' : 'nullable|exists:suppliers,id',
-            'shipping_fee'  => 'nullable|numeric|min:0',
-            'notes'         => 'nullable|string|max:1000',
-            'items'         => 'required|array|min:1',
+            'supplier_id' => $isImport ? 'required|exists:suppliers,id' : 'nullable|exists:suppliers,id',
+            'shipping_fee' => 'nullable|numeric|min:0',
+            'notes' => 'nullable|string|max:1000',
+            'items' => 'required|array|min:1',
             'items.*.product_variant_id' => 'required|exists:product_variants,id',
-            'items.*.quantity'           => 'required|integer|min:1',
-            'items.*.unit_cost'          => 'required|numeric|min:0',
-            'items.*.source_price_id'    => 'nullable|exists:supplier_product_prices,id',
+            'items.*.quantity' => 'required|integer|min:1',
+            'items.*.unit_cost' => 'required|numeric|min:0',
+            'items.*.source_price_id' => 'nullable|exists:supplier_product_prices,id',
         ]);
-
 
         try {
             DB::transaction(function () use ($validated, $type, $userWarehouseId, $isImport) {
                 $document = InventoryDocument::create([
-                    'type'          => $type,
+                    'type' => $type,
                     'document_date' => $validated['document_date'],
-                    'warehouse_id'  => $userWarehouseId,
-                    'supplier_id'   => $validated['supplier_id'] ?? null,
-                    'shipping_fee'  => $validated['shipping_fee'] ?? 0,
-                    'notes'         => $validated['notes'] ?? null,
-                    'user_id'       => Auth::id(),
+                    'warehouse_id' => $userWarehouseId,
+                    'supplier_id' => $validated['supplier_id'] ?? null,
+                    'shipping_fee' => $validated['shipping_fee'] ?? 0,
+                    'notes' => $validated['notes'] ?? null,
+                    'user_id' => Auth::id(),
                 ]);
 
                 foreach ($validated['items'] as $itemData) {
@@ -3997,7 +4022,7 @@ class WarehouseDashboardController extends Controller
                             ->where('product_id', $variant?->product_id)
                             ->first();
 
-                        if (!$price) {
+                        if (! $price) {
                             throw new \RuntimeException('Bảng giá đã chọn không khớp với nhà cung cấp hoặc sản phẩm.');
                         }
 
@@ -4006,15 +4031,15 @@ class WarehouseDashboardController extends Controller
 
                     $document->items()->create([
                         'product_variant_id' => $itemData['product_variant_id'],
-                        'quantity'           => $itemData['quantity'],
-                        'unit_cost'          => $itemData['unit_cost'],
-                        'source_price_id'    => $sourcePriceId,
+                        'quantity' => $itemData['quantity'],
+                        'unit_cost' => $itemData['unit_cost'],
+                        'source_price_id' => $sourcePriceId,
                     ]);
 
                     $inventory = Inventory::firstOrCreate(
                         [
                             'product_variant_id' => $itemData['product_variant_id'],
-                            'warehouse_id'       => $userWarehouseId,
+                            'warehouse_id' => $userWarehouseId,
                         ],
                         ['quantity' => 0]
                     );
@@ -4029,12 +4054,12 @@ class WarehouseDashboardController extends Controller
                     }
 
                     InventoryMovement::create([
-                        'inventory_id'   => $inventory->id,
-                        'quantity'       => $qty,
-                        'type'           => $type,
-                        'reference_id'   => $document->id,
+                        'inventory_id' => $inventory->id,
+                        'quantity' => $qty,
+                        'type' => $type,
+                        'reference_id' => $document->id,
                         'reference_type' => InventoryDocument::class,
-                        'user_id'        => Auth::id(),
+                        'user_id' => Auth::id(),
                     ]);
 
                     $inventory->increment('quantity', $qty);
@@ -4057,7 +4082,7 @@ class WarehouseDashboardController extends Controller
             );
         }
 
-        return redirect()->route($route)->with('success', 'Đã tạo phiếu ' . $label . ' kho thành công.');
+        return redirect()->route($route)->with('success', 'Đã tạo phiếu '.$label.' kho thành công.');
     }
 
     /**
@@ -4074,7 +4099,7 @@ class WarehouseDashboardController extends Controller
             ->buildConsolidated($selectedDate, $search, $status);
         $page = max(1, (int) $request->input('page', 1));
         $perPage = (int) $request->input('per_page', 50);
-        if (!in_array($perPage, [25, 50, 100, 200], true)) {
+        if (! in_array($perPage, [25, 50, 100, 200], true)) {
             $perPage = 50;
         }
         $products = new LengthAwarePaginator(
@@ -4304,7 +4329,7 @@ class WarehouseDashboardController extends Controller
 
         // Stock In Statistics
         $stockInData = InventoryDocument::where('type', 'import')
-            ->when($warehouseId, fn($q) => $q->where('warehouse_id', $warehouseId))
+            ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId))
             ->whereBetween('document_date', [$from, $to])
             ->with('items')
             ->get()
@@ -4312,20 +4337,21 @@ class WarehouseDashboardController extends Controller
                 if ($rangeType === 'day' || $rangeType === 'custom') {
                     return $doc->document_date->format('d/m');
                 } elseif ($rangeType === 'week') {
-                    return 'W' . $doc->document_date->weekOfYear;
+                    return 'W'.$doc->document_date->weekOfYear;
                 } elseif ($rangeType === 'month') {
                     return $doc->document_date->format('m/Y');
                 }
+
                 return $doc->document_date->format('Y');
             })
-            ->map(fn($docs) => [
+            ->map(fn ($docs) => [
                 'count' => $docs->count(),
-                'quantity' => $docs->flatMap(fn($d) => $d->items)->sum('quantity'),
+                'quantity' => $docs->flatMap(fn ($d) => $d->items)->sum('quantity'),
             ]);
 
         // Stock Out Statistics
         $stockOutData = InventoryDocument::where('type', 'export')
-            ->when($warehouseId, fn($q) => $q->where('warehouse_id', $warehouseId))
+            ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId))
             ->whereBetween('document_date', [$from, $to])
             ->with('items')
             ->get()
@@ -4333,34 +4359,35 @@ class WarehouseDashboardController extends Controller
                 if ($rangeType === 'day' || $rangeType === 'custom') {
                     return $doc->document_date->format('d/m');
                 } elseif ($rangeType === 'week') {
-                    return 'W' . $doc->document_date->weekOfYear;
+                    return 'W'.$doc->document_date->weekOfYear;
                 } elseif ($rangeType === 'month') {
                     return $doc->document_date->format('m/Y');
                 }
+
                 return $doc->document_date->format('Y');
             })
-            ->map(fn($docs) => [
+            ->map(fn ($docs) => [
                 'count' => $docs->count(),
-                'quantity' => $docs->flatMap(fn($d) => $d->items)->sum('quantity'),
+                'quantity' => $docs->flatMap(fn ($d) => $d->items)->sum('quantity'),
             ]);
 
         // Inventory Movement Statistics
-        $movementData = InventoryMovement::whereHas('inventory', fn($q) => $q->when($warehouseId, fn($q2) => $q2->where('warehouse_id', $warehouseId)))
+        $movementData = InventoryMovement::whereHas('inventory', fn ($q) => $q->when($warehouseId, fn ($q2) => $q2->where('warehouse_id', $warehouseId)))
             ->whereBetween('created_at', [$from, $to])
             ->get()
             ->groupBy('type')
-            ->map(fn($movements) => [
+            ->map(fn ($movements) => [
                 'count' => $movements->count(),
                 'quantity' => $movements->sum('quantity'),
             ]);
 
         // Top products by movement
-        $topProducts = InventoryMovement::whereHas('inventory', fn($q) => $q->when($warehouseId, fn($q2) => $q2->where('warehouse_id', $warehouseId)))
+        $topProducts = InventoryMovement::whereHas('inventory', fn ($q) => $q->when($warehouseId, fn ($q2) => $q2->where('warehouse_id', $warehouseId)))
             ->whereBetween('created_at', [$from, $to])
             ->with('inventory.productVariant.product')
             ->get()
             ->groupBy('inventory.product_variant_id')
-            ->map(fn($movements) => [
+            ->map(fn ($movements) => [
                 'product' => $movements->first()->inventory->productVariant->product,
                 'variant' => $movements->first()->inventory->productVariant,
                 'quantity' => $movements->sum('quantity'),
@@ -4374,7 +4401,7 @@ class WarehouseDashboardController extends Controller
             ->whereHas('document', function ($q) use ($warehouseId, $from, $to) {
                 $q->whereBetween('document_date', [$from, $to])
                     ->whereIn('type', ['import', 'export'])
-                    ->when($warehouseId, fn($q2) => $q2->where('warehouse_id', $warehouseId));
+                    ->when($warehouseId, fn ($q2) => $q2->where('warehouse_id', $warehouseId));
             })
             ->with([
                 'document:id,type,warehouse_id,document_date',
@@ -4391,11 +4418,11 @@ class WarehouseDashboardController extends Controller
                 $product = $variant?->product;
 
                 $inQty = (int) $items
-                    ->filter(fn($item) => $item->document?->type === 'import')
+                    ->filter(fn ($item) => $item->document?->type === 'import')
                     ->sum('quantity');
 
                 $outQty = (int) $items
-                    ->filter(fn($item) => $item->document?->type === 'export')
+                    ->filter(fn ($item) => $item->document?->type === 'export')
                     ->sum('quantity');
 
                 return [
@@ -4438,18 +4465,18 @@ class WarehouseDashboardController extends Controller
         // Overall statistics
         $totals = [
             'total_stock_in' => InventoryDocument::where('type', 'import')
-                ->when($warehouseId, fn($q) => $q->where('warehouse_id', $warehouseId))
+                ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId))
                 ->whereBetween('document_date', [$from, $to])
                 ->withSum('items', 'quantity')
                 ->get()
                 ->sum('items_sum_quantity') ?? 0,
             'total_stock_out' => InventoryDocument::where('type', 'export')
-                ->when($warehouseId, fn($q) => $q->where('warehouse_id', $warehouseId))
+                ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId))
                 ->whereBetween('document_date', [$from, $to])
                 ->withSum('items', 'quantity')
                 ->get()
                 ->sum('items_sum_quantity') ?? 0,
-            'total_movements' => InventoryMovement::whereHas('inventory', fn($q) => $q->when($warehouseId, fn($q2) => $q2->where('warehouse_id', $warehouseId)))
+            'total_movements' => InventoryMovement::whereHas('inventory', fn ($q) => $q->when($warehouseId, fn ($q2) => $q2->where('warehouse_id', $warehouseId)))
                 ->whereBetween('created_at', [$from, $to])
                 ->count(),
         ];
@@ -4511,7 +4538,7 @@ class WarehouseDashboardController extends Controller
         $orderWarehouseId = $order->warehouse_id ? (int) $order->warehouse_id : null;
         $isPackingOperator = $user?->hasRole('warehouse') || $user?->hasRole('package');
 
-        if (!$user?->hasRole('admin') && $isPackingOperator && $managedWarehouseId && $orderWarehouseId && $managedWarehouseId !== $orderWarehouseId) {
+        if (! $user?->hasRole('admin') && $isPackingOperator && $managedWarehouseId && $orderWarehouseId && $managedWarehouseId !== $orderWarehouseId) {
             abort(403, 'Đơn hàng thuộc kho khác.');
         }
     }

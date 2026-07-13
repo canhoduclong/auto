@@ -275,6 +275,9 @@
             <a href="{{ route('warehouse.inventory') }}" class="wh-nav-link {{ request()->routeIs('warehouse.inventory') ? 'active' : '' }}">
                 <i class="bi bi-stack"></i> Tồn Kho
             </a>
+            <a href="{{ route('warehouse.stocktakes.index') }}" class="wh-nav-link {{ request()->routeIs('warehouse.stocktakes.*') ? 'active' : '' }}">
+                <i class="bi bi-clipboard2-check"></i> Kiểm Kê Kho
+            </a>
             <a href="{{ route('warehouse.inventory-daily') }}" class="wh-nav-link {{ request()->routeIs('warehouse.inventory-daily') ? 'active' : '' }}">
                 <i class="bi bi-calendar3"></i> Tồn kho Daily
             </a>

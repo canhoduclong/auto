@@ -15,4 +15,18 @@ class InventoryAdjustment extends Model
         'reason',
         'user_id',
     ];
+
+    protected $casts = [
+        'quantity' => 'float',
+    ];
+
+    public function inventory()
+    {
+        return $this->belongsTo(Inventory::class);
+    }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
 }

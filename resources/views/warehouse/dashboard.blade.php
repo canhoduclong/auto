@@ -253,6 +253,12 @@
                     'done' => $stats['completed_tasks'] ?? 0,
                     'route' => route('tasks.my-tasks'),
                 ],
+                [
+                    'label' => 'Kiểm kê kho',
+                    'total' => 1,
+                    'done' => min(1, (int) ($stats['stocktakes_completed'] ?? 0)),
+                    'route' => route('warehouse.stocktakes.index'),
+                ],
             ];
             $colorMap = [
                 'todo' => 'task-status-todo',
@@ -423,8 +429,11 @@
             </div>
         @endif
         <!-- Thống kê tồn kho -->
-        <div class="underline mb-4">
+        <div class="underline mb-4 d-flex align-items-center justify-content-between gap-2">
             <span class="fw-semibold progress-title-underline d-flex align-items-center text-uppercase">Thống kê tồn kho</span>
+            <a href="{{ route('warehouse.stocktakes.index') }}" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-clipboard2-check me-1"></i>Kiểm kê kho
+            </a>
         </div>
         @include('warehouse._inventory_summary', [
             'title' => 'Tồn kho hôm nay - kho đang quản lý',
