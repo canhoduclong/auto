@@ -652,6 +652,10 @@ class CeoDashboardController extends Controller
             'date' => ['nullable', 'date'],
             'from_date' => ['nullable', 'date'],
             'to_date' => ['nullable', 'date'],
+            'stage' => ['nullable', 'in:cutting,transfer,return'],
+            'location' => ['nullable', 'string', 'max:255'],
+            'order' => ['nullable', 'string', 'max:100'],
+            'keyword' => ['nullable', 'string', 'max:100'],
         ]);
 
         $mode = in_array((string) $request->input('mode'), ['day', 'range'], true)
@@ -745,8 +749,31 @@ class CeoDashboardController extends Controller
             ->get()
             ->groupBy('product_variant_id');
 
-        $events = $this->buildLossEvents($cuttingBatches, $transfers, $returnItems, $variants, $priceRules)
+        $allEvents = $this->buildLossEvents($cuttingBatches, $transfers, $returnItems, $variants, $priceRules)
             ->sortByDesc('occurred_at')
+            ->values();
+
+        $stageFilter = (string) $request->input('stage', '');
+        $locationFilter = trim((string) $request->input('location', ''));
+        $orderFilter = trim((string) $request->input('order', ''));
+        $keywordFilter = trim((string) $request->input('keyword', ''));
+        $locationOptions = $allEvents->pluck('location')->filter()->unique()->sort()->values();
+
+        $events = $allEvents
+            ->when($stageFilter !== '', fn (Collection $rows) => $rows->where('stage_key', $stageFilter))
+            ->when($locationFilter !== '', fn (Collection $rows) => $rows->where('location', $locationFilter))
+            ->when($orderFilter !== '', function (Collection $rows) use ($orderFilter) {
+                return $rows->filter(fn ($event) => $this->containsSearchText(
+                    $event['order_label'].' '.$event['customer_name'],
+                    $orderFilter
+                ));
+            })
+            ->when($keywordFilter !== '', function (Collection $rows) use ($keywordFilter) {
+                return $rows->filter(fn ($event) => $this->containsSearchText(
+                    $event['product_name'].' '.$event['actor_name'],
+                    $keywordFilter
+                ));
+            })
             ->values();
 
         $totalInput = (float) $events->sum('input_weight');
@@ -761,26 +788,6 @@ class CeoDashboardController extends Controller
             'loss_value' => (float) $events->sum('loss_value'),
             'unpriced_event_count' => $events->where('min_price', '<=', 0)->count(),
         ];
-
-        $dailyRows = $events->groupBy(fn ($event) => $event['occurred_at']->toDateString())
-            ->map(function (Collection $rows, string $day) {
-                $input = (float) $rows->sum('input_weight');
-                $loss = (float) $rows->sum('loss_weight');
-
-                return (object) [
-                    'day_key' => $day,
-                    'event_count' => $rows->count(),
-                    'input_weight' => $input,
-                    'output_weight' => (float) $rows->sum('output_weight'),
-                    'loss_weight' => $loss,
-                    'loss_percent' => $input > 0 ? round($loss / $input * 100, 3) : 0,
-                    'loss_value' => (float) $rows->sum('loss_value'),
-                ];
-            })
-            ->sortKeys();
-
-        $stageRows = $this->summarizeLossEvents($events, 'stage_key', 'stage');
-        $orderRows = $this->summarizeLossEvents($events->filter(fn ($event) => $event['order_id']), 'order_id', 'order_label');
 
         $currentPage = LengthAwarePaginator::resolveCurrentPage();
         $perPage = 30;
@@ -797,10 +804,12 @@ class CeoDashboardController extends Controller
             'selectedDate',
             'fromDate',
             'toDate',
+            'stageFilter',
+            'locationFilter',
+            'orderFilter',
+            'keywordFilter',
+            'locationOptions',
             'summary',
-            'dailyRows',
-            'stageRows',
-            'orderRows',
             'lossEvents'
         ));
     }
@@ -963,24 +972,9 @@ class CeoDashboardController extends Controller
         return max(0, (float) ($rule?->min_price ?? 0));
     }
 
-    private function summarizeLossEvents(Collection $events, string $groupKey, string $labelKey): Collection
+    private function containsSearchText(string $value, string $search): bool
     {
-        return $events->groupBy($groupKey)
-            ->map(function (Collection $rows) use ($labelKey) {
-                $input = (float) $rows->sum('input_weight');
-                $loss = (float) $rows->sum('loss_weight');
-
-                return (object) [
-                    'label' => (string) $rows->first()[$labelKey],
-                    'event_count' => $rows->count(),
-                    'input_weight' => $input,
-                    'loss_weight' => $loss,
-                    'loss_percent' => $input > 0 ? round($loss / $input * 100, 3) : 0,
-                    'loss_value' => (float) $rows->sum('loss_value'),
-                ];
-            })
-            ->sortByDesc('loss_weight')
-            ->values();
+        return mb_stripos($value, $search) !== false;
     }
 
     private function variantName(?ProductVariant $variant): string

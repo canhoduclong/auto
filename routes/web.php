@@ -1,75 +1,80 @@
-<?php 
+<?php
+
 // Admin tool: đồng bộ số thứ tự ưu tiên đơn trong ngày
 require_once __DIR__.'/admin-orders-tools.php';
 
-use App\Http\Controllers\Package\PackageDashboardController;
-use App\Http\Controllers\Package\OrderPackingController;
-use App\Http\Controllers\Package\ReturnController;
-use App\Http\Controllers\Package\OrderChangeRequestController; 
-use App\Http\Controllers\Package\ReceivingController;
-
+use App\Http\Controllers\AccountingDashboardController;
+use App\Http\Controllers\Admin\OrderScheduleRunController;
+use App\Http\Controllers\Admin\PostCategoryController;
+use App\Http\Controllers\Admin\SettingController;
+use App\Http\Controllers\AdminEventController;
+use App\Http\Controllers\AdminNotificationController;
+use App\Http\Controllers\AIController;
+use App\Http\Controllers\ApprovalWorkflowController;
+use App\Http\Controllers\AppUpdateController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\CartController;
+use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\CeoDashboardController;
+use App\Http\Controllers\CustomerAddressController;
+use App\Http\Controllers\CustomerAppointmentController;
+use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\CustomerPopupController;
+use App\Http\Controllers\CustomerTypeController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DepartmentFinanceRequestController;
+use App\Http\Controllers\HoangLongProfileController;
+use App\Http\Controllers\HomeController;
+use App\Http\Controllers\InventoryAdjustmentController;
+use App\Http\Controllers\InventoryController;
+use App\Http\Controllers\InventoryDocumentController;
+use App\Http\Controllers\InventoryMovementController;
+use App\Http\Controllers\InventoryReservationController;
+use App\Http\Controllers\LayoutController;
+use App\Http\Controllers\LayoutPreferenceController;
+use App\Http\Controllers\MediaController;
+use App\Http\Controllers\MyDashboardController;
+use App\Http\Controllers\OrderAjaxController;
+use App\Http\Controllers\OrderApprovalController;
+use App\Http\Controllers\OrderController;
+use App\Http\Controllers\OrderMonitoringController;
+use App\Http\Controllers\OrderReturnController;
+use App\Http\Controllers\OrderScheduleController;
+use App\Http\Controllers\OrganizationUnitController;
+use App\Http\Controllers\Package\OrderChangeRequestController;
+use App\Http\Controllers\Package\OrderPackingController;
+use App\Http\Controllers\Package\PackageDashboardController;
+use App\Http\Controllers\Package\ReceivingController;
+use App\Http\Controllers\Package\ReturnController;
+use App\Http\Controllers\PageController;
+use App\Http\Controllers\PermissionController;
+use App\Http\Controllers\PostController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductPriceManagementController;
-use App\Http\Controllers\ProductVariantPriceController;
 use App\Http\Controllers\ProductVariantController;
-use App\Http\Controllers\CategoryController; 
-use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\LayoutPreferenceController;
-use App\Http\Controllers\LayoutController;
-use App\Http\Controllers\OrganizationUnitController;
-use App\Http\Controllers\RoleSwitchController;
-use App\Http\Controllers\UserController;
-use App\Http\Controllers\RoleController;
-use App\Http\Controllers\PermissionController;
-use App\Http\Controllers\CustomerController;
-use App\Http\Controllers\CustomerTypeController;
-use App\Http\Controllers\WarehouseController;
-use App\Http\Controllers\InventoryController;
-use App\Http\Controllers\InventoryMovementController;
-use App\Http\Controllers\InventoryDocumentController;
-use App\Http\Controllers\InventoryAdjustmentController;
-use App\Http\Controllers\InventoryReservationController;
-use App\Http\Controllers\OrderReturnController;
-use App\Http\Controllers\CustomerAddressController;
-use App\Http\Controllers\PermissionAddressController;
-use App\Http\Controllers\MediaController;
-use App\Http\Controllers\OrderController;
-use App\Http\Controllers\AIController;
-use App\Http\Controllers\Admin\SettingController;
-use App\Http\Controllers\HomeController;
-use App\Http\Controllers\CustomerPopupController;
-use App\Http\Controllers\OrderAjaxController;
-use App\Http\Controllers\PageController;
-use App\Http\Controllers\SiteController;
-use App\Http\Controllers\ProvinceController;
-use App\Http\Controllers\PostController; 
-use App\Http\Controllers\Admin\PostCategoryController;
+use App\Http\Controllers\ProductVariantPriceController;
 use App\Http\Controllers\ProfileController;
-use App\Http\Controllers\TransactionController;
-use App\Http\Controllers\MyCustomerController;
-use App\Http\Controllers\CartController;
-use App\Http\Controllers\OrderApprovalController;
-use App\Http\Controllers\ApprovalWorkflowController;
-use App\Http\Controllers\AdminNotificationController;
-use App\Http\Controllers\AdminEventController;
-use App\Http\Controllers\Admin\OrderScheduleRunController;
-use App\Http\Controllers\TeamController;
+use App\Http\Controllers\ProvinceController;
 use App\Http\Controllers\RevenueReportController;
-use App\Http\Controllers\OrderMonitoringController;
-use App\Http\Controllers\WarehouseDashboardController;
+use App\Http\Controllers\RoleController;
+use App\Http\Controllers\RoleSwitchController;
 use App\Http\Controllers\ShipperDashboardController;
-use App\Http\Controllers\CeoDashboardController;
+use App\Http\Controllers\SiteController;
 use App\Http\Controllers\TaskManagementController;
-use App\Http\Controllers\AccountingDashboardController;
-use App\Http\Controllers\DepartmentFinanceRequestController;
+use App\Http\Controllers\TeamController;
+use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\TruckStationController;
-use App\Http\Controllers\CustomerAppointmentController;
-use App\Http\Controllers\OrderScheduleController;
-use App\Http\Controllers\MyDashboardController;
-use App\Http\Controllers\HoangLongProfileController;
+use App\Http\Controllers\UserController;
+use App\Http\Controllers\WarehouseController;
+use App\Http\Controllers\WarehouseDashboardController;
 
-
+// Public mobile update files. These routes are also a fallback when Nginx does
+// not serve public/app-update directly.
+Route::get('/app-update/version.json', [AppUpdateController::class, 'manifest'])
+    ->name('app-update.manifest');
+Route::get('/app-update/{filename}', [AppUpdateController::class, 'apk'])
+    ->where('filename', 'app-release(?:-\d+\.\d+\.\d+)?\.apk')
+    ->name('app-update.apk');
 
 Route::get('/locale/{locale}', function (string $locale) {
     abort_unless(in_array($locale, ['vi', 'en'], true), 404);
@@ -89,7 +94,6 @@ Route::middleware('guest')->group(function () {
     Route::get('/register', [AuthController::class, 'showRegistrationForm'])->name('register');
     Route::post('/register', [AuthController::class, 'register']);
 });
-
 
 Route::middleware(['auth', 'assigned'])->group(function () {
     Route::get('/session/check', fn () => response()->json(['authenticated' => true]))
@@ -134,25 +138,25 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     // Làm mới priority cho khách đang chăm
     Route::post('/my-customer/refresh-priority', [\App\Http\Controllers\MyCustomerController::class, 'refreshPriority'])->name('my_customer.refresh_priority');
 
-        Route::get('/thankyou', fn () => view('auth.thankyou'))->name('thankyou');
+    Route::get('/thankyou', fn () => view('auth.thankyou'))->name('thankyou');
 
-        // Public-facing pages (require login)
-        Route::get('/', [HomeController::class, 'index'])->name('home');
-        Route::get('/variants', [HomeController::class, 'variants'])->name('site.variants');
-        Route::get('/products/search', [ProductController::class, 'search'])->name('products.search');
-        Route::post('/media/upload', [MediaController::class, 'upload'])->name('media.upload');
-        Route::get('/media/browse', [MediaController::class, 'browse'])->name('media.browse');
-        Route::get('/product/{product:slug}', [PageController::class, 'productDetail'])->name('pages.product_detail');
+    // Public-facing pages (require login)
+    Route::get('/', [HomeController::class, 'index'])->name('home');
+    Route::get('/variants', [HomeController::class, 'variants'])->name('site.variants');
+    Route::get('/products/search', [ProductController::class, 'search'])->name('products.search');
+    Route::post('/media/upload', [MediaController::class, 'upload'])->name('media.upload');
+    Route::get('/media/browse', [MediaController::class, 'browse'])->name('media.browse');
+    Route::get('/product/{product:slug}', [PageController::class, 'productDetail'])->name('pages.product_detail');
 
-        // Customer Reminders
-        Route::post('/my-customer/{customer}/reminders', [\App\Http\Controllers\CustomerReminderController::class, 'store'])->name('customer_reminders.store');
-        Route::put('/my-customer/{customer}/reminders/{reminder}', [\App\Http\Controllers\CustomerReminderController::class, 'update'])->name('customer_reminders.update');
-        Route::delete('/my-customer/{customer}/reminders/{reminder}', [\App\Http\Controllers\CustomerReminderController::class, 'destroy'])->name('customer_reminders.destroy');
-        Route::get('/my-customer-appointments', [CustomerAppointmentController::class, 'index'])->name('pages.my_customer_appointments')->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
-        Route::get('/my-customer-appointments/search-customers', [CustomerAppointmentController::class, 'searchCustomers'])->name('customer_appointments.search_customers')->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
-        Route::post('/my-customer-appointments', [CustomerAppointmentController::class, 'store'])->name('customer_appointments.store')->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
-        Route::put('/my-customer-appointments/{reminder}', [CustomerAppointmentController::class, 'update'])->name('customer_appointments.update')->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
-        Route::delete('/my-customer-appointments/{reminder}', [CustomerAppointmentController::class, 'destroy'])->name('customer_appointments.destroy')->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
+    // Customer Reminders
+    Route::post('/my-customer/{customer}/reminders', [\App\Http\Controllers\CustomerReminderController::class, 'store'])->name('customer_reminders.store');
+    Route::put('/my-customer/{customer}/reminders/{reminder}', [\App\Http\Controllers\CustomerReminderController::class, 'update'])->name('customer_reminders.update');
+    Route::delete('/my-customer/{customer}/reminders/{reminder}', [\App\Http\Controllers\CustomerReminderController::class, 'destroy'])->name('customer_reminders.destroy');
+    Route::get('/my-customer-appointments', [CustomerAppointmentController::class, 'index'])->name('pages.my_customer_appointments')->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
+    Route::get('/my-customer-appointments/search-customers', [CustomerAppointmentController::class, 'searchCustomers'])->name('customer_appointments.search_customers')->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
+    Route::post('/my-customer-appointments', [CustomerAppointmentController::class, 'store'])->name('customer_appointments.store')->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
+    Route::put('/my-customer-appointments/{reminder}', [CustomerAppointmentController::class, 'update'])->name('customer_appointments.update')->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
+    Route::delete('/my-customer-appointments/{reminder}', [CustomerAppointmentController::class, 'destroy'])->name('customer_appointments.destroy')->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
     // Báo cáo công việc cho user frontend
     Route::get('work-reports', [\App\Http\Controllers\WorkReportController::class, 'index'])
         ->name('work-reports.index');
@@ -328,34 +332,34 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/order-transfers', [\App\Http\Controllers\Warehouse\OrderTransferController::class, 'store'])->name('order-transfers.store');
         Route::delete('/order-transfers/{id}', [\App\Http\Controllers\Warehouse\OrderTransferController::class, 'destroy'])->name('order-transfers.destroy');
         Route::post('/order-transfers/{transfer}/orders/{order}/detach', [\App\Http\Controllers\Warehouse\OrderTransferController::class, 'detachWaitingTransfer'])->name('order-transfers.orders.detach');
-        Route::get('/',            [WarehouseDashboardController::class, 'index'])->name('dashboard');
+        Route::get('/', [WarehouseDashboardController::class, 'index'])->name('dashboard');
         Route::get('/cutting/{variant}', [WarehouseDashboardController::class, 'cuttingForm'])->name('cutting.form');
         Route::post('/cutting/{variant}', [WarehouseDashboardController::class, 'executeCutting'])->name('cutting.execute');
         Route::post('/cutting/{variant}/confirm', [WarehouseDashboardController::class, 'confirmCuttingMaterials'])->name('cutting.confirm');
         Route::post('/cutting-batches/{batch}/revert', [WarehouseDashboardController::class, 'revertCuttingBatch'])->name('cutting-batches.revert');
         Route::post('/cutting-component-import-requests/{componentImportRequest}/receive', [WarehouseDashboardController::class, 'receiveCuttingComponentImportRequest'])->name('cutting-component-import-requests.receive');
-        Route::get('/orders',      [WarehouseDashboardController::class, 'orders'])->name('orders');
-        Route::post('/orders/{order}/logistics',        [WarehouseDashboardController::class, 'updateLogistics'])->name('orders.logistics');
-        Route::post('/orders/{order}/start-packing',    [WarehouseDashboardController::class, 'startPacking'])->name('orders.start-packing');
+        Route::get('/orders', [WarehouseDashboardController::class, 'orders'])->name('orders');
+        Route::post('/orders/{order}/logistics', [WarehouseDashboardController::class, 'updateLogistics'])->name('orders.logistics');
+        Route::post('/orders/{order}/start-packing', [WarehouseDashboardController::class, 'startPacking'])->name('orders.start-packing');
         Route::post('/orders/{order}/complete-packing', [WarehouseDashboardController::class, 'completePacking'])->name('orders.complete-packing');
         Route::post('/orders/{order}/request-adjustment', [WarehouseDashboardController::class, 'requestAdjustment'])->name('orders.request-adjustment');
         Route::post('/orders/{order}/transfer-request', [WarehouseDashboardController::class, 'createTransferRequest'])->name('orders.transfer-request');
         Route::post('/orders/{order}/return-to-ready', [WarehouseDashboardController::class, 'returnToReadyToPack'])->name('orders.return-to-ready');
-        Route::post('/orders/{order}/reopen-packing',   [WarehouseDashboardController::class, 'reopenPacking'])->name('orders.reopen-packing');
-        Route::post('/orders/rap-don-hang',              [WarehouseDashboardController::class, 'rapDonHang'])->name('orders.rap-don-hang');
+        Route::post('/orders/{order}/reopen-packing', [WarehouseDashboardController::class, 'reopenPacking'])->name('orders.reopen-packing');
+        Route::post('/orders/rap-don-hang', [WarehouseDashboardController::class, 'rapDonHang'])->name('orders.rap-don-hang');
         Route::get('/transfers/incoming', [WarehouseDashboardController::class, 'incomingTransfers'])->name('transfers.incoming');
         Route::post('/transfers/{transfer}/confirm-receipt', [WarehouseDashboardController::class, 'confirmTransferReceipt'])->name('transfers.confirm-receipt');
-            Route::post('/transfers/{transfer}/rollback', [WarehouseDashboardController::class, 'rollbackIncomingTransfer'])->name('transfers.rollback');
-        Route::get('/returns',     [WarehouseDashboardController::class, 'returns'])->name('returns');
+        Route::post('/transfers/{transfer}/rollback', [WarehouseDashboardController::class, 'rollbackIncomingTransfer'])->name('transfers.rollback');
+        Route::get('/returns', [WarehouseDashboardController::class, 'returns'])->name('returns');
         Route::get('/returns/{order}/weight-entry', [WarehouseDashboardController::class, 'showWeightEntry'])->name('returns.weight-entry');
         Route::post('/returns/{order}/save-weights', [WarehouseDashboardController::class, 'saveWeights'])->name('returns.save-weights');
         Route::post('/returns/{order}/transfer-warehouse', [WarehouseDashboardController::class, 'transferReturnWarehouse'])->name('returns.transfer-warehouse');
         Route::post('/returns/{order}/confirm', [WarehouseDashboardController::class, 'confirmReturn'])->name('returns.confirm');
-        
+
         // Warehouse Management Features
-        Route::get('/stock-in',          [WarehouseDashboardController::class, 'stockIn'])->name('stock-in');
-        Route::get('/stock-in/create',   [WarehouseDashboardController::class, 'createStockIn'])->name('stock-in.create');
-        Route::post('/stock-in',         [WarehouseDashboardController::class, 'storeStockIn'])->name('stock-in.store');
+        Route::get('/stock-in', [WarehouseDashboardController::class, 'stockIn'])->name('stock-in');
+        Route::get('/stock-in/create', [WarehouseDashboardController::class, 'createStockIn'])->name('stock-in.create');
+        Route::post('/stock-in', [WarehouseDashboardController::class, 'storeStockIn'])->name('stock-in.store');
         Route::post('/stock-in-templates', [\App\Http\Controllers\InventoryDocumentTemplateController::class, 'store'])->name('stock-in-templates.store');
         Route::delete('/stock-in-templates/{template}', [\App\Http\Controllers\InventoryDocumentTemplateController::class, 'destroy'])->name('stock-in-templates.destroy');
         Route::get('/stock-in/{document}', [WarehouseDashboardController::class, 'showDocument'])->name('stock-in.show');
@@ -366,22 +370,22 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/supplier-prices/{supplier}/{product}/apply-today-sale-price', [\App\Http\Controllers\WarehouseSupplierPriceController::class, 'applyTodaySalePrice'])->name('supplier-prices.apply-today-sale-price');
         Route::post('/suppliers/{supplier}/products', [\App\Http\Controllers\WarehouseSupplierPriceController::class, 'attachProduct'])->name('suppliers.products.attach');
         Route::delete('/suppliers/{supplier}/products/{product}', [\App\Http\Controllers\WarehouseSupplierPriceController::class, 'detachProduct'])->name('suppliers.products.detach');
-        Route::get('/stock-out',         [WarehouseDashboardController::class, 'stockOut'])->name('stock-out');
-        Route::get('/stock-out/orders',  [WarehouseDashboardController::class, 'exportedOrders'])->name('stock-out.orders');
-        Route::post('/stock-out',        [WarehouseDashboardController::class, 'storeStockOut'])->name('stock-out.store');
+        Route::get('/stock-out', [WarehouseDashboardController::class, 'stockOut'])->name('stock-out');
+        Route::get('/stock-out/orders', [WarehouseDashboardController::class, 'exportedOrders'])->name('stock-out.orders');
+        Route::post('/stock-out', [WarehouseDashboardController::class, 'storeStockOut'])->name('stock-out.store');
         Route::get('/stock-out/{document}', [WarehouseDashboardController::class, 'showDocument'])->name('stock-out.show');
         Route::get('/inventory-transfers', [WarehouseDashboardController::class, 'inventoryTransfers'])->name('inventory-transfers.index');
         Route::post('/inventory-transfers', [WarehouseDashboardController::class, 'storeInventoryTransfer'])->name('inventory-transfers.store');
         Route::get('/inventory-transfers/incoming', [WarehouseDashboardController::class, 'incomingInventoryTransfers'])->name('inventory-transfers.incoming');
         Route::post('/inventory-transfers/{transfer}/confirm', [WarehouseDashboardController::class, 'confirmIncomingInventoryTransfer'])->name('inventory-transfers.confirm');
-        Route::get('/inventory',   [WarehouseDashboardController::class, 'inventory'])->name('inventory');
+        Route::get('/inventory', [WarehouseDashboardController::class, 'inventory'])->name('inventory');
         Route::get('/inventory-daily', [WarehouseDashboardController::class, 'inventoryDaily'])->name('inventory-daily');
         Route::post('/inventory/cancel-overdue', [WarehouseDashboardController::class, 'cancelOverdueOrders'])->name('inventory.cancel-overdue');
-        Route::get('/products',    [WarehouseDashboardController::class, 'products'])->name('products');
+        Route::get('/products', [WarehouseDashboardController::class, 'products'])->name('products');
         Route::get('/requests', [\App\Http\Controllers\DepartmentFinanceRequestController::class, 'warehouseIndex'])->name('finance-requests.index');
         Route::post('/requests', [\App\Http\Controllers\DepartmentFinanceRequestController::class, 'warehouseStore'])->name('finance-requests.store');
         Route::get('/requests/{transaction}/print', [\App\Http\Controllers\DepartmentFinanceRequestController::class, 'warehousePrint'])->name('finance-requests.print');
-        Route::get('/reports',     [WarehouseDashboardController::class, 'reports'])->name('reports');
+        Route::get('/reports', [WarehouseDashboardController::class, 'reports'])->name('reports');
     });
 
     Route::prefix('procurement')->name('procurement.')->middleware('role:procurement_manager,admin')->group(function () {
@@ -407,23 +411,23 @@ Route::middleware(['auth', 'assigned'])->group(function () {
 
     // ─── Shipper module ─────────────────────────────────────────────────────
     Route::prefix('shipper')->name('shipper.')->middleware('role:shipper,manager_shipper,admin')->group(function () {
-            Route::post('/warehouse-transfers/{transfer}/rollback', [ShipperDashboardController::class, 'rollbackWarehouseTransfer'])->name('warehouse-transfers.rollback');
-        Route::get('/',                                [ShipperDashboardController::class, 'index'])->name('dashboard');
-        Route::get('/available',                       [ShipperDashboardController::class, 'available'])->name('available');
-        Route::post('/available/{order}/accept',       [ShipperDashboardController::class, 'accept'])->name('accept');
-        Route::get('/my-orders',                       [ShipperDashboardController::class, 'myOrders'])->name('my-orders');
-        Route::get('/orders/{order}/delivered-form',   [ShipperDashboardController::class, 'deliveredForm'])->name('delivered-form');
-        Route::post('/orders/{order}/mark-delivered',  [ShipperDashboardController::class, 'markDelivered'])->name('mark-delivered');
-        Route::get('/orders/{order}/return-form',      [ShipperDashboardController::class, 'returnForm'])->name('return-form');
-        Route::post('/orders/{order}/store-return',    [ShipperDashboardController::class, 'storeReturn'])->name('store-return');
-        Route::get('/history',                         [ShipperDashboardController::class, 'history'])->name('history');
-        Route::get('/history/{order}',                 [ShipperDashboardController::class, 'historyDetail'])->name('history-detail');
-        Route::get('/customers',                       [ShipperDashboardController::class, 'customers'])->name('customers');
-        Route::get('/requests',                        [DepartmentFinanceRequestController::class, 'shipperIndex'])->name('finance-requests.index');
-        Route::post('/requests',                       [DepartmentFinanceRequestController::class, 'shipperStore'])->name('finance-requests.store');
-        Route::get('/requests/{transaction}/print',    [DepartmentFinanceRequestController::class, 'shipperPrint'])->name('finance-requests.print');
-        Route::get('/delivery-statistics',             [ShipperDashboardController::class, 'deliveryStatistics'])->name('delivery-statistics');
-        Route::get('/warehouse-transfers',             [ShipperDashboardController::class, 'warehouseTransfers'])->name('warehouse-transfers');
+        Route::post('/warehouse-transfers/{transfer}/rollback', [ShipperDashboardController::class, 'rollbackWarehouseTransfer'])->name('warehouse-transfers.rollback');
+        Route::get('/', [ShipperDashboardController::class, 'index'])->name('dashboard');
+        Route::get('/available', [ShipperDashboardController::class, 'available'])->name('available');
+        Route::post('/available/{order}/accept', [ShipperDashboardController::class, 'accept'])->name('accept');
+        Route::get('/my-orders', [ShipperDashboardController::class, 'myOrders'])->name('my-orders');
+        Route::get('/orders/{order}/delivered-form', [ShipperDashboardController::class, 'deliveredForm'])->name('delivered-form');
+        Route::post('/orders/{order}/mark-delivered', [ShipperDashboardController::class, 'markDelivered'])->name('mark-delivered');
+        Route::get('/orders/{order}/return-form', [ShipperDashboardController::class, 'returnForm'])->name('return-form');
+        Route::post('/orders/{order}/store-return', [ShipperDashboardController::class, 'storeReturn'])->name('store-return');
+        Route::get('/history', [ShipperDashboardController::class, 'history'])->name('history');
+        Route::get('/history/{order}', [ShipperDashboardController::class, 'historyDetail'])->name('history-detail');
+        Route::get('/customers', [ShipperDashboardController::class, 'customers'])->name('customers');
+        Route::get('/requests', [DepartmentFinanceRequestController::class, 'shipperIndex'])->name('finance-requests.index');
+        Route::post('/requests', [DepartmentFinanceRequestController::class, 'shipperStore'])->name('finance-requests.store');
+        Route::get('/requests/{transaction}/print', [DepartmentFinanceRequestController::class, 'shipperPrint'])->name('finance-requests.print');
+        Route::get('/delivery-statistics', [ShipperDashboardController::class, 'deliveryStatistics'])->name('delivery-statistics');
+        Route::get('/warehouse-transfers', [ShipperDashboardController::class, 'warehouseTransfers'])->name('warehouse-transfers');
         Route::post('/warehouse-transfers/{transfer}/pickup', [ShipperDashboardController::class, 'pickupWarehouseTransfer'])->name('warehouse-transfers.pickup');
         Route::post('/warehouse-transfers/{transfer}/deliver', [ShipperDashboardController::class, 'deliverWarehouseTransfer'])->name('warehouse-transfers.deliver');
         Route::post('/warehouse-transfers/bulk-pickup', [ShipperDashboardController::class, 'bulkPickupWarehouseTransfers'])->name('warehouse-transfers.bulk-pickup')->middleware('role:manager_shipper,admin');
@@ -431,30 +435,30 @@ Route::middleware(['auth', 'assigned'])->group(function () {
 
         // Manager Shipper routes
         Route::middleware('role:manager_shipper,admin')->group(function () {
-            Route::get('/manage-assignments',                [ShipperDashboardController::class, 'manageAssignments'])->name('manage-assignments');
-            Route::post('/assign-order/{order}',             [ShipperDashboardController::class, 'assignSelectedOrder'])->name('assign-order.selected');
-            Route::post('/assign-order/{order}/{shipper}',   [ShipperDashboardController::class, 'assignOrder'])->name('assign-order');
+            Route::get('/manage-assignments', [ShipperDashboardController::class, 'manageAssignments'])->name('manage-assignments');
+            Route::post('/assign-order/{order}', [ShipperDashboardController::class, 'assignSelectedOrder'])->name('assign-order.selected');
+            Route::post('/assign-order/{order}/{shipper}', [ShipperDashboardController::class, 'assignOrder'])->name('assign-order');
             Route::post('/customers/{customer}/default-shipper', [ShipperDashboardController::class, 'updateCustomerDefaultShipper'])->name('customers.default-shipper.update');
             Route::post('/customers/{customer}/shipping-fee', [ShipperDashboardController::class, 'updateCustomerShippingFee'])->name('customers.shipping-fee.update');
-            Route::delete('/unassign-order/{order}',         [ShipperDashboardController::class, 'unassignOrder'])->name('unassign-order');
-            Route::post('/bulk-transfer-assignments',       [ShipperDashboardController::class, 'bulkTransferAssignments'])->name('bulk-transfer-assignments');
-            Route::post('/move-order-up/{order}',            [ShipperDashboardController::class, 'moveOrderUp'])->name('move-order-up');
-            Route::post('/move-order-down/{order}',          [ShipperDashboardController::class, 'moveOrderDown'])->name('move-order-down');
-            Route::post('/manage-assignments/review',        [ShipperDashboardController::class, 'reviewDeliverySchedule'])->name('manage-assignments.review');
-            Route::post('/create-delivery-schedule',         [ShipperDashboardController::class, 'createDeliverySchedule'])->name('create-delivery-schedule');
-            Route::post('/transfer-to-warehouse/{order}',    [ShipperDashboardController::class, 'transferToWarehouse'])->name('transfer-to-warehouse');
-            Route::get('/manage-fees',                       [ShipperDashboardController::class, 'manageFees'])->name('manage-fees');
-            Route::post('/update-fee/{order}',               [ShipperDashboardController::class, 'updateFee'])->name('update-fee');
-            Route::post('/bulk-update-fees',                 [ShipperDashboardController::class, 'bulkUpdateFees'])->name('bulk-update-fees');
-            Route::post('/shipping-fee-requests',            [ShipperDashboardController::class, 'createShippingFeeRequest'])->name('shipping-fee-requests.store');
-            Route::post('/update-return-fee/{orderReturn}',  [ShipperDashboardController::class, 'updateReturnFee'])->name('update-return-fee');
-            Route::get('/route-planning',                    [ShipperDashboardController::class, 'routePlanning'])->name('route-planning');
-            Route::get('/team-report',                       [ShipperDashboardController::class, 'teamReport'])->name('team-report');
-            Route::get('/shipping-fee-report',               [ShipperDashboardController::class, 'shippingFeeReport'])->name('shipping-fee-report');
+            Route::delete('/unassign-order/{order}', [ShipperDashboardController::class, 'unassignOrder'])->name('unassign-order');
+            Route::post('/bulk-transfer-assignments', [ShipperDashboardController::class, 'bulkTransferAssignments'])->name('bulk-transfer-assignments');
+            Route::post('/move-order-up/{order}', [ShipperDashboardController::class, 'moveOrderUp'])->name('move-order-up');
+            Route::post('/move-order-down/{order}', [ShipperDashboardController::class, 'moveOrderDown'])->name('move-order-down');
+            Route::post('/manage-assignments/review', [ShipperDashboardController::class, 'reviewDeliverySchedule'])->name('manage-assignments.review');
+            Route::post('/create-delivery-schedule', [ShipperDashboardController::class, 'createDeliverySchedule'])->name('create-delivery-schedule');
+            Route::post('/transfer-to-warehouse/{order}', [ShipperDashboardController::class, 'transferToWarehouse'])->name('transfer-to-warehouse');
+            Route::get('/manage-fees', [ShipperDashboardController::class, 'manageFees'])->name('manage-fees');
+            Route::post('/update-fee/{order}', [ShipperDashboardController::class, 'updateFee'])->name('update-fee');
+            Route::post('/bulk-update-fees', [ShipperDashboardController::class, 'bulkUpdateFees'])->name('bulk-update-fees');
+            Route::post('/shipping-fee-requests', [ShipperDashboardController::class, 'createShippingFeeRequest'])->name('shipping-fee-requests.store');
+            Route::post('/update-return-fee/{orderReturn}', [ShipperDashboardController::class, 'updateReturnFee'])->name('update-return-fee');
+            Route::get('/route-planning', [ShipperDashboardController::class, 'routePlanning'])->name('route-planning');
+            Route::get('/team-report', [ShipperDashboardController::class, 'teamReport'])->name('team-report');
+            Route::get('/shipping-fee-report', [ShipperDashboardController::class, 'shippingFeeReport'])->name('shipping-fee-report');
         });
 
         // Shipper delivery schedule routes
-        Route::get('/delivery-schedules',                 [ShipperDashboardController::class, 'deliverySchedules'])->name('delivery-schedules');
+        Route::get('/delivery-schedules', [ShipperDashboardController::class, 'deliverySchedules'])->name('delivery-schedules');
         Route::post('/delivery-schedules/{order}/move-up', [ShipperDashboardController::class, 'moveOwnScheduleUp'])->name('delivery-schedules.move-up');
         Route::post('/delivery-schedules/{order}/move-down', [ShipperDashboardController::class, 'moveOwnScheduleDown'])->name('delivery-schedules.move-down');
         Route::post('/delivery-schedule/{schedule}/confirm', [ShipperDashboardController::class, 'confirmDeliverySchedule'])->name('confirm-delivery-schedule');
@@ -530,8 +534,8 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/financial-reports', [CeoDashboardController::class, 'financialReports'])->name('financial-reports');
         Route::get('/daily-sales', [CeoDashboardController::class, 'dailySales'])->name('daily-sales');
 
-            // Báo cáo doanh thu khách hàng riêng CEO
-            Route::get('/customer/{customer}/revenue', [CeoDashboardController::class, 'customerRevenueReport'])->name('customer-revenue-report');
+        // Báo cáo doanh thu khách hàng riêng CEO
+        Route::get('/customer/{customer}/revenue', [CeoDashboardController::class, 'customerRevenueReport'])->name('customer-revenue-report');
 
         // Quản lý giá (CEO layout)
         Route::get('/price-management', [ProductPriceManagementController::class, 'index'])->name('price-management.index');
@@ -606,8 +610,6 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::get('customers/popup/search', [CustomerPopupController::class, 'search'])->name('customers.popup.search')->middleware('auth');
     Route::post('customers/popup/store', [CustomerPopupController::class, 'store'])->name('customers.popup.store')->middleware('auth');
 
-
-
     Route::get('variants/{variant}/edit-price', [ProductVariantPriceController::class, 'edit'])->name('variants.edit-price')->middleware('permission');
     Route::put('variants/{variant}/update-price', [ProductVariantPriceController::class, 'update'])->name('variants.update-price')->middleware('permission');
 
@@ -618,8 +620,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
 
     // Popup gallery chọn ảnh cho biến thể
     Route::get('variants/image-library', [MediaController::class, 'variantImageLibrary'])->name('variants.image-library');
-    
-    
+
     Route::post('/ai/generate-description', [AIController::class, 'generateDescription'])->name('ai.generateDescription');
 
     Route::get('admin/notifications', [AdminNotificationController::class, 'index'])->name('admin.notifications.index');
@@ -650,7 +651,6 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::post('admin/text-order-import/{draft}/copy-confirm', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'copyConfirm'])->name('admin.text-order-import.copy-confirm')->middleware('role:admin');
     Route::post('admin/text-order-import/{draft}/confirm', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'confirm'])->name('admin.text-order-import.confirm')->middleware('role:admin');
     Route::delete('admin/text-order-import/{draft}', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'destroy'])->name('admin.text-order-import.destroy')->middleware('role:admin');
-
 
     // Quản lý đơn hàng
     Route::get('orders/list-ajax', [OrderController::class, 'listAjax'])->name('orders.list-ajax');
@@ -687,21 +687,21 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::put('approval-workflows/{approvalWorkflow}', [ApprovalWorkflowController::class, 'update'])->name('approval-workflows.update');
 
     // Giao việc (Task Assignment)
-    Route::post('task-assignments/{taskAssignment}/approve',          [\App\Http\Controllers\TaskAssignmentController::class, 'approve'])->name('task-assignments.approve');
-    Route::post('task-assignments/{taskAssignment}/reject',           [\App\Http\Controllers\TaskAssignmentController::class, 'reject'])->name('task-assignments.reject');
-    Route::post('task-assignments/{taskAssignment}/cancel',           [\App\Http\Controllers\TaskAssignmentController::class, 'cancel'])->name('task-assignments.cancel');
-    Route::post('task-assignments/{taskAssignment}/assignee-update',  [\App\Http\Controllers\TaskAssignmentController::class, 'assigneeUpdate'])->name('task-assignments.assignee-update');
+    Route::post('task-assignments/{taskAssignment}/approve', [\App\Http\Controllers\TaskAssignmentController::class, 'approve'])->name('task-assignments.approve');
+    Route::post('task-assignments/{taskAssignment}/reject', [\App\Http\Controllers\TaskAssignmentController::class, 'reject'])->name('task-assignments.reject');
+    Route::post('task-assignments/{taskAssignment}/cancel', [\App\Http\Controllers\TaskAssignmentController::class, 'cancel'])->name('task-assignments.cancel');
+    Route::post('task-assignments/{taskAssignment}/assignee-update', [\App\Http\Controllers\TaskAssignmentController::class, 'assigneeUpdate'])->name('task-assignments.assignee-update');
     Route::post('task-assignments/{taskAssignment}/complete-content', [\App\Http\Controllers\TaskAssignmentController::class, 'completeWithContent'])->name('task-assignments.complete-with-content');
     Route::get('task-assignments/{taskAssignment}/complete', [\App\Http\Controllers\TaskAssignmentController::class, 'completeForm'])->name('task-assignments.complete-form');
     Route::post('task-assignments/{taskAssignment}/verify-completion', [\App\Http\Controllers\TaskAssignmentController::class, 'verifyCompletion'])->name('task-assignments.verify-completion');
     Route::post('task-assignments/{taskAssignment}/reject-completion', [\App\Http\Controllers\TaskAssignmentController::class, 'rejectCompletion'])->name('task-assignments.reject-completion');
-    Route::get('task-assignments/assigned/to-me',                     [\App\Http\Controllers\TaskAssignmentController::class, 'assignedToMe'])->name('task-assignments.assigned-to-me');
-    Route::get('task-assignments/assigned/by-me',                     [\App\Http\Controllers\TaskAssignmentController::class, 'assignedByMe'])->name('task-assignments.assigned-by-me');
-    Route::get('task-assignments/in-progress',                        [\App\Http\Controllers\TaskAssignmentController::class, 'inProgress'])->name('task-assignments.in-progress');
-    Route::get('task-assignments/awaiting-verification',              [\App\Http\Controllers\TaskAssignmentController::class, 'awaitingVerification'])->name('task-assignments.awaiting-verification');
-    Route::get('task-assignments/verify-list',                        [\App\Http\Controllers\TaskAssignmentController::class, 'verifyList'])->name('task-assignments.verify');
-    Route::get('task-assignments/tracking',                           [\App\Http\Controllers\TaskAssignmentController::class, 'verifyList'])->name('task-assignments.tracking');
-    Route::get('task-assignments/history',                            [\App\Http\Controllers\TaskAssignmentController::class, 'history'])->name('task-assignments.history');
+    Route::get('task-assignments/assigned/to-me', [\App\Http\Controllers\TaskAssignmentController::class, 'assignedToMe'])->name('task-assignments.assigned-to-me');
+    Route::get('task-assignments/assigned/by-me', [\App\Http\Controllers\TaskAssignmentController::class, 'assignedByMe'])->name('task-assignments.assigned-by-me');
+    Route::get('task-assignments/in-progress', [\App\Http\Controllers\TaskAssignmentController::class, 'inProgress'])->name('task-assignments.in-progress');
+    Route::get('task-assignments/awaiting-verification', [\App\Http\Controllers\TaskAssignmentController::class, 'awaitingVerification'])->name('task-assignments.awaiting-verification');
+    Route::get('task-assignments/verify-list', [\App\Http\Controllers\TaskAssignmentController::class, 'verifyList'])->name('task-assignments.verify');
+    Route::get('task-assignments/tracking', [\App\Http\Controllers\TaskAssignmentController::class, 'verifyList'])->name('task-assignments.tracking');
+    Route::get('task-assignments/history', [\App\Http\Controllers\TaskAssignmentController::class, 'history'])->name('task-assignments.history');
     Route::resource('task-assignments', \App\Http\Controllers\TaskAssignmentController::class);
 
     // My Tasks - cho Sale/Leader/Manager users
@@ -725,15 +725,15 @@ Route::middleware(['auth', 'assigned'])->group(function () {
 
     // Phân quyền giao việc (Admin only)
     Route::post('task-delegate-configs/{taskDelegateConfig}/toggle', [\App\Http\Controllers\TaskDelegateConfigController::class, 'toggle'])->name('task-delegate-configs.toggle');
-    Route::post('task-delegate-configs/destroy-assigner',            [\App\Http\Controllers\TaskDelegateConfigController::class, 'destroyAssigner'])->name('task-delegate-configs.destroy-assigner');
-    Route::resource('task-delegate-configs', \App\Http\Controllers\TaskDelegateConfigController::class)->only(['index','create','store','destroy']);
+    Route::post('task-delegate-configs/destroy-assigner', [\App\Http\Controllers\TaskDelegateConfigController::class, 'destroyAssigner'])->name('task-delegate-configs.destroy-assigner');
+    Route::resource('task-delegate-configs', \App\Http\Controllers\TaskDelegateConfigController::class)->only(['index', 'create', 'store', 'destroy']);
 
     // Quản lý danh mục
     Route::post('categories/bulk-delete', [CategoryController::class, 'bulkDelete'])->name('categories.bulk-delete')->middleware('permission');
     Route::resource('categories', CategoryController::class)->middleware('permission');
 
     // Quản lý vai trò
-    Route::resource('roles', RoleController::class)->middleware('permission'); 
+    Route::resource('roles', RoleController::class)->middleware('permission');
 
     Route::get('layouts', [LayoutController::class, 'index'])->name('layouts.index')->middleware('role:admin');
     Route::put('layouts', [LayoutController::class, 'update'])->name('layouts.update')->middleware('role:admin');
@@ -780,7 +780,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::get('companies/export', [\App\Http\Controllers\CompanyController::class, 'export'])->name('companies.export')->middleware('permission');
     Route::get('companies/import', [\App\Http\Controllers\CompanyController::class, 'importForm'])->name('companies.import.form')->middleware('permission');
     Route::post('companies/import', [\App\Http\Controllers\CompanyController::class, 'import'])->name('companies.import')->middleware('permission');
-    
+
     Route::resource('customertype', CustomerTypeController::class)->middleware('permission');
     Route::resource('warehouses', WarehouseController::class)->middleware('permission');
     Route::resource('inventories', InventoryController::class)->middleware('permission');
@@ -794,18 +794,18 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::post('order-returns/{orderReturn}/warehouse-confirm', [OrderReturnController::class, 'warehouseConfirm'])->name('order-returns.warehouse-confirm')->middleware('permission');
     Route::post('order-returns/sync-warehouse-receipts', [OrderReturnController::class, 'syncWarehouseReceipts'])->name('order-returns.sync-warehouse-receipts')->middleware('permission');
     Route::resource('order-returns', OrderReturnController::class)->middleware('permission');
-    
+
     // Route list toàn bộ địa chỉ (không cần customerId)
     Route::get('customers/list/addresses', [CustomerAddressController::class, 'list'])
-    ->name('customers.addresses.list')->middleware('permission');
-    //->middleware('permission:addresses.view'); // nếu bạn dùng middleware permission
+        ->name('customers.addresses.list')->middleware('permission');
+    // ->middleware('permission:addresses.view'); // nếu bạn dùng middleware permission
 
-    //Route::resource('customeraddress', CustomerAddressController::class)->middleware('permission');
+    // Route::resource('customeraddress', CustomerAddressController::class)->middleware('permission');
     Route::resource('customers.addresses', CustomerAddressController::class)->middleware('permission');
-    
-    //Route::resource('media', MediaController::class);
+
+    // Route::resource('media', MediaController::class);
     Route::resource('media', MediaController::class)->parameters([
-        'media' => 'media'
+        'media' => 'media',
     ]);
 
     // Route::post('/media/upload', [MediaController::class, 'upload'])->name('media.upload');
@@ -816,14 +816,11 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::get('/media/gallery/popup', [MediaController::class, 'popupGallery'])->name('media.gallery.popup');
     Route::post('/media/gallery/store', [MediaController::class, 'storeGallery'])->name('media.gallery.store');
 
-    
     // Route::get('{type}/{id}/media', [MediaController::class, 'index'])->name('media.index');
     // Route::post('{type}/{id}/media', [MediaController::class, 'store'])->name('media.store');
     // Route::get('media/{media}', [MediaController::class, 'show'])->name('media.show');
     // Route::delete('media/{media}', [MediaController::class, 'destroy'])->name('media.destroy');
 
-
-    
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
     // Compatibility: allow direct GET /logout from address bar/legacy links.
     Route::get('/logout', [AuthController::class, 'logout']);
@@ -860,50 +857,49 @@ Route::middleware(['auth', 'assigned'])->group(function () {
 
     // My Customer Page (sale / leader / manager only)
     Route::middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin')->group(function () {
-    Route::get('/my-customer', [PageController::class, 'myCustomer'])->name('pages.my_customer');
-    Route::get('/my-customer/ajax', [PageController::class, 'myCustomerAjax'])->name('pages.my_customer.ajax');
-    Route::get('/my-customer/create', [PageController::class, 'myCustomerCreate'])->name('my_customer.create');
-    Route::get('/my-customer/check-duplicate', [PageController::class, 'myCustomerCheckDuplicate'])->name('my_customer.check_duplicate');
-    Route::post('/my-customer', [PageController::class, 'myCustomerStore'])->name('my_customer.store');
-    Route::get('/my-customer/{customer}/edit', [PageController::class, 'myCustomerEdit'])->name('my_customer.edit');
-    Route::put('/my-customer/{customer}', [PageController::class, 'myCustomerUpdate'])->name('my_customer.update');
-    Route::delete('/my-customer/{customer}', [PageController::class, 'myCustomerDestroy'])->name('my_customer.destroy');
-    Route::post('/my-customer/{customerId}/restore', [PageController::class, 'myCustomerRestore'])->name('my_customer.restore');
-    Route::delete('/my-customer/{customerId}/force-delete', [PageController::class, 'myCustomerForceDelete'])->name('my_customer.force_delete');
-    Route::post('/my-customer/bulk-delete', [PageController::class, 'myCustomerBulkDelete'])->name('my_customer.bulk_delete');
-    Route::post('/my-customer/{customer}/takeover', [PageController::class, 'myCustomerTakeover'])->name('my_customer.takeover');
-    Route::post('/my-customer/{customer}/sort-settings', [PageController::class, 'myCustomerSortSettings'])->name('my_customer.sort_settings');
-    Route::get('/my-customer/import', [PageController::class, 'myCustomerImportForm'])->name('my_customer.import_form');
-    Route::post('/my-customer/import', [PageController::class, 'myCustomerImport'])->name('my_customer.import');
-    Route::get('/my-customer/schedules', [OrderScheduleController::class, 'index'])->name('my_customer.schedules.index');
-    Route::get('/my-customer/schedules/create', [OrderScheduleController::class, 'create'])->name('my_customer.schedules.create');
-    Route::post('/my-customer/schedules', [OrderScheduleController::class, 'store'])->name('my_customer.schedules.store');
-    Route::get('/my-customer/{customer}/schedules/create', [OrderScheduleController::class, 'createForCustomer'])->name('my_customer.schedules.create_for_customer');
-    Route::get('/my-customer/schedules/{schedule}', [OrderScheduleController::class, 'show'])->name('my_customer.schedules.show');
-    Route::get('/my-customer/schedules/{schedule}/edit', [OrderScheduleController::class, 'edit'])->name('my_customer.schedules.edit');
-    Route::put('/my-customer/schedules/{schedule}', [OrderScheduleController::class, 'update'])->name('my_customer.schedules.update');
-    Route::delete('/my-customer/schedules/{schedule}', [OrderScheduleController::class, 'destroy'])->name('my_customer.schedules.destroy');
-    Route::post('/my-customer/schedules/{schedule}/generate', [OrderScheduleController::class, 'generateFromReview'])->name('my_customer.schedules.generate');
-    Route::post('/my-customer/schedules/{schedule}/toggle-active', [OrderScheduleController::class, 'toggleActive'])->name('my_customer.schedules.toggle_active');
-    Route::post('/my-customer/schedules/evaluate-today', [OrderScheduleController::class, 'evaluateToday'])->name('my_customer.schedules.evaluate_today');
-    Route::get('/my-customer/daily-schedules/{dailySchedule}/edit', [OrderScheduleController::class, 'editDaily'])->name('my_customer.daily_schedules.edit');
-    Route::put('/my-customer/daily-schedules/{dailySchedule}', [OrderScheduleController::class, 'updateDaily'])->name('my_customer.daily_schedules.update');
-    Route::delete('/my-customer/daily-schedules/{dailySchedule}', [OrderScheduleController::class, 'destroyDaily'])->name('my_customer.daily_schedules.destroy');
-    Route::get('/my-customer/{customer}', [PageController::class, 'myCustomerShow'])->name('my_customer.show');
-    Route::post('/my-customer/{customer}/payments', [PageController::class, 'myCustomerStorePayment'])->name('my_customer.payments.store');
-    Route::get('/my-customer/{customer}/order', [PageController::class, 'myCustomerOrderCreate'])->name('my_customer.order.create');
-    Route::post('/my-customer/{customer}/order', [PageController::class, 'myCustomerOrderStore'])->name('my_customer.order.store');
-    Route::get('/my-customer/{customer}/orders-quick-view', [PageController::class, 'myCustomerOrdersQuickView'])->name('my_customer.orders_quick_view');
+        Route::get('/my-customer', [PageController::class, 'myCustomer'])->name('pages.my_customer');
+        Route::get('/my-customer/ajax', [PageController::class, 'myCustomerAjax'])->name('pages.my_customer.ajax');
+        Route::get('/my-customer/create', [PageController::class, 'myCustomerCreate'])->name('my_customer.create');
+        Route::get('/my-customer/check-duplicate', [PageController::class, 'myCustomerCheckDuplicate'])->name('my_customer.check_duplicate');
+        Route::post('/my-customer', [PageController::class, 'myCustomerStore'])->name('my_customer.store');
+        Route::get('/my-customer/{customer}/edit', [PageController::class, 'myCustomerEdit'])->name('my_customer.edit');
+        Route::put('/my-customer/{customer}', [PageController::class, 'myCustomerUpdate'])->name('my_customer.update');
+        Route::delete('/my-customer/{customer}', [PageController::class, 'myCustomerDestroy'])->name('my_customer.destroy');
+        Route::post('/my-customer/{customerId}/restore', [PageController::class, 'myCustomerRestore'])->name('my_customer.restore');
+        Route::delete('/my-customer/{customerId}/force-delete', [PageController::class, 'myCustomerForceDelete'])->name('my_customer.force_delete');
+        Route::post('/my-customer/bulk-delete', [PageController::class, 'myCustomerBulkDelete'])->name('my_customer.bulk_delete');
+        Route::post('/my-customer/{customer}/takeover', [PageController::class, 'myCustomerTakeover'])->name('my_customer.takeover');
+        Route::post('/my-customer/{customer}/sort-settings', [PageController::class, 'myCustomerSortSettings'])->name('my_customer.sort_settings');
+        Route::get('/my-customer/import', [PageController::class, 'myCustomerImportForm'])->name('my_customer.import_form');
+        Route::post('/my-customer/import', [PageController::class, 'myCustomerImport'])->name('my_customer.import');
+        Route::get('/my-customer/schedules', [OrderScheduleController::class, 'index'])->name('my_customer.schedules.index');
+        Route::get('/my-customer/schedules/create', [OrderScheduleController::class, 'create'])->name('my_customer.schedules.create');
+        Route::post('/my-customer/schedules', [OrderScheduleController::class, 'store'])->name('my_customer.schedules.store');
+        Route::get('/my-customer/{customer}/schedules/create', [OrderScheduleController::class, 'createForCustomer'])->name('my_customer.schedules.create_for_customer');
+        Route::get('/my-customer/schedules/{schedule}', [OrderScheduleController::class, 'show'])->name('my_customer.schedules.show');
+        Route::get('/my-customer/schedules/{schedule}/edit', [OrderScheduleController::class, 'edit'])->name('my_customer.schedules.edit');
+        Route::put('/my-customer/schedules/{schedule}', [OrderScheduleController::class, 'update'])->name('my_customer.schedules.update');
+        Route::delete('/my-customer/schedules/{schedule}', [OrderScheduleController::class, 'destroy'])->name('my_customer.schedules.destroy');
+        Route::post('/my-customer/schedules/{schedule}/generate', [OrderScheduleController::class, 'generateFromReview'])->name('my_customer.schedules.generate');
+        Route::post('/my-customer/schedules/{schedule}/toggle-active', [OrderScheduleController::class, 'toggleActive'])->name('my_customer.schedules.toggle_active');
+        Route::post('/my-customer/schedules/evaluate-today', [OrderScheduleController::class, 'evaluateToday'])->name('my_customer.schedules.evaluate_today');
+        Route::get('/my-customer/daily-schedules/{dailySchedule}/edit', [OrderScheduleController::class, 'editDaily'])->name('my_customer.daily_schedules.edit');
+        Route::put('/my-customer/daily-schedules/{dailySchedule}', [OrderScheduleController::class, 'updateDaily'])->name('my_customer.daily_schedules.update');
+        Route::delete('/my-customer/daily-schedules/{dailySchedule}', [OrderScheduleController::class, 'destroyDaily'])->name('my_customer.daily_schedules.destroy');
+        Route::get('/my-customer/{customer}', [PageController::class, 'myCustomerShow'])->name('my_customer.show');
+        Route::post('/my-customer/{customer}/payments', [PageController::class, 'myCustomerStorePayment'])->name('my_customer.payments.store');
+        Route::get('/my-customer/{customer}/order', [PageController::class, 'myCustomerOrderCreate'])->name('my_customer.order.create');
+        Route::post('/my-customer/{customer}/order', [PageController::class, 'myCustomerOrderStore'])->name('my_customer.order.store');
+        Route::get('/my-customer/{customer}/orders-quick-view', [PageController::class, 'myCustomerOrdersQuickView'])->name('my_customer.orders_quick_view');
     }); // end my-customer role group
-
 
     // My Truck Stations (sale / leader / manager only)
     Route::middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin')->group(function () {
-    Route::get('/my-truck-stations', [PageController::class, 'myTruckStations'])->name('pages.my_truck_stations');
-    Route::get('/my-truck-stations/list', [PageController::class, 'myTruckStationsAjax'])->name('pages.my_truck_stations.ajax');
-    Route::get('/my-truck-stations/regions', [PageController::class, 'myTruckStationsRegions'])->name('pages.my_truck_stations.regions');
-    Route::post('/my-truck-stations', [PageController::class, 'myTruckStationsStore'])->name('pages.my_truck_stations.store');
-    Route::put('/my-truck-stations/{truckStation}', [PageController::class, 'myTruckStationsUpdate'])->name('pages.my_truck_stations.update');
+        Route::get('/my-truck-stations', [PageController::class, 'myTruckStations'])->name('pages.my_truck_stations');
+        Route::get('/my-truck-stations/list', [PageController::class, 'myTruckStationsAjax'])->name('pages.my_truck_stations.ajax');
+        Route::get('/my-truck-stations/regions', [PageController::class, 'myTruckStationsRegions'])->name('pages.my_truck_stations.regions');
+        Route::post('/my-truck-stations', [PageController::class, 'myTruckStationsStore'])->name('pages.my_truck_stations.store');
+        Route::put('/my-truck-stations/{truckStation}', [PageController::class, 'myTruckStationsUpdate'])->name('pages.my_truck_stations.update');
     }); // end my-truck-stations role group
 
     // API: Truck Routes for customer create
@@ -935,7 +931,6 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::get('/team-orders/{order}/customer-orders', [PageController::class, 'teamOrderCustomerOrders'])->name('pages.team_order_customer_orders');
 });
 
-
 //  Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth')->name('logout');
 //  Route::resource('products', ProductController::class)->middleware('auth');
 /*
@@ -945,8 +940,6 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/staff/dashboard', [StaffController::class, 'index'])->name('staff.dashboard');
 });
 */
- 
-
 
 /*
 Route::resource('products', ProductController::class);
@@ -954,7 +947,7 @@ Route::resource('categories', CategoryController::class);
 */
 
 // Quản lý giao dịch
-Route::resource('transactions', TransactionController::class)->only(['index','create','store'])->middleware('permission');
+Route::resource('transactions', TransactionController::class)->only(['index', 'create', 'store'])->middleware('permission');
 Route::post('expense-types', [TransactionController::class, 'storeExpenseType'])->name('expense-types.store')->middleware('permission');
 
 // Static Pages
@@ -964,7 +957,7 @@ Route::get('/lien-he', [PageController::class, 'contact'])->name('pages.contact'
 Route::post('/lien-he', [PageController::class, 'storeContact'])->name('pages.contact.store');
 Route::get('/san-pham/{category:slug?}', [PageController::class, 'productsByCategory'])->name('pages.products_by_category');
 Route::get('/danh-sach-san-pham/{category:slug?}', [PageController::class, 'productList'])->name('pages.product_list');
-//Route::get('/product/{product:slug}', [PageController::class, 'productDetail'])->name('pages.product_detail');
+// Route::get('/product/{product:slug}', [PageController::class, 'productDetail'])->name('pages.product_detail');
 Route::get('/variant/{variant:slug}', [PageController::class, 'variantDetail'])->name('pages.variant_detail');
 
 Route::get('/my-profile', [PageController::class, 'myDashboard'])->name('pages.my_profile')->middleware('auth');
@@ -1012,7 +1005,7 @@ Route::middleware(['auth'])->group(function () {
 
 Route::get('/page/{slug}', [PageController::class, 'show'])->name('pages.show');
 
-//Route::get('/{slug}', [PageController::class, 'show'])->name('page.show');
+// Route::get('/{slug}', [PageController::class, 'show'])->name('page.show');
 
 // Posts
 // Cart Routes
@@ -1034,6 +1027,7 @@ Route::get('/tin-tuc/{post:slug}', [PostController::class, 'show'])->name('posts
 Route::get('/test-variant', function () {
     try {
         $variant = \App\Models\ProductVariant::factory()->create();
+
         return response()->json($variant);
     } catch (\Exception $e) {
         return response()->json(['error' => $e->getMessage()], 500);
