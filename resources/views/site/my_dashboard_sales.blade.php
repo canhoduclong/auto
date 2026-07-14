@@ -610,13 +610,13 @@
                                                     <td class="price-board-variant-name">
                                                         {{ $priceVariant['size_label'] ? $priceVariant['size_label'] . ' kg' : $priceVariant['name'] }}
                                                     </td>
-                                                    <td class="price-update-price">{{ number_format((float) ($priceVariant['price'] ?? 0), 0, ',', '.') }}đ</td>
+                                                    <td class="price-update-price">{{ number_format((float) ($priceVariant['price'] ?? 0), 0, ',', '.') }}đ/{{ $priceVariant['price_unit'] ?? 'kg' }}</td>
                                                 </tr>
                                             @endforeach
                                         @else
                                             <tr>
                                                 <td class="price-board-product-name">{{ $priceProduct['product_name'] }}</td>
-                                                <td class="price-update-price">{{ number_format((float) ($priceProduct['representative_price'] ?? 0), 0, ',', '.') }}đ</td>
+                                                <td class="price-update-price">{{ number_format((float) ($priceProduct['representative_price'] ?? 0), 0, ',', '.') }}đ/{{ $priceProduct['representative_price_unit'] ?? 'kg' }}</td>
                                             </tr>
                                         @endif
                                     @endforeach

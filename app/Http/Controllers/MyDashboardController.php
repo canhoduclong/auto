@@ -554,6 +554,9 @@ class MyDashboardController extends Controller
                         }
 
                         $sizeLabel = $this->formatVariantSizeLabel($variant->size);
+                        $priceUnit = $variant->effective_priced_by_kg
+                            ? 'kg'
+                            : strtolower((string) ($product->unit_label ?: 'cái'));
 
                         return [
                             'id' => $variant->id,
@@ -562,6 +565,8 @@ class MyDashboardController extends Controller
                             'sku' => $variant->sku,
                             'price' => $price,
                             'price_key' => number_format($price, 2, '.', ''),
+                            'price_unit' => $priceUnit,
+                            'price_group_key' => number_format($price, 2, '.', '') . '|' . $priceUnit,
                             'start_date' => $publishedRule?->start_date ?? $rule?->start_date,
                         ];
                     })
@@ -572,7 +577,7 @@ class MyDashboardController extends Controller
                     return null;
                 }
 
-                $priceGroups = $variants->groupBy('price_key');
+                $priceGroups = $variants->groupBy('price_group_key');
                 $representativeKey = $priceGroups
                     ->map(fn (Collection $items) => $items->count())
                     ->sortDesc()
@@ -586,6 +591,7 @@ class MyDashboardController extends Controller
                     'product_name' => $product->name ?: 'Sản phẩm',
                     'representative_price' => (float) ($representativeVariant['price'] ?? 0),
                     'representative_price_key' => $representativeKey,
+                    'representative_price_unit' => $representativeVariant['price_unit'] ?? 'kg',
                     'has_mixed_prices' => $hasMixedPrices,
                     'variants' => $hasMixedPrices ? $variants : collect(),
                     'applied_dates' => $variants->pluck('start_date')->filter()->unique()->values(),
