@@ -534,11 +534,12 @@ class MyDashboardController extends Controller
             ->with(['variants' => function ($query) {
                 $query->with('latestPriceRule')
                     ->when(Schema::hasColumn('product_variants', 'status'), fn ($q) => $q->where('status', true))
-                    ->orderByRaw('COALESCE(sort_order, 0) ASC')
+                    ->when(Schema::hasColumn('product_variants', 'sort_order'), fn ($q) => $q->orderBy('sort_order'))
+                    ->orderByDesc('created_at')
                     ->orderBy('id');
             }])
             ->when(Schema::hasColumn('products', 'status'), fn ($query) => $query->where('status', true))
-            ->orderByRaw('COALESCE(sort_order, 0) ASC')
+            ->orderByDesc('created_at')
             ->orderBy('id')
             ->get()
             ->map(function (Product $product) {

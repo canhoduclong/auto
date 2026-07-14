@@ -198,80 +198,45 @@
         border-radius: 12px;
         background: #fffdf4;
     }
-    .price-update-item {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
-        gap: 10px;
-        align-items: center;
-        border-bottom: 1px solid #f7e2a7;
-        padding: 7px 0;
-    }
-    .price-update-item:last-child {
-        border-bottom: 0;
-    }
-    .price-update-name {
-        min-width: 0;
-        color: #111827;
-        font-weight: 700;
-    }
-    .price-update-meta {
-        color: #64748b;
-        font-size: .78rem;
-        margin-top: 1px;
-    }
     .price-update-price {
         color: #b45309;
         font-weight: 700;
         white-space: nowrap;
-        font-size: .95rem;
+        text-align: right;
     }
-    .price-product-row {
-        background: #fff8df;
-        border: 1px solid #f8e5b1;
-        border-radius: 8px;
-        padding: 9px 11px;
-        margin-top: 8px;
+    .price-board-table {
+        width: 100%;
+        margin: 0;
+        font-size: .86rem;
+        border-collapse: collapse;
     }
-    .price-product-main,
-    .price-variant-row {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
-        gap: 10px;
-        align-items: center;
+    .price-board-table td {
+        padding: 7px 4px;
+        border-bottom: 1px solid #f3e4bc;
+        vertical-align: middle;
     }
-    .price-product-main {
-        font-weight: 700;
-        color: #111827;
-    }
-    .price-product-title {
-        min-width: 0;
-    }
-    .price-variant-list {
-        margin-top: 8px;
-        border-top: 1px solid #f3dfaa;
-    }
-    .price-variant-row {
-        min-height: 34px;
-        padding: 7px 0 7px 22px;
-        border-bottom: 1px solid #edf2f7;
-        background: #f8fafc;
-    }
-    .price-variant-row:last-child {
+    .price-board-table tr:last-child td {
         border-bottom: 0;
     }
-    .price-variant-name {
+    .price-board-product-name {
         color: #111827;
-        min-width: 0;
-    }
-    .price-variant-meta {
-        color: #64748b;
-        font-size: .75rem;
-    }
-    .price-common-label {
-        color: #92400e;
-        font-size: .75rem;
         font-weight: 600;
-        margin-right: 4px;
+    }
+    .price-board-group td {
+        padding-top: 9px;
+        padding-bottom: 4px;
+        border-bottom: 0;
+        color: #111827;
+        font-weight: 700;
+    }
+    .price-board-variant-name {
+        padding-left: 18px !important;
+        color: #374151;
+    }
+    .price-board-variant-name::before {
+        content: "–";
+        margin-right: 6px;
+        color: #d97706;
     }
     .price-update-note {
         border-top: 1px solid #fde68a;
@@ -632,37 +597,32 @@
                             <h6 class="mb-0 text-uppercase" style="color:#b45309;">Bảng báo giá sản phẩm</h6>
                             <span class="badge text-bg-warning">Mới</span>
                         </div>
-                        @foreach($productPriceBoard as $priceProduct)
-                            <div class="price-product-row small">
-                                <div class="price-product-main {{ !empty($priceProduct['has_mixed_prices']) ? 'is-tree' : '' }}">
-                                    <div class="price-product-title">
+                        <div class="table-responsive">
+                            <table class="price-board-table" aria-label="Bảng báo giá sản phẩm">
+                                <tbody>
+                                    @foreach($productPriceBoard as $priceProduct)
                                         @if(!empty($priceProduct['has_mixed_prices']))
-                                            <span class="text-warning-emphasis me-1">-</span>
+                                            <tr class="price-board-group">
+                                                <td colspan="2">{{ $priceProduct['product_name'] }}</td>
+                                            </tr>
+                                            @foreach($priceProduct['variants'] as $priceVariant)
+                                                <tr>
+                                                    <td class="price-board-variant-name">
+                                                        {{ $priceVariant['size_label'] ? $priceVariant['size_label'] . ' kg' : $priceVariant['name'] }}
+                                                    </td>
+                                                    <td class="price-update-price">{{ number_format((float) ($priceVariant['price'] ?? 0), 0, ',', '.') }}đ</td>
+                                                </tr>
+                                            @endforeach
+                                        @else
+                                            <tr>
+                                                <td class="price-board-product-name">{{ $priceProduct['product_name'] }}</td>
+                                                <td class="price-update-price">{{ number_format((float) ($priceProduct['representative_price'] ?? 0), 0, ',', '.') }}đ</td>
+                                            </tr>
                                         @endif
-                                        {{ $priceProduct['product_name'] }}
-                                        @if(!empty($priceProduct['has_mixed_prices']))
-                                            <span class="price-common-label">giá chung</span>
-                                        @endif
-                                    </div>
-                                    <div class="price-update-price">{{ number_format((float) ($priceProduct['representative_price'] ?? 0), 0, ',', '.') }}đ</div>
-                                </div>
-                                @if(!empty($priceProduct['has_mixed_prices']))
-                                    <div class="price-variant-list">
-                                        @foreach($priceProduct['variants'] as $priceVariant)
-                                            <div class="price-variant-row">
-                                                <div class="price-variant-name">
-                                                    {{ $priceVariant['size_label'] ? $priceVariant['size_label'] . ' kg' : $priceVariant['name'] }}
-                                                    @if(!empty($priceVariant['sku']))
-                                                        <div class="price-variant-meta">SKU: {{ $priceVariant['sku'] }}</div>
-                                                    @endif
-                                                </div>
-                                                <div class="price-update-price">{{ number_format((float) ($priceVariant['price'] ?? 0), 0, ',', '.') }}đ</div>
-                                            </div>
-                                        @endforeach
-                                    </div>
-                                @endif
-                            </div>
-                        @endforeach
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
                         <div class="price-update-note small">
                             @if($latestPriceBoardDate)
                                 <div class="fw-semibold">Áp dụng từ {{ $latestPriceBoardDate->format('d/m/Y') }}</div>
