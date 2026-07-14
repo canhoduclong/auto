@@ -45,6 +45,7 @@
             <div class="form-text text-muted">DVT được lấy từ sản phẩm. Chỉnh sửa tại trang sản phẩm.</div>
         </div>
         <div class="mb-3 form-check">
+            <input type="hidden" name="is_priced_by_kg" value="0">
             <input type="checkbox" class="form-check-input" id="is_priced_by_kg" name="is_priced_by_kg" value="1" {{ old('is_priced_by_kg', $variant->is_priced_by_kg ?? true) ? 'checked' : '' }}>
             <label class="form-check-label" for="is_priced_by_kg">Tính tiền theo kg</label>
         </div>
