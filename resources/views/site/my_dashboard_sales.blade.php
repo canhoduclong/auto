@@ -621,11 +621,11 @@
 
                 @if(($productPriceBoard ?? collect())->isNotEmpty())
                     @php
-                        $priceBoardDates = collect($productPriceAppliedDates ?? [])
+                        $latestPriceBoardDate = collect($productPriceAppliedDates ?? [])
                             ->filter()
-                            ->map(fn ($date) => \Carbon\Carbon::parse($date)->format('d/m/Y'))
-                            ->unique()
-                            ->values();
+                            ->map(fn ($date) => \Carbon\Carbon::parse($date))
+                            ->sortByDesc(fn ($date) => $date->timestamp)
+                            ->first();
                     @endphp
                     <div class="price-update-card p-3 mb-3">
                         <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
@@ -664,8 +664,8 @@
                             </div>
                         @endforeach
                         <div class="price-update-note small">
-                            @if($priceBoardDates->isNotEmpty())
-                                <div class="fw-semibold">Áp dụng từ {{ $priceBoardDates->join(', ') }}</div>
+                            @if($latestPriceBoardDate)
+                                <div class="fw-semibold">Áp dụng từ {{ $latestPriceBoardDate->format('d/m/Y') }}</div>
                             @endif
                             <div>Giá bán chưa bao gồm VAT.</div>
                             <div>Miễn phí vận chuyển nội thành 5kg từ 20 con.</div>
