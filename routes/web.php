@@ -190,6 +190,15 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::get('/my-dashboard/stats', [MyDashboardController::class, 'stats'])
         ->name('pages.my_dashboard.stats')
         ->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
+    Route::get('/my-dashboard/notifications', [MyDashboardController::class, 'notifications'])
+        ->name('pages.my_dashboard.notifications')
+        ->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
+    Route::get('/my-dashboard/notifications/{notificationId}', [MyDashboardController::class, 'openNotification'])
+        ->name('pages.my_dashboard.notifications.open')
+        ->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
+    Route::post('/my-dashboard/notifications/read-all', [MyDashboardController::class, 'markAllNotificationsAsRead'])
+        ->name('pages.my_dashboard.notifications.read_all')
+        ->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
     Route::post('/my-dashboard/accept-customer/{customer}', [MyDashboardController::class, 'acceptCustomer'])
         ->name('pages.my_dashboard.accept_customer')
         ->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');

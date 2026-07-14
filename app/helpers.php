@@ -182,6 +182,48 @@ if (!function_exists('getWarehouseNotifications')) {
     }
 }
 
+if (!function_exists('getUserOrderNotifications')) {
+    /**
+     * Thông báo nghiệp vụ được lưu riêng cho từng tài khoản.
+     */
+    function getUserOrderNotifications($user, int $limit = 7)
+    {
+        if (!$user || !\Illuminate\Support\Facades\Schema::hasTable('notifications')) {
+            return collect();
+        }
+
+        return $user->notifications()
+            ->where('type', '!=', \App\Notifications\DepartmentBroadcastNotification::class)
+            ->latest()
+            ->limit($limit)
+            ->get()
+            ->map(function ($notification) {
+                $data = $notification->data ?? [];
+                $businessType = (string) ($data['type'] ?? 'info');
+                $displayType = match (true) {
+                    str_contains($businessType, 'warehouse_new_order') => 'new_order',
+                    str_contains($businessType, 'warehouse') => 'warehouse',
+                    str_contains($businessType, 'accounting') => 'sale',
+                    str_contains($businessType, 'order_workflow') => 'sale',
+                    default => 'info',
+                };
+
+                return [
+                    'id' => $notification->id,
+                    'type' => $displayType,
+                    'title' => (string) ($data['title'] ?? 'Thông báo'),
+                    'meta' => (string) ($data['message'] ?? ''),
+                    'link' => route('pages.my_dashboard.notifications.open', $notification->id),
+                    'time' => optional($notification->created_at)->format('d/m/Y H:i'),
+                    'read_at' => $notification->read_at,
+                    'details' => $data['products'] ?? [],
+                    'total' => (float) ($data['total'] ?? 0),
+                    'note' => (string) ($data['note'] ?? ''),
+                ];
+            });
+    }
+}
+
 if (!function_exists('getDepartmentBroadcastNotifications')) {
     function getDepartmentBroadcastNotifications($user, int $limit = 5, ?string $layoutKey = null)
     {

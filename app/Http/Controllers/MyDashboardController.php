@@ -13,12 +13,14 @@ use App\Notifications\WarehouseOrderAdjustmentConfirmed;
 use App\Notifications\WarehouseOrderAdjustmentRejected;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use App\Models\Setting;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\View\View;
 
 class MyDashboardController extends Controller
 {
@@ -46,6 +48,50 @@ class MyDashboardController extends Controller
         abort_unless($user, 403);
 
         return response()->json($this->buildPayload($user));
+    }
+
+    public function notifications(): View
+    {
+        $user = auth()->user();
+        abort_unless($user, 403);
+
+        $notifications = $user->notifications()
+            ->where('type', '!=', \App\Notifications\DepartmentBroadcastNotification::class)
+            ->latest()
+            ->paginate(20);
+
+        return view('site.my_dashboard_notifications', [
+            'notifications' => $notifications,
+            'settings' => $this->settings,
+        ]);
+    }
+
+    public function openNotification(string $notificationId): RedirectResponse
+    {
+        $user = auth()->user();
+        abort_unless($user, 403);
+
+        $notification = $user->notifications()->whereKey($notificationId)->firstOrFail();
+        if (is_null($notification->read_at)) {
+            $notification->markAsRead();
+        }
+
+        $url = (string) ($notification->data['url'] ?? '');
+
+        return redirect()->to($url !== '' ? $url : route('pages.my_dashboard.notifications'));
+    }
+
+    public function markAllNotificationsAsRead(): RedirectResponse
+    {
+        $user = auth()->user();
+        abort_unless($user, 403);
+
+        $user->unreadNotifications()
+            ->where('type', '!=', \App\Notifications\DepartmentBroadcastNotification::class)
+            ->get()
+            ->each->markAsRead();
+
+        return back()->with('success', 'Đã đánh dấu tất cả thông báo là đã đọc.');
     }
 
     public function acceptCustomer(Customer $customer): JsonResponse

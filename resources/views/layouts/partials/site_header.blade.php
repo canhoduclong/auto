@@ -509,8 +509,8 @@
                             @auth
                                 @php
                                     $user = Auth::user();
-                                    $hdrSalesNotifications = $user ? getWarehouseNotifications($user, 7) : collect();
-                                    $hdrSalesNotificationCount = $hdrSalesNotifications->count();
+                                    $hdrSalesNotifications = $user ? getUserOrderNotifications($user, 7) : collect();
+                                    $hdrSalesNotificationCount = $hdrSalesNotifications->whereNull('read_at')->count();
                                 @endphp
 
                                 @if(Auth::user()->isSalesFlowRole())
@@ -530,7 +530,7 @@
                                             <div class="hdr-notify-header">Thông báo</div>
                                             <div class="hdr-notify-list">
                                                 @forelse($hdrSalesNotifications as $notify)
-                                                    <a href="{{ $notify['link'] }}" class="hdr-notify-item d-flex align-items-center">
+                                                    <a href="{{ $notify['link'] }}" class="hdr-notify-item d-flex align-items-center {{ empty($notify['read_at']) ? 'bg-light' : '' }}">
                                                         <span class="hdr-notify-icon {{ $notify['type'] }}">
                                                             @php
                                                                 $icon = match($notify['type']) {
@@ -562,7 +562,7 @@
                                                 @endforelse
                                             </div>
                                             <div class="text-center py-2 border-top">
-                                                <a href="{{ route('warehouse.notifications') }}" class="btn btn-link p-0 small">Xem tất cả thông báo</a>
+                                                <a href="{{ route('pages.my_dashboard.notifications') }}" class="btn btn-link p-0 small">Xem tất cả thông báo</a>
                                             </div>
                                         </div>
                                     </div>

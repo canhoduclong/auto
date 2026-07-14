@@ -141,6 +141,8 @@ class ApprovalService
             $firstStep = $approverSteps->first();
             $order->update(['status' => $this->mapPendingStatusByRole($firstStep?->role_slug)]);
         });
+
+        app(OrderNotificationService::class)->notifySubmitted($order->fresh());
     }
 
     public function getCurrentPendingStep(Order $order): ?ApprovalOrder
@@ -218,6 +220,11 @@ class ApprovalService
                     $wUser->notify(new \App\Notifications\WarehouseNewOrderApproved($order));
                 }
             }
+
+            if ($user->hasRole($this->managerRoleSlugs())) {
+                app(OrderNotificationService::class)->notifyApproved($order, $user);
+            }
+
             return;
         }
 
