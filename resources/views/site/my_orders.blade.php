@@ -1046,7 +1046,7 @@
                 window.refreshOrdersList = loadOrders;
 
                 window.setTodayOrders = function () {
-                    const today = new Date().toISOString().slice(0, 10);
+                    const today = @json(now()->toDateString());
                     document.getElementById('from_date').value = today;
                     document.getElementById('to_date').value = today;
                     loadOrders(1);

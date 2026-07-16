@@ -31,12 +31,16 @@ return new class extends Migration
                 $table->unsignedBigInteger('cutting_component_import_request_id');
                 $table->foreignId('cutting_batch_id')->nullable()->constrained('product_cutting_batches')->nullOnDelete();
                 $table->foreignId('order_id')->nullable()->constrained('orders')->nullOnDelete();
-                $table->foreignId('product_variant_id')->constrained('product_variants')->cascadeOnDelete();
+                $table->foreignId('product_variant_id');
                 $table->decimal('quantity', 12, 3)->default(0);
                 $table->string('source_order_code')->nullable();
                 $table->timestamps();
 
                 $table->index(['product_variant_id'], 'cut_comp_import_req_item_variant');
+                $table->foreign('product_variant_id', 'cut_comp_import_req_item_variant_fk')
+                    ->references('id')
+                    ->on('product_variants')
+                    ->cascadeOnDelete();
                 $table->foreign('cutting_component_import_request_id', 'cut_comp_import_req_item_req_fk')
                     ->references('id')
                     ->on('cutting_component_import_requests')
