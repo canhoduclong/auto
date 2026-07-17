@@ -249,6 +249,83 @@
     .monitor-order > .collapse { grid-column: 1 / -1; }
     .monitor-empty { padding: 44px 20px; text-align: center; color: #64748b; }
     .monitor-pagination { padding: 14px 0 0; }
+    .monitor-bulk-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 10px 12px;
+    }
+    .monitor-bulk-actions > div { display: flex; flex-wrap: wrap; gap: 8px; }
+    .monitor-create { margin-bottom: 18px; overflow: hidden; }
+    .monitor-create[hidden] { display: none !important; }
+    .monitor-create-head { padding: 16px 18px 0; }
+    .monitor-create-head h2 { margin: 0; color: #9a3412; font-size: 1rem; font-weight: 900; text-transform: uppercase; }
+    .monitor-create-steps {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        padding: 18px 24px 14px;
+    }
+    .monitor-create-step { position: relative; color: #64748b; text-align: center; font-size: .75rem; font-weight: 700; }
+    .monitor-create-step:not(:last-child)::after {
+        content: "";
+        position: absolute;
+        z-index: 0;
+        top: 17px;
+        left: calc(50% + 24px);
+        width: calc(100% - 48px);
+        height: 2px;
+        background: #fed7aa;
+    }
+    .monitor-create-step-number {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        margin: 0 auto 6px;
+        border-radius: 50%;
+        background: #64748b;
+        color: #fff;
+        box-shadow: 0 2px 6px rgba(15, 23, 42, .2);
+    }
+    .monitor-create-step.is-active { color: #9a3412; }
+    .monitor-create-step.is-active .monitor-create-step-number,
+    .monitor-create-step.is-done .monitor-create-step-number { background: #c2410c; }
+    .monitor-create-body { padding: 8px 18px 18px; }
+    .monitor-create-pane[hidden] { display: none !important; }
+    .monitor-create-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+    .monitor-create-search { display: flex; gap: 8px; margin-bottom: 12px; }
+    .monitor-create-search .form-control { min-width: 0; }
+    .monitor-selected-table { border: 1px solid #fed7aa; border-radius: 9px; overflow: hidden; background: #fffaf3; }
+    .monitor-selected-table table { margin: 0; font-size: .78rem; }
+    .monitor-selected-table input { width: 80px; }
+    .monitor-create-total { padding: 10px 12px; border-top: 1px solid #fed7aa; text-align: right; color: #b45309; font-weight: 900; }
+    .monitor-customer-selected { padding: 12px 14px; border: 1px solid #99f6e4; border-radius: 8px; background: #f0fdfa; }
+    .monitor-confirm-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .monitor-confirm-card { padding: 14px; border: 1px solid var(--monitor-border); border-radius: 9px; background: #f8fafc; }
+    .monitor-confirm-card h3 { font-size: .82rem; font-weight: 900; text-transform: uppercase; }
+    .monitor-finish { padding: 24px; text-align: center; }
+    .monitor-finish-icon { color: #059669; font-size: 2.8rem; }
+    .monitor-create .variant-picker-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .monitor-create .variant-picker-list { display: grid; gap: 8px; max-height: 360px; overflow-y: auto; }
+    .monitor-create .variant-picker-item { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 12px; padding: 10px; border: 1px solid #e5e7eb; border-radius: 8px; }
+    .monitor-create .variant-picker-main { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .monitor-create .variant-picker-thumb { width: 48px; height: 48px; border-radius: 7px; object-fit: cover; }
+    .monitor-create .variant-picker-copy { min-width: 0; }
+    .monitor-create .variant-picker-name { font-size: .82rem; font-weight: 800; }
+    .monitor-create .variant-picker-meta { display: flex; flex-wrap: wrap; gap: 8px; color: #64748b; font-size: .68rem; }
+    .monitor-create .variant-picker-stats { display: flex; gap: 12px; font-size: .72rem; }
+    .monitor-create .variant-picker-stats > div { display: grid; }
+    .monitor-create .variant-picker-label { color: #64748b; }
+    .monitor-create .variant-picker-actions { display: flex; gap: 4px; }
+    .monitor-create .variant-picker-actions .btn-warning,
+    .monitor-create .variant-picker-actions .btn-outline-warning,
+    .monitor-create .variant-picker-actions .btn-outline-secondary { display: none; }
+    .monitor-create .pagination { margin-bottom: 0; }
     @media (max-width: 991.98px) {
         .monitor-layout { grid-template-columns: 1fr; }
         .monitor-sidebar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -273,6 +350,11 @@
         .monitor-actions .btn { width: auto; }
         .monitor-timeline { min-width: 0; }
         .monitor-order-main { padding: 12px; }
+        .monitor-create-steps { padding-inline: 8px; }
+        .monitor-create-step { font-size: .66rem; }
+        .monitor-confirm-grid { grid-template-columns: 1fr; }
+        .monitor-create .variant-picker-item { grid-template-columns: 1fr auto; }
+        .monitor-create .variant-picker-stats { display: none; }
     }
 </style>
 @endpush
@@ -428,6 +510,130 @@
             </div>
         </form>
 
+        <div class="monitor-panel monitor-bulk-actions mb-3">
+            <div>
+                @if($canApproveAnyOrder)
+                    <form method="POST" action="{{ route('pages.my_orders.monitoring.approve_all') }}" onsubmit="return confirm('Duyệt tất cả đơn đang tới lượt bạn theo bộ lọc hiện tại?');">
+                        @csrf
+                        <input type="hidden" name="date" value="{{ $selectedDate }}">
+                        <input type="hidden" name="keyword" value="{{ $keyword }}">
+                        <input type="hidden" name="status" value="{{ $selectedStatus }}">
+                        <input type="hidden" name="sale_id" value="{{ $selectedSaleId }}">
+                        <input type="hidden" name="customer_id" value="{{ $selectedCustomerId }}">
+                        <button type="submit" class="btn btn-sm btn-success">
+                            <i class="bi bi-check2-all me-1"></i>Duyệt tất cả
+                        </button>
+                    </form>
+                @endif
+                <form method="POST" action="{{ route('pages.my_orders.monitoring.refresh_sequence') }}" onsubmit="return confirm('Cập nhật lại số thứ tự ưu tiên cho các đơn đang thiếu số?');">
+                    @csrf
+                    <input type="hidden" name="date" value="{{ $selectedDate }}">
+                    <input type="hidden" name="keyword" value="{{ $keyword }}">
+                    <input type="hidden" name="status" value="{{ $selectedStatus }}">
+                    <input type="hidden" name="sale_id" value="{{ $selectedSaleId }}">
+                    <input type="hidden" name="customer_id" value="{{ $selectedCustomerId }}">
+                    <button type="submit" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+                    </button>
+                </form>
+            </div>
+            <button type="button" class="btn btn-sm btn-success" id="monitorOpenCreate">
+                <i class="bi bi-plus-circle me-1"></i>Thêm đơn
+            </button>
+        </div>
+
+        <section class="monitor-panel monitor-create" id="monitorCreateOrder" hidden aria-label="Tạo đơn hàng mới">
+            <div class="monitor-create-head d-flex align-items-center justify-content-between gap-2">
+                <h2>Tạo đơn hàng mới</h2>
+                <button type="button" class="btn-close" id="monitorCloseCreate" aria-label="Đóng"></button>
+            </div>
+            <div class="monitor-create-steps" aria-label="Các bước tạo đơn">
+                @foreach(['Chọn sản phẩm', 'Chọn khách hàng', 'Xác nhận', 'Hoàn thành'] as $createStep)
+                    <div class="monitor-create-step {{ $loop->first ? 'is-active' : '' }}" data-create-step-indicator="{{ $loop->iteration }}">
+                        <span class="monitor-create-step-number">{{ $loop->iteration }}</span>
+                        <span>{{ $createStep }}</span>
+                    </div>
+                @endforeach
+            </div>
+            <div class="monitor-create-body">
+                <div class="monitor-create-pane" data-create-pane="1">
+                    <div class="monitor-create-search">
+                        <input type="search" class="form-control form-control-sm" id="monitorVariantSearch" placeholder="Tìm sản phẩm, SKU hoặc size...">
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="monitorVariantSearchButton"><i class="bi bi-search me-1"></i>Tìm</button>
+                    </div>
+                    <div id="monitorVariantResults" class="mb-3">
+                        <div class="text-center text-muted py-4">Đang tải danh sách sản phẩm...</div>
+                    </div>
+                    <div class="monitor-selected-table">
+                        <div class="px-3 pt-3 fw-bold">Sản phẩm đã chọn</div>
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle">
+                                <thead><tr><th>Sản phẩm</th><th>Size</th><th>Đơn giá</th><th>Số lượng</th><th></th></tr></thead>
+                                <tbody id="monitorSelectedItems"><tr><td colspan="5" class="text-center text-muted py-3">Chưa chọn sản phẩm.</td></tr></tbody>
+                            </table>
+                        </div>
+                        <div class="monitor-create-total">Tạm tính: <span id="monitorCreateTotal">0đ</span></div>
+                    </div>
+                    <div class="monitor-create-actions">
+                        <button type="button" class="btn btn-sm btn-success" data-create-next="2">Chọn khách hàng <i class="bi bi-arrow-right ms-1"></i></button>
+                    </div>
+                </div>
+
+                <div class="monitor-create-pane" data-create-pane="2" hidden>
+                    <div class="monitor-create-search">
+                        <input type="search" class="form-control form-control-sm" id="monitorCustomerSearch" placeholder="Tìm theo tên, số điện thoại hoặc email...">
+                        <button type="button" class="btn btn-sm btn-primary" id="monitorCustomerSearchButton"><i class="bi bi-search me-1"></i>Lọc</button>
+                    </div>
+                    <div id="monitorSelectedCustomer" class="monitor-customer-selected mb-3" hidden></div>
+                    <div id="monitorCustomerResults"><div class="text-center text-muted py-4">Đang tải danh sách khách hàng...</div></div>
+                    <div class="monitor-create-actions justify-content-between">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" data-create-back="1"><i class="bi bi-arrow-left me-1"></i>Sản phẩm</button>
+                        <button type="button" class="btn btn-sm btn-success" data-create-next="3">Xác nhận <i class="bi bi-arrow-right ms-1"></i></button>
+                    </div>
+                </div>
+
+                <div class="monitor-create-pane" data-create-pane="3" hidden>
+                    <div class="monitor-confirm-grid">
+                        <div class="monitor-confirm-card">
+                            <h3>Khách hàng</h3>
+                            <div id="monitorConfirmCustomer"></div>
+                            <div class="mt-3">
+                                <label class="form-label small fw-bold" for="monitorRecipientAddress">Địa chỉ nhận hàng</label>
+                                <textarea class="form-control form-control-sm" id="monitorRecipientAddress" rows="2"></textarea>
+                            </div>
+                            <div class="mt-2">
+                                <label class="form-label small fw-bold" for="monitorDeliveryTime">Giờ giao hàng</label>
+                                <input class="form-control form-control-sm" id="monitorDeliveryTime" placeholder="Ví dụ: 9h-11h hoặc sau 17h">
+                            </div>
+                            <div class="mt-2">
+                                <label class="form-label small fw-bold" for="monitorOrderNote">Ghi chú</label>
+                                <textarea class="form-control form-control-sm" id="monitorOrderNote" rows="2"></textarea>
+                            </div>
+                        </div>
+                        <div class="monitor-confirm-card">
+                            <h3>Sản phẩm</h3>
+                            <div id="monitorConfirmItems"></div>
+                            <div class="border-top mt-2 pt-2 text-end fw-bold text-success">Tổng cộng: <span id="monitorConfirmTotal">0đ</span></div>
+                        </div>
+                    </div>
+                    <div class="monitor-create-actions justify-content-between">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" data-create-back="2"><i class="bi bi-arrow-left me-1"></i>Khách hàng</button>
+                        <button type="button" class="btn btn-sm btn-warning fw-bold" id="monitorSubmitOrder"><i class="bi bi-check2 me-1"></i>Tạo đơn</button>
+                    </div>
+                </div>
+
+                <div class="monitor-create-pane monitor-finish" data-create-pane="4" hidden>
+                    <i class="bi bi-check-circle-fill monitor-finish-icon"></i>
+                    <h3 class="mt-2">Tạo đơn hàng thành công</h3>
+                    <p class="text-muted" id="monitorFinishMessage"></p>
+                    <div class="d-flex justify-content-center gap-2">
+                        <a href="#" class="btn btn-sm btn-outline-primary" id="monitorCreatedOrderLink">Xem chi tiết</a>
+                        <a href="#" class="btn btn-sm btn-success" id="monitorBackToOrders">Về danh sách đơn</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <div class="monitor-layout">
             <aside class="monitor-sidebar">
                 <div class="monitor-panel monitor-filter-block">
@@ -463,6 +669,10 @@
                 <div class="monitor-orders">
                     @forelse($orders as $order)
                         @php
+                            $canApprove = $canApproveByOrder[$order->id] ?? false;
+                            $hasInvalidSizeItems = $order->items->contains(
+                                fn ($item) => (float) ($item->effective_unit_weight ?? 0) <= 0
+                            );
                             $timelineIndex = $timelineMap[$order->status] ?? 0;
                             $timelinePercent = ($timelineIndex / 4) * 100;
                             $deliveryAddress = $order->recipient_address ?: ($order->customer?->address ?: 'Chưa cập nhật địa chỉ');
@@ -472,6 +682,9 @@
                                 !empty($order->copied_from_order_id)
                                 || ($order->status === \App\Models\Order::STATUS_PENDING_LEADER_APPROVAL && $order->created_at?->isToday())
                             );
+                            $canCancel = $canManageOrder
+                                && $order->created_at?->isToday()
+                                && in_array($order->status, \App\Models\Order::CANCELLABLE_STATUSES, true);
                         @endphp
                         <article class="monitor-panel monitor-order" id="monitor-order-{{ $order->id }}">
                             <div class="monitor-order-main">
@@ -551,6 +764,19 @@
                             <div class="monitor-order-footer">
                                 <span class="monitor-status">{{ $statusLabels[$order->status] ?? str_replace('_', ' ', $order->status) }}</span>
                                 <div class="monitor-actions">
+                                    @if($canApprove)
+                                        <form method="POST" action="{{ route('site.orders.approve', $order) }}" class="js-monitor-approval-form">
+                                            @csrf
+                                            <input type="hidden" name="note" value="Duyệt từ trang theo dõi đơn hàng">
+                                            <button type="submit" class="btn btn-sm btn-success" @disabled($hasInvalidSizeItems)
+                                                @if($hasInvalidSizeItems) title="Có sản phẩm chưa có size hoặc khối lượng quy đổi bằng 0." @endif>
+                                                <i class="bi bi-check2 me-1"></i>Duyệt
+                                            </button>
+                                        </form>
+                                        @if($hasInvalidSizeItems)
+                                            <div class="small text-danger">Size/KL = 0</div>
+                                        @endif
+                                    @endif
                                     <button class="btn btn-sm btn-outline-info" type="button" data-bs-toggle="collapse" data-bs-target="#monitorExtra{{ $order->id }}">
                                         <i class="bi bi-eye me-1"></i>Chi tiết
                                     </button>
@@ -559,6 +785,13 @@
                                     @endif
                                     @if($canManageOrder)
                                         <a class="btn btn-sm btn-outline-secondary" href="{{ route('site.orders.copy', $order->id) }}"><i class="bi bi-files me-1"></i>Copy đơn</a>
+                                        <a class="btn btn-sm btn-warning" href="{{ route('site.order-adjustments.create', $order) }}"><i class="bi bi-arrow-left-right me-1"></i>Yêu cầu điều chỉnh</a>
+                                        @if($canCancel)
+                                            <form method="POST" action="{{ route('site.orders.cancel', $order) }}" onsubmit="return confirm('Bạn chắc chắn muốn hủy đơn hàng này?');">
+                                                @csrf
+                                                <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-x-circle me-1"></i>Hủy đơn hàng</button>
+                                            </form>
+                                        @endif
                                     @endif
                                 </div>
                             </div>
@@ -587,3 +820,303 @@
     </div>
 </section>
 @endsection
+
+@push('scripts')
+<script>
+(() => {
+    const createPanel = document.getElementById('monitorCreateOrder');
+    const openButton = document.getElementById('monitorOpenCreate');
+    if (!createPanel || !openButton) return;
+
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || @json(csrf_token());
+    const variantEndpoint = @json(route('site.orders.variants.ajax'));
+    const customerEndpoint = @json(route('site.orders.customers.ajax'));
+    const storeEndpoint = @json(route('pages.my_orders.monitoring.store'));
+    const selectedItems = new Map();
+    let selectedCustomer = null;
+    let variantsLoaded = false;
+    let customersLoaded = false;
+
+    const money = value => new Intl.NumberFormat('vi-VN').format(Math.round(Number(value) || 0)) + 'đ';
+    const itemLineTotal = item => item.price * item.quantity * (item.isPricedByKg ? item.weight : 1);
+    const orderTotal = () => Array.from(selectedItems.values()).reduce((sum, item) => sum + itemLineTotal(item), 0);
+    const notify = (message, type = 'error') => {
+        if (typeof window.showToast === 'function') window.showToast(message, type);
+        else window.alert(message);
+    };
+
+    function setStep(step) {
+        createPanel.querySelectorAll('[data-create-pane]').forEach(pane => {
+            pane.hidden = Number(pane.dataset.createPane) !== step;
+        });
+        createPanel.querySelectorAll('[data-create-step-indicator]').forEach(indicator => {
+            const value = Number(indicator.dataset.createStepIndicator);
+            indicator.classList.toggle('is-active', value === step);
+            indicator.classList.toggle('is-done', value < step);
+        });
+        if (step === 3) renderConfirmation();
+        createPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function renderItems() {
+        const body = document.getElementById('monitorSelectedItems');
+        if (!selectedItems.size) {
+            body.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">Chưa chọn sản phẩm.</td></tr>';
+        } else {
+            body.innerHTML = Array.from(selectedItems.values()).map(item => `
+                <tr data-selected-variant="${item.id}">
+                    <td><strong>${escapeHtml(item.name)}</strong><div class="small text-muted">${escapeHtml(item.sku || '')}</div></td>
+                    <td>${escapeHtml(item.size || '—')}</td>
+                    <td>${money(item.price)}</td>
+                    <td><input type="number" class="form-control form-control-sm monitor-item-quantity" min="1" max="100000" value="${item.quantity}"></td>
+                    <td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger monitor-remove-item" aria-label="Xóa"><i class="bi bi-x"></i></button></td>
+                </tr>`).join('');
+        }
+        document.getElementById('monitorCreateTotal').textContent = money(orderTotal());
+    }
+
+    function escapeHtml(value) {
+        const node = document.createElement('div');
+        node.textContent = String(value ?? '');
+        return node.innerHTML;
+    }
+
+    async function loadVariants(url = variantEndpoint, search = null) {
+        const results = document.getElementById('monitorVariantResults');
+        const target = new URL(url, window.location.origin);
+        target.searchParams.set('per_page', target.searchParams.get('per_page') || '10');
+        if (search !== null) {
+            target.searchParams.set('search', search);
+            target.searchParams.set('page', '1');
+        }
+        results.innerHTML = '<div class="text-center text-muted py-4"><span class="spinner-border spinner-border-sm me-2"></span>Đang tải sản phẩm...</div>';
+        try {
+            const response = await fetch(target, { headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' } });
+            const data = await response.json();
+            if (!response.ok || !data.success) throw new Error('Không thể tải danh sách sản phẩm.');
+            results.innerHTML = data.html;
+            variantsLoaded = true;
+        } catch (error) {
+            results.innerHTML = `<div class="alert alert-danger mb-0">${escapeHtml(error.message)}</div>`;
+        }
+    }
+
+    async function loadCustomers(page = 1) {
+        const results = document.getElementById('monitorCustomerResults');
+        const target = new URL(customerEndpoint, window.location.origin);
+        target.searchParams.set('mode', 'single');
+        target.searchParams.set('scope', 'my_customers');
+        target.searchParams.set('q', document.getElementById('monitorCustomerSearch').value.trim());
+        target.searchParams.set('per_page', '15');
+        target.searchParams.set('page', String(page));
+        results.innerHTML = '<div class="text-center text-muted py-4"><span class="spinner-border spinner-border-sm me-2"></span>Đang tải khách hàng...</div>';
+        try {
+            const response = await fetch(target, { headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' } });
+            const data = await response.json();
+            if (!response.ok || !data.html) throw new Error('Không thể tải danh sách khách hàng.');
+            results.innerHTML = data.html;
+            customersLoaded = true;
+        } catch (error) {
+            results.innerHTML = `<div class="alert alert-danger mb-0">${escapeHtml(error.message)}</div>`;
+        }
+    }
+
+    function renderSelectedCustomer() {
+        const preview = document.getElementById('monitorSelectedCustomer');
+        preview.hidden = !selectedCustomer;
+        if (!selectedCustomer) return;
+        preview.innerHTML = `<strong>${escapeHtml(selectedCustomer.name)}</strong>
+            <div class="small text-muted"><i class="bi bi-telephone me-1"></i>${escapeHtml(selectedCustomer.phone || 'Chưa có SĐT')}</div>
+            <div class="small text-muted"><i class="bi bi-geo-alt me-1"></i>${escapeHtml(selectedCustomer.address || 'Chưa có địa chỉ')}</div>`;
+    }
+
+    function renderConfirmation() {
+        if (!selectedCustomer) return;
+        document.getElementById('monitorConfirmCustomer').innerHTML = `<strong>${escapeHtml(selectedCustomer.name)}</strong>
+            <div>${escapeHtml(selectedCustomer.phone || 'Chưa có SĐT')}</div>`;
+        document.getElementById('monitorRecipientAddress').value = selectedCustomer.address || '';
+        document.getElementById('monitorConfirmItems').innerHTML = Array.from(selectedItems.values()).map(item => `
+            <div class="d-flex justify-content-between gap-2 border-bottom py-2 small">
+                <span><strong>${escapeHtml(item.name)}</strong> · ${escapeHtml(item.size || '—')} × ${item.quantity}</span>
+                <strong>${money(itemLineTotal(item))}</strong>
+            </div>`).join('');
+        document.getElementById('monitorConfirmTotal').textContent = money(orderTotal());
+    }
+
+    openButton.addEventListener('click', () => {
+        createPanel.hidden = false;
+        setStep(1);
+        if (!variantsLoaded) loadVariants();
+    });
+    document.getElementById('monitorCloseCreate').addEventListener('click', () => { createPanel.hidden = true; });
+    document.getElementById('monitorVariantSearchButton').addEventListener('click', () => loadVariants(variantEndpoint, document.getElementById('monitorVariantSearch').value.trim()));
+    document.getElementById('monitorVariantSearch').addEventListener('keydown', event => {
+        if (event.key === 'Enter') { event.preventDefault(); document.getElementById('monitorVariantSearchButton').click(); }
+    });
+    document.getElementById('monitorCustomerSearchButton').addEventListener('click', () => loadCustomers());
+    document.getElementById('monitorCustomerSearch').addEventListener('keydown', event => {
+        if (event.key === 'Enter') { event.preventDefault(); loadCustomers(); }
+    });
+
+    createPanel.addEventListener('click', event => {
+        const add = event.target.closest('#monitorVariantResults .add-variant-to-cart');
+        if (add) {
+            event.preventDefault();
+            const id = Number(add.dataset.variantId);
+            if (!selectedItems.has(id)) {
+                selectedItems.set(id, {
+                    id,
+                    name: add.dataset.variantName || 'Sản phẩm',
+                    sku: add.dataset.variantSku || '',
+                    size: add.dataset.variantSize || '',
+                    price: Number(add.dataset.variantPrice) || 0,
+                    weight: Number(add.dataset.variantWeight) || 1,
+                    isPricedByKg: add.dataset.variantIsPricedByKg === '1',
+                    quantity: 1
+                });
+                renderItems();
+            }
+            add.classList.remove('btn-primary');
+            add.classList.add('btn-success');
+            add.innerHTML = '<i class="bi bi-check2 me-1"></i>Đã chọn';
+            return;
+        }
+
+        const variantPage = event.target.closest('#monitorVariantResults .pagination a');
+        if (variantPage) { event.preventDefault(); loadVariants(variantPage.href); return; }
+
+        const remove = event.target.closest('.monitor-remove-item');
+        if (remove) {
+            selectedItems.delete(Number(remove.closest('[data-selected-variant]').dataset.selectedVariant));
+            renderItems();
+            return;
+        }
+
+        const customerButton = event.target.closest('#monitorCustomerResults .select-customer-btn');
+        if (customerButton) {
+            selectedCustomer = {
+                id: Number(customerButton.dataset.customerId),
+                name: customerButton.dataset.customerName || 'Khách hàng',
+                phone: customerButton.dataset.customerPhone || '',
+                email: customerButton.dataset.customerEmail || '',
+                address: customerButton.dataset.customerAddress || ''
+            };
+            renderSelectedCustomer();
+            return;
+        }
+
+        const customerPage = event.target.closest('#monitorCustomerResults .customer-page-btn');
+        if (customerPage && !customerPage.disabled) { loadCustomers(Number(customerPage.dataset.page) || 1); return; }
+
+        const next = event.target.closest('[data-create-next]');
+        if (next) {
+            const step = Number(next.dataset.createNext);
+            if (step === 2 && !selectedItems.size) { notify('Vui lòng chọn ít nhất một sản phẩm.'); return; }
+            if (step === 2 && !customersLoaded) loadCustomers();
+            if (step === 3 && !selectedCustomer) { notify('Vui lòng chọn khách hàng.'); return; }
+            setStep(step);
+            return;
+        }
+
+        const back = event.target.closest('[data-create-back]');
+        if (back) setStep(Number(back.dataset.createBack));
+    });
+
+    createPanel.addEventListener('input', event => {
+        const input = event.target.closest('.monitor-item-quantity');
+        if (!input) return;
+        const item = selectedItems.get(Number(input.closest('[data-selected-variant]').dataset.selectedVariant));
+        if (item) {
+            item.quantity = Math.max(1, Number.parseInt(input.value || '1', 10));
+            document.getElementById('monitorCreateTotal').textContent = money(orderTotal());
+        }
+    });
+
+    createPanel.addEventListener('change', event => {
+        if (event.target.matches('#monitorVariantResults #per-page-select')) {
+            const target = new URL(variantEndpoint, window.location.origin);
+            target.searchParams.set('search', document.getElementById('monitorVariantSearch').value.trim());
+            target.searchParams.set('per_page', event.target.value);
+            loadVariants(target);
+        }
+    });
+
+    document.getElementById('monitorSubmitOrder').addEventListener('click', async event => {
+        const button = event.currentTarget;
+        button.disabled = true;
+        button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Đang tạo...';
+        try {
+            const response = await fetch(storeEndpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': csrfToken
+                },
+                body: JSON.stringify({
+                    customer_id: selectedCustomer.id,
+                    items: Array.from(selectedItems.values()).map(item => ({ variant_id: item.id, quantity: item.quantity })),
+                    recipient_address: document.getElementById('monitorRecipientAddress').value.trim(),
+                    delivery_time: document.getElementById('monitorDeliveryTime').value.trim(),
+                    note: document.getElementById('monitorOrderNote').value.trim()
+                })
+            });
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                const validationMessage = data.errors ? Object.values(data.errors).flat()[0] : null;
+                throw new Error(validationMessage || data.message || 'Không thể tạo đơn hàng.');
+            }
+            document.getElementById('monitorFinishMessage').textContent = data.message;
+            document.getElementById('monitorCreatedOrderLink').href = data.order.url;
+            document.getElementById('monitorBackToOrders').href = data.monitoring_url;
+            setStep(4);
+            notify(data.message, 'success');
+        } catch (error) {
+            notify(error.message || 'Không thể kết nối máy chủ.');
+            button.disabled = false;
+            button.innerHTML = '<i class="bi bi-check2 me-1"></i>Tạo đơn';
+        }
+    });
+
+    const highlightedOrder = new URLSearchParams(window.location.search).get('highlight');
+    if (highlightedOrder) {
+        const card = document.getElementById(`monitor-order-${highlightedOrder}`);
+        if (card) {
+            card.style.boxShadow = '0 0 0 3px rgba(245, 158, 11, .35), 0 8px 24px rgba(15, 23, 42, .08)';
+            setTimeout(() => card.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250);
+        }
+    }
+})();
+
+document.addEventListener('submit', async function (event) {
+    const form = event.target.closest('.js-monitor-approval-form');
+    if (!form) return;
+
+    event.preventDefault();
+    const button = form.querySelector('button[type="submit"]');
+    if (button) button.disabled = true;
+
+    try {
+        const response = await fetch(form.action, {
+            method: 'POST',
+            body: new FormData(form),
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
+            }
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.message || 'Không thể duyệt đơn.');
+        }
+
+        showToast(data.message || 'Đã duyệt đơn.', 'success');
+        window.location.reload();
+    } catch (error) {
+        if (button) button.disabled = false;
+        showToast(error.message || 'Không thể kết nối máy chủ.', 'error');
+    }
+});
+</script>
+@endpush

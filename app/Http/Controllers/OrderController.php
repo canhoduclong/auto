@@ -672,6 +672,93 @@ class OrderController extends Controller
         
     }
 
+    /**
+     * Create an order from the inline wizard on the daily monitoring page.
+     * Prices and weights are resolved again on the server by the unified flow;
+     * the browser only sends variant IDs and quantities.
+     */
+    public function storeFromMonitoring(Request $request, ApprovalService $approvalService)
+    {
+        $validated = $request->validate([
+            'customer_id' => ['required', 'integer', 'exists:customers,id'],
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.variant_id' => ['required', 'integer', 'distinct', 'exists:product_variants,id'],
+            'items.*.quantity' => ['required', 'integer', 'min:1', 'max:100000'],
+            'delivery_time' => ['nullable', 'string', 'max:255'],
+            'recipient_address' => ['nullable', 'string', 'max:1000'],
+            'note' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $customerQuery = Customer::query()->whereKey((int) $validated['customer_id']);
+        $currentUser = auth()->user();
+        if (!$currentUser?->isAdmin()) {
+            $customerQuery->where(function (Builder $query) use ($currentUser): void {
+                $query->where('user_id', $currentUser->id)
+                    ->orWhere('assigned_to', $currentUser->id)
+                    ->orWhereHas('orders', fn (Builder $orders) => $orders->where('user_id', $currentUser->id));
+            });
+        }
+        $customer = $customerQuery->first();
+        if (!$customer) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Khách hàng không thuộc phạm vi bạn được phép tạo đơn.',
+            ], 403);
+        }
+        $items = collect($validated['items'])->map(static fn (array $item): array => [
+            'variant_id' => (int) $item['variant_id'],
+            'quantity' => (int) $item['quantity'],
+            'base_price' => null,
+            'unit_discount' => 0,
+            'unit_discount_type' => 'decrease',
+            'unit_weight' => null,
+        ])->values()->all();
+
+        try {
+            $order = $this->createOrderWithUnifiedStockFlow(
+                items: $items,
+                orderData: [
+                    'customer_id' => (int) $customer->id,
+                    'user_id' => auth()->id(),
+                    'recipient_name' => $customer->name,
+                    'recipient_phone' => $customer->phone,
+                    'recipient_address' => trim((string) ($validated['recipient_address'] ?? '')) ?: $customer->address,
+                    'delivery_time' => $this->resolveOrderDeliveryTime(
+                        (int) $customer->id,
+                        $validated['delivery_time'] ?? null
+                    ),
+                    'note' => $validated['note'] ?? null,
+                    'allow_backorder' => true,
+                    'status' => OrderStatus::Pending->value,
+                    'payment_status' => PaymentStatus::Unpaid->value,
+                    'delivery_status' => DeliveryStatus::NotShipped->value,
+                ],
+                approvalService: $approvalService
+            );
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã tạo đơn hàng ' . ($order->code ?: ('#' . $order->id)) . '.',
+            'order' => [
+                'id' => (int) $order->id,
+                'code' => $order->code ?: ('#' . $order->id),
+                'customer_name' => $customer->name,
+                'total' => (float) $order->total,
+                'url' => route('site.orders.show', $order),
+            ],
+            'monitoring_url' => route('pages.my_orders.monitoring', [
+                'date' => $order->created_at?->toDateString() ?: now()->toDateString(),
+                'highlight' => $order->id,
+            ]),
+        ], 201);
+    }
+
     public function updateDeliveryTime(Request $request, Order $order)
     {
         if (!$this->hasColumn('orders', 'delivery_time')) {

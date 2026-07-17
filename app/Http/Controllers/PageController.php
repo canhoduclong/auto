@@ -937,6 +937,7 @@ class PageController extends Controller
                 'customer',
                 'user',
                 'shipper',
+                'approvals.step',
                 'items.product',
                 'items.variant.product',
             ])
@@ -974,6 +975,10 @@ class PageController extends Controller
         if ($selectedCustomerId > 0) {
             $dateQuery->where('customer_id', $selectedCustomerId);
         }
+
+        $roleNames = $this->normalizedRoleNames($user);
+        $approvableQuery = clone $dateQuery;
+        $canApproveAnyOrder = $this->applyCurrentApprovalStepScope($approvableQuery, $roleNames)->exists();
 
         $allowedPerPage = [10, 20, 50, 100];
         $perPage = (int) $request->input('per_page', 20);
@@ -1025,6 +1030,19 @@ class PageController extends Controller
         $orders = $dateQuery
             ->paginate($perPage)
             ->appends($request->query());
+
+        $canApproveByOrder = [];
+        foreach ($orders as $order) {
+            $currentStep = $order->approvals
+                ->where('status', 'pending')
+                ->filter(fn ($approval) => $approval->step)
+                ->sortBy(fn ($approval) => $approval->step->step_order ?? PHP_INT_MAX)
+                ->first();
+
+            $canApproveByOrder[$order->id] = $currentStep?->step
+                ? $roleNames->contains(strtolower((string) $currentStep->step->role_slug))
+                : false;
+        }
 
         $productRows = $filteredOrders
             ->flatMap(fn (Order $order) => $order->items)
@@ -1103,7 +1121,38 @@ class PageController extends Controller
             'productRows' => $productRows,
             'saleFilters' => $saleFilters,
             'customerFilters' => $customerFilters,
+            'canApproveByOrder' => $canApproveByOrder,
+            'canApproveAnyOrder' => $canApproveAnyOrder,
         ]);
+    }
+
+    public function myOrdersMonitoringApproveAll(Request $request, ApprovalService $approvalService)
+    {
+        $user = $this->monitoringUserOrFail();
+        $roleNames = $this->normalizedRoleNames($user);
+
+        $query = Order::query()->with(['approvals.step']);
+        $this->applyMonitoringOrderFilters($query, $request);
+        $this->applyCurrentApprovalStepScope($query, $roleNames);
+
+        $result = $this->approveOrdersFromQuery(
+            $query,
+            $user,
+            $approvalService,
+            'Duyệt tất cả từ trang theo dõi đơn hàng'
+        );
+
+        return $this->redirectAfterApproveAll($result, 'theo bộ lọc');
+    }
+
+    public function myOrdersMonitoringRefreshSequence(Request $request)
+    {
+        $this->monitoringUserOrFail();
+
+        $query = Order::query()->where('status', '!=', Order::STATUS_REJECTED);
+        $this->applyMonitoringOrderFilters($query, $request);
+
+        return $this->refreshMissingDailySequencesFromQuery($query, 'theo dõi');
     }
 
     public function dailyProductPrices(Request $request)
@@ -2144,6 +2193,58 @@ class PageController extends Controller
         return $user->roles->pluck('name')
             ->map(fn ($role) => strtolower((string) $role))
             ->values();
+    }
+
+    private function monitoringUserOrFail(): User
+    {
+        if (!auth()->check()) {
+            abort(401, 'Bạn cần đăng nhập để thao tác.');
+        }
+
+        $user = auth()->user();
+        if (!$user->isAdmin() && !$user->hasPermission('orders.monitoring')) {
+            abort(403, 'Bạn không có quyền thao tác tại trang theo dõi đơn hàng.');
+        }
+
+        return $user;
+    }
+
+    private function applyMonitoringOrderFilters(Builder $query, Request $request): void
+    {
+        try {
+            $selectedDate = Carbon::parse(
+                $request->input('date', $request->input('from_date', now()->toDateString()))
+            )->toDateString();
+        } catch (\Throwable) {
+            $selectedDate = now()->toDateString();
+        }
+
+        $query->whereDate('created_at', $selectedDate);
+
+        $keyword = trim((string) $request->input('keyword', ''));
+        if ($keyword !== '') {
+            $query->where(function ($sub) use ($keyword) {
+                $sub->where('code', 'like', "%{$keyword}%")
+                    ->orWhereHas('customer', function ($customerQuery) use ($keyword) {
+                        $customerQuery->where('name', 'like', "%{$keyword}%")
+                            ->orWhere('phone', 'like', "%{$keyword}%");
+                    })
+                    ->orWhereHas('user', fn ($userQuery) => $userQuery->where('name', 'like', "%{$keyword}%"))
+                    ->orWhereHas('shipper', fn ($shipperQuery) => $shipperQuery->where('name', 'like', "%{$keyword}%"));
+            });
+        }
+
+        if ($request->filled('status')) {
+            $query->where('status', (string) $request->input('status'));
+        }
+
+        if ((int) $request->input('sale_id', 0) > 0) {
+            $query->where('user_id', (int) $request->input('sale_id'));
+        }
+
+        if ((int) $request->input('customer_id', 0) > 0) {
+            $query->where('customer_id', (int) $request->input('customer_id'));
+        }
     }
 
     private function applyCurrentApprovalStepScope(Builder $query, $roleNames): Builder

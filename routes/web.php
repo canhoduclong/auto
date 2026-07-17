@@ -988,6 +988,15 @@ Route::middleware(['auth', 'role:sale,leader,leader_sale,sale_manager,manager,ma
     Route::get('/my-orders/monitoring', [PageController::class, 'myOrdersMonitoring'])
         ->name('pages.my_orders.monitoring')
         ->middleware('permission:orders.monitoring');
+    Route::post('/my-orders/monitoring/approve-all', [PageController::class, 'myOrdersMonitoringApproveAll'])
+        ->name('pages.my_orders.monitoring.approve_all')
+        ->middleware('permission:orders.monitoring');
+    Route::post('/my-orders/monitoring/refresh-sequence', [PageController::class, 'myOrdersMonitoringRefreshSequence'])
+        ->name('pages.my_orders.monitoring.refresh_sequence')
+        ->middleware('permission:orders.monitoring');
+    Route::post('/my-orders/monitoring/orders', [OrderController::class, 'storeFromMonitoring'])
+        ->name('pages.my_orders.monitoring.store')
+        ->middleware('permission:orders.monitoring');
     Route::get('/my-orders/daily-prices', [PageController::class, 'dailyProductPrices'])->name('pages.my_orders.daily_prices');
     Route::get('/my-orders/daily-inventories', [PageController::class, 'dailyInventories'])->name('pages.my_orders.daily_inventories');
     Route::get('/my-products', [PageController::class, 'myProducts'])->name('pages.my_products');
