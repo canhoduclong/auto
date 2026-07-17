@@ -924,13 +924,27 @@ class PageController extends Controller
             abort(403, 'Bạn không có quyền truy cập theo dõi đơn hàng.');
         }
 
-        $query = Order::query()
-            ->with(['customer', 'user', 'shipper'])
-            ->latest('created_at');
+        try {
+            $selectedDate = Carbon::parse(
+                $request->input('date', $request->input('from_date', now()->toDateString()))
+            )->toDateString();
+        } catch (\Throwable) {
+            $selectedDate = now()->toDateString();
+        }
+
+        $dateQuery = Order::query()
+            ->with([
+                'customer',
+                'user',
+                'shipper',
+                'items.product',
+                'items.variant.product',
+            ])
+            ->whereDate('created_at', $selectedDate);
 
         $keyword = trim((string) $request->input('keyword', ''));
         if ($keyword !== '') {
-            $query->where(function ($sub) use ($keyword) {
+            $dateQuery->where(function ($sub) use ($keyword) {
                 $sub->where('code', 'like', "%{$keyword}%")
                     ->orWhereHas('customer', function ($customerQuery) use ($keyword) {
                         $customerQuery->where('name', 'like', "%{$keyword}%")
@@ -946,31 +960,19 @@ class PageController extends Controller
         }
 
         if ($request->filled('status')) {
-            $query->where('status', (string) $request->input('status'));
+            $dateQuery->where('status', (string) $request->input('status'));
         }
 
-        $fromDate = $request->input('from_date');
-        $toDate = $request->input('to_date');
+        $sidebarOrders = (clone $dateQuery)->get();
 
-        // Mặc định hiển thị đơn trong ngày nếu không có filter ngày
-        if (!$fromDate && !$toDate && !$request->hasAny(['from_date', 'to_date'])) {
-            $fromDate = Carbon::today()->toDateString();
-            $toDate = $fromDate;
+        $selectedSaleId = max(0, (int) $request->input('sale_id', 0));
+        if ($selectedSaleId > 0) {
+            $dateQuery->where('user_id', $selectedSaleId);
         }
 
-        if ($fromDate && $toDate) {
-            $from = Carbon::parse($fromDate)->startOfDay();
-            $to = Carbon::parse($toDate)->endOfDay();
-
-            if ($from->gt($to)) {
-                [$from, $to] = [$to, $from];
-            }
-
-            $query->whereBetween('created_at', [$from, $to]);
-        } elseif ($fromDate) {
-            $query->whereDate('created_at', '>=', $fromDate);
-        } elseif ($toDate) {
-            $query->whereDate('created_at', '<=', $toDate);
+        $selectedCustomerId = max(0, (int) $request->input('customer_id', 0));
+        if ($selectedCustomerId > 0) {
+            $dateQuery->where('customer_id', $selectedCustomerId);
         }
 
         $allowedPerPage = [10, 20, 50, 100];
@@ -979,7 +981,19 @@ class PageController extends Controller
             $perPage = 20;
         }
 
-        $statsQuery = clone $query;
+        $allowedSorts = ['daily_sequence', 'created_at', 'total', 'customer_name', 'status'];
+        $sortBy = (string) $request->input('sort_by', 'daily_sequence');
+        if (!in_array($sortBy, $allowedSorts, true)) {
+            $sortBy = 'daily_sequence';
+        }
+
+        $sortDir = strtolower((string) $request->input('sort_dir', 'asc'));
+        if (!in_array($sortDir, ['asc', 'desc'], true)) {
+            $sortDir = 'asc';
+        }
+
+        $filteredOrders = (clone $dateQuery)->get();
+        $statsQuery = clone $dateQuery;
         $stats = [
             'total_orders' => (clone $statsQuery)->count(),
             'delivering_orders' => (clone $statsQuery)->where('status', Order::STATUS_DELIVERING)->count(),
@@ -988,12 +1002,90 @@ class PageController extends Controller
                 ->whereIn('status', [Order::STATUS_COMPLETED, Order::STATUS_DELIVERED])
                 ->count(),
             'total_value' => (clone $statsQuery)->sum('total'),
-            'today_orders' => (clone $statsQuery)->whereDate('created_at', now()->toDateString())->count(),
+            'total_quantity' => $filteredOrders->sum(fn (Order $order) => (float) $order->items->sum('quantity')),
         ];
 
-        $orders = $query
+        if ($sortBy === 'customer_name') {
+            $dateQuery->orderBy(
+                Customer::query()
+                    ->select('name')
+                    ->whereColumn('customers.id', 'orders.customer_id')
+                    ->limit(1),
+                $sortDir
+            );
+        } elseif ($sortBy === 'daily_sequence') {
+            $dateQuery->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
+                ->orderBy('daily_sequence', $sortDir)
+                ->orderBy('created_at')
+                ->orderBy('id');
+        } else {
+            $dateQuery->orderBy($sortBy, $sortDir)->orderBy('id', $sortDir);
+        }
+
+        $orders = $dateQuery
             ->paginate($perPage)
             ->appends($request->query());
+
+        $productRows = $filteredOrders
+            ->flatMap(fn (Order $order) => $order->items)
+            ->groupBy(function ($item) {
+                $productName = $item->product?->name
+                    ?? $item->variant?->product?->name
+                    ?? $item->variant?->name
+                    ?? 'Sản phẩm';
+                $size = $item->variant?->size ?? $item->variant?->name ?? '-';
+
+                return implode('|', [$productName, $size, (float) ($item->price ?? 0)]);
+            })
+            ->map(function ($items) {
+                $first = $items->first();
+                $quantity = (float) $items->sum('quantity');
+                $displayTotal = (float) $items->sum(fn ($item) => (float) $item->display_total_value);
+                $subtotal = (float) $items->sum(function ($item) {
+                    $lineTotal = (float) ($item->total ?? 0);
+
+                    return $lineTotal > 0
+                        ? $lineTotal
+                        : (float) ($item->quantity ?? 0) * (float) ($item->price ?? 0);
+                });
+
+                return [
+                    'name' => $first->product?->name
+                        ?? $first->variant?->product?->name
+                        ?? $first->variant?->name
+                        ?? 'Sản phẩm',
+                    'quantity' => $quantity,
+                    'total' => $displayTotal,
+                    'unit' => $first->display_total_unit,
+                    'size' => $first->variant?->size ?? $first->variant?->name ?? '-',
+                    'price' => (float) ($first->price ?? 0),
+                    'subtotal' => $subtotal,
+                ];
+            })
+            ->sortBy('name')
+            ->values();
+
+        $saleFilters = $sidebarOrders
+            ->filter(fn (Order $order) => $order->user)
+            ->groupBy('user_id')
+            ->map(fn ($saleOrders) => [
+                'id' => (int) $saleOrders->first()->user_id,
+                'name' => $saleOrders->first()->user->name,
+                'count' => $saleOrders->count(),
+            ])
+            ->sortBy('name')
+            ->values();
+
+        $customerFilters = $sidebarOrders
+            ->filter(fn (Order $order) => $order->customer)
+            ->groupBy('customer_id')
+            ->map(fn ($customerOrders) => [
+                'id' => (int) $customerOrders->first()->customer_id,
+                'name' => $customerOrders->first()->customer->name,
+                'count' => $customerOrders->count(),
+            ])
+            ->sortBy('name')
+            ->values();
 
         return view('site.orders.monitoring', [
             'settings' => $this->settings,
@@ -1002,9 +1094,15 @@ class PageController extends Controller
             'stats' => $stats,
             'perPage' => $perPage,
             'keyword' => $keyword,
-            'fromDate' => $fromDate,
-            'toDate' => $toDate,
+            'selectedDate' => $selectedDate,
             'selectedStatus' => (string) $request->input('status', ''),
+            'selectedSaleId' => $selectedSaleId,
+            'selectedCustomerId' => $selectedCustomerId,
+            'sortBy' => $sortBy,
+            'sortDir' => $sortDir,
+            'productRows' => $productRows,
+            'saleFilters' => $saleFilters,
+            'customerFilters' => $customerFilters,
         ]);
     }
 
