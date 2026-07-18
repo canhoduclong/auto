@@ -934,7 +934,7 @@ class PageController extends Controller
 
         $dateQuery = Order::query()
             ->with([
-                'customer',
+                'customer.addresses',
                 'user',
                 'shipper',
                 'approvals.step',

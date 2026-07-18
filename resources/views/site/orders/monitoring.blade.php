@@ -11,7 +11,7 @@
         min-height: 75vh;
         padding: 28px 0 64px;
     }
-    .monitor-shell { max-width: 1180px; margin: 0 auto; }
+    .monitor-shell { max-width: 1145px; margin: 0 auto; }
     .monitor-toolbar {
         display: flex;
         flex-wrap: wrap;
@@ -58,6 +58,7 @@
         box-shadow: 0 2px 5px rgba(15, 23, 42, .18);
     }
     .monitor-sequence:hover { background: var(--monitor-teal); color: #fff; transform: translateY(-1px); }
+    .monitor-sequence.is-empty { cursor: default; }
     .monitor-summary-head {
         display: flex;
         flex-wrap: wrap;
@@ -74,7 +75,7 @@
     }
     .monitor-sort-group { display: flex; flex-wrap: wrap; gap: 6px; }
     .monitor-sort-group .btn { border-radius: 4px; font-size: .78rem; }
-    .monitor-summary-table { padding: 0 12px 12px; }
+    .monitor-summary-table { min-height: 124px; padding: 12px; }
     .monitor-summary-table table { margin: 0; font-size: .8rem; }
     .monitor-summary-table thead th {
         border: 0;
@@ -90,10 +91,11 @@
     .monitor-summary-table td { border-color: #e8eef5; vertical-align: middle; }
     .monitor-layout {
         display: grid;
-        grid-template-columns: 185px minmax(0, 1fr);
-        gap: 14px;
+        grid-template-columns: 285px minmax(0, 1fr);
+        gap: 20px;
         margin-top: 18px;
     }
+    .monitor-content { min-width: 0; }
     .monitor-sidebar { display: grid; gap: 14px; align-content: start; }
     .monitor-filter-block { overflow: hidden; }
     .monitor-filter-title {
@@ -132,14 +134,26 @@
         color: #fff;
         font-size: .68rem;
     }
-    .monitor-orders { display: grid; gap: 10px; }
+    .monitor-orders { display: grid; gap: 28px; margin-top: 46px; }
     .monitor-order {
         scroll-margin-top: 100px;
-        overflow: hidden;
+        overflow: visible;
         display: grid;
-        grid-template-columns: minmax(0, 1fr) 126px;
+        grid-template-columns: minmax(0, 1fr) 180px;
+        gap: 18px;
+        width: calc(100% + 185px);
+        border: 0;
+        background: transparent;
+        box-shadow: none;
     }
-    .monitor-order-main { min-width: 0; padding: 14px 16px 10px; }
+    .monitor-order-main {
+        min-width: 0;
+        padding: 18px 20px 16px;
+        border: 1px solid var(--monitor-border);
+        border-radius: 10px;
+        background: #fff;
+        box-shadow: 0 5px 20px rgba(15, 23, 42, .05);
+    }
     .monitor-order-head {
         display: grid;
         grid-template-columns: minmax(180px, 1fr) minmax(290px, 360px);
@@ -161,7 +175,7 @@
         color: #fff;
         font-weight: 900;
     }
-    .monitor-order-name { color: #075985; font-weight: 800; }
+    .monitor-order-name { color: #075985; font-weight: 800; text-transform: uppercase; }
     .monitor-order-code { color: #64748b; font-size: .72rem; }
     .monitor-timeline { padding-top: 2px; }
     .monitor-timeline-track {
@@ -225,18 +239,19 @@
         text-transform: uppercase;
     }
     .monitor-items td { border-color: #edf2f7; vertical-align: middle; }
-    .monitor-order-total { padding-top: 8px; text-align: right; color: #111827; font-weight: 900; }
+    .monitor-order-total { display: none; }
     .monitor-order-footer {
         display: flex;
         flex-direction: column;
         align-items: stretch;
         justify-content: flex-start;
         gap: 10px;
-        padding: 14px 10px;
-        border-left: 1px solid #edf2f7;
-        background: #fbfdff;
+        padding: 4px 0;
+        border: 0;
+        background: transparent;
     }
     .monitor-status {
+        display: none;
         padding: 5px 9px;
         border-radius: 999px;
         background: #eaf1f8;
@@ -245,8 +260,9 @@
         font-weight: 800;
     }
     .monitor-actions { display: grid; gap: 7px; }
-    .monitor-actions .btn { width: 100%; border-radius: 4px; font-size: .72rem; font-weight: 700; }
-    .monitor-order > .collapse { grid-column: 1 / -1; }
+    .monitor-actions .btn { width: 100%; min-height: 38px; border-radius: 6px; font-size: .8rem; font-weight: 700; }
+    .monitor-actions .monitor-cancel-form { margin-top: 20px; }
+    .monitor-order > .collapse { grid-column: 1; margin-top: -18px; border: 1px solid var(--monitor-border); border-radius: 0 0 10px 10px; background: #fff; }
     .monitor-empty { padding: 44px 20px; text-align: center; color: #64748b; }
     .monitor-pagination { padding: 14px 0 0; }
     .monitor-bulk-actions {
@@ -255,9 +271,16 @@
         align-items: center;
         justify-content: space-between;
         gap: 10px;
-        padding: 10px 12px;
+        min-height: 54px;
+        padding: 8px 0;
     }
-    .monitor-bulk-actions > div { display: flex; flex-wrap: wrap; gap: 8px; }
+    .monitor-bulk-actions > div { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
+    .monitor-bulk-actions form { margin: 0; }
+    .monitor-bulk-actions .form-select { width: 158px; min-height: 38px; }
+    .monitor-bulk-actions .btn { min-height: 38px; padding-inline: 14px; }
+    .monitor-summary-toggle { border: 1px solid var(--monitor-teal); color: var(--monitor-teal); }
+    .monitor-sequence-panel { min-height: 68px; }
+    .monitor-summary-panel { overflow: hidden; }
     .monitor-create { margin-bottom: 18px; overflow: hidden; }
     .monitor-create[hidden] { display: none !important; }
     .monitor-create-head { padding: 16px 18px 0; }
@@ -326,9 +349,13 @@
     .monitor-create .variant-picker-actions .btn-outline-warning,
     .monitor-create .variant-picker-actions .btn-outline-secondary { display: none; }
     .monitor-create .pagination { margin-bottom: 0; }
+    @media (max-width: 1499.98px) {
+        .monitor-order { width: 100%; grid-template-columns: minmax(0, 1fr) 160px; }
+    }
     @media (max-width: 991.98px) {
         .monitor-layout { grid-template-columns: 1fr; }
         .monitor-sidebar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .monitor-order { width: 100%; grid-template-columns: minmax(0, 1fr) 150px; }
     }
     @media (max-width: 767.98px) {
         .monitor-page { padding-top: 18px; }
@@ -343,8 +370,9 @@
             flex-wrap: wrap;
             align-items: center;
             justify-content: space-between;
-            border-top: 1px solid #edf2f7;
+            border-top: 0;
             border-left: 0;
+            padding-top: 10px;
         }
         .monitor-actions { display: flex; flex-wrap: wrap; }
         .monitor-actions .btn { width: auto; }
@@ -423,108 +451,72 @@
             </span>
         </div>
 
-        <div class="monitor-panel mb-3">
-            @if($orders->count())
-                <div class="monitor-sequences" aria-label="Điều hướng nhanh theo số thứ tự đơn">
-                    @foreach($orders->getCollection()->sortBy(fn ($order) => $order->daily_sequence ?? PHP_INT_MAX) as $sequenceOrder)
-                        <a class="monitor-sequence" href="#monitor-order-{{ $sequenceOrder->id }}" title="{{ $sequenceOrder->customer?->name ?? $sequenceOrder->code }}">
-                            {{ $sequenceOrder->daily_sequence ?? $loop->iteration }}
+        <div class="monitor-layout">
+            <aside class="monitor-sidebar">
+                <div class="monitor-panel monitor-filter-block">
+                    <div class="monitor-filter-title">Sale</div>
+                    <div class="monitor-filter-list">
+                        <a class="monitor-filter-link {{ $selectedSaleId === 0 ? 'active' : '' }}" href="{{ route('pages.my_orders.monitoring', $saleFilterQuery) }}">
+                            <span>Tất cả Sale</span><span class="monitor-filter-count">{{ $saleFilters->sum('count') }}</span>
                         </a>
-                    @endforeach
-                </div>
-            @else
-                <div class="px-3 py-2 small text-muted">Không có số thứ tự đơn trong ngày đã chọn.</div>
-            @endif
-        </div>
-
-        <div class="monitor-panel mb-3">
-            <div class="monitor-summary-head">
-                <button class="monitor-summary-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#monitorProductSummary" aria-expanded="true">
-                    <i class="bi bi-chevron-up me-1"></i>Ẩn / hiện chi tiết hàng hóa
-                </button>
-                <div class="monitor-sort-group">
-                    <a href="{{ $sortUrl('created_at') }}" class="btn btn-sm btn-outline-secondary">Ngày tạo <i class="bi bi-arrow-down-up"></i></a>
-                    <a href="{{ $sortUrl('total') }}" class="btn btn-sm btn-outline-secondary">Tổng tiền <i class="bi bi-arrow-down-up"></i></a>
-                    <a href="{{ $sortUrl('customer_name') }}" class="btn btn-sm btn-outline-secondary">Khách hàng <i class="bi bi-arrow-down-up"></i></a>
-                    <a href="{{ $sortUrl('status') }}" class="btn btn-sm btn-outline-secondary">Trạng thái <i class="bi bi-arrow-down-up"></i></a>
-                </div>
-            </div>
-            <div class="collapse show" id="monitorProductSummary">
-                <div class="monitor-summary-table table-responsive">
-                    <table class="table table-sm align-middle">
-                        <thead>
-                            <tr>
-                                <th>STT</th>
-                                <th>Sản phẩm</th>
-                                <th>Số lượng</th>
-                                <th>Tổng</th>
-                                <th>Size</th>
-                                <th>Đơn giá</th>
-                                <th class="text-end">Tạm tính</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @forelse($productRows as $row)
-                                <tr>
-                                    <td>{{ $loop->iteration }}</td>
-                                    <td class="fw-semibold">{{ $row['name'] }}</td>
-                                    <td>{{ $formatQuantity($row['quantity']) }}</td>
-                                    <td>{{ $formatQuantity($row['total']) }} {{ $row['unit'] }}</td>
-                                    <td>{{ $row['size'] }}</td>
-                                    <td>{{ number_format($row['price'], 0, ',', '.') }}đ</td>
-                                    <td class="text-end fw-semibold">{{ number_format($row['subtotal'], 0, ',', '.') }}đ</td>
-                                </tr>
-                            @empty
-                                <tr><td colspan="7" class="text-center text-muted py-3">Không có hàng hóa phù hợp.</td></tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <form method="GET" action="{{ route('pages.my_orders.monitoring') }}" class="monitor-panel p-2 mb-3">
-            <div class="row g-2 align-items-center">
-                <input type="hidden" name="date" value="{{ $selectedDate }}">
-                <div class="col-lg-5">
-                    <input type="text" name="keyword" class="form-control form-control-sm" value="{{ $keyword }}" placeholder="Mã đơn, khách hàng, sale, shipper...">
-                </div>
-                <div class="col-lg-3">
-                    <select name="status" class="form-select form-select-sm">
-                        <option value="">Tất cả trạng thái</option>
-                        @foreach($statusLabels as $statusKey => $statusName)
-                            <option value="{{ $statusKey }}" @selected($selectedStatus === $statusKey)>{{ $statusName }}</option>
+                        @foreach($saleFilters as $sale)
+                            <a class="monitor-filter-link {{ $selectedSaleId === $sale['id'] ? 'active' : '' }}" href="{{ route('pages.my_orders.monitoring', array_merge($saleFilterQuery, ['sale_id' => $sale['id']])) }}">
+                                <span>{{ $sale['name'] }}</span><span class="monitor-filter-count">{{ $sale['count'] }}</span>
+                            </a>
                         @endforeach
-                    </select>
+                    </div>
                 </div>
-                <div class="col-lg-2">
-                    <select name="per_page" class="form-select form-select-sm">
+
+                <div class="monitor-panel monitor-filter-block">
+                    <div class="monitor-filter-title">Khách hàng</div>
+                    <div class="monitor-filter-list">
+                        <a class="monitor-filter-link {{ $selectedCustomerId === 0 ? 'active' : '' }}" href="{{ route('pages.my_orders.monitoring', $customerFilterQuery) }}">
+                            <span>Tất cả khách hàng</span><span class="monitor-filter-count">{{ $customerFilters->sum('count') }}</span>
+                        </a>
+                        @foreach($customerFilters as $customer)
+                            <a class="monitor-filter-link {{ $selectedCustomerId === $customer['id'] ? 'active' : '' }}" href="{{ route('pages.my_orders.monitoring', array_merge($customerFilterQuery, ['customer_id' => $customer['id']])) }}">
+                                <span>{{ $customer['name'] }}</span><span class="monitor-filter-count">{{ $customer['count'] }}</span>
+                            </a>
+                        @endforeach
+                    </div>
+                </div>
+            </aside>
+
+            <main class="monitor-content">
+        <div class="monitor-panel monitor-sequence-panel mb-3">
+            @php
+                $sequenceOrders = $orders->getCollection()->sortBy(fn ($order) => $order->daily_sequence ?? PHP_INT_MAX)->values();
+                $sequenceSlots = min((int) $perPage, max(10, $sequenceOrders->count()));
+            @endphp
+            <div class="monitor-sequences" aria-label="Điều hướng nhanh theo số thứ tự đơn">
+                @for($sequenceIndex = 1; $sequenceIndex <= $sequenceSlots; $sequenceIndex++)
+                    @php $sequenceOrder = $sequenceOrders->get($sequenceIndex - 1); @endphp
+                    @if($sequenceOrder)
+                        <a class="monitor-sequence" href="#monitor-order-{{ $sequenceOrder->id }}" title="{{ $sequenceOrder->customer?->name ?? $sequenceOrder->code }}">
+                            {{ $sequenceOrder->daily_sequence ?? $sequenceIndex }}
+                        </a>
+                    @else
+                        <span class="monitor-sequence is-empty" aria-hidden="true">{{ $sequenceIndex }}</span>
+                    @endif
+                @endfor
+            </div>
+        </div>
+
+        <div class="monitor-bulk-actions mb-2">
+            <div class="monitor-bulk-left">
+                <form method="GET" action="{{ route('pages.my_orders.monitoring') }}">
+                    @foreach(request()->except(['per_page', 'page']) as $queryKey => $queryValue)
+                        @if(!is_array($queryValue))<input type="hidden" name="{{ $queryKey }}" value="{{ $queryValue }}">@endif
+                    @endforeach
+                    <select name="per_page" class="form-select form-select-sm" onchange="this.form.submit()" aria-label="Số đơn trên trang">
                         @foreach([10, 20, 50, 100] as $size)
                             <option value="{{ $size }}" @selected((int) $perPage === $size)>{{ $size }} đơn / trang</option>
                         @endforeach
                     </select>
-                </div>
-                <div class="col-lg-2 d-grid">
-                    <button class="btn btn-sm btn-primary"><i class="bi bi-funnel me-1"></i>Lọc dữ liệu</button>
-                </div>
-            </div>
-        </form>
-
-        <div class="monitor-panel monitor-bulk-actions mb-3">
-            <div>
-                @if($canApproveAnyOrder)
-                    <form method="POST" action="{{ route('pages.my_orders.monitoring.approve_all') }}" onsubmit="return confirm('Duyệt tất cả đơn đang tới lượt bạn theo bộ lọc hiện tại?');">
-                        @csrf
-                        <input type="hidden" name="date" value="{{ $selectedDate }}">
-                        <input type="hidden" name="keyword" value="{{ $keyword }}">
-                        <input type="hidden" name="status" value="{{ $selectedStatus }}">
-                        <input type="hidden" name="sale_id" value="{{ $selectedSaleId }}">
-                        <input type="hidden" name="customer_id" value="{{ $selectedCustomerId }}">
-                        <button type="submit" class="btn btn-sm btn-success">
-                            <i class="bi bi-check2-all me-1"></i>Duyệt tất cả
-                        </button>
-                    </form>
-                @endif
+                </form>
+                <button class="btn btn-sm btn-outline-primary monitor-summary-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#monitorProductSummary" aria-expanded="true">
+                    <i class="bi bi-inbox me-1"></i>Hàng - Số lượng
+                </button>
                 <form method="POST" action="{{ route('pages.my_orders.monitoring.refresh_sequence') }}" onsubmit="return confirm('Cập nhật lại số thứ tự ưu tiên cho các đơn đang thiếu số?');">
                     @csrf
                     <input type="hidden" name="date" value="{{ $selectedDate }}">
@@ -536,10 +528,56 @@
                         <i class="bi bi-arrow-clockwise me-1"></i>Refresh
                     </button>
                 </form>
+                <form method="POST" action="{{ route('pages.my_orders.monitoring.approve_all') }}" onsubmit="return confirm('Duyệt tất cả đơn đang tới lượt bạn theo bộ lọc hiện tại?');">
+                    @csrf
+                    <input type="hidden" name="date" value="{{ $selectedDate }}">
+                    <input type="hidden" name="keyword" value="{{ $keyword }}">
+                    <input type="hidden" name="status" value="{{ $selectedStatus }}">
+                    <input type="hidden" name="sale_id" value="{{ $selectedSaleId }}">
+                    <input type="hidden" name="customer_id" value="{{ $selectedCustomerId }}">
+                    <button type="submit" class="btn btn-sm btn-success" @disabled(!$canApproveAnyOrder)>
+                        <i class="bi bi-check2-all me-1"></i>Duyệt tất cả
+                    </button>
+                </form>
             </div>
             <button type="button" class="btn btn-sm btn-success" id="monitorOpenCreate">
                 <i class="bi bi-plus-circle me-1"></i>Thêm đơn
             </button>
+        </div>
+
+        <div class="monitor-panel monitor-summary-panel mb-4">
+            <div class="collapse show" id="monitorProductSummary">
+                <div class="monitor-summary-table table-responsive">
+                    <table class="table table-sm align-middle">
+                        <thead>
+                            <tr>
+                                <th>STT</th>
+                                <th>Sản phẩm</th>
+                                <th>Số lượng</th>
+                                <th>Size</th>
+                                <th>Tổng</th>
+                                <th>Đơn giá</th>
+                                <th class="text-end">Tạm tính</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse($productRows as $row)
+                                <tr>
+                                    <td>{{ $loop->iteration }}</td>
+                                    <td class="fw-semibold">{{ $row['name'] }}</td>
+                                    <td>{{ $formatQuantity($row['quantity']) }}</td>
+                                    <td>{{ $row['size'] }}</td>
+                                    <td>{{ $formatQuantity($row['total']) }} {{ $row['unit'] }}</td>
+                                    <td>{{ number_format($row['price'], 0, ',', '.') }}đ</td>
+                                    <td class="text-end fw-semibold">{{ number_format($row['subtotal'], 0, ',', '.') }}đ</td>
+                                </tr>
+                            @empty
+                                <tr><td colspan="7" class="text-center text-muted py-4">Không có hàng hóa phù hợp.</td></tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
 
         <section class="monitor-panel monitor-create" id="monitorCreateOrder" hidden aria-label="Tạo đơn hàng mới">
@@ -634,38 +672,6 @@
             </div>
         </section>
 
-        <div class="monitor-layout">
-            <aside class="monitor-sidebar">
-                <div class="monitor-panel monitor-filter-block">
-                    <div class="monitor-filter-title">Sale</div>
-                    <div class="monitor-filter-list">
-                        <a class="monitor-filter-link {{ $selectedSaleId === 0 ? 'active' : '' }}" href="{{ route('pages.my_orders.monitoring', $saleFilterQuery) }}">
-                            <span>Tất cả Sale</span><span class="monitor-filter-count">{{ $saleFilters->sum('count') }}</span>
-                        </a>
-                        @foreach($saleFilters as $sale)
-                            <a class="monitor-filter-link {{ $selectedSaleId === $sale['id'] ? 'active' : '' }}" href="{{ route('pages.my_orders.monitoring', array_merge($saleFilterQuery, ['sale_id' => $sale['id']])) }}">
-                                <span>{{ $sale['name'] }}</span><span class="monitor-filter-count">{{ $sale['count'] }}</span>
-                            </a>
-                        @endforeach
-                    </div>
-                </div>
-
-                <div class="monitor-panel monitor-filter-block">
-                    <div class="monitor-filter-title">Khách hàng</div>
-                    <div class="monitor-filter-list">
-                        <a class="monitor-filter-link {{ $selectedCustomerId === 0 ? 'active' : '' }}" href="{{ route('pages.my_orders.monitoring', $customerFilterQuery) }}">
-                            <span>Tất cả khách hàng</span><span class="monitor-filter-count">{{ $customerFilters->sum('count') }}</span>
-                        </a>
-                        @foreach($customerFilters as $customer)
-                            <a class="monitor-filter-link {{ $selectedCustomerId === $customer['id'] ? 'active' : '' }}" href="{{ route('pages.my_orders.monitoring', array_merge($customerFilterQuery, ['customer_id' => $customer['id']])) }}">
-                                <span>{{ $customer['name'] }}</span><span class="monitor-filter-count">{{ $customer['count'] }}</span>
-                            </a>
-                        @endforeach
-                    </div>
-                </div>
-            </aside>
-
-            <main>
                 <div class="monitor-orders">
                     @forelse($orders as $order)
                         @php
@@ -675,7 +681,11 @@
                             );
                             $timelineIndex = $timelineMap[$order->status] ?? 0;
                             $timelinePercent = ($timelineIndex / 4) * 100;
-                            $deliveryAddress = $order->recipient_address ?: ($order->customer?->address ?: 'Chưa cập nhật địa chỉ');
+                            $defaultAddress = $order->customer?->addresses?->firstWhere('is_default', 1)
+                                ?? $order->customer?->addresses?->first();
+                            $deliveryAddress = $order->recipient_address
+                                ?: ($defaultAddress?->note ?: ($order->customer?->address ?: 'Chưa cập nhật địa chỉ'));
+                            $deliveryArea = collect([$defaultAddress?->ward, $defaultAddress?->city])->filter()->implode(', ');
                             $deliveryTime = $order->delivery_time ?: ($order->customer?->delivery_time ?: 'Chưa cập nhật');
                             $canManageOrder = (int) $order->user_id === (int) auth()->id();
                             $isEditable = $canManageOrder && (
@@ -715,6 +725,9 @@
 
                                 <div class="monitor-meta">
                                     <span><i class="bi bi-geo-alt me-1"></i>Địa chỉ nhận hàng: {{ $deliveryAddress }}</span>
+                                    @if($deliveryArea !== '')
+                                        <span><i class="bi bi-pin-map me-1"></i>Khu vực: {{ $deliveryArea }}</span>
+                                    @endif
                                     <span><i class="bi bi-clock me-1"></i>Giờ giao: {{ $deliveryTime }}</span>
                                     @if($order->shipper)
                                         <span><i class="bi bi-truck me-1"></i>Shipper: {{ $order->shipper->name }}</span>
@@ -746,7 +759,10 @@
                                                     }
                                                 @endphp
                                                 <tr>
-                                                    <td class="fw-semibold">{{ $itemName }}</td>
+                                                    <td>
+                                                        <span class="fw-semibold">{{ $itemName }}</span>
+                                                        @if($item->variant?->sku)<span class="text-muted">({{ $item->variant->sku }})</span>@endif
+                                                    </td>
                                                     <td class="text-end">{{ $formatQuantity($item->quantity) }}</td>
                                                     <td class="text-end">{{ $item->variant?->size ?? '-' }}</td>
                                                     <td class="text-end fw-semibold">{{ $item->display_total_label }}</td>
@@ -777,17 +793,17 @@
                                             <div class="small text-danger">Size/KL = 0</div>
                                         @endif
                                     @endif
+                                    @if($isEditable)
+                                        <a class="btn btn-sm btn-success" href="{{ route('site.orders.edit', $order) }}"><i class="bi bi-pencil me-1"></i>Sửa</a>
+                                    @endif
                                     <button class="btn btn-sm btn-outline-info" type="button" data-bs-toggle="collapse" data-bs-target="#monitorExtra{{ $order->id }}">
                                         <i class="bi bi-eye me-1"></i>Chi tiết
                                     </button>
-                                    @if($isEditable)
-                                        <a class="btn btn-sm btn-outline-warning" href="{{ route('site.orders.edit', $order) }}"><i class="bi bi-pencil me-1"></i>Sửa đơn</a>
-                                    @endif
                                     @if($canManageOrder)
                                         <a class="btn btn-sm btn-outline-secondary" href="{{ route('site.orders.copy', $order->id) }}"><i class="bi bi-files me-1"></i>Copy đơn</a>
                                         <a class="btn btn-sm btn-warning" href="{{ route('site.order-adjustments.create', $order) }}"><i class="bi bi-arrow-left-right me-1"></i>Yêu cầu điều chỉnh</a>
                                         @if($canCancel)
-                                            <form method="POST" action="{{ route('site.orders.cancel', $order) }}" onsubmit="return confirm('Bạn chắc chắn muốn hủy đơn hàng này?');">
+                                            <form method="POST" class="monitor-cancel-form" action="{{ route('site.orders.cancel', $order) }}" onsubmit="return confirm('Bạn chắc chắn muốn hủy đơn hàng này?');">
                                                 @csrf
                                                 <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-x-circle me-1"></i>Hủy đơn hàng</button>
                                             </form>
