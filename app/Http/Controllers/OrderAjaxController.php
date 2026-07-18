@@ -2,6 +2,7 @@
 namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Order;
+use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Support\ProductVariantSorter;
 
@@ -24,6 +25,11 @@ class OrderAjaxController extends Controller
         $perPage = (int) $request->input('per_page', 20);
         $perPage = max(1, min($perPage, 50)); // giới hạn tối đa 50
         $userId = auth()->id();
+
+        if ($request->input('view') === 'products') {
+            return $this->productsWithVariants($request, $keyword, $perPage);
+        }
+
         $query = ProductVariant::query()
             ->withAvailableStock()
             ->with(['product.avatar.media', 'latestPriceRule', 'mediaLink.media'])
@@ -72,6 +78,49 @@ class OrderAjaxController extends Controller
         return response()->json([
             'success' => true,
             'variants' => $variants
+        ]);
+    }
+
+    private function productsWithVariants(Request $request, string $keyword, int $perPage)
+    {
+        $activeVariants = static function ($query): void {
+            $query->withAvailableStock()
+                ->with(['latestPriceRule', 'mediaLink.media'])
+                ->where('product_variants.status', true)
+                ->orderByRaw('COALESCE(product_variants.sort_order, 999999)')
+                ->orderByRaw("LOWER(COALESCE(NULLIF(product_variants.size, ''), NULLIF(product_variants.name, ''), product_variants.sku, ''))")
+                ->orderBy('product_variants.id');
+        };
+
+        $products = Product::query()
+            ->with(['avatar.media', 'variants' => $activeVariants])
+            ->where('products.status', true)
+            ->whereHas('variants', function ($query): void {
+                $query->where('product_variants.status', true);
+            })
+            ->when($keyword !== '', function ($query) use ($keyword): void {
+                $query->where(function ($search) use ($keyword): void {
+                    $search->where('products.name', 'like', '%' . $keyword . '%')
+                        ->orWhereHas('variants', function ($variants) use ($keyword): void {
+                            $variants->where('product_variants.status', true)
+                                ->where(function ($variantSearch) use ($keyword): void {
+                                    $variantSearch->where('product_variants.sku', 'like', '%' . $keyword . '%')
+                                        ->orWhere('product_variants.name', 'like', '%' . $keyword . '%')
+                                        ->orWhere('product_variants.size', 'like', '%' . $keyword . '%')
+                                        ->orWhere('product_variants.quality', 'like', '%' . $keyword . '%');
+                                });
+                        });
+                });
+            })
+            ->orderByRaw('COALESCE(products.sort_order, 999999)')
+            ->orderByRaw("LOWER(COALESCE(products.name, ''))")
+            ->orderBy('products.id')
+            ->paginate($perPage)
+            ->appends($request->query());
+
+        return response()->json([
+            'success' => true,
+            'html' => view('orders._product_variant_search_results', ['products' => $products])->render(),
         ]);
     }
 }

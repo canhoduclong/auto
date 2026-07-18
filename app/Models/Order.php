@@ -182,6 +182,20 @@ class Order extends Model
         return in_array((string) $this->status, self::CANCELLABLE_STATUSES, true);
     }
 
+    public function canBeDirectlyEditedByOwner(): bool
+    {
+        if (!empty($this->copied_from_order_id)) {
+            return true;
+        }
+
+        return in_array((string) $this->status, [
+            'draft',
+            'pending',
+            self::STATUS_ORDER_PLACED,
+            self::STATUS_PENDING_LEADER_APPROVAL,
+        ], true);
+    }
+
     const WAREHOUSE_ADJUSTMENT_STATUS_NONE = 'none';
     const WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION = 'pending_sale_confirmation';
     const WAREHOUSE_ADJUSTMENT_STATUS_SALE_CONFIRMED = 'sale_confirmed';

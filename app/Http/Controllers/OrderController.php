@@ -684,6 +684,8 @@ class OrderController extends Controller
             'items' => ['required', 'array', 'min:1'],
             'items.*.variant_id' => ['required', 'integer', 'distinct', 'exists:product_variants,id'],
             'items.*.quantity' => ['required', 'integer', 'min:1', 'max:100000'],
+            'items.*.unit_discount' => ['nullable', 'numeric', 'min:0'],
+            'items.*.unit_discount_type' => ['nullable', Rule::in(['decrease', 'increase'])],
             'delivery_time' => ['nullable', 'string', 'max:255'],
             'recipient_address' => ['nullable', 'string', 'max:1000'],
             'note' => ['nullable', 'string', 'max:2000'],
@@ -705,12 +707,12 @@ class OrderController extends Controller
                 'message' => 'Khách hàng không thuộc phạm vi bạn được phép tạo đơn.',
             ], 403);
         }
-        $items = collect($validated['items'])->map(static fn (array $item): array => [
+        $items = collect($validated['items'])->map(fn (array $item): array => [
             'variant_id' => (int) $item['variant_id'],
             'quantity' => (int) $item['quantity'],
             'base_price' => null,
-            'unit_discount' => 0,
-            'unit_discount_type' => 'decrease',
+            'unit_discount' => max(0, (float) ($item['unit_discount'] ?? 0)),
+            'unit_discount_type' => $this->normalizeDiscountType($item['unit_discount_type'] ?? null),
             'unit_weight' => null,
         ])->values()->all();
 

@@ -3969,13 +3969,11 @@ public function apiTruckRoutes(Request $request)
         $isCopiedOrder = $this->hasOrderColumn('copied_from_order_id')
             && !empty($order->copied_from_order_id);
 
-        $isEditable = $isCopiedOrder
-            || ($order->status === Order::STATUS_PENDING_LEADER_APPROVAL
-                && $order->created_at?->isToday());
+        $isEditable = $isCopiedOrder || $order->canBeDirectlyEditedByOwner();
 
         if (!$isEditable) {
             return redirect()->route('pages.my_orders')
-                ->with('error', 'Chi duoc sua don cho duyet leader duoc tao trong ngay.');
+                ->with('error', 'Đơn đã qua bước duyệt trực tiếp. Vui lòng dùng chức năng Yêu cầu điều chỉnh.');
         }
 
         $order->load('items.variant.product', 'customer', 'parentOrder');
@@ -4000,13 +3998,11 @@ public function apiTruckRoutes(Request $request)
             || (string) ($order->order_type ?? '') === 'order_return'
             || (string) ($order->workflow_code ?? '') === 'order_return';
 
-        $isEditable = $isCopiedOrder
-            || ($order->status === Order::STATUS_PENDING_LEADER_APPROVAL
-                && $order->created_at?->isToday());
+        $isEditable = $isCopiedOrder || $order->canBeDirectlyEditedByOwner();
 
         if (!$isEditable) {
             return redirect()->route('pages.my_orders')
-                ->with('error', 'Don hang khong con du dieu kien de sua.');
+                ->with('error', 'Đơn đã qua bước duyệt trực tiếp. Vui lòng dùng chức năng Yêu cầu điều chỉnh.');
         }
 
         $customerIds = $this->myAssignedCustomersQuery((int) $user->id)

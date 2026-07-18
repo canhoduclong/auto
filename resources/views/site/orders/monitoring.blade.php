@@ -11,7 +11,7 @@
         min-height: 75vh;
         padding: 28px 0 64px;
     }
-    .monitor-shell { max-width: 1145px; margin: 0 auto; }
+    .monitor-shell { max-width: 1320px; margin: 0 auto; }
     .monitor-toolbar {
         display: flex;
         flex-wrap: wrap;
@@ -91,7 +91,7 @@
     .monitor-summary-table td { border-color: #e8eef5; vertical-align: middle; }
     .monitor-layout {
         display: grid;
-        grid-template-columns: 285px minmax(0, 1fr);
+        grid-template-columns: 260px minmax(0, 1fr);
         gap: 20px;
         margin-top: 18px;
     }
@@ -134,14 +134,14 @@
         color: #fff;
         font-size: .68rem;
     }
-    .monitor-orders { display: grid; gap: 28px; margin-top: 46px; }
+    .monitor-orders { display: grid; gap: 18px; margin-top: 24px; }
     .monitor-order {
         scroll-margin-top: 100px;
         overflow: visible;
         display: grid;
         grid-template-columns: minmax(0, 1fr) 180px;
-        gap: 18px;
-        width: calc(100% + 185px);
+        gap: 14px;
+        width: 100%;
         border: 0;
         background: transparent;
         box-shadow: none;
@@ -261,6 +261,7 @@
     }
     .monitor-actions { display: grid; gap: 7px; }
     .monitor-actions .btn { width: 100%; min-height: 38px; border-radius: 6px; font-size: .8rem; font-weight: 700; }
+    .monitor-actions form { width: 100%; margin: 0; }
     .monitor-actions .monitor-cancel-form { margin-top: 20px; }
     .monitor-order > .collapse { grid-column: 1; margin-top: -18px; border: 1px solid var(--monitor-border); border-radius: 0 0 10px 10px; background: #fff; }
     .monitor-empty { padding: 44px 20px; text-align: center; color: #64748b; }
@@ -325,7 +326,9 @@
     .monitor-create-search .form-control { min-width: 0; }
     .monitor-selected-table { border: 1px solid #fed7aa; border-radius: 9px; overflow: hidden; background: #fffaf3; }
     .monitor-selected-table table { margin: 0; font-size: .78rem; }
-    .monitor-selected-table input { width: 80px; }
+    .monitor-selected-table .monitor-item-quantity { width: 78px; }
+    .monitor-selected-table .monitor-item-discount { width: 105px; }
+    .monitor-selected-table .monitor-item-discount-type { width: 76px; }
     .monitor-create-total { padding: 10px 12px; border-top: 1px solid #fed7aa; text-align: right; color: #b45309; font-weight: 900; }
     .monitor-customer-selected { padding: 12px 14px; border: 1px solid #99f6e4; border-radius: 8px; background: #f0fdfa; }
     .monitor-confirm-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
@@ -333,24 +336,31 @@
     .monitor-confirm-card h3 { font-size: .82rem; font-weight: 900; text-transform: uppercase; }
     .monitor-finish { padding: 24px; text-align: center; }
     .monitor-finish-icon { color: #059669; font-size: 2.8rem; }
-    .monitor-create .variant-picker-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-    .monitor-create .variant-picker-list { display: grid; gap: 8px; max-height: 360px; overflow-y: auto; }
-    .monitor-create .variant-picker-item { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 12px; padding: 10px; border: 1px solid #e5e7eb; border-radius: 8px; }
-    .monitor-create .variant-picker-main { display: flex; align-items: center; gap: 10px; min-width: 0; }
-    .monitor-create .variant-picker-thumb { width: 48px; height: 48px; border-radius: 7px; object-fit: cover; }
-    .monitor-create .variant-picker-copy { min-width: 0; }
-    .monitor-create .variant-picker-name { font-size: .82rem; font-weight: 800; }
-    .monitor-create .variant-picker-meta { display: flex; flex-wrap: wrap; gap: 8px; color: #64748b; font-size: .68rem; }
-    .monitor-create .variant-picker-stats { display: flex; gap: 12px; font-size: .72rem; }
-    .monitor-create .variant-picker-stats > div { display: grid; }
-    .monitor-create .variant-picker-label { color: #64748b; }
-    .monitor-create .variant-picker-actions { display: flex; gap: 4px; }
-    .monitor-create .variant-picker-actions .btn-warning,
-    .monitor-create .variant-picker-actions .btn-outline-warning,
-    .monitor-create .variant-picker-actions .btn-outline-secondary { display: none; }
+    .monitor-product-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .monitor-product-list { display: grid; gap: 8px; max-height: 400px; overflow-y: auto; }
+    .monitor-product-card { border: 1px solid #e5e7eb; border-radius: 9px; background: #fff; overflow: hidden; }
+    .monitor-product-card.is-open { border-color: #0f766e; box-shadow: 0 0 0 2px rgba(15, 118, 110, .08); }
+    .monitor-product-choice { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 12px; padding: 10px; border: 0; background: #fff; color: #0f172a; text-align: left; }
+    .monitor-product-main { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .monitor-product-thumb { width: 52px; height: 52px; flex: 0 0 auto; border-radius: 7px; object-fit: cover; }
+    .monitor-product-name, .monitor-product-meta { display: block; }
+    .monitor-product-name { font-size: .84rem; }
+    .monitor-product-meta { margin-top: 3px; color: #64748b; font-size: .7rem; }
+    .monitor-product-choice-label { flex: 0 0 auto; color: #0f766e; font-size: .75rem; font-weight: 800; }
+    .monitor-product-card.is-open .monitor-product-choice-label i { transform: rotate(180deg); }
+    .monitor-product-variants { padding: 10px; border-top: 1px solid #e5e7eb; background: #f8fafc; }
+    .monitor-variant-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    .monitor-variant-option { display: grid; gap: 2px; min-height: 74px; padding: 8px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #334155; text-align: left; font-size: .72rem; }
+    .monitor-variant-option:hover, .monitor-variant-option.is-selected { border-color: #0f766e; background: #ecfdf5; }
+    .monitor-variant-option.is-selected { box-shadow: inset 0 0 0 1px #0f766e; }
+    .monitor-variant-size { color: #0f172a; font-size: .84rem; font-weight: 900; }
+    .monitor-variant-option small { color: #64748b; }
     .monitor-create .pagination { margin-bottom: 0; }
-    @media (max-width: 1499.98px) {
-        .monitor-order { width: 100%; grid-template-columns: minmax(0, 1fr) 160px; }
+    @media (max-width: 1199.98px) {
+        .monitor-shell { max-width: 960px; }
+        .monitor-layout { grid-template-columns: 220px minmax(0, 1fr); gap: 14px; }
+        .monitor-order { grid-template-columns: minmax(0, 1fr) 150px; }
+        .monitor-order-head { grid-template-columns: 1fr; }
     }
     @media (max-width: 991.98px) {
         .monitor-layout { grid-template-columns: 1fr; }
@@ -381,8 +391,9 @@
         .monitor-create-steps { padding-inline: 8px; }
         .monitor-create-step { font-size: .66rem; }
         .monitor-confirm-grid { grid-template-columns: 1fr; }
-        .monitor-create .variant-picker-item { grid-template-columns: 1fr auto; }
-        .monitor-create .variant-picker-stats { display: none; }
+        .monitor-variant-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .monitor-product-choice-label { font-size: 0; }
+        .monitor-product-choice-label i { font-size: .8rem; }
     }
 </style>
 @endpush
@@ -606,8 +617,8 @@
                         <div class="px-3 pt-3 fw-bold">Sản phẩm đã chọn</div>
                         <div class="table-responsive">
                             <table class="table table-sm align-middle">
-                                <thead><tr><th>Sản phẩm</th><th>Size</th><th>Đơn giá</th><th>Số lượng</th><th></th></tr></thead>
-                                <tbody id="monitorSelectedItems"><tr><td colspan="5" class="text-center text-muted py-3">Chưa chọn sản phẩm.</td></tr></tbody>
+                                <thead><tr><th>Sản phẩm</th><th>Biến thể</th><th>Đơn giá</th><th>Số lượng</th><th>Chiết khấu</th><th>Thành tiền</th><th></th></tr></thead>
+                                <tbody id="monitorSelectedItems"><tr><td colspan="7" class="text-center text-muted py-3">Chưa chọn sản phẩm.</td></tr></tbody>
                             </table>
                         </div>
                         <div class="monitor-create-total">Tạm tính: <span id="monitorCreateTotal">0đ</span></div>
@@ -688,15 +699,12 @@
                             $deliveryArea = collect([$defaultAddress?->ward, $defaultAddress?->city])->filter()->implode(', ');
                             $deliveryTime = $order->delivery_time ?: ($order->customer?->delivery_time ?: 'Chưa cập nhật');
                             $canManageOrder = (int) $order->user_id === (int) auth()->id();
-                            $isEditable = $canManageOrder && (
-                                !empty($order->copied_from_order_id)
-                                || ($order->status === \App\Models\Order::STATUS_PENDING_LEADER_APPROVAL && $order->created_at?->isToday())
-                            );
+                            $isEditable = $canManageOrder && $order->canBeDirectlyEditedByOwner();
                             $canCancel = $canManageOrder
                                 && $order->created_at?->isToday()
                                 && in_array($order->status, \App\Models\Order::CANCELLABLE_STATUSES, true);
                         @endphp
-                        <article class="monitor-panel monitor-order" id="monitor-order-{{ $order->id }}">
+                        <article class="monitor-panel monitor-order {{ $canManageOrder ? 'is-mine' : '' }}" id="monitor-order-{{ $order->id }}">
                             <div class="monitor-order-main">
                                 <div class="monitor-order-head">
                                     <div class="monitor-order-person">
@@ -854,7 +862,11 @@
     let customersLoaded = false;
 
     const money = value => new Intl.NumberFormat('vi-VN').format(Math.round(Number(value) || 0)) + 'đ';
-    const itemLineTotal = item => item.price * item.quantity * (item.isPricedByKg ? item.weight : 1);
+    const itemAdjustedPrice = item => item.discountType === 'increase'
+        ? item.price + item.discount
+        : Math.max(0, item.price - item.discount);
+    const maximumDecrease = item => Math.max(0, item.price - item.minPrice);
+    const itemLineTotal = item => itemAdjustedPrice(item) * item.quantity * (item.isPricedByKg ? item.weight : 1);
     const orderTotal = () => Array.from(selectedItems.values()).reduce((sum, item) => sum + itemLineTotal(item), 0);
     const notify = (message, type = 'error') => {
         if (typeof window.showToast === 'function') window.showToast(message, type);
@@ -877,7 +889,7 @@
     function renderItems() {
         const body = document.getElementById('monitorSelectedItems');
         if (!selectedItems.size) {
-            body.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">Chưa chọn sản phẩm.</td></tr>';
+            body.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-3">Chưa chọn sản phẩm.</td></tr>';
         } else {
             body.innerHTML = Array.from(selectedItems.values()).map(item => `
                 <tr data-selected-variant="${item.id}">
@@ -885,6 +897,14 @@
                     <td>${escapeHtml(item.size || '—')}</td>
                     <td>${money(item.price)}</td>
                     <td><input type="number" class="form-control form-control-sm monitor-item-quantity" min="1" max="100000" value="${item.quantity}"></td>
+                    <td><div class="d-flex gap-1">
+                        <select class="form-select form-select-sm monitor-item-discount-type" aria-label="Loại chiết khấu">
+                            <option value="decrease" ${item.discountType === 'decrease' ? 'selected' : ''}>Giảm</option>
+                            <option value="increase" ${item.discountType === 'increase' ? 'selected' : ''}>Tăng</option>
+                        </select>
+                        <input type="number" class="form-control form-control-sm monitor-item-discount" min="0" ${item.discountType === 'decrease' ? `max="${maximumDecrease(item)}"` : ''} step="1000" value="${item.discount}" aria-label="Chiết khấu mỗi đơn vị">
+                    </div><div class="small text-muted mt-1">/ đơn vị${item.minPrice > 0 ? ` · Giá Min ${money(item.minPrice)}` : ''}</div></td>
+                    <td class="fw-semibold monitor-item-line-total">${money(itemLineTotal(item))}</td>
                     <td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger monitor-remove-item" aria-label="Xóa"><i class="bi bi-x"></i></button></td>
                 </tr>`).join('');
         }
@@ -900,6 +920,7 @@
     async function loadVariants(url = variantEndpoint, search = null) {
         const results = document.getElementById('monitorVariantResults');
         const target = new URL(url, window.location.origin);
+        target.searchParams.set('view', 'products');
         target.searchParams.set('per_page', target.searchParams.get('per_page') || '10');
         if (search !== null) {
             target.searchParams.set('search', search);
@@ -911,6 +932,9 @@
             const data = await response.json();
             if (!response.ok || !data.success) throw new Error('Không thể tải danh sách sản phẩm.');
             results.innerHTML = data.html;
+            results.querySelectorAll('.monitor-variant-option').forEach(button => {
+                button.classList.toggle('is-selected', selectedItems.has(Number(button.dataset.variantId)));
+            });
             variantsLoaded = true;
         } catch (error) {
             results.innerHTML = `<div class="alert alert-danger mb-0">${escapeHtml(error.message)}</div>`;
@@ -953,7 +977,9 @@
         document.getElementById('monitorRecipientAddress').value = selectedCustomer.address || '';
         document.getElementById('monitorConfirmItems').innerHTML = Array.from(selectedItems.values()).map(item => `
             <div class="d-flex justify-content-between gap-2 border-bottom py-2 small">
-                <span><strong>${escapeHtml(item.name)}</strong> · ${escapeHtml(item.size || '—')} × ${item.quantity}</span>
+                <span><strong>${escapeHtml(item.name)}</strong> · ${escapeHtml(item.size || '—')} × ${item.quantity}
+                    ${item.discount > 0 ? `<span class="d-block text-muted">${item.discountType === 'increase' ? 'Tăng' : 'Giảm'} ${money(item.discount)}/đơn vị</span>` : ''}
+                </span>
                 <strong>${money(itemLineTotal(item))}</strong>
             </div>`).join('');
         document.getElementById('monitorConfirmTotal').textContent = money(orderTotal());
@@ -975,26 +1001,50 @@
     });
 
     createPanel.addEventListener('click', event => {
-        const add = event.target.closest('#monitorVariantResults .add-variant-to-cart');
-        if (add) {
+        const productChoice = event.target.closest('#monitorVariantResults .monitor-product-choice');
+        if (productChoice) {
             event.preventDefault();
-            const id = Number(add.dataset.variantId);
+            const card = productChoice.closest('.monitor-product-card');
+            const variants = card.querySelector('.monitor-product-variants');
+            const willOpen = variants.hidden;
+            document.querySelectorAll('#monitorVariantResults .monitor-product-card.is-open').forEach(openCard => {
+                if (openCard !== card) {
+                    openCard.classList.remove('is-open');
+                    openCard.querySelector('.monitor-product-choice')?.setAttribute('aria-expanded', 'false');
+                    openCard.querySelector('.monitor-product-variants').hidden = true;
+                }
+            });
+            card.classList.toggle('is-open', willOpen);
+            variants.hidden = !willOpen;
+            productChoice.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+            return;
+        }
+
+        const variantOption = event.target.closest('#monitorVariantResults .monitor-variant-option');
+        if (variantOption) {
+            event.preventDefault();
+            const id = Number(variantOption.dataset.variantId);
             if (!selectedItems.has(id)) {
                 selectedItems.set(id, {
                     id,
-                    name: add.dataset.variantName || 'Sản phẩm',
-                    sku: add.dataset.variantSku || '',
-                    size: add.dataset.variantSize || '',
-                    price: Number(add.dataset.variantPrice) || 0,
-                    weight: Number(add.dataset.variantWeight) || 1,
-                    isPricedByKg: add.dataset.variantIsPricedByKg === '1',
-                    quantity: 1
+                    name: variantOption.dataset.variantName || 'Sản phẩm',
+                    sku: variantOption.dataset.variantSku || '',
+                    size: variantOption.dataset.variantSize || '',
+                    price: Number(variantOption.dataset.variantPrice) || 0,
+                    minPrice: Number(variantOption.dataset.variantMinPrice) || 0,
+                    weight: Number(variantOption.dataset.variantWeight) || 1,
+                    isPricedByKg: variantOption.dataset.variantIsPricedByKg === '1',
+                    quantity: 1,
+                    discount: 0,
+                    discountType: 'decrease'
                 });
                 renderItems();
+                variantOption.classList.add('is-selected');
+            } else {
+                selectedItems.delete(id);
+                renderItems();
+                variantOption.classList.remove('is-selected');
             }
-            add.classList.remove('btn-primary');
-            add.classList.add('btn-success');
-            add.innerHTML = '<i class="bi bi-check2 me-1"></i>Đã chọn';
             return;
         }
 
@@ -1003,7 +1053,9 @@
 
         const remove = event.target.closest('.monitor-remove-item');
         if (remove) {
-            selectedItems.delete(Number(remove.closest('[data-selected-variant]').dataset.selectedVariant));
+            const id = Number(remove.closest('[data-selected-variant]').dataset.selectedVariant);
+            selectedItems.delete(id);
+            document.querySelector(`#monitorVariantResults .monitor-variant-option[data-variant-id="${id}"]`)?.classList.remove('is-selected');
             renderItems();
             return;
         }
@@ -1039,16 +1091,44 @@
     });
 
     createPanel.addEventListener('input', event => {
-        const input = event.target.closest('.monitor-item-quantity');
-        if (!input) return;
-        const item = selectedItems.get(Number(input.closest('[data-selected-variant]').dataset.selectedVariant));
-        if (item) {
-            item.quantity = Math.max(1, Number.parseInt(input.value || '1', 10));
-            document.getElementById('monitorCreateTotal').textContent = money(orderTotal());
+        const row = event.target.closest('[data-selected-variant]');
+        if (!row) return;
+        const item = selectedItems.get(Number(row.dataset.selectedVariant));
+        if (!item) return;
+
+        if (event.target.matches('.monitor-item-quantity')) {
+            item.quantity = Math.max(1, Number.parseInt(event.target.value || '1', 10));
         }
+        if (event.target.matches('.monitor-item-discount')) {
+            item.discount = Math.max(0, Number(event.target.value) || 0);
+            if (item.discountType === 'decrease') {
+                item.discount = Math.min(item.discount, maximumDecrease(item));
+                event.target.value = item.discount;
+            }
+        }
+        row.querySelector('.monitor-item-line-total').textContent = money(itemLineTotal(item));
+        document.getElementById('monitorCreateTotal').textContent = money(orderTotal());
     });
 
     createPanel.addEventListener('change', event => {
+        if (event.target.matches('.monitor-item-discount-type')) {
+            const row = event.target.closest('[data-selected-variant]');
+            const item = selectedItems.get(Number(row.dataset.selectedVariant));
+            if (item) {
+                item.discountType = event.target.value === 'increase' ? 'increase' : 'decrease';
+                const discountInput = row.querySelector('.monitor-item-discount');
+                if (item.discountType === 'decrease') {
+                    item.discount = Math.min(item.discount, maximumDecrease(item));
+                    discountInput.max = maximumDecrease(item);
+                    discountInput.value = item.discount;
+                } else {
+                    discountInput.removeAttribute('max');
+                }
+                row.querySelector('.monitor-item-line-total').textContent = money(itemLineTotal(item));
+                document.getElementById('monitorCreateTotal').textContent = money(orderTotal());
+            }
+            return;
+        }
         if (event.target.matches('#monitorVariantResults #per-page-select')) {
             const target = new URL(variantEndpoint, window.location.origin);
             target.searchParams.set('search', document.getElementById('monitorVariantSearch').value.trim());
@@ -1072,7 +1152,12 @@
                 },
                 body: JSON.stringify({
                     customer_id: selectedCustomer.id,
-                    items: Array.from(selectedItems.values()).map(item => ({ variant_id: item.id, quantity: item.quantity })),
+                    items: Array.from(selectedItems.values()).map(item => ({
+                        variant_id: item.id,
+                        quantity: item.quantity,
+                        unit_discount: item.discount,
+                        unit_discount_type: item.discountType
+                    })),
                     recipient_address: document.getElementById('monitorRecipientAddress').value.trim(),
                     delivery_time: document.getElementById('monitorDeliveryTime').value.trim(),
                     note: document.getElementById('monitorOrderNote').value.trim()

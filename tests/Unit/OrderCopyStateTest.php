@@ -71,4 +71,26 @@ class OrderCopyStateTest extends TestCase
         $this->assertNull($copiedOrder->stock_sufficient);
         $this->assertNull($copiedOrder->stock_alert_status);
     }
+
+    public function test_owner_can_directly_edit_order_before_it_passes_the_first_approval_stage(): void
+    {
+        foreach (['draft', 'pending', Order::STATUS_ORDER_PLACED, Order::STATUS_PENDING_LEADER_APPROVAL] as $status) {
+            $order = new Order(['status' => $status]);
+
+            $this->assertTrue($order->canBeDirectlyEditedByOwner(), $status);
+        }
+
+        $approvedOrder = new Order(['status' => Order::STATUS_APPROVED]);
+        $this->assertFalse($approvedOrder->canBeDirectlyEditedByOwner());
+    }
+
+    public function test_copied_order_remains_directly_editable_for_its_owner(): void
+    {
+        $order = new Order([
+            'status' => Order::STATUS_COMPLETED,
+            'copied_from_order_id' => 99,
+        ]);
+
+        $this->assertTrue($order->canBeDirectlyEditedByOwner());
+    }
 }
