@@ -935,8 +935,11 @@ class PageController extends Controller
         $dateQuery = Order::query()
             ->with([
                 'customer.addresses',
+                'customer.truckStation',
+                'truckStation',
                 'user',
                 'shipper',
+                'accountingReconciliation',
                 'approvals.step',
                 'items.product',
                 'items.variant.product',
@@ -1123,6 +1126,11 @@ class PageController extends Controller
             'customerFilters' => $customerFilters,
             'canApproveByOrder' => $canApproveByOrder,
             'canApproveAnyOrder' => $canApproveAnyOrder,
+            'truckStations' => TruckStation::query()
+                ->where('is_active', true)
+                ->with(['brand', 'province', 'ward'])
+                ->orderBy('name')
+                ->get(),
         ]);
     }
 
@@ -1398,6 +1406,7 @@ class PageController extends Controller
         }
 
         $customers = $baseQuery
+            ->with('truckStation')
             ->when($search !== '', function ($q) use ($search) {
                 $q->where(function ($sub) use ($search) {
                     $sub->where('name', 'like', "%{$search}%")

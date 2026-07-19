@@ -337,6 +337,11 @@ class OrderAdjustmentController extends Controller
     {
         $user = auth()->user();
         abort_unless($user, 403);
+        abort_unless(
+            $order->canRequestAdjustment(),
+            422,
+            'Chỉ có thể gửi yêu cầu điều chỉnh sau khi đơn đã giao và kế toán đã xác nhận doanh thu.'
+        );
 
         if ($user->hasRole('admin')) {
             return;

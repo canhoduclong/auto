@@ -25,6 +25,8 @@ class Order extends Model
         'amount_paid', 'amount_due', 'payment_method', 'payment_status',
         'qr_code', 'packed_image_path', 'delivered_image_path', 'has_return_order',
         'collected_amount', 'delivered_at', 'return_reason', 'proof_images', 'shipper_note', 'delivery_time', 'delivery_date',
+        'use_truck_station', 'truck_station_id', 'truck_station_name', 'truck_station_address',
+        'truck_station_phone', 'truck_receive_time',
         'customer_feedback_status', 'customer_feedback_note', 'customer_feedback_sale_review',
         'customer_feedback_images', 'customer_feedback_by', 'customer_feedback_at',
         'daily_sequence', 'stock_sufficient', 'stock_shortage_detail',
@@ -43,6 +45,7 @@ class Order extends Model
         'delivered_at' => 'datetime',
         'customer_feedback_at' => 'datetime',
         'delivery_date' => 'date',
+        'use_truck_station' => 'boolean',
         'cancelled_at' => 'datetime',
         'trash_at' => 'datetime',
         'total_weight' => 'decimal:3',
@@ -63,6 +66,11 @@ class Order extends Model
         'commission_amount_snapshot' => 'decimal:2',
         'commission_created_at' => 'datetime',
     ];
+
+    public function truckStation()
+    {
+        return $this->belongsTo(TruckStation::class);
+    }
 
     protected static function booted(): void
     {
@@ -308,6 +316,12 @@ class Order extends Model
     public function warehouseTransfers() { return $this->hasMany(WarehouseTransfer::class); }
     public function accountingReconciliation() { return $this->hasOne(AccountingReconciliation::class); }
     public function shippingFeeRequest() { return $this->belongsTo(Transaction::class, 'shipping_fee_transaction_id'); }
+
+    public function canRequestAdjustment(): bool
+    {
+        return $this->delivered_at !== null
+            && $this->accountingReconciliation?->status === AccountingReconciliation::STATUS_CONFIRMED;
+    }
 
     public function getPaymentStatusTextAttribute()
     {

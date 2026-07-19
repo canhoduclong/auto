@@ -139,7 +139,7 @@
         scroll-margin-top: 100px;
         overflow: visible;
         display: grid;
-        grid-template-columns: minmax(0, 1fr) 180px;
+        grid-template-columns: minmax(0, 1fr) 200px;
         gap: 14px;
         width: 100%;
         border: 0;
@@ -259,10 +259,26 @@
         font-size: .7rem;
         font-weight: 800;
     }
-    .monitor-actions { display: grid; gap: 7px; }
-    .monitor-actions .btn { width: 100%; min-height: 38px; border-radius: 6px; font-size: .8rem; font-weight: 700; }
+    .monitor-actions { display: grid; align-content: start; gap: 8px; }
+    .monitor-actions .btn {
+        display: inline-flex;
+        width: 100%;
+        min-height: 42px;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 8px 10px;
+        border-radius: 7px;
+        font-size: .78rem;
+        font-weight: 700;
+        line-height: 1.25;
+        text-align: center;
+        white-space: normal;
+    }
+    .monitor-actions .btn i { flex: 0 0 auto; margin: 0 !important; font-size: .9rem; line-height: 1; }
     .monitor-actions form { width: 100%; margin: 0; }
-    .monitor-actions .monitor-cancel-form { margin-top: 20px; }
+    .monitor-actions .monitor-action-note { margin-top: -2px; font-size: .68rem; line-height: 1.25; text-align: center; }
+    .monitor-actions .monitor-cancel-form { margin-top: 8px; padding-top: 8px; border-top: 1px solid #e2e8f0; }
     .monitor-order > .collapse { grid-column: 1; margin-top: -18px; border: 1px solid var(--monitor-border); border-radius: 0 0 10px 10px; background: #fff; }
     .monitor-empty { padding: 44px 20px; text-align: center; color: #64748b; }
     .monitor-pagination { padding: 14px 0 0; }
@@ -359,13 +375,13 @@
     @media (max-width: 1199.98px) {
         .monitor-shell { max-width: 960px; }
         .monitor-layout { grid-template-columns: 220px minmax(0, 1fr); gap: 14px; }
-        .monitor-order { grid-template-columns: minmax(0, 1fr) 150px; }
+        .monitor-order { grid-template-columns: minmax(0, 1fr) 180px; }
         .monitor-order-head { grid-template-columns: 1fr; }
     }
     @media (max-width: 991.98px) {
         .monitor-layout { grid-template-columns: 1fr; }
         .monitor-sidebar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-        .monitor-order { width: 100%; grid-template-columns: minmax(0, 1fr) 150px; }
+        .monitor-order { width: 100%; grid-template-columns: minmax(0, 1fr) 180px; }
     }
     @media (max-width: 767.98px) {
         .monitor-page { padding-top: 18px; }
@@ -384,8 +400,8 @@
             border-left: 0;
             padding-top: 10px;
         }
-        .monitor-actions { display: flex; flex-wrap: wrap; }
-        .monitor-actions .btn { width: auto; }
+        .monitor-actions { width: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .monitor-actions .monitor-cancel-form { margin-top: 0; padding-top: 0; border-top: 0; }
         .monitor-timeline { min-width: 0; }
         .monitor-order-main { padding: 12px; }
         .monitor-create-steps { padding-inline: 8px; }
@@ -394,6 +410,9 @@
         .monitor-variant-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .monitor-product-choice-label { font-size: 0; }
         .monitor-product-choice-label i { font-size: .8rem; }
+    }
+    @media (max-width: 575.98px) {
+        .monitor-actions { grid-template-columns: 1fr; }
     }
 </style>
 @endpush
@@ -654,6 +673,47 @@
                                 <label class="form-label small fw-bold" for="monitorDeliveryTime">Giờ giao hàng</label>
                                 <input class="form-control form-control-sm" id="monitorDeliveryTime" placeholder="Ví dụ: 9h-11h hoặc sau 17h">
                             </div>
+                            <div class="mt-3 border-top pt-3">
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" id="monitorUseTruckStation">
+                                    <label class="form-check-label small fw-bold" for="monitorUseTruckStation">Gửi hàng qua trạm xe / nhà xe</label>
+                                </div>
+                                <div id="monitorTruckStationFields" hidden>
+                                    <div class="mb-2">
+                                        <label class="form-label small fw-bold" for="monitorTruckStationId">Chọn trạm xe</label>
+                                        <select class="form-select form-select-sm" id="monitorTruckStationId">
+                                            <option value="">-- Nhập thông tin trạm xe thủ công --</option>
+                                            @foreach($truckStations as $truckStation)
+                                                <option value="{{ $truckStation->id }}"
+                                                    data-name="{{ $truckStation->name }}"
+                                                    data-address="{{ $truckStation->address ?? '' }}"
+                                                    data-phone="{{ $truckStation->phone ?? '' }}">
+                                                    {{ $truckStation->name }}{{ $truckStation->brand?->name ? ' · ' . $truckStation->brand->name : '' }}{{ $truckStation->province?->name ? ' · ' . $truckStation->province->name : '' }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="row g-2">
+                                        <div class="col-12">
+                                            <label class="form-label small fw-bold" for="monitorTruckStationName">Tên trạm / nhà xe</label>
+                                            <input class="form-control form-control-sm" id="monitorTruckStationName" maxlength="255">
+                                        </div>
+                                        <div class="col-12">
+                                            <label class="form-label small fw-bold" for="monitorTruckStationAddress">Địa chỉ trạm xe</label>
+                                            <input class="form-control form-control-sm" id="monitorTruckStationAddress" maxlength="255">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label small fw-bold" for="monitorTruckStationPhone">Số điện thoại</label>
+                                            <input class="form-control form-control-sm" id="monitorTruckStationPhone" maxlength="30">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label small fw-bold" for="monitorTruckReceiveTime">Giờ nhà xe nhận hàng</label>
+                                            <input class="form-control form-control-sm" id="monitorTruckReceiveTime" maxlength="255" placeholder="Ví dụ: trước 17h">
+                                        </div>
+                                    </div>
+                                    <div class="form-text">Thông tin này được lưu riêng theo đơn và không làm thay đổi hồ sơ khách hàng.</div>
+                                </div>
+                            </div>
                             <div class="mt-2">
                                 <label class="form-label small fw-bold" for="monitorOrderNote">Ghi chú</label>
                                 <textarea class="form-control form-control-sm" id="monitorOrderNote" rows="2"></textarea>
@@ -703,6 +763,7 @@
                             $canCancel = $canManageOrder
                                 && $order->created_at?->isToday()
                                 && in_array($order->status, \App\Models\Order::CANCELLABLE_STATUSES, true);
+                            $canRequestAdjustment = $canManageOrder && $order->canRequestAdjustment();
                         @endphp
                         <article class="monitor-panel monitor-order {{ $canManageOrder ? 'is-mine' : '' }}" id="monitor-order-{{ $order->id }}">
                             <div class="monitor-order-main">
@@ -739,6 +800,9 @@
                                     <span><i class="bi bi-clock me-1"></i>Giờ giao: {{ $deliveryTime }}</span>
                                     @if($order->shipper)
                                         <span><i class="bi bi-truck me-1"></i>Shipper: {{ $order->shipper->name }}</span>
+                                    @endif
+                                    @if($order->use_truck_station)
+                                        <span><i class="bi bi-building me-1"></i>Nhà xe: {{ $order->truck_station_name ?: ($order->truckStation?->name ?: 'Chưa cập nhật') }}</span>
                                     @endif
                                 </div>
 
@@ -798,7 +862,7 @@
                                             </button>
                                         </form>
                                         @if($hasInvalidSizeItems)
-                                            <div class="small text-danger">Size/KL = 0</div>
+                                            <div class="monitor-action-note text-danger">Size/KL = 0</div>
                                         @endif
                                     @endif
                                     @if($isEditable)
@@ -808,8 +872,10 @@
                                         <i class="bi bi-eye me-1"></i>Chi tiết
                                     </button>
                                     @if($canManageOrder)
-                                        <a class="btn btn-sm btn-outline-secondary" href="{{ route('site.orders.copy', $order->id) }}"><i class="bi bi-files me-1"></i>Copy đơn</a>
-                                        <a class="btn btn-sm btn-warning" href="{{ route('site.order-adjustments.create', $order) }}"><i class="bi bi-arrow-left-right me-1"></i>Yêu cầu điều chỉnh</a>
+                                        <a class="btn btn-sm btn-outline-secondary" href="{{ route('site.orders.copy', $order->id) }}"><i class="bi bi-files"></i><span>Sao chép đơn</span></a>
+                                        @if($canRequestAdjustment)
+                                            <a class="btn btn-sm btn-warning" href="{{ route('site.order-adjustments.create', $order) }}"><i class="bi bi-arrow-left-right"></i><span>Gửi yêu cầu điều chỉnh</span></a>
+                                        @endif
                                         @if($canCancel)
                                             <form method="POST" class="monitor-cancel-form" action="{{ route('site.orders.cancel', $order) }}" onsubmit="return confirm('Bạn chắc chắn muốn hủy đơn hàng này?');">
                                                 @csrf
@@ -824,6 +890,11 @@
                                     <div><strong>Điện thoại:</strong> {{ $order->recipient_phone ?: ($order->customer?->phone ?: 'Chưa cập nhật') }}</div>
                                     <div><strong>Ghi chú:</strong> {{ $order->note ?: 'Không có ghi chú' }}</div>
                                     <div><strong>Thanh toán:</strong> {{ ucfirst((string) ($order->payment_status ?: 'unpaid')) }}</div>
+                                    @if($order->use_truck_station)
+                                        <div><strong>Trạm xe:</strong> {{ $order->truck_station_name ?: ($order->truckStation?->name ?: 'Chưa cập nhật') }}</div>
+                                        <div><strong>Địa chỉ trạm:</strong> {{ $order->truck_station_address ?: ($order->truckStation?->address ?: 'Chưa cập nhật') }}</div>
+                                        <div><strong>Điện thoại / giờ nhận:</strong> {{ $order->truck_station_phone ?: ($order->truckStation?->phone ?: '—') }} · {{ $order->truck_receive_time ?: 'Chưa cập nhật' }}</div>
+                                    @endif
                                 </div>
                             </div>
                         </article>
@@ -970,6 +1041,17 @@
             <div class="small text-muted"><i class="bi bi-geo-alt me-1"></i>${escapeHtml(selectedCustomer.address || 'Chưa có địa chỉ')}</div>`;
     }
 
+    function applyCustomerTruckStation() {
+        const enabled = Boolean(selectedCustomer?.useTruckStation);
+        document.getElementById('monitorUseTruckStation').checked = enabled;
+        document.getElementById('monitorTruckStationFields').hidden = !enabled;
+        document.getElementById('monitorTruckStationId').value = selectedCustomer?.truckStationId || '';
+        document.getElementById('monitorTruckStationName').value = selectedCustomer?.truckStationName || '';
+        document.getElementById('monitorTruckStationAddress').value = selectedCustomer?.truckStationAddress || '';
+        document.getElementById('monitorTruckStationPhone').value = selectedCustomer?.truckStationPhone || '';
+        document.getElementById('monitorTruckReceiveTime').value = selectedCustomer?.truckReceiveTime || '';
+    }
+
     function renderConfirmation() {
         if (!selectedCustomer) return;
         document.getElementById('monitorConfirmCustomer').innerHTML = `<strong>${escapeHtml(selectedCustomer.name)}</strong>
@@ -1067,8 +1149,15 @@
                 name: customerButton.dataset.customerName || 'Khách hàng',
                 phone: customerButton.dataset.customerPhone || '',
                 email: customerButton.dataset.customerEmail || '',
-                address: customerButton.dataset.customerAddress || ''
+                address: customerButton.dataset.customerAddress || '',
+                useTruckStation: customerButton.dataset.customerUseTruckStation === '1',
+                truckStationId: customerButton.dataset.customerTruckStationId || '',
+                truckStationName: customerButton.dataset.customerTruckStationName || '',
+                truckStationAddress: customerButton.dataset.customerTruckStationAddress || '',
+                truckStationPhone: customerButton.dataset.customerTruckStationPhone || '',
+                truckReceiveTime: customerButton.dataset.customerTruckReceiveTime || ''
             };
+            applyCustomerTruckStation();
             renderSelectedCustomer();
             return;
         }
@@ -1111,6 +1200,19 @@
     });
 
     createPanel.addEventListener('change', event => {
+        if (event.target.matches('#monitorUseTruckStation')) {
+            document.getElementById('monitorTruckStationFields').hidden = !event.target.checked;
+            return;
+        }
+        if (event.target.matches('#monitorTruckStationId')) {
+            const option = event.target.selectedOptions[0];
+            if (option?.value) {
+                document.getElementById('monitorTruckStationName').value = option.dataset.name || '';
+                document.getElementById('monitorTruckStationAddress').value = option.dataset.address || '';
+                document.getElementById('monitorTruckStationPhone').value = option.dataset.phone || '';
+            }
+            return;
+        }
         if (event.target.matches('.monitor-item-discount-type')) {
             const row = event.target.closest('[data-selected-variant]');
             const item = selectedItems.get(Number(row.dataset.selectedVariant));
@@ -1160,7 +1262,13 @@
                     })),
                     recipient_address: document.getElementById('monitorRecipientAddress').value.trim(),
                     delivery_time: document.getElementById('monitorDeliveryTime').value.trim(),
-                    note: document.getElementById('monitorOrderNote').value.trim()
+                    note: document.getElementById('monitorOrderNote').value.trim(),
+                    use_truck_station: document.getElementById('monitorUseTruckStation').checked,
+                    truck_station_id: document.getElementById('monitorTruckStationId').value || null,
+                    truck_station_name: document.getElementById('monitorTruckStationName').value.trim(),
+                    truck_station_address: document.getElementById('monitorTruckStationAddress').value.trim(),
+                    truck_station_phone: document.getElementById('monitorTruckStationPhone').value.trim(),
+                    truck_receive_time: document.getElementById('monitorTruckReceiveTime').value.trim()
                 })
             });
             const data = await response.json();

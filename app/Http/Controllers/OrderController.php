@@ -689,6 +689,12 @@ class OrderController extends Controller
             'delivery_time' => ['nullable', 'string', 'max:255'],
             'recipient_address' => ['nullable', 'string', 'max:1000'],
             'note' => ['nullable', 'string', 'max:2000'],
+            'use_truck_station' => ['nullable', 'boolean'],
+            'truck_station_id' => ['nullable', 'integer', 'exists:truck_stations,id'],
+            'truck_station_name' => ['nullable', 'string', 'max:255'],
+            'truck_station_address' => ['nullable', 'string', 'max:255'],
+            'truck_station_phone' => ['nullable', 'string', 'max:30'],
+            'truck_receive_time' => ['nullable', 'string', 'max:255'],
         ]);
 
         $customerQuery = Customer::query()->whereKey((int) $validated['customer_id']);
@@ -716,6 +722,8 @@ class OrderController extends Controller
             'unit_weight' => null,
         ])->values()->all();
 
+        $useTruckStation = (bool) ($validated['use_truck_station'] ?? false);
+
         try {
             $order = $this->createOrderWithUnifiedStockFlow(
                 items: $items,
@@ -730,6 +738,12 @@ class OrderController extends Controller
                         $validated['delivery_time'] ?? null
                     ),
                     'note' => $validated['note'] ?? null,
+                    'use_truck_station' => $useTruckStation,
+                    'truck_station_id' => $useTruckStation ? ($validated['truck_station_id'] ?? null) : null,
+                    'truck_station_name' => $useTruckStation ? trim((string) ($validated['truck_station_name'] ?? '')) ?: null : null,
+                    'truck_station_address' => $useTruckStation ? trim((string) ($validated['truck_station_address'] ?? '')) ?: null : null,
+                    'truck_station_phone' => $useTruckStation ? trim((string) ($validated['truck_station_phone'] ?? '')) ?: null : null,
+                    'truck_receive_time' => $useTruckStation ? trim((string) ($validated['truck_receive_time'] ?? '')) ?: null : null,
                     'allow_backorder' => true,
                     'status' => OrderStatus::Pending->value,
                     'payment_status' => PaymentStatus::Unpaid->value,
@@ -1679,6 +1693,14 @@ class OrderController extends Controller
                 'recipient_address' => $orderData['recipient_address'] ?? null,
                 'delivery_time' => $orderData['delivery_time'] ?? null,
                 'delivery_date' => $orderData['delivery_date'] ?? now()->addDay()->toDateString(),
+                'use_truck_station' => array_key_exists('use_truck_station', $orderData)
+                    ? (bool) $orderData['use_truck_station']
+                    : null,
+                'truck_station_id' => $orderData['truck_station_id'] ?? null,
+                'truck_station_name' => $orderData['truck_station_name'] ?? null,
+                'truck_station_address' => $orderData['truck_station_address'] ?? null,
+                'truck_station_phone' => $orderData['truck_station_phone'] ?? null,
+                'truck_receive_time' => $orderData['truck_receive_time'] ?? null,
                 'note' => $orderData['note'] ?? null,
                 'status' => $orderData['status'] ?? OrderStatus::Pending->value,
                 'payment_status' => $orderData['payment_status'] ?? PaymentStatus::Unpaid->value,

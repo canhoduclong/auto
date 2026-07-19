@@ -54,7 +54,7 @@
         || ($order->status === \App\Models\Order::STATUS_PENDING_LEADER_APPROVAL
             && $order->created_at?->isToday());
     $canCancelToday = $order->created_at?->isToday() && $order->canBeCancelled();
-    $canRequestAdjustment = !in_array((string) $order->status, ['cancelled', 'rejected'], true);
+    $canRequestAdjustment = $order->canRequestAdjustment();
 
     $statusText = \App\Models\Order::statusOptions()[$order->status] ?? ucfirst(str_replace('_', ' ', (string) $order->status));
     $paymentStatusText = match((string) $order->payment_status) {
@@ -81,8 +81,14 @@
     $hasInvoiceInfo = filled($order->customer?->company_name)
         || filled($order->customer?->tax_code)
         || filled($order->customer?->company_address);
-    $showTruckStation = (bool) ($order->customer?->use_truck_station ?? false);
-    $station = $order->customer?->truckStation;
+    $showTruckStation = $order->use_truck_station === null
+        ? (bool) ($order->customer?->use_truck_station ?? false)
+        : (bool) $order->use_truck_station;
+    $station = $order->truckStation ?: $order->customer?->truckStation;
+    $truckStationName = $order->truck_station_name ?: ($station?->name ?: 'Chưa chọn nhà xe');
+    $truckStationAddress = $order->truck_station_address ?: ($order->customer?->truck_station_address ?: ($station?->address ?: 'Chưa cập nhật'));
+    $truckStationPhone = $order->truck_station_phone ?: ($order->customer?->truck_station_phone ?: ($station?->phone ?: 'Chưa cập nhật'));
+    $truckReceiveTime = $order->truck_receive_time ?: ($order->customer?->truck_receive_time ?: 'Chưa cập nhật');
     $deliveryCollapseId = 'delivery-info-' . $order->id;
     $invoiceCollapseId = 'invoice-info-' . $order->id;
     $truckCollapseId = 'truck-info-' . $order->id;
@@ -873,18 +879,18 @@
                                         <span class="customer-collapse-action" data-collapse-label="1">Show</span>
                                     </button>
                                     <div id="{{ $truckCollapseId }}" class="collapse transport-body pt-2">
-                                        <div class="text-muted small mb-1">Nhà xe: {{ $station?->name ?: 'Chưa chọn nhà xe' }}</div>
+                                        <div class="text-muted small mb-1">Nhà xe: {{ $truckStationName }}</div>
                                         @if($station)
                                             <div class="text-muted small mb-1">
                                                 Khu vực: {{ collect([$station->ward?->name, $station->province?->name])->filter()->implode(', ') ?: 'Chưa cập nhật' }}
                                             </div>
                                         @endif
-                                        <div class="text-muted small mb-1">Địa chỉ gửi: {{ $order->customer?->truck_station_address ?: ($station?->address ?: 'Chưa cập nhật') }}</div>
+                                        <div class="text-muted small mb-1">Địa chỉ gửi: {{ $truckStationAddress }}</div>
                                         <div class="small text-muted mb-1">
                                             <i class="bi bi-clock me-1"></i>
-                                            Giờ nhận: {{ $order->customer?->truck_receive_time ?: 'Chưa cập nhật' }}
+                                            Giờ nhận: {{ $truckReceiveTime }}
                                         </div>
-                                        <div class="text-muted small"><i class="bi bi-telephone me-1"></i>{{ $order->customer?->truck_station_phone ?: ($station?->phone ?: 'Chưa cập nhật') }}</div>
+                                        <div class="text-muted small"><i class="bi bi-telephone me-1"></i>{{ $truckStationPhone }}</div>
                                     </div>
                                 </div>
                             @endif
@@ -986,7 +992,7 @@
                                 @endif
                                 @if($canRequestAdjustment)
                                     <a href="{{ route('site.order-adjustments.create', $order) }}" class="btn btn-warning btn-sm text-dark">
-                                        <i class="fa fa-exchange me-1"></i>Yêu cầu điều chỉnh
+                                        <i class="fa fa-exchange me-1"></i>Gửi yêu cầu điều chỉnh
                                     </a>
                                 @endif
                                 @if($canCancelToday)
