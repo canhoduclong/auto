@@ -1001,10 +1001,14 @@ class PageController extends Controller
         $canApproveManagedSalesAny = $canApproveManagedSales && $managedSalesApprovalQuery->exists();
 
         $allApprovalQuery = clone $dateQuery;
+        $hasPendingLeaderApprovals = false;
         if ($canApproveAllOrders) {
+            $hasPendingLeaderApprovals = $this->monitoringHasPendingLeaderApprovals($request);
             $this->applyMonitoringApprovalScope($allApprovalQuery, $roleNames);
         }
-        $canApproveAllAny = $canApproveAllOrders && $allApprovalQuery->exists();
+        $canApproveAllAny = $canApproveAllOrders
+            && !$hasPendingLeaderApprovals
+            && $allApprovalQuery->exists();
 
         $allowedPerPage = [10, 20, 50, 100];
         $perPage = (int) $request->input('per_page', 20);
@@ -1184,6 +1188,7 @@ class PageController extends Controller
             'canApproveManagedSalesAny' => $canApproveManagedSalesAny,
             'canApproveAllOrders' => $canApproveAllOrders,
             'canApproveAllAny' => $canApproveAllAny,
+            'hasPendingLeaderApprovals' => $hasPendingLeaderApprovals,
             'activeTab' => $activeTab,
             'tabContentHtml' => $tabContentHtml,
             'truckStations' => TruckStation::query()
@@ -1229,6 +1234,11 @@ class PageController extends Controller
 
         $query = Order::query()->with(['approvals.step']);
         $this->applyMonitoringOrderFilters($query, $request);
+
+        if ($this->monitoringHasPendingLeaderApprovals($request)) {
+            return back()->with('error', 'Cần chờ các Trưởng phòng KD duyệt hết đơn PKD trước khi duyệt tất cả.');
+        }
+
         $this->applyMonitoringApprovalScope($query, $roleNames);
 
         $result = $this->approveOrdersFromQuery(
@@ -2428,6 +2438,21 @@ class PageController extends Controller
         $query->where('status', '!=', Order::STATUS_CANCELLED);
 
         return $this->applyCurrentApprovalStepScope($query, $roleNames);
+    }
+
+    private function monitoringHasPendingLeaderApprovals(Request $request): bool
+    {
+        $leaderRequest = $request->duplicate($request->query->all(), $request->request->all());
+        $leaderRequest->query->remove('status');
+        $leaderRequest->request->remove('status');
+
+        $query = Order::query();
+        $this->applyMonitoringOrderFilters($query, $leaderRequest);
+
+        $leaderRoles = collect(['leader', 'leader_sale', 'sale_manager']);
+        $this->applyMonitoringApprovalScope($query, $leaderRoles);
+
+        return $query->exists();
     }
 
     private function applyTeamOrderFilters(Builder $query, Request $request): void

@@ -636,7 +636,7 @@
                         @endforeach
                     </select>
                 </form>
-                <button class="btn btn-sm btn-outline-primary monitor-summary-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#monitorProductSummary" aria-expanded="true">
+                <button class="btn btn-sm btn-outline-primary monitor-summary-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#monitorProductSummary" aria-expanded="false">
                     <i class="bi bi-inbox me-1"></i>Hàng - Số lượng
                 </button>
                 <form method="POST" action="{{ route('pages.my_orders.monitoring.refresh_sequence') }}" onsubmit="return confirm('Cập nhật lại số thứ tự ưu tiên cho các đơn đang thiếu số?');">
@@ -658,7 +658,10 @@
                         <input type="hidden" name="status" value="{{ $selectedStatus }}">
                         <input type="hidden" name="sale_id" value="{{ $selectedSaleId }}">
                         <input type="hidden" name="customer_id" value="{{ $selectedCustomerId }}">
-                        <button type="submit" class="btn btn-sm btn-success" @disabled(!$canApproveManagedSalesAny)>
+                        <button type="submit"
+                            class="btn btn-sm {{ $canApproveManagedSalesAny ? 'btn-success' : 'btn-secondary' }}"
+                            @disabled(!$canApproveManagedSalesAny)
+                            @if(!$canApproveManagedSalesAny) title="Không còn đơn PKD chờ duyệt" @endif>
                             <i class="bi bi-check2-all me-1"></i>Duyệt đơn PKD
                         </button>
                     </form>
@@ -671,7 +674,12 @@
                         <input type="hidden" name="status" value="{{ $selectedStatus }}">
                         <input type="hidden" name="sale_id" value="{{ $selectedSaleId }}">
                         <input type="hidden" name="customer_id" value="{{ $selectedCustomerId }}">
-                        <button type="submit" class="btn btn-sm btn-success" @disabled(!$canApproveAllAny)>
+                        <button type="submit"
+                            class="btn btn-sm {{ $canApproveAllAny ? 'btn-success' : 'btn-secondary' }}"
+                            @disabled(!$canApproveAllAny)
+                            @if(!$canApproveAllAny)
+                                title="{{ $hasPendingLeaderApprovals ? 'Chờ các Trưởng phòng KD duyệt hết đơn PKD' : 'Không còn đơn chờ duyệt' }}"
+                            @endif>
                             <i class="bi bi-check2-all me-1"></i>Duyệt tất cả
                         </button>
                     </form>
@@ -683,7 +691,7 @@
         </div>
 
         <div class="monitor-panel monitor-summary-panel mb-4">
-            <div class="collapse show" id="monitorProductSummary">
+            <div class="collapse" id="monitorProductSummary">
                 <div class="monitor-summary-table table-responsive">
                     <table class="table table-sm align-middle">
                         <thead>
