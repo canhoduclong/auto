@@ -97,13 +97,7 @@
     }
     .monitor-content { min-width: 0; }
     .monitor-sidebar { display: grid; gap: 14px; align-content: start; }
-    .monitor-tab-nav {
-        position: sticky;
-        top: 12px;
-        z-index: 20;
-        display: grid;
-        gap: 8px;
-    }
+    .monitor-tab-nav { display: grid; gap: 8px; }
     .monitor-tab-link {
         display: flex;
         min-height: 50px;
@@ -350,7 +344,14 @@
     .monitor-bulk-actions .form-select { width: 158px; min-height: 38px; }
     .monitor-bulk-actions .btn { min-height: 38px; padding-inline: 14px; }
     .monitor-summary-toggle { border: 1px solid var(--monitor-teal); color: var(--monitor-teal); }
-    .monitor-sequence-panel { min-height: 68px; }
+    .monitor-sequence-panel {
+        position: sticky;
+        top: 12px;
+        z-index: 20;
+        min-height: 68px;
+        background: #fff;
+        box-shadow: 0 5px 20px rgba(15, 23, 42, .12);
+    }
     .monitor-summary-panel { overflow: hidden; }
     .monitor-create { margin-bottom: 18px; overflow: hidden; }
     .monitor-create[hidden] { display: none !important; }
@@ -434,16 +435,8 @@
     }
     @media (max-width: 991.98px) {
         .monitor-layout { grid-template-columns: 1fr; }
-        .monitor-sidebar { display: contents; }
-        .monitor-tab-nav {
-            top: 0;
-            display: flex;
-            overflow-x: auto;
-            padding: 8px;
-            background: #f8fafc;
-            box-shadow: 0 4px 12px rgba(15, 23, 42, .08);
-        }
-        .monitor-tab-link { flex: 0 0 170px; min-height: 44px; }
+        .monitor-sidebar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .monitor-sequence-panel { top: 0; }
         .monitor-order { width: 100%; grid-template-columns: minmax(0, 1fr) 180px; }
     }
     @media (max-width: 767.98px) {
