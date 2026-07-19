@@ -97,7 +97,13 @@
     }
     .monitor-content { min-width: 0; }
     .monitor-sidebar { display: grid; gap: 14px; align-content: start; }
-    .monitor-tab-nav { display: grid; gap: 8px; }
+    .monitor-tab-nav {
+        position: sticky;
+        top: 12px;
+        z-index: 20;
+        display: grid;
+        gap: 8px;
+    }
     .monitor-tab-link {
         display: flex;
         min-height: 50px;
@@ -186,6 +192,21 @@
         border-radius: 10px;
         background: #fff;
         box-shadow: 0 5px 20px rgba(15, 23, 42, .05);
+    }
+    .monitor-order.is-cancelled .monitor-order-main {
+        border-color: #ef4444;
+        background: #fef2f2;
+        box-shadow: 0 5px 20px rgba(220, 38, 38, .12);
+    }
+    .monitor-order.is-cancelled .monitor-order-number { background: #dc2626; }
+    .monitor-order.is-cancelled .monitor-order-name { color: #b91c1c; }
+    .monitor-order.is-cancelled .monitor-status {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid #ef4444;
+        background: #fee2e2;
+        color: #b91c1c;
     }
     .monitor-order-head {
         display: grid;
@@ -413,7 +434,16 @@
     }
     @media (max-width: 991.98px) {
         .monitor-layout { grid-template-columns: 1fr; }
-        .monitor-sidebar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .monitor-sidebar { display: contents; }
+        .monitor-tab-nav {
+            top: 0;
+            display: flex;
+            overflow-x: auto;
+            padding: 8px;
+            background: #f8fafc;
+            box-shadow: 0 4px 12px rgba(15, 23, 42, .08);
+        }
+        .monitor-tab-link { flex: 0 0 170px; min-height: 44px; }
         .monitor-order { width: 100%; grid-template-columns: minmax(0, 1fr) 180px; }
     }
     @media (max-width: 767.98px) {
@@ -565,11 +595,14 @@
                     <div class="monitor-filter-title">Khách hàng</div>
                     <div class="monitor-filter-list">
                         <a class="monitor-filter-link {{ $selectedCustomerId === 0 ? 'active' : '' }}" href="{{ route('pages.my_orders.monitoring', $customerFilterQuery) }}">
-                            <span>Tất cả khách hàng</span><span class="monitor-filter-count">{{ $customerFilters->sum('count') }}</span>
+                            <span>Tất cả khách hàng</span>
                         </a>
                         @foreach($customerFilters as $customer)
                             <a class="monitor-filter-link {{ $selectedCustomerId === $customer['id'] ? 'active' : '' }}" href="{{ route('pages.my_orders.monitoring', array_merge($customerFilterQuery, ['customer_id' => $customer['id']])) }}">
-                                <span>{{ $customer['name'] }}</span><span class="monitor-filter-count">{{ $customer['count'] }}</span>
+                                <span>{{ $customer['name'] }}</span>
+                                <span class="monitor-filter-count" title="Số thứ tự ưu tiên" aria-label="Số thứ tự ưu tiên {{ $customer['priority_sequence'] ?? 'chưa có' }}">
+                                    {{ $customer['priority_sequence'] ?? '—' }}
+                                </span>
                             </a>
                         @endforeach
                     </div>
@@ -827,7 +860,8 @@
                 <div class="monitor-orders">
                     @forelse($orders as $order)
                         @php
-                            $canApprove = $canApproveByOrder[$order->id] ?? false;
+                            $isCancelled = $order->status === \App\Models\Order::STATUS_CANCELLED;
+                            $canApprove = !$isCancelled && ($canApproveByOrder[$order->id] ?? false);
                             $hasInvalidSizeItems = $order->items->contains(
                                 fn ($item) => (float) ($item->effective_unit_weight ?? 0) <= 0
                             );
@@ -846,7 +880,7 @@
                                 && in_array($order->status, \App\Models\Order::CANCELLABLE_STATUSES, true);
                             $canRequestAdjustment = $canManageOrder && $order->canRequestAdjustment();
                         @endphp
-                        <article class="monitor-panel monitor-order {{ $canManageOrder ? 'is-mine' : '' }}" id="monitor-order-{{ $order->id }}">
+                        <article class="monitor-panel monitor-order {{ $canManageOrder ? 'is-mine' : '' }} {{ $isCancelled ? 'is-cancelled' : '' }}" id="monitor-order-{{ $order->id }}">
                             <div class="monitor-order-main">
                                 <div class="monitor-order-head">
                                     <div class="monitor-order-person">

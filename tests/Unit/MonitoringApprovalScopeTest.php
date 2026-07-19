@@ -7,6 +7,7 @@ use App\Http\Controllers\PageController;
 use App\Models\Order;
 use App\Models\Role;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use ReflectionClass;
 use Tests\TestCase;
 
@@ -47,6 +48,18 @@ class MonitoringApprovalScopeTest extends TestCase
         $order = $this->orderFor($this->userWithRole('sale', 99));
 
         $this->assertTrue($method->invoke($controller, $manager, $order));
+    }
+
+    public function test_monitoring_approval_scope_excludes_cancelled_orders(): void
+    {
+        $controller = (new ReflectionClass(PageController::class))->newInstanceWithoutConstructor();
+        $method = new \ReflectionMethod(PageController::class, 'applyMonitoringApprovalScope');
+        $query = Order::query();
+
+        $result = $method->invoke($controller, $query, collect(['manager']));
+
+        $this->assertInstanceOf(Builder::class, $result);
+        $this->assertContains(Order::STATUS_CANCELLED, $query->getQuery()->getBindings());
     }
 
     private function userWithRole(string $roleName, ?int $teamId = null): User

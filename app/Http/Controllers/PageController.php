@@ -996,13 +996,13 @@ class PageController extends Controller
         $managedSalesApprovalQuery = clone $dateQuery;
         if ($canApproveManagedSales) {
             $this->applyManagedSalesScope($managedSalesApprovalQuery, $user);
-            $this->applyCurrentApprovalStepScope($managedSalesApprovalQuery, $roleNames);
+            $this->applyMonitoringApprovalScope($managedSalesApprovalQuery, $roleNames);
         }
         $canApproveManagedSalesAny = $canApproveManagedSales && $managedSalesApprovalQuery->exists();
 
         $allApprovalQuery = clone $dateQuery;
         if ($canApproveAllOrders) {
-            $this->applyCurrentApprovalStepScope($allApprovalQuery, $roleNames);
+            $this->applyMonitoringApprovalScope($allApprovalQuery, $roleNames);
         }
         $canApproveAllAny = $canApproveAllOrders && $allApprovalQuery->exists();
 
@@ -1035,6 +1035,11 @@ class PageController extends Controller
             'total_value' => (clone $statsQuery)->sum('total'),
             'total_quantity' => $filteredOrders->sum(fn (Order $order) => (float) $order->items->sum('quantity')),
         ];
+
+        $dateQuery->orderByRaw(
+            'CASE WHEN status = ? THEN 1 ELSE 0 END ASC',
+            [Order::STATUS_CANCELLED]
+        );
 
         if ($sortBy === 'customer_name') {
             $dateQuery->orderBy(
@@ -1072,7 +1077,9 @@ class PageController extends Controller
                 && $order->user?->roles?->contains(fn ($role) => strtolower((string) $role->name) === 'sale')
             );
 
-            $canApproveByOrder[$order->id] = $isInApprovalScope && $currentStep?->step
+            $canApproveByOrder[$order->id] = $order->status !== Order::STATUS_CANCELLED
+                && $isInApprovalScope
+                && $currentStep?->step
                 ? $roleNames->contains(strtolower((string) $currentStep->step->role_slug))
                 : false;
         }
@@ -1130,12 +1137,26 @@ class PageController extends Controller
         $customerFilters = $sidebarOrders
             ->filter(fn (Order $order) => $order->customer)
             ->groupBy('customer_id')
-            ->map(fn ($customerOrders) => [
-                'id' => (int) $customerOrders->first()->customer_id,
-                'name' => $customerOrders->first()->customer->name,
-                'count' => $customerOrders->count(),
-            ])
-            ->sortBy('name')
+            ->map(function ($customerOrders) {
+                $prioritySequence = $customerOrders
+                    ->pluck('daily_sequence')
+                    ->filter(fn ($sequence) => $sequence !== null)
+                    ->map(fn ($sequence) => (int) $sequence)
+                    ->min();
+
+                return [
+                    'id' => (int) $customerOrders->first()->customer_id,
+                    'name' => $customerOrders->first()->customer->name,
+                    'priority_sequence' => $prioritySequence,
+                ];
+            })
+            ->sort(function ($left, $right) {
+                $leftSequence = $left['priority_sequence'] ?? PHP_INT_MAX;
+                $rightSequence = $right['priority_sequence'] ?? PHP_INT_MAX;
+
+                return $leftSequence <=> $rightSequence
+                    ?: strcasecmp((string) $left['name'], (string) $right['name']);
+            })
             ->values();
 
         $tabContentHtml = $activeTab === 'today'
@@ -1208,7 +1229,7 @@ class PageController extends Controller
 
         $query = Order::query()->with(['approvals.step']);
         $this->applyMonitoringOrderFilters($query, $request);
-        $this->applyCurrentApprovalStepScope($query, $roleNames);
+        $this->applyMonitoringApprovalScope($query, $roleNames);
 
         $result = $this->approveOrdersFromQuery(
             $query,
@@ -1229,7 +1250,7 @@ class PageController extends Controller
         $query = Order::query()->with(['approvals.step', 'user.roles']);
         $this->applyMonitoringOrderFilters($query, $request);
         $this->applyManagedSalesScope($query, $user);
-        $this->applyCurrentApprovalStepScope($query, $roleNames);
+        $this->applyMonitoringApprovalScope($query, $roleNames);
 
         $result = $this->approveOrdersFromQuery(
             $query,
@@ -2400,6 +2421,13 @@ class PageController extends Controller
                         ->whereColumn('aps_prev.step_order', '<', 'aps.step_order');
                 });
         });
+    }
+
+    private function applyMonitoringApprovalScope(Builder $query, $roleNames): Builder
+    {
+        $query->where('status', '!=', Order::STATUS_CANCELLED);
+
+        return $this->applyCurrentApprovalStepScope($query, $roleNames);
     }
 
     private function applyTeamOrderFilters(Builder $query, Request $request): void
