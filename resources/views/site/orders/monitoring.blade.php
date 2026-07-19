@@ -11,7 +11,7 @@
         min-height: 75vh;
         padding: 28px 0 64px;
     }
-    .monitor-shell { max-width: 1320px; margin: 0 auto; }
+    .monitor-shell { width: calc(100% - 32px); max-width: 1600px; margin: 0 auto; }
     .monitor-toolbar {
         display: flex;
         flex-wrap: wrap;
@@ -97,6 +97,39 @@
     }
     .monitor-content { min-width: 0; }
     .monitor-sidebar { display: grid; gap: 14px; align-content: start; }
+    .monitor-tab-nav { display: grid; gap: 8px; }
+    .monitor-tab-link {
+        display: flex;
+        min-height: 50px;
+        align-items: center;
+        gap: 11px;
+        padding: 10px 14px;
+        border: 1px solid var(--monitor-border);
+        border-radius: 4px;
+        background: #fff;
+        color: #075985;
+        font-size: .82rem;
+        font-weight: 800;
+        text-decoration: none;
+        box-shadow: 0 3px 10px rgba(15, 23, 42, .04);
+    }
+    .monitor-tab-link i { width: 18px; color: #527394; font-size: 1rem; text-align: center; }
+    .monitor-tab-link:hover,
+    .monitor-tab-link.active { border-color: #cfe3e8; background: #eaf5f6; color: #075985; }
+    .monitor-tab-content { min-width: 0; }
+    .monitor-tab-content .orders-page,
+    .monitor-tab-content .drafts-page,
+    .monitor-tab-content .schidx-page { padding: 0 0 30px; background: transparent; }
+    .monitor-tab-content .orders-shell,
+    .monitor-tab-content .drafts-shell { max-width: none; }
+    .monitor-tab-content .container { max-width: 100%; padding-inline: 0; }
+    .monitor-tab-schedules .schidx-daily-box { display: none; }
+    .monitor-tab-automatic .schidx-page > .container > .row > .col-lg-3,
+    .monitor-tab-automatic #schedTabToolbar,
+    .monitor-tab-automatic #schedSummaryPanel,
+    .monitor-tab-automatic #schedResultsWrap { display: none; }
+    .monitor-tab-automatic .schidx-page > .container > .row > .col-lg-9 { width: 100%; }
+    .monitor-tab-automatic .schidx-hero .schidx-kpi-grid { display: none; }
     .monitor-filter-block { overflow: hidden; }
     .monitor-filter-title {
         padding: 10px 14px;
@@ -467,8 +500,19 @@
 <section class="monitor-page">
     <div class="container monitor-shell">
         <div class="monitor-toolbar">
-            <h1 class="monitor-title">Theo dõi đơn hàng ngày</h1>
+            @php
+                $monitorTabLabels = [
+                    'today' => 'Theo dõi đơn hàng ngày',
+                    'drafts' => 'Đơn hàng mẫu',
+                    'my_orders' => 'Đơn hàng của tôi',
+                    'schedules' => 'Đơn hàng theo lịch',
+                    'automatic' => 'Đơn hàng tự động',
+                ];
+            @endphp
+            <h1 class="monitor-title">{{ $monitorTabLabels[$activeTab] ?? $monitorTabLabels['today'] }}</h1>
+            @if($activeTab === 'today')
             <form class="monitor-date-form" method="GET" action="{{ route('pages.my_orders.monitoring') }}">
+                <input type="hidden" name="tab" value="today">
                 <input type="date" name="date" class="form-control form-control-sm" value="{{ $selectedDate }}">
                 @if($keyword !== '')<input type="hidden" name="keyword" value="{{ $keyword }}">@endif
                 @if($selectedStatus !== '')<input type="hidden" name="status" value="{{ $selectedStatus }}">@endif
@@ -479,10 +523,30 @@
                 {{ $formatQuantity($stats['total_quantity']) }} sản phẩm ·
                 {{ number_format($stats['total_value'], 0, ',', '.') }}đ
             </span>
+            @endif
         </div>
 
         <div class="monitor-layout">
             <aside class="monitor-sidebar">
+                <nav class="monitor-tab-nav" aria-label="Nhóm đơn hàng">
+                    <a class="monitor-tab-link {{ $activeTab === 'today' ? 'active' : '' }}" href="{{ route('pages.my_orders.monitoring', ['tab' => 'today', 'date' => $selectedDate]) }}">
+                        <i class="bi bi-file-earmark-text"></i><span>Đơn hôm nay</span>
+                    </a>
+                    <a class="monitor-tab-link {{ $activeTab === 'drafts' ? 'active' : '' }}" href="{{ route('pages.my_orders.monitoring', ['tab' => 'drafts']) }}">
+                        <i class="bi bi-file-earmark-text"></i><span>Đơn hàng Mẫu</span>
+                    </a>
+                    <a class="monitor-tab-link {{ $activeTab === 'my_orders' ? 'active' : '' }}" href="{{ route('pages.my_orders.monitoring', ['tab' => 'my_orders']) }}">
+                        <i class="bi bi-bag-check"></i><span>Đơn của tôi</span>
+                    </a>
+                    <a class="monitor-tab-link {{ $activeTab === 'schedules' ? 'active' : '' }}" href="{{ route('pages.my_orders.monitoring', ['tab' => 'schedules']) }}">
+                        <i class="bi bi-calendar-check"></i><span>Đơn hàng theo lịch</span>
+                    </a>
+                    <a class="monitor-tab-link {{ $activeTab === 'automatic' ? 'active' : '' }}" href="{{ route('pages.my_orders.monitoring', ['tab' => 'automatic']) }}">
+                        <i class="bi bi-arrow-repeat"></i><span>Đơn hàng tự động</span>
+                    </a>
+                </nav>
+
+                @if($activeTab === 'today')
                 <div class="monitor-panel monitor-filter-block">
                     <div class="monitor-filter-title">Sale</div>
                     <div class="monitor-filter-list">
@@ -510,9 +574,11 @@
                         @endforeach
                     </div>
                 </div>
+                @endif
             </aside>
 
             <main class="monitor-content">
+        @if($activeTab === 'today')
         <div class="monitor-panel monitor-sequence-panel mb-3">
             @php
                 $sequenceOrders = $orders->getCollection()->sortBy(fn ($order) => $order->daily_sequence ?? PHP_INT_MAX)->values();
@@ -558,17 +624,32 @@
                         <i class="bi bi-arrow-clockwise me-1"></i>Refresh
                     </button>
                 </form>
-                <form method="POST" action="{{ route('pages.my_orders.monitoring.approve_all') }}" onsubmit="return confirm('Duyệt tất cả đơn đang tới lượt bạn theo bộ lọc hiện tại?');">
-                    @csrf
-                    <input type="hidden" name="date" value="{{ $selectedDate }}">
-                    <input type="hidden" name="keyword" value="{{ $keyword }}">
-                    <input type="hidden" name="status" value="{{ $selectedStatus }}">
-                    <input type="hidden" name="sale_id" value="{{ $selectedSaleId }}">
-                    <input type="hidden" name="customer_id" value="{{ $selectedCustomerId }}">
-                    <button type="submit" class="btn btn-sm btn-success" @disabled(!$canApproveAnyOrder)>
-                        <i class="bi bi-check2-all me-1"></i>Duyệt tất cả
-                    </button>
-                </form>
+                @if($canApproveManagedSales)
+                    <form method="POST" action="{{ route('pages.my_orders.monitoring.approve_sales') }}" onsubmit="return confirm('Duyệt các đơn của sale thuộc phạm vi bạn quản lý?');">
+                        @csrf
+                        <input type="hidden" name="date" value="{{ $selectedDate }}">
+                        <input type="hidden" name="keyword" value="{{ $keyword }}">
+                        <input type="hidden" name="status" value="{{ $selectedStatus }}">
+                        <input type="hidden" name="sale_id" value="{{ $selectedSaleId }}">
+                        <input type="hidden" name="customer_id" value="{{ $selectedCustomerId }}">
+                        <button type="submit" class="btn btn-sm btn-success" @disabled(!$canApproveManagedSalesAny)>
+                            <i class="bi bi-check2-all me-1"></i>Duyệt đơn PKD
+                        </button>
+                    </form>
+                @endif
+                @if($canApproveAllOrders)
+                    <form method="POST" action="{{ route('pages.my_orders.monitoring.approve_all') }}" onsubmit="return confirm('Manager duyệt tất cả đơn đang tới lượt theo bộ lọc hiện tại?');">
+                        @csrf
+                        <input type="hidden" name="date" value="{{ $selectedDate }}">
+                        <input type="hidden" name="keyword" value="{{ $keyword }}">
+                        <input type="hidden" name="status" value="{{ $selectedStatus }}">
+                        <input type="hidden" name="sale_id" value="{{ $selectedSaleId }}">
+                        <input type="hidden" name="customer_id" value="{{ $selectedCustomerId }}">
+                        <button type="submit" class="btn btn-sm btn-success" @disabled(!$canApproveAllAny)>
+                            <i class="bi bi-check2-all me-1"></i>Duyệt tất cả
+                        </button>
+                    </form>
+                @endif
             </div>
             <button type="button" class="btn btn-sm btn-success" id="monitorOpenCreate">
                 <i class="bi bi-plus-circle me-1"></i>Thêm đơn
@@ -910,6 +991,11 @@
                 @if($orders->hasPages())
                     <div class="monitor-pagination">{{ $orders->links('pagination::bootstrap-5') }}</div>
                 @endif
+        @else
+            <div class="monitor-tab-content monitor-tab-{{ $activeTab }}">
+                {!! $tabContentHtml !!}
+            </div>
+        @endif
             </main>
         </div>
     </div>

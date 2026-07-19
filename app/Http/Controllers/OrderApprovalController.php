@@ -37,6 +37,31 @@ class OrderApprovalController extends Controller
             ->contains(fn ($role) => $this->isApproverRole($role));
     }
 
+    private function userCanApproveOrder(?\App\Models\User $user, Order $order): bool
+    {
+        if (!$this->userCanApprove($user)) {
+            return false;
+        }
+
+        if ($user->hasRole(['admin', 'manager', 'manager_sale', 'director'])) {
+            return true;
+        }
+
+        if (!$user->hasRole(['leader', 'leader_sale', 'sale_manager'])) {
+            return false;
+        }
+
+        $teamId = (int) ($user->team_id ?? 0);
+        if ($teamId <= 0) {
+            return false;
+        }
+
+        $order->loadMissing('user.roles');
+
+        return (int) ($order->user?->team_id ?? 0) === $teamId
+            && $order->user?->roles?->contains(fn ($role) => strtolower((string) $role->name) === 'sale');
+    }
+
     private function logOrderHistory(Order $order, string $action, ?string $before, ?string $after, ?string $note = null): void
     {
         $user = auth()->user();
@@ -61,7 +86,7 @@ class OrderApprovalController extends Controller
         $isAjax = $request->ajax() || $request->wantsJson();
 
         $user = $request->user();
-        if (!$this->userCanApprove($user)) {
+        if (!$this->userCanApproveOrder($user, $order)) {
             $msg = __('orders.approval.no_permission');
             return $isAjax
                 ? response()->json(['success' => false, 'message' => $msg], 403)
@@ -93,7 +118,7 @@ class OrderApprovalController extends Controller
         $isAjax = $request->ajax() || $request->wantsJson();
 
         $user = $request->user();
-        if (!$this->userCanApprove($user)) {
+        if (!$this->userCanApproveOrder($user, $order)) {
             $msg = __('orders.approval.no_permission');
             return $isAjax
                 ? response()->json(['success' => false, 'message' => $msg], 403)

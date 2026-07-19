@@ -1,4 +1,4 @@
-@extends('layouts.site')
+@extends(($monitoringEmbedded ?? false) ? 'layouts.embedded' : 'layouts.site')
 
 @push('styles')
 <style>
@@ -642,6 +642,9 @@
 
 @section('content')
 @php
+    $ordersIndexUrl = ($monitoringEmbedded ?? false)
+        ? route('pages.my_orders.monitoring', ['tab' => 'my_orders'])
+        : route('pages.my_orders');
     $statusLabels = \App\Models\Order::statusOptions() + [
         \App\Models\Order::STATUS_READY_TO_PACK => 'Chờ đóng gói',
         \App\Models\Order::STATUS_PACKING => 'Đang đóng gói',
@@ -784,13 +787,14 @@
                                 <p class="mb-0 text-muted">Lọc theo trạng thái, thanh toán và thời gian tạo đơn.</p>
                             </div>
                             @if(request()->filled('customer_id') || !empty(request('customer_ids', [])) || request()->filled('customer_query') || request()->filled('payment_status') || request()->filled('status') || request()->filled('from_date') || request()->filled('to_date'))
-                                <a href="{{ route('pages.my_orders') }}" class="btn btn-outline-secondary">
+                                <a href="{{ $ordersIndexUrl }}" class="btn btn-outline-secondary">
                                     <i class="fa fa-refresh me-2"></i>Xóa bộ lọc
                                 </a>
                             @endif
                         </div>
 
-                        <form action="{{ route('pages.my_orders') }}" method="GET" class="row g-3 align-items-end" id="ordersFilterForm">
+                        <form action="{{ $ordersIndexUrl }}" method="GET" class="row g-3 align-items-end" id="ordersFilterForm">
+                            @if($monitoringEmbedded ?? false)<input type="hidden" name="tab" value="my_orders">@endif
                             <input type="hidden" name="customer_query" id="customer_query" value="{{ $customerSearch ?? '' }}">
                             <input type="hidden" name="sort_by" value="{{ $currentSortBy }}">
                             <input type="hidden" name="sort_dir" value="{{ $currentSortDir }}">
@@ -848,7 +852,7 @@
                                 </button>
                             </div>
                             <div class="col-md-4 d-grid">
-                                <a href="{{ route('my_customer.schedules.index') }}" class="btn btn-outline-primary ">
+                                <a href="{{ ($monitoringEmbedded ?? false) ? route('pages.my_orders.monitoring', ['tab' => 'schedules']) : route('my_customer.schedules.index') }}" class="btn btn-outline-primary ">
                                     <i class="bi bi-calendar2-check"></i> Lịch lên đơn
                                 </a>
                             </div>
@@ -989,7 +993,7 @@
 
         <script>
             (function () {
-                const ordersEndpoint = @json(route('pages.my_orders'));
+                const ordersEndpoint = @json($ordersIndexUrl);
                 const ordersFilterForm = document.getElementById('ordersFilterForm');
                 const ordersListingContainer = document.getElementById('ordersListingContainer');
                 const sortByInput = ordersFilterForm.querySelector('input[name="sort_by"]');

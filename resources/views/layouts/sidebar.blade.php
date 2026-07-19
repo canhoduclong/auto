@@ -136,7 +136,7 @@
 							</a>
 						</li>
 					<li class="nav-item">
-						<a href="{{ route('pages.my_order_drafts') }}" class="nav-link{{ request()->routeIs('pages.my_order_drafts*') ? ' active' : '' }}">
+						<a href="{{ (auth()->user()?->isAdmin() || auth()->user()?->hasPermission('orders.monitoring')) ? route('pages.my_orders.monitoring', ['tab' => 'drafts']) : route('pages.my_order_drafts') }}" class="nav-link{{ request()->routeIs('pages.my_order_drafts*') ? ' active' : '' }}">
 							<i class="ph-textbox"></i>
 							<span>Đơn nháp</span>
 						</a>

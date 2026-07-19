@@ -1,4 +1,4 @@
-@extends('layouts.site')
+@extends(($monitoringEmbedded ?? false) ? 'layouts.embedded' : 'layouts.site')
 
 @section('title', 'Đơn nháp')
 

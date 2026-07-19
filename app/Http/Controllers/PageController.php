@@ -924,6 +924,16 @@ class PageController extends Controller
             abort(403, 'Bạn không có quyền truy cập theo dõi đơn hàng.');
         }
 
+        $allowedTabs = ['today', 'drafts', 'my_orders', 'schedules', 'automatic'];
+        $activeTab = (string) $request->input('tab', 'today');
+        if (!in_array($activeTab, $allowedTabs, true)) {
+            $activeTab = 'today';
+        }
+
+        if ($activeTab !== 'today' && ($request->ajax() || $request->boolean('ajax'))) {
+            return $this->monitoringTabResponse($activeTab, $request);
+        }
+
         try {
             $selectedDate = Carbon::parse(
                 $request->input('date', $request->input('from_date', now()->toDateString()))
@@ -937,7 +947,7 @@ class PageController extends Controller
                 'customer.addresses',
                 'customer.truckStation',
                 'truckStation',
-                'user',
+                'user.roles',
                 'shipper',
                 'accountingReconciliation',
                 'approvals.step',
@@ -980,8 +990,21 @@ class PageController extends Controller
         }
 
         $roleNames = $this->normalizedRoleNames($user);
-        $approvableQuery = clone $dateQuery;
-        $canApproveAnyOrder = $this->applyCurrentApprovalStepScope($approvableQuery, $roleNames)->exists();
+        $canApproveManagedSales = $this->canApproveManagedSalesFromMonitoring($user);
+        $canApproveAllOrders = $this->canApproveAllFromMonitoring($user);
+
+        $managedSalesApprovalQuery = clone $dateQuery;
+        if ($canApproveManagedSales) {
+            $this->applyManagedSalesScope($managedSalesApprovalQuery, $user);
+            $this->applyCurrentApprovalStepScope($managedSalesApprovalQuery, $roleNames);
+        }
+        $canApproveManagedSalesAny = $canApproveManagedSales && $managedSalesApprovalQuery->exists();
+
+        $allApprovalQuery = clone $dateQuery;
+        if ($canApproveAllOrders) {
+            $this->applyCurrentApprovalStepScope($allApprovalQuery, $roleNames);
+        }
+        $canApproveAllAny = $canApproveAllOrders && $allApprovalQuery->exists();
 
         $allowedPerPage = [10, 20, 50, 100];
         $perPage = (int) $request->input('per_page', 20);
@@ -1042,7 +1065,14 @@ class PageController extends Controller
                 ->sortBy(fn ($approval) => $approval->step->step_order ?? PHP_INT_MAX)
                 ->first();
 
-            $canApproveByOrder[$order->id] = $currentStep?->step
+            $isInApprovalScope = $canApproveAllOrders || (
+                $canApproveManagedSales
+                && (int) ($user->team_id ?? 0) > 0
+                && (int) ($order->user?->team_id ?? 0) === (int) ($user->team_id ?? 0)
+                && $order->user?->roles?->contains(fn ($role) => strtolower((string) $role->name) === 'sale')
+            );
+
+            $canApproveByOrder[$order->id] = $isInApprovalScope && $currentStep?->step
                 ? $roleNames->contains(strtolower((string) $currentStep->step->role_slug))
                 : false;
         }
@@ -1108,6 +1138,10 @@ class PageController extends Controller
             ->sortBy('name')
             ->values();
 
+        $tabContentHtml = $activeTab === 'today'
+            ? null
+            : $this->renderMonitoringTab($activeTab, $request);
+
         return view('site.orders.monitoring', [
             'settings' => $this->settings,
             'user' => $user,
@@ -1125,7 +1159,12 @@ class PageController extends Controller
             'saleFilters' => $saleFilters,
             'customerFilters' => $customerFilters,
             'canApproveByOrder' => $canApproveByOrder,
-            'canApproveAnyOrder' => $canApproveAnyOrder,
+            'canApproveManagedSales' => $canApproveManagedSales,
+            'canApproveManagedSalesAny' => $canApproveManagedSalesAny,
+            'canApproveAllOrders' => $canApproveAllOrders,
+            'canApproveAllAny' => $canApproveAllAny,
+            'activeTab' => $activeTab,
+            'tabContentHtml' => $tabContentHtml,
             'truckStations' => TruckStation::query()
                 ->where('is_active', true)
                 ->with(['brand', 'province', 'ward'])
@@ -1134,9 +1173,37 @@ class PageController extends Controller
         ]);
     }
 
+    private function monitoringTabResponse(string $tab, Request $request)
+    {
+        $tabRequest = $request->duplicate(collect($request->query())->except(['date'])->all());
+        $tabRequest->setUserResolver(fn () => $request->user());
+
+        return match ($tab) {
+            'drafts' => app(\App\Http\Controllers\Admin\TextOrderImportController::class)->saleIndex($tabRequest),
+            'my_orders' => $this->myOrders($tabRequest),
+            'schedules', 'automatic' => app(OrderScheduleController::class)->index($tabRequest),
+            default => abort(404),
+        };
+    }
+
+    private function renderMonitoringTab(string $tab, Request $request): string
+    {
+        $response = $this->monitoringTabResponse($tab, $request);
+        if (!$response instanceof \Illuminate\View\View) {
+            return '';
+        }
+
+        return $response->with([
+            'monitoringEmbedded' => true,
+            'monitoringScheduleMode' => $tab === 'automatic' ? 'automatic' : 'schedules',
+            'errors' => session()->get('errors', new \Illuminate\Support\ViewErrorBag()),
+        ])->render();
+    }
+
     public function myOrdersMonitoringApproveAll(Request $request, ApprovalService $approvalService)
     {
         $user = $this->monitoringUserOrFail();
+        abort_unless($this->canApproveAllFromMonitoring($user), 403, 'Chỉ manager mới được duyệt tất cả đơn.');
         $roleNames = $this->normalizedRoleNames($user);
 
         $query = Order::query()->with(['approvals.step']);
@@ -1151,6 +1218,27 @@ class PageController extends Controller
         );
 
         return $this->redirectAfterApproveAll($result, 'theo bộ lọc');
+    }
+
+    public function myOrdersMonitoringApproveSales(Request $request, ApprovalService $approvalService)
+    {
+        $user = $this->monitoringUserOrFail();
+        abort_unless($this->canApproveManagedSalesFromMonitoring($user), 403, 'Bạn không có quyền duyệt đơn của sale được quản lý.');
+        $roleNames = $this->normalizedRoleNames($user);
+
+        $query = Order::query()->with(['approvals.step', 'user.roles']);
+        $this->applyMonitoringOrderFilters($query, $request);
+        $this->applyManagedSalesScope($query, $user);
+        $this->applyCurrentApprovalStepScope($query, $roleNames);
+
+        $result = $this->approveOrdersFromQuery(
+            $query,
+            $user,
+            $approvalService,
+            'Duyệt đơn PKD từ trang theo dõi đơn hàng'
+        );
+
+        return $this->redirectAfterApproveAll($result, 'sale được quản lý');
     }
 
     public function myOrdersMonitoringRefreshSequence(Request $request)
@@ -2202,6 +2290,40 @@ class PageController extends Controller
         return $user->roles->pluck('name')
             ->map(fn ($role) => strtolower((string) $role))
             ->values();
+    }
+
+    private function canApproveManagedSalesFromMonitoring(User $user): bool
+    {
+        return $user->hasRole([
+            'leader',
+            'leader_sale',
+            'sale_manager',
+            'manager',
+            'manager_sale',
+            'director',
+            'admin',
+        ]);
+    }
+
+    private function canApproveAllFromMonitoring(User $user): bool
+    {
+        return $user->hasRole(['manager', 'manager_sale', 'director', 'admin']);
+    }
+
+    private function applyManagedSalesScope(Builder $query, User $user): Builder
+    {
+        $query->whereHas('user.roles', fn ($roles) => $roles->whereRaw('LOWER(name) = ?', ['sale']));
+
+        if ($user->hasRole('admin')) {
+            return $query;
+        }
+
+        $teamId = (int) ($user->team_id ?? 0);
+        if ($teamId <= 0) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->whereHas('user', fn ($sale) => $sale->where('team_id', $teamId));
     }
 
     private function monitoringUserOrFail(): User

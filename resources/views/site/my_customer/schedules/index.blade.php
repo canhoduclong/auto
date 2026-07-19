@@ -1,4 +1,4 @@
-@extends('layouts.site')
+@extends(($monitoringEmbedded ?? false) ? 'layouts.embedded' : 'layouts.site')
 
 @push('styles')
 <style>
@@ -402,6 +402,11 @@
 @endpush
 
 @section('content')
+@php
+    $scheduleIndexUrl = ($monitoringEmbedded ?? false)
+        ? route('pages.my_orders.monitoring', ['tab' => ($monitoringScheduleMode ?? 'schedules')])
+        : route('my_customer.schedules.index');
+@endphp
 <div class="schidx-page">
     <div class="container">
 
@@ -409,8 +414,8 @@
         <div class="schidx-hero">
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
                 <div>
-                    <h4 class="mb-1 fw-bold">Lên đơn theo lịch</h4>
-                    <div class="opacity-75 small">Kiểm soát giá & tồn kho, xem nhanh chi tiết từng lịch</div>
+                    <h4 class="mb-1 fw-bold">{{ ($monitoringScheduleMode ?? 'schedules') === 'automatic' ? 'Đơn hàng tự động' : 'Lên đơn theo lịch' }}</h4>
+                    <div class="opacity-75 small">{{ ($monitoringScheduleMode ?? 'schedules') === 'automatic' ? 'Quản lý các cấu hình tự động tạo đơn hàng ngày' : 'Kiểm soát giá & tồn kho, xem nhanh chi tiết từng lịch' }}</div>
                 </div>
                 <div class="d-flex gap-2 flex-wrap">
                     <form method="POST" action="{{ route('my_customer.schedules.evaluate_today') }}" class="m-0">
@@ -500,7 +505,8 @@
                     <div class="schidx-card">
                         <div class="schidx-card-header">Lọc dữ liệu</div>
                         <div class="schidx-card-body">
-                            <form method="GET" action="{{ route('my_customer.schedules.index') }}" class="row g-2" id="schedFilterForm">
+                            <form method="GET" action="{{ $scheduleIndexUrl }}" class="row g-2" id="schedFilterForm">
+                                @if($monitoringEmbedded ?? false)<input type="hidden" name="tab" value="{{ $monitoringScheduleMode ?? 'schedules' }}">@endif
                                 <input type="hidden" name="customer_id" id="sidebar-customer-id" value="{{ $activeCustomerId ?: '' }}">
 
                                 <div class="col-12">
@@ -527,7 +533,7 @@
                                 </div>
                                 <div class="col-12 d-grid gap-2 mt-1">
                                     <button class="btn btn-sm btn-primary" type="submit">Áp dụng</button>
-                                    <a href="{{ route('my_customer.schedules.index') }}" class="btn btn-sm btn-outline-secondary">Xoá bộ lọc</a>
+                                    <a href="{{ $scheduleIndexUrl }}" class="btn btn-sm btn-outline-secondary">Xoá bộ lọc</a>
                                 </div>
                             </form>
                         </div>
@@ -886,7 +892,7 @@ async function toggleActiveSchedule(btn) {
 /* ---- AJAX scheduler for sort / tabs / filter / pagination ---- */
 /* loadResults and getFormParams are exposed globally for the customer picker */
 (function () {
-    const INDEX_URL = '{{ route('my_customer.schedules.index') }}';
+    const INDEX_URL = @json($scheduleIndexUrl);
     let _activeParams = new URLSearchParams(window.location.search);
     let _loading = false;
 

@@ -991,6 +991,9 @@ Route::middleware(['auth', 'role:sale,leader,leader_sale,sale_manager,manager,ma
     Route::post('/my-orders/monitoring/approve-all', [PageController::class, 'myOrdersMonitoringApproveAll'])
         ->name('pages.my_orders.monitoring.approve_all')
         ->middleware('permission:orders.monitoring');
+    Route::post('/my-orders/monitoring/approve-sales', [PageController::class, 'myOrdersMonitoringApproveSales'])
+        ->name('pages.my_orders.monitoring.approve_sales')
+        ->middleware('permission:orders.monitoring');
     Route::post('/my-orders/monitoring/refresh-sequence', [PageController::class, 'myOrdersMonitoringRefreshSequence'])
         ->name('pages.my_orders.monitoring.refresh_sequence')
         ->middleware('permission:orders.monitoring');
