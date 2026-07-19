@@ -24,6 +24,18 @@ class MonitoringApprovalScopeTest extends TestCase
         $this->assertFalse($method->invoke($controller, $this->userWithRole('sale')));
     }
 
+    public function test_only_leader_roles_can_approve_managed_sales_from_monitoring(): void
+    {
+        $controller = (new ReflectionClass(PageController::class))->newInstanceWithoutConstructor();
+        $method = new \ReflectionMethod(PageController::class, 'canApproveManagedSalesFromMonitoring');
+
+        $this->assertTrue($method->invoke($controller, $this->userWithRole('leader')));
+        $this->assertTrue($method->invoke($controller, $this->userWithRole('leader_sale')));
+        $this->assertTrue($method->invoke($controller, $this->userWithRole('sale_manager')));
+        $this->assertFalse($method->invoke($controller, $this->userWithRole('manager')));
+        $this->assertFalse($method->invoke($controller, $this->userWithRole('director')));
+    }
+
     public function test_leader_can_only_approve_sale_in_the_same_team(): void
     {
         $controller = (new ReflectionClass(OrderApprovalController::class))->newInstanceWithoutConstructor();

@@ -990,13 +990,14 @@ class PageController extends Controller
         }
 
         $roleNames = $this->normalizedRoleNames($user);
+        $leaderRoleNames = $roleNames->intersect($this->monitoringLeaderRoleNames())->values();
         $canApproveManagedSales = $this->canApproveManagedSalesFromMonitoring($user);
         $canApproveAllOrders = $this->canApproveAllFromMonitoring($user);
 
         $managedSalesApprovalQuery = clone $dateQuery;
         if ($canApproveManagedSales) {
             $this->applyManagedSalesScope($managedSalesApprovalQuery, $user);
-            $this->applyMonitoringApprovalScope($managedSalesApprovalQuery, $roleNames);
+            $this->applyMonitoringApprovalScope($managedSalesApprovalQuery, $leaderRoleNames);
         }
         $canApproveManagedSalesAny = $canApproveManagedSales && $managedSalesApprovalQuery->exists();
 
@@ -1255,12 +1256,14 @@ class PageController extends Controller
     {
         $user = $this->monitoringUserOrFail();
         abort_unless($this->canApproveManagedSalesFromMonitoring($user), 403, 'Bạn không có quyền duyệt đơn của sale được quản lý.');
-        $roleNames = $this->normalizedRoleNames($user);
 
         $query = Order::query()->with(['approvals.step', 'user.roles']);
         $this->applyMonitoringOrderFilters($query, $request);
         $this->applyManagedSalesScope($query, $user);
-        $this->applyMonitoringApprovalScope($query, $roleNames);
+        $leaderRoleNames = $this->normalizedRoleNames($user)
+            ->intersect($this->monitoringLeaderRoleNames())
+            ->values();
+        $this->applyMonitoringApprovalScope($query, $leaderRoleNames);
 
         $result = $this->approveOrdersFromQuery(
             $query,
@@ -2329,10 +2332,6 @@ class PageController extends Controller
             'leader',
             'leader_sale',
             'sale_manager',
-            'manager',
-            'manager_sale',
-            'director',
-            'admin',
         ]);
     }
 
@@ -2449,10 +2448,14 @@ class PageController extends Controller
         $query = Order::query();
         $this->applyMonitoringOrderFilters($query, $leaderRequest);
 
-        $leaderRoles = collect(['leader', 'leader_sale', 'sale_manager']);
-        $this->applyMonitoringApprovalScope($query, $leaderRoles);
+        $this->applyMonitoringApprovalScope($query, $this->monitoringLeaderRoleNames());
 
         return $query->exists();
+    }
+
+    private function monitoringLeaderRoleNames()
+    {
+        return collect(['leader', 'leader_sale', 'sale_manager']);
     }
 
     private function applyTeamOrderFilters(Builder $query, Request $request): void
