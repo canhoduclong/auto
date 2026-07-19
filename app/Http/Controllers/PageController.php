@@ -3981,8 +3981,12 @@ public function apiTruckRoutes(Request $request)
         $isEditable = $isCopiedOrder || $order->canBeDirectlyEditedByOwner();
 
         if (!$isEditable) {
-            return redirect()->route('pages.my_orders')
-                ->with('error', 'Đơn đã qua bước duyệt trực tiếp. Vui lòng dùng chức năng Yêu cầu điều chỉnh.');
+            return redirect()->route('pages.my_orders.monitoring', [
+                'date' => $order->created_at?->toDateString(),
+            ])
+                ->with('error', $order->canRequestAdjustment()
+                    ? 'Đơn đã chốt doanh thu. Vui lòng dùng chức năng Gửi yêu cầu điều chỉnh.'
+                    : 'Không thể sửa đơn đã giao hoặc đơn đã kết thúc.');
         }
 
         $order->load('items.variant.product', 'customer', 'parentOrder');
@@ -4010,8 +4014,12 @@ public function apiTruckRoutes(Request $request)
         $isEditable = $isCopiedOrder || $order->canBeDirectlyEditedByOwner();
 
         if (!$isEditable) {
-            return redirect()->route('pages.my_orders')
-                ->with('error', 'Đơn đã qua bước duyệt trực tiếp. Vui lòng dùng chức năng Yêu cầu điều chỉnh.');
+            return redirect()->route('pages.my_orders.monitoring', [
+                'date' => $order->created_at?->toDateString(),
+            ])
+                ->with('error', $order->canRequestAdjustment()
+                    ? 'Đơn đã chốt doanh thu. Vui lòng dùng chức năng Gửi yêu cầu điều chỉnh.'
+                    : 'Không thể sửa đơn đã giao hoặc đơn đã kết thúc.');
         }
 
         $customerIds = $this->myAssignedCustomersQuery((int) $user->id)

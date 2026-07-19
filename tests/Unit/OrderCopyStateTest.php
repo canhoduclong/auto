@@ -72,16 +72,34 @@ class OrderCopyStateTest extends TestCase
         $this->assertNull($copiedOrder->stock_alert_status);
     }
 
-    public function test_owner_can_directly_edit_order_before_it_passes_the_first_approval_stage(): void
+    public function test_owner_can_directly_edit_active_order_before_delivery(): void
     {
-        foreach (['draft', 'pending', Order::STATUS_ORDER_PLACED, Order::STATUS_PENDING_LEADER_APPROVAL] as $status) {
+        foreach ([
+            'draft',
+            'pending',
+            Order::STATUS_ORDER_PLACED,
+            Order::STATUS_PENDING_LEADER_APPROVAL,
+            Order::STATUS_PENDING_MANAGER_APPROVAL,
+            Order::STATUS_APPROVED,
+            Order::STATUS_PACKING,
+            Order::STATUS_DELIVERING,
+        ] as $status) {
             $order = new Order(['status' => $status]);
 
             $this->assertTrue($order->canBeDirectlyEditedByOwner(), $status);
         }
+    }
 
-        $approvedOrder = new Order(['status' => Order::STATUS_APPROVED]);
-        $this->assertFalse($approvedOrder->canBeDirectlyEditedByOwner());
+    public function test_owner_cannot_directly_edit_delivered_or_closed_order(): void
+    {
+        $deliveredOrder = new Order([
+            'status' => Order::STATUS_COMPLETED,
+            'delivered_at' => now(),
+        ]);
+        $cancelledOrder = new Order(['status' => Order::STATUS_CANCELLED]);
+
+        $this->assertFalse($deliveredOrder->canBeDirectlyEditedByOwner());
+        $this->assertFalse($cancelledOrder->canBeDirectlyEditedByOwner());
     }
 
     public function test_copied_order_remains_directly_editable_for_its_owner(): void

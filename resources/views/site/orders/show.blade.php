@@ -50,9 +50,7 @@
         return $prefix . number_format(abs($amount), 0, ',', '.') . 'đ';
     };
     $isCopiedOrder = !empty($order->copied_from_order_id);
-    $canEdit = $isCopiedOrder
-        || ($order->status === \App\Models\Order::STATUS_PENDING_LEADER_APPROVAL
-            && $order->created_at?->isToday());
+    $canEdit = $order->canBeDirectlyEditedByOwner();
     $canCancelToday = $order->created_at?->isToday() && $order->canBeCancelled();
     $canRequestAdjustment = $order->canRequestAdjustment();
 

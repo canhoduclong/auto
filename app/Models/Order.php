@@ -196,11 +196,18 @@ class Order extends Model
             return true;
         }
 
-        return in_array((string) $this->status, [
-            'draft',
-            'pending',
-            self::STATUS_ORDER_PLACED,
-            self::STATUS_PENDING_LEADER_APPROVAL,
+        if ($this->delivered_at !== null) {
+            return false;
+        }
+
+        return !in_array((string) $this->status, [
+            self::STATUS_DELIVERED,
+            self::STATUS_COMPLETED,
+            self::STATUS_RETURNED,
+            self::STATUS_RETURNING,
+            self::STATUS_RETURNED_COMPLETED,
+            self::STATUS_CANCELLED,
+            self::STATUS_REJECTED,
         ], true);
     }
 
