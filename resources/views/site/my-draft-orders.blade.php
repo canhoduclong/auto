@@ -39,6 +39,10 @@
     .draft-template-editor label { margin-bottom: 3px; color: #64748b; font-size: .66rem; font-weight: 800; }
     .draft-template-edit-item { display: grid; grid-template-columns: minmax(130px, .8fr) minmax(170px, 1fr) 72px 90px 105px 34px; gap: 6px; margin-top: 7px; }
     .draft-template-edit-item .btn { display: inline-flex; align-items: center; justify-content: center; }
+    .draft-picker { margin-top: 8px; padding: 12px; border: 1px solid #dbe5ef; border-radius: 8px; background: #f8fafc; }
+    .draft-picker-search { display: flex; gap: 8px; margin-bottom: 10px; }
+    .draft-selected-customer { min-width: 0; color: #334155; font-size: .75rem; font-weight: 700; }
+    .draft-product-picker .monitor-product-list { max-height: 430px; overflow-y: auto; }
     .draft-template-empty { padding: 48px 20px; border: 1px solid #dce6f1; border-radius: 8px; background: #fff; color: #64748b; text-align: center; }
     @media (max-width: 767.98px) {
         .draft-template-row { grid-template-columns: 1fr; }
@@ -177,20 +181,21 @@
                                 <input type="hidden" name="truck_brand_name" value="{{ $draft->truck_brand_name }}">
                                 <input type="hidden" name="truck_station_address" value="{{ $draft->truck_station_address }}">
                                 <div class="draft-template-editor-grid">
-                                    <div class="is-wide">
-                                        <label>Chọn khách hàng</label>
-                                        <select class="form-select form-select-sm js-draft-customer">
-                                            <option value="">Chọn khách hàng</option>
-                                            @foreach($customers as $customer)
-                                                <option
-                                                    value="{{ $customer->id }}"
-                                                    data-name="{{ $customer->name }}"
-                                                    data-phone="{{ $customer->phone }}"
-                                                    data-address="{{ $customer->address }}"
-                                                    @selected((int) $draft->customer_id === (int) $customer->id)
-                                                >{{ $customer->name }}{{ $customer->phone ? ' · ' . $customer->phone : '' }}</option>
-                                            @endforeach
-                                        </select>
+                                    <div class="is-wide d-flex align-items-center justify-content-between gap-2">
+                                        <span class="draft-selected-customer">
+                                            {{ $draft->customer?->name ?: ($draft->customer_name ?: 'Chưa chọn khách hàng') }}
+                                            @if($draft->customer?->phone || $draft->phone) · {{ $draft->customer?->phone ?: $draft->phone }} @endif
+                                        </span>
+                                        <button type="button" class="btn btn-sm btn-outline-primary flex-shrink-0 js-draft-customer-toggle">
+                                            <i class="bi bi-person-check me-1"></i>Chọn khách hàng
+                                        </button>
+                                    </div>
+                                    <div class="is-wide draft-picker draft-customer-picker" hidden>
+                                        <div class="draft-picker-search">
+                                            <input type="search" class="form-control form-control-sm draft-customer-search" placeholder="Tìm theo tên, số điện thoại hoặc email...">
+                                            <button type="button" class="btn btn-sm btn-primary draft-customer-search-button"><i class="bi bi-search me-1"></i>Tìm</button>
+                                        </div>
+                                        <div class="draft-customer-results"><div class="text-center text-muted py-3">Nhập từ khóa hoặc xem danh sách khách hàng.</div></div>
                                     </div>
                                     <div><label>Tên khách</label><input name="customer_name" class="form-control form-control-sm" value="{{ $draft->customer_name }}"></div>
                                     <div><label>Số điện thoại</label><input name="phone" class="form-control form-control-sm" value="{{ $draft->phone }}"></div>
@@ -224,8 +229,15 @@
                                     </div>
                                 @endforeach
                                 @if($draft->status !== 'confirmed')
+                                    <div class="draft-picker draft-product-picker" hidden>
+                                        <div class="draft-picker-search">
+                                            <input type="search" class="form-control form-control-sm draft-product-search" placeholder="Tìm sản phẩm, SKU hoặc size...">
+                                            <button type="button" class="btn btn-sm btn-primary draft-product-search-button"><i class="bi bi-search me-1"></i>Tìm</button>
+                                        </div>
+                                        <div class="draft-product-results"><div class="text-center text-muted py-3">Đang tải danh sách sản phẩm...</div></div>
+                                    </div>
                                     <div class="d-flex justify-content-between gap-2 mt-3">
-                                        <button type="button" class="btn btn-sm btn-outline-primary js-add-draft-item"><i class="bi bi-plus-circle me-1"></i>Thêm sản phẩm</button>
+                                        <button type="button" class="btn btn-sm btn-outline-primary js-draft-product-toggle"><i class="bi bi-plus-circle me-1"></i>Thêm sản phẩm</button>
                                         <button type="button" class="btn btn-sm btn-success js-save-draft"><i class="bi bi-check2 me-1"></i>Lưu thay đổi</button>
                                     </div>
                                 @endif
@@ -252,8 +264,15 @@
 document.addEventListener('DOMContentLoaded', () => {
     const csrf = document.querySelector('meta[name="csrf-token"]')?.content || @json(csrf_token());
     const baseUrl = @json($actionBaseUrl);
+    const customerEndpoint = @json(route('site.orders.customers.ajax'));
+    const variantEndpoint = @json(route('site.orders.variants.ajax'));
     const variants = @json($variantCatalog);
     const notify = (message, type = 'success') => typeof window.showToast === 'function' ? window.showToast(message, type) : window.alert(message);
+    const escapeHtml = value => {
+        const node = document.createElement('div');
+        node.textContent = String(value ?? '');
+        return node.innerHTML;
+    };
     const populateVariants = (row, productId, selectedId = null) => {
         const select = row.querySelector('.js-draft-variant');
         select.innerHTML = '<option value="">Chọn biến thể</option>';
@@ -270,6 +289,74 @@ document.addEventListener('DOMContentLoaded', () => {
         row.querySelector('[name="item_size_kg"]').value = 1;
         row.querySelector('[name="item_unit_price"]').value = 0;
         row.querySelector('[name="item_product_text"]').value = '';
+    };
+    const loadCustomers = async (editor, page = 1) => {
+        const results = editor.querySelector('.draft-customer-results');
+        const target = new URL(customerEndpoint, window.location.origin);
+        target.searchParams.set('mode', 'single');
+        target.searchParams.set('scope', 'my_customers');
+        target.searchParams.set('q', editor.querySelector('.draft-customer-search').value.trim());
+        target.searchParams.set('per_page', '15');
+        target.searchParams.set('page', String(page));
+        target.searchParams.set('sort_by', editor.dataset.customerSortBy || 'manual');
+        target.searchParams.set('sort_dir', editor.dataset.customerSortDir || 'asc');
+        results.innerHTML = '<div class="text-center text-muted py-3"><span class="spinner-border spinner-border-sm me-1"></span>Đang tải khách hàng...</div>';
+        try {
+            const response = await fetch(target, {headers: {'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json'}});
+            const data = await response.json();
+            if (!response.ok || !data.html) throw new Error('Không thể tải danh sách khách hàng.');
+            results.innerHTML = data.html;
+        } catch (error) {
+            results.innerHTML = `<div class="alert alert-danger py-2 mb-0">${escapeHtml(error.message)}</div>`;
+        }
+    };
+    const loadProducts = async (editor, url = variantEndpoint) => {
+        const results = editor.querySelector('.draft-product-results');
+        const target = new URL(url, window.location.origin);
+        target.searchParams.set('view', 'products');
+        target.searchParams.set('search', editor.querySelector('.draft-product-search').value.trim());
+        target.searchParams.set('per_page', editor.dataset.productPerPage || '10');
+        target.searchParams.set('page', target.searchParams.get('page') || '1');
+        results.innerHTML = '<div class="text-center text-muted py-3"><span class="spinner-border spinner-border-sm me-1"></span>Đang tải sản phẩm...</div>';
+        try {
+            const response = await fetch(target, {headers: {'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json'}});
+            const data = await response.json();
+            if (!response.ok || !data.html) throw new Error('Không thể tải danh sách sản phẩm.');
+            results.innerHTML = data.html;
+            const selectedIds = new Set(Array.from(editor.querySelectorAll('.js-draft-variant')).map(select => String(select.value)).filter(Boolean));
+            results.querySelectorAll('.monitor-variant-option').forEach(button => {
+                const selected = selectedIds.has(String(button.dataset.variantId || ''));
+                button.classList.toggle('is-selected', selected);
+                button.disabled = selected;
+                if (selected) button.title = 'Biến thể đã có trong đơn mẫu';
+            });
+        } catch (error) {
+            results.innerHTML = `<div class="alert alert-danger py-2 mb-0">${escapeHtml(error.message)}</div>`;
+        }
+    };
+    const addVariantToDraft = (editor, button) => {
+        const variantId = String(button.dataset.variantId || '');
+        if (!variantId) return;
+        if (Array.from(editor.querySelectorAll('.js-draft-variant')).some(select => String(select.value) === variantId)) {
+            notify('Biến thể này đã có trong đơn mẫu.', 'error');
+            return;
+        }
+        let row = Array.from(editor.querySelectorAll('[data-draft-item]')).find(item => !item.querySelector('.js-draft-variant').value);
+        if (!row) {
+            row = editor.querySelector('[data-draft-item]').cloneNode(true);
+            resetItemRow(row);
+            editor.querySelector('.draft-product-picker').before(row);
+        }
+        const productId = button.closest('.monitor-product-card')?.dataset.productId || '';
+        row.querySelector('.js-draft-product').value = productId;
+        populateVariants(row, productId, variantId);
+        row.querySelector('[name="item_quantity"]').value = 1;
+        row.querySelector('[name="item_size_kg"]').value = Math.max(.01, Number(button.dataset.variantWeight) || 1);
+        row.querySelector('[name="item_unit_price"]').value = Math.max(0, Number(button.dataset.variantPrice) || 0);
+        row.querySelector('[name="item_product_text"]').value = `${button.dataset.variantName || 'Sản phẩm'} ${button.dataset.variantSize || button.dataset.variantSku || ''}`.trim();
+        button.classList.add('is-selected');
+        button.disabled = true;
+        button.title = 'Biến thể đã có trong đơn mẫu';
     };
     const rowData = card => {
         const editor = card.querySelector('.draft-template-editor');
@@ -298,21 +385,101 @@ document.addEventListener('DOMContentLoaded', () => {
         return payload;
     };
     document.addEventListener('click', async event => {
-        const addItemButton = event.target.closest('.js-add-draft-item');
-        if (addItemButton) {
-            const editor = addItemButton.closest('.draft-template-editor');
-            const source = editor.querySelector('[data-draft-item]');
-            const row = source.cloneNode(true);
-            resetItemRow(row);
-            source.parentNode.insertBefore(row, addItemButton.parentElement);
+        const customerToggle = event.target.closest('.js-draft-customer-toggle');
+        if (customerToggle) {
+            const editor = customerToggle.closest('.draft-template-editor');
+            const picker = editor.querySelector('.draft-customer-picker');
+            picker.hidden = !picker.hidden;
+            if (!picker.hidden) loadCustomers(editor);
+            return;
+        }
+        const customerSearch = event.target.closest('.draft-customer-search-button');
+        if (customerSearch) {
+            loadCustomers(customerSearch.closest('.draft-template-editor'));
+            return;
+        }
+        const customerPage = event.target.closest('.draft-customer-results .customer-page-btn');
+        if (customerPage && !customerPage.disabled) {
+            loadCustomers(customerPage.closest('.draft-template-editor'), Number(customerPage.dataset.page) || 1);
+            return;
+        }
+        const customerSort = event.target.closest('.draft-customer-results .customer-sort-link');
+        if (customerSort) {
+            event.preventDefault();
+            const editor = customerSort.closest('.draft-template-editor');
+            editor.dataset.customerSortBy = customerSort.dataset.sortBy || 'manual';
+            editor.dataset.customerSortDir = customerSort.dataset.sortDir || 'asc';
+            loadCustomers(editor);
+            return;
+        }
+        const customerButton = event.target.closest('.draft-customer-results .select-customer-btn');
+        if (customerButton) {
+            const editor = customerButton.closest('.draft-template-editor');
+            editor.querySelector('[name="customer_id"]').value = customerButton.dataset.customerId || '';
+            editor.querySelector('[name="customer_name"]').value = customerButton.dataset.customerName || '';
+            editor.querySelector('[name="phone"]').value = customerButton.dataset.customerPhone || '';
+            editor.querySelector('[name="address"]').value = customerButton.dataset.customerAddress || '';
+            editor.querySelector('.draft-selected-customer').textContent = [customerButton.dataset.customerName, customerButton.dataset.customerPhone].filter(Boolean).join(' · ');
+            editor.querySelector('.draft-customer-picker').hidden = true;
+            return;
+        }
+        const productToggle = event.target.closest('.js-draft-product-toggle');
+        if (productToggle) {
+            const editor = productToggle.closest('.draft-template-editor');
+            const picker = editor.querySelector('.draft-product-picker');
+            picker.hidden = !picker.hidden;
+            if (!picker.hidden) loadProducts(editor);
+            return;
+        }
+        const productSearch = event.target.closest('.draft-product-search-button');
+        if (productSearch) {
+            loadProducts(productSearch.closest('.draft-template-editor'));
+            return;
+        }
+        const productChoice = event.target.closest('.draft-product-results .monitor-product-choice');
+        if (productChoice) {
+            const card = productChoice.closest('.monitor-product-card');
+            const variantsPanel = card.querySelector('.monitor-product-variants');
+            const willOpen = variantsPanel.hidden;
+            const results = productChoice.closest('.draft-product-results');
+            results.querySelectorAll('.monitor-product-card.is-open').forEach(openCard => {
+                if (openCard !== card) {
+                    openCard.classList.remove('is-open');
+                    openCard.querySelector('.monitor-product-choice')?.setAttribute('aria-expanded', 'false');
+                    openCard.querySelector('.monitor-product-variants').hidden = true;
+                }
+            });
+            card.classList.toggle('is-open', willOpen);
+            variantsPanel.hidden = !willOpen;
+            productChoice.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+            return;
+        }
+        const productPage = event.target.closest('.draft-product-results .pagination a');
+        if (productPage) {
+            event.preventDefault();
+            loadProducts(productPage.closest('.draft-template-editor'), productPage.href);
+            return;
+        }
+        const variantButton = event.target.closest('.draft-product-results .monitor-variant-option');
+        if (variantButton && !variantButton.disabled) {
+            addVariantToDraft(variantButton.closest('.draft-template-editor'), variantButton);
             return;
         }
         const removeItemButton = event.target.closest('.js-remove-draft-item');
         if (removeItemButton) {
             const editor = removeItemButton.closest('.draft-template-editor');
             const rows = editor.querySelectorAll('[data-draft-item]');
+            const removedVariantId = removeItemButton.closest('[data-draft-item]').querySelector('.js-draft-variant').value;
             if (rows.length === 1) resetItemRow(rows[0]);
             else removeItemButton.closest('[data-draft-item]').remove();
+            if (removedVariantId) {
+                const pickerButton = editor.querySelector(`.draft-product-results .monitor-variant-option[data-variant-id="${CSS.escape(removedVariantId)}"]`);
+                if (pickerButton) {
+                    pickerButton.disabled = false;
+                    pickerButton.classList.remove('is-selected');
+                    pickerButton.removeAttribute('title');
+                }
+            }
             return;
         }
         const button = event.target.closest('.js-save-draft, .js-copy-draft, .js-confirm-draft');
@@ -333,16 +500,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     document.addEventListener('change', event => {
-        const customerSelect = event.target.closest('.js-draft-customer');
-        if (customerSelect) {
-            const editor = customerSelect.closest('.draft-template-editor');
-            const option = customerSelect.selectedOptions[0];
-            editor.querySelector('[name="customer_id"]').value = option?.value || '';
-            if (option?.value) {
-                editor.querySelector('[name="customer_name"]').value = option.dataset.name || '';
-                editor.querySelector('[name="phone"]').value = option.dataset.phone || '';
-                editor.querySelector('[name="address"]').value = option.dataset.address || '';
-            }
+        const perPage = event.target.closest('.draft-product-results #per-page-select');
+        if (perPage) {
+            const editor = perPage.closest('.draft-template-editor');
+            editor.dataset.productPerPage = perPage.value;
+            loadProducts(editor);
             return;
         }
         const productSelect = event.target.closest('.js-draft-product');
@@ -358,6 +520,20 @@ document.addEventListener('DOMContentLoaded', () => {
             row.querySelector('[name="item_size_kg"]').value = variant.kg;
             row.querySelector('[name="item_unit_price"]').value = variant.price;
             row.querySelector('[name="item_product_text"]').value = `${variant.product_name} ${variant.label}`.trim();
+        }
+    });
+    document.addEventListener('keydown', event => {
+        if (event.key !== 'Enter') return;
+        const customerSearch = event.target.closest('.draft-customer-search');
+        if (customerSearch) {
+            event.preventDefault();
+            loadCustomers(customerSearch.closest('.draft-template-editor'));
+            return;
+        }
+        const productSearch = event.target.closest('.draft-product-search');
+        if (productSearch) {
+            event.preventDefault();
+            loadProducts(productSearch.closest('.draft-template-editor'));
         }
     });
 });
