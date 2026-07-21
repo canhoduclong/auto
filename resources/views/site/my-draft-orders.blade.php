@@ -60,6 +60,14 @@
     $currentSortDir = $sortDir ?? 'desc';
     $sortDirFor = fn (string $field): string => $currentSortBy === $field && $currentSortDir === 'asc' ? 'desc' : 'asc';
     $sortIconFor = fn (string $field): string => $currentSortBy !== $field ? 'fa-sort' : ($currentSortDir === 'asc' ? 'fa-sort-asc' : 'fa-sort-desc');
+    $variantCatalog = $variants->map(fn ($variant) => [
+        'id' => $variant->id,
+        'product_id' => $variant->product_id,
+        'label' => ($variant->size ?: ($variant->name ?: $variant->sku)) . ($variant->sku ? ' · ' . $variant->sku : ''),
+        'kg' => (float) ($variant->kg ?: $variant->size ?: 1),
+        'price' => (float) ($variant->latestPriceRule?->price ?? $variant->price ?? $variant->product?->default_price ?? $variant->product?->price ?? 0),
+        'product_name' => $variant->product?->name ?: 'Sản phẩm',
+    ])->values();
 @endphp
 
 <section class="drafts-page">
@@ -244,14 +252,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     const csrf = document.querySelector('meta[name="csrf-token"]')?.content || @json(csrf_token());
     const baseUrl = @json($actionBaseUrl);
-    const variants = @json($variants->map(fn ($variant) => [
-        'id' => $variant->id,
-        'product_id' => $variant->product_id,
-        'label' => ($variant->size ?: ($variant->name ?: $variant->sku)) . ($variant->sku ? ' · ' . $variant->sku : ''),
-        'kg' => (float) ($variant->kg ?: $variant->size ?: 1),
-        'price' => (float) ($variant->latestPriceRule?->price ?? $variant->price ?? $variant->product?->default_price ?? $variant->product?->price ?? 0),
-        'product_name' => $variant->product?->name ?: 'Sản phẩm',
-    ])->values());
+    const variants = @json($variantCatalog);
     const notify = (message, type = 'success') => typeof window.showToast === 'function' ? window.showToast(message, type) : window.alert(message);
     const populateVariants = (row, productId, selectedId = null) => {
         const select = row.querySelector('.js-draft-variant');
