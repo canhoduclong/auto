@@ -712,6 +712,7 @@ class PageController extends Controller
                 'sortDir' => $sortDir,
                 'stockWarnings' => $stockWarnings,
                 'isTrashView' => $isTrashView,
+                'monitoringEmbedded' => (string) $request->input('tab') === 'my_orders',
             ])->render();
 
             return response()->json([

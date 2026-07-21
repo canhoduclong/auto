@@ -704,6 +704,7 @@
 
 <section class="orders-page">
     <div class="container orders-shell">
+        @unless($monitoringEmbedded ?? false)
         <div class="orders-hero mb-4">
             <div class="row g-4 align-items-end position-relative">
                 <div class="col-lg-5">
@@ -737,8 +738,10 @@
                 </div>
             </div>
         </div>
+        @endunless
 
         <div class="row g-4">
+            @unless($monitoringEmbedded ?? false)
             <div class="col-xl-4">
                 <div class="orders-panel orders-side-panel">
                      
@@ -777,8 +780,9 @@
                     </div>
                 </div>
             </div>
+            @endunless
 
-            <div class="col-xl-8">
+            <div class="{{ ($monitoringEmbedded ?? false) ? 'col-12' : 'col-xl-8' }}">
                 <div class="orders-panel mb-4">
                     <div class="orders-filter">
                         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
@@ -884,6 +888,10 @@
                 const clearCustomerSelectionButton = document.getElementById('clearCustomerSelection');
                 const selectedIds = new Set(@json(array_map('intval', $selectedCustomerIds ?? [])));
                 let debounceTimer = null;
+
+                if (!searchInput || !selectedInputsContainer || !customerQueryInput || !listingContainer || !selectedCustomerLabel || !clearCustomerSelectionButton) {
+                    return;
+                }
 
                 const syncSelectedInputs = () => {
                     selectedInputsContainer.innerHTML = '';

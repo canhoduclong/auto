@@ -1,3 +1,6 @@
+@if($monitoringEmbedded ?? false)
+    @include('site.orders.partials.orders_listing_monitoring', compact('orders', 'user', 'sortBy', 'sortDir', 'stockWarnings', 'isTrashView'))
+@else
 @php
     $statusLabels = \App\Models\Order::statusOptions() + [
         \App\Models\Order::STATUS_READY_TO_PACK => 'Chờ đóng gói',
@@ -579,3 +582,4 @@
         </div>
     @endif
 </div>
+@endif

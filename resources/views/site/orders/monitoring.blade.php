@@ -11,7 +11,7 @@
         min-height: 75vh;
         padding: 28px 0 64px;
     }
-    .monitor-shell { width: calc(100% - 32px); max-width: 1600px; margin: 0 auto; }
+    .monitor-shell { width: calc(100% - 32px); max-width: 1290px; margin: 0 auto; }
     .monitor-toolbar {
         display: flex;
         flex-wrap: wrap;
@@ -335,17 +335,9 @@
     .monitor-edit-selected-customer { color: #075985; font-size: .82rem; font-weight: 800; }
     .monitor-edit-picker-results { max-height: 280px; margin-top: 8px; overflow: auto; background: #fff; }
     .monitor-edit-product-search { display: flex; gap: 6px; margin-top: 10px; }
-    .monitor-edit-product-results .variant-picker-toolbar { display: none; }
-    .monitor-edit-product-results .variant-picker-list { display: grid; gap: 6px; }
-    .monitor-edit-product-results .variant-picker-item { display: flex; align-items: center; gap: 8px; padding: 8px; border: 1px solid #e2e8f0; border-radius: 7px; }
-    .monitor-edit-product-results .variant-picker-main { display: flex; flex: 1; align-items: center; gap: 8px; min-width: 0; }
-    .monitor-edit-product-results .variant-picker-thumb { width: 38px; height: 38px; border-radius: 6px; object-fit: cover; }
-    .monitor-edit-product-results .variant-picker-name { font-size: .75rem; font-weight: 800; }
-    .monitor-edit-product-results .variant-picker-meta { display: flex; flex-wrap: wrap; gap: 5px; color: #64748b; font-size: .65rem; }
-    .monitor-edit-product-results .variant-picker-stats { display: flex; gap: 10px; font-size: .68rem; }
-    .monitor-edit-product-results .variant-picker-stats > div { display: grid; }
-    .monitor-edit-product-results .variant-picker-label { color: #64748b; }
-    .monitor-edit-product-results .variant-picker-actions > :not(.add-variant-to-cart) { display: none; }
+    .monitor-edit-product-results { max-height: 430px; padding: 1px; }
+    .monitor-edit-product-results .monitor-product-list { max-height: none; overflow: visible; }
+    .monitor-edit-product-results .monitor-variant-option:disabled { cursor: not-allowed; opacity: .65; }
     .monitor-inline-edit-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
     .monitor-inline-edit-fields .is-wide { grid-column: 1 / -1; }
     .monitor-inline-edit-fields label { margin-bottom: 3px; color: #475569; font-size: .68rem; font-weight: 800; }
@@ -581,7 +573,7 @@
 
 <section class="monitor-page">
     <div class="container monitor-shell">
-        <div class="monitor-toolbar">
+        <div class="monitor-toolbar {{ $activeTab === 'my_orders' ? 'd-none' : '' }}">
             @php
                 $monitorTabLabels = [
                     'today' => 'Theo dõi đơn hàng ngày',
@@ -1616,9 +1608,9 @@
         const variantIds = Array.from(form.querySelectorAll('[data-monitor-edit-item]'))
             .map(row => row.dataset.variantId)
             .filter(Boolean);
+        target.searchParams.set('view', 'products');
         target.searchParams.set('search', form.querySelector('.monitor-edit-product-search-input').value.trim());
-        target.searchParams.set('per_page', '5');
-        target.searchParams.set('exclude_ids', variantIds.join(','));
+        target.searchParams.set('per_page', form.dataset.productPerPage || '10');
         target.searchParams.set('page', target.searchParams.get('page') || '1');
         results.innerHTML = '<div class="text-center text-muted py-3"><span class="spinner-border spinner-border-sm me-1"></span>Đang tải sản phẩm...</div>';
         try {
@@ -1626,6 +1618,13 @@
             const data = await response.json();
             if (!response.ok || !data.html) throw new Error('Không thể tải sản phẩm.');
             results.innerHTML = data.html;
+            const selectedIds = new Set(variantIds);
+            results.querySelectorAll('.monitor-variant-option').forEach(button => {
+                const isSelected = selectedIds.has(String(button.dataset.variantId || ''));
+                button.classList.toggle('is-selected', isSelected);
+                button.disabled = isSelected;
+                if (isSelected) button.title = 'Biến thể đã có trong đơn';
+            });
         } catch (error) {
             results.innerHTML = `<div class="alert alert-danger py-2 mb-0">${escapeHtml(error.message)}</div>`;
         }
@@ -1667,7 +1666,9 @@
                 <td class="text-end fw-semibold monitor-edit-line-total">${money(price * pricingFactor)}</td>
                 <td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger monitor-edit-remove-item" aria-label="Xóa sản phẩm"><i class="bi bi-x"></i></button></td>
             </tr>`);
-        button.closest('.variant-picker-item')?.remove();
+        button.classList.add('is-selected');
+        button.disabled = true;
+        button.title = 'Biến thể đã có trong đơn';
         updateInlineEditTotals(form);
     }
 
@@ -1742,6 +1743,24 @@
             return;
         }
 
+        const productChoice = event.target.closest('.monitor-edit-product-results .monitor-product-choice');
+        if (productChoice) {
+            const card = productChoice.closest('.monitor-product-card');
+            const variants = card.querySelector('.monitor-product-variants');
+            const willOpen = variants.hidden;
+            form.querySelectorAll('.monitor-edit-product-results .monitor-product-card.is-open').forEach(openCard => {
+                if (openCard !== card) {
+                    openCard.classList.remove('is-open');
+                    openCard.querySelector('.monitor-product-choice')?.setAttribute('aria-expanded', 'false');
+                    openCard.querySelector('.monitor-product-variants').hidden = true;
+                }
+            });
+            card.classList.toggle('is-open', willOpen);
+            variants.hidden = !willOpen;
+            productChoice.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+            return;
+        }
+
         const productPage = event.target.closest('.monitor-edit-product-results .pagination a');
         if (productPage) {
             event.preventDefault();
@@ -1749,8 +1768,8 @@
             return;
         }
 
-        const addProduct = event.target.closest('.monitor-edit-product-results .add-variant-to-cart');
-        if (addProduct) {
+        const addProduct = event.target.closest('.monitor-edit-product-results .monitor-variant-option');
+        if (addProduct && !addProduct.disabled) {
             event.preventDefault();
             addInlineEditItem(form, addProduct);
             return;
@@ -1784,6 +1803,14 @@
         if (!event.target.matches('[data-monitor-edit-form] .monitor-edit-quantity')) return;
         const form = event.target.closest('[data-monitor-edit-form]');
         if (form) updateInlineEditTotals(form);
+    });
+
+    document.addEventListener('change', event => {
+        if (!event.target.matches('[data-monitor-edit-form] .monitor-edit-product-results #per-page-select')) return;
+        const form = event.target.closest('[data-monitor-edit-form]');
+        if (!form) return;
+        form.dataset.productPerPage = event.target.value || '10';
+        loadInlineProducts(form);
     });
 
     document.querySelectorAll('[data-monitor-edit-form]').forEach(form => {
