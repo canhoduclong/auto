@@ -173,6 +173,35 @@
         padding: .2rem .55rem;
         font-size: .78rem;
     }
+    .selling-price-stepper {
+        display: inline-flex;
+        align-items: stretch;
+        min-width: 164px;
+    }
+    .selling-price-stepper .btn {
+        width: 34px;
+        border-color: #cbd5e1;
+        border-radius: 0;
+        color: #0f766e;
+        font-size: 1rem;
+        font-weight: 900;
+    }
+    .selling-price-stepper .btn:first-child { border-radius: 5px 0 0 5px; }
+    .selling-price-stepper .btn:last-child { border-radius: 0 5px 5px 0; }
+    .selling-price-stepper .btn:disabled { color: #94a3b8; background: #f1f5f9; opacity: 1; }
+    .selling-price-value {
+        min-width: 96px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 4px 8px;
+        border-block: 1px solid #cbd5e1;
+        background: #fff;
+        color: #047857;
+        font-size: .84rem;
+        font-weight: 900;
+        white-space: nowrap;
+    }
     .selling-price-feedback {
         display: none;
         margin-top: .35rem;
@@ -187,6 +216,7 @@
         color: #dc3545;
         font-weight: 700;
     }
+    .price.price-invalid .selling-price-value { color: #dc3545; }
     .discount-input.is-invalid {
         border-color: #dc3545 !important;
         box-shadow: 0 0 0 .2rem rgba(220,53,69,.15) !important;
@@ -422,8 +452,7 @@
                                         <tr>
                                             <th>Sản phẩm</th>
                                             <th class="text-center">Size</th>
-                                            <th class="text-center">Đơn giá</th>
-                                            <th class="text-center">CK giá</th>
+                                            <th class="text-center">Giá bán</th>
                                             <th class="text-center">SL</th>
                                             <th class="text-center">Tổng</th>
                                             <th class="text-center">Tạm tính</th>
@@ -479,22 +508,14 @@
                                                     <input type="hidden" name="items[{{ $index }}][variant_id]" value="{{ $variant?->id }}">
                                                 </td>
                                                 <td>{{ $variant?->size ?? '--' }}</td>
-                                                <td class="price" data-price="{{ $unitPrice }}" data-min-price="{{ $minPrice }}">{{ number_format($unitPrice, 0, ',', '.') }}đ</td>
-                                                <td>
-                                                    <div class="btn-group discount-switch mb-1" role="group" aria-label="Loai chiet khau">
-                                                        <input class="btn-check discount-type-input" type="radio" name="item_discount_type[{{ $variant?->id }}]" id="discount-decrease-{{ $variant?->id }}" value="decrease" {{ $unitDiscountType === 'decrease' ? 'checked' : '' }}>
-                                                        <label class="btn btn-outline-secondary" for="discount-decrease-{{ $variant?->id }}">Giảm</label>
-                                                        <input class="btn-check discount-type-input" type="radio" name="item_discount_type[{{ $variant?->id }}]" id="discount-increase-{{ $variant?->id }}" value="increase" {{ $unitDiscountType === 'increase' ? 'checked' : '' }}>
-                                                        <label class="btn btn-outline-secondary" for="discount-increase-{{ $variant?->id }}">Tăng</label>
+                                                <td class="price text-center" data-price="{{ $unitPrice }}" data-min-price="{{ $minPrice }}">
+                                                    <div class="selling-price-stepper">
+                                                        <button type="button" class="btn btn-sm selling-price-decrease" aria-label="Giảm đơn giá 1.000 đồng" title="Giảm 1.000đ">−</button>
+                                                        <span class="selling-price-value">{{ number_format($lineUnitPrice, 0, ',', '.') }}đ</span>
+                                                        <button type="button" class="btn btn-sm selling-price-increase" aria-label="Tăng đơn giá 1.000 đồng" title="Tăng 1.000đ">+</button>
                                                     </div>
-                                                    <input
-                                                        type="number"
-                                                        class="form-control form-control-sm discount-input min80"
-                                                        name="item_discount[{{ $variant?->id }}]"
-                                                        min="0"
-                                                        step="1000"
-                                                        max="{{ $unitDiscountType === 'decrease' ? max($unitPrice - $minPrice, 0) : '' }}"
-                                                        value="{{ number_format($unitDiscount, 0, '.', '') }}">
+                                                    <input type="hidden" class="discount-type-input" name="item_discount_type[{{ $variant?->id }}]" value="{{ $unitDiscountType }}">
+                                                    <input type="hidden" class="discount-input" name="item_discount[{{ $variant?->id }}]" value="{{ number_format($unitDiscount, 0, '.', '') }}">
                                                     <div class="selling-price-feedback"></div>
                                                 </td>
                                                 <td>
@@ -906,7 +927,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function validateRowSellingPrice(row) {
         const priceEl = row.querySelector('.price');
         const discountInput = row.querySelector('.discount-input');
-        const discountTypeInput = row.querySelector('.discount-type-input:checked');
+        const discountTypeInput = row.querySelector('.discount-type-input');
         const feedbackEl = row.querySelector('.selling-price-feedback');
         const rowTotalEl = row.querySelector('.row-total');
 
@@ -942,7 +963,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const priceEl = row.querySelector('.price');
             const qtyInput = row.querySelector('.quantity-input');
             const discountInput = row.querySelector('.discount-input');
-            const discountTypeInput = row.querySelector('.discount-type-input:checked');
+            const discountTypeInput = row.querySelector('.discount-type-input');
             const rowTotalEl = row.querySelector('.row-total');
             const price = parseFloat(priceEl?.getAttribute('data-price') || '0');
             const minPrice = parseFloat(priceEl?.getAttribute('data-min-price') || '0');
@@ -976,6 +997,16 @@ document.addEventListener('DOMContentLoaded', function () {
             const lineSubtotal = price * quantity * pricingFactor;
             const lineAdjustment = (discountType === 'increase' ? -1 : 1) * unitDiscount * quantity * pricingFactor;
             const lineTotal = Math.max(lineSubtotal - lineAdjustment, 0);
+            const sellingPrice = discountType === 'increase' ? price + unitDiscount : price - unitDiscount;
+
+            const sellingPriceEl = row.querySelector('.selling-price-value');
+            if (sellingPriceEl) {
+                sellingPriceEl.textContent = formatMoney(sellingPrice);
+            }
+            const decreaseButton = row.querySelector('.selling-price-decrease');
+            if (decreaseButton) {
+                decreaseButton.disabled = sellingPrice <= minPrice;
+            }
 
             if (rowTotalEl) {
                 rowTotalEl.textContent = `${formatNumber(lineTotal)}đ`;
@@ -1129,22 +1160,14 @@ document.addEventListener('DOMContentLoaded', function () {
                 <input type="hidden" name="items[${itemIndex}][variant_id]" value="${variantId}">
             </td>
             <td>${variantSize || variantSku}</td>
-            <td class="price" data-price="${variantPrice}" data-min-price="${variantMinPrice}">${formatNumber(variantPrice)}đ</td>
-            <td>
-                <div class="btn-group discount-switch mb-1" role="group" aria-label="Loai chiet khau">
-                    <input class="btn-check discount-type-input" type="radio" name="item_discount_type[${variantId}]" id="discount-decrease-${variantId}" value="decrease" checked>
-                    <label class="btn btn-outline-secondary" for="discount-decrease-${variantId}">Giảm</label>
-                    <input class="btn-check discount-type-input" type="radio" name="item_discount_type[${variantId}]" id="discount-increase-${variantId}" value="increase">
-                    <label class="btn btn-outline-secondary" for="discount-increase-${variantId}">Tăng</label>
+            <td class="price text-center" data-price="${variantPrice}" data-min-price="${variantMinPrice}">
+                <div class="selling-price-stepper">
+                    <button type="button" class="btn btn-sm selling-price-decrease" aria-label="Giảm đơn giá 1.000 đồng" title="Giảm 1.000đ">−</button>
+                    <span class="selling-price-value">${formatMoney(variantPrice)}</span>
+                    <button type="button" class="btn btn-sm selling-price-increase" aria-label="Tăng đơn giá 1.000 đồng" title="Tăng 1.000đ">+</button>
                 </div>
-                <input
-                    type="number"
-                    class="form-control form-control-sm discount-input"
-                    name="item_discount[${variantId}]"
-                    min="0"
-                    step="1000"
-                    max="${variantPrice}"
-                    value="0">
+                <input type="hidden" class="discount-type-input" name="item_discount_type[${variantId}]" value="decrease">
+                <input type="hidden" class="discount-input" name="item_discount[${variantId}]" value="0">
                 <div class="selling-price-feedback"></div>
             </td>
             <td>
@@ -1209,6 +1232,31 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     cartContainer.addEventListener('click', function (event) {
+        const priceButton = event.target.closest('.selling-price-decrease, .selling-price-increase');
+        if (priceButton) {
+            const row = priceButton.closest('.cart-item-row');
+            const priceEl = row?.querySelector('.price');
+            const discountInput = row?.querySelector('.discount-input');
+            const discountTypeInput = row?.querySelector('.discount-type-input');
+            if (!row || !priceEl || !discountInput || !discountTypeInput) {
+                return;
+            }
+
+            const basePrice = toNumber(priceEl.dataset.price, 0);
+            const minPrice = toNumber(priceEl.dataset.minPrice, 0);
+            const adjustment = Math.max(0, toNumber(discountInput.value, 0));
+            const currentPrice = discountTypeInput.value === 'increase'
+                ? basePrice + adjustment
+                : basePrice - adjustment;
+            const step = priceButton.classList.contains('selling-price-increase') ? 1000 : -1000;
+            const sellingPrice = Math.max(minPrice, currentPrice + step);
+
+            discountTypeInput.value = sellingPrice > basePrice ? 'increase' : 'decrease';
+            discountInput.value = String(Math.abs(sellingPrice - basePrice));
+            updateCartTotal();
+            return;
+        }
+
         const removeBtn = event.target.closest('.remove-cart-item');
         if (!removeBtn) {
             return;
