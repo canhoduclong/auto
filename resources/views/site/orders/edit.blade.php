@@ -322,6 +322,70 @@
         gap: 8px;
         flex-wrap: wrap;
     }
+    .monitor-product-toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 10px;
+    }
+    .monitor-product-toolbar #per-page-select { width: 78px; }
+    .monitor-product-list { display: grid; gap: 10px; }
+    .monitor-product-card {
+        overflow: hidden;
+        border: 1px solid #cbd5e1;
+        border-radius: 12px;
+        background: #fff;
+    }
+    .monitor-product-card.is-open {
+        border-color: #0f766e;
+        box-shadow: 0 0 0 2px rgba(15, 118, 110, .08);
+    }
+    .monitor-product-choice {
+        display: flex;
+        width: 100%;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px;
+        border: 0;
+        background: #fff;
+        color: #0f172a;
+        text-align: left;
+    }
+    .monitor-product-main { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .monitor-product-thumb {
+        width: 58px;
+        height: 58px;
+        flex: 0 0 auto;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        object-fit: cover;
+        background: #f1f5f9;
+    }
+    .monitor-product-name, .monitor-product-meta { display: block; }
+    .monitor-product-name { font-size: .9rem; }
+    .monitor-product-meta { margin-top: 4px; color: #64748b; font-size: .76rem; }
+    .monitor-product-choice-label { flex: 0 0 auto; color: #0f766e; font-size: .8rem; font-weight: 800; }
+    .monitor-product-choice-label i { display: inline-block; transition: transform .15s ease; }
+    .monitor-product-card.is-open .monitor-product-choice-label i { transform: rotate(180deg); }
+    .monitor-product-variants { padding: 12px; border-top: 1px solid #e2e8f0; background: #f8fafc; }
+    .monitor-variant-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
+    .monitor-variant-option {
+        display: grid;
+        gap: 3px;
+        min-height: 82px;
+        padding: 10px;
+        border: 1px solid #cbd5e1;
+        border-radius: 9px;
+        background: #fff;
+        color: #334155;
+        text-align: left;
+        font-size: .78rem;
+    }
+    .monitor-variant-option:hover { border-color: #0f766e; background: #ecfdf5; }
+    .monitor-variant-size { color: #0f172a; font-size: .88rem; font-weight: 900; }
+    .monitor-variant-option small { color: #64748b; }
     @media (max-width: 992px) {
         .variant-picker-item {
             grid-template-columns: 1fr;
@@ -329,6 +393,12 @@
         .variant-picker-actions {
             justify-content: flex-start;
         }
+        .monitor-variant-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 576px) {
+        .monitor-product-choice-label { font-size: 0; }
+        .monitor-product-choice-label i { font-size: .85rem; }
+        .monitor-variant-grid { grid-template-columns: 1fr; }
     }
 </style>
 @endpush
@@ -548,14 +618,15 @@
 
                     <div class="checkout-panel">
                         <div class="checkout-panel-body">
-                            <h2 class="h6 fw-bold mb-3">Thêm biến thể sản phẩm</h2>
+                            <h2 class="h6 fw-bold mb-1">Thêm sản phẩm vào đơn</h2>
+                            <p class="text-muted small mb-3">Chọn sản phẩm, sau đó chọn biến thể cần đưa vào đơn.</p>
                             <div class="input-group mb-2">
                                 <button class="btn btn-success" type="button" id="variant-show-all-button">
                                     <i class="bi bi-plus-circle me-1"></i> Thêm sản phẩm
                                 </button>
                             </div>
                             <div class="input-group">
-                                <input type="text" id="variant-search" class="form-control" placeholder="Nhập SKU hoặc tên sản phẩm">
+                                <input type="text" id="variant-search" class="form-control" placeholder="Tìm sản phẩm, SKU hoặc size...">
                                 <button class="btn btn-outline-secondary" type="button" id="variant-search-button">Tìm</button>
                             </div>
                             <div id="variant-search-results" class="mt-3"></div>
@@ -1062,7 +1133,7 @@ document.addEventListener('DOMContentLoaded', function () {
         currentVariantSearchPerPage = Number(data.per_page || currentVariantSearchPerPage || 5);
         currentVariantShowAll = data.show_all === true || data.show_all === 1 || data.show_all === '1';
 
-        const query = new URLSearchParams(data).toString();
+        const query = new URLSearchParams({...data, view: 'products'}).toString();
         variantSearchResults.innerHTML = '<div class="text-center text-muted py-3">Đang tải...</div>';
 
         fetch(`${url}?${query}`, {
@@ -1118,7 +1189,31 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     variantSearchResults.addEventListener('click', function (event) {
-        const addBtn = event.target.closest('.add-variant-to-cart');
+        const productChoice = event.target.closest('.monitor-product-choice');
+        if (productChoice) {
+            event.preventDefault();
+            const card = productChoice.closest('.monitor-product-card');
+            const variants = card?.querySelector('.monitor-product-variants');
+            if (!card || !variants) {
+                return;
+            }
+
+            const willOpen = variants.hidden;
+            variantSearchResults.querySelectorAll('.monitor-product-card.is-open').forEach((openCard) => {
+                if (openCard !== card) {
+                    openCard.classList.remove('is-open');
+                    openCard.querySelector('.monitor-product-choice')?.setAttribute('aria-expanded', 'false');
+                    const openVariants = openCard.querySelector('.monitor-product-variants');
+                    if (openVariants) openVariants.hidden = true;
+                }
+            });
+            card.classList.toggle('is-open', willOpen);
+            productChoice.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+            variants.hidden = !willOpen;
+            return;
+        }
+
+        const addBtn = event.target.closest('.monitor-variant-option, .add-variant-to-cart');
         if (!addBtn) {
             return;
         }
@@ -1191,12 +1286,7 @@ document.addEventListener('DOMContentLoaded', function () {
         updateNameIndexes();
         updateCartTotal();
 
-        const currentResultItem = addBtn.closest('.list-group-item');
-        if (currentResultItem) {
-            currentResultItem.remove();
-        } else {
-            performVariantSearch(currentVariantSearchPage);
-        }
+        refreshVariantResults(currentVariantSearchPage);
     });
 
     variantSearchResults.addEventListener('click', function (event) {

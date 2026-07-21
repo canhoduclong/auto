@@ -978,7 +978,7 @@ Route::post('/my-profile', [PageController::class, 'updateProfile'])->name('page
 // My Orders routes (sale / leader / manager only)
 Route::middleware(['auth', 'role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin'])->group(function () {
     Route::get('/my-order-drafts', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'saleIndex'])->name('pages.my_order_drafts')->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
-    Route::post('/my-order-drafts/parse', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'saleParse'])->name('pages.my_order_drafts.parse')->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
+    Route::put('/my-order-drafts/{draft}', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'saleUpdate'])->name('pages.my_order_drafts.update')->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
     Route::post('/my-order-drafts/bulk-confirm', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'saleBulkConfirm'])->name('pages.my_order_drafts.bulk_confirm')->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
     Route::post('/my-order-drafts/{draft}/copy', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'saleCopy'])->name('pages.my_order_drafts.copy')->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
     Route::post('/my-order-drafts/{draft}/copy-confirm', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'saleCopyConfirm'])->name('pages.my_order_drafts.copy-confirm')->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
@@ -986,8 +986,7 @@ Route::middleware(['auth', 'role:sale,leader,leader_sale,sale_manager,manager,ma
     Route::delete('/my-order-drafts/{draft}', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'saleDestroy'])->name('pages.my_order_drafts.destroy')->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
     Route::get('/my-orders', [PageController::class, 'myOrders'])->name('pages.my_orders');
     Route::get('/my-orders/monitoring', [PageController::class, 'myOrdersMonitoring'])
-        ->name('pages.my_orders.monitoring')
-        ->middleware('permission:orders.monitoring');
+        ->name('pages.my_orders.monitoring');
     Route::post('/my-orders/monitoring/approve-all', [PageController::class, 'myOrdersMonitoringApproveAll'])
         ->name('pages.my_orders.monitoring.approve_all')
         ->middleware('permission:orders.monitoring');
@@ -995,11 +994,9 @@ Route::middleware(['auth', 'role:sale,leader,leader_sale,sale_manager,manager,ma
         ->name('pages.my_orders.monitoring.approve_sales')
         ->middleware('permission:orders.monitoring');
     Route::post('/my-orders/monitoring/refresh-sequence', [PageController::class, 'myOrdersMonitoringRefreshSequence'])
-        ->name('pages.my_orders.monitoring.refresh_sequence')
-        ->middleware('permission:orders.monitoring');
+        ->name('pages.my_orders.monitoring.refresh_sequence');
     Route::post('/my-orders/monitoring/orders', [OrderController::class, 'storeFromMonitoring'])
-        ->name('pages.my_orders.monitoring.store')
-        ->middleware('permission:orders.monitoring');
+        ->name('pages.my_orders.monitoring.store');
     Route::get('/my-orders/daily-prices', [PageController::class, 'dailyProductPrices'])->name('pages.my_orders.daily_prices');
     Route::get('/my-orders/daily-inventories', [PageController::class, 'dailyInventories'])->name('pages.my_orders.daily_inventories');
     Route::get('/my-products', [PageController::class, 'myProducts'])->name('pages.my_products');

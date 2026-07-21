@@ -83,10 +83,19 @@ class OrderAjaxController extends Controller
 
     private function productsWithVariants(Request $request, string $keyword, int $perPage)
     {
-        $activeVariants = static function ($query): void {
+        $excludeIds = $request->input('exclude_ids', []);
+        if (is_string($excludeIds)) {
+            $excludeIds = array_filter(explode(',', $excludeIds));
+        }
+        $excludeIds = is_array($excludeIds)
+            ? array_values(array_filter(array_map('intval', $excludeIds)))
+            : [];
+
+        $activeVariants = static function ($query) use ($excludeIds): void {
             $query->withAvailableStock()
                 ->with(['latestPriceRule', 'mediaLink.media'])
                 ->where('product_variants.status', true)
+                ->when($excludeIds !== [], fn ($variantQuery) => $variantQuery->whereNotIn('product_variants.id', $excludeIds))
                 ->orderByRaw('COALESCE(product_variants.sort_order, 999999)')
                 ->orderByRaw("LOWER(COALESCE(NULLIF(product_variants.size, ''), NULLIF(product_variants.name, ''), product_variants.sku, ''))")
                 ->orderBy('product_variants.id');
@@ -95,14 +104,16 @@ class OrderAjaxController extends Controller
         $products = Product::query()
             ->with(['avatar.media', 'variants' => $activeVariants])
             ->where('products.status', true)
-            ->whereHas('variants', function ($query): void {
-                $query->where('product_variants.status', true);
+            ->whereHas('variants', function ($query) use ($excludeIds): void {
+                $query->where('product_variants.status', true)
+                    ->when($excludeIds !== [], fn ($variantQuery) => $variantQuery->whereNotIn('product_variants.id', $excludeIds));
             })
-            ->when($keyword !== '', function ($query) use ($keyword): void {
-                $query->where(function ($search) use ($keyword): void {
+            ->when($keyword !== '', function ($query) use ($keyword, $excludeIds): void {
+                $query->where(function ($search) use ($keyword, $excludeIds): void {
                     $search->where('products.name', 'like', '%' . $keyword . '%')
-                        ->orWhereHas('variants', function ($variants) use ($keyword): void {
+                        ->orWhereHas('variants', function ($variants) use ($keyword, $excludeIds): void {
                             $variants->where('product_variants.status', true)
+                                ->when($excludeIds !== [], fn ($variantQuery) => $variantQuery->whereNotIn('product_variants.id', $excludeIds))
                                 ->where(function ($variantSearch) use ($keyword): void {
                                     $variantSearch->where('product_variants.sku', 'like', '%' . $keyword . '%')
                                         ->orWhere('product_variants.name', 'like', '%' . $keyword . '%')

@@ -921,7 +921,7 @@ class PageController extends Controller
         }
 
         $user = auth()->user();
-        if (!$user->isAdmin() && !$user->hasPermission('orders.monitoring')) {
+        if (!$user->isAdmin() && !$user->isSalesFlowRole() && !$user->hasPermission('orders.monitoring')) {
             abort(403, 'Bạn không có quyền truy cập theo dõi đơn hàng.');
         }
 
@@ -2365,7 +2365,7 @@ class PageController extends Controller
         }
 
         $user = auth()->user();
-        if (!$user->isAdmin() && !$user->hasPermission('orders.monitoring')) {
+        if (!$user->isAdmin() && !$user->isSalesFlowRole() && !$user->hasPermission('orders.monitoring')) {
             abort(403, 'Bạn không có quyền thao tác tại trang theo dõi đơn hàng.');
         }
 

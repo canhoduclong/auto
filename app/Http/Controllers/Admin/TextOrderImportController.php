@@ -34,29 +34,34 @@ class TextOrderImportController extends Controller
             return Setting::all()->keyBy('key');
         });
     } 
-    public function index()
+    public function index(Request $request)
     {
-        return $this->draftIndex();
+        return $this->draftIndex(null, $request);
     }
 
     public function saleIndex(Request $request)
     {
-        return $this->draftIndex((int) $request->user()->id);
+        return $this->draftIndex((int) $request->user()->id, $request);
     }
 
-    private function draftIndex(?int $saleId = null)
+    private function draftIndex(?int $saleId = null, ?Request $request = null)
     {
         $settings = $this->settings;
+        $sortBy = in_array($request?->input('sort_by'), ['created_at', 'unit_price', 'customer_name', 'status'], true)
+            ? (string) $request->input('sort_by')
+            : 'created_at';
+        $sortDir = strtolower((string) ($request?->input('sort_dir', 'desc')));
+        $sortDir = in_array($sortDir, ['asc', 'desc'], true) ? $sortDir : 'desc';
         $drafts = TextOrderDraft::query()
-            ->with(['sale:id,name,zalo_name', 'customer:id,name,phone', 'truckBrand:id,name', 'truckStation:id,name,address,brand_id', 'variant.product:id,name', 'order:id,code'])
+            ->with(['sale:id,name,zalo_name', 'customer:id,name,phone', 'truckBrand:id,name', 'truckStation:id,name,address,brand_id', 'variant.product.avatar.media', 'order:id,code'])
             ->where('draft_scope', $saleId ? TextOrderDraft::SCOPE_SALE_PRIVATE : TextOrderDraft::SCOPE_ADMIN_IMPORT)
             ->when($saleId, fn ($query) => $query->where('sale_id', $saleId))
-            ->latest()
+            ->orderBy($sortBy, $sortDir)
             ->limit(100)
             ->get();
         $sales = User::query()->whereHas('roles', fn ($query) => $query->where('name', 'sale'))->orderBy('name')->get(['id', 'name', 'zalo_name']);
         $variants = ProductVariant::query()
-            ->with('product:id,name,kg')
+            ->with('product.avatar.media')
             ->orderBy('name')
             ->get(['id', 'product_id', 'name', 'sku', 'size', 'kg']);
         $truckStations = TruckStation::query()
@@ -68,11 +73,11 @@ class TextOrderImportController extends Controller
         $saleMode = $saleId !== null;
         $pageTitle = $saleMode ? 'Đơn nháp' : 'Nhập đơn text';
         $actionBaseUrl = $saleMode ? url('my-order-drafts') : url('admin/text-order-import');
-        $parseRoute = $saleMode ? route('pages.my_order_drafts.parse') : route('admin.text-order-import.parse');
+        $parseRoute = $saleMode ? null : route('admin.text-order-import.parse');
         $viewName = $saleMode ? 'site.my-draft-orders' : 'admin.text-order-import.index';
 
         return view($viewName, compact(
-            'drafts', 'sales', 'variants', 'truckStations', 'saleMode', 'pageTitle', 'actionBaseUrl', 'parseRoute', 'settings'
+            'drafts', 'sales', 'variants', 'truckStations', 'saleMode', 'pageTitle', 'actionBaseUrl', 'parseRoute', 'settings', 'sortBy', 'sortDir'
         ));
     }
 
@@ -89,23 +94,6 @@ class TextOrderImportController extends Controller
         }
 
         return back()->with('success', 'Đã nhận diện ' . $parsed->count() . ' đơn nháp từ nội dung Zalo.');
-    }
-
-    public function saleParse(Request $request, ZaloOrderTextParser $parser)
-    {
-        $validated = $request->validate(['text' => ['required', 'string', 'max:200000']]);
-        $saleId = (int) $request->user()->id;
-        $parsed = $parser->parse($validated['text']);
-
-        foreach ($parsed as $data) {
-            TextOrderDraft::query()->create(array_merge($data, [
-                'sale_id' => $saleId,
-                'created_by' => $saleId,
-                'draft_scope' => TextOrderDraft::SCOPE_SALE_PRIVATE,
-            ]));
-        }
-
-        return back()->with('success', 'Đã nhận diện ' . $parsed->count() . ' đơn nháp của bạn.');
     }
 
     public function saleConfirm(Request $request, TextOrderDraft $draft, ApprovalService $approvalService): JsonResponse
@@ -137,6 +125,19 @@ class TextOrderImportController extends Controller
         $this->ensureSaleDraft($request, $draft);
 
         return $this->destroyAction($draft);
+    }
+
+    public function saleUpdate(Request $request, TextOrderDraft $draft): JsonResponse
+    {
+        $this->ensureSaleDraft($request, $draft);
+        abort_if($draft->status === 'confirmed', 422, 'Đơn mẫu đã lên đơn, không thể sửa.');
+        $this->forceSale($request);
+        $draft->fill($this->validatedDraftData($request));
+        $draft->error_message = null;
+        $draft->status = 'draft';
+        $draft->save();
+
+        return response()->json(['message' => 'Đã lưu thay đổi đơn mẫu.']);
     }
 
     public function saleBulkConfirm(Request $request, ApprovalService $approvalService): JsonResponse
@@ -325,7 +326,7 @@ class TextOrderImportController extends Controller
         $draft->refresh();
 
         if (!$draft->sale_id) {
-            throw new \RuntimeException('⚠️ Bắt buộc phải chọn Sale trước khi xác nhận. Hãy chọn Sale từ dropdown hoặc cập nhật tên Zalo của Sale.');
+            throw new \RuntimeException('Bắt buộc phải chọn Sale trước khi lên đơn.');
         }
         
         $sale = User::query()->find($draft->sale_id);

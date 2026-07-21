@@ -13,11 +13,12 @@
     }
     .monitor-shell { width: calc(100% - 32px); max-width: 1290px; margin: 0 auto; }
     .monitor-toolbar {
-        display: flex;
-        flex-wrap: wrap;
+        display: grid;
+        grid-template-columns: max-content minmax(0, 1fr);
         align-items: center;
-        gap: 14px;
-        padding: 0 8px 14px;
+        column-gap: 14px;
+        row-gap: 16px;
+        padding: 5px 3px 16px;
     }
     .monitor-title {
         margin: 0;
@@ -27,6 +28,8 @@
         font-size: 1.08rem;
         font-weight: 900;
         text-transform: uppercase;
+        justify-self: start;
+        grid-column: 1 / -1;
     }
     .monitor-date-form { display: flex; align-items: center; gap: 8px; }
     .monitor-date-form .form-control { width: 160px; height: 36px; border-radius: 4px; }
@@ -93,7 +96,7 @@
         display: grid;
         grid-template-columns: 260px minmax(0, 1fr);
         gap: 20px;
-        margin-top: 18px;
+        margin-top: 0;
     }
     .monitor-content { min-width: 0; }
     .monitor-sidebar { display: grid; gap: 14px; align-content: start; }
@@ -167,7 +170,7 @@
         color: #fff;
         font-size: .68rem;
     }
-    .monitor-orders { display: grid; gap: 18px; margin-top: 24px; }
+    .monitor-orders { display: grid; gap: 18px; margin-top: 8px; }
     .monitor-order {
         scroll-margin-top: 100px;
         overflow: visible;
@@ -377,7 +380,21 @@
         background: #fff;
         box-shadow: 0 5px 20px rgba(15, 23, 42, .12);
     }
-    .monitor-summary-panel { overflow: hidden; }
+    .monitor-summary-panel {
+        overflow: hidden;
+        margin-bottom: 0 !important;
+        border: 0;
+        background: transparent;
+        box-shadow: none;
+    }
+    .monitor-summary-panel .collapse.show,
+    .monitor-summary-panel .collapsing {
+        margin-bottom: 16px;
+        border: 1px solid var(--monitor-border);
+        border-radius: 10px;
+        background: #fff;
+        box-shadow: 0 5px 20px rgba(15, 23, 42, .05);
+    }
     .monitor-create { margin-bottom: 18px; overflow: hidden; }
     .monitor-create[hidden] { display: none !important; }
     .monitor-create-head { padding: 16px 18px 0; }
@@ -490,7 +507,8 @@
     }
     @media (max-width: 767.98px) {
         .monitor-page { padding-top: 18px; }
-        .monitor-toolbar { align-items: flex-start; }
+        .monitor-toolbar { grid-template-columns: 1fr; align-items: flex-start; row-gap: 10px; padding-top: 0; }
+        .monitor-toolbar > * { grid-column: 1; }
         .monitor-date-form { width: 100%; }
         .monitor-date-form .form-control { flex: 1; width: auto; }
         .monitor-sidebar { grid-template-columns: 1fr; }
@@ -573,33 +591,6 @@
 
 <section class="monitor-page">
     <div class="container monitor-shell">
-        <div class="monitor-toolbar {{ $activeTab === 'my_orders' ? 'd-none' : '' }}">
-            @php
-                $monitorTabLabels = [
-                    'today' => 'Theo dõi đơn hàng ngày',
-                    'drafts' => 'Đơn hàng mẫu',
-                    'my_orders' => 'Đơn hàng của tôi',
-                    'schedules' => 'Đơn hàng theo lịch',
-                    'automatic' => 'Đơn hàng tự động',
-                ];
-            @endphp
-            <h1 class="monitor-title">{{ $monitorTabLabels[$activeTab] ?? $monitorTabLabels['today'] }}</h1>
-            @if($activeTab === 'today')
-            <form class="monitor-date-form" method="GET" action="{{ route('pages.my_orders.monitoring') }}">
-                <input type="hidden" name="tab" value="today">
-                <input type="date" name="date" class="form-control form-control-sm" value="{{ $selectedDate }}">
-                @if($keyword !== '')<input type="hidden" name="keyword" value="{{ $keyword }}">@endif
-                @if($selectedStatus !== '')<input type="hidden" name="status" value="{{ $selectedStatus }}">@endif
-                <button type="submit" class="btn btn-sm btn-success">Lọc</button>
-            </form>
-            <span class="small text-muted">
-                {{ number_format($stats['total_orders']) }} đơn ·
-                {{ $formatQuantity($stats['total_quantity']) }} sản phẩm ·
-                {{ number_format($stats['total_value'], 0, ',', '.') }}đ
-            </span>
-            @endif
-        </div>
-
         <div class="monitor-layout">
             <aside class="monitor-sidebar">
                 <nav class="monitor-tab-nav" aria-label="Nhóm đơn hàng">
@@ -655,6 +646,32 @@
             </aside>
 
             <main class="monitor-content">
+        <div class="monitor-toolbar {{ in_array($activeTab, ['my_orders', 'drafts'], true) ? 'd-none' : '' }}">
+            @php
+                $monitorTabLabels = [
+                    'today' => 'Theo dõi đơn hàng ngày',
+                    'drafts' => 'Đơn hàng mẫu',
+                    'my_orders' => 'Đơn hàng của tôi',
+                    'schedules' => 'Đơn hàng theo lịch',
+                    'automatic' => 'Đơn hàng tự động',
+                ];
+            @endphp
+            <h1 class="monitor-title">{{ $monitorTabLabels[$activeTab] ?? $monitorTabLabels['today'] }}</h1>
+            @if($activeTab === 'today')
+            <form class="monitor-date-form" method="GET" action="{{ route('pages.my_orders.monitoring') }}">
+                <input type="hidden" name="tab" value="today">
+                <input type="date" name="date" class="form-control form-control-sm" value="{{ $selectedDate }}">
+                @if($keyword !== '')<input type="hidden" name="keyword" value="{{ $keyword }}">@endif
+                @if($selectedStatus !== '')<input type="hidden" name="status" value="{{ $selectedStatus }}">@endif
+                <button type="submit" class="btn btn-sm btn-success">Lọc</button>
+            </form>
+            <span class="small text-muted">
+                {{ number_format($stats['total_orders']) }} đơn ·
+                {{ $formatQuantity($stats['total_quantity']) }} sản phẩm ·
+                {{ number_format($stats['total_value'], 0, ',', '.') }}đ
+            </span>
+            @endif
+        </div>
         @if($activeTab === 'today')
         <div class="monitor-panel monitor-sequence-panel mb-3">
             @php

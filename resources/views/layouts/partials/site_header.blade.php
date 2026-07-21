@@ -343,7 +343,7 @@
                 </div>
                 <ul class="list-unstyled mb-2">
                     @php
-                        $offcanvasCanViewMonitoring = Auth::user()->isAdmin() || Auth::user()->hasPermission('orders.monitoring');
+                        $offcanvasCanViewMonitoring = Auth::user()->isAdmin() || Auth::user()->isSalesFlowRole() || Auth::user()->hasPermission('orders.monitoring');
                         $offcanvasCanApproveTeamOrders = Auth::user()->hasRole('leader') || Auth::user()->hasRole('leader_sale') || Auth::user()->hasRole('sale_manager');
                         $offcanvasCanApproveDepartmentOrders = Auth::user()->hasRole('manager') || Auth::user()->hasRole('manager_sale') || Auth::user()->hasRole('director');
                         $offcanvasCanCreateDepartmentNotifications = Auth::user()->hasRole(['admin', 'leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale']);
@@ -625,10 +625,10 @@
                                             @endif
                                         @endif
                                         @if(Auth::user()->isSalesFlowRole())
-                                        <a class="dropdown-item" href="{{ (Auth::user()->isAdmin() || Auth::user()->hasPermission('orders.monitoring')) ? route('pages.my_orders.monitoring', ['tab' => 'drafts']) : route('pages.my_order_drafts') }}">
+                                        <a class="dropdown-item" href="{{ route('pages.my_orders.monitoring', ['tab' => 'drafts']) }}">
                                             <i class="bi bi-file-earmark-text"></i> Đơn nháp
                                         </a>
-                                        <a class="dropdown-item" href="{{ (Auth::user()->isAdmin() || Auth::user()->hasPermission('orders.monitoring')) ? route('pages.my_orders.monitoring', ['tab' => 'my_orders']) : route('pages.my_orders') }}">
+                                        <a class="dropdown-item" href="{{ route('pages.my_orders.monitoring', ['tab' => 'my_orders']) }}">
                                             <i class="bi bi-bag-check"></i> {{ __('site.my_orders') }}
                                         </a>
                                         <a class="dropdown-item" href="{{ route('pages.my_products') }}">
@@ -636,7 +636,7 @@
                                         </a>
                                         @endif
                                         @php
-                                            $canViewMonitoring = Auth::user()->isAdmin() || Auth::user()->hasPermission('orders.monitoring');
+                                            $canViewMonitoring = Auth::user()->isAdmin() || Auth::user()->isSalesFlowRole() || Auth::user()->hasPermission('orders.monitoring');
                                         @endphp
                                         @if($canViewMonitoring)
                                             <a class="dropdown-item" href="{{ route('pages.my_orders.monitoring') }}">
@@ -647,7 +647,7 @@
                                         <a class="dropdown-item" href="{{ route('pages.my_customer') }}">
                                             <i class="bi bi-people"></i> {{ __('site.my_customers') }}
                                         </a>
-                                        <a class="dropdown-item" href="{{ (Auth::user()->isAdmin() || Auth::user()->hasPermission('orders.monitoring')) ? route('pages.my_orders.monitoring', ['tab' => 'schedules']) : route('my_customer.schedules.index') }}">
+                                        <a class="dropdown-item" href="{{ route('pages.my_orders.monitoring', ['tab' => 'schedules']) }}">
                                             <i class="bi bi-calendar2-check"></i> Lịch lên đơn
                                         </a>
                                         @endif
