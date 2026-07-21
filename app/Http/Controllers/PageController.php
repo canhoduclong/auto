@@ -953,6 +953,7 @@ class PageController extends Controller
                 'approvals.step',
                 'items.product',
                 'items.variant.product',
+                'items.variant.latestPriceRule',
             ])
             ->whereDate('created_at', $selectedDate);
 
@@ -4480,6 +4481,13 @@ public function apiTruckRoutes(Request $request)
 
         if (!$isReturnOrder) {
             app(OrderController::class)->syncDailySequenceAndStockSufficiency($order->fresh()->created_at ?: now());
+        }
+
+        if ($request->input('return_to') === 'monitoring') {
+            return redirect()->route('pages.my_orders.monitoring', [
+                'date' => $order->fresh()->created_at?->toDateString(),
+                'highlight' => $order->id,
+            ])->with('success', 'Đã cập nhật đơn hàng thành công.');
         }
 
         return redirect()->route('site.orders.show', $order)

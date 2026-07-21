@@ -327,6 +327,23 @@
     .monitor-actions form { width: 100%; margin: 0; }
     .monitor-actions .monitor-action-note { margin-top: -2px; font-size: .68rem; line-height: 1.25; text-align: center; }
     .monitor-actions .monitor-cancel-form { margin-top: 8px; padding-top: 8px; border-top: 1px solid #e2e8f0; }
+    .monitor-inline-edit { margin-top: 14px; border-top: 1px solid #dce6f1; }
+    .monitor-inline-edit-form { padding: 14px 0 2px; }
+    .monitor-inline-edit-title { margin-bottom: 10px; color: #075985; font-size: .82rem; font-weight: 900; text-transform: uppercase; }
+    .monitor-inline-edit-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+    .monitor-inline-edit-fields .is-wide { grid-column: 1 / -1; }
+    .monitor-inline-edit-fields label { margin-bottom: 3px; color: #475569; font-size: .68rem; font-weight: 800; }
+    .monitor-edit-items { margin-bottom: 10px; font-size: .74rem; }
+    .monitor-edit-items th { color: #64748b; font-size: .64rem; text-transform: uppercase; }
+    .monitor-edit-quantity { width: 76px; min-width: 76px; }
+    .monitor-edit-price-stepper { display: inline-flex; align-items: stretch; }
+    .monitor-edit-price-stepper .btn { width: 32px; border-color: #cbd5e1; border-radius: 0; color: #0f766e; font-weight: 900; }
+    .monitor-edit-price-stepper .btn:first-child { border-radius: 5px 0 0 5px; }
+    .monitor-edit-price-stepper .btn:last-child { border-radius: 0 5px 5px 0; }
+    .monitor-edit-price-stepper .btn:disabled { color: #94a3b8; background: #f1f5f9; opacity: 1; }
+    .monitor-edit-price-value { min-width: 90px; display: inline-flex; align-items: center; justify-content: center; padding: 4px 7px; border-block: 1px solid #cbd5e1; background: #fff; color: #047857; font-weight: 900; white-space: nowrap; }
+    .monitor-inline-edit-total { color: #047857; font-size: .9rem; font-weight: 900; text-align: right; }
+    .monitor-inline-edit-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
     .monitor-order > .collapse { grid-column: 1; margin-top: -18px; border: 1px solid var(--monitor-border); border-radius: 0 0 10px 10px; background: #fff; }
     .monitor-empty { padding: 44px 20px; text-align: center; color: #64748b; }
     .monitor-pagination { padding: 14px 0 0; }
@@ -487,6 +504,8 @@
         .monitor-create-steps { padding-inline: 8px; }
         .monitor-create-step { font-size: .66rem; }
         .monitor-confirm-grid { grid-template-columns: 1fr; }
+        .monitor-inline-edit-fields { grid-template-columns: 1fr; }
+        .monitor-inline-edit-fields .is-wide { grid-column: auto; }
         .monitor-variant-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .monitor-product-choice-label { font-size: 0; }
         .monitor-product-choice-label i { font-size: .8rem; }
@@ -988,6 +1007,89 @@
                                     </table>
                                 </div>
                                 <div class="monitor-order-total">{{ number_format((float) $order->total, 0, ',', '.') }}đ</div>
+
+                                @if($isEditable)
+                                    <div class="collapse monitor-inline-edit" id="monitorEdit{{ $order->id }}">
+                                        <form method="POST" action="{{ route('site.orders.update', $order) }}" class="monitor-inline-edit-form" data-monitor-edit-form>
+                                            @csrf
+                                            @method('PUT')
+                                            <input type="hidden" name="return_to" value="monitoring">
+                                            <input type="hidden" name="customer_id" value="{{ $order->customer_id }}">
+                                            <input type="hidden" name="recipient_email" value="{{ $order->recipient_email }}">
+                                            <input type="hidden" name="shipper_note" value="{{ $order->shipper_note }}">
+                                            <input type="hidden" name="order_discount" value="{{ (float) ($order->order_discount ?? 0) }}">
+                                            <input type="hidden" name="order_discount_type" value="{{ ($order->order_discount_type ?? 'decrease') === 'increase' ? 'increase' : 'decrease' }}">
+                                            <input type="hidden" name="warehouse_can_adjust" value="{{ $order->warehouse_can_adjust ? 1 : 0 }}">
+
+                                            <div class="monitor-inline-edit-title"><i class="bi bi-pencil-square me-1"></i>Sửa đơn {{ $order->code ?: ('#' . $order->id) }}</div>
+                                            <div class="monitor-inline-edit-fields">
+                                                <div>
+                                                    <label for="monitorEditName{{ $order->id }}">Người nhận</label>
+                                                    <input class="form-control form-control-sm" id="monitorEditName{{ $order->id }}" name="recipient_name" value="{{ $order->recipient_name ?: ($order->customer?->name ?? '') }}" required>
+                                                </div>
+                                                <div>
+                                                    <label for="monitorEditPhone{{ $order->id }}">Số điện thoại</label>
+                                                    <input class="form-control form-control-sm" id="monitorEditPhone{{ $order->id }}" name="recipient_phone" value="{{ $order->recipient_phone ?: ($order->customer?->phone ?? '') }}" required>
+                                                </div>
+                                                <div class="is-wide">
+                                                    <label for="monitorEditAddress{{ $order->id }}">Địa chỉ nhận hàng</label>
+                                                    <input class="form-control form-control-sm" id="monitorEditAddress{{ $order->id }}" name="recipient_address" value="{{ $order->recipient_address ?: ($order->customer?->address ?? '') }}" required>
+                                                </div>
+                                                <div>
+                                                    <label for="monitorEditDelivery{{ $order->id }}">Giờ giao hàng</label>
+                                                    <input class="form-control form-control-sm" id="monitorEditDelivery{{ $order->id }}" name="delivery_time" value="{{ $order->delivery_time }}">
+                                                </div>
+                                                <div>
+                                                    <label for="monitorEditNote{{ $order->id }}">Ghi chú</label>
+                                                    <input class="form-control form-control-sm" id="monitorEditNote{{ $order->id }}" name="note" value="{{ $order->note }}">
+                                                </div>
+                                            </div>
+
+                                            <div class="table-responsive">
+                                                <table class="table table-sm align-middle monitor-edit-items">
+                                                    <thead><tr><th>Sản phẩm</th><th>Giá bán</th><th>Số lượng</th><th class="text-end">Thành tiền</th></tr></thead>
+                                                    <tbody>
+                                                        @foreach($order->items as $editIndex => $item)
+                                                            @php
+                                                                $editVariant = $item->variant;
+                                                                $editBasePrice = (float) ($editVariant?->latestPriceRule?->price ?? $editVariant?->final_price ?? $item->base_price ?? $item->price ?? 0);
+                                                                $editMinPrice = max(0, (float) ($editVariant?->latestPriceRule?->min_price ?? 0));
+                                                                $editSellingPrice = (float) ($item->price ?? $editBasePrice);
+                                                                $editDiscountType = $editSellingPrice > $editBasePrice ? 'increase' : 'decrease';
+                                                                $editDiscount = abs($editSellingPrice - $editBasePrice);
+                                                                $editPricingFactor = $item->effective_priced_by_kg ? max((float) $item->effective_unit_weight, 0) : 1;
+                                                                $editLineTotal = $editSellingPrice * (float) $item->quantity * $editPricingFactor;
+                                                            @endphp
+                                                            <tr data-monitor-edit-item data-base-price="{{ $editBasePrice }}" data-min-price="{{ $editMinPrice }}" data-pricing-factor="{{ $editPricingFactor }}">
+                                                                <td>
+                                                                    <strong>{{ $item->product?->name ?? $editVariant?->product?->name ?? 'Sản phẩm' }}</strong>
+                                                                    <span class="d-block text-muted">{{ $editVariant?->size ?: ($editVariant?->sku ?: '') }}</span>
+                                                                    <input type="hidden" name="items[{{ $editIndex }}][variant_id]" value="{{ $editVariant?->id }}">
+                                                                    <input type="hidden" class="monitor-edit-discount-type" name="item_discount_type[{{ $editVariant?->id }}]" value="{{ $editDiscountType }}">
+                                                                    <input type="hidden" class="monitor-edit-discount" name="item_discount[{{ $editVariant?->id }}]" value="{{ $editDiscount }}">
+                                                                </td>
+                                                                <td>
+                                                                    <div class="monitor-edit-price-stepper">
+                                                                        <button type="button" class="btn btn-sm monitor-edit-price-decrease" aria-label="Giảm đơn giá 1.000 đồng" {{ $editSellingPrice <= $editMinPrice ? 'disabled' : '' }}>−</button>
+                                                                        <span class="monitor-edit-price-value">{{ number_format($editSellingPrice, 0, ',', '.') }}đ</span>
+                                                                        <button type="button" class="btn btn-sm monitor-edit-price-increase" aria-label="Tăng đơn giá 1.000 đồng">+</button>
+                                                                    </div>
+                                                                </td>
+                                                                <td><input type="number" class="form-control form-control-sm monitor-edit-quantity" name="items[{{ $editIndex }}][quantity]" min="1" max="100000" value="{{ (int) $item->quantity }}" required></td>
+                                                                <td class="text-end fw-semibold monitor-edit-line-total">{{ number_format($editLineTotal, 0, ',', '.') }}đ</td>
+                                                            </tr>
+                                                        @endforeach
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                            <div class="monitor-inline-edit-total">Tổng sản phẩm: <span>{{ number_format((float) $order->items->sum('total'), 0, ',', '.') }}đ</span></div>
+                                            <div class="monitor-inline-edit-actions">
+                                                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#monitorEdit{{ $order->id }}">Đóng</button>
+                                                <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-check2 me-1"></i>Lưu thay đổi</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                @endif
                             </div>
                             <div class="monitor-order-footer">
                                 <span class="monitor-status">{{ $statusLabels[$order->status] ?? str_replace('_', ' ', $order->status) }}</span>
@@ -1006,7 +1108,7 @@
                                         @endif
                                     @endif
                                     @if($isEditable)
-                                        <a class="btn btn-sm btn-success" href="{{ route('site.orders.edit', $order) }}"><i class="bi bi-pencil me-1"></i>Sửa</a>
+                                        <button class="btn btn-sm btn-success" type="button" data-bs-toggle="collapse" data-bs-target="#monitorEdit{{ $order->id }}" aria-controls="monitorEdit{{ $order->id }}"><i class="bi bi-pencil me-1"></i>Sửa trực tiếp</button>
                                     @endif
                                     <button class="btn btn-sm btn-outline-info" type="button" data-bs-toggle="collapse" data-bs-target="#monitorExtra{{ $order->id }}">
                                         <i class="bi bi-eye me-1"></i>Chi tiết
