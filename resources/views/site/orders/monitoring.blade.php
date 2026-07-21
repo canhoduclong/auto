@@ -398,13 +398,32 @@
     .monitor-selected-table { border: 1px solid #fed7aa; border-radius: 9px; overflow: hidden; background: #fffaf3; }
     .monitor-selected-table table { margin: 0; font-size: .78rem; }
     .monitor-selected-table .monitor-item-quantity { width: 78px; }
-    .monitor-sale-price { min-width: 250px; }
-    .monitor-sale-price-value { color: #047857; font-size: .9rem; font-weight: 900; }
-    .monitor-sale-price-base { color: #64748b; font-size: .68rem; }
-    .monitor-price-adjustment { display: flex; gap: 5px; margin-top: 5px; }
-    .monitor-selected-table .monitor-item-discount { width: 110px; }
-    .monitor-selected-table .monitor-item-discount-type { width: 78px; }
-    .monitor-price-adjustment-note { margin-top: 3px; color: #64748b; font-size: .66rem; }
+    .monitor-sale-price { min-width: 170px; }
+    .monitor-price-stepper { display: inline-flex; align-items: stretch; }
+    .monitor-price-stepper .btn {
+        width: 34px;
+        border-color: #cbd5e1;
+        border-radius: 0;
+        color: #0f766e;
+        font-size: 1rem;
+        font-weight: 900;
+    }
+    .monitor-price-stepper .btn:first-child { border-radius: 5px 0 0 5px; }
+    .monitor-price-stepper .btn:last-child { border-radius: 0 5px 5px 0; }
+    .monitor-price-stepper .btn:disabled { color: #94a3b8; background: #f1f5f9; opacity: 1; }
+    .monitor-sale-price-value {
+        min-width: 92px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 4px 8px;
+        border-block: 1px solid #cbd5e1;
+        background: #fff;
+        color: #047857;
+        font-size: .84rem;
+        font-weight: 900;
+        white-space: nowrap;
+    }
     .monitor-create-total { padding: 10px 12px; border-top: 1px solid #fed7aa; text-align: right; color: #b45309; font-weight: 900; }
     .monitor-customer-selected { padding: 12px 14px; border: 1px solid #99f6e4; border-radius: 8px; background: #f0fdfa; }
     .monitor-confirm-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
@@ -1062,7 +1081,6 @@
     const itemAdjustedPrice = item => item.discountType === 'increase'
         ? item.price + item.discount
         : Math.max(0, item.price - item.discount);
-    const maximumDecrease = item => Math.max(0, item.price - item.minPrice);
     const itemLineTotal = item => itemAdjustedPrice(item) * item.quantity * (item.isPricedByKg ? item.weight : 1);
     const orderTotal = () => Array.from(selectedItems.values()).reduce((sum, item) => sum + itemLineTotal(item), 0);
     const notify = (message, type = 'error') => {
@@ -1093,16 +1111,11 @@
                     <td><strong>${escapeHtml(item.name)}</strong><div class="small text-muted">${escapeHtml(item.sku || '')}</div></td>
                     <td>${escapeHtml(item.size || '—')}</td>
                     <td class="monitor-sale-price">
-                        <div class="monitor-sale-price-value">${money(itemAdjustedPrice(item))}</div>
-                        <div class="monitor-sale-price-base">Giá niêm yết: ${money(item.price)}</div>
-                        <div class="monitor-price-adjustment">
-                            <select class="form-select form-select-sm monitor-item-discount-type" aria-label="Tăng hoặc giảm giá bán">
-                                <option value="decrease" ${item.discountType === 'decrease' ? 'selected' : ''}>Giảm</option>
-                                <option value="increase" ${item.discountType === 'increase' ? 'selected' : ''}>Tăng</option>
-                            </select>
-                            <input type="number" class="form-control form-control-sm monitor-item-discount" min="0" ${item.discountType === 'decrease' ? `max="${maximumDecrease(item)}"` : ''} step="1000" value="${item.discount}" aria-label="Số tiền điều chỉnh trên mỗi đơn vị">
+                        <div class="monitor-price-stepper">
+                            <button type="button" class="btn btn-sm monitor-price-decrease" aria-label="Giảm đơn giá 1.000 đồng" title="Giảm 1.000đ" ${itemAdjustedPrice(item) <= item.minPrice ? 'disabled' : ''}>−</button>
+                            <span class="monitor-sale-price-value">${money(itemAdjustedPrice(item))}</span>
+                            <button type="button" class="btn btn-sm monitor-price-increase" aria-label="Tăng đơn giá 1.000 đồng" title="Tăng 1.000đ">+</button>
                         </div>
-                        <div class="monitor-price-adjustment-note">Số tiền / đơn vị${item.minPrice > 0 ? ` · Giá tối thiểu ${money(item.minPrice)}` : ''}</div>
                     </td>
                     <td><input type="number" class="form-control form-control-sm monitor-item-quantity" min="1" max="100000" value="${item.quantity}"></td>
                     <td class="fw-semibold monitor-item-line-total">${money(itemLineTotal(item))}</td>
@@ -1272,6 +1285,25 @@
             return;
         }
 
+        const priceButton = event.target.closest('.monitor-price-decrease, .monitor-price-increase');
+        if (priceButton) {
+            const row = priceButton.closest('[data-selected-variant]');
+            const item = selectedItems.get(Number(row.dataset.selectedVariant));
+            if (!item) return;
+
+            const step = priceButton.classList.contains('monitor-price-increase') ? 1000 : -1000;
+            const adjustedPrice = Math.max(item.minPrice, itemAdjustedPrice(item) + step);
+            item.discountType = adjustedPrice >= item.price ? 'increase' : 'decrease';
+            item.discount = Math.abs(adjustedPrice - item.price);
+            if (item.discount === 0) item.discountType = 'decrease';
+
+            row.querySelector('.monitor-sale-price-value').textContent = money(adjustedPrice);
+            row.querySelector('.monitor-price-decrease').disabled = adjustedPrice <= item.minPrice;
+            row.querySelector('.monitor-item-line-total').textContent = money(itemLineTotal(item));
+            document.getElementById('monitorCreateTotal').textContent = money(orderTotal());
+            return;
+        }
+
         const customerButton = event.target.closest('#monitorCustomerResults .select-customer-btn');
         if (customerButton) {
             selectedCustomer = {
@@ -1318,14 +1350,6 @@
         if (event.target.matches('.monitor-item-quantity')) {
             item.quantity = Math.max(1, Number.parseInt(event.target.value || '1', 10));
         }
-        if (event.target.matches('.monitor-item-discount')) {
-            item.discount = Math.max(0, Number(event.target.value) || 0);
-            if (item.discountType === 'decrease') {
-                item.discount = Math.min(item.discount, maximumDecrease(item));
-                event.target.value = item.discount;
-            }
-        }
-        row.querySelector('.monitor-sale-price-value').textContent = money(itemAdjustedPrice(item));
         row.querySelector('.monitor-item-line-total').textContent = money(itemLineTotal(item));
         document.getElementById('monitorCreateTotal').textContent = money(orderTotal());
     });
@@ -1341,25 +1365,6 @@
                 document.getElementById('monitorTruckStationName').value = option.dataset.name || '';
                 document.getElementById('monitorTruckStationAddress').value = option.dataset.address || '';
                 document.getElementById('monitorTruckStationPhone').value = option.dataset.phone || '';
-            }
-            return;
-        }
-        if (event.target.matches('.monitor-item-discount-type')) {
-            const row = event.target.closest('[data-selected-variant]');
-            const item = selectedItems.get(Number(row.dataset.selectedVariant));
-            if (item) {
-                item.discountType = event.target.value === 'increase' ? 'increase' : 'decrease';
-                const discountInput = row.querySelector('.monitor-item-discount');
-                if (item.discountType === 'decrease') {
-                    item.discount = Math.min(item.discount, maximumDecrease(item));
-                    discountInput.max = maximumDecrease(item);
-                    discountInput.value = item.discount;
-                } else {
-                    discountInput.removeAttribute('max');
-                }
-                row.querySelector('.monitor-sale-price-value').textContent = money(itemAdjustedPrice(item));
-                row.querySelector('.monitor-item-line-total').textContent = money(itemLineTotal(item));
-                document.getElementById('monitorCreateTotal').textContent = money(orderTotal());
             }
             return;
         }
