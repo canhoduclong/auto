@@ -37,7 +37,8 @@
     .draft-template-editor-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
     .draft-template-editor-grid .is-wide { grid-column: 1 / -1; }
     .draft-template-editor label { margin-bottom: 3px; color: #64748b; font-size: .66rem; font-weight: 800; }
-    .draft-template-edit-item { display: grid; grid-template-columns: minmax(0, 1fr) 72px 90px 105px; gap: 6px; margin-top: 7px; }
+    .draft-template-edit-item { display: grid; grid-template-columns: minmax(130px, .8fr) minmax(170px, 1fr) 72px 90px 105px 34px; gap: 6px; margin-top: 7px; }
+    .draft-template-edit-item .btn { display: inline-flex; align-items: center; justify-content: center; }
     .draft-template-empty { padding: 48px 20px; border: 1px solid #dce6f1; border-radius: 8px; background: #fff; color: #64748b; text-align: center; }
     @media (max-width: 767.98px) {
         .draft-template-row { grid-template-columns: 1fr; }
@@ -47,6 +48,7 @@
         .draft-template-editor-grid { grid-template-columns: 1fr; }
         .draft-template-editor-grid .is-wide { grid-column: auto; }
         .draft-template-edit-item { grid-template-columns: 1fr 1fr; }
+        .draft-template-edit-item .js-remove-draft-item { min-height: 31px; }
     }
 </style>
 @endpush
@@ -167,6 +169,21 @@
                                 <input type="hidden" name="truck_brand_name" value="{{ $draft->truck_brand_name }}">
                                 <input type="hidden" name="truck_station_address" value="{{ $draft->truck_station_address }}">
                                 <div class="draft-template-editor-grid">
+                                    <div class="is-wide">
+                                        <label>Chọn khách hàng</label>
+                                        <select class="form-select form-select-sm js-draft-customer">
+                                            <option value="">Chọn khách hàng</option>
+                                            @foreach($customers as $customer)
+                                                <option
+                                                    value="{{ $customer->id }}"
+                                                    data-name="{{ $customer->name }}"
+                                                    data-phone="{{ $customer->phone }}"
+                                                    data-address="{{ $customer->address }}"
+                                                    @selected((int) $draft->customer_id === (int) $customer->id)
+                                                >{{ $customer->name }}{{ $customer->phone ? ' · ' . $customer->phone : '' }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
                                     <div><label>Tên khách</label><input name="customer_name" class="form-control form-control-sm" value="{{ $draft->customer_name }}"></div>
                                     <div><label>Số điện thoại</label><input name="phone" class="form-control form-control-sm" value="{{ $draft->phone }}"></div>
                                     <div class="is-wide"><label>Địa chỉ</label><input name="address" class="form-control form-control-sm" value="{{ $draft->address }}"></div>
@@ -175,18 +192,35 @@
                                 </div>
                                 <div class="draft-template-section-title mt-3">Sản phẩm</div>
                                 @foreach($draftItems as $itemIndex => $item)
+                                    @php
+                                        $selectedVariant = $variantMap->get((int) ($item['product_variant_id'] ?? 0));
+                                        $selectedProductId = (int) ($selectedVariant?->product_id ?? 0);
+                                    @endphp
                                     <div class="draft-template-edit-item" data-draft-item>
-                                        <select name="item_product_variant_id" class="form-select form-select-sm" required>
+                                        <select class="form-select form-select-sm js-draft-product">
+                                            <option value="">Chọn sản phẩm</option>
+                                            @foreach($variants->groupBy('product_id') as $productVariants)
+                                                @php $product = $productVariants->first()?->product; @endphp
+                                                <option value="{{ $product?->id }}" @selected($selectedProductId === (int) $product?->id)>{{ $product?->name ?: 'Sản phẩm' }}</option>
+                                            @endforeach
+                                        </select>
+                                        <select name="item_product_variant_id" class="form-select form-select-sm js-draft-variant" required @disabled(!$selectedProductId)>
                                             <option value="">Chọn biến thể</option>
-                                            @foreach($variants as $variant)<option value="{{ $variant->id }}" @selected((int) ($item['product_variant_id'] ?? 0) === $variant->id)>{{ $variant->product?->name }} · {{ $variant->size ?: ($variant->name ?: $variant->sku) }}</option>@endforeach
+                                            @foreach($variants->where('product_id', $selectedProductId) as $variant)<option value="{{ $variant->id }}" @selected((int) ($item['product_variant_id'] ?? 0) === $variant->id)>{{ $variant->size ?: ($variant->name ?: $variant->sku) }}{{ $variant->sku ? ' · ' . $variant->sku : '' }}</option>@endforeach
                                         </select>
                                         <input type="number" name="item_quantity" class="form-control form-control-sm" min="1" value="{{ $item['quantity'] ?? 1 }}" placeholder="SL">
                                         <input type="number" name="item_size_kg" class="form-control form-control-sm" step=".001" min=".01" value="{{ $item['size_kg'] ?? 1 }}" placeholder="Kg">
                                         <input type="number" name="item_unit_price" class="form-control form-control-sm" min="0" value="{{ $item['unit_price'] ?? 0 }}" placeholder="Giá">
                                         <input type="hidden" name="item_product_text" value="{{ $item['product_text'] ?? '' }}">
+                                        <button type="button" class="btn btn-sm btn-outline-danger js-remove-draft-item" title="Xóa sản phẩm" aria-label="Xóa sản phẩm"><i class="bi bi-x"></i></button>
                                     </div>
                                 @endforeach
-                                @if($draft->status !== 'confirmed')<div class="text-end mt-3"><button type="button" class="btn btn-sm btn-success js-save-draft"><i class="bi bi-check2 me-1"></i>Lưu thay đổi</button></div>@endif
+                                @if($draft->status !== 'confirmed')
+                                    <div class="d-flex justify-content-between gap-2 mt-3">
+                                        <button type="button" class="btn btn-sm btn-outline-primary js-add-draft-item"><i class="bi bi-plus-circle me-1"></i>Thêm sản phẩm</button>
+                                        <button type="button" class="btn btn-sm btn-success js-save-draft"><i class="bi bi-check2 me-1"></i>Lưu thay đổi</button>
+                                    </div>
+                                @endif
                             </div>
                     </div>
 
@@ -210,7 +244,32 @@
 document.addEventListener('DOMContentLoaded', () => {
     const csrf = document.querySelector('meta[name="csrf-token"]')?.content || @json(csrf_token());
     const baseUrl = @json($actionBaseUrl);
+    const variants = @json($variants->map(fn ($variant) => [
+        'id' => $variant->id,
+        'product_id' => $variant->product_id,
+        'label' => ($variant->size ?: ($variant->name ?: $variant->sku)) . ($variant->sku ? ' · ' . $variant->sku : ''),
+        'kg' => (float) ($variant->kg ?: $variant->size ?: 1),
+        'price' => (float) ($variant->latestPriceRule?->price ?? $variant->price ?? $variant->product?->default_price ?? $variant->product?->price ?? 0),
+        'product_name' => $variant->product?->name ?: 'Sản phẩm',
+    ])->values());
     const notify = (message, type = 'success') => typeof window.showToast === 'function' ? window.showToast(message, type) : window.alert(message);
+    const populateVariants = (row, productId, selectedId = null) => {
+        const select = row.querySelector('.js-draft-variant');
+        select.innerHTML = '<option value="">Chọn biến thể</option>';
+        variants.filter(variant => Number(variant.product_id) === Number(productId)).forEach(variant => {
+            const option = new Option(variant.label, variant.id, false, Number(selectedId) === Number(variant.id));
+            select.add(option);
+        });
+        select.disabled = !productId;
+    };
+    const resetItemRow = row => {
+        row.querySelector('.js-draft-product').value = '';
+        populateVariants(row, null);
+        row.querySelector('[name="item_quantity"]').value = 1;
+        row.querySelector('[name="item_size_kg"]').value = 1;
+        row.querySelector('[name="item_unit_price"]').value = 0;
+        row.querySelector('[name="item_product_text"]').value = '';
+    };
     const rowData = card => {
         const editor = card.querySelector('.draft-template-editor');
         const value = name => editor?.querySelector(`[name="${name}"]`)?.value || null;
@@ -238,6 +297,23 @@ document.addEventListener('DOMContentLoaded', () => {
         return payload;
     };
     document.addEventListener('click', async event => {
+        const addItemButton = event.target.closest('.js-add-draft-item');
+        if (addItemButton) {
+            const editor = addItemButton.closest('.draft-template-editor');
+            const source = editor.querySelector('[data-draft-item]');
+            const row = source.cloneNode(true);
+            resetItemRow(row);
+            source.parentNode.insertBefore(row, addItemButton.parentElement);
+            return;
+        }
+        const removeItemButton = event.target.closest('.js-remove-draft-item');
+        if (removeItemButton) {
+            const editor = removeItemButton.closest('.draft-template-editor');
+            const rows = editor.querySelectorAll('[data-draft-item]');
+            if (rows.length === 1) resetItemRow(rows[0]);
+            else removeItemButton.closest('[data-draft-item]').remove();
+            return;
+        }
         const button = event.target.closest('.js-save-draft, .js-copy-draft, .js-confirm-draft');
         if (!button) return;
         const card = button.closest('[data-draft-card]');
@@ -253,6 +329,34 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             notify(error.message, 'error');
             button.disabled = false;
+        }
+    });
+    document.addEventListener('change', event => {
+        const customerSelect = event.target.closest('.js-draft-customer');
+        if (customerSelect) {
+            const editor = customerSelect.closest('.draft-template-editor');
+            const option = customerSelect.selectedOptions[0];
+            editor.querySelector('[name="customer_id"]').value = option?.value || '';
+            if (option?.value) {
+                editor.querySelector('[name="customer_name"]').value = option.dataset.name || '';
+                editor.querySelector('[name="phone"]').value = option.dataset.phone || '';
+                editor.querySelector('[name="address"]').value = option.dataset.address || '';
+            }
+            return;
+        }
+        const productSelect = event.target.closest('.js-draft-product');
+        if (productSelect) {
+            populateVariants(productSelect.closest('[data-draft-item]'), productSelect.value);
+            return;
+        }
+        const variantSelect = event.target.closest('.js-draft-variant');
+        if (variantSelect) {
+            const row = variantSelect.closest('[data-draft-item]');
+            const variant = variants.find(item => Number(item.id) === Number(variantSelect.value));
+            if (!variant) return;
+            row.querySelector('[name="item_size_kg"]').value = variant.kg;
+            row.querySelector('[name="item_unit_price"]').value = variant.price;
+            row.querySelector('[name="item_product_text"]').value = `${variant.product_name} ${variant.label}`.trim();
         }
     });
 });

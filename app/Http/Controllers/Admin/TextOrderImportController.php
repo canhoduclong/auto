@@ -79,9 +79,19 @@ class TextOrderImportController extends Controller
             ->get();
         $sales = User::query()->whereHas('roles', fn ($query) => $query->where('name', 'sale'))->orderBy('name')->get(['id', 'name', 'zalo_name']);
         $variants = ProductVariant::query()
-            ->with('product.avatar.media')
+            ->with(['product.avatar.media', 'latestPriceRule'])
             ->orderBy('name')
-            ->get(['id', 'product_id', 'name', 'sku', 'size', 'kg']);
+            ->get(['id', 'product_id', 'name', 'sku', 'size', 'kg', 'price']);
+        $customers = $saleId
+            ? Customer::query()
+                ->where(function ($query) use ($saleId) {
+                    $query->where('user_id', $saleId)
+                        ->orWhere('assigned_to', $saleId)
+                        ->orWhere('current_owner_sale_id', $saleId);
+                })
+                ->orderBy('name')
+                ->get(['id', 'name', 'phone', 'address'])
+            : collect();
         $truckStations = TruckStation::query()
             ->with('brand:id,name')
             ->where('is_active', true)
@@ -95,7 +105,7 @@ class TextOrderImportController extends Controller
         $viewName = $saleMode ? 'site.my-draft-orders' : 'admin.text-order-import.index';
 
         return view($viewName, compact(
-            'drafts', 'sales', 'variants', 'truckStations', 'saleMode', 'pageTitle', 'actionBaseUrl', 'parseRoute', 'settings', 'sortBy', 'sortDir'
+            'drafts', 'sales', 'variants', 'customers', 'truckStations', 'saleMode', 'pageTitle', 'actionBaseUrl', 'parseRoute', 'settings', 'sortBy', 'sortDir'
         ));
     }
 
