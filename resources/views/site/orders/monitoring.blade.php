@@ -398,8 +398,13 @@
     .monitor-selected-table { border: 1px solid #fed7aa; border-radius: 9px; overflow: hidden; background: #fffaf3; }
     .monitor-selected-table table { margin: 0; font-size: .78rem; }
     .monitor-selected-table .monitor-item-quantity { width: 78px; }
-    .monitor-selected-table .monitor-item-discount { width: 105px; }
-    .monitor-selected-table .monitor-item-discount-type { width: 76px; }
+    .monitor-sale-price { min-width: 250px; }
+    .monitor-sale-price-value { color: #047857; font-size: .9rem; font-weight: 900; }
+    .monitor-sale-price-base { color: #64748b; font-size: .68rem; }
+    .monitor-price-adjustment { display: flex; gap: 5px; margin-top: 5px; }
+    .monitor-selected-table .monitor-item-discount { width: 110px; }
+    .monitor-selected-table .monitor-item-discount-type { width: 78px; }
+    .monitor-price-adjustment-note { margin-top: 3px; color: #64748b; font-size: .66rem; }
     .monitor-create-total { padding: 10px 12px; border-top: 1px solid #fed7aa; text-align: right; color: #b45309; font-weight: 900; }
     .monitor-customer-selected { padding: 12px 14px; border: 1px solid #99f6e4; border-radius: 8px; background: #f0fdfa; }
     .monitor-confirm-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
@@ -751,8 +756,8 @@
                         <div class="px-3 pt-3 fw-bold">Sản phẩm đã chọn</div>
                         <div class="table-responsive">
                             <table class="table table-sm align-middle">
-                                <thead><tr><th>Sản phẩm</th><th>Biến thể</th><th>Đơn giá</th><th>Số lượng</th><th>Chiết khấu</th><th>Thành tiền</th><th></th></tr></thead>
-                                <tbody id="monitorSelectedItems"><tr><td colspan="7" class="text-center text-muted py-3">Chưa chọn sản phẩm.</td></tr></tbody>
+                                <thead><tr><th>Sản phẩm</th><th>Biến thể</th><th>Giá bán</th><th>Số lượng</th><th>Thành tiền</th><th></th></tr></thead>
+                                <tbody id="monitorSelectedItems"><tr><td colspan="6" class="text-center text-muted py-3">Chưa chọn sản phẩm.</td></tr></tbody>
                             </table>
                         </div>
                         <div class="monitor-create-total">Tạm tính: <span id="monitorCreateTotal">0đ</span></div>
@@ -1081,21 +1086,25 @@
     function renderItems() {
         const body = document.getElementById('monitorSelectedItems');
         if (!selectedItems.size) {
-            body.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-3">Chưa chọn sản phẩm.</td></tr>';
+            body.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">Chưa chọn sản phẩm.</td></tr>';
         } else {
             body.innerHTML = Array.from(selectedItems.values()).map(item => `
                 <tr data-selected-variant="${item.id}">
                     <td><strong>${escapeHtml(item.name)}</strong><div class="small text-muted">${escapeHtml(item.sku || '')}</div></td>
                     <td>${escapeHtml(item.size || '—')}</td>
-                    <td>${money(item.price)}</td>
+                    <td class="monitor-sale-price">
+                        <div class="monitor-sale-price-value">${money(itemAdjustedPrice(item))}</div>
+                        <div class="monitor-sale-price-base">Giá niêm yết: ${money(item.price)}</div>
+                        <div class="monitor-price-adjustment">
+                            <select class="form-select form-select-sm monitor-item-discount-type" aria-label="Tăng hoặc giảm giá bán">
+                                <option value="decrease" ${item.discountType === 'decrease' ? 'selected' : ''}>Giảm</option>
+                                <option value="increase" ${item.discountType === 'increase' ? 'selected' : ''}>Tăng</option>
+                            </select>
+                            <input type="number" class="form-control form-control-sm monitor-item-discount" min="0" ${item.discountType === 'decrease' ? `max="${maximumDecrease(item)}"` : ''} step="1000" value="${item.discount}" aria-label="Số tiền điều chỉnh trên mỗi đơn vị">
+                        </div>
+                        <div class="monitor-price-adjustment-note">Số tiền / đơn vị${item.minPrice > 0 ? ` · Giá tối thiểu ${money(item.minPrice)}` : ''}</div>
+                    </td>
                     <td><input type="number" class="form-control form-control-sm monitor-item-quantity" min="1" max="100000" value="${item.quantity}"></td>
-                    <td><div class="d-flex gap-1">
-                        <select class="form-select form-select-sm monitor-item-discount-type" aria-label="Loại chiết khấu">
-                            <option value="decrease" ${item.discountType === 'decrease' ? 'selected' : ''}>Giảm</option>
-                            <option value="increase" ${item.discountType === 'increase' ? 'selected' : ''}>Tăng</option>
-                        </select>
-                        <input type="number" class="form-control form-control-sm monitor-item-discount" min="0" ${item.discountType === 'decrease' ? `max="${maximumDecrease(item)}"` : ''} step="1000" value="${item.discount}" aria-label="Chiết khấu mỗi đơn vị">
-                    </div><div class="small text-muted mt-1">/ đơn vị${item.minPrice > 0 ? ` · Giá Min ${money(item.minPrice)}` : ''}</div></td>
                     <td class="fw-semibold monitor-item-line-total">${money(itemLineTotal(item))}</td>
                     <td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger monitor-remove-item" aria-label="Xóa"><i class="bi bi-x"></i></button></td>
                 </tr>`).join('');
@@ -1181,7 +1190,7 @@
         document.getElementById('monitorConfirmItems').innerHTML = Array.from(selectedItems.values()).map(item => `
             <div class="d-flex justify-content-between gap-2 border-bottom py-2 small">
                 <span><strong>${escapeHtml(item.name)}</strong> · ${escapeHtml(item.size || '—')} × ${item.quantity}
-                    ${item.discount > 0 ? `<span class="d-block text-muted">${item.discountType === 'increase' ? 'Tăng' : 'Giảm'} ${money(item.discount)}/đơn vị</span>` : ''}
+                    <span class="d-block text-muted">Giá bán: ${money(itemAdjustedPrice(item))}/đơn vị${item.discount > 0 ? ` · ${item.discountType === 'increase' ? 'Tăng' : 'Giảm'} ${money(item.discount)}` : ''}</span>
                 </span>
                 <strong>${money(itemLineTotal(item))}</strong>
             </div>`).join('');
@@ -1316,6 +1325,7 @@
                 event.target.value = item.discount;
             }
         }
+        row.querySelector('.monitor-sale-price-value').textContent = money(itemAdjustedPrice(item));
         row.querySelector('.monitor-item-line-total').textContent = money(itemLineTotal(item));
         document.getElementById('monitorCreateTotal').textContent = money(orderTotal());
     });
@@ -1347,6 +1357,7 @@
                 } else {
                     discountInput.removeAttribute('max');
                 }
+                row.querySelector('.monitor-sale-price-value').textContent = money(itemAdjustedPrice(item));
                 row.querySelector('.monitor-item-line-total').textContent = money(itemLineTotal(item));
                 document.getElementById('monitorCreateTotal').textContent = money(orderTotal());
             }
