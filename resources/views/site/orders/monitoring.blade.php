@@ -330,6 +330,22 @@
     .monitor-inline-edit { margin-top: 14px; border-top: 1px solid #dce6f1; }
     .monitor-inline-edit-form { padding: 14px 0 2px; }
     .monitor-inline-edit-title { margin-bottom: 10px; color: #075985; font-size: .82rem; font-weight: 900; text-transform: uppercase; }
+    .monitor-edit-picker { margin-bottom: 12px; padding: 10px; border: 1px solid #dce6f1; border-radius: 8px; background: #f8fafc; }
+    .monitor-edit-picker-label { color: #475569; font-size: .68rem; font-weight: 800; }
+    .monitor-edit-selected-customer { color: #075985; font-size: .82rem; font-weight: 800; }
+    .monitor-edit-picker-results { max-height: 280px; margin-top: 8px; overflow: auto; background: #fff; }
+    .monitor-edit-product-search { display: flex; gap: 6px; margin-top: 10px; }
+    .monitor-edit-product-results .variant-picker-toolbar { display: none; }
+    .monitor-edit-product-results .variant-picker-list { display: grid; gap: 6px; }
+    .monitor-edit-product-results .variant-picker-item { display: flex; align-items: center; gap: 8px; padding: 8px; border: 1px solid #e2e8f0; border-radius: 7px; }
+    .monitor-edit-product-results .variant-picker-main { display: flex; flex: 1; align-items: center; gap: 8px; min-width: 0; }
+    .monitor-edit-product-results .variant-picker-thumb { width: 38px; height: 38px; border-radius: 6px; object-fit: cover; }
+    .monitor-edit-product-results .variant-picker-name { font-size: .75rem; font-weight: 800; }
+    .monitor-edit-product-results .variant-picker-meta { display: flex; flex-wrap: wrap; gap: 5px; color: #64748b; font-size: .65rem; }
+    .monitor-edit-product-results .variant-picker-stats { display: flex; gap: 10px; font-size: .68rem; }
+    .monitor-edit-product-results .variant-picker-stats > div { display: grid; }
+    .monitor-edit-product-results .variant-picker-label { color: #64748b; }
+    .monitor-edit-product-results .variant-picker-actions > :not(.add-variant-to-cart) { display: none; }
     .monitor-inline-edit-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
     .monitor-inline-edit-fields .is-wide { grid-column: 1 / -1; }
     .monitor-inline-edit-fields label { margin-bottom: 3px; color: #475569; font-size: .68rem; font-weight: 800; }
@@ -1022,6 +1038,22 @@
                                             <input type="hidden" name="warehouse_can_adjust" value="{{ $order->warehouse_can_adjust ? 1 : 0 }}">
 
                                             <div class="monitor-inline-edit-title"><i class="bi bi-pencil-square me-1"></i>Sửa đơn {{ $order->code ?: ('#' . $order->id) }}</div>
+                                            <div class="monitor-edit-picker">
+                                                <div class="d-flex align-items-center justify-content-between gap-2">
+                                                    <div>
+                                                        <div class="monitor-edit-picker-label">Khách hàng</div>
+                                                        <div class="monitor-edit-selected-customer">{{ $order->customer?->name ?? 'Chưa chọn' }}{{ $order->customer?->phone ? ' · ' . $order->customer->phone : '' }}</div>
+                                                    </div>
+                                                    <button type="button" class="btn btn-sm btn-outline-primary monitor-edit-customer-toggle">Chọn khách khác</button>
+                                                </div>
+                                                <div class="monitor-edit-customer-picker mt-2" hidden>
+                                                    <div class="input-group input-group-sm">
+                                                        <input type="search" class="form-control monitor-edit-customer-search" placeholder="Tìm tên, số điện thoại hoặc email...">
+                                                        <button type="button" class="btn btn-primary monitor-edit-customer-search-button"><i class="bi bi-search"></i> Tìm</button>
+                                                    </div>
+                                                    <div class="monitor-edit-picker-results monitor-edit-customer-results"></div>
+                                                </div>
+                                            </div>
                                             <div class="monitor-inline-edit-fields">
                                                 <div>
                                                     <label for="monitorEditName{{ $order->id }}">Người nhận</label>
@@ -1047,7 +1079,7 @@
 
                                             <div class="table-responsive">
                                                 <table class="table table-sm align-middle monitor-edit-items">
-                                                    <thead><tr><th>Sản phẩm</th><th>Giá bán</th><th>Số lượng</th><th class="text-end">Thành tiền</th></tr></thead>
+                                                    <thead><tr><th>Sản phẩm</th><th>Giá bán</th><th>Số lượng</th><th class="text-end">Thành tiền</th><th></th></tr></thead>
                                                     <tbody>
                                                         @foreach($order->items as $editIndex => $item)
                                                             @php
@@ -1060,7 +1092,7 @@
                                                                 $editPricingFactor = $item->effective_priced_by_kg ? max((float) $item->effective_unit_weight, 0) : 1;
                                                                 $editLineTotal = $editSellingPrice * (float) $item->quantity * $editPricingFactor;
                                                             @endphp
-                                                            <tr data-monitor-edit-item data-base-price="{{ $editBasePrice }}" data-min-price="{{ $editMinPrice }}" data-pricing-factor="{{ $editPricingFactor }}">
+                                                            <tr data-monitor-edit-item data-variant-id="{{ $editVariant?->id }}" data-base-price="{{ $editBasePrice }}" data-min-price="{{ $editMinPrice }}" data-pricing-factor="{{ $editPricingFactor }}">
                                                                 <td>
                                                                     <strong>{{ $item->product?->name ?? $editVariant?->product?->name ?? 'Sản phẩm' }}</strong>
                                                                     <span class="d-block text-muted">{{ $editVariant?->size ?: ($editVariant?->sku ?: '') }}</span>
@@ -1077,10 +1109,19 @@
                                                                 </td>
                                                                 <td><input type="number" class="form-control form-control-sm monitor-edit-quantity" name="items[{{ $editIndex }}][quantity]" min="1" max="100000" value="{{ (int) $item->quantity }}" required></td>
                                                                 <td class="text-end fw-semibold monitor-edit-line-total">{{ number_format($editLineTotal, 0, ',', '.') }}đ</td>
+                                                                <td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger monitor-edit-remove-item" aria-label="Xóa sản phẩm"><i class="bi bi-x"></i></button></td>
                                                             </tr>
                                                         @endforeach
                                                     </tbody>
                                                 </table>
+                                            </div>
+                                            <div class="monitor-edit-picker">
+                                                <div class="monitor-edit-picker-label">Thêm sản phẩm vào đơn</div>
+                                                <div class="monitor-edit-product-search">
+                                                    <input type="search" class="form-control form-control-sm monitor-edit-product-search-input" placeholder="Tìm sản phẩm, SKU hoặc size...">
+                                                    <button type="button" class="btn btn-sm btn-outline-primary monitor-edit-product-search-button"><i class="bi bi-search me-1"></i>Tìm</button>
+                                                </div>
+                                                <div class="monitor-edit-picker-results monitor-edit-product-results"></div>
                                             </div>
                                             <div class="monitor-inline-edit-total">Tổng sản phẩm: <span>{{ number_format((float) $order->items->sum('total'), 0, ',', '.') }}đ</span></div>
                                             <div class="monitor-inline-edit-actions">
@@ -1525,6 +1566,229 @@
             button.disabled = false;
             button.innerHTML = '<i class="bi bi-check2 me-1"></i>Tạo đơn';
         }
+    });
+
+    function updateInlineEditTotals(form) {
+        let total = 0;
+        form.querySelectorAll('[data-monitor-edit-item]').forEach(row => {
+            const basePrice = Number(row.dataset.basePrice) || 0;
+            const discount = Math.max(0, Number(row.querySelector('.monitor-edit-discount')?.value) || 0);
+            const discountType = row.querySelector('.monitor-edit-discount-type')?.value === 'increase' ? 'increase' : 'decrease';
+            const sellingPrice = discountType === 'increase' ? basePrice + discount : basePrice - discount;
+            const quantityInput = row.querySelector('.monitor-edit-quantity');
+            const quantity = Math.max(1, Number.parseInt(quantityInput?.value || '1', 10));
+            const pricingFactor = Math.max(0, Number(row.dataset.pricingFactor) || 0);
+            const lineTotal = sellingPrice * quantity * pricingFactor;
+
+            if (quantityInput && Number(quantityInput.value) !== quantity) quantityInput.value = quantity;
+            row.querySelector('.monitor-edit-price-value').textContent = money(sellingPrice);
+            row.querySelector('.monitor-edit-line-total').textContent = money(lineTotal);
+            row.querySelector('.monitor-edit-price-decrease').disabled = sellingPrice <= (Number(row.dataset.minPrice) || 0);
+            total += lineTotal;
+        });
+        form.querySelector('.monitor-inline-edit-total span').textContent = money(total);
+    }
+
+    async function loadInlineCustomers(form, page = 1) {
+        const results = form.querySelector('.monitor-edit-customer-results');
+        const target = new URL(customerEndpoint, window.location.origin);
+        target.searchParams.set('mode', 'single');
+        target.searchParams.set('scope', 'my_customers');
+        target.searchParams.set('q', form.querySelector('.monitor-edit-customer-search').value.trim());
+        target.searchParams.set('per_page', '10');
+        target.searchParams.set('page', String(page));
+        target.searchParams.set('sort_by', form.dataset.customerSortBy || 'manual');
+        target.searchParams.set('sort_dir', form.dataset.customerSortDir || 'asc');
+        results.innerHTML = '<div class="text-center text-muted py-3"><span class="spinner-border spinner-border-sm me-1"></span>Đang tải khách hàng...</div>';
+        try {
+            const response = await fetch(target, { headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' } });
+            const data = await response.json();
+            if (!response.ok || !data.html) throw new Error('Không thể tải khách hàng.');
+            results.innerHTML = data.html;
+        } catch (error) {
+            results.innerHTML = `<div class="alert alert-danger py-2 mb-0">${escapeHtml(error.message)}</div>`;
+        }
+    }
+
+    async function loadInlineProducts(form, url = variantEndpoint) {
+        const results = form.querySelector('.monitor-edit-product-results');
+        const target = new URL(url, window.location.origin);
+        const variantIds = Array.from(form.querySelectorAll('[data-monitor-edit-item]'))
+            .map(row => row.dataset.variantId)
+            .filter(Boolean);
+        target.searchParams.set('search', form.querySelector('.monitor-edit-product-search-input').value.trim());
+        target.searchParams.set('per_page', '5');
+        target.searchParams.set('exclude_ids', variantIds.join(','));
+        target.searchParams.set('page', target.searchParams.get('page') || '1');
+        results.innerHTML = '<div class="text-center text-muted py-3"><span class="spinner-border spinner-border-sm me-1"></span>Đang tải sản phẩm...</div>';
+        try {
+            const response = await fetch(target, { headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' } });
+            const data = await response.json();
+            if (!response.ok || !data.html) throw new Error('Không thể tải sản phẩm.');
+            results.innerHTML = data.html;
+        } catch (error) {
+            results.innerHTML = `<div class="alert alert-danger py-2 mb-0">${escapeHtml(error.message)}</div>`;
+        }
+    }
+
+    function addInlineEditItem(form, button) {
+        const variantId = String(button.dataset.variantId || '');
+        if (!variantId || form.querySelector(`[data-monitor-edit-item][data-variant-id="${CSS.escape(variantId)}"]`)) {
+            notify('Sản phẩm này đã có trong đơn.');
+            return;
+        }
+
+        const rows = form.querySelectorAll('[data-monitor-edit-item]');
+        const nextIndex = Number(form.dataset.nextItemIndex || rows.length);
+        form.dataset.nextItemIndex = String(nextIndex + 1);
+        const name = button.dataset.variantName || 'Sản phẩm';
+        const sku = button.dataset.variantSku || '';
+        const size = button.dataset.variantSize || '';
+        const price = Math.max(0, Number(button.dataset.variantPrice) || 0);
+        const minPrice = Math.max(0, Number(button.dataset.variantMinPrice) || 0);
+        const weight = Math.max(0.01, Number(button.dataset.variantWeight) || 1);
+        const pricingFactor = button.dataset.variantIsPricedByKg === '1' ? weight : 1;
+
+        form.querySelector('.monitor-edit-items tbody').insertAdjacentHTML('beforeend', `
+            <tr data-monitor-edit-item data-variant-id="${escapeHtml(variantId)}" data-base-price="${price}" data-min-price="${minPrice}" data-pricing-factor="${pricingFactor}">
+                <td>
+                    <strong>${escapeHtml(name)}</strong>
+                    <span class="d-block text-muted">${escapeHtml(size || sku)}</span>
+                    <input type="hidden" name="items[${nextIndex}][variant_id]" value="${escapeHtml(variantId)}">
+                    <input type="hidden" class="monitor-edit-discount-type" name="item_discount_type[${escapeHtml(variantId)}]" value="decrease">
+                    <input type="hidden" class="monitor-edit-discount" name="item_discount[${escapeHtml(variantId)}]" value="0">
+                </td>
+                <td><div class="monitor-edit-price-stepper">
+                    <button type="button" class="btn btn-sm monitor-edit-price-decrease" aria-label="Giảm đơn giá 1.000 đồng" ${price <= minPrice ? 'disabled' : ''}>−</button>
+                    <span class="monitor-edit-price-value">${money(price)}</span>
+                    <button type="button" class="btn btn-sm monitor-edit-price-increase" aria-label="Tăng đơn giá 1.000 đồng">+</button>
+                </div></td>
+                <td><input type="number" class="form-control form-control-sm monitor-edit-quantity" name="items[${nextIndex}][quantity]" min="1" max="100000" value="1" required></td>
+                <td class="text-end fw-semibold monitor-edit-line-total">${money(price * pricingFactor)}</td>
+                <td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger monitor-edit-remove-item" aria-label="Xóa sản phẩm"><i class="bi bi-x"></i></button></td>
+            </tr>`);
+        button.closest('.variant-picker-item')?.remove();
+        updateInlineEditTotals(form);
+    }
+
+    document.addEventListener('click', event => {
+        const priceButton = event.target.closest('.monitor-edit-price-decrease, .monitor-edit-price-increase');
+        if (!priceButton) return;
+
+        const row = priceButton.closest('[data-monitor-edit-item]');
+        const form = priceButton.closest('[data-monitor-edit-form]');
+        if (!row || !form) return;
+
+        const basePrice = Number(row.dataset.basePrice) || 0;
+        const minPrice = Number(row.dataset.minPrice) || 0;
+        const discountInput = row.querySelector('.monitor-edit-discount');
+        const discountTypeInput = row.querySelector('.monitor-edit-discount-type');
+        const adjustment = Math.max(0, Number(discountInput.value) || 0);
+        const currentPrice = discountTypeInput.value === 'increase' ? basePrice + adjustment : basePrice - adjustment;
+        const step = priceButton.classList.contains('monitor-edit-price-increase') ? 1000 : -1000;
+        const sellingPrice = Math.max(minPrice, currentPrice + step);
+
+        discountTypeInput.value = sellingPrice > basePrice ? 'increase' : 'decrease';
+        discountInput.value = Math.abs(sellingPrice - basePrice);
+        updateInlineEditTotals(form);
+    });
+
+    document.addEventListener('click', event => {
+        const form = event.target.closest('[data-monitor-edit-form]');
+        if (!form) return;
+
+        const customerToggle = event.target.closest('.monitor-edit-customer-toggle');
+        if (customerToggle) {
+            const picker = form.querySelector('.monitor-edit-customer-picker');
+            picker.hidden = !picker.hidden;
+            if (!picker.hidden && !form.querySelector('.monitor-edit-customer-results').innerHTML.trim()) loadInlineCustomers(form);
+            return;
+        }
+
+        if (event.target.closest('.monitor-edit-customer-search-button')) {
+            loadInlineCustomers(form);
+            return;
+        }
+
+        const customerPage = event.target.closest('.monitor-edit-customer-results .customer-page-btn');
+        if (customerPage && !customerPage.disabled) {
+            loadInlineCustomers(form, Number(customerPage.dataset.page) || 1);
+            return;
+        }
+
+        const customerSort = event.target.closest('.monitor-edit-customer-results .customer-sort-link');
+        if (customerSort) {
+            event.preventDefault();
+            form.dataset.customerSortBy = customerSort.dataset.sortBy || 'manual';
+            form.dataset.customerSortDir = customerSort.dataset.sortDir || 'asc';
+            loadInlineCustomers(form);
+            return;
+        }
+
+        const customerButton = event.target.closest('.monitor-edit-customer-results .select-customer-btn');
+        if (customerButton) {
+            form.elements.namedItem('customer_id').value = customerButton.dataset.customerId || '';
+            form.elements.namedItem('recipient_name').value = customerButton.dataset.customerName || '';
+            form.elements.namedItem('recipient_phone').value = customerButton.dataset.customerPhone || '';
+            form.elements.namedItem('recipient_email').value = customerButton.dataset.customerEmail || '';
+            form.elements.namedItem('recipient_address').value = customerButton.dataset.customerAddress || '';
+            form.querySelector('.monitor-edit-selected-customer').textContent = [customerButton.dataset.customerName, customerButton.dataset.customerPhone].filter(Boolean).join(' · ');
+            form.querySelector('.monitor-edit-customer-picker').hidden = true;
+            return;
+        }
+
+        if (event.target.closest('.monitor-edit-product-search-button')) {
+            loadInlineProducts(form);
+            return;
+        }
+
+        const productPage = event.target.closest('.monitor-edit-product-results .pagination a');
+        if (productPage) {
+            event.preventDefault();
+            loadInlineProducts(form, productPage.href);
+            return;
+        }
+
+        const addProduct = event.target.closest('.monitor-edit-product-results .add-variant-to-cart');
+        if (addProduct) {
+            event.preventDefault();
+            addInlineEditItem(form, addProduct);
+            return;
+        }
+
+        const removeProduct = event.target.closest('.monitor-edit-remove-item');
+        if (removeProduct) {
+            if (form.querySelectorAll('[data-monitor-edit-item]').length <= 1) {
+                notify('Đơn hàng phải có ít nhất một sản phẩm.');
+                return;
+            }
+            removeProduct.closest('[data-monitor-edit-item]')?.remove();
+            updateInlineEditTotals(form);
+            loadInlineProducts(form);
+        }
+    });
+
+    document.addEventListener('keydown', event => {
+        const form = event.target.closest('[data-monitor-edit-form]');
+        if (!form || event.key !== 'Enter') return;
+        if (event.target.matches('.monitor-edit-customer-search')) {
+            event.preventDefault();
+            loadInlineCustomers(form);
+        } else if (event.target.matches('.monitor-edit-product-search-input')) {
+            event.preventDefault();
+            loadInlineProducts(form);
+        }
+    });
+
+    document.addEventListener('input', event => {
+        if (!event.target.matches('[data-monitor-edit-form] .monitor-edit-quantity')) return;
+        const form = event.target.closest('[data-monitor-edit-form]');
+        if (form) updateInlineEditTotals(form);
+    });
+
+    document.querySelectorAll('[data-monitor-edit-form]').forEach(form => {
+        form.dataset.nextItemIndex = String(form.querySelectorAll('[data-monitor-edit-item]').length);
+        updateInlineEditTotals(form);
     });
 
     const highlightedOrder = new URLSearchParams(window.location.search).get('highlight');
