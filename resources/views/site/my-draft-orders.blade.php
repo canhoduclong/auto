@@ -6,8 +6,9 @@
 <style>
     .drafts-page { padding: 0 0 48px; background: transparent; }
     .drafts-shell { max-width: none; margin: 0; padding: 0; }
-    .draft-template-title { padding: 15px 14px 10px; border-left: 7px solid #f8fafc; background: #fff; }
+    .draft-template-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 15px 14px 10px; border-left: 7px solid #f8fafc; background: #fff; }
     .draft-template-title h1 { display: inline-block; margin: 0; padding-bottom: 6px; border-bottom: 3px solid #f59e0b; font-size: 1rem; font-weight: 900; text-transform: uppercase; }
+    .draft-template-create { border-radius: 6px; font-size: .75rem; font-weight: 800; }
     .draft-template-sort { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 18px 4px 12px; }
     .draft-template-sort-actions { display: flex; flex-wrap: wrap; gap: 6px; }
     .draft-template-sort .btn { border-radius: 4px; font-size: .7rem; }
@@ -61,7 +62,17 @@
 
 <section class="drafts-page">
     <div class="container drafts-shell">
-        <div class="draft-template-title"><h1>Đơn hàng Mẫu</h1></div>
+        <div class="draft-template-title">
+            <h1>Đơn hàng Mẫu</h1>
+            @if($monitoringEmbedded ?? false)
+                <form method="POST" action="{{ route('pages.my_order_drafts.store') }}">
+                    @csrf
+                    <button type="submit" class="btn btn-sm btn-success draft-template-create">
+                        <i class="bi bi-plus-circle me-1"></i>Tạo mới
+                    </button>
+                </form>
+            @endif
+        </div>
 
         @if(session('success'))<div class="alert alert-success mt-3">{{ session('success') }}</div>@endif
         @if($errors->any())<div class="alert alert-danger mt-3">{{ $errors->first() }}</div>@endif
@@ -148,7 +159,7 @@
                             </div>
                         </div>
 
-                            <div class="collapse draft-template-editor" id="draftEdit{{ $draft->id }}">
+                            <div class="collapse draft-template-editor {{ (int) request('edit') === (int) $draft->id ? 'show' : '' }}" id="draftEdit{{ $draft->id }}">
                                 <input type="hidden" name="sale_id" value="{{ auth()->id() }}">
                                 <input type="hidden" name="customer_id" value="{{ $draft->customer_id }}">
                                 <input type="hidden" name="truck_brand_id" value="{{ $draft->truck_brand_id }}">

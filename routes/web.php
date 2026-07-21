@@ -978,6 +978,7 @@ Route::post('/my-profile', [PageController::class, 'updateProfile'])->name('page
 // My Orders routes (sale / leader / manager only)
 Route::middleware(['auth', 'role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin'])->group(function () {
     Route::get('/my-order-drafts', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'saleIndex'])->name('pages.my_order_drafts')->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
+    Route::post('/my-order-drafts', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'saleStore'])->name('pages.my_order_drafts.store')->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
     Route::put('/my-order-drafts/{draft}', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'saleUpdate'])->name('pages.my_order_drafts.update')->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
     Route::post('/my-order-drafts/bulk-confirm', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'saleBulkConfirm'])->name('pages.my_order_drafts.bulk_confirm')->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
     Route::post('/my-order-drafts/{draft}/copy', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'saleCopy'])->name('pages.my_order_drafts.copy')->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');

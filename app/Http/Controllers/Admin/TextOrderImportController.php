@@ -44,6 +44,24 @@ class TextOrderImportController extends Controller
         return $this->draftIndex((int) $request->user()->id, $request);
     }
 
+    public function saleStore(Request $request)
+    {
+        $saleId = (int) $request->user()->id;
+        $draft = TextOrderDraft::query()->create([
+            'created_by' => $saleId,
+            'draft_scope' => TextOrderDraft::SCOPE_SALE_PRIVATE,
+            'sale_id' => $saleId,
+            'delivery_date' => $this->today(),
+            'raw_text' => '',
+            'status' => 'draft',
+        ]);
+
+        return redirect()->route('pages.my_orders.monitoring', [
+            'tab' => 'drafts',
+            'edit' => $draft->id,
+        ])->with('success', 'Đã tạo đơn hàng mẫu mới.');
+    }
+
     private function draftIndex(?int $saleId = null, ?Request $request = null)
     {
         $settings = $this->settings;
