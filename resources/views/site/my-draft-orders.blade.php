@@ -14,6 +14,7 @@
     .draft-template-sort .btn { border-radius: 4px; font-size: .7rem; }
     .draft-template-list { display: grid; gap: 16px; }
     .draft-template-row { display: grid; grid-template-columns: minmax(0, 1fr) 132px; gap: 14px; align-items: start; }
+    .draft-template-row.is-editing { grid-template-columns: minmax(0, 1fr); }
     .draft-template-card { min-width: 0; padding: 14px 16px; border: 1px solid #dce6f1; border-radius: 7px; background: #fff; box-shadow: 0 5px 16px rgba(15, 23, 42, .06); }
     .draft-template-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding-bottom: 8px; border-bottom: 1px solid #e5e7eb; }
     .draft-template-name { color: #0f172a; font-size: .82rem; font-weight: 900; text-transform: uppercase; }
@@ -33,12 +34,29 @@
     .draft-template-total { display: grid; grid-template-columns: 95px 105px; justify-content: end; gap: 8px; margin-top: 5px; padding-top: 7px; border-top: 1px solid #dce6f1; font-size: .8rem; font-weight: 900; text-align: right; }
     .draft-template-actions { display: grid; gap: 8px; }
     .draft-template-actions .btn { min-height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; border-radius: 6px; font-size: .72rem; font-weight: 800; }
-    .draft-template-editor { margin-top: 12px; padding-top: 12px; border-top: 1px solid #dce6f1; }
+    .draft-template-editor { padding-top: 10px; }
     .draft-template-editor-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
     .draft-template-editor-grid .is-wide { grid-column: 1 / -1; }
     .draft-template-editor label { margin-bottom: 3px; color: #64748b; font-size: .66rem; font-weight: 800; }
-    .draft-template-edit-item { display: grid; grid-template-columns: minmax(130px, .8fr) minmax(170px, 1fr) 72px 90px 105px 34px; gap: 6px; margin-top: 7px; }
-    .draft-template-edit-item .btn { display: inline-flex; align-items: center; justify-content: center; }
+    .draft-edit-delivery { display: grid; grid-template-columns: minmax(0, 2fr) minmax(160px, 1fr); gap: 12px; padding: 10px 0; border-bottom: 1px dashed #dce6f1; }
+    .draft-edit-delivery .input-group-text { border: 0; background: transparent; color: #527394; padding-left: 0; }
+    .draft-edit-delivery .form-control { border: 0; border-bottom: 1px solid transparent; border-radius: 0; padding-left: 2px; }
+    .draft-edit-delivery .form-control:focus { border-bottom-color: #0f766e; box-shadow: none; }
+    .draft-edit-product-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; }
+    .draft-edit-products { width: 100%; margin: 4px 0 0; font-size: .72rem; }
+    .draft-edit-products th { padding: 7px 6px; border-color: #dce6f1; color: #52617a; font-size: .62rem; font-weight: 900; letter-spacing: .03em; text-transform: uppercase; white-space: nowrap; }
+    .draft-edit-products td { padding: 7px 6px; border-color: #edf2f7; vertical-align: middle; }
+    .draft-edit-products .draft-edit-image { width: 54px; height: 54px; border: 1px solid #dce6f1; border-radius: 8px; object-fit: cover; }
+    .draft-edit-products .draft-edit-product-name { display: block; color: #0f172a; font-size: .82rem; font-weight: 900; }
+    .draft-edit-products .draft-edit-product-variant { display: block; color: #64748b; font-size: .68rem; }
+    .draft-edit-products .draft-edit-quantity { width: 78px; min-width: 68px; }
+    .draft-price-stepper { display: inline-flex; align-items: center; min-width: 205px; border: 1px solid #cbd5e1; border-radius: 7px; overflow: hidden; }
+    .draft-price-stepper .btn { width: 40px; border: 0; border-radius: 0; color: #087f5b; font-size: 1rem; font-weight: 900; }
+    .draft-price-stepper .draft-edit-price-value { min-width: 122px; padding: 7px 8px; border-inline: 1px solid #cbd5e1; color: #047857; font-size: .82rem; font-weight: 900; text-align: center; }
+    .draft-edit-line-weight { color: #047857; font-size: .85rem; font-weight: 900; white-space: nowrap; }
+    .draft-edit-line-total { font-weight: 900; white-space: nowrap; }
+    .draft-edit-footer { display: flex; align-items: center; justify-content: flex-end; gap: 28px; padding-top: 8px; border-top: 1px solid #dce6f1; }
+    .draft-edit-total { display: grid; grid-template-columns: auto minmax(100px, auto); gap: 18px; color: #0f172a; font-size: .8rem; font-weight: 900; }
     .draft-picker { margin-top: 8px; padding: 12px; border: 1px solid #dbe5ef; border-radius: 8px; background: #f8fafc; }
     .draft-picker-search { display: flex; gap: 8px; margin-bottom: 10px; }
     .draft-selected-customer { min-width: 0; color: #334155; font-size: .75rem; font-weight: 700; }
@@ -51,8 +69,9 @@
         .draft-template-products { min-width: 650px; }
         .draft-template-editor-grid { grid-template-columns: 1fr; }
         .draft-template-editor-grid .is-wide { grid-column: auto; }
-        .draft-template-edit-item { grid-template-columns: 1fr 1fr; }
-        .draft-template-edit-item .js-remove-draft-item { min-height: 31px; }
+        .draft-edit-delivery { grid-template-columns: 1fr; }
+        .draft-edit-products { min-width: 820px; }
+        .draft-edit-footer { align-items: flex-end; flex-direction: column; gap: 10px; }
     }
 </style>
 @endpush
@@ -71,6 +90,7 @@
         'kg' => (float) ($variant->kg ?: $variant->size ?: 1),
         'price' => (float) ($variant->latestPriceRule?->price ?? $variant->price ?? $variant->product?->default_price ?? $variant->product?->price ?? 0),
         'product_name' => $variant->product?->name ?: 'Sản phẩm',
+        'image' => $variant->product?->avatar?->media?->file_path ? asset('storage/' . $variant->product->avatar->media->file_path) : '',
     ])->values();
 @endphp
 
@@ -117,8 +137,9 @@
                     });
                     $statusText = $draft->status === 'confirmed' ? 'Đã lên đơn' : ($draft->status === 'error' ? 'Có lỗi' : 'Đơn mẫu');
                     $statusClass = $draft->status === 'confirmed' ? 'is-confirmed' : ($draft->status === 'error' ? 'is-error' : '');
+                    $isEditingDraft = (int) request('edit') === (int) $draft->id;
                 @endphp
-                <article class="draft-template-row" data-draft-card data-draft-id="{{ $draft->id }}">
+                <article class="draft-template-row {{ $isEditingDraft ? 'is-editing' : '' }}" data-draft-card data-draft-id="{{ $draft->id }}">
                     <div class="draft-template-card">
                         <div class="draft-template-head">
                             <div>
@@ -129,10 +150,14 @@
                                     <span>MẪU-{{ $draft->id }}</span>
                                 </div>
                             </div>
-                            <span class="draft-template-status {{ $statusClass }}">{{ $statusText }}</span>
+                            @if($isEditingDraft && $draft->status !== 'confirmed')
+                                <button type="button" class="btn btn-sm btn-outline-success js-draft-customer-toggle"><i class="bi bi-person-check me-1"></i>Chọn khách hàng</button>
+                            @else
+                                <span class="draft-template-status {{ $statusClass }}">{{ $statusText }}</span>
+                            @endif
                         </div>
 
-                        <div class="collapse show draft-template-details" id="draftDetails{{ $draft->id }}">
+                        <div class="collapse {{ $isEditingDraft ? '' : 'show' }} draft-template-details" id="draftDetails{{ $draft->id }}">
                             <div class="draft-template-section">
                                 <div class="draft-template-section-title">Giao hàng</div>
                                 <div class="draft-template-delivery">
@@ -173,61 +198,76 @@
                             </div>
                         </div>
 
-                            <div class="collapse draft-template-editor {{ (int) request('edit') === (int) $draft->id ? 'show' : '' }}" id="draftEdit{{ $draft->id }}">
+                            <div class="collapse draft-template-editor {{ $isEditingDraft ? 'show' : '' }}" id="draftEdit{{ $draft->id }}">
                                 <input type="hidden" name="sale_id" value="{{ auth()->id() }}">
                                 <input type="hidden" name="customer_id" value="{{ $draft->customer_id }}">
                                 <input type="hidden" name="truck_brand_id" value="{{ $draft->truck_brand_id }}">
                                 <input type="hidden" name="truck_station_id" value="{{ $draft->truck_station_id }}">
                                 <input type="hidden" name="truck_brand_name" value="{{ $draft->truck_brand_name }}">
                                 <input type="hidden" name="truck_station_address" value="{{ $draft->truck_station_address }}">
-                                <div class="draft-template-editor-grid">
-                                    <div class="is-wide d-flex align-items-center justify-content-between gap-2">
-                                        <span class="draft-selected-customer">
-                                            {{ $draft->customer?->name ?: ($draft->customer_name ?: 'Chưa chọn khách hàng') }}
-                                            @if($draft->customer?->phone || $draft->phone) · {{ $draft->customer?->phone ?: $draft->phone }} @endif
-                                        </span>
-                                        <button type="button" class="btn btn-sm btn-outline-primary flex-shrink-0 js-draft-customer-toggle">
-                                            <i class="bi bi-person-check me-1"></i>Chọn khách hàng
-                                        </button>
+                                <input type="hidden" name="customer_name" value="{{ $draft->customer_name }}">
+                                <input type="hidden" name="phone" value="{{ $draft->phone }}">
+                                <input type="hidden" name="note" value="{{ $draft->note }}">
+
+                                @unless($isEditingDraft)
+                                    <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+                                        <span class="draft-selected-customer">{{ $draft->customer?->name ?: ($draft->customer_name ?: 'Chưa chọn khách hàng') }}</span>
+                                        <button type="button" class="btn btn-sm btn-outline-success js-draft-customer-toggle"><i class="bi bi-person-check me-1"></i>Chọn khách hàng</button>
                                     </div>
-                                    <div class="is-wide draft-picker draft-customer-picker" hidden>
+                                @endunless
+                                <div class="draft-picker draft-customer-picker" hidden>
                                         <div class="draft-picker-search">
                                             <input type="search" class="form-control form-control-sm draft-customer-search" placeholder="Tìm theo tên, số điện thoại hoặc email...">
                                             <button type="button" class="btn btn-sm btn-primary draft-customer-search-button"><i class="bi bi-search me-1"></i>Tìm</button>
                                         </div>
                                         <div class="draft-customer-results"><div class="text-center text-muted py-3">Nhập từ khóa hoặc xem danh sách khách hàng.</div></div>
-                                    </div>
-                                    <div><label>Tên khách</label><input name="customer_name" class="form-control form-control-sm" value="{{ $draft->customer_name }}"></div>
-                                    <div><label>Số điện thoại</label><input name="phone" class="form-control form-control-sm" value="{{ $draft->phone }}"></div>
-                                    <div class="is-wide"><label>Địa chỉ</label><input name="address" class="form-control form-control-sm" value="{{ $draft->address }}"></div>
-                                    <div><label>Giờ giao</label><input name="delivery_time" class="form-control form-control-sm" value="{{ $draft->delivery_time }}"></div>
-                                    <div><label>Ghi chú</label><input name="note" class="form-control form-control-sm" value="{{ $draft->note }}"></div>
                                 </div>
-                                <div class="draft-template-section-title mt-3">Sản phẩm</div>
-                                @foreach($draftItems as $itemIndex => $item)
-                                    @php
-                                        $selectedVariant = $variantMap->get((int) ($item['product_variant_id'] ?? 0));
-                                        $selectedProductId = (int) ($selectedVariant?->product_id ?? 0);
-                                    @endphp
-                                    <div class="draft-template-edit-item" data-draft-item>
-                                        <select class="form-select form-select-sm js-draft-product">
-                                            <option value="">Chọn sản phẩm</option>
-                                            @foreach($variants->groupBy('product_id') as $productVariants)
-                                                @php $product = $productVariants->first()?->product; @endphp
-                                                <option value="{{ $product?->id }}" @selected($selectedProductId === (int) $product?->id)>{{ $product?->name ?: 'Sản phẩm' }}</option>
-                                            @endforeach
-                                        </select>
-                                        <select name="item_product_variant_id" class="form-select form-select-sm js-draft-variant" required @disabled(!$selectedProductId)>
-                                            <option value="">Chọn biến thể</option>
-                                            @foreach($variants->where('product_id', $selectedProductId) as $variant)<option value="{{ $variant->id }}" @selected((int) ($item['product_variant_id'] ?? 0) === $variant->id)>{{ $variant->size ?: ($variant->name ?: $variant->sku) }}{{ $variant->sku ? ' · ' . $variant->sku : '' }}</option>@endforeach
-                                        </select>
-                                        <input type="number" name="item_quantity" class="form-control form-control-sm" min="1" value="{{ $item['quantity'] ?? 1 }}" placeholder="SL">
-                                        <input type="number" name="item_size_kg" class="form-control form-control-sm" step=".001" min=".01" value="{{ $item['size_kg'] ?? 1 }}" placeholder="Kg">
-                                        <input type="number" name="item_unit_price" class="form-control form-control-sm" min="0" value="{{ $item['unit_price'] ?? 0 }}" placeholder="Giá">
-                                        <input type="hidden" name="item_product_text" value="{{ $item['product_text'] ?? '' }}">
-                                        <button type="button" class="btn btn-sm btn-outline-danger js-remove-draft-item" title="Xóa sản phẩm" aria-label="Xóa sản phẩm"><i class="bi bi-x"></i></button>
-                                    </div>
-                                @endforeach
+
+                                <div class="draft-template-section-title mt-2">Giao hàng</div>
+                                <div class="draft-edit-delivery">
+                                    <div class="input-group input-group-sm"><span class="input-group-text"><i class="bi bi-geo-alt me-1"></i>Địa chỉ nhận hàng:</span><input name="address" class="form-control" value="{{ $draft->address }}" placeholder="Chưa cập nhật"></div>
+                                    <div class="input-group input-group-sm"><span class="input-group-text"><i class="bi bi-clock me-1"></i>Giờ giao:</span><input name="delivery_time" class="form-control" value="{{ $draft->delivery_time }}" placeholder="Chưa cập nhật"></div>
+                                </div>
+
+                                <div class="draft-edit-product-head">
+                                    <div class="draft-template-section-title mb-0">Danh sách sản phẩm</div>
+                                    @if($draft->status !== 'confirmed')<button type="button" class="btn btn-sm btn-outline-success js-draft-product-toggle"><i class="bi bi-plus-circle me-1"></i>Thêm sản phẩm</button>@endif
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="table table-sm draft-edit-products">
+                                        <thead><tr><th></th><th>Ảnh</th><th>Sản phẩm</th><th class="text-center">Size</th><th>SL</th><th class="text-center">Đơn giá</th><th class="text-end">Tổng</th><th class="text-end">Thành tiền</th></tr></thead>
+                                        <tbody class="draft-edit-items">
+                                        @foreach($draftItems as $itemIndex => $item)
+                                            @php
+                                                $selectedVariant = $variantMap->get((int) ($item['product_variant_id'] ?? 0));
+                                                $selectedProductId = (int) ($selectedVariant?->product_id ?? 0);
+                                                $editImagePath = $selectedVariant?->product?->avatar?->media?->file_path;
+                                                $editProductName = $selectedVariant?->product?->name ?? ($item['product_text'] ?? 'Chưa chọn sản phẩm');
+                                                $editVariantLabel = $selectedVariant?->sku ?: ($selectedVariant?->name ?: 'Chọn biến thể');
+                                                $editWeight = max(.01, (float) ($item['size_kg'] ?? $selectedVariant?->effective_kg ?? 1));
+                                                $editQuantity = max(1, (int) ($item['quantity'] ?? 1));
+                                                $editPrice = max(0, (float) ($item['unit_price'] ?? 0));
+                                            @endphp
+                                            <tr data-draft-item>
+                                                <td><button type="button" class="btn btn-sm btn-outline-danger js-remove-draft-item" title="Xóa sản phẩm" aria-label="Xóa sản phẩm"><i class="bi bi-x"></i></button></td>
+                                                <td><img class="draft-edit-image {{ $editImagePath ? '' : 'd-none' }}" src="{{ $editImagePath ? asset('storage/' . $editImagePath) : '' }}" alt=""><i class="bi bi-image text-muted draft-edit-image-placeholder {{ $editImagePath ? 'd-none' : '' }}"></i></td>
+                                                <td>
+                                                    <span class="draft-edit-product-name">{{ $editProductName }}</span><span class="draft-edit-product-variant">{{ $editVariantLabel }}</span>
+                                                    <select class="js-draft-product d-none"><option value="{{ $selectedProductId }}" selected></option></select>
+                                                    <select name="item_product_variant_id" class="js-draft-variant d-none" @disabled(!$selectedProductId)><option value="{{ $selectedVariant?->id }}" selected></option></select>
+                                                    <input type="hidden" name="item_product_text" value="{{ $item['product_text'] ?? '' }}">
+                                                    <input type="hidden" name="item_size_kg" value="{{ $editWeight }}">
+                                                </td>
+                                                <td class="text-center fw-bold draft-edit-size">{{ $selectedVariant?->size ?: rtrim(rtrim(number_format($editWeight, 3, '.', ''), '0'), '.') }}</td>
+                                                <td><input type="number" name="item_quantity" class="form-control form-control-sm draft-edit-quantity" min="1" value="{{ $editQuantity }}"></td>
+                                                <td class="text-center"><div class="draft-price-stepper"><button type="button" class="btn btn-sm js-draft-price-decrease">−</button><span class="draft-edit-price-value">{{ number_format($editPrice, 0, ',', '.') }}đ</span><button type="button" class="btn btn-sm js-draft-price-increase">+</button><input type="hidden" name="item_unit_price" value="{{ $editPrice }}"></div></td>
+                                                <td class="text-end draft-edit-line-weight">{{ rtrim(rtrim(number_format($editQuantity * $editWeight, 3, ',', '.'), '0'), ',') }}kg</td>
+                                                <td class="text-end draft-edit-line-total">{{ number_format($editQuantity * $editWeight * $editPrice, 0, ',', '.') }}đ</td>
+                                            </tr>
+                                        @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
                                 @if($draft->status !== 'confirmed')
                                     <div class="draft-picker draft-product-picker" hidden>
                                         <div class="draft-picker-search">
@@ -236,14 +276,15 @@
                                         </div>
                                         <div class="draft-product-results"><div class="text-center text-muted py-3">Đang tải danh sách sản phẩm...</div></div>
                                     </div>
-                                    <div class="d-flex justify-content-between gap-2 mt-3">
-                                        <button type="button" class="btn btn-sm btn-outline-primary js-draft-product-toggle"><i class="bi bi-plus-circle me-1"></i>Thêm sản phẩm</button>
+                                    <div class="draft-edit-footer">
+                                        <div class="draft-edit-total"><span>Tổng cộng:</span><strong class="draft-edit-grand-total">{{ number_format($draftTotal, 0, ',', '.') }}đ</strong></div>
                                         <button type="button" class="btn btn-sm btn-success js-save-draft"><i class="bi bi-check2 me-1"></i>Lưu thay đổi</button>
                                     </div>
                                 @endif
                             </div>
                     </div>
 
+                    @unless($isEditingDraft)
                     <div class="draft-template-actions">
                         @if($draft->status !== 'confirmed')<button type="button" class="btn btn-sm btn-outline-success" data-bs-toggle="collapse" data-bs-target="#draftEdit{{ $draft->id }}"><i class="bi bi-pencil"></i>Sửa</button>@endif
                         <button type="button" class="btn btn-sm btn-outline-info" data-bs-toggle="collapse" data-bs-target="#draftDetails{{ $draft->id }}"><i class="bi bi-eye"></i>Chi tiết</button>
@@ -251,6 +292,7 @@
                         @if($draft->status !== 'confirmed')<button type="button" class="btn btn-sm btn-success js-confirm-draft"><i class="bi bi-check2-circle"></i>Lên đơn</button>@endif
                         <button type="button" class="btn btn-sm btn-outline-danger js-delete-draft"><i class="bi bi-trash"></i>Xóa đơn</button>
                     </div>
+                    @endunless
                 </article>
             @empty
                 <div class="draft-template-empty"><i class="bi bi-inbox fs-2 d-block mb-2"></i>Chưa có đơn hàng mẫu.</div>
@@ -269,6 +311,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const variantEndpoint = @json(route('site.orders.variants.ajax'));
     const variants = @json($variantCatalog);
     const notify = (message, type = 'success') => typeof window.showToast === 'function' ? window.showToast(message, type) : window.alert(message);
+    const money = value => new Intl.NumberFormat('vi-VN').format(Math.round(Number(value) || 0)) + 'đ';
+    const quantity = row => Math.max(1, Number.parseInt(row.querySelector('[name="item_quantity"]').value || '1', 10));
+    const weight = row => Math.max(.01, Number(row.querySelector('[name="item_size_kg"]').value) || 1);
+    const price = row => Math.max(0, Number(row.querySelector('[name="item_unit_price"]').value) || 0);
+    const updateDraftTotals = editor => {
+        let total = 0;
+        editor.querySelectorAll('[data-draft-item]').forEach(row => {
+            const lineWeight = quantity(row) * weight(row);
+            const lineTotal = lineWeight * price(row);
+            row.querySelector('.draft-edit-price-value').textContent = money(price(row));
+            row.querySelector('.draft-edit-line-weight').textContent = `${new Intl.NumberFormat('vi-VN', {maximumFractionDigits: 3}).format(lineWeight)}kg`;
+            row.querySelector('.draft-edit-line-total').textContent = money(lineTotal);
+            total += lineTotal;
+        });
+        const grandTotal = editor.querySelector('.draft-edit-grand-total');
+        if (grandTotal) grandTotal.textContent = money(total);
+    };
     const escapeHtml = value => {
         const node = document.createElement('div');
         node.textContent = String(value ?? '');
@@ -290,6 +349,12 @@ document.addEventListener('DOMContentLoaded', () => {
         row.querySelector('[name="item_size_kg"]').value = 1;
         row.querySelector('[name="item_unit_price"]').value = 0;
         row.querySelector('[name="item_product_text"]').value = '';
+        row.querySelector('.draft-edit-product-name').textContent = 'Chưa chọn sản phẩm';
+        row.querySelector('.draft-edit-product-variant').textContent = 'Chọn biến thể';
+        row.querySelector('.draft-edit-size').textContent = '—';
+        row.querySelector('.draft-edit-image').src = '';
+        row.querySelector('.draft-edit-image').classList.add('d-none');
+        row.querySelector('.draft-edit-image-placeholder').classList.remove('d-none');
     };
     const loadCustomers = async (editor, page = 1) => {
         const results = editor.querySelector('.draft-customer-results');
@@ -346,7 +411,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!row) {
             row = editor.querySelector('[data-draft-item]').cloneNode(true);
             resetItemRow(row);
-            editor.querySelector('.draft-product-picker').before(row);
+            editor.querySelector('.draft-edit-items').append(row);
         }
         const productId = button.closest('.monitor-product-card')?.dataset.productId || '';
         row.querySelector('.js-draft-product').value = productId;
@@ -355,6 +420,16 @@ document.addEventListener('DOMContentLoaded', () => {
         row.querySelector('[name="item_size_kg"]').value = Math.max(.01, Number(button.dataset.variantWeight) || 1);
         row.querySelector('[name="item_unit_price"]').value = Math.max(0, Number(button.dataset.variantPrice) || 0);
         row.querySelector('[name="item_product_text"]').value = `${button.dataset.variantName || 'Sản phẩm'} ${button.dataset.variantSize || button.dataset.variantSku || ''}`.trim();
+        row.querySelector('.draft-edit-product-name').textContent = button.dataset.variantName || 'Sản phẩm';
+        row.querySelector('.draft-edit-product-variant').textContent = button.dataset.variantSku || button.dataset.variantSize || 'Biến thể';
+        row.querySelector('.draft-edit-size').textContent = button.dataset.variantSize || button.dataset.variantWeight || '—';
+        const image = row.querySelector('.draft-edit-image');
+        if (button.dataset.variantImage) {
+            image.src = button.dataset.variantImage;
+            image.classList.remove('d-none');
+            row.querySelector('.draft-edit-image-placeholder').classList.add('d-none');
+        }
+        updateDraftTotals(editor);
         button.classList.add('is-selected');
         button.disabled = true;
         button.title = 'Biến thể đã có trong đơn mẫu';
@@ -388,7 +463,8 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('click', async event => {
         const customerToggle = event.target.closest('.js-draft-customer-toggle');
         if (customerToggle) {
-            const editor = customerToggle.closest('.draft-template-editor');
+            const editor = customerToggle.closest('[data-draft-card]')?.querySelector('.draft-template-editor');
+            if (!editor) return;
             const picker = editor.querySelector('.draft-customer-picker');
             picker.hidden = !picker.hidden;
             if (!picker.hidden) loadCustomers(editor);
@@ -420,7 +496,12 @@ document.addEventListener('DOMContentLoaded', () => {
             editor.querySelector('[name="customer_name"]').value = customerButton.dataset.customerName || '';
             editor.querySelector('[name="phone"]').value = customerButton.dataset.customerPhone || '';
             editor.querySelector('[name="address"]').value = customerButton.dataset.customerAddress || '';
-            editor.querySelector('.draft-selected-customer').textContent = [customerButton.dataset.customerName, customerButton.dataset.customerPhone].filter(Boolean).join(' · ');
+            const card = editor.closest('[data-draft-card]');
+            card.querySelector('.draft-template-name').textContent = customerButton.dataset.customerName || 'Chưa chọn khách hàng';
+            const selectedCustomer = editor.querySelector('.draft-selected-customer');
+            if (selectedCustomer) selectedCustomer.textContent = [customerButton.dataset.customerName, customerButton.dataset.customerPhone].filter(Boolean).join(' · ');
+            const phoneMeta = card.querySelector('.draft-template-meta .draft-customer-phone');
+            if (phoneMeta) phoneMeta.textContent = customerButton.dataset.customerPhone || '';
             editor.querySelector('.draft-customer-picker').hidden = true;
             return;
         }
@@ -481,6 +562,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     pickerButton.removeAttribute('title');
                 }
             }
+            updateDraftTotals(editor);
+            return;
+        }
+        const priceButton = event.target.closest('.js-draft-price-decrease, .js-draft-price-increase');
+        if (priceButton) {
+            const row = priceButton.closest('[data-draft-item]');
+            const input = row.querySelector('[name="item_unit_price"]');
+            const step = priceButton.classList.contains('js-draft-price-increase') ? 1000 : -1000;
+            input.value = Math.max(0, price(row) + step);
+            updateDraftTotals(priceButton.closest('.draft-template-editor'));
             return;
         }
         const deleteButton = event.target.closest('.js-delete-draft');
@@ -540,7 +631,20 @@ document.addEventListener('DOMContentLoaded', () => {
             row.querySelector('[name="item_size_kg"]').value = variant.kg;
             row.querySelector('[name="item_unit_price"]').value = variant.price;
             row.querySelector('[name="item_product_text"]').value = `${variant.product_name} ${variant.label}`.trim();
+            row.querySelector('.draft-edit-product-name').textContent = variant.product_name;
+            row.querySelector('.draft-edit-product-variant').textContent = variant.label;
+            row.querySelector('.draft-edit-size').textContent = variant.label.split(' · ')[0];
+            if (variant.image) {
+                row.querySelector('.draft-edit-image').src = variant.image;
+                row.querySelector('.draft-edit-image').classList.remove('d-none');
+                row.querySelector('.draft-edit-image-placeholder').classList.add('d-none');
+            }
+            updateDraftTotals(variantSelect.closest('.draft-template-editor'));
         }
+    });
+    document.addEventListener('input', event => {
+        if (!event.target.matches('.draft-edit-quantity')) return;
+        updateDraftTotals(event.target.closest('.draft-template-editor'));
     });
     document.addEventListener('keydown', event => {
         if (event.key !== 'Enter') return;
