@@ -141,8 +141,9 @@ class TextOrderImportController extends Controller
     public function saleDestroy(Request $request, TextOrderDraft $draft): JsonResponse
     {
         $this->ensureSaleDraft($request, $draft);
+        $draft->delete();
 
-        return $this->destroyAction($draft);
+        return response()->json(['message' => 'Đã xóa đơn mẫu.']);
     }
 
     public function saleUpdate(Request $request, TextOrderDraft $draft): JsonResponse

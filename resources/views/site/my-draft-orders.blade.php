@@ -249,6 +249,7 @@
                         <button type="button" class="btn btn-sm btn-outline-info" data-bs-toggle="collapse" data-bs-target="#draftDetails{{ $draft->id }}"><i class="bi bi-eye"></i>Chi tiết</button>
                         <button type="button" class="btn btn-sm btn-outline-secondary js-copy-draft"><i class="bi bi-files"></i>Sao chép đơn</button>
                         @if($draft->status !== 'confirmed')<button type="button" class="btn btn-sm btn-success js-confirm-draft"><i class="bi bi-check2-circle"></i>Lên đơn</button>@endif
+                        <button type="button" class="btn btn-sm btn-outline-danger js-delete-draft"><i class="bi bi-trash"></i>Xóa đơn</button>
                     </div>
                 </article>
             @empty
@@ -479,6 +480,25 @@ document.addEventListener('DOMContentLoaded', () => {
                     pickerButton.classList.remove('is-selected');
                     pickerButton.removeAttribute('title');
                 }
+            }
+            return;
+        }
+        const deleteButton = event.target.closest('.js-delete-draft');
+        if (deleteButton) {
+            const card = deleteButton.closest('[data-draft-card]');
+            if (!card || !confirm('Bạn chắc chắn muốn xóa đơn mẫu này? Thao tác này không thể hoàn tác.')) return;
+            deleteButton.disabled = true;
+            try {
+                const payload = await request(card, '', 'DELETE');
+                notify(payload.message || 'Đã xóa đơn mẫu.');
+                card.remove();
+                const list = document.querySelector('.draft-template-list');
+                if (list && !list.querySelector('[data-draft-card]')) {
+                    list.innerHTML = '<div class="draft-template-empty"><i class="bi bi-inbox fs-2 d-block mb-2"></i>Chưa có đơn hàng mẫu.</div>';
+                }
+            } catch (error) {
+                notify(error.message, 'error');
+                deleteButton.disabled = false;
             }
             return;
         }
