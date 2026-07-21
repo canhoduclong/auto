@@ -333,13 +333,69 @@
     .monitor-inline-edit { margin-top: 14px; border-top: 1px solid #dce6f1; }
     .monitor-inline-edit-form { padding: 14px 0 2px; }
     .monitor-inline-edit-title { margin-bottom: 10px; color: #075985; font-size: .82rem; font-weight: 900; text-transform: uppercase; }
-    .monitor-edit-picker { margin-bottom: 12px; padding: 10px; border: 1px solid #dce6f1; border-radius: 8px; background: #f8fafc; }
-    .monitor-edit-picker-label { color: #475569; font-size: .68rem; font-weight: 800; }
+    .monitor-edit-picker { margin-bottom: 12px; padding: 12px; border: 1px solid #dce6f1; border-radius: 9px; background: #f8fafc; }
+    .monitor-edit-picker-label { color: #334155; font-size: .78rem; font-weight: 900; }
     .monitor-edit-selected-customer { color: #075985; font-size: .82rem; font-weight: 800; }
     .monitor-edit-picker-results { max-height: 280px; margin-top: 8px; overflow: auto; background: #fff; }
-    .monitor-edit-product-search { display: flex; gap: 6px; margin-top: 10px; }
-    .monitor-edit-product-results { max-height: 430px; padding: 1px; }
-    .monitor-edit-product-results .monitor-product-list { max-height: none; overflow: visible; }
+    .monitor-edit-product-search {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 88px;
+        align-items: stretch;
+        gap: 8px;
+        margin-top: 10px;
+    }
+    .monitor-edit-product-search .form-control {
+        width: 100%;
+        min-width: 0;
+        height: 38px;
+        padding-inline: 11px;
+        border-radius: 6px;
+    }
+    .monitor-edit-product-search-button {
+        display: inline-flex;
+        width: 88px;
+        height: 38px;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+        padding: 6px 10px;
+        white-space: nowrap;
+    }
+    .monitor-edit-product-search-button i { margin: 0 !important; }
+    .monitor-edit-product-results {
+        max-height: 430px;
+        margin-top: 12px;
+        padding: 0 5px 0 0;
+        overflow-x: hidden;
+        overflow-y: auto;
+        background: transparent;
+        scrollbar-gutter: stable;
+    }
+    .monitor-edit-product-results .monitor-product-toolbar {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) max-content;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 10px;
+        padding: 0 2px;
+    }
+    .monitor-edit-product-results .monitor-product-toolbar p { min-width: 0; }
+    .monitor-edit-product-results .monitor-product-toolbar > div { flex-wrap: nowrap; white-space: nowrap; }
+    .monitor-edit-product-results .monitor-product-toolbar label { white-space: nowrap; }
+    .monitor-edit-product-results .monitor-product-toolbar #per-page-select { width: 82px; min-width: 82px; }
+    .monitor-edit-product-results .monitor-product-list { max-height: none; gap: 9px; overflow: visible; }
+    .monitor-edit-product-results .monitor-product-card { border-color: #dce5ef; border-radius: 9px; box-shadow: 0 2px 7px rgba(15, 23, 42, .025); }
+    .monitor-edit-product-results .monitor-product-choice { min-height: 72px; padding: 9px 11px; }
+    .monitor-edit-product-results .monitor-product-main { overflow: hidden; }
+    .monitor-edit-product-results .monitor-product-main > span:last-child { min-width: 0; }
+    .monitor-edit-product-results .monitor-product-thumb { width: 50px; height: 50px; }
+    .monitor-edit-product-results .monitor-product-name {
+        overflow: hidden;
+        color: #0f172a;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .monitor-edit-product-results .monitor-product-choice-label { min-width: 112px; text-align: right; white-space: nowrap; }
     .monitor-edit-product-results .monitor-variant-option:disabled { cursor: not-allowed; opacity: .65; }
     .monitor-inline-edit-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
     .monitor-inline-edit-fields .is-wide { grid-column: 1 / -1; }
@@ -538,6 +594,11 @@
     }
     @media (max-width: 575.98px) {
         .monitor-actions { grid-template-columns: 1fr; }
+        .monitor-edit-product-search { grid-template-columns: minmax(0, 1fr) 82px; }
+        .monitor-edit-product-search-button { width: 82px; }
+        .monitor-edit-product-results .monitor-product-toolbar { grid-template-columns: 1fr; gap: 7px; }
+        .monitor-edit-product-results .monitor-product-toolbar > div { justify-content: flex-end; }
+        .monitor-edit-product-results .monitor-product-choice-label { min-width: auto; }
     }
 </style>
 @endpush
