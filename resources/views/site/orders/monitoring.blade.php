@@ -648,6 +648,12 @@
     };
     $saleFilterQuery = request()->except(['sale_id', 'page']);
     $customerFilterQuery = request()->except(['customer_id', 'page']);
+    $monitorUser = auth()->user();
+    $activeMonitorRole = strtolower(trim((string) (session('active_role') ?: $monitorUser?->defaultRole?->name)));
+    $isSaleViewingRole = $activeMonitorRole === 'sale';
+    if ($activeMonitorRole === '' && $monitorUser?->hasRole('sale')) {
+        $isSaleViewingRole = !$monitorUser->hasRole(['admin', 'leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale']);
+    }
 @endphp
 
 <section class="monitor-page">
@@ -1004,6 +1010,7 @@
                             $deliveryArea = collect([$defaultAddress?->ward, $defaultAddress?->city])->filter()->implode(', ');
                             $deliveryTime = $order->delivery_time ?: ($order->customer?->delivery_time ?: 'Chưa cập nhật');
                             $canManageOrder = (int) $order->user_id === (int) auth()->id();
+                            $canViewOrderDetail = !$isSaleViewingRole || $canManageOrder;
                             $isEditable = $canManageOrder && $order->canBeDirectlyEditedByOwner();
                             $canCancel = $canManageOrder
                                 && $order->created_at?->isToday()
@@ -1221,9 +1228,11 @@
                                     @if($isEditable)
                                         <button class="btn btn-sm btn-success" type="button" data-bs-toggle="collapse" data-bs-target="#monitorEdit{{ $order->id }}" aria-controls="monitorEdit{{ $order->id }}"><i class="bi bi-pencil me-1"></i>Sửa trực tiếp</button>
                                     @endif
-                                    <button class="btn btn-sm btn-outline-info" type="button" data-bs-toggle="collapse" data-bs-target="#monitorExtra{{ $order->id }}">
-                                        <i class="bi bi-eye me-1"></i>Chi tiết
-                                    </button>
+                                    @if($canViewOrderDetail)
+                                        <button class="btn btn-sm btn-outline-info" type="button" data-bs-toggle="collapse" data-bs-target="#monitorExtra{{ $order->id }}">
+                                            <i class="bi bi-eye me-1"></i>Chi tiết
+                                        </button>
+                                    @endif
                                     @if($canManageOrder)
                                         <a class="btn btn-sm btn-outline-secondary" href="{{ route('site.orders.copy', $order->id) }}"><i class="bi bi-files"></i><span>Sao chép đơn</span></a>
                                         @if($canRequestAdjustment)
@@ -1238,18 +1247,20 @@
                                     @endif
                                 </div>
                             </div>
-                            <div class="collapse" id="monitorExtra{{ $order->id }}">
-                                <div class="px-3 py-2 border-top small text-muted">
-                                    <div><strong>Điện thoại:</strong> {{ $order->recipient_phone ?: ($order->customer?->phone ?: 'Chưa cập nhật') }}</div>
-                                    <div><strong>Ghi chú:</strong> {{ $order->note ?: 'Không có ghi chú' }}</div>
-                                    <div><strong>Thanh toán:</strong> {{ ucfirst((string) ($order->payment_status ?: 'unpaid')) }}</div>
-                                    @if($order->use_truck_station)
-                                        <div><strong>Trạm xe:</strong> {{ $order->truck_station_name ?: ($order->truckStation?->name ?: 'Chưa cập nhật') }}</div>
-                                        <div><strong>Địa chỉ trạm:</strong> {{ $order->truck_station_address ?: ($order->truckStation?->address ?: 'Chưa cập nhật') }}</div>
-                                        <div><strong>Điện thoại / giờ nhận:</strong> {{ $order->truck_station_phone ?: ($order->truckStation?->phone ?: '—') }} · {{ $order->truck_receive_time ?: 'Chưa cập nhật' }}</div>
-                                    @endif
+                            @if($canViewOrderDetail)
+                                <div class="collapse" id="monitorExtra{{ $order->id }}">
+                                    <div class="px-3 py-2 border-top small text-muted">
+                                        <div><strong>Điện thoại:</strong> {{ $order->recipient_phone ?: ($order->customer?->phone ?: 'Chưa cập nhật') }}</div>
+                                        <div><strong>Ghi chú:</strong> {{ $order->note ?: 'Không có ghi chú' }}</div>
+                                        <div><strong>Thanh toán:</strong> {{ ucfirst((string) ($order->payment_status ?: 'unpaid')) }}</div>
+                                        @if($order->use_truck_station)
+                                            <div><strong>Trạm xe:</strong> {{ $order->truck_station_name ?: ($order->truckStation?->name ?: 'Chưa cập nhật') }}</div>
+                                            <div><strong>Địa chỉ trạm:</strong> {{ $order->truck_station_address ?: ($order->truckStation?->address ?: 'Chưa cập nhật') }}</div>
+                                            <div><strong>Điện thoại / giờ nhận:</strong> {{ $order->truck_station_phone ?: ($order->truckStation?->phone ?: '—') }} · {{ $order->truck_receive_time ?: 'Chưa cập nhật' }}</div>
+                                        @endif
+                                    </div>
                                 </div>
-                            </div>
+                            @endif
                         </article>
                     @empty
                         <div class="monitor-panel monitor-empty">
