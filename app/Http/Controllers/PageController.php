@@ -958,6 +958,10 @@ class PageController extends Controller
             ])
             ->whereDate('created_at', $selectedDate);
 
+        if ($this->hasOrderColumn('trash_at')) {
+            $dateQuery->whereNull('trash_at');
+        }
+
         $keyword = trim((string) $request->input('keyword', ''));
         if ($keyword !== '') {
             $dateQuery->where(function ($sub) use ($keyword) {
@@ -1130,6 +1134,11 @@ class PageController extends Controller
             ->sortBy('name')
             ->values();
 
+        $dailyOrderNotes = $filteredOrders
+            ->filter(fn (Order $order) => trim((string) $order->note) !== '' || trim((string) $order->shipper_note) !== '')
+            ->sortBy(fn (Order $order) => $order->daily_sequence ?? PHP_INT_MAX)
+            ->values();
+
         $saleFilters = $sidebarOrders
             ->filter(fn (Order $order) => $order->user)
             ->groupBy('user_id')
@@ -1184,6 +1193,7 @@ class PageController extends Controller
             'sortBy' => $sortBy,
             'sortDir' => $sortDir,
             'productRows' => $productRows,
+            'dailyOrderNotes' => $dailyOrderNotes,
             'saleFilters' => $saleFilters,
             'customerFilters' => $customerFilters,
             'canApproveByOrder' => $canApproveByOrder,

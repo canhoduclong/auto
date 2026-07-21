@@ -414,6 +414,68 @@
     .monitor-order > .collapse { grid-column: 1; margin-top: -18px; border: 1px solid var(--monitor-border); border-radius: 0 0 10px 10px; background: #fff; }
     .monitor-empty { padding: 44px 20px; text-align: center; color: #64748b; }
     .monitor-pagination { padding: 14px 0 0; }
+    .monitor-day-footer {
+        margin-top: 18px;
+        overflow: hidden;
+        border: 1px solid #dce6f1;
+        border-radius: 10px;
+        background: #fff;
+        box-shadow: 0 5px 20px rgba(15, 23, 42, .05);
+    }
+    .monitor-day-footer-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 11px 14px;
+        border-bottom: 1px solid #e5edf5;
+        background: #f8fafc;
+    }
+    .monitor-day-footer-title {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        margin: 0;
+        color: #075985;
+        font-size: .82rem;
+        font-weight: 900;
+        text-transform: uppercase;
+    }
+    .monitor-day-footer-count {
+        display: inline-flex;
+        min-width: 22px;
+        height: 22px;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        background: #e0f2fe;
+        color: #0369a1;
+        font-size: .7rem;
+        font-weight: 800;
+    }
+    .monitor-day-notes { max-height: 260px; overflow-y: auto; }
+    .monitor-day-note {
+        display: grid;
+        grid-template-columns: minmax(190px, .7fr) minmax(0, 1.3fr);
+        gap: 14px;
+        padding: 10px 14px;
+        border-bottom: 1px solid #eef2f7;
+    }
+    .monitor-day-note:last-child { border-bottom: 0; }
+    .monitor-day-note-order { min-width: 0; color: #0f172a; font-size: .76rem; }
+    .monitor-day-note-order strong {
+        display: block;
+        overflow: hidden;
+        color: #075985;
+        text-overflow: ellipsis;
+        text-transform: uppercase;
+        white-space: nowrap;
+    }
+    .monitor-day-note-meta { color: #64748b; font-size: .68rem; }
+    .monitor-day-note-content { color: #334155; font-size: .78rem; line-height: 1.45; white-space: pre-line; }
+    .monitor-day-note-content div + div { margin-top: 3px; }
+    .monitor-day-note-label { color: #64748b; font-weight: 700; }
+    .monitor-day-notes-empty { padding: 16px 14px; color: #64748b; font-size: .78rem; text-align: center; }
     .monitor-bulk-actions {
         display: flex;
         flex-wrap: wrap;
@@ -599,6 +661,7 @@
         .monitor-edit-product-results .monitor-product-toolbar { grid-template-columns: 1fr; gap: 7px; }
         .monitor-edit-product-results .monitor-product-toolbar > div { justify-content: flex-end; }
         .monitor-edit-product-results .monitor-product-choice-label { min-width: auto; }
+        .monitor-day-note { grid-template-columns: 1fr; gap: 5px; }
     }
 </style>
 @endpush
@@ -654,6 +717,9 @@
     if ($activeMonitorRole === '' && $monitorUser?->hasRole('sale')) {
         $isSaleViewingRole = !$monitorUser->hasRole(['admin', 'leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale']);
     }
+    $visibleDailyOrderNotes = $dailyOrderNotes
+        ->filter(fn ($noteOrder) => !$isSaleViewingRole || (int) $noteOrder->user_id === (int) $monitorUser?->id)
+        ->values();
 @endphp
 
 <section class="monitor-page">
@@ -1011,6 +1077,9 @@
                             $deliveryTime = $order->delivery_time ?: ($order->customer?->delivery_time ?: 'Chưa cập nhật');
                             $canManageOrder = (int) $order->user_id === (int) auth()->id();
                             $canViewOrderDetail = !$isSaleViewingRole || $canManageOrder;
+                            $canDeleteCancelledOrder = $isCancelled
+                                && empty($order->trash_at)
+                                && ($canManageOrder || auth()->user()?->isAdmin());
                             $isEditable = $canManageOrder && $order->canBeDirectlyEditedByOwner();
                             $canCancel = $canManageOrder
                                 && $order->created_at?->isToday()
@@ -1245,6 +1314,15 @@
                                             </form>
                                         @endif
                                     @endif
+                                    @if($canDeleteCancelledOrder)
+                                        <form method="POST" class="monitor-cancel-form" action="{{ route('site.orders.trash', $order) }}"
+                                              onsubmit="return confirm('Xóa đơn đã hủy {{ $order->code ?: ('#' . $order->id) }}? Đơn sẽ được chuyển vào thùng rác.');">
+                                            @csrf
+                                            <button type="submit" class="btn btn-sm btn-danger">
+                                                <i class="bi bi-trash me-1"></i>Xóa đơn
+                                            </button>
+                                        </form>
+                                    @endif
                                 </div>
                             </div>
                             @if($canViewOrderDetail)
@@ -1274,6 +1352,35 @@
                 @if($orders->hasPages())
                     <div class="monitor-pagination">{{ $orders->links('pagination::bootstrap-5') }}</div>
                 @endif
+
+                <footer class="monitor-day-footer" aria-label="Ghi chú đơn hàng trong ngày">
+                    <div class="monitor-day-footer-head">
+                        <h2 class="monitor-day-footer-title">
+                            <i class="bi bi-journal-text"></i>Ghi chú đơn hàng ngày {{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}
+                        </h2>
+                        <span class="monitor-day-footer-count" title="Số đơn có ghi chú">{{ $visibleDailyOrderNotes->count() }}</span>
+                    </div>
+                    <div class="monitor-day-notes">
+                        @forelse($visibleDailyOrderNotes as $noteOrder)
+                            <div class="monitor-day-note">
+                                <div class="monitor-day-note-order">
+                                    <strong>#{{ $noteOrder->daily_sequence ?? '—' }} · {{ $noteOrder->customer?->name ?? 'Khách hàng' }}</strong>
+                                    <span class="monitor-day-note-meta">{{ $noteOrder->code ?: ('Đơn #' . $noteOrder->id) }} · Sale: {{ $noteOrder->user?->name ?? '—' }}</span>
+                                </div>
+                                <div class="monitor-day-note-content">
+                                    @if(trim((string) $noteOrder->note) !== '')
+                                        <div><span class="monitor-day-note-label">Ghi chú:</span> {{ $noteOrder->note }}</div>
+                                    @endif
+                                    @if(trim((string) $noteOrder->shipper_note) !== '')
+                                        <div><span class="monitor-day-note-label">Giao hàng:</span> {{ $noteOrder->shipper_note }}</div>
+                                    @endif
+                                </div>
+                            </div>
+                        @empty
+                            <div class="monitor-day-notes-empty"><i class="bi bi-check-circle me-1"></i>Chưa có ghi chú cho các đơn trong ngày.</div>
+                        @endforelse
+                    </div>
+                </footer>
         @else
             <div class="monitor-tab-content monitor-tab-{{ $activeTab }}">
                 {!! $tabContentHtml !!}
