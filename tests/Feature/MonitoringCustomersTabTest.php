@@ -37,7 +37,14 @@ class MonitoringCustomersTabTest extends TestCase
             ->assertSee('Danh sách khách hàng')
             ->assertSee('Nguyễn Đình Huy')
             ->assertSee('Mã KH:')
-            ->assertSee('mcl-details', false);
+            ->assertSee('mcl-details', false)
+            ->assertSee('data-customer-more', false)
+            ->assertSee('data-customer-actions', false)
+            ->assertSee('is-actions-open', false)
+            ->assertSee('Sửa')
+            ->assertSee('Chi tiết')
+            ->assertSee('Thanh toán')
+            ->assertSee('Lên đơn');
 
         $compactView = $this->actingAs($sale)
             ->withSession(['active_role' => 'sale'])

@@ -1,653 +1,333 @@
 @extends('layouts.site')
 
-@section('title', 'My Dashboard')
+@section('title', 'Bảng điều khiển')
 
 @push('styles')
 <style>
     .my-dashboard {
-        background: linear-gradient(180deg, #f6faf9 0%, #eef4f8 100%);
+        --dashboard-maroon: #5b2b2f;
+        --dashboard-blue: #075985;
+        --dashboard-border: #d7e2eb;
+        --dashboard-orange: #c65b00;
+        background: #f5f8fb;
         min-height: calc(100vh - 80px);
-        padding: 24px 0 36px;
+        padding: 32px 0 70px;
     }
-
-    .my-dashboard .hero-card {
-        border: 0; 
-        background: linear-gradient(135deg, #0f766e, #15803d);
-        color: #fff;
-        box-shadow: 0 10px 30px rgba(15, 118, 110, 0.25);
-    }
-
-    .stats-grid {
+    .dashboard-shell {
         display: grid;
-        grid-template-columns: repeat(7, minmax(120px, 1fr));
-        gap: 12px;
+        grid-template-columns: 236px minmax(0, 550px) minmax(280px, 332px);
+        gap: 26px;
+        width: calc(100% - 32px);
+        max-width: 1180px;
+        margin: 0 auto;
+        align-items: start;
     }
-
-    .stat-card {
-        border-radius: 14px;
-        border: 1px solid #dbe4ea;
-        background: #fff;
-        padding: 14px;
-        min-height: 120px;
-    }
-
-    .stat-label {
-        font-size: 12px;
-        color: #64748b;
-        margin-bottom: 8px;
-    }
-    .newcus{
-        color: #0f766e;
-    }
-
-    .stat-value {
-        font-size: 22px;
-        font-weight: 700;
-        color: #0f172a;
-    }
-
-    .shortcut-btn {
-        display: inline-flex;
+    .dashboard-sidebar,
+    .dashboard-main,
+    .dashboard-price-column { min-width: 0; }
+    .dashboard-sidebar { display: grid; gap: 8px; }
+    .dashboard-menu-link {
+        display: flex;
         align-items: center;
-        gap: 8px;
-        padding: 10px 14px;
-        border-radius: 10px;
-        background: #0f766e;
-        color: #fff;
-        text-decoration: none;
-    }
-
-    .shortcut-btn.secondary {
-        background: #f59e0b;
-        color: #0f172a;
-    }
-
-    .section-card {
-        border: 1px solid #dbe4ea;
-        border-radius: 14px;
+        gap: 11px;
+        min-height: 45px;
+        padding: 10px 13px;
+        border: 1px solid #d4e1eb;
+        border-radius: 3px;
         background: #fff;
+        color: var(--dashboard-blue);
+        font-size: .83rem;
+        font-weight: 800;
+        text-decoration: none;
+        box-shadow: 0 2px 7px rgba(15, 23, 42, .025);
+        transition: background-color .18s ease, border-color .18s ease;
     }
-
+    .dashboard-menu-link i {
+        width: 18px;
+        color: #527394;
+        font-size: 1rem;
+        text-align: center;
+    }
+    .dashboard-menu-link:hover {
+        border-color: #b9d4de;
+        background: #eaf5f6;
+        color: var(--dashboard-blue);
+    }
+    .dashboard-menu-link.is-active {
+        min-height: 40px;
+        margin: 8px 4px 11px;
+        border-color: var(--dashboard-maroon);
+        border-radius: 0;
+        background: var(--dashboard-maroon);
+        color: #fff;
+        box-shadow: none;
+    }
+    .dashboard-menu-link.is-active i { color: #d9eef4; }
+    .dashboard-card {
+        border: 1px solid var(--dashboard-border);
+        border-radius: 10px;
+        background: #fff;
+        box-shadow: 0 3px 9px rgba(15, 23, 42, .035);
+    }
+    .dashboard-commission {
+        min-height: 69px;
+        margin-bottom: 14px;
+        padding: 13px 12px;
+        overflow: hidden;
+    }
+    .dashboard-section-title {
+        margin: 0;
+        color: #263645;
+        font-size: .82rem;
+        font-weight: 500;
+    }
+    .commission-feed-list { margin-top: 7px; }
     .feed-item {
-        border-bottom: 1px solid #eef2f7;
-        padding: 12px 0;
+        padding: 7px 0;
+        border-top: 1px dashed #e2e8f0;
     }
-
-    .feed-item:last-child {
-        border-bottom: 0;
+    .feed-item:first-child { padding-top: 0; border-top: 0; }
+    .dashboard-empty {
+        color: #64748b;
+        font-size: .76rem;
     }
-
-    .timeline-item {
-        border-left: 2px solid #dbe4ea;
-        padding-left: 12px;
-        margin-left: 8px;
-        margin-bottom: 12px;
+    .dashboard-chart-card {
+        margin-bottom: 27px;
+        padding: 15px 11px 10px;
     }
-
-    .timeline-item .dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: #0f766e;
-        position: relative;
-        left: -18px;
-        top: 16px;
-    }
-
-    .assigned-customer-card {
-        transition: all 0.2s ease;
-        border-left: 3px solid #0f766e !important;
-    }
-
-    .assigned-customer-card:hover {
-        box-shadow: 0 2px 8px rgba(15, 118, 110, 0.1);
-    }
-
-    .accept-customer-btn {
-        white-space: nowrap;
-        font-size: 12px;
-        padding: 4px 8px;
-    }
-
-    .warehouse-adjustment-card {
-        border-left: 3px solid #f59e0b !important;
-        background: #fffbeb;
-    }
-    .warehouse-adjustment-header {
-        border-bottom: 1px dashed #fcd34d;
-        padding-bottom: 6px;
+    .dashboard-chart-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
         margin-bottom: 8px;
     }
-    .warehouse-adjustment-index {
-        width: 28px;
-        height: 28px;
-        border-radius: 999px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 700;
-        color: #92400e;
-        background: #fde68a;
-        font-size: .78rem;
-        flex-shrink: 0;
-    }
-    .warehouse-adjustment-list {
-        border: 1px solid #fde68a;
-        border-radius: 10px;
-        background: #fff;
-        padding: 8px;
-    }
-    .warehouse-adjustment-row {
-        border-bottom: 1px dashed #f1f5f9;
-        padding: 6px 0;
-    }
-    .warehouse-adjustment-row:last-child {
-        border-bottom: 0;
-    }
-    .warehouse-contact-strip {
-        margin-top: 10px;
-        padding: 10px 12px;
-        border-radius: 12px;
-        background: linear-gradient(90deg, #fff7ed 0%, #fffbeb 100%);
-        border: 1px dashed #f59e0b;
-    }
-    .warehouse-contact-title {
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: .04em;
-        text-transform: uppercase;
-        color: #b45309;
-        margin-bottom: 4px;
-    }
-    .warehouse-contact-name {
-        font-size: 13px;
-        font-weight: 700;
-        color: #1f2937;
-    }
-    .warehouse-contact-phone {
-        font-size: 13px;
-        color: #374151;
-    }
-    .warehouse-contact-actions {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-    }
-    .warehouse-contact-action {
-        width: 26px;
-        height: 26px;
-        border-radius: 999px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        text-decoration: none;
-        color: #fff;
-    }
-    .warehouse-contact-action.phone {
-        background: #0ea5e9;
-    }
-    .warehouse-contact-action.zalo {
-        background: #2563eb;
-    }
-    .warehouse-contact-action:hover {
-        opacity: .9;
-    }
-    .price-update-card {
-        border: 1px solid #f5d489;
-        border-left: 4px solid #f59e0b;
-        border-radius: 12px;
-        background: #fffdf4;
-    }
-    .price-update-price {
-        color: #b45309;
-        font-weight: 700;
+    .dashboard-chart-note {
+        color: #64748b;
+        font-size: .7rem;
         white-space: nowrap;
-        text-align: right;
+    }
+    .dashboard-chart-wrap {
+        position: relative;
+        height: 245px;
+    }
+    .dashboard-main .dept-broadcast-card {
+        margin: 0 !important;
+        border: 0;
+        border-radius: 0;
+        background: #fff9e6;
+        box-shadow: none;
+    }
+    .dashboard-main .dept-broadcast-head {
+        padding: 8px 10px;
+        border-bottom: 1px solid #f4cf70;
+    }
+    .dashboard-main .dept-broadcast-title {
+        color: #8d3e00;
+        font-size: .78rem;
+    }
+    .dashboard-main .dept-broadcast-subtitle {
+        color: #b45309;
+        font-size: .73rem;
+    }
+    .dashboard-main .dept-broadcast-list { padding: 0 10px; }
+    .dashboard-main .dept-broadcast-item { padding: 10px 0; }
+    .dashboard-main .dept-broadcast-item-title { font-size: .9rem; }
+    .dashboard-main .dept-broadcast-message { font-size: .82rem; }
+    .dashboard-main .dept-broadcast-sender,
+    .dashboard-main .dept-broadcast-time { font-size: .7rem; }
+    .price-board-card {
+        border: 1px solid #d77742;
+        background: #fff;
+        padding: 11px 12px 15px;
+    }
+    .price-board-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 5px;
+    }
+    .price-board-title {
+        margin: 0;
+        color: var(--dashboard-orange);
+        font-size: .88rem;
+        font-weight: 500;
+        text-transform: uppercase;
+    }
+    .price-board-badge {
+        padding: 3px 9px;
+        border-radius: 5px;
+        background: #ffc400;
+        color: #211700;
+        font-size: .68rem;
+        font-weight: 800;
     }
     .price-board-table {
         width: 100%;
         margin: 0;
-        font-size: .86rem;
         border-collapse: collapse;
+        font-size: .77rem;
     }
     .price-board-table td {
         padding: 7px 4px;
-        border-bottom: 1px solid #f3e4bc;
+        border-bottom: 1px solid #ecd5ab;
         vertical-align: middle;
     }
-    .price-board-table tr:last-child td {
-        border-bottom: 0;
-    }
-    .price-board-product-name {
-        color: #111827;
-        font-weight: 600;
-    }
-    .price-board-group td {
-        padding-top: 9px;
-        padding-bottom: 4px;
-        border-bottom: 0;
-        color: #111827;
-        font-weight: 700;
-    }
-    .price-board-variant-name {
-        padding-left: 18px !important;
-        color: #374151;
-    }
+    .price-board-product-name,
+    .price-board-group td { color: #202938; font-weight: 700; }
+    .price-board-group td { padding-top: 9px; padding-bottom: 2px; border-bottom: 0; }
+    .price-board-variant-name { padding-left: 18px !important; color: #384152; }
     .price-board-variant-name::before {
         content: "–";
-        margin-right: 6px;
-        color: #d97706;
+        margin-right: 7px;
+        color: var(--dashboard-orange);
+    }
+    .price-update-price {
+        color: var(--dashboard-orange);
+        font-weight: 800;
+        white-space: nowrap;
+        text-align: right;
     }
     .price-update-note {
-        border-top: 1px solid #fde68a;
-        margin-top: 6px;
-        padding-top: 9px;
-        color: #92400e;
+        margin-top: 7px;
+        padding-top: 2px;
+        color: #9a3f00;
+        font-size: .75rem;
+        line-height: 1.5;
     }
-
-    @media (max-width: 1200px) {
-        .stats-grid {
-            grid-template-columns: repeat(3, minmax(120px, 1fr));
+    @media (max-width: 1100px) {
+        .dashboard-shell {
+            grid-template-columns: 220px minmax(0, 1fr);
+            max-width: 920px;
         }
+        .dashboard-price-column { grid-column: 2; }
     }
-
-    @media (max-width: 768px) {
-        .stats-grid {
-            grid-template-columns: repeat(2, minmax(120px, 1fr));
+    @media (max-width: 767.98px) {
+        .my-dashboard { padding-top: 18px; }
+        .dashboard-shell { display: block; width: calc(100% - 24px); }
+        .dashboard-sidebar {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            margin-bottom: 16px;
         }
+        .dashboard-menu-link.is-active { grid-column: 1 / -1; margin: 0; }
+        .dashboard-menu-link { padding: 9px 10px; font-size: .76rem; }
+        .dashboard-chart-wrap { height: 215px; }
+        .dashboard-chart-head { align-items: flex-start; }
+        .dashboard-chart-note { white-space: normal; text-align: right; }
+        .dashboard-price-column { margin-top: 18px; }
     }
 </style>
 @endpush
 
 @section('content')
+@php
+    $monitorRoute = fn (string $tab) => route('pages.my_orders.monitoring', ['tab' => $tab]);
+    $latestPriceBoardDate = collect($productPriceAppliedDates ?? [])
+        ->filter()
+        ->map(fn ($date) => \Carbon\Carbon::parse($date))
+        ->sortByDesc(fn ($date) => $date->timestamp)
+        ->first();
+@endphp
 <div class="my-dashboard">
-    <div class="container">
-        <div class="card hero-card mb-3">
-            <div class="card-body d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-2">
-                <div>
-                    <h4 class="mb-1">My Dashboard</h4>
-                    <div class="small opacity-75">Thống kê nhanh doanh số, hoa hồng và công việc</div>
-                </div>
-                <div class="d-flex flex-wrap gap-2">
-                    <a href="{{ route('pages.hoang_long_profile') }}" class="shortcut-btn secondary">
-                        <i class="bi bi-file-earmark-text"></i>
-                        Hoàng Long TNT Profile
-                    </a>
-                    <a href="{{ route('my-tasks') }}" class="shortcut-btn">
-                        <i class="bi bi-list-task"></i>
-                        Nhiệm vụ được giao
-                    </a>
-                </div>
-            </div>
-        </div>
+    <div class="dashboard-shell">
+        <aside class="dashboard-sidebar" aria-label="Điều hướng đơn hàng">
+            <a href="{{ route('pages.my_dashboard') }}" class="dashboard-menu-link is-active" aria-current="page">
+                <i class="bi bi-house-door"></i><span>Bảng điều khiển</span>
+            </a>
+            <a href="{{ $monitorRoute('today') }}" class="dashboard-menu-link">
+                <i class="bi bi-file-earmark-text"></i><span>Đơn hôm nay</span>
+            </a>
+            <a href="{{ $monitorRoute('drafts') }}" class="dashboard-menu-link">
+                <i class="bi bi-file-earmark-text"></i><span>Đơn hàng Mẫu</span>
+            </a>
+            <a href="{{ $monitorRoute('my_orders') }}" class="dashboard-menu-link">
+                <i class="bi bi-bag-check"></i><span>Đơn của tôi</span>
+            </a>
+            <a href="{{ $monitorRoute('schedules') }}" class="dashboard-menu-link">
+                <i class="bi bi-calendar-check"></i><span>Đơn hàng theo lịch</span>
+            </a>
+            <a href="{{ $monitorRoute('automatic') }}" class="dashboard-menu-link">
+                <i class="bi bi-arrow-repeat"></i><span>Đơn hàng tự động</span>
+            </a>
+        </aside>
 
-        <div class="stats-grid mb-3" id="stats-grid">
-            <div class="stat-card">
-                <div class="stat-label">Tổng doanh số</div>
-                <div class="stat-value" data-stat="total_revenue">{{ number_format($dashboardStats['total_revenue'] ?? 0, 0, ',', '.') }}</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Hoa hồng tháng này</div>
-                <div class="stat-value" data-stat="commission_this_month">{{ number_format($dashboardStats['commission_this_month'] ?? 0, 0, ',', '.') }}</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Tổng khách hàng</div>
-                <div class="stat-value" data-stat="total_customers">{{ number_format($dashboardStats['total_customers'] ?? 0, 0, ',', '.') }}</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Khách đang hoạt động</div>
-                <div class="stat-value" data-stat="active_customers">{{ number_format($dashboardStats['active_customers'] ?? 0, 0, ',', '.') }}</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Đơn tháng này</div>
-                <div class="stat-value" data-stat="orders_this_month">{{ number_format($dashboardStats['orders_this_month'] ?? 0, 0, ',', '.') }}</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Task đang xử lý</div>
-                <div class="stat-value" data-stat="tasks_processing">{{ number_format($dashboardStats['tasks_processing'] ?? 0, 0, ',', '.') }}</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Task chưa hoàn thành</div>
-                <div class="stat-value" data-stat="tasks_unfinished">{{ number_format($dashboardStats['tasks_unfinished'] ?? 0, 0, ',', '.') }}</div>
-            </div>
-        </div>
-
-        <div class="row g-3">
-            <div class="col-lg-7"> 
-
-                <div class="section-card p-3 mb-3" id="commission-feed"> 
+        <main class="dashboard-main">
+            <section class="dashboard-card dashboard-commission" id="commission-feed">
+                <h2 class="dashboard-section-title">Chúc mừng nhận hoa hồng</h2>
+                <div class="commission-feed-list">
                     @forelse($commissionFeed as $item)
                         <div class="feed-item">
-                            <div class="fw-semibold">{{ $item->order_code ?: ('#' . $item->order_id) }} - {{ $item->customer_name ?: 'Khách hàng' }}</div>
-                            <div class="small text-muted">
-                                Giá trị đơn: {{ number_format((float) $item->order_total, 0, ',', '.') }} |
-                                {{ number_format((float) $item->commission_percent, 2) }}% |
-                                Hoa hồng: <span class="text-success fw-semibold">{{ number_format((float) $item->commission_amount, 0, ',', '.') }}</span>
+                            <div class="small fw-semibold">{{ $item->order_code ?: ('#' . $item->order_id) }} - {{ $item->customer_name ?: 'Khách hàng' }}</div>
+                            <div class="dashboard-empty">
+                                Giá trị đơn: {{ number_format((float) $item->order_total, 0, ',', '.') }}đ ·
+                                Hoa hồng: <span class="text-success fw-semibold">{{ number_format((float) $item->commission_amount, 0, ',', '.') }}đ</span>
                             </div>
-                            <div class="small text-muted">{{ \Carbon\Carbon::parse($item->confirmed_at)->format('d/m/Y H:i') }}</div>
                         </div>
                     @empty
-                        <div class="text-muted small">Chưa có bản ghi hoa hồng.</div>
+                        <div class="dashboard-empty">Chưa có bản ghi hoa hồng.</div>
                     @endforelse
                 </div>
-                <div class="section-card p-3 mb-3">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h6 class="mb-0">Biểu đồ doanh số</h6>
-                        <small class="text-muted">Cập nhật tự động mỗi 30 giây</small>
-                    </div>
-                    <canvas id="salesChart" height="120"></canvas>
+            </section>
+
+            <section class="dashboard-card dashboard-chart-card">
+                <div class="dashboard-chart-head">
+                    <h2 class="dashboard-section-title">Biểu đồ doanh số</h2>
+                    <span class="dashboard-chart-note">Cập nhật tự động mỗi 30 giây</span>
                 </div>
+                <div class="dashboard-chart-wrap">
+                    <canvas id="salesChart"></canvas>
+                </div>
+            </section>
 
-                @include('layouts.partials.department_broadcasts')
+            @include('layouts.partials.department_broadcasts', ['showEmpty' => true])
+        </main>
 
-            </div>
-
-            <div class="col-lg-5">
-                @if(($pendingWarehouseAdjustments ?? collect())->isNotEmpty())
-                    <div id="pending-warehouse-adjustments"></div>
-                    <h6 class="mx-1 mb-3 text-uppercase fs-5" style="color:#b45309;">Yêu cầu thay đổi đơn từ kho</h6>
-                    <div class="pb-3 mb-3">
-                        @foreach($pendingWarehouseAdjustments as $idx => $pendingOrder)
-                            <div class="warehouse-adjustment-card p-2 mb-2 border rounded">
-                                <div class="warehouse-adjustment-header d-flex align-items-start justify-content-between gap-2">
-                                    <div class="d-flex align-items-start gap-2 flex-grow-1">
-                                        <span class="warehouse-adjustment-index">{{ $idx + 1 }}</span>
-                                        <div class="flex-grow-1">
-                                            <div class="small fw-semibold text-dark">{{ $pendingOrder->customer?->name ?: 'Khách hàng' }}</div>
-                                            <div class="small text-muted">
-                                                {{ optional($pendingOrder->warehouse_adjustment_requested_at)->format('d/m/Y H:i') ?: 'Chưa có thời gian gửi' }}
-                                                , {{ $pendingOrder->code }}
-                                                , {{ $pendingOrder->customer?->customer_code ?: ('#' . ($pendingOrder->customer?->id ?? '---')) }}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="d-flex align-items-center gap-1 flex-shrink-0">
-                                        <form method="POST" action="{{ route('pages.my_dashboard.order_adjustments.confirm', $pendingOrder) }}">
-                                            @csrf
-                                            <button type="submit" class="btn btn-sm btn-warning">
-                                                <i class="bi bi-check2-circle"></i> Xác nhận
-                                            </button>
-                                        </form>
-                                        <button type="button"
-                                                class="btn btn-sm btn-outline-danger"
-                                                data-bs-toggle="modal"
-                                                data-bs-target="#rejectAdjustmentModal-{{ $pendingOrder->id }}">
-                                            <i class="bi bi-x-circle"></i> Từ chối
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div class="d-flex align-items-start gap-2">
-                                    <div class="flex-grow-1">
-                                        <div class="small text-muted">Lý do: {{ $pendingOrder->warehouse_adjustment_note ?: 'Chưa cập nhật' }}</div>
-
-                                        @php
-                                            $changeRows = collect($pendingOrder->warehouse_adjustment_changes ?? []);
-                                            $changeMap = $changeRows->mapWithKeys(function ($change) {
-                                                $variantId = (int) (($change['product_variant_id'] ?? 0) ?: ($change['variant_id'] ?? 0));
-                                                if ($variantId <= 0) {
-                                                    return [];
-                                                }
-
-                                                $oldQty = (int) ($change['old_quantity'] ?? 0);
-                                                $newQty = (int) ($change['new_quantity'] ?? 0);
-                                                $delta = $newQty - $oldQty;
-
-                                                if ($oldQty <= 0 && $newQty > 0) {
-                                                    $note = 'Thêm +' . $newQty;
-                                                } elseif ($newQty <= 0 && $oldQty > 0) {
-                                                    $note = 'Xóa -' . $oldQty;
-                                                } elseif ($delta > 0) {
-                                                    $note = 'Tăng +' . $delta;
-                                                } elseif ($delta < 0) {
-                                                    $note = 'Giảm ' . $delta;
-                                                } else {
-                                                    $note = 'Không đổi';
-                                                }
-
-                                                return [$variantId => $note];
-                                            });
-
-                                            $proposedItems = $pendingOrder->items
-                                                ->mapWithKeys(function ($item) {
-                                                    $variantId = (int) ($item->product_variant_id ?? 0);
-                                                    if ($variantId <= 0) {
-                                                        return [];
-                                                    }
-
-                                                    return [
-                                                        $variantId => [
-                                                            'product_name' => $item->variant?->name ?? $item->product?->name ?? 'Sản phẩm',
-                                                            'sku' => $item->variant?->sku,
-                                                            'size' => $item->variant?->size,
-                                                            'quantity' => (int) ($item->quantity ?? 0),
-                                                            'price' => (float) ($item->price ?? 0),
-                                                        ],
-                                                    ];
-                                                });
-
-                                            foreach ($changeRows as $change) {
-                                                $variantId = (int) (($change['product_variant_id'] ?? 0) ?: ($change['variant_id'] ?? 0));
-                                                if ($variantId <= 0) {
-                                                    continue;
-                                                }
-
-                                                $newQty = (int) ($change['new_quantity'] ?? 0);
-                                                if ($newQty <= 0) {
-                                                    $proposedItems->forget($variantId);
-                                                    continue;
-                                                }
-
-                                                $existing = $proposedItems->get($variantId, []);
-                                                $proposedItems->put($variantId, [
-                                                    'product_name' => $change['product_name'] ?? ($existing['product_name'] ?? 'Sản phẩm'),
-                                                    'sku' => $change['sku'] ?? ($existing['sku'] ?? null),
-                                                    'size' => $change['size'] ?? ($existing['size'] ?? null),
-                                                    'quantity' => $newQty,
-                                                    'price' => (float) (($change['price'] ?? null) ?: ($existing['price'] ?? 0)),
-                                                ]);
-                                            }
-                                        @endphp
-
-                                        <div class="mt-2">
-                                            <div class="small fw-semibold mb-1 text-dark">Danh sách sản phẩm sau khi thay đổi</div>
-                                            <div class="warehouse-adjustment-list">
-                                                @forelse($proposedItems as $variantId => $finalItem)
-                                                    @php
-                                                        $finalSize = $finalItem['size'] ?? null;
-                                                        $finalSizeLabel = (is_numeric($finalSize) && (float) $finalSize > 0)
-                                                            ? rtrim(rtrim(number_format((float) $finalSize, 2, '.', ''), '0'), '.')
-                                                            : null;
-                                                        $finalVariantId = (int) $variantId;
-                                                        $finalChangeNote = $changeMap->get($finalVariantId);
-                                                    @endphp
-                                                    <div class="warehouse-adjustment-row small">
-                                                        <div class="fw-semibold">
-                                                            {{ $finalItem['product_name'] ?? 'Sản phẩm' }}
-                                                            @if($finalChangeNote)
-                                                                <span class="text-warning-emphasis">({{ $finalChangeNote }})</span>
-                                                            @endif
-                                                        </div>
-                                                        <div class="text-muted">
-                                                            SKU: {{ $finalItem['sku'] ?? '---' }}
-                                                            @if($finalSizeLabel)
-                                                                | Size: {{ $finalSizeLabel }}
-                                                            @endif
-                                                            | SL mới: {{ number_format((float) ($finalItem['quantity'] ?? 0), 0, ',', '.') }}
-                                                            | Đơn giá: {{ number_format((float) ($finalItem['price'] ?? 0), 0, ',', '.') }}đ
-                                                        </div>
-                                                    </div>
-                                                @empty
-                                                    <div class="small text-muted">Không có sản phẩm trong đơn sau khi thay đổi.</div>
-                                                @endforelse
-                                            </div>
-                                        </div>
-
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="modal fade" id="rejectAdjustmentModal-{{ $pendingOrder->id }}" tabindex="-1" aria-hidden="true">
-                                <div class="modal-dialog modal-dialog-centered">
-                                    <div class="modal-content">
-                                        <form method="POST" action="{{ route('pages.my_dashboard.order_adjustments.reject', $pendingOrder) }}">
-                                            @csrf
-                                            <div class="modal-header">
-                                                <h6 class="modal-title mb-0">Từ chối yêu cầu điều chỉnh</h6>
-                                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                            </div>
-                                            <div class="modal-body">
-                                                <div class="small text-muted mb-2">
-                                                    Đơn {{ $pendingOrder->code }} - {{ $pendingOrder->customer?->name ?: 'Khách hàng' }}
-                                                </div>
-                                                <label class="form-label small fw-semibold">Lý do từ chối</label>
-                                                <textarea name="reject_reason"
-                                                          class="form-control"
-                                                          rows="3"
-                                                          maxlength="2000"
-                                                          placeholder="Nhập lý do để kho xử lý lại"
-                                                          required></textarea>
-                                            </div>
-                                            <div class="modal-footer">
-                                                <button type="button" class="btn btn-sm btn-light" data-bs-dismiss="modal">Hủy</button>
-                                                <button type="submit" class="btn btn-sm btn-danger">
-                                                    <i class="bi bi-x-circle me-1"></i>Từ chối
-                                                </button>
-                                            </div>
-                                        </form>
-                                    </div>
-                                </div>
-                            </div>
-                        @endforeach
-
-                        @php
-                            $contactWarehouse = collect($pendingWarehouseAdjustments ?? [])->first()?->warehouse;
-                            $warehouseName = $contactWarehouse?->name ?: 'Kho chưa cập nhật';
-                            $warehousePhone = trim((string) ($contactWarehouse?->phone ?? ''));
-                            $warehousePhoneDigits = preg_replace('/\D+/', '', $warehousePhone);
-                        @endphp
-                        <div class="warehouse-contact-strip">
-                            <div class="warehouse-contact-title">Liên hệ kho</div>
-                            <div class="d-flex flex-wrap align-items-center gap-2">
-                                <span class="warehouse-contact-name">{{ $warehouseName }}</span>
-                                @if($warehousePhone !== '')
-                                    <span class="warehouse-contact-phone">{{ $warehousePhone }}</span>
-                                    @if(!empty($warehousePhoneDigits))
-                                        <span class="warehouse-contact-actions">
-                                            <a href="tel:{{ $warehousePhoneDigits }}" class="warehouse-contact-action phone" title="Gọi điện">
-                                                <i class="bi bi-telephone-fill"></i>
-                                            </a>
-                                            <a href="https://zalo.me/{{ $warehousePhoneDigits }}" target="_blank" rel="noopener" class="warehouse-contact-action zalo" title="Nhắn Zalo">
-                                                <i class="bi bi-chat-dots-fill"></i>
-                                            </a>
-                                        </span>
-                                    @endif
-                                @else
-                                    <span class="warehouse-contact-phone">Chưa có số điện thoại</span>
-                                @endif
-                            </div>
-                        </div>
-                    </div>
-                @endif
-
-                @if(($assignedCustomers ?? collect())->isNotEmpty())
-                    {{-- Assigned Customers Section --}}
-                    <h6 class="mx-1 mb-3 text-uppercase fs-5 newcus">Khách hàng mới</h6>
-                    <div class="pb-3 mb-3" id="assigned-customers"> 
-                        @foreach($assignedCustomers as $idx => $customer)
-                            <div class="assigned-customer-card p-2 mb-2 border rounded" style="background: #f8fafc;">
-                                <div class="d-flex align-items-center bd-highlight  ">
-                                    <div class="d-flex  border-right  mr-2    text-muted justify-content-center align-items-center " style="width: 30px;"> 
-                                        <span class="fs-2 newcus">{{ $idx + 1 }}</span>
-                                    </div>
-                                    <div class="flex-grow-1">                                   
-                                        <div class="small newcus fw-semibold fs-6 text-uppercase">{{ $customer['name'] }}</div>
-                                        <div class="small text-muted fw-semibold ">
-                                            {{ $customer['phone'] ?: '' }} 
-                                        </div>
-                                        <div class="small text-muted">
-                                            {{ $customer['address'] ?: '' }}
-                                        </div>
-                                    </div>
-                                    <button type="button" class="btn btn-sm {{ $customer['is_accepted'] ? 'btn-success' : 'btn-outline-primary' }} accept-customer-btn" 
-                                            data-customer-id="{{ $customer['id'] }}" 
-                                            {{ $customer['is_accepted'] ? 'disabled' : '' }}>
-                                        @if($customer['is_accepted'])
-                                            <i class="bi bi-check-circle"></i> Đã nhận
-                                        @else
-                                            <i class="bi bi-plus-circle"></i> Nhận
-                                        @endif
-                                    </button>
-                                </div>
-                            </div>
-                        @endforeach
-                    </div>
-                @endif
-
+        <aside class="dashboard-price-column">
+            <section class="price-board-card">
+                <div class="price-board-head">
+                    <h2 class="price-board-title">Bảng báo giá sản phẩm</h2>
+                    <span class="price-board-badge">Mới</span>
+                </div>
                 @if(($productPriceBoard ?? collect())->isNotEmpty())
-                    @php
-                        $latestPriceBoardDate = collect($productPriceAppliedDates ?? [])
-                            ->filter()
-                            ->map(fn ($date) => \Carbon\Carbon::parse($date))
-                            ->sortByDesc(fn ($date) => $date->timestamp)
-                            ->first();
-                    @endphp
-                    <div class="price-update-card p-3 mb-3">
-                        <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
-                            <h6 class="mb-0 text-uppercase" style="color:#b45309;">Bảng báo giá sản phẩm</h6>
-                            <span class="badge text-bg-warning">Mới</span>
-                        </div>
-                        <div class="table-responsive">
-                            <table class="price-board-table" aria-label="Bảng báo giá sản phẩm">
-                                <tbody>
-                                    @foreach($productPriceBoard as $priceProduct)
-                                        @if(!empty($priceProduct['has_mixed_prices']))
-                                            <tr class="price-board-group">
-                                                <td colspan="2">{{ $priceProduct['product_name'] }}</td>
-                                            </tr>
-                                            @foreach($priceProduct['variants'] as $priceVariant)
-                                                <tr>
-                                                    <td class="price-board-variant-name">
-                                                        {{ $priceVariant['size_label'] ? $priceVariant['size_label'] . ' kg' : $priceVariant['name'] }}
-                                                    </td>
-                                                    <td class="price-update-price">{{ number_format((float) ($priceVariant['price'] ?? 0), 0, ',', '.') }}đ/{{ $priceVariant['price_unit'] ?? 'kg' }}</td>
-                                                </tr>
-                                            @endforeach
-                                        @else
+                    <div class="table-responsive">
+                        <table class="price-board-table" aria-label="Bảng báo giá sản phẩm">
+                            <tbody>
+                                @foreach($productPriceBoard as $priceProduct)
+                                    @if(!empty($priceProduct['has_mixed_prices']))
+                                        <tr class="price-board-group">
+                                            <td colspan="2">{{ $priceProduct['product_name'] }}</td>
+                                        </tr>
+                                        @foreach($priceProduct['variants'] as $priceVariant)
                                             <tr>
-                                                <td class="price-board-product-name">{{ $priceProduct['product_name'] }}</td>
-                                                <td class="price-update-price">{{ number_format((float) ($priceProduct['representative_price'] ?? 0), 0, ',', '.') }}đ/{{ $priceProduct['representative_price_unit'] ?? 'kg' }}</td>
+                                                <td class="price-board-variant-name">
+                                                    {{ $priceVariant['size_label'] ? $priceVariant['size_label'] . ' kg' : $priceVariant['name'] }}
+                                                </td>
+                                                <td class="price-update-price">{{ number_format((float) ($priceVariant['price'] ?? 0), 0, ',', '.') }}đ/{{ $priceVariant['price_unit'] ?? 'kg' }}</td>
                                             </tr>
-                                        @endif
-                                    @endforeach
-                                </tbody>
-                            </table>
-                        </div>
-                        <div class="price-update-note small">
-                            @if($latestPriceBoardDate)
-                                <div class="fw-semibold">Áp dụng từ {{ $latestPriceBoardDate->format('d/m/Y') }}</div>
-                            @endif
-                            <div>Giá bán chưa bao gồm VAT.</div>
-                            <div>Miễn phí vận chuyển nội thành 5kg từ 20 con.</div>
-                        </div>
+                                        @endforeach
+                                    @else
+                                        <tr>
+                                            <td class="price-board-product-name">{{ $priceProduct['product_name'] }}</td>
+                                            <td class="price-update-price">{{ number_format((float) ($priceProduct['representative_price'] ?? 0), 0, ',', '.') }}đ/{{ $priceProduct['representative_price_unit'] ?? 'kg' }}</td>
+                                        </tr>
+                                    @endif
+                                @endforeach
+                            </tbody>
+                        </table>
                     </div>
+                @else
+                    <div class="dashboard-empty py-3">Chưa có bảng giá sản phẩm.</div>
                 @endif
-                {{-- Activity Timeline Section --}}
-                <div class="section-card p-3" id="activity-timeline">
-                    <h6 class="mb-2">Timeline hoạt động task</h6>
-                    @forelse($timeline as $log)
-                        <div class="timeline-item">
-                            <div class="dot"></div>
-                            <div class="small fw-semibold">{{ $log->task_code }} - {{ $log->task_title }}</div>
-                            <div class="small text-muted">{{ $log->from_status }} → {{ $log->to_status }}</div>
-                            <div class="small text-muted">{{ $log->changed_by_name ?: 'System' }} - {{ \Carbon\Carbon::parse($log->created_at)->format('d/m/Y H:i') }}</div>
-                        </div>
-                    @empty
-                        <div class="text-muted small">Chưa có hoạt động gần đây.</div>
-                    @endforelse
+                <div class="price-update-note">
+                    @if($latestPriceBoardDate)
+                        <div>Áp dụng từ {{ $latestPriceBoardDate->format('d/m/Y') }}</div>
+                    @endif
+                    <div>Giá bán chưa bao gồm VAT.</div>
+                    <div>Miễn phí vận chuyển nội thành 5kg từ 20 con.</div>
                 </div>
-            </div>
-        </div>
+            </section>
+        </aside>
     </div>
 </div>
 @endsection
@@ -655,167 +335,74 @@
 @push('scripts')
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-    const chartLabels = @json($salesChart['labels'] ?? []);
-    const chartValues = @json($salesChart['values'] ?? []);
+document.addEventListener('DOMContentLoaded', function () {
+    const chartCanvas = document.getElementById('salesChart');
+    if (!chartCanvas || typeof Chart === 'undefined') return;
 
-    const ctx = document.getElementById('salesChart').getContext('2d');
-    const salesChart = new Chart(ctx, {
+    const salesChart = new Chart(chartCanvas.getContext('2d'), {
         type: 'line',
         data: {
-            labels: chartLabels,
+            labels: @json($salesChart['labels'] ?? []),
             datasets: [{
-                label: 'Doanh số',
-                data: chartValues,
-                borderColor: '#0f766e',
-                backgroundColor: 'rgba(15, 118, 110, 0.15)',
-                tension: 0.35,
-                fill: true,
+                data: @json($salesChart['values'] ?? []),
+                borderColor: '#168a84',
+                backgroundColor: 'rgba(22, 138, 132, .08)',
+                borderWidth: 2,
+                pointRadius: 2,
+                pointHoverRadius: 4,
+                tension: .15,
+                fill: false
             }]
         },
         options: {
             responsive: true,
+            maintainAspectRatio: false,
+            interaction: { intersect: false, mode: 'index' },
             plugins: { legend: { display: false } },
+            scales: {
+                x: { grid: { color: 'rgba(148, 163, 184, .28)' }, ticks: { maxRotation: 48, minRotation: 48, font: { size: 9 } } },
+                y: { grid: { color: 'rgba(148, 163, 184, .28)' }, ticks: { font: { size: 9 } } }
+            }
         }
     });
 
-    function formatNumber(value) {
-        return new Intl.NumberFormat('vi-VN').format(Number(value || 0));
-    }
+    const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;'
+    }[char]));
+    const formatNumber = (value) => new Intl.NumberFormat('vi-VN').format(Number(value || 0));
 
     function renderCommissionFeed(feed) {
         const container = document.getElementById('commission-feed');
-        const html = ['<h6 class="mb-2">Chúc mừng nhận hoa hồng</h6>'];
+        if (!container) return;
 
-        if (!Array.isArray(feed) || feed.length === 0) {
-            html.push('<div class="text-muted small">Chưa có bản ghi hoa hồng.</div>');
-            container.innerHTML = html.join('');
-            return;
-        }
-
-        feed.forEach(item => {
-            const code = item.order_code || ('#' + item.order_id);
-            const customer = item.customer_name || 'Khách hàng';
-            const time = item.confirmed_at ? new Date(item.confirmed_at).toLocaleString('vi-VN') : '';
-            html.push(`
+        const rows = Array.isArray(feed) && feed.length
+            ? feed.map((item) => `
                 <div class="feed-item">
-                    <div class="fw-semibold">${code} - ${customer}</div>
-                    <div class="small text-muted">
-                        Giá trị đơn: ${formatNumber(item.order_total)} |
-                        ${Number(item.commission_percent || 0).toFixed(2)}% |
-                        Hoa hồng: <span class="text-success fw-semibold">${formatNumber(item.commission_amount)}</span>
-                    </div>
-                    <div class="small text-muted">${time}</div>
-                </div>
-            `);
-        });
+                    <div class="small fw-semibold">${escapeHtml(item.order_code || ('#' + item.order_id))} - ${escapeHtml(item.customer_name || 'Khách hàng')}</div>
+                    <div class="dashboard-empty">Giá trị đơn: ${formatNumber(item.order_total)}đ · Hoa hồng: <span class="text-success fw-semibold">${formatNumber(item.commission_amount)}đ</span></div>
+                </div>`).join('')
+            : '<div class="dashboard-empty">Chưa có bản ghi hoa hồng.</div>';
 
-        container.innerHTML = html.join('');
-    }
-
-    function renderTimeline(items) {
-        const container = document.getElementById('activity-timeline');
-        const html = ['<h6 class="mb-2">Timeline hoạt động task</h6>'];
-
-        if (!Array.isArray(items) || items.length === 0) {
-            html.push('<div class="text-muted small">Chưa có hoạt động gần đây.</div>');
-            container.innerHTML = html.join('');
-            return;
-        }
-
-        items.forEach(log => {
-            const time = log.created_at ? new Date(log.created_at).toLocaleString('vi-VN') : '';
-            html.push(`
-                <div class="timeline-item">
-                    <div class="dot"></div>
-                    <div class="small fw-semibold">${log.task_code || ''} - ${log.task_title || ''}</div>
-                    <div class="small text-muted">${log.from_status || ''} → ${log.to_status || ''}</div>
-                    <div class="small text-muted">${log.changed_by_name || 'System'} - ${time}</div>
-                </div>
-            `);
-        });
-
-        container.innerHTML = html.join('');
+        container.innerHTML = '<h2 class="dashboard-section-title">Chúc mừng nhận hoa hồng</h2><div class="commission-feed-list">' + rows + '</div>';
     }
 
     function refreshDashboard() {
         fetch("{{ route('pages.my_dashboard.stats') }}", {
-            headers: {
-                'Accept': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            }
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
         })
-        .then((response) => response.json())
+        .then((response) => response.ok ? response.json() : Promise.reject())
         .then((data) => {
-            const stats = data.dashboardStats || {};
-            Object.keys(stats).forEach((key) => {
-                const el = document.querySelector(`[data-stat="${key}"]`);
-                if (el) {
-                    el.textContent = formatNumber(stats[key]);
-                }
-            });
-
             if (data.salesChart) {
                 salesChart.data.labels = data.salesChart.labels || [];
                 salesChart.data.datasets[0].data = data.salesChart.values || [];
                 salesChart.update();
             }
-
             renderCommissionFeed(data.commissionFeed || []);
-            renderTimeline(data.timeline || []);
         })
         .catch(() => {});
     }
 
-    // Handle accept customer buttons
-    document.querySelectorAll('.accept-customer-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const customerId = this.dataset.customerId;
-            const button = this;
-            const originalHTML = button.innerHTML;
-
-            button.disabled = true;
-            button.innerHTML = '<i class="bi bi-hourglass-split"></i> Đang xử lý...';
-
-            fetch("{{ route('pages.my_dashboard.accept_customer', ['customer' => ':id']) }}".replace(':id', customerId), {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'Accept': 'application/json',
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    button.classList.remove('btn-outline-primary');
-                    button.classList.add('btn-success');
-                    button.disabled = true;
-                    button.innerHTML = '<i class="bi bi-check-circle"></i> Đã nhận';
-                    
-                    // Show success message
-                    const alert = document.createElement('div');
-                    alert.className = 'alert alert-success alert-dismissible fade show mt-2';
-                    alert.innerHTML = `
-                        <strong>Thành công!</strong> ${data.message}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                    `;
-                    document.querySelector('#assigned-customers')?.insertAdjacentElement('beforeend', alert);
-                } else {
-                    button.disabled = false;
-                    button.innerHTML = originalHTML;
-                    alert('Lỗi: ' + (data.error || 'Không thể nhận khách hàng'));
-                }
-            })
-            .catch(error => {
-                button.disabled = false;
-                button.innerHTML = originalHTML;
-                console.error('Error:', error);
-                alert('Lỗi kết nối: ' + error.message);
-            });
-        });
-    });
-
-    setInterval(refreshDashboard, 30000);
+    window.setInterval(refreshDashboard, 30000);
+});
 </script>
 @endpush

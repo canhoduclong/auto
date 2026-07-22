@@ -18,7 +18,7 @@
         : 'department-notifications.show';
 @endphp
 
-@if($departmentBroadcasts->isNotEmpty())
+@if($departmentBroadcasts->isNotEmpty() || ($showEmpty ?? false))
     <div class="dept-broadcast-card mb-3">
         <div class="dept-broadcast-head">
             <div>
@@ -28,7 +28,7 @@
             <span class="badge text-bg-warning">{{ $departmentBroadcasts->whereNull('read_at')->count() }} mới</span>
         </div>
         <div class="dept-broadcast-list">
-            @foreach($departmentBroadcasts as $broadcast)
+            @forelse($departmentBroadcasts as $broadcast)
                 @php
                     $message = trim((string) ($broadcast['message'] ?? ''));
                     $href = route($departmentNotificationShowRoute, [
@@ -50,7 +50,11 @@
                             <div class="dept-broadcast-time">{{ optional($broadcast['created_at'])->format('d/m/Y H:i') }}</div>
                     </a>
                 </div>
-            @endforeach
+            @empty
+                <div class="dept-broadcast-item">
+                    <div class="dept-broadcast-message">Chưa có thông báo phòng ban.</div>
+                </div>
+            @endforelse
         </div>
     </div>
 @endif
