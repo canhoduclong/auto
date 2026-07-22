@@ -736,6 +736,9 @@
                     <a class="monitor-tab-link {{ $activeTab === 'my_orders' ? 'active' : '' }}" href="{{ route('pages.my_orders.monitoring', ['tab' => 'my_orders']) }}">
                         <i class="bi bi-bag-check"></i><span>Đơn của tôi</span>
                     </a>
+                    <a class="monitor-tab-link {{ $activeTab === 'customers' ? 'active' : '' }}" href="{{ route('pages.my_orders.monitoring', ['tab' => 'customers']) }}">
+                        <i class="bi bi-person-check"></i><span>Khách hàng</span>
+                    </a>
                     <a class="monitor-tab-link {{ $activeTab === 'schedules' ? 'active' : '' }}" href="{{ route('pages.my_orders.monitoring', ['tab' => 'schedules']) }}">
                         <i class="bi bi-calendar-check"></i><span>Đơn hàng theo lịch</span>
                     </a>
@@ -776,15 +779,33 @@
                     </div>
                 </div>
                 @endif
+
+                @if($activeTab === 'customers' && ($customerTabSales ?? collect())->isNotEmpty())
+                @php $customerSaleQuery = request()->except(['sale_id', 'page']); @endphp
+                <div class="monitor-panel monitor-filter-block">
+                    <div class="monitor-filter-title">Sale</div>
+                    <div class="monitor-filter-list">
+                        <a class="monitor-filter-link {{ (int) request('sale_id', 0) === 0 ? 'active' : '' }}" href="{{ route('pages.my_orders.monitoring', $customerSaleQuery) }}">
+                            <span>Tất cả Sale</span><span class="monitor-filter-count">{{ $customerTabSales->sum('count') }}</span>
+                        </a>
+                        @foreach($customerTabSales as $sale)
+                            <a class="monitor-filter-link {{ (int) request('sale_id', 0) === $sale['id'] ? 'active' : '' }}" href="{{ route('pages.my_orders.monitoring', array_merge($customerSaleQuery, ['sale_id' => $sale['id']])) }}">
+                                <span>{{ $sale['name'] }}</span><span class="monitor-filter-count">{{ $sale['count'] }}</span>
+                            </a>
+                        @endforeach
+                    </div>
+                </div>
+                @endif
             </aside>
 
             <main class="monitor-content">
-        <div class="monitor-toolbar {{ in_array($activeTab, ['my_orders', 'drafts'], true) ? 'd-none' : '' }}">
+        <div class="monitor-toolbar {{ in_array($activeTab, ['my_orders', 'drafts', 'customers'], true) ? 'd-none' : '' }}">
             @php
                 $monitorTabLabels = [
                     'today' => 'Theo dõi đơn hàng ngày',
                     'drafts' => 'Đơn hàng mẫu',
                     'my_orders' => 'Đơn hàng của tôi',
+                    'customers' => 'Danh sách khách hàng',
                     'schedules' => 'Đơn hàng theo lịch',
                     'automatic' => 'Đơn hàng tự động',
                 ];

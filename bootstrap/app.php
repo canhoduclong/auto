@@ -3,6 +3,7 @@
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\Request;
 use Illuminate\Session\TokenMismatchException;
@@ -18,6 +19,14 @@ return Application::configure(basePath: dirname(__DIR__))
             require __DIR__ . '/../routes/mobile.php';
         },
     )
+    ->withSchedule(function (Schedule $schedule): void {
+        $schedule->command('orders:auto-cancel-overdue')->dailyAt('00:05');
+        $schedule->command('inventory:reconcile-reservations')->dailyAt('00:10');
+        $schedule->command('order-drafts:process-automation')->dailyAt('00:13');
+        $schedule->command('order-schedules:process-daily-rules')->dailyAt('00:14');
+        $schedule->command('order-schedules:evaluate-today')->dailyAt('00:15');
+        $schedule->command('customers:apply-free-reset')->dailyAt('00:20');
+    })
     ->withMiddleware(function (Middleware $middleware) {
     $middleware->web(append: [
         \App\Http\Middleware\TrackUserOnlineStatus::class,

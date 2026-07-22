@@ -22,6 +22,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use App\Models\Setting;
 use Illuminate\Support\Facades\Cache;
 
@@ -157,6 +158,74 @@ class TextOrderImportController extends Controller
         $draft->save();
 
         return response()->json(['message' => 'Đã lưu thay đổi đơn mẫu.']);
+    }
+
+    public function saleUpdateAutomation(Request $request, TextOrderDraft $draft): JsonResponse
+    {
+        $this->ensureSaleDraft($request, $draft);
+
+        $validated = $request->validate([
+            'automation_mode' => ['required', Rule::in([
+                TextOrderDraft::AUTOMATION_DAILY,
+                TextOrderDraft::AUTOMATION_SCHEDULED,
+            ])],
+            'automation_enabled' => ['required', 'boolean'],
+            'automation_dates' => ['nullable', 'array'],
+            'automation_dates.*' => ['required', 'date_format:Y-m-d'],
+        ]);
+
+        $mode = (string) $validated['automation_mode'];
+        $enabled = (bool) $validated['automation_enabled'];
+        $dates = $mode === TextOrderDraft::AUTOMATION_SCHEDULED
+            ? collect($validated['automation_dates'] ?? [])->unique()->sort()->values()->all()
+            : [];
+
+        if ($mode === TextOrderDraft::AUTOMATION_SCHEDULED && $dates === []) {
+            throw ValidationException::withMessages([
+                'automation_dates' => 'Hãy chọn ít nhất một ngày lên đơn.',
+            ]);
+        }
+
+        if ($enabled) {
+            $items = collect($draft->parsed_items ?: [[
+                'product_variant_id' => $draft->product_variant_id,
+                'quantity' => $draft->quantity,
+            ]]);
+
+            if (!$draft->customer_id) {
+                throw ValidationException::withMessages([
+                    'customer_id' => 'Hãy chọn khách hàng trước khi bật lịch lên đơn.',
+                ]);
+            }
+
+            if ($items->isEmpty() || $items->contains(
+                fn ($item) => empty($item['product_variant_id']) || (int) ($item['quantity'] ?? 0) < 1
+            )) {
+                throw ValidationException::withMessages([
+                    'items' => 'Hãy chọn đầy đủ sản phẩm và số lượng trước khi bật lịch lên đơn.',
+                ]);
+            }
+        }
+
+        $draft->update([
+            'automation_mode' => $mode,
+            'automation_enabled' => $enabled,
+            'automation_dates' => $dates ?: null,
+            'automation_last_error' => null,
+        ]);
+
+        return response()->json([
+            'message' => $enabled
+                ? ($mode === TextOrderDraft::AUTOMATION_DAILY
+                    ? 'Đã bật tự động lên đơn hằng ngày.'
+                    : 'Đã bật lên đơn theo các ngày đã chọn.')
+                : 'Đã lưu cấu hình và tắt tự động lên đơn.',
+            'automation' => [
+                'mode' => $draft->automation_mode,
+                'enabled' => $draft->automation_enabled,
+                'dates' => $draft->automation_dates ?: [],
+            ],
+        ]);
     }
 
     public function saleBulkConfirm(Request $request, ApprovalService $approvalService): JsonResponse
@@ -431,13 +500,25 @@ class TextOrderImportController extends Controller
             throw new \RuntimeException('Hãy chọn sale nhận đơn trước khi sao chép.');
         }
 
-        $copy = $draft->replicate(['order_id', 'status', 'error_message']);
+        $copy = $draft->replicate([
+            'order_id',
+            'status',
+            'error_message',
+            'automation_mode',
+            'automation_enabled',
+            'automation_dates',
+            'automation_last_run_at',
+            'automation_last_error',
+        ]);
         $copy->fill($data);
         $copy->created_by = $data['sale_id'];
         $copy->delivery_date = $this->today();
         $copy->order_id = null;
         $copy->status = 'draft';
         $copy->error_message = null;
+        $copy->automation_mode = null;
+        $copy->automation_enabled = false;
+        $copy->automation_dates = null;
         $copy->save();
 
         return $copy;

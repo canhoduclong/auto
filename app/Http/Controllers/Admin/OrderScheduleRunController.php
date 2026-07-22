@@ -14,6 +14,7 @@ class OrderScheduleRunController extends Controller
     public function index(Request $request): View
     {
         $commandNames = [
+            'order-drafts:process-automation',
             'order-schedules:process-daily-rules',
             'order-schedules:evaluate-today',
         ];

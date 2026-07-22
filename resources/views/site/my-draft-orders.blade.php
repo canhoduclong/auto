@@ -57,6 +57,19 @@
     .draft-edit-total { display: grid; grid-template-columns: auto minmax(100px, auto); justify-content: end; gap: 18px; padding: 9px 6px 20px; color: #0f172a; font-size: .8rem; font-weight: 900; text-align: right; }
     .draft-edit-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 4px 0; border-top: 1px solid #dce6f1; }
     .draft-edit-footer-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+    .draft-automation { padding-top: 12px; }
+    .draft-automation-intro { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 12px; padding: 12px 14px; border: 1px solid #dce6f1; border-radius: 8px; background: #f8fafc; }
+    .draft-automation-modes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .draft-automation-mode { position: relative; display: block; padding: 12px 14px; border: 1px solid #cbd5e1; border-radius: 8px; cursor: pointer; }
+    .draft-automation-mode:has(input:checked) { border-color: #198754; background: #f0fdf4; box-shadow: inset 0 0 0 1px #198754; }
+    .draft-automation-mode input { position: absolute; top: 12px; right: 12px; }
+    .draft-automation-mode-title { padding-right: 24px; color: #0f172a; font-size: .78rem; font-weight: 900; }
+    .draft-automation-mode-help { margin-top: 4px; color: #64748b; font-size: .7rem; line-height: 1.45; }
+    .draft-automation-dates { margin-top: 12px; padding: 12px; border: 1px dashed #cbd5e1; border-radius: 8px; background: #f8fafc; }
+    .draft-automation-date-row { display: grid; grid-template-columns: minmax(180px, 260px) auto; gap: 8px; margin-bottom: 8px; }
+    .draft-automation-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; padding-top: 10px; border-top: 1px solid #dce6f1; }
+    .draft-automation-label { display: inline-flex; align-items: center; gap: 4px; color: #0f766e; font-size: .68rem; font-weight: 800; }
+    .draft-automation-label.is-off { color: #64748b; }
     .draft-picker { margin-top: 8px; padding: 12px; border: 1px solid #dbe5ef; border-radius: 8px; background: #f8fafc; }
     .draft-picker-search { display: flex; gap: 8px; margin-bottom: 10px; }
     .draft-selected-customer { min-width: 0; color: #334155; font-size: .75rem; font-weight: 700; }
@@ -73,6 +86,8 @@
         .draft-edit-products { min-width: 820px; }
         .draft-edit-footer { align-items: stretch; flex-direction: column; gap: 10px; }
         .draft-edit-footer-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .draft-automation-modes { grid-template-columns: 1fr; }
+        .draft-automation-intro, .draft-automation-footer { flex-direction: column; }
     }
 </style>
 @endpush
@@ -140,7 +155,7 @@
                     $statusClass = $draft->status === 'confirmed' ? 'is-confirmed' : ($draft->status === 'error' ? 'is-error' : '');
                     $isEditingDraft = (int) request('edit') === (int) $draft->id;
                 @endphp
-                <article class="draft-template-row" data-draft-card data-draft-id="{{ $draft->id }}">
+                <article class="draft-template-row" data-draft-card data-draft-id="{{ $draft->id }}" data-draft-editable="{{ $draft->status !== 'confirmed' ? '1' : '0' }}">
                     <div class="draft-template-card">
                         <div class="draft-template-head">
                             <div>
@@ -149,6 +164,13 @@
                                     <span>{{ $draft->created_at?->format('d/m/Y H:i') }}</span>
                                     @if($draft->phone)<span><i class="bi bi-telephone me-1"></i>{{ $draft->phone }}</span>@endif
                                     <span>MẪU-{{ $draft->id }}</span>
+                                    @if($draft->automation_mode)
+                                        <span class="draft-automation-label {{ $draft->automation_enabled ? '' : 'is-off' }}">
+                                            <i class="bi bi-power"></i>
+                                            {{ $draft->automation_mode === \App\Models\TextOrderDraft::AUTOMATION_DAILY ? 'Tự động hằng ngày' : 'Theo lịch' }}
+                                            · {{ $draft->automation_enabled ? 'Đang bật' : 'Đang tắt' }}
+                                        </span>
+                                    @endif
                                 </div>
                             </div>
                             <span class="draft-template-status {{ $statusClass }}">{{ $statusText }}</span>
@@ -276,12 +298,71 @@
                                     </div>
                                 @endif
                             </div>
+
+                            @php
+                                $automationDates = collect($draft->automation_dates ?: [now('Asia/Bangkok')->toDateString()]);
+                                $automationMode = $draft->automation_mode ?: \App\Models\TextOrderDraft::AUTOMATION_DAILY;
+                            @endphp
+                            <div class="collapse draft-automation" data-draft-automation>
+                                <div class="draft-automation-intro">
+                                    <div>
+                                        <div class="draft-template-section-title mb-1">Cấu hình lên đơn</div>
+                                        <div class="small text-muted">Sản phẩm được sao chép từ đơn mẫu; giá bán được lấy lại theo giá hiện tại vào ngày hệ thống thực hiện.</div>
+                                    </div>
+                                    <div class="form-check form-switch flex-shrink-0">
+                                        <input class="form-check-input js-automation-enabled" type="checkbox" role="switch" id="draftAutomationEnabled{{ $draft->id }}" @checked($draft->automation_enabled)>
+                                        <label class="form-check-label fw-bold small" for="draftAutomationEnabled{{ $draft->id }}">Bật tự động</label>
+                                    </div>
+                                </div>
+
+                                <div class="draft-automation-modes">
+                                    <label class="draft-automation-mode">
+                                        <input type="radio" class="form-check-input js-automation-mode" name="automation_mode_{{ $draft->id }}" value="daily" @checked($automationMode === \App\Models\TextOrderDraft::AUTOMATION_DAILY)>
+                                        <span class="draft-automation-mode-title d-block">1. Tự động lên đơn hằng ngày</span>
+                                        <span class="draft-automation-mode-help d-block">Mỗi ngày tạo đúng một đơn mới từ đơn mẫu này.</span>
+                                    </label>
+                                    <label class="draft-automation-mode">
+                                        <input type="radio" class="form-check-input js-automation-mode" name="automation_mode_{{ $draft->id }}" value="scheduled" @checked($automationMode === \App\Models\TextOrderDraft::AUTOMATION_SCHEDULED)>
+                                        <span class="draft-automation-mode-title d-block">2. Lên đơn theo lịch</span>
+                                        <span class="draft-automation-mode-help d-block">Chỉ tạo đơn vào những ngày được chọn bên dưới.</span>
+                                    </label>
+                                </div>
+
+                                <div class="draft-automation-dates" @if($automationMode !== \App\Models\TextOrderDraft::AUTOMATION_SCHEDULED) hidden @endif>
+                                    <div class="draft-template-section-title">Các ngày lên đơn</div>
+                                    <div class="draft-automation-date-list">
+                                        @foreach($automationDates as $automationDate)
+                                            <div class="draft-automation-date-row">
+                                                <input type="date" class="form-control form-control-sm js-automation-date" min="{{ now('Asia/Bangkok')->toDateString() }}" value="{{ $automationDate }}">
+                                                <button type="button" class="btn btn-sm btn-outline-danger js-remove-automation-date" title="Xóa ngày"><i class="bi bi-trash"></i></button>
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                    <button type="button" class="btn btn-sm btn-outline-primary js-add-automation-date"><i class="bi bi-plus-circle me-1"></i>Thêm ngày</button>
+                                </div>
+
+                                @if($draft->automation_last_run_at || $draft->automation_last_error)
+                                    <div class="small mt-2 {{ $draft->automation_last_error ? 'text-danger' : 'text-muted' }}">
+                                        @if($draft->automation_last_error)
+                                            <i class="bi bi-exclamation-triangle me-1"></i>{{ $draft->automation_last_error }}
+                                        @else
+                                            Lần chạy gần nhất: {{ $draft->automation_last_run_at?->format('d/m/Y H:i') }}
+                                        @endif
+                                    </div>
+                                @endif
+
+                                <div class="draft-automation-footer">
+                                    <span class="small text-muted">Hai chế độ loại trừ nhau; mỗi đơn mẫu chỉ chọn được một chế độ.</span>
+                                    <button type="button" class="btn btn-sm btn-success js-save-draft-automation"><i class="bi bi-calendar2-check me-1"></i>Lưu cấu hình</button>
+                                </div>
+                            </div>
                     </div>
 
                     <div class="draft-template-actions">
                         @if($draft->status !== 'confirmed')<button type="button" class="btn btn-sm btn-outline-success js-show-draft-editor"><i class="bi bi-pencil"></i>Sửa</button>@endif
                         <button type="button" class="btn btn-sm btn-outline-info js-show-draft-details"><i class="bi bi-eye"></i>Chi tiết</button>
                         <button type="button" class="btn btn-sm btn-outline-secondary js-copy-draft"><i class="bi bi-files"></i>Sao chép đơn</button>
+                        <button type="button" class="btn btn-sm btn-outline-primary js-show-draft-automation"><i class="bi bi-calendar2-check"></i>Lịch lên đơn</button>
                         @if($draft->status !== 'confirmed')<button type="button" class="btn btn-sm btn-success js-confirm-draft"><i class="bi bi-check2-circle"></i>Lên đơn</button>@endif
                         <button type="button" class="btn btn-sm btn-outline-danger js-delete-draft"><i class="bi bi-trash"></i>Xóa đơn</button>
                     </div>
@@ -302,6 +383,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const customerEndpoint = @json(route('site.orders.customers.ajax'));
     const variantEndpoint = @json(route('site.orders.variants.ajax'));
     const variants = @json($variantCatalog);
+    const today = @json(now('Asia/Bangkok')->toDateString());
     const notify = (message, type = 'success') => typeof window.showToast === 'function' ? window.showToast(message, type) : window.alert(message);
     const money = value => new Intl.NumberFormat('vi-VN').format(Math.round(Number(value) || 0)) + 'đ';
     const quantity = row => Math.max(1, Number.parseInt(row.querySelector('[name="item_quantity"]').value || '1', 10));
@@ -457,6 +539,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (showEditorButton) {
             const card = showEditorButton.closest('[data-draft-card]');
             card?.querySelector('.draft-template-details')?.classList.remove('show');
+            card?.querySelector('[data-draft-automation]')?.classList.remove('show');
             card?.querySelector('.draft-template-editor')?.classList.add('show');
             return;
         }
@@ -464,7 +547,33 @@ document.addEventListener('DOMContentLoaded', () => {
         if (showDetailsButton) {
             const card = showDetailsButton.closest('[data-draft-card]');
             card?.querySelector('.draft-template-editor')?.classList.remove('show');
+            card?.querySelector('[data-draft-automation]')?.classList.remove('show');
             card?.querySelector('.draft-template-details')?.classList.add('show');
+            return;
+        }
+        const showAutomationButton = event.target.closest('.js-show-draft-automation');
+        if (showAutomationButton) {
+            const card = showAutomationButton.closest('[data-draft-card]');
+            card?.querySelector('.draft-template-details')?.classList.remove('show');
+            card?.querySelector('.draft-template-editor')?.classList.remove('show');
+            card?.querySelector('[data-draft-automation]')?.classList.add('show');
+            return;
+        }
+        const addAutomationDateButton = event.target.closest('.js-add-automation-date');
+        if (addAutomationDateButton) {
+            const list = addAutomationDateButton.closest('.draft-automation-dates').querySelector('.draft-automation-date-list');
+            const row = document.createElement('div');
+            row.className = 'draft-automation-date-row';
+            row.innerHTML = `<input type="date" class="form-control form-control-sm js-automation-date" min="${today}" value="${today}"><button type="button" class="btn btn-sm btn-outline-danger js-remove-automation-date" title="Xóa ngày"><i class="bi bi-trash"></i></button>`;
+            list.append(row);
+            return;
+        }
+        const removeAutomationDateButton = event.target.closest('.js-remove-automation-date');
+        if (removeAutomationDateButton) {
+            const list = removeAutomationDateButton.closest('.draft-automation-date-list');
+            const rows = list.querySelectorAll('.draft-automation-date-row');
+            if (rows.length === 1) rows[0].querySelector('.js-automation-date').value = '';
+            else removeAutomationDateButton.closest('.draft-automation-date-row').remove();
             return;
         }
         const customerToggle = event.target.closest('.js-draft-customer-toggle');
@@ -599,6 +708,38 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             return;
         }
+        const automationSaveButton = event.target.closest('.js-save-draft-automation');
+        if (automationSaveButton) {
+            const card = automationSaveButton.closest('[data-draft-card]');
+            const panel = card.querySelector('[data-draft-automation]');
+            const mode = panel.querySelector('.js-automation-mode:checked')?.value || 'daily';
+            const dates = Array.from(panel.querySelectorAll('.js-automation-date')).map(input => input.value).filter(Boolean);
+            if (mode === 'scheduled' && dates.length === 0) {
+                notify('Hãy chọn ít nhất một ngày lên đơn.', 'error');
+                return;
+            }
+            automationSaveButton.disabled = true;
+            try {
+                if (card.dataset.draftEditable === '1') await request(card, '', 'PUT');
+                const response = await fetch(`${baseUrl}/${card.dataset.draftId}/automation`, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrf},
+                    body: JSON.stringify({
+                        automation_mode: mode,
+                        automation_enabled: panel.querySelector('.js-automation-enabled').checked,
+                        automation_dates: [...new Set(dates)].sort(),
+                    }),
+                });
+                const payload = await response.json();
+                if (!response.ok) throw new Error(payload.message || Object.values(payload.errors || {}).flat()[0] || 'Không thể lưu lịch lên đơn.');
+                notify(payload.message || 'Đã lưu cấu hình lịch lên đơn.');
+                window.location.reload();
+            } catch (error) {
+                notify(error.message, 'error');
+                automationSaveButton.disabled = false;
+            }
+            return;
+        }
         const button = event.target.closest('.js-save-draft, .js-copy-draft, .js-confirm-draft');
         if (!button) return;
         const card = button.closest('[data-draft-card]');
@@ -617,6 +758,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     document.addEventListener('change', event => {
+        const automationMode = event.target.closest('.js-automation-mode');
+        if (automationMode) {
+            const panel = automationMode.closest('[data-draft-automation]');
+            panel.querySelector('.draft-automation-dates').hidden = automationMode.value !== 'scheduled';
+            return;
+        }
         const perPage = event.target.closest('.draft-product-results #per-page-select');
         if (perPage) {
             const editor = perPage.closest('.draft-template-editor');

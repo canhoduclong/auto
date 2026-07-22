@@ -20,6 +20,7 @@ class Kernel extends ConsoleKernel
         \App\Console\Commands\ReconcileInventoryReservations::class,
         \App\Console\Commands\ProcessDailyOrderSchedulesCommand::class,
         \App\Console\Commands\EvaluateOrderSchedulesCommand::class,
+        \App\Console\Commands\ProcessDraftOrderAutomationCommand::class,
         \App\Console\Commands\CustomersApplyFreeResetCommand::class,
     ];
 
@@ -32,6 +33,8 @@ class Kernel extends ConsoleKernel
         $schedule->command('orders:auto-cancel-overdue')->dailyAt('00:05');
         // Reconcile reserved_quantity drift every day at 00:10 (after auto-cancel)
         $schedule->command('inventory:reconcile-reservations')->dailyAt('00:10');
+        // Copy active order templates with the prices effective on the execution day
+        $schedule->command('order-drafts:process-automation')->dailyAt('00:13');
         // Materialize daily auto-order rules and create/review orders for today
         $schedule->command('order-schedules:process-daily-rules')->dailyAt('00:14');
         // Evaluate scheduled orders (price/stock) and auto-generate valid ones

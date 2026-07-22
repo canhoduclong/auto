@@ -925,7 +925,7 @@ class PageController extends Controller
             abort(403, 'Bạn không có quyền truy cập theo dõi đơn hàng.');
         }
 
-        $allowedTabs = ['today', 'drafts', 'my_orders', 'schedules', 'automatic'];
+        $allowedTabs = ['today', 'drafts', 'my_orders', 'customers', 'schedules', 'automatic'];
         $activeTab = (string) $request->input('tab', 'today');
         if (!in_array($activeTab, $allowedTabs, true)) {
             $activeTab = 'today';
@@ -1178,6 +1178,9 @@ class PageController extends Controller
         $tabContentHtml = $activeTab === 'today'
             ? null
             : $this->renderMonitoringTab($activeTab, $request);
+        $customerTabSales = $activeTab === 'customers'
+            ? $this->monitoringCustomerSaleFilters($user)
+            : collect();
 
         return view('site.orders.monitoring', [
             'settings' => $this->settings,
@@ -1196,6 +1199,7 @@ class PageController extends Controller
             'dailyOrderNotes' => $dailyOrderNotes,
             'saleFilters' => $saleFilters,
             'customerFilters' => $customerFilters,
+            'customerTabSales' => $customerTabSales,
             'canApproveByOrder' => $canApproveByOrder,
             'canApproveManagedSales' => $canApproveManagedSales,
             'canApproveManagedSalesAny' => $canApproveManagedSalesAny,
@@ -1220,9 +1224,127 @@ class PageController extends Controller
         return match ($tab) {
             'drafts' => app(\App\Http\Controllers\Admin\TextOrderImportController::class)->saleIndex($tabRequest),
             'my_orders' => $this->myOrders($tabRequest),
+            'customers' => $this->monitoringCustomers($tabRequest),
             'schedules', 'automatic' => app(OrderScheduleController::class)->index($tabRequest),
             default => abort(404),
         };
+    }
+
+    private function monitoringCustomers(Request $request)
+    {
+        $user = $request->user();
+        $sales = $this->monitoringVisibleSales($user);
+        $visibleSaleIds = $sales->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $selectedSaleId = max(0, (int) $request->input('sale_id', 0));
+        if ($selectedSaleId > 0 && !in_array($selectedSaleId, $visibleSaleIds, true)) {
+            $selectedSaleId = 0;
+        }
+
+        $perPage = (int) $request->input('per_page', 20);
+        if (!in_array($perPage, [10, 20, 50, 100], true)) {
+            $perPage = 20;
+        }
+        $viewMode = in_array($request->input('view'), ['compact', 'default'], true)
+            ? (string) $request->input('view')
+            : 'default';
+        $search = trim((string) $request->input('search', ''));
+
+        $customers = Customer::query()
+            ->where(function ($query) use ($visibleSaleIds) {
+                $query->whereIn('user_id', $visibleSaleIds)
+                    ->orWhereIn('assigned_to', $visibleSaleIds)
+                    ->orWhereIn('current_owner_sale_id', $visibleSaleIds)
+                    ->orWhereHas('priorities', fn ($priority) => $priority
+                        ->whereIn('sale_id', $visibleSaleIds)
+                        ->where('is_active', true));
+            })
+            ->where(function ($query) {
+                $query->where('is_employee', '<>', 1)->orWhereNull('is_employee');
+            })
+            ->when($selectedSaleId > 0, function ($query) use ($selectedSaleId) {
+                $query->where(function ($saleScope) use ($selectedSaleId) {
+                    $saleScope->where('user_id', $selectedSaleId)
+                        ->orWhere('assigned_to', $selectedSaleId)
+                        ->orWhere('current_owner_sale_id', $selectedSaleId)
+                        ->orWhereHas('priorities', fn ($priority) => $priority
+                            ->where('sale_id', $selectedSaleId)
+                            ->where('is_active', true));
+                });
+            })
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where(function ($searchQuery) use ($search) {
+                    $searchQuery->where('name', 'like', "%{$search}%")
+                        ->orWhere('phone', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%")
+                        ->orWhere('address', 'like', "%{$search}%");
+                });
+            })
+            ->withCount('orders')
+            ->withSum('orders as total_debt', 'amount_due')
+            ->with([
+                'addresses' => fn ($query) => $query->orderByDesc('is_default')->limit(1),
+                'currentOwner:id,name',
+                'assignedTo:id,name',
+                'user:id,name',
+            ]);
+
+        $this->applyCustomerPinnedSort($customers);
+        $customers = $customers->orderByDesc('id')->paginate($perPage)->withQueryString();
+
+        return view('site.my_customer.monitoring-list', [
+            'customers' => $customers,
+            'perPage' => $perPage,
+            'viewMode' => $viewMode,
+            'search' => $search,
+            'selectedSaleId' => $selectedSaleId,
+            'manageableSaleIds' => $visibleSaleIds,
+            'monitoringEmbedded' => true,
+        ]);
+    }
+
+    private function monitoringVisibleSales(User $user)
+    {
+        $activeRole = strtolower(trim((string) (session('active_role') ?: $user->defaultRole?->name)));
+        $isSaleView = $activeRole === 'sale' || (
+            $activeRole === ''
+            && $user->hasRole('sale')
+            && !$user->hasRole(['admin', 'leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale', 'director'])
+        );
+
+        if ($isSaleView) {
+            return User::query()->whereKey($user->id)->get(['id', 'name', 'team_id']);
+        }
+
+        $query = User::query()
+            ->whereHas('roles', fn ($roles) => $roles->whereRaw('LOWER(name) = ?', ['sale']));
+
+        if ($user->hasRole(['leader', 'leader_sale', 'sale_manager']) && !$user->hasRole(['admin', 'manager', 'manager_sale', 'director'])) {
+            $teamId = (int) ($user->team_id ?? 0);
+            $teamId > 0 ? $query->where('team_id', $teamId) : $query->whereRaw('1 = 0');
+        }
+
+        return $query->orderBy('name')->get(['id', 'name', 'team_id']);
+    }
+
+    private function monitoringCustomerSaleFilters(User $user)
+    {
+        return $this->monitoringVisibleSales($user)->map(function (User $sale) {
+            $count = Customer::query()
+                ->where(function ($query) use ($sale) {
+                    $query->where('user_id', $sale->id)
+                        ->orWhere('assigned_to', $sale->id)
+                        ->orWhere('current_owner_sale_id', $sale->id)
+                        ->orWhereHas('priorities', fn ($priority) => $priority
+                            ->where('sale_id', $sale->id)
+                            ->where('is_active', true));
+                })
+                ->where(function ($query) {
+                    $query->where('is_employee', '<>', 1)->orWhereNull('is_employee');
+                })
+                ->count();
+
+            return ['id' => (int) $sale->id, 'name' => $sale->name, 'count' => $count];
+        })->filter(fn ($sale) => $sale['count'] > 0)->values();
     }
 
     private function renderMonitoringTab(string $tab, Request $request): string
@@ -3245,12 +3367,30 @@ public function apiTruckRoutes(Request $request)
             abort(403);
         }
 
-        if ($user->hasRole('admin')) {
+        if ($user->hasRole(['admin', 'manager', 'manager_sale', 'director'])) {
             return;
         }
 
         $canManage = (int) $customer->user_id === (int) $user->id
-            || (int) $customer->assigned_to === (int) $user->id;
+            || (int) $customer->assigned_to === (int) $user->id
+            || (int) $customer->current_owner_sale_id === (int) $user->id
+            || $customer->priorities()
+                ->where('sale_id', $user->id)
+                ->where('is_active', true)
+                ->exists();
+
+        if (!$canManage && $user->hasRole(['leader', 'leader_sale', 'sale_manager'])) {
+            $ownerIds = collect([
+                $customer->current_owner_sale_id,
+                $customer->assigned_to,
+                $customer->user_id,
+            ])->filter()->map(fn ($id) => (int) $id)->unique();
+            $canManage = (int) ($user->team_id ?? 0) > 0
+                && User::query()
+                    ->whereIn('id', $ownerIds->all())
+                    ->where('team_id', $user->team_id)
+                    ->exists();
+        }
 
         if (!$canManage) {
             abort(403, 'Bạn không có quyền cập nhật khách hàng này.');
@@ -3527,19 +3667,7 @@ public function apiTruckRoutes(Request $request)
 
     public function myCustomerSortSettings(Request $request, Customer $customer)
     {
-        $user = auth()->user();
-        abort_unless($user, 403);
-
-        $canManage = $user->isAdmin()
-            || (int) $customer->assigned_to === (int) $user->id
-            || (int) $customer->current_owner_sale_id === (int) $user->id
-            || (int) $customer->user_id === (int) $user->id
-            || $customer->priorities()
-                ->where('sale_id', $user->id)
-                ->where('is_active', true)
-                ->exists();
-
-        abort_unless($canManage, 403);
+        $this->ensureManagedCustomer($customer);
 
         $validated = $request->validate([
             'is_pinned' => ['nullable', 'boolean'],
