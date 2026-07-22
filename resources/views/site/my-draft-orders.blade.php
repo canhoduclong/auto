@@ -14,7 +14,6 @@
     .draft-template-sort .btn { border-radius: 4px; font-size: .7rem; }
     .draft-template-list { display: grid; gap: 16px; }
     .draft-template-row { display: grid; grid-template-columns: minmax(0, 1fr) 132px; gap: 14px; align-items: start; }
-    .draft-template-row.is-editing { grid-template-columns: minmax(0, 1fr); }
     .draft-template-card { min-width: 0; padding: 14px 16px; border: 1px solid #dce6f1; border-radius: 7px; background: #fff; box-shadow: 0 5px 16px rgba(15, 23, 42, .06); }
     .draft-template-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding-bottom: 8px; border-bottom: 1px solid #e5e7eb; }
     .draft-template-name { color: #0f172a; font-size: .82rem; font-weight: 900; text-transform: uppercase; }
@@ -42,7 +41,7 @@
     .draft-edit-delivery .input-group-text { border: 0; background: transparent; color: #527394; padding-left: 0; }
     .draft-edit-delivery .form-control { border: 0; border-bottom: 1px solid transparent; border-radius: 0; padding-left: 2px; }
     .draft-edit-delivery .form-control:focus { border-bottom-color: #0f766e; box-shadow: none; }
-    .draft-edit-product-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; }
+    .draft-edit-product-head { margin-top: 8px; }
     .draft-edit-products { width: 100%; margin: 4px 0 0; font-size: .72rem; }
     .draft-edit-products th { padding: 7px 6px; border-color: #dce6f1; color: #52617a; font-size: .62rem; font-weight: 900; letter-spacing: .03em; text-transform: uppercase; white-space: nowrap; }
     .draft-edit-products td { padding: 7px 6px; border-color: #edf2f7; vertical-align: middle; }
@@ -55,8 +54,9 @@
     .draft-price-stepper .draft-edit-price-value { min-width: 122px; padding: 7px 8px; border-inline: 1px solid #cbd5e1; color: #047857; font-size: .82rem; font-weight: 900; text-align: center; }
     .draft-edit-line-weight { color: #047857; font-size: .85rem; font-weight: 900; white-space: nowrap; }
     .draft-edit-line-total { font-weight: 900; white-space: nowrap; }
-    .draft-edit-footer { display: flex; align-items: center; justify-content: flex-end; gap: 28px; padding-top: 8px; border-top: 1px solid #dce6f1; }
-    .draft-edit-total { display: grid; grid-template-columns: auto minmax(100px, auto); gap: 18px; color: #0f172a; font-size: .8rem; font-weight: 900; }
+    .draft-edit-total { display: grid; grid-template-columns: auto minmax(100px, auto); justify-content: end; gap: 18px; padding: 9px 6px 20px; color: #0f172a; font-size: .8rem; font-weight: 900; text-align: right; }
+    .draft-edit-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 4px 0; border-top: 1px solid #dce6f1; }
+    .draft-edit-footer-actions { display: flex; flex-wrap: wrap; gap: 10px; }
     .draft-picker { margin-top: 8px; padding: 12px; border: 1px solid #dbe5ef; border-radius: 8px; background: #f8fafc; }
     .draft-picker-search { display: flex; gap: 8px; margin-bottom: 10px; }
     .draft-selected-customer { min-width: 0; color: #334155; font-size: .75rem; font-weight: 700; }
@@ -71,7 +71,8 @@
         .draft-template-editor-grid .is-wide { grid-column: auto; }
         .draft-edit-delivery { grid-template-columns: 1fr; }
         .draft-edit-products { min-width: 820px; }
-        .draft-edit-footer { align-items: flex-end; flex-direction: column; gap: 10px; }
+        .draft-edit-footer { align-items: stretch; flex-direction: column; gap: 10px; }
+        .draft-edit-footer-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
 </style>
 @endpush
@@ -139,7 +140,7 @@
                     $statusClass = $draft->status === 'confirmed' ? 'is-confirmed' : ($draft->status === 'error' ? 'is-error' : '');
                     $isEditingDraft = (int) request('edit') === (int) $draft->id;
                 @endphp
-                <article class="draft-template-row {{ $isEditingDraft ? 'is-editing' : '' }}" data-draft-card data-draft-id="{{ $draft->id }}">
+                <article class="draft-template-row" data-draft-card data-draft-id="{{ $draft->id }}">
                     <div class="draft-template-card">
                         <div class="draft-template-head">
                             <div>
@@ -150,11 +151,7 @@
                                     <span>MẪU-{{ $draft->id }}</span>
                                 </div>
                             </div>
-                            @if($isEditingDraft && $draft->status !== 'confirmed')
-                                <button type="button" class="btn btn-sm btn-outline-success js-draft-customer-toggle"><i class="bi bi-person-check me-1"></i>Chọn khách hàng</button>
-                            @else
-                                <span class="draft-template-status {{ $statusClass }}">{{ $statusText }}</span>
-                            @endif
+                            <span class="draft-template-status {{ $statusClass }}">{{ $statusText }}</span>
                         </div>
 
                         <div class="collapse {{ $isEditingDraft ? '' : 'show' }} draft-template-details" id="draftDetails{{ $draft->id }}">
@@ -209,12 +206,6 @@
                                 <input type="hidden" name="phone" value="{{ $draft->phone }}">
                                 <input type="hidden" name="note" value="{{ $draft->note }}">
 
-                                @unless($isEditingDraft)
-                                    <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
-                                        <span class="draft-selected-customer">{{ $draft->customer?->name ?: ($draft->customer_name ?: 'Chưa chọn khách hàng') }}</span>
-                                        <button type="button" class="btn btn-sm btn-outline-success js-draft-customer-toggle"><i class="bi bi-person-check me-1"></i>Chọn khách hàng</button>
-                                    </div>
-                                @endunless
                                 <div class="draft-picker draft-customer-picker" hidden>
                                         <div class="draft-picker-search">
                                             <input type="search" class="form-control form-control-sm draft-customer-search" placeholder="Tìm theo tên, số điện thoại hoặc email...">
@@ -231,11 +222,10 @@
 
                                 <div class="draft-edit-product-head">
                                     <div class="draft-template-section-title mb-0">Danh sách sản phẩm</div>
-                                    @if($draft->status !== 'confirmed')<button type="button" class="btn btn-sm btn-outline-success js-draft-product-toggle"><i class="bi bi-plus-circle me-1"></i>Thêm sản phẩm</button>@endif
                                 </div>
                                 <div class="table-responsive">
                                     <table class="table table-sm draft-edit-products">
-                                        <thead><tr><th></th><th>Ảnh</th><th>Sản phẩm</th><th class="text-center">Size</th><th>SL</th><th class="text-center">Đơn giá</th><th class="text-end">Tổng</th><th class="text-end">Thành tiền</th></tr></thead>
+                                        <thead><tr><th>#</th><th>Ảnh</th><th>Sản phẩm</th><th class="text-center">Size</th><th>SL</th><th class="text-center">Đơn giá</th><th class="text-end">Tổng</th><th class="text-end">Thành tiền</th></tr></thead>
                                         <tbody class="draft-edit-items">
                                         @foreach($draftItems as $itemIndex => $item)
                                             @php
@@ -276,23 +266,25 @@
                                         </div>
                                         <div class="draft-product-results"><div class="text-center text-muted py-3">Đang tải danh sách sản phẩm...</div></div>
                                     </div>
+                                    <div class="draft-edit-total"><span>Tổng cộng:</span><strong class="draft-edit-grand-total">{{ number_format($draftTotal, 0, ',', '.') }}đ</strong></div>
                                     <div class="draft-edit-footer">
-                                        <div class="draft-edit-total"><span>Tổng cộng:</span><strong class="draft-edit-grand-total">{{ number_format($draftTotal, 0, ',', '.') }}đ</strong></div>
+                                        <div class="draft-edit-footer-actions">
+                                            <button type="button" class="btn btn-sm btn-outline-success js-draft-product-toggle"><i class="bi bi-plus-circle me-1"></i>Thêm sản phẩm</button>
+                                            <button type="button" class="btn btn-sm btn-outline-success js-draft-customer-toggle"><i class="bi bi-person-check me-1"></i>Chọn khách hàng</button>
+                                        </div>
                                         <button type="button" class="btn btn-sm btn-success js-save-draft"><i class="bi bi-check2 me-1"></i>Lưu thay đổi</button>
                                     </div>
                                 @endif
                             </div>
                     </div>
 
-                    @unless($isEditingDraft)
                     <div class="draft-template-actions">
-                        @if($draft->status !== 'confirmed')<button type="button" class="btn btn-sm btn-outline-success" data-bs-toggle="collapse" data-bs-target="#draftEdit{{ $draft->id }}"><i class="bi bi-pencil"></i>Sửa</button>@endif
-                        <button type="button" class="btn btn-sm btn-outline-info" data-bs-toggle="collapse" data-bs-target="#draftDetails{{ $draft->id }}"><i class="bi bi-eye"></i>Chi tiết</button>
+                        @if($draft->status !== 'confirmed')<button type="button" class="btn btn-sm btn-outline-success js-show-draft-editor"><i class="bi bi-pencil"></i>Sửa</button>@endif
+                        <button type="button" class="btn btn-sm btn-outline-info js-show-draft-details"><i class="bi bi-eye"></i>Chi tiết</button>
                         <button type="button" class="btn btn-sm btn-outline-secondary js-copy-draft"><i class="bi bi-files"></i>Sao chép đơn</button>
                         @if($draft->status !== 'confirmed')<button type="button" class="btn btn-sm btn-success js-confirm-draft"><i class="bi bi-check2-circle"></i>Lên đơn</button>@endif
                         <button type="button" class="btn btn-sm btn-outline-danger js-delete-draft"><i class="bi bi-trash"></i>Xóa đơn</button>
                     </div>
-                    @endunless
                 </article>
             @empty
                 <div class="draft-template-empty"><i class="bi bi-inbox fs-2 d-block mb-2"></i>Chưa có đơn hàng mẫu.</div>
@@ -461,6 +453,20 @@ document.addEventListener('DOMContentLoaded', () => {
         return payload;
     };
     document.addEventListener('click', async event => {
+        const showEditorButton = event.target.closest('.js-show-draft-editor');
+        if (showEditorButton) {
+            const card = showEditorButton.closest('[data-draft-card]');
+            card?.querySelector('.draft-template-details')?.classList.remove('show');
+            card?.querySelector('.draft-template-editor')?.classList.add('show');
+            return;
+        }
+        const showDetailsButton = event.target.closest('.js-show-draft-details');
+        if (showDetailsButton) {
+            const card = showDetailsButton.closest('[data-draft-card]');
+            card?.querySelector('.draft-template-editor')?.classList.remove('show');
+            card?.querySelector('.draft-template-details')?.classList.add('show');
+            return;
+        }
         const customerToggle = event.target.closest('.js-draft-customer-toggle');
         if (customerToggle) {
             const editor = customerToggle.closest('[data-draft-card]')?.querySelector('.draft-template-editor');
