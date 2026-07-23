@@ -121,6 +121,40 @@ class OrderAutoApprovalTest extends TestCase
         ]);
     }
 
+    public function test_monitoring_refresh_approves_pending_order_that_matches_saved_rule(): void
+    {
+        [$sale, $leader] = $this->salesUsers();
+        $variant = ProductVariant::factory()->create();
+        ProductPriceRule::query()->create([
+            'product_variant_id' => $variant->id,
+            'price' => 85000,
+            'min_price' => 80000,
+        ]);
+
+        $order = $this->orderWithItem($sale, $variant, 100, 78000);
+        app(ApprovalService::class)->initOrderApproval($order);
+        $this->assertSame('pending_leader_approval', $order->fresh()->status);
+
+        OrderAutoApprovalRule::query()->create([
+            'user_id' => $leader->id,
+            'order_type' => OrderAutoApprovalRule::TYPE_NEW_ORDER,
+            'enabled' => true,
+            'require_min_price' => true,
+            'allow_bulk_below_min' => true,
+            'bulk_min_quantity' => 100,
+            'bulk_below_min_amount' => 2000,
+        ]);
+
+        $response = $this->actingAs($leader)->post(
+            route('pages.my_orders.monitoring.refresh_sequence'),
+            ['date' => $order->created_at->toDateString()]
+        );
+
+        $response->assertRedirect();
+        $response->assertSessionHas('success', fn (string $message) => str_contains($message, 'Đã tự động duyệt 1 đơn phù hợp.'));
+        $this->assertSame(Order::STATUS_APPROVED, $order->fresh()->status);
+    }
+
     private function salesUsers(): array
     {
         $team = Team::query()->create(['name' => 'Phòng kinh doanh kiểm thử']);

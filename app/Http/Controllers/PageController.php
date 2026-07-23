@@ -1417,14 +1417,48 @@ class PageController extends Controller
         return $this->redirectAfterApproveAll($result, 'sale được quản lý');
     }
 
-    public function myOrdersMonitoringRefreshSequence(Request $request)
+    public function myOrdersMonitoringRefreshSequence(
+        Request $request,
+        OrderAutoApprovalService $autoApprovalService
+    )
     {
         $this->monitoringUserOrFail();
 
         $query = Order::query()->where('status', '!=', Order::STATUS_REJECTED);
         $this->applyMonitoringOrderFilters($query, $request);
 
-        return $this->refreshMissingDailySequencesFromQuery($query, 'theo dõi');
+        $autoApprovedOrders = 0;
+        (clone $query)
+            ->whereIn('status', [
+                Order::STATUS_PENDING_LEADER_APPROVAL,
+                Order::STATUS_PENDING_MANAGER_APPROVAL,
+                OrderStatus::Pending->value,
+            ])
+            ->where(function ($scope): void {
+                $scope->whereNull('is_return_order')->orWhere('is_return_order', false);
+            })
+            ->where(function ($scope): void {
+                $scope->whereNull('order_type')->orWhere('order_type', '!=', 'order_return');
+            })
+            ->with(['user', 'items.variant.latestPriceRule', 'approvals.step'])
+            ->orderBy('id')
+            ->get()
+            ->each(function (Order $order) use ($autoApprovalService, &$autoApprovedOrders): void {
+                if ($autoApprovalService->processOrder($order) > 0) {
+                    $autoApprovedOrders++;
+                }
+            });
+
+        $response = $this->refreshMissingDailySequencesFromQuery($query, 'theo dõi');
+        if ($autoApprovedOrders > 0) {
+            $sequenceMessage = (string) session('success', 'Đã cập nhật số thứ tự ưu tiên.');
+            $response->with(
+                'success',
+                "Đã tự động duyệt {$autoApprovedOrders} đơn phù hợp. {$sequenceMessage}"
+            );
+        }
+
+        return $response;
     }
 
     public function myOrdersMonitoringAutoApproval(Request $request, OrderAutoApprovalService $autoApprovalService)

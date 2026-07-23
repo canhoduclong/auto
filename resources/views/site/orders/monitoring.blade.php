@@ -887,7 +887,7 @@
                 <button class="btn btn-sm btn-outline-primary monitor-summary-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#monitorProductSummary" aria-expanded="false">
                     <i class="bi bi-inbox me-1"></i>Hàng - Số lượng
                 </button>
-                <form method="POST" action="{{ route('pages.my_orders.monitoring.refresh_sequence') }}" onsubmit="return confirm('Cập nhật lại số thứ tự ưu tiên cho các đơn đang thiếu số?');">
+                <form method="POST" action="{{ route('pages.my_orders.monitoring.refresh_sequence') }}" onsubmit="return confirm('Quét duyệt tự động các đơn đủ điều kiện và cập nhật lại số thứ tự ưu tiên?');">
                     @csrf
                     <input type="hidden" name="date" value="{{ $selectedDate }}">
                     <input type="hidden" name="keyword" value="{{ $keyword }}">
