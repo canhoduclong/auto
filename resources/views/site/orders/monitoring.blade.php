@@ -615,7 +615,6 @@
         .monitor-shell { max-width: 960px; }
         .monitor-layout { grid-template-columns: 220px minmax(0, 1fr); gap: 14px; }
         .monitor-order { grid-template-columns: minmax(0, 1fr) 180px; }
-        .monitor-order-head { grid-template-columns: 1fr; }
     }
     @media (max-width: 991.98px) {
         .monitor-layout { grid-template-columns: 1fr; }
