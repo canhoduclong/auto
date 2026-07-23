@@ -26,11 +26,12 @@
     .mcl-list { display: grid; gap: 16px; }
     .mcl-row {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) 128px 132px;
+        grid-template-columns: minmax(0, 1fr) 128px;
         gap: 10px;
         align-items: start;
         position: relative;
     }
+    .mcl-row.is-actions-open { z-index: 20; }
     .mcl-card {
         min-width: 0;
         min-height: 106px;
@@ -68,37 +69,52 @@
     .mcl-actions {
         display: none;
         grid-template-columns: 1fr;
-        gap: 8px;
-        position: relative;
-        z-index: 5;
-        padding-top: 4px;
+        gap: 2px;
+        position: absolute;
+        z-index: 30;
+        top: 39px;
+        right: 0;
+        width: 154px;
+        padding: 6px;
+        border: 1px solid #dbe4ec;
+        border-radius: 7px;
+        background: #fff;
+        box-shadow: 0 10px 26px rgba(15, 23, 42, .16);
     }
     .mcl-row.is-actions-open .mcl-actions { display: grid; }
     .mcl-actions .btn {
-        min-height: 42px;
+        min-height: 34px;
         display: inline-flex;
         align-items: center;
-        justify-content: center;
-        gap: 5px;
-        border-radius: 6px;
-        background: #fff;
-        font-size: .7rem;
-        font-weight: 800;
+        justify-content: flex-start;
+        gap: 8px;
+        padding: 6px 9px;
+        border: 0;
+        border-radius: 5px;
+        background: transparent;
+        font-size: .73rem;
+        font-weight: 700;
+        text-align: left;
     }
-    .mcl-actions .btn-success { color: #fff; background: #198754; }
+    .mcl-actions .btn:hover { background: #f1f5f9; }
+    .mcl-actions .btn-success { color: #198754; }
     .mcl-actions::before {
         content: "";
         position: absolute;
-        top: 17px;
-        left: -17px;
-        width: 16px;
-        border-top: 1px dashed #f97316;
+        top: -6px;
+        right: 12px;
+        width: 11px;
+        height: 11px;
+        border-top: 1px solid #dbe4ec;
+        border-left: 1px solid #dbe4ec;
+        background: #fff;
+        transform: rotate(45deg);
     }
     .mcl-empty { padding: 45px 20px; border: 1px solid #dce4ec; border-radius: 8px; background: #fff; color: #64748b; text-align: center; }
     .mcl-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; color: #475569; font-size: .75rem; }
     .mcl-pagination .pagination { margin-bottom: 0; }
     .mcl-pagination .page-link { padding: .32rem .58rem; color: #087f5b; border-color: #86c9ad; }
-    .mcl-row.is-compact { grid-template-columns: minmax(0, 1fr) 128px 132px; }
+    .mcl-row.is-compact { grid-template-columns: minmax(0, 1fr) 128px; }
     .mcl-row.is-compact .mcl-card { min-height: 74px; padding-block: 10px; }
     .mcl-row.is-compact .mcl-name { font-size: .9rem; }
     @media (max-width: 991.98px) {
@@ -106,12 +122,6 @@
         .mcl-toolbar-left, .mcl-toolbar-right { flex-wrap: wrap; }
         .mcl-toolbar-right { justify-content: space-between; }
         .mcl-row, .mcl-row.is-compact { grid-template-columns: minmax(0, 1fr) 128px; }
-        .mcl-actions {
-            grid-column: 1 / -1;
-            grid-template-columns: repeat(5, minmax(0, 1fr));
-            padding: 0 0 4px;
-        }
-        .mcl-actions::before { display: none; }
     }
     @media (max-width: 767.98px) {
         .mcl-title { margin-bottom: 20px; }
@@ -127,7 +137,7 @@
         .mcl-sort-input { width: 42px; }
         .mcl-details { gap: 8px 12px; }
         .mcl-updated { margin-left: 0; }
-        .mcl-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .mcl-actions { top: 105px; width: 150px; }
         .mcl-pagination { align-items: stretch; flex-direction: column; }
     }
 </style>

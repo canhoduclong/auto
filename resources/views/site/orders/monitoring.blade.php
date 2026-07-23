@@ -727,6 +727,9 @@
         <div class="monitor-layout">
             <aside class="monitor-sidebar">
                 <nav class="monitor-tab-nav" aria-label="Nhóm đơn hàng">
+                    <a class="monitor-tab-link" href="{{ route('pages.my_dashboard') }}">
+                        <i class="bi bi-house-door"></i><span>Bảng điều khiển</span>
+                    </a>
                     <a class="monitor-tab-link {{ $activeTab === 'today' ? 'active' : '' }}" href="{{ route('pages.my_orders.monitoring', ['tab' => 'today', 'date' => $selectedDate]) }}">
                         <i class="bi bi-file-earmark-text"></i><span>Đơn hôm nay</span>
                     </a>
@@ -827,24 +830,20 @@
             @endif
         </div>
         @if($activeTab === 'today')
+        @php
+            $sequenceOrders = $orders->getCollection()->sortBy(fn ($order) => $order->daily_sequence ?? PHP_INT_MAX)->values();
+        @endphp
+        @if($sequenceOrders->isNotEmpty())
         <div class="monitor-panel monitor-sequence-panel mb-3">
-            @php
-                $sequenceOrders = $orders->getCollection()->sortBy(fn ($order) => $order->daily_sequence ?? PHP_INT_MAX)->values();
-                $sequenceSlots = min((int) $perPage, max(10, $sequenceOrders->count()));
-            @endphp
             <div class="monitor-sequences" aria-label="Điều hướng nhanh theo số thứ tự đơn">
-                @for($sequenceIndex = 1; $sequenceIndex <= $sequenceSlots; $sequenceIndex++)
-                    @php $sequenceOrder = $sequenceOrders->get($sequenceIndex - 1); @endphp
-                    @if($sequenceOrder)
-                        <a class="monitor-sequence" href="#monitor-order-{{ $sequenceOrder->id }}" title="{{ $sequenceOrder->customer?->name ?? $sequenceOrder->code }}">
-                            {{ $sequenceOrder->daily_sequence ?? $sequenceIndex }}
-                        </a>
-                    @else
-                        <span class="monitor-sequence is-empty" aria-hidden="true">{{ $sequenceIndex }}</span>
-                    @endif
-                @endfor
+                @foreach($sequenceOrders as $sequenceOrder)
+                    <a class="monitor-sequence" href="#monitor-order-{{ $sequenceOrder->id }}" title="{{ $sequenceOrder->customer?->name ?? $sequenceOrder->code }}">
+                        {{ $sequenceOrder->daily_sequence ?? $loop->iteration }}
+                    </a>
+                @endforeach
             </div>
         </div>
+        @endif
 
         <div class="monitor-bulk-actions mb-2">
             <div class="monitor-bulk-left">
