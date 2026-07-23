@@ -15,10 +15,10 @@
     }
     .dashboard-shell {
         display: grid;
-        grid-template-columns: 236px minmax(0, 550px) minmax(280px, 332px);
-        gap: 26px;
+        grid-template-columns: 232px minmax(0, 680px) 332px;
+        gap: 28px;
         width: calc(100% - 32px);
-        max-width: 1180px;
+        max-width: 1300px;
         margin: 0 auto;
         align-items: start;
     }
@@ -196,10 +196,10 @@
         font-size: .75rem;
         line-height: 1.5;
     }
-    @media (max-width: 1100px) {
+    @media (max-width: 1340px) {
         .dashboard-shell {
             grid-template-columns: 220px minmax(0, 1fr);
-            max-width: 920px;
+            max-width: 1000px;
         }
         .dashboard-price-column { grid-column: 2; }
     }
