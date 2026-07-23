@@ -948,7 +948,9 @@
                                 'new_order' => ['title' => 'Đơn mới', 'rule' => $newOrderRule],
                                 'order_adjustment' => ['title' => 'Điều chỉnh đơn', 'rule' => $adjustmentRule],
                             ] as $prefix => $config)
-                                @php($rule = $config['rule'])
+                                @php
+                                    $rule = $config['rule'];
+                                @endphp
                                 <section data-auto-rule>
                                     <div class="monitor-auto-rule-title">{{ $config['title'] }}</div>
                                     <div class="form-check form-switch monitor-auto-rule-toggle">
