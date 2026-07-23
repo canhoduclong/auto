@@ -207,7 +207,7 @@
     }
     .monitor-order-head {
         display: grid;
-        grid-template-columns: minmax(180px, 1fr) minmax(290px, 360px);
+        grid-template-columns: minmax(180px, 1fr) minmax(250px, 280px);
         align-items: start;
         gap: 18px;
         padding-bottom: 10px;
