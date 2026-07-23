@@ -769,12 +769,6 @@
                     <a class="monitor-tab-link {{ $activeTab === 'customers' ? 'active' : '' }}" href="{{ route('pages.my_orders.monitoring', ['tab' => 'customers']) }}">
                         <i class="bi bi-person-check"></i><span>Khách hàng</span>
                     </a>
-                    <a class="monitor-tab-link {{ $activeTab === 'schedules' ? 'active' : '' }}" href="{{ route('pages.my_orders.monitoring', ['tab' => 'schedules']) }}">
-                        <i class="bi bi-calendar-check"></i><span>Đơn hàng theo lịch</span>
-                    </a>
-                    <a class="monitor-tab-link {{ $activeTab === 'automatic' ? 'active' : '' }}" href="{{ route('pages.my_orders.monitoring', ['tab' => 'automatic']) }}">
-                        <i class="bi bi-arrow-repeat"></i><span>Đơn hàng tự động</span>
-                    </a>
                 </nav>
 
                 @if($activeTab === 'today')

@@ -244,12 +244,6 @@
             <a href="{{ $monitorRoute('my_orders') }}" class="dashboard-menu-link">
                 <i class="bi bi-bag-check"></i><span>Đơn của tôi</span>
             </a>
-            <a href="{{ $monitorRoute('schedules') }}" class="dashboard-menu-link">
-                <i class="bi bi-calendar-check"></i><span>Đơn hàng theo lịch</span>
-            </a>
-            <a href="{{ $monitorRoute('automatic') }}" class="dashboard-menu-link">
-                <i class="bi bi-arrow-repeat"></i><span>Đơn hàng tự động</span>
-            </a>
         </aside>
 
         <main class="dashboard-main">
