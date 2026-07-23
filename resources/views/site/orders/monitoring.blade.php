@@ -489,18 +489,29 @@
     .monitor-bulk-actions form { margin: 0; }
     .monitor-bulk-actions .form-select { width: 158px; min-height: 38px; }
     .monitor-bulk-actions .btn { min-height: 38px; padding-inline: 14px; }
-    .monitor-auto-approval { margin: 0 0 18px; overflow: hidden; border: 1px solid var(--monitor-border); border-radius: 8px; background: #fff; }
-    .monitor-auto-approval-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 14px; border-bottom: 1px solid #e5edf5; color: #0f4770; font-size: .78rem; font-weight: 900; text-transform: uppercase; }
-    .monitor-auto-approval-body { padding: 14px 18px 16px; }
-    .monitor-auto-approval-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; }
-    .monitor-auto-rule-title { margin-bottom: 10px; padding-bottom: 7px; border-bottom: 1px solid #334155; color: #0f172a; font-size: .76rem; font-weight: 900; text-transform: uppercase; }
-    .monitor-auto-rule-toggle { margin-bottom: 10px; padding: 8px 10px; border-radius: 6px; background: #f0fdf4; }
-    .monitor-auto-rule-options { display: grid; gap: 9px; }
-    .monitor-auto-rule-options .form-check-label { color: #334155; font-size: .76rem; }
-    .monitor-auto-bulk-fields { display: grid; grid-template-columns: minmax(130px, .7fr) minmax(180px, 1fr); gap: 9px; margin: 2px 0 0 24px; }
-    .monitor-auto-bulk-fields label { margin-bottom: 3px; color: #64748b; font-size: .66rem; font-weight: 800; }
-    .monitor-auto-help { margin-top: 12px; padding-top: 10px; border-top: 1px dashed #dce6f1; color: #64748b; font-size: .7rem; }
-    .monitor-auto-footer { display: flex; align-items: center; justify-content: flex-end; margin-top: 14px; }
+    .monitor-auto-approval { margin: 0 0 18px; overflow: hidden; border: 1px solid #d3e0ed; border-radius: 10px; background: #fff; }
+    .monitor-auto-approval-head { display: flex; min-height: 40px; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 14px; border-bottom: 1px solid #dce6f1; color: #075985; font-size: .76rem; font-weight: 900; text-transform: uppercase; }
+    .monitor-auto-approval-head-meta { display: flex; align-items: center; justify-content: flex-end; gap: 18px; }
+    .monitor-auto-approval-head .monitor-auto-owner { color: #64748b; font-size: .66rem; font-weight: 400; text-transform: lowercase; }
+    .monitor-auto-close { width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; background: transparent; color: #0f172a; font-size: 1.25rem; font-weight: 300; line-height: 1; }
+    .monitor-auto-close:hover { color: #9a3412; }
+    .monitor-auto-approval-body { padding: 15px 18px 14px; }
+    .monitor-auto-approval-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 27px; }
+    .monitor-auto-rule-title { margin: 0 0 10px; padding: 0 0 7px; border-bottom: 1px solid #334155; color: #0f172a; font-size: .75rem; font-weight: 900; text-transform: uppercase; }
+    .monitor-auto-rule-toggle { display: flex; min-height: 40px; align-items: center; gap: 8px; margin: 0 0 10px; padding: 8px 14px; border-radius: 0 6px 6px 0; background: #effcf4; }
+    .monitor-auto-rule-toggle .form-check-input { flex: 0 0 auto; margin: 0; }
+    .monitor-auto-rule-toggle .form-check-label { color: #0f172a; font-size: .88rem; font-weight: 900; }
+    .monitor-auto-rule-options { display: grid; gap: 9px; padding: 2px 14px 0; }
+    .monitor-auto-rule-options > .form-check { min-height: 22px; margin: 0; }
+    .monitor-auto-rule-options .form-check-label { color: #334155; font-size: .72rem; }
+    .monitor-auto-bulk-fields { display: grid; grid-template-columns: 175px 145px; gap: 10px; margin: 1px 0 0 24px; }
+    .monitor-auto-bulk-fields label { display: block; margin-bottom: 4px; color: #52617a; font-size: .65rem; font-weight: 900; }
+    .monitor-auto-bulk-fields .form-control { height: 32px; font-size: .76rem; }
+    .monitor-auto-bottom { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; margin-top: 13px; padding-top: 10px; border-top: 1px dashed #dce6f1; }
+    .monitor-auto-help { display: grid; gap: 4px; color: #64748b; font-size: .68rem; line-height: 1.4; }
+    .monitor-auto-footer { flex: 0 0 auto; }
+    .monitor-auto-footer .btn { min-height: 32px; padding: 6px 12px; border-color: #98572f; background: #98572f; color: #fff; font-size: .72rem; font-weight: 700; }
+    .monitor-auto-footer .btn:hover, .monitor-auto-footer .btn:focus { border-color: #7f4525; background: #7f4525; color: #fff; }
     .monitor-summary-toggle { border: 1px solid var(--monitor-teal); color: var(--monitor-teal); }
     .monitor-sequence-panel {
         position: sticky;
@@ -663,6 +674,8 @@
         .monitor-inline-edit-fields .is-wide { grid-column: auto; }
         .monitor-auto-approval-grid { grid-template-columns: 1fr; gap: 18px; }
         .monitor-auto-bulk-fields { grid-template-columns: 1fr; }
+        .monitor-auto-bottom { align-items: stretch; flex-direction: column; }
+        .monitor-auto-footer .btn { width: 100%; }
         .monitor-variant-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .monitor-product-choice-label { font-size: 0; }
         .monitor-product-choice-label i { font-size: .8rem; }
@@ -725,6 +738,7 @@
     $saleFilterQuery = request()->except(['sale_id', 'page']);
     $customerFilterQuery = request()->except(['customer_id', 'page']);
     $monitorUser = auth()->user();
+    $hasAutoApprovalErrors = isset($errors) && $errors->any();
     $activeMonitorRole = strtolower(trim((string) (session('active_role') ?: $monitorUser?->defaultRole?->name)));
     $isSaleViewingRole = $activeMonitorRole === 'sale';
     if ($activeMonitorRole === '' && $monitorUser?->hasRole('sale')) {
@@ -919,7 +933,7 @@
                     </form>
                 @endif
                 @if($canConfigureAutoApproval)
-                    <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="collapse" data-bs-target="#monitorAutoApproval" aria-expanded="{{ $errors->any() ? 'true' : 'false' }}" title="Cấu hình duyệt đơn tự động">
+                    <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="collapse" data-bs-target="#monitorAutoApproval" aria-expanded="{{ $hasAutoApprovalErrors ? 'true' : 'false' }}" title="Cấu hình duyệt đơn tự động">
                         <i class="bi bi-gear"></i>
                     </button>
                 @endif
@@ -934,19 +948,22 @@
                 $newOrderRule = $autoApprovalRules->get(\App\Models\OrderAutoApprovalRule::TYPE_NEW_ORDER);
                 $adjustmentRule = $autoApprovalRules->get(\App\Models\OrderAutoApprovalRule::TYPE_ORDER_ADJUSTMENT);
             @endphp
-            <div class="collapse {{ $errors->any() ? 'show' : '' }}" id="monitorAutoApproval">
+            <div class="collapse {{ $hasAutoApprovalErrors ? 'show' : '' }}" id="monitorAutoApproval">
                 <form method="POST" action="{{ route('pages.my_orders.monitoring.auto_approval') }}" class="monitor-auto-approval">
                     @csrf
                     @method('PUT')
                     <div class="monitor-auto-approval-head">
                         <span><i class="bi bi-shield-check me-1"></i>Duyệt đơn tự động</span>
-                        <span class="small text-muted text-lowercase fw-normal">Cấu hình riêng cho {{ $user->name }}</span>
+                        <div class="monitor-auto-approval-head-meta">
+                            <span class="monitor-auto-owner">Cấu hình riêng cho {{ $user->name }}</span>
+                            <button type="button" class="monitor-auto-close" data-bs-toggle="collapse" data-bs-target="#monitorAutoApproval" aria-controls="monitorAutoApproval" aria-label="Đóng cấu hình duyệt tự động">×</button>
+                        </div>
                     </div>
                     <div class="monitor-auto-approval-body">
                         <div class="monitor-auto-approval-grid">
                             @foreach([
-                                'new_order' => ['title' => 'Đơn mới', 'rule' => $newOrderRule],
-                                'order_adjustment' => ['title' => 'Điều chỉnh đơn', 'rule' => $adjustmentRule],
+                                'new_order' => ['title' => 'Đơn mới', 'rule' => $newOrderRule, 'quantity_label' => 'Sản lượng từ (con)'],
+                                'order_adjustment' => ['title' => 'Điều chỉnh đơn', 'rule' => $adjustmentRule, 'quantity_label' => 'Sản lượng từ'],
                             ] as $prefix => $config)
                                 @php
                                     $rule = $config['rule'];
@@ -968,11 +985,11 @@
                                         </div>
                                         <div class="monitor-auto-bulk-fields">
                                             <div>
-                                                <label for="{{ $prefix }}Quantity">Sản lượng tối thiểu (con)</label>
+                                                <label for="{{ $prefix }}Quantity">{{ $config['quantity_label'] }}</label>
                                                 <input type="number" class="form-control form-control-sm" id="{{ $prefix }}Quantity" name="{{ $prefix }}_bulk_min_quantity" min="1" max="1000000" value="{{ old("{$prefix}_bulk_min_quantity", $rule?->bulk_min_quantity ?? 100) }}" required>
                                             </div>
                                             <div>
-                                                <label for="{{ $prefix }}BelowMin">Được thấp hơn giá Min (đ/con)</label>
+                                                <label for="{{ $prefix }}BelowMin">Chiết khấu thêm</label>
                                                 <input type="number" class="form-control form-control-sm" id="{{ $prefix }}BelowMin" name="{{ $prefix }}_bulk_below_min_amount" min="0" max="1000000000" step="1000" value="{{ old("{$prefix}_bulk_below_min_amount", (float) ($rule?->bulk_below_min_amount ?? 2000)) }}" required>
                                             </div>
                                         </div>
@@ -980,11 +997,14 @@
                                 </section>
                             @endforeach
                         </div>
-                        <div class="monitor-auto-help">
-                            Trưởng phòng chỉ duyệt đơn của sale cùng team. Giám đốc chỉ duyệt khi các bước trước đã hoàn tất. Đơn không đạt điều kiện vẫn giữ trạng thái chờ duyệt thủ công.
-                        </div>
-                        <div class="monitor-auto-footer">
-                            <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-check2-circle me-1"></i>Lưu cấu hình và duyệt đơn phù hợp</button>
+                        <div class="monitor-auto-bottom">
+                            <div class="monitor-auto-help">
+                                <span>Trưởng phòng chỉ duyệt đơn của sale cùng team. Giám đốc chỉ duyệt khi các bước trước đã hoàn tất.</span>
+                                <span>Đơn không đạt điều kiện vẫn giữ trạng thái chờ duyệt thủ công.</span>
+                            </div>
+                            <div class="monitor-auto-footer">
+                                <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-check2-circle me-1"></i>Lưu cấu hình và duyệt đơn phù hợp</button>
+                            </div>
                         </div>
                     </div>
                 </form>
