@@ -165,6 +165,35 @@
         padding: .2rem .55rem;
         font-size: .78rem;
     }
+    .selling-price-stepper {
+        display: inline-flex;
+        align-items: stretch;
+        min-width: 164px;
+    }
+    .selling-price-stepper .btn {
+        width: 34px;
+        border-color: #cbd5e1;
+        border-radius: 0;
+        color: #0f766e;
+        font-size: 1rem;
+        font-weight: 900;
+    }
+    .selling-price-stepper .btn:first-child { border-radius: 5px 0 0 5px; }
+    .selling-price-stepper .btn:last-child { border-radius: 0 5px 5px 0; }
+    .selling-price-stepper .btn:disabled { color: #94a3b8; background: #f1f5f9; opacity: 1; }
+    .selling-price-value {
+        min-width: 96px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 4px 8px;
+        border-block: 1px solid #cbd5e1;
+        background: #fff;
+        color: #047857;
+        font-size: .84rem;
+        font-weight: 900;
+        white-space: nowrap;
+    }
     .selling-price-feedback {
         display: none;
         margin-top: .35rem;
@@ -297,6 +326,25 @@
         padding: .25rem .5rem;
         font-size: .78rem;
     }
+    .monitor-product-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .monitor-product-list { display: grid; gap: 8px; }
+    .monitor-product-card { overflow: hidden; border: 1px solid #e5e7eb; border-radius: 9px; background: #fff; }
+    .monitor-product-card.is-open { border-color: #0f766e; box-shadow: 0 0 0 2px rgba(15, 118, 110, .08); }
+    .monitor-product-choice { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 12px; padding: 10px; border: 0; background: #fff; color: #0f172a; text-align: left; }
+    .monitor-product-main { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .monitor-product-main > span:last-child { min-width: 0; }
+    .monitor-product-thumb { width: 52px; height: 52px; flex: 0 0 auto; border-radius: 7px; object-fit: cover; }
+    .monitor-product-name, .monitor-product-meta { display: block; }
+    .monitor-product-name { overflow: hidden; font-size: .84rem; text-overflow: ellipsis; white-space: nowrap; }
+    .monitor-product-meta { margin-top: 3px; color: #64748b; font-size: .7rem; }
+    .monitor-product-choice-label { flex: 0 0 auto; color: #0f766e; font-size: .75rem; font-weight: 800; }
+    .monitor-product-card.is-open .monitor-product-choice-label i { transform: rotate(180deg); }
+    .monitor-product-variants { padding: 10px; border-top: 1px solid #e5e7eb; background: #f8fafc; }
+    .monitor-variant-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    .monitor-variant-option { display: grid; gap: 2px; min-height: 74px; padding: 8px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #334155; text-align: left; font-size: .72rem; }
+    .monitor-variant-option:hover { border-color: #0f766e; background: #ecfdf5; }
+    .monitor-variant-size { color: #0f172a; font-size: .84rem; font-weight: 900; }
+    .monitor-variant-option small { color: #64748b; }
     @media (max-width: 992px) {
         .variant-picker-item {
             grid-template-columns: 1fr;
@@ -312,6 +360,12 @@
         .variant-picker-meta {
             flex-wrap: wrap;
         }
+        .monitor-variant-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 575.98px) {
+        .monitor-product-choice-label { font-size: 0; }
+        .monitor-product-choice-label i { font-size: .8rem; }
+        .monitor-variant-grid { grid-template-columns: 1fr; }
     }
 </style>
 @endpush
@@ -439,10 +493,9 @@
                                         <tr>
                                             <th>Sản phẩm</th>
                                             <th class="text-center">Size</th>
-                                            <th class="text-center">Đơn giá</th>
-                                            <th class="text-center">CK giá</th>
+                                            <th class="text-center">Giá bán</th>
                                             <th class="text-center">SL</th>
-                                            <th class="text-center">Tổng cộng</th>
+                                            <th class="text-center">Tổng</th>
                                             <th class="text-center">Tạm tính</th>
                                             <th></th>
                                         </tr>
@@ -457,14 +510,14 @@
 
                     <div class="checkout-panel">
                         <div class="checkout-panel-body">
-                            <h2 class="h6 fw-bold mb-3">Thêm biến thể sản phẩm</h2>
+                            <h2 class="h6 fw-bold mb-3">Chọn sản phẩm và biến thể</h2>
                             <div class="input-group mb-2">
                                 <button class="btn btn-success" type="button" id="variant-show-all-button">
                                     <i class="bi bi-plus-circle me-1"></i> Thêm sản phẩm
                                 </button>
                             </div>
                             <div class="input-group">
-                                <input type="text" id="variant-search" class="form-control" placeholder="Nhập SKU hoặc tên sản phẩm">
+                                <input type="text" id="variant-search" class="form-control" placeholder="Nhập tên sản phẩm, SKU hoặc size biến thể">
                                 <button class="btn btn-outline-secondary" type="button" id="variant-search-button">Tìm</button>
                             </div>
                             <div id="variant-search-results" class="mt-3"></div>
@@ -650,7 +703,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function validateRowSellingPrice(row) {
         const priceEl = row.querySelector('.price');
         const discountInput = row.querySelector('.discount-input');
-        const discountTypeInput = row.querySelector('.discount-type-input:checked');
+        const discountTypeInput = row.querySelector('.discount-type-input');
         const feedbackEl = row.querySelector('.selling-price-feedback');
         const rowTotalEl = row.querySelector('.row-total');
 
@@ -686,7 +739,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const priceEl = row.querySelector('.price');
             const qtyInput = row.querySelector('.quantity-input');
             const discountInput = row.querySelector('.discount-input');
-            const discountTypeInput = row.querySelector('.discount-type-input:checked');
+            const discountTypeInput = row.querySelector('.discount-type-input');
             const rowTotalEl = row.querySelector('.row-total');
             const price = parseFloat(priceEl?.getAttribute('data-price') || '0');
             const minPrice = parseFloat(priceEl?.getAttribute('data-min-price') || '0');
@@ -701,7 +754,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 const unitWeight = parseFloat(lineWeightEl.getAttribute('data-unit-weight') || '0');
                 const weightUnit = lineWeightEl.getAttribute('data-weight-unit') || 'Kg';
                 const lineWeight = Math.max(0, unitWeight * quantity);
-                lineWeightEl.textContent = formatKg(lineWeight);
+                lineWeightEl.textContent = isPricedByKg
+                    ? formatKg(lineWeight)
+                    : `${formatNumber(quantity)} ${weightUnit}`;
             }
 
             discountInput.max = discountType === 'decrease' ? String(Math.max(price - minPrice, 0)) : '';
@@ -714,6 +769,16 @@ document.addEventListener('DOMContentLoaded', function () {
             const lineSubtotal = price * quantity * pricingFactor;
             const lineAdjustment = (discountType === 'increase' ? -1 : 1) * unitDiscount * quantity * pricingFactor;
             const lineTotal = Math.max(lineSubtotal - lineAdjustment, 0);
+            const sellingPrice = discountType === 'increase' ? price + unitDiscount : price - unitDiscount;
+
+            const sellingPriceEl = row.querySelector('.selling-price-value');
+            if (sellingPriceEl) {
+                sellingPriceEl.textContent = formatMoney(sellingPrice);
+            }
+            const decreaseButton = row.querySelector('.selling-price-decrease');
+            if (decreaseButton) {
+                decreaseButton.disabled = sellingPrice <= minPrice;
+            }
 
             if (rowTotalEl) {
                 rowTotalEl.textContent = `${formatNumber(lineTotal)}đ`;
@@ -767,7 +832,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function fetchVariantData(url, data) {
         currentVariantSearchPage = Number(data.page || 1);
         currentVariantSearchPerPage = Number(data.per_page || currentVariantSearchPerPage || 5);
-        currentVariantShowAll = data.allow_backorder === true || data.allow_backorder === 1 || data.allow_backorder === '1';
+        currentVariantShowAll = data.show_all === true || data.show_all === 1 || data.show_all === '1';
 
         const query = new URLSearchParams(data).toString();
         variantSearchResults.innerHTML = '<div class="text-center text-muted py-3">Đang tải...</div>';
@@ -792,11 +857,11 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        fetchVariantData('{{ route('orders.ajax_variant_search') }}', {
+        fetchVariantData('{{ route('site.orders.variants.ajax') }}', {
             page: page,
             search: term,
             per_page: currentVariantSearchPerPage,
-            allow_backorder: 1,
+            view: 'products',
             exclude_ids: getCartVariantIds()
         });
     }
@@ -804,10 +869,11 @@ document.addEventListener('DOMContentLoaded', function () {
     function refreshVariantResults(page = currentVariantSearchPage) {
         const term = (variantSearchInput.value || '').trim();
         if (currentVariantShowAll || term.length < 2) {
-            fetchVariantData('{{ route('orders.ajax_variant_search') }}', {
+            fetchVariantData('{{ route('site.orders.variants.ajax') }}', {
                 page: page,
                 per_page: currentVariantSearchPerPage,
-                allow_backorder: 1,
+                view: 'products',
+                show_all: 1,
                 exclude_ids: getCartVariantIds()
             });
             return;
@@ -818,10 +884,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (variantShowAllButton) {
         variantShowAllButton.addEventListener('click', function () {
-            fetchVariantData('{{ route('orders.ajax_variant_search') }}', {
+            fetchVariantData('{{ route('site.orders.variants.ajax') }}', {
                 page: 1,
                 per_page: currentVariantSearchPerPage,
-                allow_backorder: 1,
+                view: 'products',
+                show_all: 1,
                 exclude_ids: getCartVariantIds()
             });
             if (variantSearchInput) {
@@ -840,7 +907,31 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     variantSearchResults.addEventListener('click', function (event) {
-        const addBtn = event.target.closest('.add-variant-to-cart');
+        const productChoice = event.target.closest('.monitor-product-choice');
+        if (productChoice) {
+            event.preventDefault();
+            const card = productChoice.closest('.monitor-product-card');
+            const variants = card?.querySelector('.monitor-product-variants');
+            if (!card || !variants) {
+                return;
+            }
+
+            const willOpen = variants.hidden;
+            variantSearchResults.querySelectorAll('.monitor-product-card.is-open').forEach((openCard) => {
+                if (openCard !== card) {
+                    openCard.classList.remove('is-open');
+                    openCard.querySelector('.monitor-product-choice')?.setAttribute('aria-expanded', 'false');
+                    const openVariants = openCard.querySelector('.monitor-product-variants');
+                    if (openVariants) openVariants.hidden = true;
+                }
+            });
+            card.classList.toggle('is-open', willOpen);
+            productChoice.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+            variants.hidden = !willOpen;
+            return;
+        }
+
+        const addBtn = event.target.closest('.monitor-variant-option, .add-variant-to-cart');
         if (!addBtn) {
             return;
         }
@@ -863,7 +954,6 @@ document.addEventListener('DOMContentLoaded', function () {
         const variantImage = addBtn.dataset.variantImage || 'https://via.placeholder.com/48';
         const variantUnitLabel = addBtn.dataset.variantUnitLabel || 'Cái';
         const variantWeight = parseFloat(addBtn.dataset.variantWeight || '0');
-        const variantWeightUnitLabel = addBtn.dataset.variantWeightUnitLabel || 'Kg';
         const variantIsPricedByKg = addBtn.dataset.variantIsPricedByKg === '1';
         const variantMinPrice = parseFloat(addBtn.dataset.variantMinPrice || '0');
 
@@ -881,40 +971,26 @@ document.addEventListener('DOMContentLoaded', function () {
                     </div>
                 </div>
                 <input type="hidden" name="items[${itemIndex}][variant_id]" value="${variantId}">
-                <input type="hidden" name="items[${itemIndex}][price]" value="${variantPrice}">
-                <input type="hidden" name="items[${itemIndex}][base_price]" value="${variantPrice}">
                 <input type="hidden" name="item_weight[${variantId}]" value="${variantWeight.toFixed(3)}">
             </td>
             <td class="text-center">${variantSize || variantSku}</td>
-            <td class="text-center price" data-price="${variantPrice}" data-min-price="${variantMinPrice}">${formatNumber(variantPrice)}đ</td>
-            <td class="text-center">
-                <div class="btn-group discount-switch mb-1" role="group" aria-label="Loai chiet khau">
-                    <input class="btn-check discount-type-input" type="radio" name="item_discount_type[${variantId}]" id="my-customer-discount-decrease-${variantId}" value="decrease" checked>
-                    <label class="btn btn-outline-secondary" for="my-customer-discount-decrease-${variantId}">Giảm</label>
-                    <input class="btn-check discount-type-input" type="radio" name="item_discount_type[${variantId}]" id="my-customer-discount-increase-${variantId}" value="increase">
-                    <label class="btn btn-outline-secondary" for="my-customer-discount-increase-${variantId}">Tăng</label>
+            <td class="price text-center" data-price="${variantPrice}" data-min-price="${variantMinPrice}">
+                <div class="selling-price-stepper">
+                    <button type="button" class="btn btn-sm selling-price-decrease" aria-label="Giảm đơn giá 1.000 đồng" title="Giảm 1.000đ" ${variantPrice <= variantMinPrice ? 'disabled' : ''}>−</button>
+                    <span class="selling-price-value">${formatMoney(variantPrice)}</span>
+                    <button type="button" class="btn btn-sm selling-price-increase" aria-label="Tăng đơn giá 1.000 đồng" title="Tăng 1.000đ">+</button>
                 </div>
-                <input
-                    type="number"
-                    class="form-control form-control-sm discount-input min80"
-                    name="item_discount[${variantId}]"
-                    min="0"
-                    step="1000"
-                    max="${variantPrice}"
-                    value="0">
+                <input type="hidden" class="discount-type-input" name="item_discount_type[${variantId}]" value="decrease">
+                <input type="hidden" class="discount-input" name="item_discount[${variantId}]" value="0">
                 <div class="selling-price-feedback"></div>
             </td>
             <td class="text-center">
                 <input type="number" name="items[${itemIndex}][quantity]" class="form-control form-control-sm quantity-input min50" min="1" value="1" required>
             </td>
             <td class="text-center">
-                ${variantIsPricedByKg
-                    ? `<span class="line-weight fw-bold" data-unit-weight="${variantWeight.toFixed(3)}" data-weight-unit="${variantWeightUnitLabel}">
-                        ${formatKg(variantWeight * 1)}
-                       </span>`
-                    : `<span class="text-muted small">${variantUnitLabel}</span>
-                       <span class="line-weight d-none" data-unit-weight="${variantWeight.toFixed(3)}" data-weight-unit="${variantWeightUnitLabel}"></span>`
-                }
+                <span class="line-weight" data-unit-weight="${variantWeight.toFixed(3)}" data-weight-unit="${variantUnitLabel}">
+                    ${variantIsPricedByKg ? formatKg(variantWeight) : `1 ${variantUnitLabel}`}
+                </span>
             </td>
             <td class="text-end row-total">${formatNumber(variantPrice)}đ</td>
             <td class="text-end">
@@ -928,12 +1004,7 @@ document.addEventListener('DOMContentLoaded', function () {
         updateCartTotal();
         updateCartVisibility();
 
-        const currentResultItem = addBtn.closest('.list-group-item');
-        if (currentResultItem) {
-            currentResultItem.remove();
-        } else {
-            performVariantSearch(currentVariantSearchPage);
-        }
+        refreshVariantResults(currentVariantSearchPage);
     });
 
     variantSearchResults.addEventListener('click', function (event) {
@@ -950,11 +1021,12 @@ document.addEventListener('DOMContentLoaded', function () {
         const parsedUrl = new URL(url, window.location.origin);
         const search = parsedUrl.searchParams.get('search') || (variantSearchInput.value || '').trim();
         const shouldShowAll = currentVariantShowAll || search.length < 2;
-        fetchVariantData('{{ route('orders.ajax_variant_search') }}', {
+        fetchVariantData('{{ route('site.orders.variants.ajax') }}', {
             page: parsedUrl.searchParams.get('page') || currentVariantSearchPage,
             search: search,
             per_page: parsedUrl.searchParams.get('per_page') || currentVariantSearchPerPage,
-            allow_backorder: shouldShowAll ? 1 : 0,
+            view: 'products',
+            show_all: shouldShowAll ? 1 : 0,
             exclude_ids: getCartVariantIds()
         });
     });
@@ -969,6 +1041,31 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     cartContainer.addEventListener('click', function (event) {
+        const priceButton = event.target.closest('.selling-price-decrease, .selling-price-increase');
+        if (priceButton) {
+            const row = priceButton.closest('.cart-item-row');
+            const priceEl = row?.querySelector('.price');
+            const discountInput = row?.querySelector('.discount-input');
+            const discountTypeInput = row?.querySelector('.discount-type-input');
+            if (!row || !priceEl || !discountInput || !discountTypeInput) {
+                return;
+            }
+
+            const basePrice = toNumber(priceEl.dataset.price, 0);
+            const minPrice = toNumber(priceEl.dataset.minPrice, 0);
+            const adjustment = Math.max(0, toNumber(discountInput.value, 0));
+            const currentPrice = discountTypeInput.value === 'increase'
+                ? basePrice + adjustment
+                : basePrice - adjustment;
+            const step = priceButton.classList.contains('selling-price-increase') ? 1000 : -1000;
+            const sellingPrice = Math.max(minPrice, currentPrice + step);
+
+            discountTypeInput.value = sellingPrice > basePrice ? 'increase' : 'decrease';
+            discountInput.value = String(Math.abs(sellingPrice - basePrice));
+            updateCartTotal();
+            return;
+        }
+
         const removeBtn = event.target.closest('.remove-cart-item');
         if (!removeBtn) {
             return;
@@ -979,8 +1076,8 @@ document.addEventListener('DOMContentLoaded', function () {
         updateCartTotal();
         updateCartVisibility();
 
-        if (variantSearchInput.value.trim().length >= 2) {
-            performVariantSearch(1);
+        if (currentVariantShowAll || variantSearchInput.value.trim().length >= 2) {
+            refreshVariantResults(1);
         }
     });
 
