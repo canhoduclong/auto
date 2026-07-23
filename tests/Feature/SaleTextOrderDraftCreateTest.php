@@ -73,6 +73,10 @@ class SaleTextOrderDraftCreateTest extends TestCase
         $page->assertOk()
             ->assertSee('Ghi chú đơn hàng')
             ->assertSee('Gửi hàng qua nhà xe')
+            ->assertSee('Chọn nhà xe có sẵn (chọn tên trạm xe)')
+            ->assertSee('Nhập thông tin nhà xe')
+            ->assertSee('Tìm tên trạm, nhà xe, địa chỉ, số điện thoại...')
+            ->assertSee('draftTruckStationModal', false)
             ->assertSee('Trạm Miền Đông')
             ->assertSee('Đóng thùng kỹ và gọi khách trước khi gửi.');
     }

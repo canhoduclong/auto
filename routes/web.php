@@ -976,7 +976,7 @@ Route::get('/my-profile', [PageController::class, 'myDashboard'])->name('pages.m
 Route::post('/my-profile', [PageController::class, 'updateProfile'])->name('pages.update_profile')->middleware('auth');
 
 // My Orders routes (sale / leader / manager only)
-Route::middleware(['auth', 'role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin'])->group(function () {
+Route::middleware(['auth', 'role:sale,leader,leader_sale,sale_manager,manager,manager_sale,director,admin'])->group(function () {
     Route::get('/my-order-drafts', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'saleIndex'])->name('pages.my_order_drafts')->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
     Route::post('/my-order-drafts', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'saleStore'])->name('pages.my_order_drafts.store')->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
     Route::put('/my-order-drafts/{draft}', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'saleUpdate'])->name('pages.my_order_drafts.update')->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
@@ -997,6 +997,8 @@ Route::middleware(['auth', 'role:sale,leader,leader_sale,sale_manager,manager,ma
         ->middleware('permission:orders.monitoring');
     Route::post('/my-orders/monitoring/refresh-sequence', [PageController::class, 'myOrdersMonitoringRefreshSequence'])
         ->name('pages.my_orders.monitoring.refresh_sequence');
+    Route::put('/my-orders/monitoring/auto-approval', [PageController::class, 'myOrdersMonitoringAutoApproval'])
+        ->name('pages.my_orders.monitoring.auto_approval');
     Route::post('/my-orders/monitoring/orders', [OrderController::class, 'storeFromMonitoring'])
         ->name('pages.my_orders.monitoring.store');
     Route::get('/my-orders/daily-prices', [PageController::class, 'dailyProductPrices'])->name('pages.my_orders.daily_prices');

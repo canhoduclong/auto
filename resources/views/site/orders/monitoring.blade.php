@@ -489,6 +489,18 @@
     .monitor-bulk-actions form { margin: 0; }
     .monitor-bulk-actions .form-select { width: 158px; min-height: 38px; }
     .monitor-bulk-actions .btn { min-height: 38px; padding-inline: 14px; }
+    .monitor-auto-approval { margin: 0 0 18px; overflow: hidden; border: 1px solid var(--monitor-border); border-radius: 8px; background: #fff; }
+    .monitor-auto-approval-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 14px; border-bottom: 1px solid #e5edf5; color: #0f4770; font-size: .78rem; font-weight: 900; text-transform: uppercase; }
+    .monitor-auto-approval-body { padding: 14px 18px 16px; }
+    .monitor-auto-approval-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; }
+    .monitor-auto-rule-title { margin-bottom: 10px; padding-bottom: 7px; border-bottom: 1px solid #334155; color: #0f172a; font-size: .76rem; font-weight: 900; text-transform: uppercase; }
+    .monitor-auto-rule-toggle { margin-bottom: 10px; padding: 8px 10px; border-radius: 6px; background: #f0fdf4; }
+    .monitor-auto-rule-options { display: grid; gap: 9px; }
+    .monitor-auto-rule-options .form-check-label { color: #334155; font-size: .76rem; }
+    .monitor-auto-bulk-fields { display: grid; grid-template-columns: minmax(130px, .7fr) minmax(180px, 1fr); gap: 9px; margin: 2px 0 0 24px; }
+    .monitor-auto-bulk-fields label { margin-bottom: 3px; color: #64748b; font-size: .66rem; font-weight: 800; }
+    .monitor-auto-help { margin-top: 12px; padding-top: 10px; border-top: 1px dashed #dce6f1; color: #64748b; font-size: .7rem; }
+    .monitor-auto-footer { display: flex; align-items: center; justify-content: flex-end; margin-top: 14px; }
     .monitor-summary-toggle { border: 1px solid var(--monitor-teal); color: var(--monitor-teal); }
     .monitor-sequence-panel {
         position: sticky;
@@ -649,6 +661,8 @@
         .monitor-confirm-grid { grid-template-columns: 1fr; }
         .monitor-inline-edit-fields { grid-template-columns: 1fr; }
         .monitor-inline-edit-fields .is-wide { grid-column: auto; }
+        .monitor-auto-approval-grid { grid-template-columns: 1fr; gap: 18px; }
+        .monitor-auto-bulk-fields { grid-template-columns: 1fr; }
         .monitor-variant-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .monitor-product-choice-label { font-size: 0; }
         .monitor-product-choice-label i { font-size: .8rem; }
@@ -904,11 +918,76 @@
                         </button>
                     </form>
                 @endif
+                @if($canConfigureAutoApproval)
+                    <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="collapse" data-bs-target="#monitorAutoApproval" aria-expanded="{{ $errors->any() ? 'true' : 'false' }}" title="Cấu hình duyệt đơn tự động">
+                        <i class="bi bi-gear"></i>
+                    </button>
+                @endif
             </div>
             <button type="button" class="btn btn-sm btn-success" id="monitorOpenCreate">
                 <i class="bi bi-plus-circle me-1"></i>Thêm đơn
             </button>
         </div>
+
+        @if($canConfigureAutoApproval)
+            @php
+                $newOrderRule = $autoApprovalRules->get(\App\Models\OrderAutoApprovalRule::TYPE_NEW_ORDER);
+                $adjustmentRule = $autoApprovalRules->get(\App\Models\OrderAutoApprovalRule::TYPE_ORDER_ADJUSTMENT);
+            @endphp
+            <div class="collapse {{ $errors->any() ? 'show' : '' }}" id="monitorAutoApproval">
+                <form method="POST" action="{{ route('pages.my_orders.monitoring.auto_approval') }}" class="monitor-auto-approval">
+                    @csrf
+                    @method('PUT')
+                    <div class="monitor-auto-approval-head">
+                        <span><i class="bi bi-shield-check me-1"></i>Duyệt đơn tự động</span>
+                        <span class="small text-muted text-lowercase fw-normal">Cấu hình riêng cho {{ $user->name }}</span>
+                    </div>
+                    <div class="monitor-auto-approval-body">
+                        <div class="monitor-auto-approval-grid">
+                            @foreach([
+                                'new_order' => ['title' => 'Đơn mới', 'rule' => $newOrderRule],
+                                'order_adjustment' => ['title' => 'Điều chỉnh đơn', 'rule' => $adjustmentRule],
+                            ] as $prefix => $config)
+                                @php($rule = $config['rule'])
+                                <section data-auto-rule>
+                                    <div class="monitor-auto-rule-title">{{ $config['title'] }}</div>
+                                    <div class="form-check form-switch monitor-auto-rule-toggle">
+                                        <input type="checkbox" class="form-check-input js-auto-rule-enabled" id="{{ $prefix }}Enabled" name="{{ $prefix }}_enabled" value="1" @checked(old("{$prefix}_enabled", $rule?->enabled ?? false))>
+                                        <label class="form-check-label fw-bold" for="{{ $prefix }}Enabled">Bật tự động duyệt {{ mb_strtolower($config['title']) }}</label>
+                                    </div>
+                                    <div class="monitor-auto-rule-options">
+                                        <div class="form-check">
+                                            <input type="checkbox" class="form-check-input" id="{{ $prefix }}MinPrice" name="{{ $prefix }}_require_min_price" value="1" @checked(old("{$prefix}_require_min_price", $rule?->require_min_price ?? true))>
+                                            <label class="form-check-label" for="{{ $prefix }}MinPrice">Giá bán của tất cả sản phẩm ≥ giá Min</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input type="checkbox" class="form-check-input js-auto-bulk-enabled" id="{{ $prefix }}Bulk" name="{{ $prefix }}_allow_bulk_below_min" value="1" @checked(old("{$prefix}_allow_bulk_below_min", $rule?->allow_bulk_below_min ?? false))>
+                                            <label class="form-check-label" for="{{ $prefix }}Bulk">Cho phép sản lượng lớn được bán thấp hơn giá Min</label>
+                                        </div>
+                                        <div class="monitor-auto-bulk-fields">
+                                            <div>
+                                                <label for="{{ $prefix }}Quantity">Sản lượng tối thiểu (con)</label>
+                                                <input type="number" class="form-control form-control-sm" id="{{ $prefix }}Quantity" name="{{ $prefix }}_bulk_min_quantity" min="1" max="1000000" value="{{ old("{$prefix}_bulk_min_quantity", $rule?->bulk_min_quantity ?? 100) }}" required>
+                                            </div>
+                                            <div>
+                                                <label for="{{ $prefix }}BelowMin">Được thấp hơn giá Min (đ/con)</label>
+                                                <input type="number" class="form-control form-control-sm" id="{{ $prefix }}BelowMin" name="{{ $prefix }}_bulk_below_min_amount" min="0" max="1000000000" step="1000" value="{{ old("{$prefix}_bulk_below_min_amount", (float) ($rule?->bulk_below_min_amount ?? 2000)) }}" required>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </section>
+                            @endforeach
+                        </div>
+                        <div class="monitor-auto-help">
+                            Trưởng phòng chỉ duyệt đơn của sale cùng team. Giám đốc chỉ duyệt khi các bước trước đã hoàn tất. Đơn không đạt điều kiện vẫn giữ trạng thái chờ duyệt thủ công.
+                        </div>
+                        <div class="monitor-auto-footer">
+                            <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-check2-circle me-1"></i>Lưu cấu hình và duyệt đơn phù hợp</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        @endif
 
         <div class="monitor-panel monitor-summary-panel mb-4">
             <div class="collapse" id="monitorProductSummary">

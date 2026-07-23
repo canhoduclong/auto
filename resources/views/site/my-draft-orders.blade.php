@@ -44,9 +44,24 @@
     .draft-edit-extra { display: grid; gap: 10px; padding: 12px 0; border-bottom: 1px dashed #dce6f1; }
     .draft-edit-note { min-height: 76px; resize: vertical; }
     .draft-truck-toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid #bae6d3; border-radius: 8px; background: #f0fdf4; }
-    .draft-truck-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; padding: 12px; border: 1px solid #dce6f1; border-radius: 8px; background: #f8fafc; }
+    .draft-truck-fields { padding: 12px; border: 1px solid #dce6f1; border-radius: 8px; background: #f8fafc; }
     .draft-truck-fields .is-wide { grid-column: 1 / -1; }
     .draft-truck-fields[hidden] { display: none; }
+    .draft-truck-section-title { display: flex; align-items: center; gap: 7px; margin-bottom: 9px; color: #0f4770; font-size: .72rem; font-weight: 900; }
+    .draft-truck-section-number { display: inline-flex; width: 21px; height: 21px; align-items: center; justify-content: center; border-radius: 50%; background: #e0f2fe; color: #0369a1; }
+    .draft-truck-existing-picker { display: grid; grid-template-columns: minmax(180px, 220px) minmax(0, 1fr); gap: 9px; align-items: stretch; }
+    .draft-truck-selected { min-width: 0; padding: 8px 11px; border: 1px solid #bfdbfe; border-radius: 6px; background: #fff; color: #334155; font-size: .7rem; }
+    .draft-truck-selected strong { display: block; color: #075985; font-size: .74rem; }
+    .draft-truck-selected.is-empty { display: flex; align-items: center; color: #94a3b8; font-style: italic; }
+    .draft-truck-divider { display: flex; align-items: center; gap: 10px; margin: 13px 0; color: #94a3b8; font-size: .62rem; font-weight: 900; letter-spacing: .12em; }
+    .draft-truck-divider::before, .draft-truck-divider::after { content: ''; flex: 1; border-top: 1px dashed #cbd5e1; }
+    .draft-truck-manual-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+    .draft-truck-station-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 9px; }
+    .draft-truck-station-list { display: grid; gap: 8px; max-height: 430px; margin-top: 12px; overflow-y: auto; }
+    .draft-truck-station-option { width: 100%; padding: 10px 12px; border: 1px solid #dce6f1; border-radius: 8px; background: #fff; color: #334155; text-align: left; }
+    .draft-truck-station-option:hover, .draft-truck-station-option.is-selected { border-color: #0ea5e9; background: #f0f9ff; }
+    .draft-truck-station-option strong { display: block; color: #075985; font-size: .78rem; }
+    .draft-truck-station-option span { display: block; margin-top: 2px; color: #64748b; font-size: .69rem; }
     .draft-template-note { margin-top: 5px; padding: 7px 9px; border-left: 3px solid #f59e0b; background: #fffbeb; color: #475569; white-space: pre-line; }
     .draft-edit-product-head { margin-top: 8px; }
     .draft-edit-products { width: 100%; margin: 4px 0 0; font-size: .72rem; }
@@ -90,8 +105,8 @@
         .draft-template-editor-grid { grid-template-columns: 1fr; }
         .draft-template-editor-grid .is-wide { grid-column: auto; }
         .draft-edit-delivery { grid-template-columns: 1fr; }
-        .draft-truck-fields { grid-template-columns: 1fr; }
-        .draft-truck-fields .is-wide { grid-column: auto; }
+        .draft-truck-existing-picker, .draft-truck-manual-fields, .draft-truck-station-toolbar { grid-template-columns: 1fr; }
+        .draft-truck-manual-fields .is-wide { grid-column: auto; }
         .draft-edit-products { min-width: 820px; }
         .draft-edit-footer { align-items: stretch; flex-direction: column; gap: 10px; }
         .draft-edit-footer-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -168,6 +183,7 @@
                         || filled($draft->truck_brand_name)
                         || filled($draft->truck_station_name)
                         || filled($draft->truck_station_address);
+                    $selectedTruckStation = $draft->truck_station_id ? $truckStations->firstWhere('id', (int) $draft->truck_station_id) : null;
                 @endphp
                 <article class="draft-template-row" data-draft-card data-draft-id="{{ $draft->id }}" data-draft-editable="{{ $draft->status !== 'confirmed' ? '1' : '0' }}">
                     <div class="draft-template-card">
@@ -278,42 +294,43 @@
                                         </div>
                                     </div>
                                     <div class="draft-truck-fields" data-draft-truck-fields @if(!$usesTruckStation) hidden @endif>
-                                        <div class="is-wide">
-                                            <label class="form-label">Chọn trạm xe có sẵn</label>
-                                            <select name="truck_station_id" class="form-select form-select-sm js-draft-truck-station">
-                                                <option value="">— Nhập thông tin trạm thủ công —</option>
-                                                @foreach($truckStations as $station)
-                                                    <option value="{{ $station->id }}"
-                                                        data-brand-id="{{ $station->brand_id }}"
-                                                        data-brand-name="{{ $station->brand?->name ?? '' }}"
-                                                        data-station-name="{{ $station->name }}"
-                                                        data-address="{{ $station->address ?? '' }}"
-                                                        data-phone="{{ $station->phone ?? '' }}"
-                                                        @selected((int) $draft->truck_station_id === (int) $station->id)>
-                                                        {{ $station->name }}{{ $station->brand?->name ? ' · ' . $station->brand->name : '' }}{{ $station->address ? ' · ' . $station->address : '' }}
-                                                    </option>
-                                                @endforeach
-                                            </select>
+                                        <input type="hidden" name="truck_station_id" value="{{ $draft->truck_station_id }}">
+                                        <div class="draft-truck-section-title"><span class="draft-truck-section-number">1</span>Chọn nhà xe có sẵn (chọn tên trạm xe)</div>
+                                        <div class="draft-truck-existing-picker">
+                                            <button type="button" class="btn btn-sm btn-outline-primary js-open-truck-station-modal"><i class="bi bi-search me-1"></i>Chọn tên trạm xe</button>
+                                            <div class="draft-truck-selected js-draft-truck-selected {{ $selectedTruckStation ? '' : 'is-empty' }}">
+                                                @if($selectedTruckStation)
+                                                    <strong>{{ $selectedTruckStation->name }}</strong>
+                                                    <span>{{ collect([$selectedTruckStation->brand?->name, $selectedTruckStation->address, $selectedTruckStation->phone])->filter()->join(' · ') }}</span>
+                                                @else
+                                                    Chưa chọn trạm xe có sẵn
+                                                @endif
+                                            </div>
                                         </div>
+
+                                        <div class="draft-truck-divider"><span>HOẶC</span></div>
+                                        <div class="draft-truck-section-title"><span class="draft-truck-section-number">2</span>Nhập thông tin nhà xe</div>
+                                        <div class="draft-truck-manual-fields">
                                         <div>
                                             <label class="form-label">Tên nhà xe</label>
-                                            <input name="truck_brand_name" class="form-control form-control-sm" maxlength="255" value="{{ $draft->truck_brand_name ?: ($draft->truckStation?->brand?->name ?? '') }}" placeholder="Ví dụ: Phương Trang">
+                                            <input name="truck_brand_name" class="form-control form-control-sm js-manual-truck-field" maxlength="255" value="{{ $draft->truck_brand_name ?: ($draft->truckStation?->brand?->name ?? '') }}" placeholder="Ví dụ: Phương Trang">
                                         </div>
                                         <div>
                                             <label class="form-label">Tên trạm / điểm gửi</label>
-                                            <input name="truck_station_name" class="form-control form-control-sm" maxlength="255" value="{{ $draft->truck_station_name ?: ($draft->truckStation?->name ?? '') }}" placeholder="Ví dụ: Bến xe Miền Đông">
+                                            <input name="truck_station_name" class="form-control form-control-sm js-manual-truck-field" maxlength="255" value="{{ $draft->truck_station_name ?: ($draft->truckStation?->name ?? '') }}" placeholder="Ví dụ: Bến xe Miền Đông">
                                         </div>
                                         <div class="is-wide">
                                             <label class="form-label">Địa chỉ trạm xe</label>
-                                            <input name="truck_station_address" class="form-control form-control-sm" maxlength="255" value="{{ $draft->truck_station_address ?: ($draft->truckStation?->address ?? '') }}" placeholder="Địa chỉ nhận hàng của nhà xe">
+                                            <input name="truck_station_address" class="form-control form-control-sm js-manual-truck-field" maxlength="255" value="{{ $draft->truck_station_address ?: ($draft->truckStation?->address ?? '') }}" placeholder="Địa chỉ nhận hàng của nhà xe">
                                         </div>
                                         <div>
                                             <label class="form-label">Số điện thoại trạm</label>
-                                            <input name="truck_station_phone" class="form-control form-control-sm" maxlength="30" value="{{ $draft->truck_station_phone ?: ($draft->truckStation?->phone ?? '') }}">
+                                            <input name="truck_station_phone" class="form-control form-control-sm js-manual-truck-field" maxlength="30" value="{{ $draft->truck_station_phone ?: ($draft->truckStation?->phone ?? '') }}">
                                         </div>
                                         <div>
                                             <label class="form-label">Giờ nhà xe nhận hàng</label>
                                             <input name="truck_receive_time" class="form-control form-control-sm" maxlength="255" value="{{ $draft->truck_receive_time }}" placeholder="Ví dụ: trước 17h">
+                                        </div>
                                         </div>
                                     </div>
                                 </div>
@@ -449,6 +466,51 @@
         </div>
     </div>
 </section>
+
+<div class="modal fade" id="draftTruckStationModal" tabindex="-1" aria-labelledby="draftTruckStationModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title" id="draftTruckStationModalLabel">Chọn nhà xe / trạm xe</h5>
+                    <div class="small text-muted">Tìm kiếm và chọn một trạm xe có sẵn trong hệ thống.</div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+            </div>
+            <div class="modal-body">
+                <div class="draft-truck-station-toolbar">
+                    <input type="search" class="form-control js-truck-station-search" placeholder="Tìm tên trạm, nhà xe, địa chỉ, số điện thoại...">
+                    <select class="form-select js-truck-brand-filter" aria-label="Lọc theo nhà xe">
+                        <option value="">Tất cả nhà xe</option>
+                        @foreach($truckStations->pluck('brand')->filter()->unique('id')->sortBy('name') as $brand)
+                            <option value="{{ $brand->id }}">{{ $brand->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="draft-truck-station-list">
+                    @foreach($truckStations as $station)
+                        <button type="button" class="draft-truck-station-option js-select-truck-station"
+                            data-station-id="{{ $station->id }}"
+                            data-brand-id="{{ $station->brand_id }}"
+                            data-brand-name="{{ $station->brand?->name ?? '' }}"
+                            data-station-name="{{ $station->name }}"
+                            data-address="{{ $station->address ?? '' }}"
+                            data-phone="{{ $station->phone ?? '' }}"
+                            data-search="{{ mb_strtolower(collect([$station->name, $station->brand?->name, $station->address, $station->phone])->filter()->join(' ')) }}">
+                            <strong>{{ $station->name }}</strong>
+                            <span>{{ collect([$station->brand?->name, $station->address, $station->phone])->filter()->join(' · ') ?: 'Chưa cập nhật thông tin' }}</span>
+                        </button>
+                    @endforeach
+                </div>
+                <div class="js-truck-station-empty text-center text-muted py-4" @if($truckStations->isNotEmpty()) hidden @endif>Không tìm thấy trạm xe phù hợp.</div>
+            </div>
+            <div class="modal-footer justify-content-between">
+                <button type="button" class="btn btn-outline-secondary js-use-manual-truck-station"><i class="bi bi-pencil-square me-1"></i>Nhập thông tin nhà xe</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+            </div>
+        </div>
+    </div>
+</div>
 @endsection
 
 @push('scripts')
@@ -460,11 +522,49 @@ document.addEventListener('DOMContentLoaded', () => {
     const variantEndpoint = @json(route('site.orders.variants.ajax'));
     const variants = @json($variantCatalog);
     const today = @json(now('Asia/Bangkok')->toDateString());
+    const truckStationModalElement = document.getElementById('draftTruckStationModal');
+    const truckStationModal = truckStationModalElement ? bootstrap.Modal.getOrCreateInstance(truckStationModalElement) : null;
+    let activeTruckEditor = null;
     const notify = (message, type = 'success') => typeof window.showToast === 'function' ? window.showToast(message, type) : window.alert(message);
     const money = value => new Intl.NumberFormat('vi-VN').format(Math.round(Number(value) || 0)) + 'đ';
     const quantity = row => Math.max(1, Number.parseInt(row.querySelector('[name="item_quantity"]').value || '1', 10));
     const weight = row => Math.max(.01, Number(row.querySelector('[name="item_size_kg"]').value) || 1);
     const price = row => Math.max(0, Number(row.querySelector('[name="item_unit_price"]').value) || 0);
+    const normalizeSearch = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('vi');
+    const renderSelectedTruckStation = (editor, station = null) => {
+        const summary = editor?.querySelector('.js-draft-truck-selected');
+        if (!summary) return;
+        summary.replaceChildren();
+        summary.classList.toggle('is-empty', !station);
+        if (!station) {
+            summary.textContent = 'Chưa chọn trạm xe có sẵn';
+            return;
+        }
+        const title = document.createElement('strong');
+        title.textContent = station.stationName || 'Trạm xe';
+        const meta = document.createElement('span');
+        meta.textContent = [station.brandName, station.address, station.phone].filter(Boolean).join(' · ');
+        summary.append(title, meta);
+    };
+    const clearSelectedTruckStation = editor => {
+        if (!editor) return;
+        editor.querySelector('[name="truck_station_id"]').value = '';
+        editor.querySelector('[name="truck_brand_id"]').value = '';
+        renderSelectedTruckStation(editor);
+    };
+    const filterTruckStations = () => {
+        if (!truckStationModalElement) return;
+        const keyword = normalizeSearch(truckStationModalElement.querySelector('.js-truck-station-search').value.trim());
+        const brandId = truckStationModalElement.querySelector('.js-truck-brand-filter').value;
+        let visible = 0;
+        truckStationModalElement.querySelectorAll('.js-select-truck-station').forEach(option => {
+            const matches = (!keyword || normalizeSearch(option.dataset.search).includes(keyword))
+                && (!brandId || option.dataset.brandId === brandId);
+            option.hidden = !matches;
+            if (matches) visible++;
+        });
+        truckStationModalElement.querySelector('.js-truck-station-empty').hidden = visible > 0;
+    };
     const updateDraftTotals = editor => {
         let total = 0;
         editor.querySelectorAll('[data-draft-item]').forEach(row => {
@@ -613,6 +713,40 @@ document.addEventListener('DOMContentLoaded', () => {
         return payload;
     };
     document.addEventListener('click', async event => {
+        const openTruckStationModalButton = event.target.closest('.js-open-truck-station-modal');
+        if (openTruckStationModalButton) {
+            activeTruckEditor = openTruckStationModalButton.closest('.draft-template-editor');
+            const selectedId = activeTruckEditor?.querySelector('[name="truck_station_id"]')?.value || '';
+            truckStationModalElement.querySelector('.js-truck-station-search').value = '';
+            truckStationModalElement.querySelector('.js-truck-brand-filter').value = '';
+            truckStationModalElement.querySelectorAll('.js-select-truck-station').forEach(option => {
+                option.classList.toggle('is-selected', option.dataset.stationId === selectedId);
+            });
+            filterTruckStations();
+            truckStationModal?.show();
+            return;
+        }
+        const truckStationOption = event.target.closest('.js-select-truck-station');
+        if (truckStationOption && activeTruckEditor) {
+            const station = truckStationOption.dataset;
+            activeTruckEditor.querySelector('[name="truck_station_id"]').value = station.stationId || '';
+            activeTruckEditor.querySelector('[name="truck_brand_id"]').value = station.brandId || '';
+            activeTruckEditor.querySelector('[name="truck_brand_name"]').value = station.brandName || '';
+            activeTruckEditor.querySelector('[name="truck_station_name"]').value = station.stationName || '';
+            activeTruckEditor.querySelector('[name="truck_station_address"]').value = station.address || '';
+            activeTruckEditor.querySelector('[name="truck_station_phone"]').value = station.phone || '';
+            renderSelectedTruckStation(activeTruckEditor, station);
+            truckStationModal?.hide();
+            return;
+        }
+        const useManualTruckStationButton = event.target.closest('.js-use-manual-truck-station');
+        if (useManualTruckStationButton && activeTruckEditor) {
+            clearSelectedTruckStation(activeTruckEditor);
+            activeTruckEditor.querySelectorAll('.js-manual-truck-field').forEach(input => input.value = '');
+            truckStationModal?.hide();
+            activeTruckEditor.querySelector('[name="truck_brand_name"]')?.focus();
+            return;
+        }
         const showEditorButton = event.target.closest('.js-show-draft-editor');
         if (showEditorButton) {
             const card = showEditorButton.closest('[data-draft-card]');
@@ -842,18 +976,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (fields) fields.hidden = !truckToggle.checked;
             return;
         }
-        const truckStation = event.target.closest('.js-draft-truck-station');
-        if (truckStation) {
-            const editor = truckStation.closest('.draft-template-editor');
-            const option = truckStation.selectedOptions[0];
-            if (!editor || !option || !truckStation.value) return;
-            editor.querySelector('[name="truck_brand_id"]').value = option.dataset.brandId || '';
-            editor.querySelector('[name="truck_brand_name"]').value = option.dataset.brandName || '';
-            editor.querySelector('[name="truck_station_name"]').value = option.dataset.stationName || '';
-            editor.querySelector('[name="truck_station_address"]').value = option.dataset.address || '';
-            editor.querySelector('[name="truck_station_phone"]').value = option.dataset.phone || '';
-            return;
-        }
         const automationMode = event.target.closest('.js-automation-mode');
         if (automationMode) {
             const panel = automationMode.closest('[data-draft-automation]');
@@ -892,9 +1014,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     document.addEventListener('input', event => {
+        if (event.target.matches('.js-truck-station-search')) {
+            filterTruckStations();
+            return;
+        }
+        if (event.target.matches('.js-manual-truck-field')) {
+            clearSelectedTruckStation(event.target.closest('.draft-template-editor'));
+            return;
+        }
         if (!event.target.matches('.draft-edit-quantity')) return;
         updateDraftTotals(event.target.closest('.draft-template-editor'));
     });
+    truckStationModalElement?.querySelector('.js-truck-brand-filter')?.addEventListener('change', filterTruckStations);
     document.addEventListener('keydown', event => {
         if (event.key !== 'Enter') return;
         const customerSearch = event.target.closest('.draft-customer-search');

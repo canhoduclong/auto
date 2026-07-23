@@ -6,6 +6,7 @@ use App\Models\Order;
 use App\Models\OrderHistory;
 use App\Models\Setting;
 use App\Services\ApprovalService;
+use App\Services\OrderAutoApprovalService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -96,6 +97,7 @@ class OrderApprovalController extends Controller
         try {
             $statusBefore = (string) $order->status;
             $approvalService->approve($order, $request->user(), $request->input('note'));
+            app(OrderAutoApprovalService::class)->processOrder($order);
             $order->refresh();
             $this->logOrderHistory($order, 'approve_order', $statusBefore, (string) $order->status, $request->input('note'));
             $msg = __('orders.messages.confirmed');

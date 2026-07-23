@@ -11,6 +11,7 @@ use App\Models\ReturnItem;
 use App\Models\Warehouse;
 use App\Models\User;
 use App\Services\ApprovalService;
+use App\Services\OrderAutoApprovalService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -132,6 +133,10 @@ class OrderAdjustmentController extends Controller
         if ($adjustment->status === OrderAdjustment::STATUS_PENDING_APPROVAL) {
             $this->createOrSyncReturnOrder($adjustment->fresh('items', 'order'));
             app(ApprovalService::class)->initAdjustmentApproval($adjustment);
+            $autoApproval = app(OrderAutoApprovalService::class)->processAdjustment($adjustment);
+            if ($autoApproval['all_approved'] && $autoApproval['approver']) {
+                $this->finalizeAutoApprovedAdjustment($adjustment, $autoApproval['approver']);
+            }
         }
 
         return redirect()
@@ -182,21 +187,25 @@ class OrderAdjustmentController extends Controller
 
         $approvalService = app(ApprovalService::class);
         $hasPendingStep = $orderAdjustment->approvalSteps()->where('status', 'pending')->exists();
+        $approvalActor = $user;
 
-        DB::transaction(function () use ($orderAdjustment, $user, $note, $approvalService, $hasPendingStep): void {
+        DB::transaction(function () use ($orderAdjustment, $user, $note, $approvalService, $hasPendingStep, &$approvalActor): void {
             if ($hasPendingStep) {
                 $allApproved = $approvalService->approveAdjustmentStep($orderAdjustment, $user, $note !== '' ? $note : null);
 
                 if (!$allApproved) {
-                    // More steps pending — do not mark as approved yet
-                    return;
+                    $autoApproval = app(OrderAutoApprovalService::class)->processAdjustment($orderAdjustment);
+                    if (!$autoApproval['all_approved']) {
+                        return;
+                    }
+                    $approvalActor = $autoApproval['approver'] ?: $user;
                 }
             }
 
             // All steps approved (or no workflow) — finalize
             $orderAdjustment->update([
                 'status' => OrderAdjustment::STATUS_APPROVED,
-                'approved_by' => $user->id,
+                'approved_by' => $approvalActor->id,
                 'approved_at' => now(),
                 'approval_note' => $note !== '' ? $note : null,
             ]);
@@ -208,7 +217,7 @@ class OrderAdjustmentController extends Controller
 
         if ($orderAdjustment->status === OrderAdjustment::STATUS_APPROVED
             && $orderAdjustment->warehouse_confirmation_status === 'not_required') {
-            $this->completeAdjustment($orderAdjustment, $user);
+            $this->completeAdjustment($orderAdjustment, $approvalActor);
             return back()->with('success', 'Da duyet va hoan tat dieu chinh don hang.');
         }
 
@@ -217,6 +226,27 @@ class OrderAdjustmentController extends Controller
         }
 
         return back()->with('success', 'Da duyet buoc nay. Yeu cau chuyen sang buoc tiep theo.');
+    }
+
+    public function finalizeAutoApprovedAdjustment(OrderAdjustment $orderAdjustment, User $approver): void
+    {
+        if ($orderAdjustment->status !== OrderAdjustment::STATUS_PENDING_APPROVAL) {
+            return;
+        }
+
+        $orderAdjustment->update([
+            'status' => OrderAdjustment::STATUS_APPROVED,
+            'approved_by' => $approver->id,
+            'approved_at' => now(),
+            'approval_note' => 'Đã tự động duyệt theo tiêu chí giá Min và sản lượng.',
+        ]);
+
+        $this->createOrSyncReturnOrder($orderAdjustment->fresh(['items', 'order']));
+        $orderAdjustment->refresh();
+
+        if ($orderAdjustment->warehouse_confirmation_status === 'not_required') {
+            $this->completeAdjustment($orderAdjustment, $approver);
+        }
     }
 
     public function reject(Request $request, OrderAdjustment $orderAdjustment): RedirectResponse

@@ -143,6 +143,9 @@ class ApprovalService
         });
 
         app(OrderNotificationService::class)->notifySubmitted($order->fresh());
+        if ($activity === ApprovalWorkflow::ACTIVITY_ORDER_CREATE) {
+            app(OrderAutoApprovalService::class)->processOrder($order);
+        }
     }
 
     public function getCurrentPendingStep(Order $order): ?ApprovalOrder
@@ -171,6 +174,13 @@ class ApprovalService
 
         $requiredRole = strtolower((string) $current->step->role_slug);
         return $user->roles->contains(fn ($role) => strtolower((string) $role->name) === $requiredRole);
+    }
+
+    public function canApproveCurrentRole(User $user, string $requiredRole): bool
+    {
+        return $user->roles->contains(
+            fn ($role) => strtolower((string) $role->name) === strtolower($requiredRole)
+        );
     }
 
     public function approve(Order $order, User $user, ?string $note = null): void

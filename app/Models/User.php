@@ -120,6 +120,11 @@ class User extends Authenticatable
         return $this->hasMany(UserProductVariantPreference::class);
     }
 
+    public function orderAutoApprovalRules()
+    {
+        return $this->hasMany(OrderAutoApprovalRule::class);
+    }
+
     public function warehouse()
     {
         return $this->belongsTo(Warehouse::class);

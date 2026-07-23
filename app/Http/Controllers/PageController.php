@@ -19,7 +19,9 @@ use App\Models\CustomerReminder;
 use App\Models\Team;
 use App\Services\OrderService;
 use App\Services\ApprovalService;
+use App\Services\OrderAutoApprovalService;
 use App\Models\Order;
+use App\Models\OrderAutoApprovalRule;
 use App\Models\Inventory;
 use App\Models\Transaction;
 use App\Services\AdminActivityService;
@@ -921,7 +923,7 @@ class PageController extends Controller
         }
 
         $user = auth()->user();
-        if (!$user->isAdmin() && !$user->isSalesFlowRole() && !$user->hasPermission('orders.monitoring')) {
+        if (!$user->isAdmin() && !$user->isSalesFlowRole() && !$user->hasRole('director') && !$user->hasPermission('orders.monitoring')) {
             abort(403, 'Bạn không có quyền truy cập theo dõi đơn hàng.');
         }
 
@@ -999,6 +1001,10 @@ class PageController extends Controller
         $leaderRoleNames = $roleNames->intersect($this->monitoringLeaderRoleNames())->values();
         $canApproveManagedSales = $this->canApproveManagedSalesFromMonitoring($user);
         $canApproveAllOrders = $this->canApproveAllFromMonitoring($user);
+        $canConfigureAutoApproval = $canApproveManagedSales || $canApproveAllOrders;
+        $autoApprovalRules = $canConfigureAutoApproval
+            ? $user->orderAutoApprovalRules()->get()->keyBy('order_type')
+            : collect();
 
         $managedSalesApprovalQuery = clone $dateQuery;
         if ($canApproveManagedSales) {
@@ -1206,6 +1212,8 @@ class PageController extends Controller
             'canApproveAllOrders' => $canApproveAllOrders,
             'canApproveAllAny' => $canApproveAllAny,
             'hasPendingLeaderApprovals' => $hasPendingLeaderApprovals,
+            'canConfigureAutoApproval' => $canConfigureAutoApproval,
+            'autoApprovalRules' => $autoApprovalRules,
             'activeTab' => $activeTab,
             'tabContentHtml' => $tabContentHtml,
             'truckStations' => TruckStation::query()
@@ -1417,6 +1425,58 @@ class PageController extends Controller
         $this->applyMonitoringOrderFilters($query, $request);
 
         return $this->refreshMissingDailySequencesFromQuery($query, 'theo dõi');
+    }
+
+    public function myOrdersMonitoringAutoApproval(Request $request, OrderAutoApprovalService $autoApprovalService)
+    {
+        $user = $this->monitoringUserOrFail();
+        abort_unless(
+            $this->canApproveManagedSalesFromMonitoring($user) || $this->canApproveAllFromMonitoring($user),
+            403,
+            'Bạn không có quyền cấu hình duyệt đơn tự động.'
+        );
+
+        $validated = $request->validate([
+            'new_order_enabled' => ['nullable', 'boolean'],
+            'new_order_require_min_price' => ['nullable', 'boolean'],
+            'new_order_allow_bulk_below_min' => ['nullable', 'boolean'],
+            'new_order_bulk_min_quantity' => ['required', 'integer', 'min:1', 'max:1000000'],
+            'new_order_bulk_below_min_amount' => ['required', 'numeric', 'min:0', 'max:1000000000'],
+            'order_adjustment_enabled' => ['nullable', 'boolean'],
+            'order_adjustment_require_min_price' => ['nullable', 'boolean'],
+            'order_adjustment_allow_bulk_below_min' => ['nullable', 'boolean'],
+            'order_adjustment_bulk_min_quantity' => ['required', 'integer', 'min:1', 'max:1000000'],
+            'order_adjustment_bulk_below_min_amount' => ['required', 'numeric', 'min:0', 'max:1000000000'],
+        ]);
+
+        foreach ([
+            OrderAutoApprovalRule::TYPE_NEW_ORDER => 'new_order',
+            OrderAutoApprovalRule::TYPE_ORDER_ADJUSTMENT => 'order_adjustment',
+        ] as $type => $prefix) {
+            OrderAutoApprovalRule::query()->updateOrCreate(
+                ['user_id' => $user->id, 'order_type' => $type],
+                [
+                    'enabled' => $request->boolean("{$prefix}_enabled"),
+                    'require_min_price' => $request->boolean("{$prefix}_require_min_price"),
+                    'allow_bulk_below_min' => $request->boolean("{$prefix}_allow_bulk_below_min"),
+                    'bulk_min_quantity' => (int) $validated["{$prefix}_bulk_min_quantity"],
+                    'bulk_below_min_amount' => (float) $validated["{$prefix}_bulk_below_min_amount"],
+                ]
+            );
+        }
+
+        $result = $autoApprovalService->processPendingForUser($user);
+        foreach ($result['completedAdjustments'] as [$adjustment, $approver]) {
+            app(OrderAdjustmentController::class)->finalizeAutoApprovedAdjustment($adjustment, $approver);
+        }
+
+        $approvedSteps = $result['orderSteps'] + $result['adjustmentSteps'];
+        $message = 'Đã lưu cấu hình duyệt đơn tự động.';
+        if ($approvedSteps > 0) {
+            $message .= " Đã tự động duyệt {$approvedSteps} bước đang chờ phù hợp.";
+        }
+
+        return back()->with('success', $message);
     }
 
     public function dailyProductPrices(Request $request)
@@ -1987,6 +2047,7 @@ class PageController extends Controller
                         . $this->discountNoteFromResult($discountResult);
 
                     $approvalService->approve($order, $user, $note);
+                    app(OrderAutoApprovalService::class)->processOrder($order);
                     $approvedCount++;
                 } else {
                     $failedCount++;
@@ -2352,6 +2413,7 @@ class PageController extends Controller
                         . $this->discountNoteFromResult($discountResult);
 
                     $approvalService->approve($order, $user, $note);
+                    app(OrderAutoApprovalService::class)->processOrder($order);
                     $approvedCount++;
                 } else {
                     $failedCount++;
@@ -2497,7 +2559,7 @@ class PageController extends Controller
         }
 
         $user = auth()->user();
-        if (!$user->isAdmin() && !$user->isSalesFlowRole() && !$user->hasPermission('orders.monitoring')) {
+        if (!$user->isAdmin() && !$user->isSalesFlowRole() && !$user->hasRole('director') && !$user->hasPermission('orders.monitoring')) {
             abort(403, 'Bạn không có quyền thao tác tại trang theo dõi đơn hàng.');
         }
 
@@ -2652,6 +2714,7 @@ class PageController extends Controller
                 }
 
                 $approvalService->approve($order, $user, $note);
+                app(OrderAutoApprovalService::class)->processOrder($order);
                 $approvedCount++;
             } catch (\Throwable) {
                 $failedCount++;
