@@ -99,6 +99,7 @@ class DraftOrderAutomationService
             }
 
             $customer = $draft->customer()->firstOrFail();
+            $truckStation = $draft->use_truck_station ? $draft->truckStation()->first() : null;
             $order = app(OrderController::class)->createOrderFromSchedule(
                 $orderItems,
                 [
@@ -111,6 +112,12 @@ class DraftOrderAutomationService
                     'note' => $draft->note,
                     'delivery_date' => Carbon::today('Asia/Bangkok')->toDateString(),
                     'delivery_time' => $draft->delivery_time,
+                    'use_truck_station' => (bool) $draft->use_truck_station,
+                    'truck_station_id' => $truckStation?->id,
+                    'truck_station_name' => $draft->truck_station_name ?: $truckStation?->name,
+                    'truck_station_address' => $draft->truck_station_address ?: $truckStation?->address,
+                    'truck_station_phone' => $draft->truck_station_phone ?: $truckStation?->phone,
+                    'truck_receive_time' => $draft->truck_receive_time,
                     'status' => OrderStatus::Pending->value,
                     'payment_status' => PaymentStatus::Unpaid->value,
                     'delivery_status' => DeliveryStatus::NotShipped->value,

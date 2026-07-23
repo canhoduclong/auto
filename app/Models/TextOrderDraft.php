@@ -13,7 +13,8 @@ class TextOrderDraft extends Model
 
     protected $fillable = [
         'created_by', 'draft_scope', 'sale_id', 'customer_id', 'truck_brand_id', 'truck_station_id', 'product_variant_id', 'order_id',
-        'zalo_name', 'customer_name', 'phone', 'address', 'truck_brand_name', 'truck_station_address', 'product_text',
+        'zalo_name', 'customer_name', 'phone', 'address', 'use_truck_station', 'truck_brand_name', 'truck_station_name',
+        'truck_station_address', 'truck_station_phone', 'truck_receive_time', 'product_text',
         'parsed_items', 'quantity', 'size_kg', 'unit_price', 'delivery_date', 'delivery_time',
         'note', 'raw_text', 'status', 'error_message', 'automation_mode', 'automation_enabled',
         'automation_dates', 'automation_last_run_at', 'automation_last_error',
@@ -24,6 +25,7 @@ class TextOrderDraft extends Model
         'size_kg' => 'decimal:3',
         'unit_price' => 'decimal:2',
         'parsed_items' => 'array',
+        'use_truck_station' => 'boolean',
         'automation_enabled' => 'boolean',
         'automation_dates' => 'array',
         'automation_last_run_at' => 'datetime',

@@ -72,7 +72,7 @@ class TextOrderImportController extends Controller
         $sortDir = strtolower((string) ($request?->input('sort_dir', 'desc')));
         $sortDir = in_array($sortDir, ['asc', 'desc'], true) ? $sortDir : 'desc';
         $drafts = TextOrderDraft::query()
-            ->with(['sale:id,name,zalo_name', 'customer:id,name,phone', 'truckBrand:id,name', 'truckStation:id,name,address,brand_id', 'variant.product.avatar.media', 'order:id,code'])
+            ->with(['sale:id,name,zalo_name', 'customer:id,name,phone', 'truckBrand:id,name', 'truckStation:id,name,address,phone,brand_id', 'truckStation.brand:id,name', 'variant.product.avatar.media', 'order:id,code'])
             ->where('draft_scope', $saleId ? TextOrderDraft::SCOPE_SALE_PRIVATE : TextOrderDraft::SCOPE_ADMIN_IMPORT)
             ->when($saleId, fn ($query) => $query->where('sale_id', $saleId))
             ->orderBy($sortBy, $sortDir)
@@ -87,7 +87,7 @@ class TextOrderImportController extends Controller
             ->with('brand:id,name')
             ->where('is_active', true)
             ->orderBy('name')
-            ->get(['id', 'brand_id', 'name', 'address']);
+            ->get(['id', 'brand_id', 'name', 'address', 'phone']);
 
         $saleMode = $saleId !== null;
         $pageTitle = $saleMode ? 'Đơn nháp' : 'Nhập đơn text';
@@ -431,7 +431,7 @@ class TextOrderImportController extends Controller
             throw new \RuntimeException('Có sản phẩm chưa nhận diện biến thể hoặc số lượng.');
         }
 
-        $truckStation = $this->resolveTruckStation($draft);
+        $truckStation = $draft->use_truck_station ? $this->resolveTruckStation($draft) : null;
         $customer = $draft->customer;
         if (!$customer) {
             if (!$draft->customer_name && !$draft->phone) {
@@ -460,7 +460,7 @@ class TextOrderImportController extends Controller
             ]);
         }
 
-        return DB::transaction(function () use ($draft, $customer, $draftItems, $approvalService) {
+        return DB::transaction(function () use ($draft, $customer, $draftItems, $truckStation, $approvalService) {
             $order = app(OrderController::class)->createOrderFromSchedule(
                 $draftItems->map(fn ($item) => [
                     'variant_id' => (int) $item['product_variant_id'],
@@ -480,6 +480,12 @@ class TextOrderImportController extends Controller
                     'note' => $draft->note,
                     'delivery_date' => $this->today(),
                     'delivery_time' => $draft->delivery_time,
+                    'use_truck_station' => (bool) $draft->use_truck_station,
+                    'truck_station_id' => $truckStation?->id,
+                    'truck_station_name' => $draft->truck_station_name ?: $truckStation?->name,
+                    'truck_station_address' => $draft->truck_station_address ?: $truckStation?->address,
+                    'truck_station_phone' => $draft->truck_station_phone ?: $truckStation?->phone,
+                    'truck_receive_time' => $draft->truck_receive_time,
                     'status' => OrderStatus::Pending->value,
                     'payment_status' => PaymentStatus::Unpaid->value,
                     'delivery_status' => DeliveryStatus::NotShipped->value,
@@ -542,6 +548,10 @@ class TextOrderImportController extends Controller
             'unit_price' => ['nullable', 'numeric', 'min:0'],
             'delivery_date' => ['nullable', 'date'],
             'delivery_time' => ['nullable', 'string', 'max:255'],
+            'use_truck_station' => ['nullable', 'boolean'],
+            'truck_station_name' => ['nullable', 'string', 'max:255'],
+            'truck_station_phone' => ['nullable', 'string', 'max:30'],
+            'truck_receive_time' => ['nullable', 'string', 'max:255'],
             'note' => ['nullable', 'string', 'max:10000'],
             'items' => ['nullable', 'array', 'min:1'],
             'items.*.product_variant_id' => ['nullable', 'exists:product_variants,id'],
@@ -555,22 +565,59 @@ class TextOrderImportController extends Controller
             unset($validated['items']);
         }
 
+        $useTruckStation = $request->has('use_truck_station')
+            ? $request->boolean('use_truck_station')
+            : collect([
+                $validated['truck_station_id'] ?? null,
+                $validated['truck_brand_name'] ?? null,
+                $validated['truck_station_name'] ?? null,
+                $validated['truck_station_address'] ?? null,
+            ])->contains(fn ($value) => filled($value));
+
+        $validated['use_truck_station'] = $useTruckStation;
+        if (!$useTruckStation) {
+            foreach ([
+                'truck_brand_id', 'truck_station_id', 'truck_brand_name', 'truck_station_name',
+                'truck_station_address', 'truck_station_phone', 'truck_receive_time',
+            ] as $field) {
+                $validated[$field] = null;
+            }
+        } elseif (empty($validated['truck_station_id'])
+            && blank($validated['truck_brand_name'] ?? null)
+            && blank($validated['truck_station_name'] ?? null)) {
+            throw ValidationException::withMessages([
+                'truck_station_name' => 'Hãy chọn trạm xe hoặc nhập tên nhà xe/trạm xe cần gửi.',
+            ]);
+        }
+
         return $validated;
     }
 
     private function resolveTruckStation(TextOrderDraft $draft): ?TruckStation
     {
         if ($draft->truck_station_id) {
-            return TruckStation::query()->find($draft->truck_station_id);
+            $station = TruckStation::query()->with('brand:id,name')->find($draft->truck_station_id);
+            if ($station) {
+                $draft->update([
+                    'truck_brand_id' => $station->brand_id,
+                    'truck_brand_name' => $station->brand?->name ?: $draft->truck_brand_name,
+                    'truck_station_name' => $station->name,
+                    'truck_station_address' => $draft->truck_station_address ?: $station->address,
+                    'truck_station_phone' => $draft->truck_station_phone ?: $station->phone,
+                ]);
+            }
+
+            return $station;
         }
 
         $brandName = trim((string) $draft->truck_brand_name);
+        $stationName = trim((string) $draft->truck_station_name);
         $stationAddress = trim((string) $draft->truck_station_address);
-        if ($brandName === '' && $stationAddress === '') {
+        if ($brandName === '' && $stationName === '' && $stationAddress === '') {
             return null;
         }
         if ($brandName === '') {
-            throw new \RuntimeException('Có địa chỉ trạm xe nhưng chưa có tên nhà xe.');
+            $brandName = $stationName;
         }
 
         $normalizedBrand = Str::of($brandName)->ascii()->lower()->replaceMatches('/[^a-z0-9]+/', ' ')->squish()->toString();
@@ -585,18 +632,23 @@ class TextOrderImportController extends Controller
             'created_by' => $draft->sale_id,
         ]);
 
+        $normalizedStation = Str::of($stationName)->ascii()->lower()->replaceMatches('/[^a-z0-9]+/', ' ')->squish()->toString();
         $normalizedAddress = Str::of($stationAddress)->ascii()->lower()->replaceMatches('/[^a-z0-9]+/', ' ')->squish()->toString();
         $station = TruckStation::query()
             ->where('brand_id', $brand->id)
             ->get()
-            ->first(fn (TruckStation $item) => $normalizedAddress !== '' && (
-                Str::of((string) $item->address)->ascii()->lower()->replaceMatches('/[^a-z0-9]+/', ' ')->squish()->toString() === $normalizedAddress
-                || Str::of($item->name)->ascii()->lower()->replaceMatches('/[^a-z0-9]+/', ' ')->squish()->toString() === $normalizedAddress
+            ->first(fn (TruckStation $item) => (
+                $normalizedStation !== ''
+                && Str::of($item->name)->ascii()->lower()->replaceMatches('/[^a-z0-9]+/', ' ')->squish()->toString() === $normalizedStation
+            ) || (
+                $normalizedAddress !== ''
+                && Str::of((string) $item->address)->ascii()->lower()->replaceMatches('/[^a-z0-9]+/', ' ')->squish()->toString() === $normalizedAddress
             ));
         $station ??= TruckStation::query()->create([
-            'name' => $brand->name . ($stationAddress !== '' ? ' - ' . $stationAddress : ''),
+            'name' => $stationName ?: $brand->name . ($stationAddress !== '' ? ' - ' . $stationAddress : ''),
             'brand_id' => $brand->id,
             'address' => $stationAddress ?: null,
+            'phone' => $draft->truck_station_phone ?: null,
             'is_active' => true,
             'created_by' => $draft->sale_id,
         ]);
@@ -605,7 +657,9 @@ class TextOrderImportController extends Controller
             'truck_brand_id' => $brand->id,
             'truck_station_id' => $station->id,
             'truck_brand_name' => $brand->name,
+            'truck_station_name' => $station->name,
             'truck_station_address' => $stationAddress ?: $station->address,
+            'truck_station_phone' => $draft->truck_station_phone ?: $station->phone,
         ]);
 
         return $station;

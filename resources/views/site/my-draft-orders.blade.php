@@ -41,6 +41,13 @@
     .draft-edit-delivery .input-group-text { border: 0; background: transparent; color: #527394; padding-left: 0; }
     .draft-edit-delivery .form-control { border: 0; border-bottom: 1px solid transparent; border-radius: 0; padding-left: 2px; }
     .draft-edit-delivery .form-control:focus { border-bottom-color: #0f766e; box-shadow: none; }
+    .draft-edit-extra { display: grid; gap: 10px; padding: 12px 0; border-bottom: 1px dashed #dce6f1; }
+    .draft-edit-note { min-height: 76px; resize: vertical; }
+    .draft-truck-toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid #bae6d3; border-radius: 8px; background: #f0fdf4; }
+    .draft-truck-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; padding: 12px; border: 1px solid #dce6f1; border-radius: 8px; background: #f8fafc; }
+    .draft-truck-fields .is-wide { grid-column: 1 / -1; }
+    .draft-truck-fields[hidden] { display: none; }
+    .draft-template-note { margin-top: 5px; padding: 7px 9px; border-left: 3px solid #f59e0b; background: #fffbeb; color: #475569; white-space: pre-line; }
     .draft-edit-product-head { margin-top: 8px; }
     .draft-edit-products { width: 100%; margin: 4px 0 0; font-size: .72rem; }
     .draft-edit-products th { padding: 7px 6px; border-color: #dce6f1; color: #52617a; font-size: .62rem; font-weight: 900; letter-spacing: .03em; text-transform: uppercase; white-space: nowrap; }
@@ -83,6 +90,8 @@
         .draft-template-editor-grid { grid-template-columns: 1fr; }
         .draft-template-editor-grid .is-wide { grid-column: auto; }
         .draft-edit-delivery { grid-template-columns: 1fr; }
+        .draft-truck-fields { grid-template-columns: 1fr; }
+        .draft-truck-fields .is-wide { grid-column: auto; }
         .draft-edit-products { min-width: 820px; }
         .draft-edit-footer { align-items: stretch; flex-direction: column; gap: 10px; }
         .draft-edit-footer-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -154,6 +163,11 @@
                     $statusText = $draft->status === 'confirmed' ? 'Đã lên đơn' : ($draft->status === 'error' ? 'Có lỗi' : 'Đơn mẫu');
                     $statusClass = $draft->status === 'confirmed' ? 'is-confirmed' : ($draft->status === 'error' ? 'is-error' : '');
                     $isEditingDraft = (int) request('edit') === (int) $draft->id;
+                    $usesTruckStation = (bool) $draft->use_truck_station
+                        || filled($draft->truck_station_id)
+                        || filled($draft->truck_brand_name)
+                        || filled($draft->truck_station_name)
+                        || filled($draft->truck_station_address);
                 @endphp
                 <article class="draft-template-row" data-draft-card data-draft-id="{{ $draft->id }}" data-draft-editable="{{ $draft->status !== 'confirmed' ? '1' : '0' }}">
                     <div class="draft-template-card">
@@ -182,7 +196,17 @@
                                 <div class="draft-template-delivery">
                                     <span><i class="bi bi-geo-alt me-1"></i>Địa chỉ nhận hàng: {{ $draft->address ?: 'Chưa cập nhật' }}</span>
                                     <span><i class="bi bi-clock me-1"></i>Giờ giao: {{ $draft->delivery_time ?: 'Chưa cập nhật' }}</span>
+                                    @if($usesTruckStation)
+                                        <span><i class="bi bi-truck me-1"></i>Nhà xe: {{ $draft->truck_brand_name ?: ($draft->truckStation?->brand?->name ?: '—') }}</span>
+                                        <span><i class="bi bi-building me-1"></i>Trạm gửi: {{ $draft->truck_station_name ?: ($draft->truckStation?->name ?: '—') }} · {{ $draft->truck_station_address ?: ($draft->truckStation?->address ?: 'Chưa cập nhật địa chỉ') }}</span>
+                                        @if($draft->truck_station_phone || $draft->truck_receive_time)
+                                            <span><i class="bi bi-telephone me-1"></i>{{ $draft->truck_station_phone ?: ($draft->truckStation?->phone ?: '—') }} · Giờ nhận: {{ $draft->truck_receive_time ?: 'Chưa cập nhật' }}</span>
+                                        @endif
+                                    @endif
                                 </div>
+                                @if(trim((string) $draft->note) !== '')
+                                    <div class="draft-template-note"><strong>Ghi chú:</strong> {{ $draft->note }}</div>
+                                @endif
                             </div>
                             <div class="draft-template-section border-bottom-0 pb-0">
                                 <div class="draft-template-section-title">Danh sách sản phẩm</div>
@@ -221,12 +245,8 @@
                                 <input type="hidden" name="sale_id" value="{{ auth()->id() }}">
                                 <input type="hidden" name="customer_id" value="{{ $draft->customer_id }}">
                                 <input type="hidden" name="truck_brand_id" value="{{ $draft->truck_brand_id }}">
-                                <input type="hidden" name="truck_station_id" value="{{ $draft->truck_station_id }}">
-                                <input type="hidden" name="truck_brand_name" value="{{ $draft->truck_brand_name }}">
-                                <input type="hidden" name="truck_station_address" value="{{ $draft->truck_station_address }}">
                                 <input type="hidden" name="customer_name" value="{{ $draft->customer_name }}">
                                 <input type="hidden" name="phone" value="{{ $draft->phone }}">
-                                <input type="hidden" name="note" value="{{ $draft->note }}">
 
                                 <div class="draft-picker draft-customer-picker" hidden>
                                         <div class="draft-picker-search">
@@ -240,6 +260,62 @@
                                 <div class="draft-edit-delivery">
                                     <div class="input-group input-group-sm"><span class="input-group-text"><i class="bi bi-geo-alt me-1"></i>Địa chỉ nhận hàng:</span><input name="address" class="form-control" value="{{ $draft->address }}" placeholder="Chưa cập nhật"></div>
                                     <div class="input-group input-group-sm"><span class="input-group-text"><i class="bi bi-clock me-1"></i>Giờ giao:</span><input name="delivery_time" class="form-control" value="{{ $draft->delivery_time }}" placeholder="Chưa cập nhật"></div>
+                                </div>
+
+                                <div class="draft-edit-extra">
+                                    <div>
+                                        <label class="form-label" for="draftNote{{ $draft->id }}">Ghi chú đơn hàng</label>
+                                        <textarea name="note" id="draftNote{{ $draft->id }}" class="form-control form-control-sm draft-edit-note" maxlength="10000" placeholder="Nhập ghi chú giao hàng, đóng gói hoặc yêu cầu riêng...">{{ $draft->note }}</textarea>
+                                    </div>
+                                    <div class="draft-truck-toggle">
+                                        <div>
+                                            <div class="fw-bold small"><i class="bi bi-truck me-1"></i>Gửi hàng qua nhà xe</div>
+                                            <div class="text-muted small">Bật để chọn hoặc nhập thông tin trạm xe cần gửi.</div>
+                                        </div>
+                                        <div class="form-check form-switch mb-0">
+                                            <input class="form-check-input js-draft-use-truck" type="checkbox" role="switch" name="use_truck_station" id="draftUseTruck{{ $draft->id }}" value="1" @checked($usesTruckStation)>
+                                            <label class="visually-hidden" for="draftUseTruck{{ $draft->id }}">Gửi hàng qua nhà xe</label>
+                                        </div>
+                                    </div>
+                                    <div class="draft-truck-fields" data-draft-truck-fields @if(!$usesTruckStation) hidden @endif>
+                                        <div class="is-wide">
+                                            <label class="form-label">Chọn trạm xe có sẵn</label>
+                                            <select name="truck_station_id" class="form-select form-select-sm js-draft-truck-station">
+                                                <option value="">— Nhập thông tin trạm thủ công —</option>
+                                                @foreach($truckStations as $station)
+                                                    <option value="{{ $station->id }}"
+                                                        data-brand-id="{{ $station->brand_id }}"
+                                                        data-brand-name="{{ $station->brand?->name ?? '' }}"
+                                                        data-station-name="{{ $station->name }}"
+                                                        data-address="{{ $station->address ?? '' }}"
+                                                        data-phone="{{ $station->phone ?? '' }}"
+                                                        @selected((int) $draft->truck_station_id === (int) $station->id)>
+                                                        {{ $station->name }}{{ $station->brand?->name ? ' · ' . $station->brand->name : '' }}{{ $station->address ? ' · ' . $station->address : '' }}
+                                                    </option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="form-label">Tên nhà xe</label>
+                                            <input name="truck_brand_name" class="form-control form-control-sm" maxlength="255" value="{{ $draft->truck_brand_name ?: ($draft->truckStation?->brand?->name ?? '') }}" placeholder="Ví dụ: Phương Trang">
+                                        </div>
+                                        <div>
+                                            <label class="form-label">Tên trạm / điểm gửi</label>
+                                            <input name="truck_station_name" class="form-control form-control-sm" maxlength="255" value="{{ $draft->truck_station_name ?: ($draft->truckStation?->name ?? '') }}" placeholder="Ví dụ: Bến xe Miền Đông">
+                                        </div>
+                                        <div class="is-wide">
+                                            <label class="form-label">Địa chỉ trạm xe</label>
+                                            <input name="truck_station_address" class="form-control form-control-sm" maxlength="255" value="{{ $draft->truck_station_address ?: ($draft->truckStation?->address ?? '') }}" placeholder="Địa chỉ nhận hàng của nhà xe">
+                                        </div>
+                                        <div>
+                                            <label class="form-label">Số điện thoại trạm</label>
+                                            <input name="truck_station_phone" class="form-control form-control-sm" maxlength="30" value="{{ $draft->truck_station_phone ?: ($draft->truckStation?->phone ?? '') }}">
+                                        </div>
+                                        <div>
+                                            <label class="form-label">Giờ nhà xe nhận hàng</label>
+                                            <input name="truck_receive_time" class="form-control form-control-sm" maxlength="255" value="{{ $draft->truck_receive_time }}" placeholder="Ví dụ: trước 17h">
+                                        </div>
+                                    </div>
                                 </div>
 
                                 <div class="draft-edit-product-head">
@@ -514,6 +590,8 @@ document.addEventListener('DOMContentLoaded', () => {
         return {
             sale_id: value('sale_id'), customer_id: value('customer_id'), customer_name: value('customer_name'), phone: value('phone'), address: value('address'),
             truck_brand_id: value('truck_brand_id'), truck_station_id: value('truck_station_id'), truck_brand_name: value('truck_brand_name'), truck_station_address: value('truck_station_address'),
+            use_truck_station: editor?.querySelector('.js-draft-use-truck')?.checked ? 1 : 0,
+            truck_station_name: value('truck_station_name'), truck_station_phone: value('truck_station_phone'), truck_receive_time: value('truck_receive_time'),
             delivery_time: value('delivery_time'), note: value('note'),
             items: Array.from(editor?.querySelectorAll('[data-draft-item]') || []).map(item => ({
                 product_variant_id: item.querySelector('[name="item_product_variant_id"]')?.value || null,
@@ -758,6 +836,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     document.addEventListener('change', event => {
+        const truckToggle = event.target.closest('.js-draft-use-truck');
+        if (truckToggle) {
+            const fields = truckToggle.closest('.draft-edit-extra')?.querySelector('[data-draft-truck-fields]');
+            if (fields) fields.hidden = !truckToggle.checked;
+            return;
+        }
+        const truckStation = event.target.closest('.js-draft-truck-station');
+        if (truckStation) {
+            const editor = truckStation.closest('.draft-template-editor');
+            const option = truckStation.selectedOptions[0];
+            if (!editor || !option || !truckStation.value) return;
+            editor.querySelector('[name="truck_brand_id"]').value = option.dataset.brandId || '';
+            editor.querySelector('[name="truck_brand_name"]').value = option.dataset.brandName || '';
+            editor.querySelector('[name="truck_station_name"]').value = option.dataset.stationName || '';
+            editor.querySelector('[name="truck_station_address"]').value = option.dataset.address || '';
+            editor.querySelector('[name="truck_station_phone"]').value = option.dataset.phone || '';
+            return;
+        }
         const automationMode = event.target.closest('.js-automation-mode');
         if (automationMode) {
             const panel = automationMode.closest('[data-draft-automation]');
