@@ -681,7 +681,7 @@ class MyDashboardController extends Controller
 
         $confirmedRevenueByUser = $this->confirmedRevenueByUser($memberIds, $from, $to);
 
-        $employeeRows = $orders->groupBy('user_id')->map(function (Collection $userOrders, $userId) use ($confirmedRevenueByUser, $returnedQuantityByUser, $returnShippingByUser) {
+        $employeeRows = $orders->groupBy('user_id')->map(function (Collection $userOrders, $userId) use ($confirmedRevenueByUser, $returnedQuantityByUser, $returnShippingByUser, $from, $to) {
             $employeeQuantity = (int) $userOrders->pluck('items')->flatten()->sum('quantity');
             $employeeReturns = (int) ($returnedQuantityByUser[$userId] ?? 0);
             $completed = (int) $userOrders->whereIn('status', ['delivered', 'completed'])->count();
