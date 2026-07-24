@@ -27,20 +27,28 @@ class OrderAutoApprovalTest extends TestCase
         $director = User::factory()->create();
         $director->roles()->attach($directorRole);
 
-        $response = $this->actingAs($director)->put(route('pages.my_orders.monitoring.auto_approval'), [
-            'new_order_enabled' => 1,
-            'new_order_require_min_price' => 1,
-            'new_order_allow_bulk_below_min' => 1,
-            'new_order_bulk_min_quantity' => 100,
-            'new_order_bulk_below_min_amount' => 3000,
-            'order_adjustment_enabled' => 1,
-            'order_adjustment_require_min_price' => 1,
-            'order_adjustment_allow_bulk_below_min' => 1,
-            'order_adjustment_bulk_min_quantity' => 120,
-            'order_adjustment_bulk_below_min_amount' => 5000,
-        ]);
+        $response = $this->actingAs($director)
+            ->withHeaders([
+                'Accept' => 'application/json',
+                'X-Requested-With' => 'XMLHttpRequest',
+            ])
+            ->put(route('pages.my_orders.monitoring.auto_approval'), [
+                'new_order_enabled' => 1,
+                'new_order_require_min_price' => 1,
+                'new_order_allow_bulk_below_min' => 1,
+                'new_order_bulk_min_quantity' => 100,
+                'new_order_bulk_below_min_amount' => 3000,
+                'order_adjustment_enabled' => 1,
+                'order_adjustment_require_min_price' => 1,
+                'order_adjustment_allow_bulk_below_min' => 1,
+                'order_adjustment_bulk_min_quantity' => 120,
+                'order_adjustment_bulk_below_min_amount' => 5000,
+            ]);
 
-        $response->assertRedirect()->assertSessionHas('success');
+        $response->assertOk()->assertJson([
+            'success' => true,
+            'scan_completed' => true,
+        ]);
         $this->assertDatabaseHas('order_auto_approval_rules', [
             'user_id' => $director->id,
             'order_type' => OrderAutoApprovalRule::TYPE_NEW_ORDER,

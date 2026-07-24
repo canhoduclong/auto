@@ -512,6 +512,10 @@
     .monitor-auto-footer { flex: 0 0 auto; }
     .monitor-auto-footer .btn { min-height: 32px; padding: 6px 12px; border-color: #98572f; background: #98572f; color: #fff; font-size: .72rem; font-weight: 700; }
     .monitor-auto-footer .btn:hover, .monitor-auto-footer .btn:focus { border-color: #7f4525; background: #7f4525; color: #fff; }
+    .monitor-auto-status { display: none; margin-top: 10px; padding: 8px 12px; border-radius: 6px; font-size: .76rem; font-weight: 600; }
+    .monitor-auto-status.is-visible { display: block; }
+    .monitor-auto-status.is-success { background: #dcfce7; color: #166534; }
+    .monitor-auto-status.is-error { background: #fee2e2; color: #991b1b; }
     .monitor-summary-toggle { border: 1px solid var(--monitor-teal); color: var(--monitor-teal); }
     .monitor-sequence-panel {
         position: sticky;
@@ -943,7 +947,7 @@
                 $adjustmentRule = $autoApprovalRules->get(\App\Models\OrderAutoApprovalRule::TYPE_ORDER_ADJUSTMENT);
             @endphp
             <div class="collapse {{ $hasAutoApprovalErrors ? 'show' : '' }}" id="monitorAutoApproval">
-                <form method="POST" action="{{ route('pages.my_orders.monitoring.auto_approval') }}" class="monitor-auto-approval">
+                <form method="POST" action="{{ route('pages.my_orders.monitoring.auto_approval') }}" class="monitor-auto-approval" data-auto-approval-form novalidate>
                     @csrf
                     @method('PUT')
                     <div class="monitor-auto-approval-head">
@@ -965,15 +969,18 @@
                                 <section data-auto-rule>
                                     <div class="monitor-auto-rule-title">{{ $config['title'] }}</div>
                                     <div class="form-check form-switch monitor-auto-rule-toggle">
+                                        <input type="hidden" name="{{ $prefix }}_enabled" value="0">
                                         <input type="checkbox" class="form-check-input js-auto-rule-enabled" id="{{ $prefix }}Enabled" name="{{ $prefix }}_enabled" value="1" @checked(old("{$prefix}_enabled", $rule?->enabled ?? false))>
                                         <label class="form-check-label fw-bold" for="{{ $prefix }}Enabled">Bật tự động duyệt {{ mb_strtolower($config['title']) }}</label>
                                     </div>
                                     <div class="monitor-auto-rule-options">
                                         <div class="form-check">
+                                            <input type="hidden" name="{{ $prefix }}_require_min_price" value="0">
                                             <input type="checkbox" class="form-check-input" id="{{ $prefix }}MinPrice" name="{{ $prefix }}_require_min_price" value="1" @checked(old("{$prefix}_require_min_price", $rule?->require_min_price ?? true))>
                                             <label class="form-check-label" for="{{ $prefix }}MinPrice">Giá bán của tất cả sản phẩm ≥ giá Min</label>
                                         </div>
                                         <div class="form-check">
+                                            <input type="hidden" name="{{ $prefix }}_allow_bulk_below_min" value="0">
                                             <input type="checkbox" class="form-check-input js-auto-bulk-enabled" id="{{ $prefix }}Bulk" name="{{ $prefix }}_allow_bulk_below_min" value="1" @checked(old("{$prefix}_allow_bulk_below_min", $rule?->allow_bulk_below_min ?? false))>
                                             <label class="form-check-label" for="{{ $prefix }}Bulk">Cho phép sản lượng lớn được bán thấp hơn giá Min</label>
                                         </div>
@@ -984,7 +991,7 @@
                                             </div>
                                             <div>
                                                 <label for="{{ $prefix }}BelowMin">Chiết khấu thêm</label>
-                                                <input type="number" class="form-control form-control-sm" id="{{ $prefix }}BelowMin" name="{{ $prefix }}_bulk_below_min_amount" min="0" max="1000000000" step="1000" value="{{ old("{$prefix}_bulk_below_min_amount", (float) ($rule?->bulk_below_min_amount ?? 2000)) }}" required>
+                                                <input type="number" class="form-control form-control-sm" id="{{ $prefix }}BelowMin" name="{{ $prefix }}_bulk_below_min_amount" min="0" max="1000000000" step="1" value="{{ old("{$prefix}_bulk_below_min_amount", (float) ($rule?->bulk_below_min_amount ?? 2000)) }}" required>
                                             </div>
                                         </div>
                                     </div>
@@ -1000,6 +1007,7 @@
                                 <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-check2-circle me-1"></i>Lưu cấu hình và duyệt đơn phù hợp</button>
                             </div>
                         </div>
+                        <div class="monitor-auto-status" data-auto-approval-status role="status" aria-live="polite"></div>
                     </div>
                 </form>
             </div>
@@ -2139,6 +2147,62 @@
 })();
 
 document.addEventListener('submit', async function (event) {
+    const autoApprovalForm = event.target.closest('[data-auto-approval-form]');
+    if (autoApprovalForm) {
+        event.preventDefault();
+
+        const status = autoApprovalForm.querySelector('[data-auto-approval-status]');
+        const button = autoApprovalForm.querySelector('button[type="submit"]');
+        const showAutoApprovalStatus = (message, type) => {
+            status.textContent = message;
+            status.className = `monitor-auto-status is-visible is-${type}`;
+        };
+
+        if (!autoApprovalForm.checkValidity()) {
+            autoApprovalForm.reportValidity();
+            showAutoApprovalStatus('Vui lòng kiểm tra lại sản lượng và mức chiết khấu.', 'error');
+            return;
+        }
+
+        if (button) {
+            button.disabled = true;
+            button.dataset.originalText = button.innerHTML;
+            button.innerHTML = '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>Đang lưu...';
+        }
+
+        try {
+            const response = await fetch(autoApprovalForm.action, {
+                method: 'POST',
+                body: new FormData(autoApprovalForm),
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json'
+                }
+            });
+            const data = await response.json();
+
+            if (!response.ok || !data.success) {
+                const validationMessage = data.errors
+                    ? Object.values(data.errors).flat().join(' ')
+                    : data.message;
+                throw new Error(validationMessage || 'Không thể lưu cấu hình duyệt tự động.');
+            }
+
+            showAutoApprovalStatus(data.message, 'success');
+            if (typeof showToast === 'function') showToast(data.message, 'success');
+        } catch (error) {
+            showAutoApprovalStatus(error.message || 'Không thể kết nối máy chủ.', 'error');
+            if (typeof showToast === 'function') showToast(error.message || 'Không thể kết nối máy chủ.', 'error');
+        } finally {
+            if (button) {
+                button.disabled = false;
+                button.innerHTML = button.dataset.originalText;
+            }
+        }
+
+        return;
+    }
+
     const form = event.target.closest('.js-monitor-approval-form');
     if (!form) return;
 

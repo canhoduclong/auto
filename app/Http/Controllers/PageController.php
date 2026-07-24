@@ -33,6 +33,7 @@ use App\Enums\OrderStatus;
 use App\Enums\PaymentStatus;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Illuminate\Database\Eloquent\Builder;
@@ -1499,15 +1500,36 @@ class PageController extends Controller
             );
         }
 
-        $result = $autoApprovalService->processPendingForUser($user);
-        foreach ($result['completedAdjustments'] as [$adjustment, $approver]) {
-            app(OrderAdjustmentController::class)->finalizeAutoApprovedAdjustment($adjustment, $approver);
+        $scanCompleted = true;
+        try {
+            $result = $autoApprovalService->processPendingForUser($user);
+            foreach ($result['completedAdjustments'] as [$adjustment, $approver]) {
+                app(OrderAdjustmentController::class)->finalizeAutoApprovedAdjustment($adjustment, $approver);
+            }
+        } catch (\Throwable $exception) {
+            $scanCompleted = false;
+            $result = ['orderSteps' => 0, 'adjustmentSteps' => 0];
+            Log::error('Đã lưu cấu hình nhưng không thể quét duyệt đơn tự động.', [
+                'user_id' => $user->id,
+                'message' => $exception->getMessage(),
+            ]);
         }
 
         $approvedSteps = $result['orderSteps'] + $result['adjustmentSteps'];
         $message = 'Đã lưu cấu hình duyệt đơn tự động.';
         if ($approvedSteps > 0) {
             $message .= " Đã tự động duyệt {$approvedSteps} bước đang chờ phù hợp.";
+        } elseif (!$scanCompleted) {
+            $message .= ' Cấu hình đã có hiệu lực cho đơn mới; chưa thể quét lại các đơn đang chờ.';
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'approved_steps' => $approvedSteps,
+                'scan_completed' => $scanCompleted,
+            ]);
         }
 
         return back()->with('success', $message);

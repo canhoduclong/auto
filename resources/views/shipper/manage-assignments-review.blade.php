@@ -73,6 +73,10 @@
         color: #dc2626;
         font-weight: 700;
     }
+    .route-send-status { display: none; margin-top: 10px; padding: 8px 12px; border-radius: 6px; font-size: .8rem; font-weight: 600; }
+    .route-send-status.is-visible { display: block; }
+    .route-send-status.is-success { background: #dcfce7; color: #166534; }
+    .route-send-status.is-error { background: #fee2e2; color: #991b1b; }
     @media print {
         .sp-sidebar,
         .sp-topbar,
@@ -122,16 +126,17 @@
         <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.print()">
             <i class="bi bi-printer me-1"></i>In
         </button>
-        <form method="POST" action="{{ route('shipper.create-delivery-schedule') }}" class="d-inline">
+        <form method="POST" action="{{ route('shipper.create-delivery-schedule') }}" class="d-inline" data-route-send-form data-success-url="{{ route('shipper.manage-assignments', ['date' => $selectedDate]) }}">
             @csrf
             <input type="hidden" name="date" value="{{ $selectedDate }}">
             <input type="hidden" name="notes" value="{{ $notes }}">
-            <input type="hidden" name="route_plan" value="{{ e($routePlanJson) }}">
+            <input type="hidden" name="route_plan" value="{{ $routePlanJson }}">
             <button type="submit" class="btn btn-success btn-sm">
                 <i class="bi bi-send-check me-1"></i>Gửi lộ trình cho shipper
             </button>
         </form>
     </div>
+    <div class="route-send-status w-100" data-route-send-status role="status" aria-live="polite"></div>
 </div>
 
 <div class="row g-3 mb-3">
@@ -243,3 +248,53 @@
     </div>
 </div>
 @endsection
+
+@push('scripts')
+<script>
+document.addEventListener('submit', async function (event) {
+    const form = event.target.closest('[data-route-send-form]');
+    if (!form) return;
+
+    event.preventDefault();
+    const button = form.querySelector('button[type="submit"]');
+    const status = document.querySelector('[data-route-send-status]');
+    const showStatus = (message, type) => {
+        status.textContent = message;
+        status.className = `route-send-status w-100 is-visible is-${type}`;
+    };
+
+    if (button) {
+        button.disabled = true;
+        button.dataset.originalText = button.innerHTML;
+        button.innerHTML = '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>Đang gửi...';
+    }
+
+    try {
+        const response = await fetch(form.action, {
+            method: 'POST',
+            body: new FormData(form),
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
+            }
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            const validationMessage = data.errors
+                ? Object.values(data.errors).flat().join(' ')
+                : data.message;
+            throw new Error(validationMessage || 'Không thể gửi lộ trình cho shipper.');
+        }
+
+        showStatus(data.message || 'Đã gửi lộ trình cho shipper.', 'success');
+        window.setTimeout(() => window.location.assign(form.dataset.successUrl), 700);
+    } catch (error) {
+        showStatus(error.message || 'Không thể kết nối máy chủ.', 'error');
+        if (button) {
+            button.disabled = false;
+            button.innerHTML = button.dataset.originalText;
+        }
+    }
+});
+</script>
+@endpush

@@ -23,6 +23,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 class ShipperDashboardController extends Controller
 {
@@ -1923,7 +1924,22 @@ class ShipperDashboardController extends Controller
 
         $date = $this->assignmentOrderingDate($request);
         $routePlan = $this->decodeRoutePlan($validated['route_plan'] ?? null);
-        $this->applyRoutePlanFees($routePlan, $date);
+        try {
+            $this->applyRoutePlanFees($routePlan, $date);
+        } catch (HttpExceptionInterface $exception) {
+            if ($exception->getStatusCode() !== 422) {
+                throw $exception;
+            }
+
+            $message = $exception->getMessage() ?: 'Lộ trình không còn hợp lệ. Vui lòng kiểm tra lại.';
+            if ($request->expectsJson()) {
+                return response()->json(['message' => $message], 422);
+            }
+
+            return redirect()
+                ->route('shipper.manage-assignments', ['date' => $date])
+                ->with('error', $message);
+        }
 
         // Lấy danh sách tất cả shippers có đơn đã gán trong ngày
         $shipperIds = Order::query()
@@ -2003,7 +2019,15 @@ class ShipperDashboardController extends Controller
             ->keyBy('id');
 
         abort_if($orders->count() !== $plannedOrders->count(), 422, 'Có đơn trong lộ trình không còn hợp lệ. Vui lòng tải lại trang.');
-        abort_if($orders->contains(fn (Order $order) => $order->accountingReconciliation?->status === \App\Models\AccountingReconciliation::STATUS_CONFIRMED), 422, 'Có đơn đã được kế toán xác nhận, không thể đổi phí ship.');
+        $hasLockedFeeChange = $orders->contains(function (Order $order) use ($plannedOrders): bool {
+            $plannedOrder = $plannedOrders->get((int) $order->id, []);
+            $newFee = max(0, (float) ($plannedOrder['final_fee'] ?? $order->shipping_fee ?? 0));
+            $oldFee = (float) ($order->shipping_fee ?? 0);
+
+            return abs($oldFee - $newFee) >= 0.01
+                && $order->accountingReconciliation?->status === \App\Models\AccountingReconciliation::STATUS_CONFIRMED;
+        });
+        abort_if($hasLockedFeeChange, 422, 'Có đơn đã được kế toán xác nhận nên không thể đổi phí ship. Bạn vẫn có thể gửi nếu giữ nguyên phí của đơn đó.');
 
         DB::transaction(function () use ($plannedOrders, $orders): void {
             foreach ($plannedOrders as $orderId => $plannedOrder) {
