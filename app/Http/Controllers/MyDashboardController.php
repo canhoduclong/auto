@@ -679,16 +679,7 @@ class MyDashboardController extends Controller
         })->values();
         $bestSize = $sizes->sortByDesc('quantity')->first();
 
-        $confirmedRevenueByUser = collect();
-        if (Schema::hasTable('accounting_reconciliations')) {
-            $confirmedRevenueByUser = DB::table('accounting_reconciliations')
-                ->selectRaw('sale_id, SUM(recognized_revenue) as revenue')
-                ->whereIn('sale_id', $memberIds)
-                ->where('status', 'confirmed')
-                ->whereBetween('confirmed_at', [$from, $to])
-                ->groupBy('sale_id')
-                ->pluck('revenue', 'sale_id');
-        }
+        $confirmedRevenueByUser = $this->confirmedRevenueByUser($memberIds, $from, $to);
 
         $employeeRows = $orders->groupBy('user_id')->map(function (Collection $userOrders, $userId) use ($confirmedRevenueByUser, $returnedQuantityByUser, $returnShippingByUser) {
             $employeeQuantity = (int) $userOrders->pluck('items')->flatten()->sum('quantity');
@@ -742,6 +733,60 @@ class MyDashboardController extends Controller
         }
 
         return round(($current - $previous) * 100 / abs($previous), 1);
+    }
+
+    /**
+     * Doanh thu chỉ được ghi nhận từ đối soát đã xác nhận. Một số database cũ
+     * có thể đã có bảng nhưng chưa có đủ các cột của migration mới, nên không
+     * thể chỉ kiểm tra hasTable() rồi mặc định truy vấn confirmed_at/sale_id.
+     */
+    private function confirmedRevenueByUser(array $memberIds, Carbon $from, Carbon $to): Collection
+    {
+        if (empty($memberIds) || !Schema::hasTable('accounting_reconciliations')) {
+            return collect();
+        }
+
+        $table = 'accounting_reconciliations';
+        $requiredColumns = ['status', 'recognized_revenue'];
+        if (!Schema::hasColumns($table, $requiredColumns)) {
+            return collect();
+        }
+
+        $dateColumn = Schema::hasColumn($table, 'confirmed_at')
+            ? 'confirmed_at'
+            : (Schema::hasColumn($table, 'updated_at') ? 'updated_at' : null);
+        if ($dateColumn === null) {
+            return collect();
+        }
+
+        try {
+            if (Schema::hasColumn($table, 'sale_id')) {
+                return DB::table($table)
+                    ->selectRaw('sale_id, COALESCE(SUM(recognized_revenue), 0) as revenue')
+                    ->whereIn('sale_id', $memberIds)
+                    ->where('status', 'confirmed')
+                    ->whereBetween($dateColumn, [$from, $to])
+                    ->whereNotNull('sale_id')
+                    ->groupBy('sale_id')
+                    ->pluck('revenue', 'sale_id');
+            }
+
+            // Tương thích database cũ chưa có sale_id: lấy sale theo đơn hàng.
+            if (Schema::hasColumn($table, 'order_id')) {
+                return DB::table($table . ' as ar')
+                    ->join('orders as revenue_orders', 'revenue_orders.id', '=', 'ar.order_id')
+                    ->selectRaw('revenue_orders.user_id as sale_id, COALESCE(SUM(ar.recognized_revenue), 0) as revenue')
+                    ->whereIn('revenue_orders.user_id', $memberIds)
+                    ->where('ar.status', 'confirmed')
+                    ->whereBetween('ar.' . $dateColumn, [$from, $to])
+                    ->groupBy('revenue_orders.user_id')
+                    ->pluck('revenue', 'sale_id');
+            }
+        } catch (\Illuminate\Database\QueryException $exception) {
+            report($exception);
+        }
+
+        return collect();
     }
 
     private function buildProductPriceBoard(): Collection
