@@ -196,6 +196,54 @@
         font-size: .75rem;
         line-height: 1.5;
     }
+    .manager-board { display: grid; gap: 14px; color: #1f2937; }
+    .manager-board-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; }
+    .manager-board-head h1 { margin: 0; color: #17376e; font-size: 1.25rem; font-weight: 850; text-transform: uppercase; }
+    .manager-board-head p { margin: 3px 0 0; color: #64748b; font-size: .72rem; }
+    .manager-date-filter { display: flex; align-items: end; gap: 5px; padding: 6px; border: 1px solid var(--dashboard-border); border-radius: 7px; background: #fff; }
+    .manager-date-filter label span { display: block; margin-bottom: 2px; color: #64748b; font-size: .58rem; }
+    .manager-date-filter input { width: 112px; border: 0; color: #334155; font-size: .67rem; outline: 0; }
+    .manager-date-filter button { width: 29px; height: 29px; border: 0; border-radius: 5px; background: #17376e; color: #fff; }
+    .manager-summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    .manager-summary-card { min-height: 120px; padding: 12px 11px 10px; border: 1px solid var(--dashboard-border); border-radius: 8px; background: #fff; box-shadow: 0 2px 7px rgba(15,23,42,.035); }
+    .manager-summary-label { display: flex; align-items: center; gap: 7px; font-size: .65rem; font-weight: 800; text-transform: uppercase; }
+    .manager-summary-label i { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 50%; background: currentColor; font-size: .8rem; }
+    .manager-summary-label i::before { color: #fff; }
+    .manager-summary-card > strong { display: block; margin: 10px 0 8px; color: #111827; font-size: 1.05rem; text-align: center; white-space: nowrap; }
+    .manager-summary-card strong em { font-size: .65rem; font-style: normal; font-weight: 500; }
+    .manager-summary-card > small { display: block; color: #64748b; font-size: .61rem; text-align: center; }
+    .manager-summary-card .is-good { color: #14804a; } .manager-summary-card .is-bad { color: #c52b3c; } .manager-summary-card .is-neutral { color: #64748b; }
+    .tone-green { color: #15803d; } .tone-blue { color: #1261a6; } .tone-purple { color: #5835a5; }
+    .tone-orange { color: #df7009; } .tone-teal { color: #08717b; } .tone-red { color: #cf2237; }
+    .manager-detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .manager-panel { overflow: hidden; border: 1px solid var(--dashboard-border); border-radius: 8px; background: #fff; }
+    .manager-panel > h2 { margin: 0; padding: 7px 11px; background: var(--panel-color, #17376e); color: #fff; font-size: .72rem; font-weight: 800; text-transform: uppercase; }
+    .panel-blue { --panel-color:#1463a5; } .panel-orange { --panel-color:#e36b08; } .panel-teal { --panel-color:#08717b; }
+    .panel-red { --panel-color:#cf2237; } .panel-navy { --panel-color:#17376e; } .panel-purple { --panel-color:#55309b; }
+    .manager-size-body { display: flex; align-items: center; gap: 14px; min-height: 178px; padding: 13px; }
+    .manager-donut { display: grid; flex: 0 0 112px; width: 112px; height: 112px; place-items: center; border-radius: 50%; background: var(--manager-donut); }
+    .manager-donut::before { content:""; grid-area:1/1; width: 68px; height: 68px; border-radius:50%; background:#fff; }
+    .manager-donut span { z-index:1; grid-area:1/1; font-size:.6rem; text-align:center; } .manager-donut strong { display:block; font-size:.9rem; }
+    .manager-size-legend { display:grid; gap:8px; font-size:.6rem; }
+    .manager-size-legend > div { display:flex; gap:6px; align-items:flex-start; }
+    .manager-size-legend i { flex:0 0 8px; width:8px; height:8px; margin-top:3px; border-radius:50%; }
+    .manager-size-legend small { display:block; color:#64748b; }
+    .manager-metric-list { margin:0; padding:8px 12px; }
+    .manager-metric-list > div { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:39px; border-bottom:1px solid #e9eef3; }
+    .manager-metric-list > div:last-child { border:0; } .manager-metric-list dt { color:#475569; font-size:.65rem; font-weight:500; }
+    .manager-metric-list dd { margin:0; font-size:.72rem; font-weight:800; white-space:nowrap; }
+    .manager-reasons { display:flex; flex-wrap:wrap; gap:4px 10px; padding:8px 12px; border-top:1px solid #e9eef3; font-size:.58rem; }
+    .manager-reasons b { width:100%; } .manager-reasons span { color:#64748b; }
+    .manager-performance table { width:100%; border-collapse:collapse; font-size:.58rem; }
+    .manager-performance th, .manager-performance td { padding:7px 6px; border:1px solid #e5eaf0; white-space:nowrap; text-align:right; }
+    .manager-performance th:first-child, .manager-performance td:first-child { text-align:left; }
+    .manager-performance thead { background:#f2f6fa; } .manager-table-empty { padding:18px!important; color:#64748b; text-align:center!important; }
+    .manager-progress { display:inline-block; width:30px; height:4px; margin-right:4px; overflow:hidden; border-radius:4px; background:#e5e7eb; vertical-align:middle; }
+    .manager-progress i { display:block; height:100%; background:#16865c; }
+    .manager-kpi-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); padding:12px 6px; }
+    .manager-kpi-grid > div { display:grid; min-height:90px; padding:4px 8px; place-items:center; align-content:center; gap:5px; border-left:1px solid #e5eaf0; text-align:center; }
+    .manager-kpi-grid > div:first-child { border-left:0; } .manager-kpi-grid i { color:#17376e; font-size:1.1rem; }
+    .manager-kpi-grid span { min-height:26px; font-size:.58rem; } .manager-kpi-grid strong { font-size:.82rem; }
     @media (max-width: 1340px) {
         .dashboard-shell {
             grid-template-columns: 220px minmax(0, 1fr);
@@ -216,6 +264,12 @@
         .dashboard-chart-head { align-items: flex-start; }
         .dashboard-chart-note { white-space: normal; text-align: right; }
         .dashboard-price-column { margin-top: 18px; }
+        .manager-board-head { display:block; } .manager-date-filter { margin-top:10px; width:100%; }
+        .manager-date-filter label { flex:1; } .manager-date-filter input { width:100%; }
+        .manager-summary-grid, .manager-detail-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+        .manager-kpi-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+        .manager-kpi-grid > div { border-bottom:1px solid #e5eaf0; }
+        .manager-size-body { flex-direction:column; align-items:flex-start; }
     }
 </style>
 @endpush
@@ -247,6 +301,9 @@
         </aside>
 
         <main class="dashboard-main">
+            @if($isManagerDashboard ?? false)
+                @include('site.partials.manager_dashboard')
+            @else
             <section class="dashboard-card dashboard-commission" id="commission-feed">
                 <h2 class="dashboard-section-title">Chúc mừng nhận hoa hồng</h2>
                 <div class="commission-feed-list">
@@ -273,6 +330,7 @@
                     <canvas id="salesChart"></canvas>
                 </div>
             </section>
+            @endif
 
             @include('layouts.partials.department_broadcasts', ['showEmpty' => true])
         </main>

@@ -32,22 +32,22 @@ class MyDashboardController extends Controller
             return Setting::all()->keyBy('key');
         });
     }
-    public function index()
+    public function index(Request $request)
     {
         $user = auth()->user();
         abort_unless($user, 403);
 
-        $payload = $this->buildPayload($user);
+        $payload = $this->buildPayload($user, $request);
         $settings   = $this->settings;
         return view('site.my_dashboard_sales', array_merge($payload, ['settings' => $settings]));
     }
 
-    public function stats(): JsonResponse
+    public function stats(Request $request): JsonResponse
     {
         $user = auth()->user();
         abort_unless($user, 403);
 
-        return response()->json($this->buildPayload($user));
+        return response()->json($this->buildPayload($user, $request));
     }
 
     public function notifications(): View
@@ -364,12 +364,14 @@ class MyDashboardController extends Controller
         return back()->with('success', 'Đã từ chối yêu cầu điều chỉnh và gửi thông báo cho kho xử lý lại.');
     }
 
-    private function buildPayload(User $user): array
+    private function buildPayload(User $user, ?Request $request = null): array
     {
         $now = now();
         $monthStart = $now->copy()->startOfMonth();
 
         $memberIds = $this->resolveScopedUserIds($user);
+        $dashboardRole = $this->resolveDashboardRole($user);
+        $isManagerDashboard = in_array($dashboardRole, ['manager', 'manager_sale', 'sale_manager'], true);
 
         $ordersBaseQuery = Order::query()->whereIn('user_id', $memberIds);
 
@@ -505,6 +507,10 @@ class MyDashboardController extends Controller
         }
 
         return [
+            'isManagerDashboard' => $isManagerDashboard,
+            'managerDashboard' => $isManagerDashboard
+                ? $this->buildManagerDashboard($memberIds, $request)
+                : null,
             'dashboardStats' => [
                 'total_revenue' => $totalRevenue,
                 'commission_this_month' => $commissionThisMonth,
@@ -522,6 +528,220 @@ class MyDashboardController extends Controller
             'productPriceBoard' => $productPriceBoard,
             'productPriceAppliedDates' => $productPriceAppliedDates,
         ];
+    }
+
+    /**
+     * Tổng hợp các chỉ số điều hành của manager từ dữ liệu nghiệp vụ thật.
+     * Khoảng ngày mặc định là tuần hiện tại và luôn được giới hạn tối đa 93 ngày.
+     */
+    private function buildManagerDashboard(array $memberIds, ?Request $request): array
+    {
+        $today = now()->startOfDay();
+        try {
+            $from = $request?->filled('from')
+                ? Carbon::createFromFormat('Y-m-d', (string) $request->input('from'))->startOfDay()
+                : $today->copy()->startOfWeek();
+            $to = $request?->filled('to')
+                ? Carbon::createFromFormat('Y-m-d', (string) $request->input('to'))->endOfDay()
+                : $today->copy()->endOfWeek();
+        } catch (\Throwable) {
+            $from = $today->copy()->startOfWeek();
+            $to = $today->copy()->endOfWeek();
+        }
+
+        if ($from->gt($to)) {
+            [$from, $to] = [$to->copy()->startOfDay(), $from->copy()->endOfDay()];
+        }
+        if ($from->diffInDays($to) > 92) {
+            $from = $to->copy()->subDays(92)->startOfDay();
+        }
+
+        $periodDays = $from->copy()->startOfDay()->diffInDays($to->copy()->startOfDay()) + 1;
+        $previousTo = $from->copy()->subSecond();
+        $previousFrom = $previousTo->copy()->subDays($periodDays - 1)->startOfDay();
+
+        $current = $this->managerPeriodSnapshot($memberIds, $from, $to);
+        $previous = $this->managerPeriodSnapshot($memberIds, $previousFrom, $previousTo, false);
+
+        foreach (['customers', 'quantity', 'defect_rate', 'receivables', 'shipping_cost'] as $key) {
+            $current['changes'][$key] = $this->percentageChange(
+                (float) ($current['summary'][$key] ?? 0),
+                (float) ($previous['summary'][$key] ?? 0)
+            );
+        }
+
+        return array_merge($current, [
+            'from' => $from->toDateString(),
+            'to' => $to->toDateString(),
+            'range_label' => $from->format('d/m/Y') . ' – ' . $to->format('d/m/Y'),
+        ]);
+    }
+
+    private function managerPeriodSnapshot(array $memberIds, Carbon $from, Carbon $to, bool $withDetails = true): array
+    {
+        $excludedStatuses = ['draft', 'cancelled', 'rejected'];
+        $orders = Order::query()
+            ->with($withDetails ? ['items.variant', 'user:id,name', 'customer:id,created_at'] : [])
+            ->whereIn('user_id', $memberIds)
+            ->whereBetween('created_at', [$from, $to])
+            ->whereNotIn('status', $excludedStatuses)
+            ->when(Schema::hasColumn('orders', 'is_return_order'), fn ($q) => $q->where(function ($nested) {
+                $nested->whereNull('is_return_order')->orWhere('is_return_order', false);
+            }))
+            ->get();
+
+        $orderIds = $orders->pluck('id');
+        $items = $withDetails ? $orders->pluck('items')->flatten() : collect();
+        $quantity = $withDetails
+            ? (int) $items->sum(fn ($item) => (int) ($item->quantity ?? 0))
+            : (int) DB::table('order_items')->whereIn('order_id', $orderIds)->sum('quantity');
+
+        $returnRows = collect();
+        $returnedQuantityByOrder = collect();
+        $returnedQuantityByUser = collect();
+        $returnShippingByUser = collect();
+        $returnedQuantity = 0;
+        $returnedValue = 0.0;
+        if (Schema::hasTable('order_returns')) {
+            $returnRows = DB::table('order_returns as ore')
+                ->join('orders as return_orders', 'return_orders.id', '=', 'ore.order_id')
+                ->whereIn('return_orders.user_id', $memberIds)
+                ->whereBetween('ore.created_at', [$from, $to])
+                ->get(['ore.*', 'return_orders.user_id as sale_user_id']);
+            $returnIds = $returnRows->pluck('id');
+            if (Schema::hasTable('return_items') && $returnIds->isNotEmpty()) {
+                $returnedQuantityByOrder = DB::table('return_items as ri')
+                    ->join('order_returns as ore', 'ore.id', '=', 'ri.order_return_id')
+                    ->whereIn('ri.order_return_id', $returnIds)
+                    ->groupBy('ore.order_id')
+                    ->selectRaw('ore.order_id, SUM(ri.quantity) as quantity')
+                    ->pluck('quantity', 'ore.order_id');
+                $returnedQuantity = (int) $returnedQuantityByOrder->sum();
+                $returnedQuantityByUser = $returnRows->groupBy('sale_user_id')->map(function (Collection $userReturns) use ($returnedQuantityByOrder) {
+                    return (int) $userReturns->pluck('order_id')->unique()->sum(fn ($orderId) => (int) ($returnedQuantityByOrder[$orderId] ?? 0));
+                });
+            }
+            if (Schema::hasColumn('order_returns', 'refund_amount')) {
+                $returnedValue = (float) $returnRows->sum('refund_amount');
+            }
+            if (Schema::hasColumn('order_returns', 'return_shipping_fee')) {
+                $returnShippingByUser = $returnRows->groupBy('sale_user_id')
+                    ->map(fn (Collection $userReturns) => (float) $userReturns->sum('return_shipping_fee'));
+            }
+        }
+
+        $receivables = Schema::hasColumn('orders', 'amount_due')
+            ? (float) $orders->sum('amount_due')
+            : 0.0;
+        $overdue = Schema::hasColumn('orders', 'amount_due')
+            ? (float) $orders->filter(fn ($order) => (float) $order->amount_due > 0 && $order->created_at->lt(now()->subDays(7)))->sum('amount_due')
+            : 0.0;
+        $deliveryShippingCost = Schema::hasColumn('orders', 'shipping_fee')
+            ? (float) $orders->sum(fn ($order) => ($order->charge_shipping_fee ?? true) ? (float) ($order->shipping_fee ?? 0) : 0)
+            : 0.0;
+        $returnShippingCost = Schema::hasTable('order_returns') && Schema::hasColumn('order_returns', 'return_shipping_fee')
+            ? (float) $returnRows->sum('return_shipping_fee')
+            : 0.0;
+        $shippingCost = $deliveryShippingCost + $returnShippingCost;
+
+        $summary = [
+            'customers' => (int) $orders->pluck('customer_id')->filter()->unique()->count(),
+            'quantity' => $quantity,
+            'defect_rate' => $quantity > 0 ? round($returnedQuantity * 100 / $quantity, 2) : 0.0,
+            'receivables' => $receivables,
+            'shipping_cost' => $shippingCost,
+        ];
+
+        if (!$withDetails) {
+            return ['summary' => $summary];
+        }
+
+        $sizeDefinitions = [
+            ['key' => 'size_1', 'label' => 'Size 1', 'range' => '1,5 – <2,0 kg', 'min' => 1.5, 'max' => 2.0, 'color' => '#1d6fbb'],
+            ['key' => 'size_2', 'label' => 'Size 2', 'range' => '2,0 – <2,5 kg', 'min' => 2.0, 'max' => 2.5, 'color' => '#20875b'],
+            ['key' => 'size_3', 'label' => 'Size 3', 'range' => '2,5 – 3,0 kg', 'min' => 2.5, 'max' => 3.001, 'color' => '#f59e0b'],
+            ['key' => 'size_4', 'label' => 'Size 4', 'range' => '>3,0 kg', 'min' => 3.001, 'max' => PHP_FLOAT_MAX, 'color' => '#dc2638'],
+        ];
+        $sizes = collect($sizeDefinitions)->map(function (array $definition) use ($items, $quantity) {
+            $sizeQuantity = (int) $items->sum(function ($item) use ($definition) {
+                $weight = (float) ($item->unit_weight ?? 0);
+                if ($weight <= 0) {
+                    $weight = (float) ($item->variant?->size ?? 0);
+                }
+                return $weight >= $definition['min'] && $weight < $definition['max']
+                    ? (int) ($item->quantity ?? 0)
+                    : 0;
+            });
+            return array_merge($definition, [
+                'quantity' => $sizeQuantity,
+                'percentage' => $quantity > 0 ? round($sizeQuantity * 100 / $quantity, 1) : 0,
+            ]);
+        })->values();
+        $bestSize = $sizes->sortByDesc('quantity')->first();
+
+        $confirmedRevenueByUser = collect();
+        if (Schema::hasTable('accounting_reconciliations')) {
+            $confirmedRevenueByUser = DB::table('accounting_reconciliations')
+                ->selectRaw('sale_id, SUM(recognized_revenue) as revenue')
+                ->whereIn('sale_id', $memberIds)
+                ->where('status', 'confirmed')
+                ->whereBetween('confirmed_at', [$from, $to])
+                ->groupBy('sale_id')
+                ->pluck('revenue', 'sale_id');
+        }
+
+        $employeeRows = $orders->groupBy('user_id')->map(function (Collection $userOrders, $userId) use ($confirmedRevenueByUser, $returnedQuantityByUser, $returnShippingByUser) {
+            $employeeQuantity = (int) $userOrders->pluck('items')->flatten()->sum('quantity');
+            $employeeReturns = (int) ($returnedQuantityByUser[$userId] ?? 0);
+            $completed = (int) $userOrders->whereIn('status', ['delivered', 'completed'])->count();
+            return [
+                'name' => (string) ($userOrders->first()?->user?->name ?? ('NV #' . $userId)),
+                'quantity' => $employeeQuantity,
+                'revenue' => (float) ($confirmedRevenueByUser[$userId] ?? 0),
+                'new_customers' => $userOrders->filter(fn ($order) => $order->customer && $order->customer->created_at->between($from, $to))->pluck('customer_id')->unique()->count(),
+                'defect_rate' => $employeeQuantity > 0 ? round($employeeReturns * 100 / $employeeQuantity, 1) : 0,
+                'debt' => (float) $userOrders->sum('amount_due'),
+                'shipping_cost' => (float) $userOrders->sum(fn ($order) => ($order->charge_shipping_fee ?? true) ? (float) ($order->shipping_fee ?? 0) : 0)
+                    + (float) ($returnShippingByUser[$userId] ?? 0),
+                'completion_rate' => $userOrders->count() > 0 ? round($completed * 100 / $userOrders->count(), 1) : 0,
+            ];
+        })->sortByDesc('revenue')->values();
+
+        $completedOrders = $orders->whereIn('status', ['delivered', 'completed']);
+        $onTimeOrders = $completedOrders->filter(function ($order) {
+            if (!$order->delivery_date || !$order->delivered_at) return false;
+            return $order->delivered_at->endOfDay()->lte(Carbon::parse($order->delivery_date)->endOfDay());
+        })->count();
+
+        return [
+            'summary' => array_merge($summary, [
+                'best_size' => $bestSize,
+                'returned_quantity' => $returnedQuantity,
+                'returned_value' => $returnedValue,
+                'overdue_receivables' => $overdue,
+                'overdue_rate' => $receivables > 0 ? round($overdue * 100 / $receivables, 2) : 0,
+                'shipping_per_unit' => $quantity > 0 ? round($shippingCost / $quantity) : 0,
+                'shipping_orders' => $orders->filter(fn ($order) => (float) ($order->shipping_fee ?? 0) > 0)->count(),
+            ]),
+            'changes' => [],
+            'sizes' => $sizes,
+            'return_reasons' => $returnRows->groupBy(fn ($row) => trim((string) ($row->reason ?? '')) ?: 'Khác')
+                ->map->count()->sortDesc()->take(4),
+            'employees' => $employeeRows,
+            'kpis' => [
+                'completion_rate' => $orders->count() > 0 ? round($completedOrders->count() * 100 / $orders->count(), 1) : 0,
+                'on_time_rate' => $completedOrders->count() > 0 ? round($onTimeOrders * 100 / $completedOrders->count(), 1) : 0,
+            ],
+        ];
+    }
+
+    private function percentageChange(float $current, float $previous): ?float
+    {
+        if (abs($previous) < 0.00001) {
+            return abs($current) < 0.00001 ? 0.0 : null;
+        }
+
+        return round(($current - $previous) * 100 / abs($previous), 1);
     }
 
     private function buildProductPriceBoard(): Collection
@@ -637,11 +857,13 @@ class MyDashboardController extends Controller
 
     private function resolveScopedUserIds(User $user): array
     {
-        if ($user->hasRole('sale')) {
+        $dashboardRole = $this->resolveDashboardRole($user);
+
+        if ($dashboardRole === 'sale') {
             return [$user->id];
         }
 
-        if ($user->hasRole('leader') || $user->hasRole('leader_sale') || $user->hasRole('sale_manager')) {
+        if (in_array($dashboardRole, ['leader', 'leader_sale', 'sale_manager'], true)) {
             $memberIds = User::query()
                 ->where('team_id', $user->team_id)
                 ->pluck('id')
@@ -650,7 +872,7 @@ class MyDashboardController extends Controller
             return empty($memberIds) ? [$user->id] : $memberIds;
         }
 
-        if ($user->hasRole('manager') || $user->hasRole('manager_sale')) {
+        if (in_array($dashboardRole, ['manager', 'manager_sale'], true)) {
             $memberIds = User::query()
                 ->when($user->team_id, fn ($q) => $q->where('team_id', $user->team_id))
                 ->pluck('id')
@@ -660,6 +882,22 @@ class MyDashboardController extends Controller
         }
 
         return [$user->id];
+    }
+
+    private function resolveDashboardRole(User $user): string
+    {
+        $activeRole = strtolower(trim((string) session('active_role', '')));
+        if ($activeRole !== '' && $user->hasRole($activeRole)) {
+            return $activeRole;
+        }
+
+        foreach (['sale', 'leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale'] as $role) {
+            if ($user->hasRole($role)) {
+                return $role;
+            }
+        }
+
+        return '';
     }
 
     private function buildSalesChart(array $memberIds, Carbon $from, Carbon $to): array

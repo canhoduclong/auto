@@ -35,4 +35,25 @@ class MyDashboardLayoutTest extends TestCase
             ->assertSee('Bảng báo giá sản phẩm')
             ->assertSee(route('pages.my_orders.monitoring', ['tab' => 'automatic']), false);
     }
+
+    public function test_manager_dashboard_is_rendered_in_the_existing_middle_column(): void
+    {
+        $managerRole = Role::query()->create(['name' => 'manager']);
+        $manager = User::factory()->create();
+        $manager->roles()->attach($managerRole);
+
+        $response = $this->actingAs($manager)
+            ->withSession(['active_role' => 'manager'])
+            ->get(route('pages.my_dashboard', ['from' => now()->startOfWeek()->toDateString(), 'to' => now()->endOfWeek()->toDateString()]));
+
+        $response->assertOk()
+            ->assertSee('dashboard-shell', false)
+            ->assertSee('dashboard-main', false)
+            ->assertSee('manager-board', false)
+            ->assertSee('Bảng điều hành phòng kinh doanh')
+            ->assertSee('Sản lượng bán theo size')
+            ->assertSee('Hiệu suất kinh doanh theo nhân viên')
+            ->assertSee('KPI tổng hợp')
+            ->assertSee('Bảng báo giá sản phẩm');
+    }
 }
