@@ -283,7 +283,7 @@
         font-size: .82rem;
         border-collapse: separate;
         border-spacing: 0 7px;
-        min-width: 1450px;
+        min-width: 1240px;
     }
     .trip-order-table thead {
         display: none;
@@ -412,6 +412,35 @@
     .trip-order-table input,
     .trip-order-table select {
         min-width: 86px;
+    }
+    .trip-shipping-fee-input {
+        min-width: 96px !important;
+        text-align: right;
+        font-weight: 800;
+        color: #111827;
+        background: #fff;
+    }
+    .trip-distance-cell,
+    .trip-fixed-shipper-cell {
+        color: #475569;
+        font-size: .78rem;
+        font-weight: 700;
+    }
+    .trip-order-actions { white-space: nowrap; }
+    .trip-cell-label {
+        display: block;
+        margin-bottom: 2px;
+        color: #94a3b8;
+        font-size: .68rem;
+        font-weight: 500;
+    }
+    .trip-order-actions .btn {
+        width: 32px;
+        height: 30px;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
     }
     @media (max-width: 992px) {
         .trip-definition-row {
@@ -769,15 +798,14 @@
                                                 <thead>
                                                     <tr>
                                                         <th style="width: 58px;" class="trip-head-strong">STT</th>
-                                                        <th style="width: 290px;" class="trip-head-strong">Giờ giao - Khách hàng</th>
-                                                        <th style="width: 130px;">Điểm đi</th>
-                                                        <th>Điểm giao</th>
-                                                        <th style="width: 128px;">Nhân viên sale</th>
-                                                        <th style="width: 112px;">Giá ship điều chỉnh</th>
-                                                        <th style="width: 100px;">Giá mặc định</th>
-                                                        <th style="width: 124px;">Trạng thái</th>
-                                                        <th style="width: 170px;">Hàng</th>
-                                                        <th style="width: 174px;">Tính năng</th>
+                                                        <th style="width: 120px;" class="trip-head-strong">Giờ giao</th>
+                                                        <th style="width: 270px;" class="trip-head-strong">Đơn hàng</th>
+                                                        <th style="width: 170px;">Điểm đi</th>
+                                                        <th>Điểm đến</th>
+                                                        <th style="width: 116px;">Tiền ship</th>
+                                                        <th style="width: 100px;">Khoảng cách</th>
+                                                        <th style="width: 135px;">Cố định</th>
+                                                        <th style="width: 130px;">Tính năng</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
@@ -820,34 +848,29 @@
                                                             <td class="text-center">
                                                                 <span class="priority-dot is-routed" style="width:28px;height:28px;font-size:.78rem;">{{ $order->daily_sequence ?: $loop->iteration }}</span>
                                                             </td>
+                                                            <td class="trip-order-time">{{ $deliveryTime ?: 'Chưa hẹn giờ' }}</td>
                                                             <td class="trip-order-main">
-                                                                @if($deliveryTime)
-                                                                    <span class="trip-order-time">{{ $deliveryTime }}</span>
-                                                                @endif
                                                                 <span class="trip-order-customer">{{ $customerName }}</span>
                                                                 <div class="trip-order-subline">
-                                                                    <span class="trip-order-code">
-                                                                        <i class="bi bi-receipt me-1"></i>{{ $order->code ?: ('ORD-' . $order->id) }}
-                                                                    </span>
-                                                                    @if($defaultShipperName)
-                                                                        <span class="trip-default-shipper">Cố định: {{ $defaultShipperName }}</span>
-                                                                    @endif
+                                                                    <span class="trip-products-cell">{{ $productSummary ?: ($order->code ?: ('ORD-' . $order->id)) }}</span>
                                                                 </div>
                                                                 <input type="hidden" class="js-order-trip" value="{{ $defaultTripCode }}">
                                                             </td>
-                                                            <td class="trip-origin-cell">{{ $originName }}</td>
-                                                            <td class="trip-order-address" title="{{ $destination }}">{{ $destination }}</td>
-                                                            <td class="trip-sale-cell">{{ $saleName }}</td>
+                                                            <td class="trip-origin-cell"><span class="trip-cell-label">Gửi từ:</span>{{ $originName }}</td>
+                                                            <td class="trip-order-address" title="{{ $destination }}"><span class="trip-cell-label">Gửi tới:</span>{{ $destination }}</td>
                                                             <td>
-                                                                <input type="number" step="1000" class="form-control form-control-sm js-order-extra-fee" value="0">
+                                                                <span class="trip-cell-label">Tiền ship:</span>
+                                                                <input type="text" inputmode="numeric" autocomplete="off"
+                                                                    class="form-control form-control-sm trip-shipping-fee-input js-order-shipping-fee"
+                                                                    value="{{ number_format($baseFee, 0, '', '') }}"
+                                                                    aria-label="Tiền ship đơn {{ $order->code ?: $order->id }}">
                                                             </td>
-                                                            <td class="text-end fw-bold">{{ number_format($baseFee, 0, ',', '.') }}</td>
-                                                            <td><span class="trip-status-text">{{ $statusLabel }}</span></td>
-                                                            <td class="trip-products-cell">{{ $productSummary ?: '-' }}</td>
-                                                            <td>
+                                                            <td class="trip-distance-cell"><span class="trip-cell-label">Khoảng cách:</span><span class="js-order-distance">—</span></td>
+                                                            <td class="trip-fixed-shipper-cell"><span class="trip-cell-label">Cố định:</span>{{ $defaultShipperName ?: 'Chưa có' }}</td>
+                                                            <td class="trip-order-actions">
                                                                 <input type="hidden" class="js-order-trip-note" value="">
                                                                 <span class="js-order-final-fee d-none">{{ number_format($baseFee, 0, ',', '.') }}</span>
-                                                                <div class="d-flex gap-1 flex-wrap">
+                                                                <div class="d-flex gap-1 flex-nowrap">
                                                                     <button type="button"
                                                                         class="btn btn-sm btn-outline-secondary quick-products-btn js-open-products-preview"
                                                                         data-bs-toggle="modal"
@@ -856,7 +879,7 @@
                                                                         data-customer-name="{{ $customerName }}"
                                                                         data-order-total="{{ $order->total ?? 0 }}"
                                                                         data-products="{{ e($productPayload->toJson(JSON_UNESCAPED_UNICODE)) }}">
-                                                                        <i class="bi bi-list-ul me-1"></i>SP
+                                                                        <i class="bi bi-list-ul"></i>
                                                                     </button>
                                                                     <button type="button"
                                                                         class="btn btn-sm btn-outline-success js-open-shipper-picker"
@@ -867,13 +890,13 @@
                                                                         data-order-code="{{ $order->code ?: $order->id }}"
                                                                         data-customer-name="{{ $customerName }}"
                                                                         data-set-default="0">
-                                                                        <i class="bi bi-arrow-left-right me-1"></i>Chuyển
+                                                                        <i class="bi bi-arrow-left-right"></i>
                                                                     </button>
                                                                     <form action="{{ route('shipper.unassign-order', [$order->id]) }}" method="POST">
                                                                         @csrf
                                                                         @method('DELETE')
                                                                         <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Bạn có chắc chắn muốn gỡ đơn này ra?')">
-                                                                            <i class="bi bi-x-circle me-1"></i>Gỡ
+                                                                            <i class="bi bi-x-circle"></i>
                                                                         </button>
                                                                     </form>
                                                                 </div>
@@ -1050,7 +1073,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 state.orders[row.dataset.orderId] = {
                     shipper_id: Number(shipperId),
                     trip_code: row.querySelector('.js-order-trip')?.value || '',
-                    extra_fee: row.querySelector('.js-order-extra-fee')?.value || '0',
+                    shipping_fee: moneyValue(row.querySelector('.js-order-shipping-fee')?.value),
                     note: row.querySelector('.js-order-trip-note')?.value || '',
                 };
             });
@@ -1062,6 +1085,15 @@ document.addEventListener('DOMContentLoaded', function () {
     function numberValue(value) {
         const parsed = Number(value);
         return Number.isFinite(parsed) ? parsed : 0;
+    }
+
+    function moneyValue(value) {
+        const normalized = String(value ?? '').replace(/[^0-9]/g, '');
+        return normalized === '' ? 0 : Number(normalized);
+    }
+
+    function formatShippingFeeInput(input) {
+        if (input) input.value = currency.format(moneyValue(input.value));
     }
 
     function tripDefinitionsFor(shipperBlock) {
@@ -1097,7 +1129,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    function collectTripPlan() {
+    function collectTripPlan(renderGroups = true) {
         const plan = [];
         document.querySelectorAll('.js-trip-shipper').forEach(function (shipperBlock) {
             syncTripOptions(shipperBlock);
@@ -1117,8 +1149,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (!trip) return;
 
                 const baseFee = numberValue(row.dataset.baseFee);
-                const extraFee = numberValue(row.querySelector('.js-order-extra-fee')?.value);
-                const finalFee = Math.max(0, baseFee + extraFee);
+                const finalFee = Math.max(0, moneyValue(row.querySelector('.js-order-shipping-fee')?.value));
+                const extraFee = finalFee - baseFee;
                 const finalFeeText = row.querySelector('.js-order-final-fee');
                 if (finalFeeText) {
                     finalFeeText.textContent = currency.format(finalFee);
@@ -1137,6 +1169,11 @@ document.addEventListener('DOMContentLoaded', function () {
                     note: row.querySelector('.js-order-trip-note')?.value?.trim() || '',
                 };
 
+                const distanceText = row.querySelector('.js-order-distance');
+                if (distanceText) {
+                    distanceText.textContent = trip.km > 0 ? currency.format(trip.km) + ' km' : '—';
+                }
+
                 row.dataset.tripCode = trip.code;
                 trip.orders.push(order);
                 trip.original_total += baseFee;
@@ -1146,6 +1183,7 @@ document.addEventListener('DOMContentLoaded', function () {
             });
 
             trips.forEach(function (trip) {
+                trip.combined_fee = trip.final_total;
                 const countEl = trip.element?.querySelector('.js-trip-order-count');
                 const totalEl = trip.element?.querySelector('.js-trip-final-total');
                 const feeInput = trip.element?.querySelector('.js-trip-fee');
@@ -1165,7 +1203,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 totalEl.textContent = currency.format(shipperFinalTotal) + ' đ';
             }
 
-            renderTripOrderGroups(shipperBlock, trips);
+            if (renderGroups) {
+                renderTripOrderGroups(shipperBlock, trips);
+            }
 
             plan.push({
                 shipper_id: Number(shipperBlock.dataset.shipperId),
@@ -1196,7 +1236,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const groupRow = document.createElement('tr');
             groupRow.className = 'trip-group-row';
             groupRow.innerHTML = `
-                <td colspan="10">
+                <td colspan="9">
                     <div class="trip-group-line">
                         <div class="trip-group-title">
                             ${trip.name}
@@ -1252,7 +1292,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function restoreTripState() {
         const state = loadTripState();
-        if (!state.shippers && !state.orders) return;
 
         isRestoringTrips = true;
         Object.entries(state.shippers || {}).forEach(function ([shipperId, trips]) {
@@ -1277,11 +1316,17 @@ document.addEventListener('DOMContentLoaded', function () {
                     select.value = savedOrder.trip_code;
                 }
             }
-            const extraInput = row.querySelector('.js-order-extra-fee');
-            if (extraInput) extraInput.value = savedOrder.extra_fee ?? '0';
+            const feeInput = row.querySelector('.js-order-shipping-fee');
+            if (feeInput) {
+                const baseFee = numberValue(row.dataset.baseFee);
+                feeInput.value = savedOrder.shipping_fee ?? (baseFee + numberValue(savedOrder.extra_fee));
+                formatShippingFeeInput(feeInput);
+            }
             const noteInput = row.querySelector('.js-order-trip-note');
             if (noteInput) noteInput.value = savedOrder.note ?? '';
         });
+
+        document.querySelectorAll('.js-order-shipping-fee').forEach(formatShippingFeeInput);
 
         isRestoringTrips = false;
         refreshTripBlocks();
@@ -1531,6 +1576,23 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.addEventListener('input', function (event) {
         if (!event.target.closest('.js-trip-shipper')) return;
+        if (event.target.matches('.js-order-shipping-fee')) {
+            collectTripPlan(false);
+            saveTripState();
+            return;
+        }
+        refreshTripBlocks();
+    });
+
+    document.addEventListener('focusin', function (event) {
+        if (!event.target.matches('.js-order-shipping-fee')) return;
+        event.target.value = String(moneyValue(event.target.value));
+        event.target.select();
+    });
+
+    document.addEventListener('focusout', function (event) {
+        if (!event.target.matches('.js-order-shipping-fee')) return;
+        formatShippingFeeInput(event.target);
         refreshTripBlocks();
     });
 
