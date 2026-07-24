@@ -23,5 +23,8 @@ class ShipperAssignmentViewTest extends TestCase
         $this->assertStringContainsString('collectTripPlan(false);', $template);
         $this->assertStringContainsString('const extraFee = finalFee - baseFee;', $template);
         $this->assertStringContainsString('trip.combined_fee = trip.final_total;', $template);
+        $this->assertStringContainsString('data-delivery-time="{{ e($deliveryTime', $template);
+        $this->assertStringContainsString('product_summary: row.dataset.productSummary,', $template);
+        $this->assertStringContainsString('sequence: numberValue(row.dataset.sequence),', $template);
     }
 }

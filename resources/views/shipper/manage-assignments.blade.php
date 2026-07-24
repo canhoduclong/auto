@@ -841,6 +841,9 @@
                                                             data-order-id="{{ $order->id }}"
                                                             data-order-code="{{ $order->code ?: $order->id }}"
                                                             data-customer-name="{{ e($customerName) }}"
+                                                            data-delivery-time="{{ e($deliveryTime ?: 'Chưa hẹn giờ') }}"
+                                                            data-product-summary="{{ e($productSummary) }}"
+                                                            data-sequence="{{ $order->daily_sequence ?: $loop->iteration }}"
                                                             data-destination="{{ e($destination) }}"
                                                             data-origin="{{ e($order->warehouse?->name ?: 'Kho') }}"
                                                             data-quantity="{{ $quantity }}"
@@ -1160,6 +1163,9 @@ document.addEventListener('DOMContentLoaded', function () {
                     order_id: Number(row.dataset.orderId),
                     order_code: row.dataset.orderCode,
                     customer_name: row.dataset.customerName,
+                    delivery_time: row.dataset.deliveryTime,
+                    product_summary: row.dataset.productSummary,
+                    sequence: numberValue(row.dataset.sequence),
                     destination: row.dataset.destination,
                     origin: row.dataset.origin,
                     quantity: numberValue(row.dataset.quantity),

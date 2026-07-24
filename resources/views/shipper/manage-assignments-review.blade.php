@@ -15,14 +15,16 @@
     .route-review-table {
         font-size: .82rem;
         table-layout: fixed;
+        min-width: 1120px;
     }
     .route-review-table th {
         background: #0b5f59;
         color: #fff;
         text-align: center;
         vertical-align: middle;
-        font-size: .72rem;
+        font-size: .76rem;
         text-transform: uppercase;
+        padding: 14px 10px;
     }
     .route-review-table td {
         vertical-align: middle;
@@ -39,9 +41,6 @@
         text-align: center;
         white-space: nowrap;
     }
-    .route-review-table .muted-cell {
-        color: #475569;
-    }
     .route-review-table .address-cell {
         color: #111827;
     }
@@ -51,28 +50,96 @@
         -webkit-box-orient: vertical;
         overflow: hidden;
     }
-    .shipper-row {
-        background: #e6fffb;
+    .route-group-row td {
+        background: #fff;
         font-weight: 800;
-    }
-    .trip-row {
-        background: #fff8df;
-        font-weight: 700;
+        padding: 10px 6px;
+        border-left: 0;
+        border-right: 0;
     }
     .order-row {
-        background: #f8fbfd;
+        background: #fff;
     }
-    .order-indent {
-        padding-left: 24px !important;
+    .review-sequence {
+        width: 29px;
+        height: 29px;
+        border: 1px solid #0f766e;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #ff8a1c;
+        color: #fff;
+        font-weight: 800;
     }
-    .saving-positive {
-        color: #15803d;
+    .review-customer {
+        color: #111827;
+        font-weight: 800;
+    }
+    .review-product {
+        margin-top: 3px;
+        color: #475569;
+        font-size: .72rem;
+    }
+    .route-review-table tfoot td {
+        background: #f8fafc;
+        font-weight: 800;
+        border-top: 1px solid #dbe4ea;
+    }
+    .review-view-switcher {
+        display: inline-flex;
+        gap: 4px;
+        margin-bottom: 12px;
+        padding: 3px;
+        border: 1px solid #dbe4ea;
+        border-radius: 7px;
+        background: #fff;
+    }
+    .review-view-switcher .btn {
+        border: 0;
+        border-radius: 5px;
+        color: #475569;
+        font-size: .76rem;
         font-weight: 700;
     }
-    .saving-negative {
-        color: #dc2626;
-        font-weight: 700;
+    .review-view-switcher .btn.active {
+        background: #0b5f59;
+        color: #fff;
     }
+    .compact-route-table {
+        width: 100%;
+        min-width: 1160px;
+        border-collapse: separate;
+        border-spacing: 0 6px;
+        font-size: .78rem;
+    }
+    .compact-route-table th {
+        padding: 0 7px 3px;
+        border: 0;
+        background: transparent;
+        color: #111827;
+        text-align: left;
+        white-space: nowrap;
+    }
+    .compact-route-table th span {
+        display: inline-block;
+        padding: 5px 10px;
+        background: #0b5f59;
+        color: #fff;
+        font-size: .72rem;
+        text-transform: uppercase;
+    }
+    .compact-route-table td {
+        padding: 3px 7px;
+        border: 0;
+        color: #111827;
+        vertical-align: middle;
+    }
+    .compact-route-table .compact-strong { font-weight: 800; }
+    .compact-route-table .compact-product { color: #475569; font-size: .7rem; white-space: nowrap; }
+    .compact-route-table .compact-arrow { width: 36px; padding-inline: 2px; text-align: center; font-weight: 800; }
+    .compact-route-table .compact-money { text-align: right; white-space: nowrap; font-weight: 900; }
+    .compact-route-table tfoot td { padding-top: 9px; border-top: 1px solid #dbe4ea; font-weight: 800; }
     .route-send-status { display: none; margin-top: 10px; padding: 8px 12px; border-radius: 6px; font-size: .8rem; font-weight: 600; }
     .route-send-status.is-visible { display: block; }
     .route-send-status.is-success { background: #dcfce7; color: #166534; }
@@ -80,7 +147,8 @@
     @media print {
         .sp-sidebar,
         .sp-topbar,
-        .review-actions {
+        .review-actions,
+        .review-view-switcher {
             display: none !important;
         }
         .sp-main {
@@ -97,17 +165,9 @@
 @php
     $tripCount = collect($routePlan)->sum(fn ($shipper) => count($shipper['routes'] ?? []));
     $orderCount = collect($routePlan)->sum(fn ($shipper) => collect($shipper['routes'] ?? [])->sum(fn ($route) => count($route['orders'] ?? [])));
-    $originalTotal = collect($routePlan)->sum(fn ($shipper) => collect($shipper['routes'] ?? [])->sum(function ($route) {
-        $orders = collect($route['orders'] ?? []);
-        return (float) ($route['original_total'] ?? $orders->sum('base_fee'));
-    }));
     $combinedTotal = collect($routePlan)->sum(fn ($shipper) => collect($shipper['routes'] ?? [])->sum(function ($route) {
         $orders = collect($route['orders'] ?? []);
         return (float) ($route['combined_fee'] ?? $orders->sum('final_fee'));
-    }));
-    $extraTotal = collect($routePlan)->sum(fn ($shipper) => collect($shipper['routes'] ?? [])->sum(function ($route) {
-        $orders = collect($route['orders'] ?? []);
-        return (float) ($route['additional_total'] ?? $orders->sum('extra_fee'));
     }));
 @endphp
 
@@ -139,110 +199,149 @@
     <div class="route-send-status w-100" data-route-send-status role="status" aria-live="polite"></div>
 </div>
 
-<div class="row g-3 mb-3">
-    <div class="col-md-3">
-        <div class="card border-0 shadow-sm"><div class="card-body py-3">
-            <div class="text-muted small">Tổng phí riêng lẻ</div>
-            <div class="fs-5 fw-bold">{{ number_format($originalTotal, 0, ',', '.') }} đ</div>
-        </div></div>
-    </div>
-    <div class="col-md-3">
-        <div class="card border-0 shadow-sm"><div class="card-body py-3">
-            <div class="text-muted small">Phí sau ghép chuyến</div>
-            <div class="fs-5 fw-bold text-primary">{{ number_format($combinedTotal, 0, ',', '.') }} đ</div>
-        </div></div>
-    </div>
-    <div class="col-md-3">
-        <div class="card border-0 shadow-sm"><div class="card-body py-3">
-            <div class="text-muted small">Điều chỉnh theo đơn</div>
-            <div class="fs-5 fw-bold text-warning">{{ number_format($extraTotal, 0, ',', '.') }} đ</div>
-        </div></div>
-    </div>
-    <div class="col-md-3">
-        <div class="card border-0 shadow-sm"><div class="card-body py-3">
-            <div class="text-muted small">Chênh lệch ghép chuyến</div>
-            @php $savingTotal = $originalTotal - $combinedTotal; @endphp
-            <div class="fs-5 fw-bold {{ $savingTotal >= 0 ? 'text-success' : 'text-danger' }}">{{ number_format($savingTotal, 0, ',', '.') }} đ</div>
-        </div></div>
-    </div>
+<div class="review-view-switcher review-actions" role="group" aria-label="Kiểu hiển thị lộ trình">
+    <button type="button" class="btn active" data-review-view-switch="grouped" aria-pressed="true">
+        <i class="bi bi-diagram-3 me-1"></i>Theo lộ trình
+    </button>
+    <button type="button" class="btn" data-review-view-switch="compact" aria-pressed="false">
+        <i class="bi bi-list-ul me-1"></i>Danh sách gọn
+    </button>
 </div>
 
-<div class="card border-0 shadow-sm">
+<div class="card border-0 shadow-sm" data-review-view-panel="grouped">
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table table-bordered route-review-table mb-0">
                 <colgroup>
-                    <col style="width: 42px;">
-                    <col style="width: 15%;">
-                    <col style="width: 9%;">
-                    <col style="width: 68px;">
-                    <col style="width: 9%;">
-                    <col style="width: 34%;">
-                    <col style="width: 10%;">
-                    <col style="width: 9%;">
-                    <col style="width: 9%;">
-                    <col style="width: 9%;">
+                    <col style="width: 50px;">
+                    <col style="width: 125px;">
+                    <col style="width: 190px;">
+                    <col style="width: 100px;">
+                    <col style="width: 21%;">
+                    <col style="width: 26%;">
+                    <col style="width: 115px;">
+                    <col>
                 </colgroup>
                 <thead>
                     <tr>
                         <th>STT</th>
-                        <th>Lộ trình / Khách hàng</th>
-                        <th>Nhân viên ship</th>
+                        <th>Giờ giao</th>
+                        <th>Khách hàng</th>
                         <th>Số lượng</th>
-                        <th>Điểm đi / Phí riêng lẻ</th>
-                        <th>Điểm đến / Km</th>
-                        <th>Tên đơn ghép cùng</th>
-                        <th>Số tiền cho đơn đó</th>
-                        <th>Tiết kiệm / Điều chỉnh</th>
+                        <th>Điểm đi</th>
+                        <th>Điểm đến</th>
+                        <th>Số tiền</th>
                         <th>Ghi chú</th>
                     </tr>
                 </thead>
                 <tbody>
                     @php $rowIndex = 1; @endphp
                     @foreach($routePlan as $shipperPlan)
-                        <tr class="shipper-row">
-                            <td colspan="10">+ {{ $shipperPlan['shipper_name'] ?? 'Shipper' }}</td>
-                        </tr>
                         @foreach(($shipperPlan['routes'] ?? []) as $route)
                             @php
                                 $routeOrders = collect($route['orders'] ?? []);
-                                $routeOriginal = (float) ($route['original_total'] ?? $routeOrders->sum('base_fee'));
-                                $routeCombined = (float) ($route['combined_fee'] ?? $routeOrders->sum('final_fee'));
-                                $saving = $routeOriginal - $routeCombined;
+                                $shipperName = (string) ($shipperPlan['shipper_name'] ?? 'Shipper');
+                                $routeLabel = (string) ($route['name'] ?? 'Lộ trình');
+                                $shipperSuffix = ' - ' . $shipperName;
+                                if (str_ends_with($routeLabel, $shipperSuffix)) {
+                                    $routeLabel = substr($routeLabel, 0, -strlen($shipperSuffix));
+                                }
                             @endphp
-                            <tr class="trip-row">
-                                <td class="center-cell"></td>
-                                <td>− {{ $route['name'] ?? 'Chuyến' }}</td>
-                                <td>{{ $shipperPlan['shipper_name'] ?? '-' }}</td>
-                                <td class="center-cell">{{ number_format($routeOrders->sum('quantity'), 0, ',', '.') }}</td>
-                                <td class="money-cell">{{ number_format($routeOriginal, 0, ',', '.') }} đ</td>
-                                <td class="center-cell">{{ !empty($route['km']) ? $route['km'] . ' km' : '' }}</td>
-                                <td>{{ $route['note'] ?? '' }}</td>
-                                <td class="money-cell">{{ $routeCombined > 0 ? number_format($routeCombined, 0, ',', '.') . ' đ' : '' }}</td>
-                                <td class="money-cell {{ $saving >= 0 ? 'saving-positive' : 'saving-negative' }}">{{ $routeCombined > 0 ? number_format($saving, 0, ',', '.') . ' đ' : '' }}</td>
-                                <td></td>
+                            <tr class="route-group-row">
+                                <td colspan="8">+ {{ $shipperName }} &nbsp;–&nbsp; {{ $routeLabel }}</td>
                             </tr>
                             @foreach($routeOrders as $order)
                                 <tr class="order-row">
-                                    <td class="center-cell">{{ $rowIndex++ }}</td>
-                                    <td class="order-indent fw-semibold">{{ $order['customer_name'] ?? '' }}</td>
-                                    <td>{{ $shipperPlan['shipper_name'] ?? '-' }}</td>
-                                    <td class="center-cell">{{ number_format((float) ($order['quantity'] ?? 0), 0, ',', '.') }}</td>
-                                    <td class="muted-cell">{{ $order['origin'] ?? '' }}</td>
-                                    <td class="address-cell"><div class="wrap-2">{{ $order['destination'] ?? '' }}</div></td>
-                                    <td><div class="wrap-2">{{ $route['name'] ?? '' }}</div></td>
-                                    <td class="money-cell">{{ number_format((float) ($order['final_fee'] ?? 0), 0, ',', '.') }} đ</td>
-                                    <td class="money-cell">
-                                        @if(!empty($order['extra_fee']))
-                                            {{ (float) $order['extra_fee'] > 0 ? '+' : '' }}{{ number_format((float) $order['extra_fee'], 0, ',', '.') }} đ
+                                    <td class="center-cell"><span class="review-sequence">{{ $order['sequence'] ?? $rowIndex }}</span></td>
+                                    <td class="fw-bold">{{ $order['delivery_time'] ?? 'Chưa hẹn giờ' }}</td>
+                                    <td>
+                                        <div class="review-customer">{{ $order['customer_name'] ?? '' }}</div>
+                                        @if(!empty($order['product_summary']))
+                                            <div class="review-product">{{ $order['product_summary'] }}</div>
                                         @endif
                                     </td>
+                                    <td class="center-cell">{{ number_format((float) ($order['quantity'] ?? 0), 0, ',', '.') }}</td>
+                                    <td>{{ $order['origin'] ?? '' }}</td>
+                                    <td class="address-cell"><div class="wrap-2">{{ $order['destination'] ?? '' }}</div></td>
+                                    <td class="money-cell">{{ number_format((float) ($order['final_fee'] ?? 0), 0, ',', '.') }} đ</td>
                                     <td>{{ $order['note'] ?? '' }}</td>
                                 </tr>
+                                @php $rowIndex++; @endphp
                             @endforeach
                         @endforeach
                     @endforeach
                 </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="6" class="text-end text-muted">Tổng phí</td>
+                        <td class="money-cell">{{ number_format($combinedTotal, 0, ',', '.') }} đ</td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm d-none" data-review-view-panel="compact">
+    <div class="card-body p-2">
+        <div class="table-responsive">
+            <table class="compact-route-table mb-0">
+                <colgroup>
+                    <col style="width: 48px;">
+                    <col style="width: 128px;">
+                    <col style="width: 110px;">
+                    <col style="width: 110px;">
+                    <col style="width: 185px;">
+                    <col style="width: 120px;">
+                    <col style="width: 36px;">
+                    <col>
+                    <col style="width: 105px;">
+                    <col style="width: 120px;">
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th><span>STT</span></th>
+                        <th><span>Giờ giao</span></th>
+                        <th>Shipper</th>
+                        <th><span>Khách hàng</span></th>
+                        <th><span>Số lượng</span></th>
+                        <th><span>Điểm đi</span></th>
+                        <th></th>
+                        <th><span>Điểm đến</span></th>
+                        <th><span>Số tiền</span></th>
+                        <th><span>Ghi chú</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @php $compactRowIndex = 1; @endphp
+                    @foreach($routePlan as $shipperPlan)
+                        @foreach(($shipperPlan['routes'] ?? []) as $route)
+                            @foreach(($route['orders'] ?? []) as $order)
+                                <tr>
+                                    <td class="center-cell"><span class="review-sequence">{{ $order['sequence'] ?? $compactRowIndex }}</span></td>
+                                    <td class="compact-strong">{{ $order['delivery_time'] ?? 'Chưa hẹn giờ' }}</td>
+                                    <td class="compact-strong">{{ $shipperPlan['shipper_name'] ?? 'Shipper' }}</td>
+                                    <td class="compact-strong">{{ $order['customer_name'] ?? '' }}</td>
+                                    <td class="compact-product">{{ $order['product_summary'] ?? number_format((float) ($order['quantity'] ?? 0), 0, ',', '.') }}</td>
+                                    <td>{{ $order['origin'] ?? '' }}</td>
+                                    <td class="compact-arrow">---&gt;</td>
+                                    <td>{{ $order['destination'] ?? '' }}</td>
+                                    <td class="compact-money">{{ number_format((float) ($order['final_fee'] ?? 0), 0, ',', '.') }} đ</td>
+                                    <td>{{ $order['note'] ?? '' }}</td>
+                                </tr>
+                                @php $compactRowIndex++; @endphp
+                            @endforeach
+                        @endforeach
+                    @endforeach
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="8" class="text-end text-muted">Tổng phí</td>
+                        <td class="compact-money">{{ number_format($combinedTotal, 0, ',', '.') }} đ</td>
+                        <td></td>
+                    </tr>
+                </tfoot>
             </table>
         </div>
     </div>
@@ -251,6 +350,21 @@
 
 @push('scripts')
 <script>
+document.addEventListener('click', function (event) {
+    const switchButton = event.target.closest('[data-review-view-switch]');
+    if (!switchButton) return;
+
+    const selectedView = switchButton.dataset.reviewViewSwitch;
+    document.querySelectorAll('[data-review-view-switch]').forEach(function (button) {
+        const isActive = button.dataset.reviewViewSwitch === selectedView;
+        button.classList.toggle('active', isActive);
+        button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    });
+    document.querySelectorAll('[data-review-view-panel]').forEach(function (panel) {
+        panel.classList.toggle('d-none', panel.dataset.reviewViewPanel !== selectedView);
+    });
+});
+
 document.addEventListener('submit', async function (event) {
     const form = event.target.closest('[data-route-send-form]');
     if (!form) return;
