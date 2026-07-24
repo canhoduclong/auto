@@ -471,6 +471,10 @@
             <a href="{{ route('shipper.manage-assignments') }}" class="btn btn-sm btn-outline-secondary">
                 <i class="bi bi-arrow-clockwise me-1"></i>Đặt lại
             </a>
+            <a href="{{ route('shipper.manage-assignments.history', ['date' => $selectedDate]) }}"
+                class="btn btn-sm {{ $historyCount > 0 ? 'btn-outline-primary' : 'btn-outline-secondary' }}">
+                <i class="bi bi-clock-history me-1"></i>Lịch sử{{ $historyCount > 0 ? ' (' . $historyCount . ')' : '' }}
+            </a>
         </form>
         <div class="small text-muted mt-2">
             Đang hiển thị đơn lên ngày {{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}; ngày giao của từng đơn có thể là hôm nay hoặc ngày mai.

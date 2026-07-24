@@ -11,6 +11,7 @@ use App\Models\OrderHistory;
 use App\Models\OrderReturn;
 use App\Models\ProductVariant;
 use App\Models\ReturnItem;
+use App\Models\ShipperDispatchHistory;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Models\WarehouseTransfer;
@@ -1558,6 +1559,9 @@ class ShipperDashboardController extends Controller
         $hasUnpublishedSchedules = collect($shipperScheduleStatuses)->contains('draft');
 
         $warehouses = Warehouse::query()->orderBy('name')->get();
+        $historyCount = ShipperDispatchHistory::query()
+            ->whereDate('schedule_date', $selectedDate)
+            ->count();
         $view = $request->routeIs('accounting.*')
             ? 'accounting.ship.manage-assignments'
             : 'shipper.manage-assignments';
@@ -1572,8 +1576,41 @@ class ShipperDashboardController extends Controller
             'totalOrdersCount',
             'shipperScheduleStatuses',
             'hasUnpublishedSchedules',
-            'warehouses'
+            'warehouses',
+            'historyCount'
         ));
+    }
+
+    public function assignmentHistory(Request $request)
+    {
+        $this->authorizeManagerShipper();
+
+        $latestDate = ShipperDispatchHistory::query()->max('schedule_date');
+        $selectedDate = $request->filled('date')
+            ? Carbon::parse($request->input('date'))->toDateString()
+            : ($latestDate ?: Carbon::today()->toDateString());
+
+        $versions = ShipperDispatchHistory::query()
+            ->with('creator:id,name')
+            ->whereDate('schedule_date', $selectedDate)
+            ->orderByDesc('version')
+            ->get();
+
+        $selectedHistory = $request->filled('history_id')
+            ? $versions->firstWhere('id', (int) $request->input('history_id'))
+            : $versions->first();
+        $selectedHistory ??= $versions->first();
+        $routePlan = $selectedHistory?->route_plan ?? [];
+
+        return view('shipper.manage-assignments-review', [
+            'selectedDate' => $selectedDate,
+            'notes' => $selectedHistory?->notes ?? '',
+            'routePlan' => $routePlan,
+            'routePlanJson' => json_encode($routePlan, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'readOnly' => true,
+            'historyVersions' => $versions,
+            'selectedHistory' => $selectedHistory,
+        ]);
     }
 
     private function applyDefaultShipperAssignmentsForDate(string $selectedDate): void
@@ -1978,9 +2015,38 @@ class ShipperDashboardController extends Controller
         }
 
         $shipperList = implode(', ', $processedShippers);
+        $this->archiveDeliverySchedule($date, $routePlan, $validated['notes'] ?? null);
         $message = 'Đã gửi lịch trình giao hàng cho ' . count($processedShippers) . ' shipper (' . $totalOrdersCount . ' đơn): ' . $shipperList . '. Các shipper sẽ nhận được thông báo xác nhận.';
 
         return $this->assignmentMutationResponse($request, $message);
+    }
+
+    private function archiveDeliverySchedule(string $date, array $routePlan, ?string $notes): ShipperDispatchHistory
+    {
+        $plans = collect($routePlan);
+        $routes = $plans->flatMap(fn ($shipperPlan) => $shipperPlan['routes'] ?? []);
+        $orders = $routes->flatMap(fn ($route) => $route['orders'] ?? []);
+
+        return DB::transaction(function () use ($date, $routePlan, $notes, $plans, $routes, $orders): ShipperDispatchHistory {
+            $latest = ShipperDispatchHistory::query()
+                ->whereDate('schedule_date', $date)
+                ->orderByDesc('version')
+                ->lockForUpdate()
+                ->first();
+
+            return ShipperDispatchHistory::create([
+                'schedule_date' => $date,
+                'version' => ((int) ($latest?->version ?? 0)) + 1,
+                'route_plan' => $routePlan,
+                'notes' => filled($notes) ? trim($notes) : null,
+                'shippers_count' => $plans->filter(fn ($plan) => !empty($plan['routes']))->count(),
+                'trips_count' => $routes->count(),
+                'orders_count' => $orders->count(),
+                'total_fee' => $orders->sum(fn ($order) => (float) ($order['final_fee'] ?? 0)),
+                'created_by' => Auth::id(),
+                'published_at' => now(),
+            ]);
+        });
     }
 
     private function decodeRoutePlan(?string $routePlanJson): array

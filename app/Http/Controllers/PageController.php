@@ -23,6 +23,7 @@ use App\Services\OrderAutoApprovalService;
 use App\Models\Order;
 use App\Models\OrderAutoApprovalRule;
 use App\Models\Inventory;
+use App\Models\Warehouse;
 use App\Models\Transaction;
 use App\Services\AdminActivityService;
 use App\Services\CustomerPriorityService;
@@ -1102,40 +1103,97 @@ class PageController extends Controller
                 : false;
         }
 
-        $productRows = $filteredOrders
-            ->flatMap(fn (Order $order) => $order->items)
-            ->groupBy(function ($item) {
-                $productName = $item->product?->name
-                    ?? $item->variant?->product?->name
-                    ?? $item->variant?->name
-                    ?? 'Sản phẩm';
-                $size = $item->variant?->size ?? $item->variant?->name ?? '-';
-
-                return implode('|', [$productName, $size, (float) ($item->price ?? 0)]);
-            })
-            ->map(function ($items) {
-                $first = $items->first();
-                $quantity = (float) $items->sum('quantity');
-                $displayTotal = (float) $items->sum(fn ($item) => (float) $item->display_total_value);
-                $subtotal = (float) $items->sum(function ($item) {
-                    $lineTotal = (float) ($item->total ?? 0);
-
-                    return $lineTotal > 0
-                        ? $lineTotal
-                        : (float) ($item->quantity ?? 0) * (float) ($item->price ?? 0);
-                });
+        $monitoringItems = $filteredOrders->flatMap(fn (Order $order) => $order->items);
+        $monitoringVariantIds = $monitoringItems
+            ->pluck('product_variant_id')
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+        $monitoringWarehouses = Warehouse::query()
+            ->where('status', true)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+        $inventoryByVariant = Inventory::query()
+            ->whereIn('product_variant_id', $monitoringVariantIds)
+            ->get(['product_variant_id', 'warehouse_id', 'quantity', 'reserved_quantity'])
+            ->groupBy('product_variant_id')
+            ->map(fn ($inventories) => $inventories->groupBy('warehouse_id')->map(function ($warehouseInventories) {
+                $onHand = (float) $warehouseInventories->sum('quantity');
+                $reserved = (float) $warehouseInventories->sum('reserved_quantity');
 
                 return [
-                    'name' => $first->product?->name
-                        ?? $first->variant?->product?->name
-                        ?? $first->variant?->name
-                        ?? 'Sản phẩm',
-                    'quantity' => $quantity,
-                    'total' => $displayTotal,
-                    'unit' => $first->display_total_unit,
-                    'size' => $first->variant?->size ?? $first->variant?->name ?? '-',
-                    'price' => (float) ($first->price ?? 0),
-                    'subtotal' => $subtotal,
+                    'on_hand' => $onHand,
+                    'available' => max(0, $onHand - $reserved),
+                ];
+            }));
+
+        $productRows = $monitoringItems
+            ->groupBy(function ($item) {
+                $product = $item->product ?: $item->variant?->product;
+
+                return $product?->id ? 'product:' . $product->id : 'name:' . ($product?->name ?? 'Sản phẩm');
+            })
+            ->map(function ($productItems) use ($inventoryByVariant, $monitoringWarehouses) {
+                $firstProductItem = $productItems->first();
+                $product = $firstProductItem->product ?: $firstProductItem->variant?->product;
+                $variants = $productItems
+                    ->groupBy(function ($item) {
+                        return $item->product_variant_id
+                            ? 'variant:' . $item->product_variant_id
+                            : 'variant-name:' . ($item->variant?->name ?? $item->variant?->size ?? 'Mặc định');
+                    })
+                    ->map(function ($variantItems) use ($inventoryByVariant, $monitoringWarehouses) {
+                        $first = $variantItems->first();
+                        $variant = $first->variant;
+                        $variantId = (int) ($first->product_variant_id ?? 0);
+                        $prices = $variantItems->pluck('price')->map(fn ($price) => (float) $price);
+                        $minPrice = (float) ($prices->min() ?? 0);
+                        $maxPrice = (float) ($prices->max() ?? 0);
+                        $subtotal = (float) $variantItems->sum(function ($item) {
+                            $lineTotal = (float) ($item->total ?? 0);
+
+                            return $lineTotal > 0
+                                ? $lineTotal
+                                : (float) ($item->quantity ?? 0) * (float) ($item->price ?? 0);
+                        });
+                        $warehouseStocks = $monitoringWarehouses->mapWithKeys(function ($warehouse) use ($inventoryByVariant, $variantId) {
+                            return [$warehouse->id => $inventoryByVariant->get($variantId)?->get($warehouse->id) ?? [
+                                'on_hand' => 0,
+                                'available' => 0,
+                            ]];
+                        });
+
+                        return [
+                            'variant_id' => $variantId,
+                            'name' => $variant?->size ?: ($variant?->name ?: ($variant?->sku ?: 'Mặc định')),
+                            'sku' => (string) ($variant?->sku ?? ''),
+                            'quantity' => (float) $variantItems->sum('quantity'),
+                            'total' => (float) $variantItems->sum(fn ($item) => (float) $item->display_total_value),
+                            'unit' => $first->display_total_unit,
+                            'price_label' => abs($maxPrice - $minPrice) < 0.01
+                                ? number_format($minPrice, 0, ',', '.') . 'đ'
+                                : number_format($minPrice, 0, ',', '.') . '–' . number_format($maxPrice, 0, ',', '.') . 'đ',
+                            'subtotal' => $subtotal,
+                            'warehouse_stocks' => $warehouseStocks,
+                        ];
+                    })
+                    ->sortBy('name')
+                    ->values();
+
+                return [
+                    'name' => $product?->name ?? 'Sản phẩm',
+                    'quantity' => (float) $variants->sum('quantity'),
+                    'total' => (float) $variants->sum('total'),
+                    'unit' => $variants->first()['unit'] ?? '',
+                    'subtotal' => (float) $variants->sum('subtotal'),
+                    'warehouse_stocks' => $monitoringWarehouses->mapWithKeys(fn ($warehouse) => [
+                        $warehouse->id => [
+                            'on_hand' => (float) $variants->sum(fn ($variant) => $variant['warehouse_stocks']->get($warehouse->id)['on_hand'] ?? 0),
+                            'available' => (float) $variants->sum(fn ($variant) => $variant['warehouse_stocks']->get($warehouse->id)['available'] ?? 0),
+                        ],
+                    ]),
+                    'variants' => $variants,
                 ];
             })
             ->sortBy('name')
@@ -1203,6 +1261,7 @@ class PageController extends Controller
             'sortBy' => $sortBy,
             'sortDir' => $sortDir,
             'productRows' => $productRows,
+            'monitoringWarehouses' => $monitoringWarehouses,
             'dailyOrderNotes' => $dailyOrderNotes,
             'saleFilters' => $saleFilters,
             'customerFilters' => $customerFilters,

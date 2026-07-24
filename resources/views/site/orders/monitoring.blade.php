@@ -92,6 +92,24 @@
     .monitor-summary-table th:first-child { border-radius: 9px 0 0 9px; }
     .monitor-summary-table th:last-child { border-radius: 0 9px 9px 0; }
     .monitor-summary-table td { border-color: #e8eef5; vertical-align: middle; }
+    .monitor-summary-table .monitor-product-group td {
+        border-top: 2px solid #cbdbe7;
+        background: #eef5fa;
+        color: #0f172a;
+        font-weight: 800;
+    }
+    .monitor-summary-table .monitor-product-group:first-child td { border-top: 0; }
+    .monitor-summary-table .monitor-variant-row td { background: #fff; }
+    .monitor-summary-table .monitor-variant-name { padding-left: 26px; }
+    .monitor-summary-table .monitor-variant-tree { color: #f97316; font-weight: 900; }
+    .monitor-summary-table .monitor-variant-sku { display: block; margin-top: 2px; color: #94a3b8; font-size: .66rem; }
+    .monitor-summary-table .monitor-stock-head { min-width: 112px; text-align: center; }
+    .monitor-summary-table .monitor-stock-head span { display: block; color: #0f766e; font-size: .7rem; }
+    .monitor-summary-table .monitor-stock-head small { display: block; margin-top: 2px; color: #64748b; font-size: .62rem; text-transform: none; }
+    .monitor-summary-table .monitor-stock-cell { min-width: 112px; text-align: center; }
+    .monitor-stock-value { color: #0f766e; font-size: .85rem; font-weight: 900; }
+    .monitor-stock-value.is-low { color: #dc2626; }
+    .monitor-stock-available { display: block; margin-top: 2px; color: #64748b; font-size: .64rem; white-space: nowrap; }
     .monitor-layout {
         display: grid;
         grid-template-columns: 260px minmax(0, 1fr);
@@ -1020,27 +1038,64 @@
                         <thead>
                             <tr>
                                 <th>STT</th>
-                                <th>Sản phẩm</th>
+                                <th>Sản phẩm / Biến thể</th>
                                 <th>Số lượng</th>
-                                <th>Size</th>
                                 <th>Tổng</th>
                                 <th>Đơn giá</th>
                                 <th class="text-end">Tạm tính</th>
+                                @foreach($monitoringWarehouses as $warehouse)
+                                    <th class="monitor-stock-head">
+                                        <span>{{ $warehouse->name }}</span>
+                                        <small>Tồn kho</small>
+                                    </th>
+                                @endforeach
                             </tr>
                         </thead>
                         <tbody>
                             @forelse($productRows as $row)
-                                <tr>
+                                <tr class="monitor-product-group">
                                     <td>{{ $loop->iteration }}</td>
-                                    <td class="fw-semibold">{{ $row['name'] }}</td>
+                                    <td><i class="bi bi-box-seam me-1 text-primary"></i>{{ $row['name'] }}</td>
                                     <td>{{ $formatQuantity($row['quantity']) }}</td>
-                                    <td>{{ $row['size'] }}</td>
                                     <td>{{ $formatQuantity($row['total']) }} {{ $row['unit'] }}</td>
-                                    <td>{{ number_format($row['price'], 0, ',', '.') }}đ</td>
+                                    <td>—</td>
                                     <td class="text-end fw-semibold">{{ number_format($row['subtotal'], 0, ',', '.') }}đ</td>
+                                    @foreach($monitoringWarehouses as $warehouse)
+                                        @php $productStock = $row['warehouse_stocks']->get($warehouse->id); @endphp
+                                        <td class="monitor-stock-cell">
+                                            <span class="monitor-stock-value">{{ $formatQuantity($productStock['on_hand'] ?? 0) }}</span>
+                                            @if(($productStock['available'] ?? 0) < ($productStock['on_hand'] ?? 0))
+                                                <span class="monitor-stock-available">Khả dụng: {{ $formatQuantity($productStock['available']) }}</span>
+                                            @endif
+                                        </td>
+                                    @endforeach
                                 </tr>
+                                @foreach($row['variants'] as $variant)
+                                    <tr class="monitor-variant-row">
+                                        <td></td>
+                                        <td class="monitor-variant-name">
+                                            <span class="monitor-variant-tree">└─</span> {{ $variant['name'] }}
+                                            @if($variant['sku'])<span class="monitor-variant-sku">SKU: {{ $variant['sku'] }}</span>@endif
+                                        </td>
+                                        <td>{{ $formatQuantity($variant['quantity']) }}</td>
+                                        <td>{{ $formatQuantity($variant['total']) }} {{ $variant['unit'] }}</td>
+                                        <td>{{ $variant['price_label'] }}</td>
+                                        <td class="text-end fw-semibold">{{ number_format($variant['subtotal'], 0, ',', '.') }}đ</td>
+                                        @foreach($monitoringWarehouses as $warehouse)
+                                            @php $variantStock = $variant['warehouse_stocks']->get($warehouse->id); @endphp
+                                            <td class="monitor-stock-cell">
+                                                <span class="monitor-stock-value {{ ($variantStock['available'] ?? 0) < $variant['quantity'] ? 'is-low' : '' }}">
+                                                    {{ $formatQuantity($variantStock['on_hand'] ?? 0) }}
+                                                </span>
+                                                @if(($variantStock['available'] ?? 0) < ($variantStock['on_hand'] ?? 0))
+                                                    <span class="monitor-stock-available">Khả dụng: {{ $formatQuantity($variantStock['available']) }}</span>
+                                                @endif
+                                            </td>
+                                        @endforeach
+                                    </tr>
+                                @endforeach
                             @empty
-                                <tr><td colspan="7" class="text-center text-muted py-4">Không có hàng hóa phù hợp.</td></tr>
+                                <tr><td colspan="{{ 6 + $monitoringWarehouses->count() }}" class="text-center text-muted py-4">Không có hàng hóa phù hợp.</td></tr>
                             @endforelse
                         </tbody>
                     </table>

@@ -1,7 +1,7 @@
 @extends('layouts.shipper')
 
-@section('title', 'Xem lại lộ trình giao hàng')
-@section('subtitle', 'Kiểm tra các chuyến ghép đơn trước khi gửi shipper xác nhận')
+@section('title', !empty($readOnly) ? 'Lịch sử điều phối giao hàng' : 'Xem lại lộ trình giao hàng')
+@section('subtitle', !empty($readOnly) ? 'Chọn ngày để xem lại nguyên trạng lộ trình đã gửi' : 'Kiểm tra các chuyến ghép đơn trước khi gửi shipper xác nhận')
 
 @push('styles')
 <style>
@@ -108,38 +108,81 @@
     }
     .compact-route-table {
         width: 100%;
-        min-width: 1160px;
-        border-collapse: separate;
-        border-spacing: 0 6px;
-        font-size: .78rem;
+        min-width: 1240px;
+        border-collapse: collapse;
+        font-size: .8rem;
     }
     .compact-route-table th {
-        padding: 0 7px 3px;
-        border: 0;
-        background: transparent;
-        color: #111827;
-        text-align: left;
-        white-space: nowrap;
-    }
-    .compact-route-table th span {
-        display: inline-block;
-        padding: 5px 10px;
+        padding: 11px 10px;
+        border: 1px solid #0f766e;
         background: #0b5f59;
         color: #fff;
-        font-size: .72rem;
+        text-align: center;
+        white-space: nowrap;
+        font-size: .7rem;
+        font-weight: 800;
+        letter-spacing: .025em;
         text-transform: uppercase;
     }
+    .compact-route-table th:first-child {
+        border-top-left-radius: 7px;
+    }
+    .compact-route-table th:last-child {
+        border-top-right-radius: 7px;
+    }
     .compact-route-table td {
-        padding: 3px 7px;
-        border: 0;
+        padding: 10px;
+        border: 1px solid #dbe4ea;
         color: #111827;
         vertical-align: middle;
+        background: #fff;
     }
+    .compact-route-table tbody tr:nth-child(even) td { background: #f8fbfc; }
+    .compact-route-table tbody tr:hover td { background: #eef9f7; }
     .compact-route-table .compact-strong { font-weight: 800; }
-    .compact-route-table .compact-product { color: #475569; font-size: .7rem; white-space: nowrap; }
-    .compact-route-table .compact-arrow { width: 36px; padding-inline: 2px; text-align: center; font-weight: 800; }
-    .compact-route-table .compact-money { text-align: right; white-space: nowrap; font-weight: 900; }
-    .compact-route-table tfoot td { padding-top: 9px; border-top: 1px solid #dbe4ea; font-weight: 800; }
+    .compact-route-table .compact-time {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 5px 8px;
+        border-radius: 5px;
+        background: #fff7ed;
+        color: #9a3412;
+        font-weight: 800;
+        white-space: nowrap;
+    }
+    .compact-route-table .compact-shipper { font-weight: 800; color: #0b5f59; }
+    .compact-route-table .compact-route-name,
+    .compact-route-table .compact-product {
+        display: block;
+        margin-top: 3px;
+        color: #64748b;
+        font-size: .7rem;
+        font-weight: 500;
+    }
+    .compact-route-table .compact-product { line-height: 1.35; }
+    .compact-route-table .compact-address { line-height: 1.4; }
+    .compact-route-table .compact-address i { color: #0f766e; }
+    .compact-route-table .compact-arrow {
+        width: 42px;
+        padding-inline: 4px;
+        text-align: center;
+        color: #0f766e;
+        font-size: 1rem;
+    }
+    .compact-route-table .compact-money {
+        text-align: right;
+        white-space: nowrap;
+        color: #0f5132;
+        font-weight: 900;
+    }
+    .compact-route-table tfoot td {
+        padding: 11px 10px;
+        border-top: 2px solid #0f766e;
+        background: #f0fdfa;
+        font-weight: 800;
+    }
+    .compact-route-table tfoot .compact-money { font-size: .9rem; }
     .route-send-status { display: none; margin-top: 10px; padding: 8px 12px; border-radius: 6px; font-size: .8rem; font-weight: 600; }
     .route-send-status.is-visible { display: block; }
     .route-send-status.is-success { background: #dcfce7; color: #166534; }
@@ -171,34 +214,72 @@
     }));
 @endphp
 
+@if(!empty($readOnly))
+<div class="review-toolbar review-actions">
+    <form method="GET" action="{{ route('shipper.manage-assignments.history') }}" class="d-flex flex-wrap align-items-end gap-2">
+        <div>
+            <label for="historyDate" class="form-label small fw-bold mb-1">Ngày điều phối</label>
+            <input id="historyDate" type="date" name="date" value="{{ $selectedDate }}" class="form-control form-control-sm">
+        </div>
+        @if(($historyVersions ?? collect())->isNotEmpty())
+            <div>
+                <label for="historyVersion" class="form-label small fw-bold mb-1">Lần gửi</label>
+                <select id="historyVersion" name="history_id" class="form-select form-select-sm" style="min-width: 230px;">
+                    @foreach($historyVersions as $historyVersion)
+                        <option value="{{ $historyVersion->id }}" @selected($selectedHistory?->id === $historyVersion->id)>
+                            Lần {{ $historyVersion->version }} · {{ $historyVersion->published_at?->format('H:i d/m/Y') }}
+                        </option>
+                    @endforeach
+                </select>
+            </div>
+        @endif
+        <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search me-1"></i>Xem lịch sử</button>
+        <a href="{{ route('shipper.manage-assignments', ['date' => $selectedDate]) }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left me-1"></i>Về trang điều phối
+        </a>
+    </form>
+</div>
+@endif
+
 <div class="review-toolbar d-flex flex-wrap justify-content-between align-items-center gap-3">
     <div>
-        <div class="fw-bold text-dark">Bảng kê chi phí ship cho từng chuyến</div>
+        <div class="fw-bold text-dark">{{ !empty($readOnly) ? 'Bản lưu điều phối giao hàng' : 'Bảng kê chi phí ship cho từng chuyến' }}</div>
         <div class="text-muted small">Ngày {{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }} · {{ $tripCount }} chuyến · {{ $orderCount }} đơn</div>
+        @if(!empty($readOnly) && $selectedHistory)
+            <div class="small mt-1 text-muted">
+                Phiên bản {{ $selectedHistory->version }} · Lưu lúc {{ $selectedHistory->published_at?->format('H:i d/m/Y') }}
+                · Người gửi: {{ $selectedHistory->creator?->name ?? 'Hệ thống' }}
+            </div>
+        @endif
         @if($notes)
             <div class="small mt-1"><span class="text-muted">Ghi chú:</span> {{ $notes }}</div>
         @endif
     </div>
     <div class="review-actions d-flex flex-wrap gap-2">
-        <a href="{{ route('shipper.manage-assignments', ['date' => $selectedDate]) }}" class="btn btn-outline-secondary btn-sm">
-            <i class="bi bi-arrow-left me-1"></i>Quay lại chỉnh
-        </a>
+        @if(empty($readOnly))
+            <a href="{{ route('shipper.manage-assignments', ['date' => $selectedDate]) }}" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-arrow-left me-1"></i>Quay lại chỉnh
+            </a>
+        @endif
         <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.print()">
             <i class="bi bi-printer me-1"></i>In
         </button>
-        <form method="POST" action="{{ route('shipper.create-delivery-schedule') }}" class="d-inline" data-route-send-form data-success-url="{{ route('shipper.manage-assignments', ['date' => $selectedDate]) }}">
-            @csrf
-            <input type="hidden" name="date" value="{{ $selectedDate }}">
-            <input type="hidden" name="notes" value="{{ $notes }}">
-            <input type="hidden" name="route_plan" value="{{ $routePlanJson }}">
-            <button type="submit" class="btn btn-success btn-sm">
-                <i class="bi bi-send-check me-1"></i>Gửi lộ trình cho shipper
-            </button>
-        </form>
+        @if(empty($readOnly))
+            <form method="POST" action="{{ route('shipper.create-delivery-schedule') }}" class="d-inline" data-route-send-form data-success-url="{{ route('shipper.manage-assignments', ['date' => $selectedDate]) }}">
+                @csrf
+                <input type="hidden" name="date" value="{{ $selectedDate }}">
+                <input type="hidden" name="notes" value="{{ $notes }}">
+                <input type="hidden" name="route_plan" value="{{ $routePlanJson }}">
+                <button type="submit" class="btn btn-success btn-sm">
+                    <i class="bi bi-send-check me-1"></i>Gửi lộ trình cho shipper
+                </button>
+            </form>
+        @endif
     </div>
     <div class="route-send-status w-100" data-route-send-status role="status" aria-live="polite"></div>
 </div>
 
+@if(!empty($routePlan))
 <div class="review-view-switcher review-actions" role="group" aria-label="Kiểu hiển thị lộ trình">
     <button type="button" class="btn active" data-review-view-switch="grouped" aria-pressed="true">
         <i class="bi bi-diagram-3 me-1"></i>Theo lộ trình
@@ -288,47 +369,58 @@
         <div class="table-responsive">
             <table class="compact-route-table mb-0">
                 <colgroup>
-                    <col style="width: 48px;">
-                    <col style="width: 128px;">
-                    <col style="width: 110px;">
-                    <col style="width: 110px;">
-                    <col style="width: 185px;">
-                    <col style="width: 120px;">
-                    <col style="width: 36px;">
+                    <col style="width: 56px;">
+                    <col style="width: 145px;">
+                    <col style="width: 145px;">
+                    <col style="width: 145px;">
+                    <col style="width: 205px;">
+                    <col style="width: 150px;">
+                    <col style="width: 42px;">
                     <col>
-                    <col style="width: 105px;">
                     <col style="width: 120px;">
+                    <col style="width: 150px;">
                 </colgroup>
                 <thead>
                     <tr>
-                        <th><span>STT</span></th>
-                        <th><span>Giờ giao</span></th>
+                        <th>STT</th>
+                        <th>Giờ giao</th>
                         <th>Shipper</th>
-                        <th><span>Khách hàng</span></th>
-                        <th><span>Số lượng</span></th>
-                        <th><span>Điểm đi</span></th>
+                        <th>Khách hàng</th>
+                        <th>Sản phẩm / Số lượng</th>
+                        <th>Điểm đi</th>
                         <th></th>
-                        <th><span>Điểm đến</span></th>
-                        <th><span>Số tiền</span></th>
-                        <th><span>Ghi chú</span></th>
+                        <th>Điểm đến</th>
+                        <th>Số tiền</th>
+                        <th>Ghi chú</th>
                     </tr>
                 </thead>
                 <tbody>
                     @php $compactRowIndex = 1; @endphp
                     @foreach($routePlan as $shipperPlan)
                         @foreach(($shipperPlan['routes'] ?? []) as $route)
+                            @php
+                                $compactShipperName = (string) ($shipperPlan['shipper_name'] ?? 'Shipper');
+                                $compactRouteLabel = (string) ($route['name'] ?? 'Lộ trình');
+                                $compactShipperSuffix = ' - ' . $compactShipperName;
+                                if (str_ends_with($compactRouteLabel, $compactShipperSuffix)) {
+                                    $compactRouteLabel = substr($compactRouteLabel, 0, -strlen($compactShipperSuffix));
+                                }
+                            @endphp
                             @foreach(($route['orders'] ?? []) as $order)
                                 <tr>
                                     <td class="center-cell"><span class="review-sequence">{{ $order['sequence'] ?? $compactRowIndex }}</span></td>
-                                    <td class="compact-strong">{{ $order['delivery_time'] ?? 'Chưa hẹn giờ' }}</td>
-                                    <td class="compact-strong">{{ $shipperPlan['shipper_name'] ?? 'Shipper' }}</td>
+                                    <td><span class="compact-time"><i class="bi bi-clock"></i>{{ $order['delivery_time'] ?? 'Chưa hẹn giờ' }}</span></td>
+                                    <td>
+                                        <span class="compact-shipper">{{ $compactShipperName }}</span>
+                                        <span class="compact-route-name">{{ $compactRouteLabel }}</span>
+                                    </td>
                                     <td class="compact-strong">{{ $order['customer_name'] ?? '' }}</td>
-                                    <td class="compact-product">{{ $order['product_summary'] ?? number_format((float) ($order['quantity'] ?? 0), 0, ',', '.') }}</td>
-                                    <td>{{ $order['origin'] ?? '' }}</td>
-                                    <td class="compact-arrow">---&gt;</td>
-                                    <td>{{ $order['destination'] ?? '' }}</td>
+                                    <td><span class="compact-product">{{ $order['product_summary'] ?? number_format((float) ($order['quantity'] ?? 0), 0, ',', '.') }}</span></td>
+                                    <td class="compact-address"><i class="bi bi-box-arrow-up-right me-1"></i>{{ $order['origin'] ?? '' }}</td>
+                                    <td class="compact-arrow"><i class="bi bi-arrow-right"></i></td>
+                                    <td class="compact-address"><i class="bi bi-geo-alt me-1"></i>{{ $order['destination'] ?? '' }}</td>
                                     <td class="compact-money">{{ number_format((float) ($order['final_fee'] ?? 0), 0, ',', '.') }} đ</td>
-                                    <td>{{ $order['note'] ?? '' }}</td>
+                                    <td class="text-muted">{{ !empty($order['note']) ? $order['note'] : '—' }}</td>
                                 </tr>
                                 @php $compactRowIndex++; @endphp
                             @endforeach
@@ -346,6 +438,11 @@
         </div>
     </div>
 </div>
+@else
+    <div class="alert alert-info border-0 shadow-sm">
+        <i class="bi bi-calendar-x me-2"></i>Chưa có lịch sử điều phối nào được lưu cho ngày {{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}.
+    </div>
+@endif
 @endsection
 
 @push('scripts')

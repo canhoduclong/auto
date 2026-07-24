@@ -55,6 +55,7 @@ class ShipperRouteReviewTest extends TestCase
         $this->assertStringContainsString('data-review-view-panel="grouped"', $template);
         $this->assertStringContainsString('data-review-view-panel="compact"', $template);
         $this->assertStringContainsString('class="compact-route-table mb-0"', $template);
-        $this->assertStringContainsString("{{ \$shipperPlan['shipper_name'] ?? 'Shipper' }}", $template);
+        $this->assertStringContainsString("{{ \$compactShipperName }}", $template);
+        $this->assertStringContainsString("{{ \$compactRouteLabel }}", $template);
     }
 }
