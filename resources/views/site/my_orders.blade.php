@@ -72,6 +72,50 @@
         border-radius: 9px;
         font-weight: 700;
     }
+    .orders-monitor-filter-form {
+        display: grid;
+        grid-template-columns: minmax(150px, 1.15fr) minmax(150px, 1.15fr) minmax(145px, 1fr) minmax(145px, 1fr) auto auto;
+        gap: 18px;
+        align-items: end;
+    }
+    .orders-monitor-filter-form .orders-monitor-action .btn {
+        min-width: 126px;
+        white-space: nowrap;
+    }
+    .orders-customer-filter {
+        grid-column: 1 / -1;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+    }
+    .orders-customer-filter .btn {
+        min-width: 258px;
+        color: #087b72;
+        border-color: #087b72;
+    }
+    .orders-customer-filter .btn:hover,
+    .orders-customer-filter .btn:focus {
+        color: #fff;
+        background: #087b72;
+    }
+    .orders-selected-customer {
+        color: #475569;
+        font-size: .82rem;
+    }
+    .orders-customer-modal .modal-content {
+        overflow: hidden;
+        border: 0;
+        border-radius: 12px;
+        box-shadow: 0 24px 70px rgba(15, 23, 42, .2);
+    }
+    .orders-customer-modal .modal-header {
+        border-bottom-color: #e7edf4;
+        background: #f8fafc;
+    }
+    .orders-customer-modal .modal-footer {
+        border-top-color: #e7edf4;
+    }
     .orders-side-panel {
         position: sticky;
         top: 84px;
@@ -509,6 +553,9 @@
         .orders-filter {
             padding: 20px;
         }
+        .orders-monitor-filter-form {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
     }
     @media (max-width: 767.98px) {
         .orders-page {
@@ -533,6 +580,17 @@
         /* Filter panel */
         .orders-filter {
             padding: 12px;
+        }
+        .orders-monitor-filter-form {
+            grid-template-columns: 1fr;
+            gap: 12px;
+        }
+        .orders-customer-filter {
+            grid-column: auto;
+        }
+        .orders-customer-filter .btn {
+            width: 100%;
+            min-width: 0;
         }
 
         /* Table ẩn, mobile list hiện */
@@ -797,7 +855,7 @@
                             @endif
                         </div>
 
-                        <form action="{{ $ordersIndexUrl }}" method="GET" class="row g-3 align-items-end" id="ordersFilterForm">
+                        <form action="{{ $ordersIndexUrl }}" method="GET" class="{{ ($monitoringEmbedded ?? false) ? 'orders-monitor-filter-form' : 'row g-3 align-items-end' }}" id="ordersFilterForm">
                             @if($monitoringEmbedded ?? false)<input type="hidden" name="tab" value="my_orders">@endif
                             <input type="hidden" name="customer_query" id="customer_query" value="{{ $customerSearch ?? '' }}">
                             <input type="hidden" name="sort_by" value="{{ $currentSortBy }}">
@@ -811,7 +869,7 @@
                                 @endforeach
                             </div>
 
-                            <div class="col-md-3">
+                            <div class="{{ ($monitoringEmbedded ?? false) ? 'orders-monitor-field' : 'col-md-3' }}">
                                 <label for="payment_status" class="form-label fw-bold">Thanh toán</label>
                                 <select name="payment_status" id="payment_status" class="form-select">
                                     <option value="">Tất cả</option>
@@ -820,7 +878,7 @@
                                     <option value="paid" {{ request('payment_status') === 'paid' ? 'selected' : '' }}>Đã thanh toán</option>
                                 </select>
                             </div>
-                            <div class="col-md-3">
+                            <div class="{{ ($monitoringEmbedded ?? false) ? 'orders-monitor-field' : 'col-md-3' }}">
                                 <label for="status" class="form-label fw-bold">Trạng thái</label>
                                 <select name="status" id="status" class="form-select">
                                     <option value="">Tất cả</option>
@@ -829,14 +887,17 @@
                                     @endforeach
                                 </select>
                             </div>
-                            <div class="col-md-2">
+                            <div class="{{ ($monitoringEmbedded ?? false) ? 'orders-monitor-field' : 'col-md-2' }}">
                                 <label for="from_date" class="form-label fw-bold">Từ ngày</label>
                                 <input type="date" name="from_date" id="from_date" class="form-control" value="{{ request('from_date') }}">
                             </div>
-                            <div class="col-md-2">
+                            <div class="{{ ($monitoringEmbedded ?? false) ? 'orders-monitor-field' : 'col-md-2' }}">
                                 <label for="to_date" class="form-label fw-bold">Đến ngày</label>
                                 <input type="date" name="to_date" id="to_date" class="form-control" value="{{ request('to_date') }}">
                             </div>
+                            @if($monitoringEmbedded ?? false)
+                                <input type="hidden" name="per_page" id="per_page" value="{{ (int) ($perPage ?? request('per_page', 10)) }}">
+                            @else
                             <div class="col-md-2">
                                 <label for="per_page" class="form-label fw-bold">Hiển thị</label>
                                 <select name="per_page" id="per_page" class="form-select">
@@ -845,21 +906,37 @@
                                     @endforeach
                                 </select>
                             </div>
-                            <div class="col-md-4 d-grid">
-                                <button type="button" class="btn btn-outline-primary" onclick="setTodayOrders()" style="font-size:0.95rem;">
-                                    Đơn hôm nay
-                                </button>
-                            </div>
-                            <div class="col-md-4 d-grid">
+                            @endif
+                            <div class="{{ ($monitoringEmbedded ?? false) ? 'orders-monitor-action' : 'col-md-4 d-grid' }}">
                                 <button type="submit" class="btn btn-primary">
                                     <i class="fa fa-search me-1"></i>Lọc đơn
                                 </button>
                             </div>
+                            <div class="{{ ($monitoringEmbedded ?? false) ? 'orders-monitor-action' : 'col-md-4 d-grid' }}">
+                                <button type="button" class="btn btn-outline-primary" onclick="setTodayOrders()" style="font-size:0.95rem;">
+                                    Đơn hôm nay
+                                </button>
+                            </div>
+                            @if($monitoringEmbedded ?? false)
+                            <div class="orders-customer-filter">
+                                <button type="button" class="btn btn-outline-primary" id="openOrdersCustomerPicker">
+                                    <i class="bi bi-calendar2-check me-2"></i>Chọn khách hàng
+                                </button>
+                                <span class="orders-selected-customer" id="ordersSelectedCustomerLabel">
+                                    @if(($selectedCustomers ?? collect())->isNotEmpty())
+                                        Đang lọc: <strong>{{ $selectedCustomers->pluck('name')->implode(', ') }}</strong>
+                                    @else
+                                        Đang xem tất cả khách hàng
+                                    @endif
+                                </span>
+                            </div>
+                            @else
                             <div class="col-md-4 d-grid">
                                 <a href="{{ ($monitoringEmbedded ?? false) ? route('pages.my_orders.monitoring', ['tab' => 'schedules']) : route('my_customer.schedules.index') }}" class="btn btn-outline-primary ">
                                     <i class="bi bi-calendar2-check"></i> Lịch lên đơn
                                 </a>
                             </div>
+                            @endif
                         </form>
                     </div>
                 </div>
@@ -876,6 +953,55 @@
                 </div>
             </div>
         </div>
+
+        @if($monitoringEmbedded ?? false)
+        <div class="modal fade orders-customer-modal" id="ordersCustomerPickerModal" tabindex="-1" aria-labelledby="ordersCustomerPickerModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <div>
+                            <h5 class="modal-title fw-bold" id="ordersCustomerPickerModalLabel">Chọn khách hàng</h5>
+                            <div class="small text-muted">Chọn một khách hàng để lọc danh sách đơn.</div>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row g-2 mb-3">
+                            <div class="col-md-5">
+                                <input type="search" id="ordersCustomerSearch" class="form-control" placeholder="Tìm theo tên, SĐT hoặc email...">
+                            </div>
+                            <div class="col-md-4">
+                                <select id="ordersCustomerSort" class="form-select" aria-label="Sắp xếp khách hàng">
+                                    <option value="manual|asc">Ghim / thứ tự ưu tiên</option>
+                                    <option value="name|asc">Tên A → Z</option>
+                                    <option value="name|desc">Tên Z → A</option>
+                                    <option value="phone|asc">SĐT tăng dần</option>
+                                    <option value="phone|desc">SĐT giảm dần</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <select id="ordersCustomerPerPage" class="form-select" aria-label="Số khách hàng mỗi trang">
+                                    <option value="10">10 khách hàng</option>
+                                    <option value="15" selected>15 khách hàng</option>
+                                    <option value="25">25 khách hàng</option>
+                                    <option value="50">50 khách hàng</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div id="ordersCustomerPickerResults">
+                            <div class="text-center text-muted py-5">Đang tải danh sách khách hàng...</div>
+                        </div>
+                    </div>
+                    <div class="modal-footer justify-content-between">
+                        <button type="button" class="btn btn-outline-danger" id="clearOrdersCustomerFilter">
+                            <i class="bi bi-x-circle me-1"></i>Xem tất cả khách hàng
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Đóng</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        @endif
 
         <script>
             (function () {
@@ -998,6 +1124,140 @@
                 updateSelectedLabel();
             })();
         </script>
+
+        @if($monitoringEmbedded ?? false)
+        <script>
+            (function () {
+                const endpoint = @json(route('site.orders.customers.ajax'));
+                const modalElement = document.getElementById('ordersCustomerPickerModal');
+                const openButton = document.getElementById('openOrdersCustomerPicker');
+                const clearButton = document.getElementById('clearOrdersCustomerFilter');
+                const searchInput = document.getElementById('ordersCustomerSearch');
+                const sortSelect = document.getElementById('ordersCustomerSort');
+                const perPageSelect = document.getElementById('ordersCustomerPerPage');
+                const results = document.getElementById('ordersCustomerPickerResults');
+                const selectedInputs = document.getElementById('selectedCustomerInputs');
+                const selectedLabel = document.getElementById('ordersSelectedCustomerLabel');
+                let selectedCustomerIds = @json(array_map('intval', $selectedCustomerIds ?? []));
+                let searchTimer = null;
+
+                if (!modalElement || !openButton || !results || !selectedInputs || !selectedLabel) {
+                    return;
+                }
+
+                const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
+
+                const syncCustomerFilter = (customer = null) => {
+                    selectedInputs.innerHTML = '';
+
+                    selectedCustomerIds.forEach((id) => {
+                        const input = document.createElement('input');
+                        input.type = 'hidden';
+                        input.name = 'customer_ids[]';
+                        input.value = String(id);
+                        selectedInputs.appendChild(input);
+                    });
+
+                    selectedLabel.innerHTML = customer
+                        ? 'Đang lọc: <strong>' + escapeHtml(customer.name) + '</strong>'
+                        : 'Đang xem tất cả khách hàng';
+                };
+
+                const escapeHtml = (value) => {
+                    const element = document.createElement('div');
+                    element.textContent = String(value || '');
+                    return element.innerHTML;
+                };
+
+                const loadCustomers = (page = 1) => {
+                    const [sortBy, sortDir] = (sortSelect.value || 'manual|asc').split('|');
+                    const params = new URLSearchParams({
+                        q: searchInput.value.trim(),
+                        per_page: perPageSelect.value || '15',
+                        sort_by: sortBy || 'manual',
+                        sort_dir: sortDir || 'asc',
+                        page: String(page),
+                        mode: 'single',
+                        scope: 'orders',
+                        selected_ids: selectedCustomerIds.join(','),
+                    });
+
+                    results.innerHTML = '<div class="text-center text-muted py-5"><span class="spinner-border spinner-border-sm me-2"></span>Đang tải danh sách khách hàng...</div>';
+
+                    fetch(endpoint + '?' + params.toString(), {
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Accept': 'application/json'
+                        }
+                    })
+                        .then((response) => {
+                            if (!response.ok) {
+                                throw new Error('Không thể tải danh sách khách hàng.');
+                            }
+                            return response.json();
+                        })
+                        .then((data) => {
+                            results.innerHTML = data.html || '<div class="text-center text-muted py-5">Không tìm thấy khách hàng.</div>';
+                        })
+                        .catch((error) => {
+                            results.innerHTML = '<div class="alert alert-danger mb-0">' + escapeHtml(error.message) + '</div>';
+                        });
+                };
+
+                openButton.addEventListener('click', function () {
+                    modal.show();
+                    loadCustomers(1);
+                });
+
+                modalElement.addEventListener('shown.bs.modal', function () {
+                    searchInput.focus();
+                });
+
+                searchInput.addEventListener('input', function () {
+                    clearTimeout(searchTimer);
+                    searchTimer = setTimeout(() => loadCustomers(1), 300);
+                });
+
+                [sortSelect, perPageSelect].forEach((element) => {
+                    element.addEventListener('change', () => loadCustomers(1));
+                });
+
+                results.addEventListener('click', function (event) {
+                    const pageButton = event.target.closest('.customer-page-btn');
+                    if (pageButton) {
+                        event.preventDefault();
+                        loadCustomers(parseInt(pageButton.dataset.page || '1', 10));
+                        return;
+                    }
+
+                    const sortLink = event.target.closest('.customer-sort-link');
+                    if (sortLink) {
+                        event.preventDefault();
+                        sortSelect.value = (sortLink.dataset.sortBy || 'manual') + '|' + (sortLink.dataset.sortDir || 'asc');
+                        loadCustomers(1);
+                        return;
+                    }
+
+                    const selectButton = event.target.closest('.select-customer-btn');
+                    if (!selectButton) {
+                        return;
+                    }
+
+                    selectedCustomerIds = [parseInt(selectButton.dataset.customerId, 10)];
+                    syncCustomerFilter({ name: selectButton.dataset.customerName || 'Khách hàng' });
+                    modal.hide();
+                    window.refreshOrdersList?.(1);
+                });
+
+                clearButton.addEventListener('click', function () {
+                    selectedCustomerIds = [];
+                    syncCustomerFilter();
+                    modal.hide();
+                    window.refreshOrdersList?.(1);
+                });
+            })();
+        </script>
+        @endif
 
         <script>
             (function () {

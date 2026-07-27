@@ -636,6 +636,13 @@ class PageController extends Controller
             ->paginate(15, ['*'], 'customer_page')
             ->appends($request->except('customer_page'));
 
+        $selectedCustomers = $selectedCustomerIds->isEmpty()
+            ? collect()
+            : $this->myOrderCustomersBaseQuery($user->id)
+                ->whereIn('id', $selectedCustomerIds->all())
+                ->orderBy('name')
+                ->get(['id', 'name', 'phone']);
+
         if ($selectedCustomerIds->isNotEmpty()) {
             $query->whereIn('customer_id', $selectedCustomerIds->all());
         }
@@ -731,6 +738,7 @@ class PageController extends Controller
             'customers' => $customers,
             'customerSearch' => $customerSearch,
             'selectedCustomerIds' => $selectedCustomerIds->all(),
+            'selectedCustomers' => $selectedCustomers,
             'perPage' => $perPage,
             'sortBy' => $sortBy,
             'sortDir' => $sortDir,

@@ -21,4 +21,14 @@ class MyOrdersPaginationViewTest extends TestCase
             $template
         );
     }
+
+    public function test_monitoring_view_contains_ajax_customer_picker_controls(): void
+    {
+        $template = file_get_contents(resource_path('views/site/my_orders.blade.php'));
+
+        $this->assertStringContainsString('id="openOrdersCustomerPicker"', $template);
+        $this->assertStringContainsString('id="ordersCustomerPickerModal"', $template);
+        $this->assertStringContainsString("scope: 'orders'", $template);
+        $this->assertStringContainsString('window.refreshOrdersList?.(1);', $template);
+    }
 }
