@@ -344,6 +344,13 @@ class CustomerPriorityService
         $cycleNo = (int) $customer->current_cycle_no;
 
         if ((int) $customer->current_owner_sale_id === $saleId) {
+            $customer->update([
+                'customer_status' => 'active',
+                'free_from_date' => null,
+                'assigned_to' => $saleId,
+                'assigned_at' => now(),
+            ]);
+
             return;
         }
 

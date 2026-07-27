@@ -916,6 +916,7 @@
         destroy:     "{{ route('my_customer.destroy', ':id') }}",
         restore:     "{{ route('my_customer.restore', ':id') }}",
         forceDelete: "{{ route('my_customer.force_delete', ':id') }}",
+        takeover:     "{{ route('my_customer.takeover', ':id') }}",
         sortSettings: "{{ route('my_customer.sort_settings', ':id') }}",
     };
     function mcUrl(key, id) { return _mcUrls[key].replace(':id', id); }
@@ -1090,18 +1091,26 @@
                 const name = this.dataset.name || 'khách hàng này';
                 if (!confirm(`Nhận ${name} về danh sách của bạn với Ưu tiên 1?`)) return;
                 this.disabled = true;
-                const res = await fetch(`/my-customer/${id}/takeover`, {
-                    method: 'POST',
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-CSRF-TOKEN': csrfToken,
-                    },
-                });
-                const data = await res.json();
-                if (data.success) {
-                    loadCustomers({ page: 1 });
-                } else {
-                    alert(data.message || 'Không thể nhận khách hàng này.');
+                try {
+                    const res = await fetch(mcUrl('takeover', id), {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': csrfToken,
+                        },
+                    });
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok || data.success === false) {
+                        throw new Error(data.message || 'Không thể nhận khách hàng này.');
+                    }
+
+                    if (typeof window.showToast === 'function') {
+                        window.showToast(data.message || 'Đã nhận khách hàng.', 'success');
+                    }
+                    await loadCustomers({ page: 1 });
+                } catch (error) {
+                    alert(error.message || 'Không thể nhận khách hàng này.');
+                } finally {
                     this.disabled = false;
                 }
             });

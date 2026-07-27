@@ -3795,7 +3795,7 @@ public function apiTruckRoutes(Request $request)
             ->with('success', 'Đã xóa vĩnh viễn khách hàng "' . $name . '".');
     }
 
-    public function myCustomerTakeover(Request $request, Customer $customer)
+    public function myCustomerTakeover(Request $request, Customer $customer, CustomerPriorityService $priorityService)
     {
         $user = auth()->user();
 
@@ -3803,8 +3803,7 @@ public function apiTruckRoutes(Request $request)
             return response()->json(['success' => false, 'message' => 'Khách hàng này chưa tự do, không thể nhận.'], 422);
         }
 
-        $priorityService = app(\App\Services\CustomerPriorityService::class);
-        $priorityService->takeover($customer, $user->id, 'free_takeover');
+        $priorityService->takeover($customer, (int) $user->id, 'free_takeover');
 
         return response()->json(['success' => true, 'message' => 'Đã nhận khách hàng "' . $customer->name . '" về danh sách của bạn.']);
     }
