@@ -1243,9 +1243,7 @@ class PageController extends Controller
         $tabContentHtml = $activeTab === 'today'
             ? null
             : $this->renderMonitoringTab($activeTab, $request);
-        $customerTabSales = $activeTab === 'customers'
-            ? $this->monitoringCustomerSaleFilters($user)
-            : collect();
+        $customerTabSales = collect();
 
         return view('site.orders.monitoring', [
             'settings' => $this->settings,
@@ -1301,12 +1299,7 @@ class PageController extends Controller
     private function monitoringCustomers(Request $request)
     {
         $user = $request->user();
-        $sales = $this->monitoringVisibleSales($user);
-        $visibleSaleIds = $sales->pluck('id')->map(fn ($id) => (int) $id)->all();
-        $selectedSaleId = max(0, (int) $request->input('sale_id', 0));
-        if ($selectedSaleId > 0 && !in_array($selectedSaleId, $visibleSaleIds, true)) {
-            $selectedSaleId = 0;
-        }
+        $userId = (int) $user->id;
 
         $perPage = (int) $request->input('per_page', 20);
         if (!in_array($perPage, [10, 20, 50, 100], true)) {
@@ -1318,26 +1311,12 @@ class PageController extends Controller
         $search = trim((string) $request->input('search', ''));
 
         $customers = Customer::query()
-            ->where(function ($query) use ($visibleSaleIds) {
-                $query->whereIn('user_id', $visibleSaleIds)
-                    ->orWhereIn('assigned_to', $visibleSaleIds)
-                    ->orWhereIn('current_owner_sale_id', $visibleSaleIds)
-                    ->orWhereHas('priorities', fn ($priority) => $priority
-                        ->whereIn('sale_id', $visibleSaleIds)
-                        ->where('is_active', true));
+            ->where(function ($query) use ($userId) {
+                $query->where('user_id', $userId)
+                    ->orWhere('assigned_to', $userId);
             })
             ->where(function ($query) {
                 $query->where('is_employee', '<>', 1)->orWhereNull('is_employee');
-            })
-            ->when($selectedSaleId > 0, function ($query) use ($selectedSaleId) {
-                $query->where(function ($saleScope) use ($selectedSaleId) {
-                    $saleScope->where('user_id', $selectedSaleId)
-                        ->orWhere('assigned_to', $selectedSaleId)
-                        ->orWhere('current_owner_sale_id', $selectedSaleId)
-                        ->orWhereHas('priorities', fn ($priority) => $priority
-                            ->where('sale_id', $selectedSaleId)
-                            ->where('is_active', true));
-                });
             })
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($searchQuery) use ($search) {
@@ -1364,8 +1343,8 @@ class PageController extends Controller
             'perPage' => $perPage,
             'viewMode' => $viewMode,
             'search' => $search,
-            'selectedSaleId' => $selectedSaleId,
-            'manageableSaleIds' => $visibleSaleIds,
+            'selectedSaleId' => 0,
+            'manageableSaleIds' => [$userId],
             'monitoringEmbedded' => true,
         ]);
     }
@@ -1392,27 +1371,6 @@ class PageController extends Controller
         }
 
         return $query->orderBy('name')->get(['id', 'name', 'team_id']);
-    }
-
-    private function monitoringCustomerSaleFilters(User $user)
-    {
-        return $this->monitoringVisibleSales($user)->map(function (User $sale) {
-            $count = Customer::query()
-                ->where(function ($query) use ($sale) {
-                    $query->where('user_id', $sale->id)
-                        ->orWhere('assigned_to', $sale->id)
-                        ->orWhere('current_owner_sale_id', $sale->id)
-                        ->orWhereHas('priorities', fn ($priority) => $priority
-                            ->where('sale_id', $sale->id)
-                            ->where('is_active', true));
-                })
-                ->where(function ($query) {
-                    $query->where('is_employee', '<>', 1)->orWhereNull('is_employee');
-                })
-                ->count();
-
-            return ['id' => (int) $sale->id, 'name' => $sale->name, 'count' => $count];
-        })->filter(fn ($sale) => $sale['count'] > 0)->values();
     }
 
     private function renderMonitoringTab(string $tab, Request $request): string

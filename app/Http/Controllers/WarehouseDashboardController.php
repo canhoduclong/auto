@@ -689,6 +689,11 @@ class WarehouseDashboardController extends Controller
             return [
                 'variant_id' => (int) $variant->id,
                 'product_id' => (int) $variant->product_id,
+                'product_name' => (string) ($variant->product->name ?? 'Sản phẩm'),
+                'product_sku' => (string) ($variant->product->sku ?? ''),
+                'variant_name' => (string) ($variant->name ?? 'Biến thể'),
+                'variant_sku' => (string) ($variant->sku ?? ''),
+                'attributes' => $attributes,
                 'label' => $label,
                 'unit_label' => $variant->product->unit_label ?? 'Cái',
                 'weight_per_unit' => $weightPerUnit,

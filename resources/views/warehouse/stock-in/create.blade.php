@@ -480,9 +480,8 @@ function filterProductModalRows(allowedVariantIds) {
             button.dataset.label = meta.label ?? button.dataset.label ?? '';
         }
     });
-    const noProductsFound = document.getElementById('noProductsFound');
-    if (noProductsFound) {
-        noProductsFound.style.display = allowed.size > 0 ? 'none' : '';
+    if (typeof window.syncProductSelectionGroups === 'function') {
+        window.syncProductSelectionGroups();
     }
 }
 

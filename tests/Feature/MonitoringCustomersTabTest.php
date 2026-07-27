@@ -55,4 +55,47 @@ class MonitoringCustomersTabTest extends TestCase
             ->assertSee('mcl-row is-compact', false)
             ->assertDontSee('Mã KH:');
     }
+
+    public function test_customer_tab_only_shows_customers_owned_by_or_assigned_to_current_user(): void
+    {
+        $saleRole = Role::query()->create(['name' => 'sale']);
+        $sale = User::factory()->create();
+        $sale->roles()->attach($saleRole);
+        $otherSale = User::factory()->create();
+        $otherSale->roles()->attach($saleRole);
+
+        Customer::query()->create([
+            'user_id' => $sale->id,
+            'name' => 'Khách do tôi tạo',
+            'status' => 'active',
+        ]);
+        Customer::query()->create([
+            'user_id' => $otherSale->id,
+            'assigned_to' => $sale->id,
+            'name' => 'Khách được giao cho tôi',
+            'status' => 'active',
+        ]);
+        Customer::query()->create([
+            'user_id' => $otherSale->id,
+            'current_owner_sale_id' => $sale->id,
+            'name' => 'Khách chỉ có current owner',
+            'status' => 'active',
+        ]);
+        Customer::query()->create([
+            'user_id' => $otherSale->id,
+            'assigned_to' => $otherSale->id,
+            'name' => 'Khách của sale khác',
+            'status' => 'active',
+        ]);
+
+        $response = $this->actingAs($sale)
+            ->withSession(['active_role' => 'sale'])
+            ->get(route('pages.my_orders.monitoring', ['tab' => 'customers']));
+
+        $response->assertOk()
+            ->assertSee('Khách do tôi tạo')
+            ->assertSee('Khách được giao cho tôi')
+            ->assertDontSee('Khách chỉ có current owner')
+            ->assertDontSee('Khách của sale khác');
+    }
 }

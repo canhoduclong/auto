@@ -1,8 +1,8 @@
 {
-  "version": "1.0.39",
-  "version_code": 40,
+  "version": "1.0.40",
+  "version_code": 41,
   "apk_url": "https://hoanglongtnt.com/app-update/app-release.apk",
   "ios_url": "",
   "force_update": false,
-  "message": "Bản cập nhật 1.0.39: đồng bộ cỡ chữ và tỷ lệ hiển thị đơn hàng tại tab Đơn hàng của Sale theo trang Home."
+  "message": "Bản cập nhật 1.0.40: trình bày lại danh sách đơn hàng, luồng thêm đơn và menu Sale theo giao diện mới."
 }
