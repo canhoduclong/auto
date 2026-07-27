@@ -1038,7 +1038,10 @@
                     const ajaxParams = new URLSearchParams(params.toString());
                     ajaxParams.set('ajax', '1');
 
-                    fetch(ordersEndpoint + '?' + ajaxParams.toString(), {
+                    const requestUrl = new URL(ordersEndpoint, window.location.origin);
+                    requestUrl.search = ajaxParams.toString();
+
+                    fetch(requestUrl, {
                         headers: {
                             'X-Requested-With': 'XMLHttpRequest'
                         }
@@ -1047,7 +1050,8 @@
                         .then((data) => {
                             ordersListingContainer.innerHTML = data.html || '';
                             syncCollapseActionLabels();
-                            const nextUrl = ordersEndpoint + '?' + params.toString();
+                            const nextUrl = new URL(ordersEndpoint, window.location.origin);
+                            nextUrl.search = params.toString();
                             window.history.replaceState({}, '', nextUrl);
                         })
                         .catch(() => {
