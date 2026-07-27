@@ -9,6 +9,7 @@ use App\Http\Controllers\MyDashboardController;
 use App\Http\Controllers\Admin\TextOrderImportController;
 use App\Models\Customer;
 use App\Models\Order;
+use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Province;
 use App\Models\Team;
@@ -318,6 +319,75 @@ class SaleApiController extends BaseApiController
         ]);
 
         return $this->paginated($variants);
+    }
+
+    public function productGroups(Request $request): JsonResponse
+    {
+        $this->ensureSaleRole($request);
+        $search = trim((string) $request->query('search', ''));
+        $inStock = $request->boolean('in_stock', true);
+
+        $availableVariants = fn ($query) => $query
+            ->when($inStock, fn ($variantQuery) => $variantQuery->inStock());
+        $matchingVariantSearch = fn ($query) => $query
+            ->where(fn ($scope) => $scope
+                ->where('product_variants.sku', 'like', "%{$search}%")
+                ->orWhere('product_variants.name', 'like', "%{$search}%"))
+            ->when($inStock, fn ($variantQuery) => $variantQuery->inStock());
+
+        $products = Product::query()
+            ->with([
+                'avatar.media',
+                'variants' => function ($query) use ($availableVariants) {
+                    $availableVariants($query);
+                    $query
+                        ->withAvailableStock()
+                        ->with(['latestPriceRule', 'avatar.media'])
+                        ->orderByRaw('CAST(COALESCE(size, 0) AS DECIMAL(12, 3))')
+                        ->orderBy('sort_order')
+                        ->orderBy('id');
+                },
+            ])
+            ->whereHas('variants', $availableVariants)
+            ->when($search !== '', fn ($query) => $query->where(fn ($scope) => $scope
+                ->where('products.name', 'like', "%{$search}%")
+                ->orWhereHas('variants', $matchingVariantSearch)))
+            ->orderByRaw('COALESCE(sort_order, 0) ASC')
+            ->orderBy('name')
+            ->paginate(min(50, max(10, (int) $request->query('per_page', 30))));
+
+        $products->getCollection()->transform(function (Product $product) {
+            $variants = $product->variants->map(function (ProductVariant $variant) use ($product) {
+                $variantLabel = trim((string) ($variant->size ?: $variant->name ?: $variant->sku));
+
+                return [
+                    'id' => (int) $variant->id,
+                    'name' => trim($product->name.' - '.$variantLabel, ' -'),
+                    'variant_name' => (string) ($variant->name ?? ''),
+                    'sku' => (string) ($variant->sku ?? ''),
+                    'size' => (string) ($variant->size ?? ''),
+                    'price' => (float) ($variant->latestPriceRule?->price ?? $variant->final_price ?? 0),
+                    'min_price' => (float) ($variant->latestPriceRule?->min_price ?? 0),
+                    'available_stock' => (int) ($variant->available_stock ?? 0),
+                    'is_priced_by_kg' => (bool) ($variant->effective_priced_by_kg ?? false),
+                    'kg' => (float) ($variant->effective_kg ?? 0),
+                ];
+            })->values();
+
+            $imageUrl = $product->avatar?->media?->url
+                ?? $product->variants->first(fn (ProductVariant $variant) => $variant->avatar?->media)?->avatar?->media?->url;
+
+            return [
+                'id' => (int) $product->id,
+                'name' => (string) $product->name,
+                'unit' => (string) $product->unit_label,
+                'image_url' => $imageUrl,
+                'variant_count' => $variants->count(),
+                'variants' => $variants,
+            ];
+        });
+
+        return $this->paginated($products);
     }
 
     public function updateProductPreference(Request $request, ProductVariant $variant): JsonResponse

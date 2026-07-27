@@ -1145,7 +1145,13 @@
                     return;
                 }
 
-                const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
+                // This tab is rendered inside the monitoring page before the parent
+                // layout loads Bootstrap. Resolve the modal lazily when the user
+                // interacts with the picker so an early `bootstrap is not defined`
+                // error does not prevent the click handlers below from being bound.
+                const getModal = () => window.bootstrap?.Modal
+                    ? window.bootstrap.Modal.getOrCreateInstance(modalElement)
+                    : null;
 
                 const syncCustomerFilter = (customer = null) => {
                     selectedInputs.innerHTML = '';
@@ -1205,6 +1211,12 @@
                 };
 
                 openButton.addEventListener('click', function () {
+                    const modal = getModal();
+                    if (!modal) {
+                        results.innerHTML = '<div class="alert alert-danger mb-0">Không thể mở danh sách khách hàng. Vui lòng tải lại trang.</div>';
+                        return;
+                    }
+
                     modal.show();
                     loadCustomers(1);
                 });
@@ -1245,14 +1257,14 @@
 
                     selectedCustomerIds = [parseInt(selectButton.dataset.customerId, 10)];
                     syncCustomerFilter({ name: selectButton.dataset.customerName || 'Khách hàng' });
-                    modal.hide();
+                    getModal()?.hide();
                     window.refreshOrdersList?.(1);
                 });
 
                 clearButton.addEventListener('click', function () {
                     selectedCustomerIds = [];
                     syncCustomerFilter();
-                    modal.hide();
+                    getModal()?.hide();
                     window.refreshOrdersList?.(1);
                 });
             })();

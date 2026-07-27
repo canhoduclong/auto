@@ -30,5 +30,10 @@ class MyOrdersPaginationViewTest extends TestCase
         $this->assertStringContainsString('id="ordersCustomerPickerModal"', $template);
         $this->assertStringContainsString("scope: 'orders'", $template);
         $this->assertStringContainsString('window.refreshOrdersList?.(1);', $template);
+        $this->assertStringContainsString('const getModal = () => window.bootstrap?.Modal', $template);
+        $this->assertStringNotContainsString(
+            'const modal = bootstrap.Modal.getOrCreateInstance(modalElement);',
+            $template
+        );
     }
 }
