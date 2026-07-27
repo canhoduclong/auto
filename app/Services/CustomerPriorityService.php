@@ -235,8 +235,8 @@ class CustomerPriorityService
             return false;
         }
 
-        $lastOrderAt = $customer->orders()->max('created_at');
-        if (!$lastOrderAt || now()->diffInDays($lastOrderAt) < $days) {
+        $expiresAt = $customer->assignmentExpiresAt();
+        if (!$expiresAt || $expiresAt->isFuture()) {
             return false;
         }
 

@@ -150,13 +150,20 @@ class Customer extends Model
             return null;
         }
 
-        // Expiry is based on last order date; no orders = no expiry
+        // A fresh assignment/takeover starts a new care window even when the
+        // customer's latest order is already older than the configured limit.
+        // Customers with no orders keep the existing no-expiry behavior.
         $lastOrderAt = $this->_lastOrderDate();
         if (!$lastOrderAt) {
             return null;
         }
 
-        return $lastOrderAt->copy()->addDays($days);
+        $activityAt = $lastOrderAt;
+        if ($this->assigned_at && $this->assigned_at->gt($activityAt)) {
+            $activityAt = $this->assigned_at;
+        }
+
+        return $activityAt->copy()->addDays($days);
     }
 
     public function isFree(): bool
@@ -173,18 +180,9 @@ class Customer extends Model
             return true;
         }
 
-        $days = static::freeCustomerDays();
-        if ($days <= 0) {
-            return false;
-        }
+        $expiresAt = $this->assignmentExpiresAt();
 
-        // Customers with no orders are never considered free by time alone
-        $lastOrderAt = $this->_lastOrderDate();
-        if (!$lastOrderAt) {
-            return false;
-        }
-
-        return $lastOrderAt->lte(now()->subDays($days));
+        return $expiresAt ? $expiresAt->lte(now()) : false;
     }
 
     /**
@@ -223,10 +221,12 @@ class Customer extends Model
 
                 if ($days > 0) {
                     $threshold = now()->subDays($days);
-                    // Free if has orders AND last order is older than threshold
+                    // Free only when both the latest order and latest assignment
+                    // are older than the configured care window.
                     $builder->orWhereRaw(
-                        '(SELECT MAX(created_at) FROM orders WHERE orders.customer_id = customers.id) <= ?',
-                        [$threshold]
+                        '(SELECT MAX(created_at) FROM orders WHERE orders.customer_id = customers.id) <= ?
+                        AND (customers.assigned_at IS NULL OR customers.assigned_at <= ?)',
+                        [$threshold, $threshold]
                     );
                 }
             });
@@ -242,14 +242,15 @@ class Customer extends Model
 
         if ($days > 0) {
             $threshold = now()->subDays($days);
-            // Managed if: no orders yet, OR last order is within threshold
+            // Managed if there are no orders, or either the latest order or
+            // latest assignment is still inside the configured care window.
             $query->where(function (Builder $q) use ($threshold) {
                 $q->whereRaw(
                     '(SELECT MAX(created_at) FROM orders WHERE orders.customer_id = customers.id) IS NULL'
                 )->orWhereRaw(
                     '(SELECT MAX(created_at) FROM orders WHERE orders.customer_id = customers.id) > ?',
                     [$threshold]
-                );
+                )->orWhere('assigned_at', '>', $threshold);
             });
         }
 
