@@ -730,6 +730,8 @@ class CustomerController extends Controller
 
         $duplicateCustomer = Customer::query()
             ->where(function ($query) use ($data) {
+                $query->where('name_normalized', Customer::normalizeName($data['name']));
+
                 if (!empty($data['email'])) {
                     $query->orWhereRaw('LOWER(email) = ?', [strtolower($data['email'])]);
                 }
@@ -871,6 +873,17 @@ class CustomerController extends Controller
         $selectedProvinceId = $data['province_id'] ?? null;
         $selectedWardId = $data['ward_id'] ?? null;
         unset($data['province_id'], $data['ward_id']);
+
+        $duplicateName = Customer::query()
+            ->where('name_normalized', Customer::normalizeName($data['name']))
+            ->whereKeyNot($customer->id)
+            ->first();
+
+        if ($duplicateName) {
+            return back()->withErrors([
+                'name' => "Tên khách hàng đã tồn tại (#{$duplicateName->id}: {$duplicateName->name}).",
+            ])->withInput();
+        }
 
         $customer->update($data);
 

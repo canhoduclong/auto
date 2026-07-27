@@ -44,6 +44,16 @@ class CustomerImportWithErrorReport implements ToModel, WithHeadingRow, WithVali
                 throw new \Exception('Trường "Địa chỉ" (address) là bắt buộc.');
             }
 
+            $nameDuplicate = Customer::query()
+                ->where('name_normalized', Customer::normalizeName($data['name']))
+                ->first();
+            if ($nameDuplicate) {
+                if ($this->userId) {
+                    app(CustomerPriorityService::class)->attachSale($nameDuplicate, (int) $this->userId, 2, 'duplicate_join');
+                }
+                throw new \Exception('Tên khách hàng đã tồn tại. Đã thêm sale import vào Priority 2 của khách trùng.');
+            }
+
             if (!empty($data['email'])) {
                 $emailExists = Customer::query()->where('email', $data['email'])->exists();
                 if ($emailExists) {

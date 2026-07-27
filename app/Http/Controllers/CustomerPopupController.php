@@ -38,6 +38,8 @@ class CustomerPopupController extends Controller
 
         $duplicateCustomer = Customer::query()
             ->where(function ($query) use ($data) {
+                $query->where('name_normalized', Customer::normalizeName($data['name']));
+
                 if (!empty($data['email'])) {
                     $query->orWhereRaw('LOWER(email) = ?', [strtolower($data['email'])]);
                 }

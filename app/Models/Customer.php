@@ -13,6 +13,26 @@ class Customer extends Model
 {
     use HasFactory, SoftDeletes;
 
+    protected static function booted(): void
+    {
+        static::saving(function (Customer $customer): void {
+            $customer->name = trim((string) $customer->name);
+            $customer->name_normalized = static::normalizeName($customer->name);
+        });
+    }
+
+    public static function normalizeName(?string $name): string
+    {
+        $name = trim((string) $name);
+        $name = preg_replace('/\s+/u', ' ', $name) ?? $name;
+
+        if (class_exists(\Normalizer::class)) {
+            $name = \Normalizer::normalize($name, \Normalizer::FORM_C) ?: $name;
+        }
+
+        return mb_strtolower($name, 'UTF-8');
+    }
+
     /**
      * Quan hệ: Customer thuộc một tuyến vận chuyển
      */
