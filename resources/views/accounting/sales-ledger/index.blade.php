@@ -1,8 +1,9 @@
 @extends('layouts.accounting')
 
 @section('title', 'Sổ doanh số kế toán')
+@section('subtitle', 'Import, đối chiếu và quản trị doanh số đã xác nhận')
 
-@section('content')
+@section('accounting_content')
 <style>
 .ledger-card{border:0;border-radius:12px;box-shadow:0 3px 16px rgba(15,23,42,.07)}
 .ledger-text{min-height:230px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;white-space:pre}

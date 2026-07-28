@@ -1,6 +1,7 @@
 @extends('layouts.accounting')
 @section('title', 'Sửa dòng doanh số')
-@section('content')
+@section('subtitle', 'Điều chỉnh dữ liệu doanh số lịch sử')
+@section('accounting_content')
 <div class="container py-4"><div class="card border-0 shadow-sm mx-auto" style="max-width:900px"><div class="card-header bg-white py-3"><h4 class="mb-0">Sửa dòng doanh số #{{ $entry->id }}</h4></div><div class="card-body">
     @if($errors->any())<div class="alert alert-danger">{{ $errors->first() }}</div>@endif
     @if($entry->order_id)<div class="alert alert-info">Dòng này đã thuộc đơn lịch sử #{{ $entry->order_id }}. Ngày, khách hàng và NVKD được khóa theo nhóm đơn; bạn chỉ có thể sửa DVT, số lượng và giá trị.</div>@endif
