@@ -191,6 +191,10 @@
 
             <div class="vr d-none d-sm-block" style="height:24px;"></div>
 
+            <a href="{{ route('customers.import.form') }}" class="btn btn-sm btn-outline-primary text-nowrap">
+                <i class="ph ph-table me-1"></i>Import văn bản
+            </a>
+
             <form action="{{ route('customers.import') }}" method="POST" enctype="multipart/form-data" class="d-inline-flex align-items-center gap-2">
                 @csrf
                 <input type="file" name="file" accept=".xlsx,.xls" class="form-control form-control-sm" style="max-width:210px;" required>

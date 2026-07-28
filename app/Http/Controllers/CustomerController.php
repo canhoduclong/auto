@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Models\Ward;
 use App\Services\AdminActivityService;
 use App\Services\CustomerPriorityService;
+use App\Services\CustomerTextImportService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -104,12 +105,51 @@ class CustomerController extends Controller
     {
         $import_failures = session('import_errors', []);
         $success = session('import_success', null);
-        return view('customers.import', compact('import_failures', 'success'));
+        $textImportResult = session('text_import_result');
+        $textData = old('text_data', session('text_import_data', ''));
+        $salesUsers = $request->user()?->isAdmin() ? $this->salesUsersQuery()->get(['id', 'name', 'short_name', 'email']) : collect();
+        return view('customers.import', compact('import_failures', 'success', 'textImportResult', 'textData', 'salesUsers'));
     }
 
     // Xử lý import excel
-    public function import(Request $request)
+    public function import(Request $request, CustomerTextImportService $textImporter)
     {
+        if ($request->filled('text_data') || $request->input('import_source') === 'text') {
+            $validated = $request->validate([
+                'text_data' => ['required', 'string', 'max:200000'],
+                'text_action' => ['required', Rule::in(['preview', 'import'])],
+                'sale_mapping' => ['nullable', 'array'],
+                'sale_mapping.*' => ['nullable', 'integer', 'exists:users,id'],
+            ]);
+
+            try {
+                $saleMappings = $validated['sale_mapping'] ?? [];
+                $result = $validated['text_action'] === 'import'
+                    ? $textImporter->import($validated['text_data'], $request->user(), $saleMappings)
+                    : $textImporter->preview($validated['text_data'], $request->user(), $saleMappings);
+
+                if ($validated['text_action'] === 'import' && ($result['imported'] ?? false)) {
+                    $created = $result['counts']['create'] ?? 0;
+                    $updated = $result['counts']['update'] ?? 0;
+                    $skipped = $result['counts']['skip'] ?? 0;
+                    return redirect()->route('customers.import.form')->with([
+                        'import_success' => "Đã import {$created} khách mới, bổ sung {$updated} khách hiện có; bỏ qua {$skipped} dòng không thay đổi.",
+                        'text_import_result' => $result,
+                    ]);
+                }
+
+                return view('customers.import', [
+                    'import_failures' => [],
+                    'success' => null,
+                    'textImportResult' => $result,
+                    'textData' => $validated['text_data'],
+                    'salesUsers' => $request->user()?->isAdmin() ? $this->salesUsersQuery()->get(['id', 'name', 'short_name', 'email']) : collect(),
+                ]);
+            } catch (\InvalidArgumentException $e) {
+                return back()->withInput()->withErrors(['text_data' => $e->getMessage()]);
+            }
+        }
+
         $request->validate([
             'file' => 'required|file|mimes:xlsx,xls',
         ]);

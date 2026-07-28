@@ -437,21 +437,7 @@ class TextOrderImportController extends Controller
             if (!$draft->customer_name && !$draft->phone) {
                 throw new \RuntimeException('Thiếu tên và số điện thoại khách hàng.');
             }
-            $customer = Customer::query()->create([
-                'user_id' => $draft->sale_id,
-                'assigned_to' => $draft->sale_id,
-                'current_owner_sale_id' => $draft->sale_id,
-                'name' => $draft->customer_name ?: ('Khách ' . $draft->phone),
-                'phone' => $draft->phone,
-                'address' => $draft->address,
-                'delivery_time' => $draft->delivery_time,
-                'use_truck_station' => (bool) $truckStation,
-                'truck_station_id' => $truckStation?->id,
-                'truck_station_address' => $draft->truck_station_address ?: $truckStation?->address,
-                'status' => 'active',
-            ]);
-            $draft->update(['customer_id' => $customer->id]);
-            app(CustomerPriorityService::class)->attachSale($customer, (int) $draft->sale_id, 1, 'text_order_import');
+            $customer = $this->resolveOrCreateCustomer($draft, $truckStation);
         } elseif ($truckStation) {
             $customer->update([
                 'use_truck_station' => true,
@@ -497,6 +483,79 @@ class TextOrderImportController extends Controller
             $draft->update(['status' => 'confirmed', 'order_id' => $order->id, 'error_message' => null]);
             return $order;
         });
+    }
+
+    private function resolveOrCreateCustomer(TextOrderDraft $draft, ?TruckStation $truckStation): Customer
+    {
+        $customerName = trim((string) ($draft->customer_name ?: ('Khách ' . $draft->phone)));
+        $normalizedName = Customer::normalizeName($customerName);
+        $customer = Customer::withTrashed()
+            ->where('name_normalized', $normalizedName)
+            ->first();
+
+        if ($customer?->trashed()) {
+            throw new \RuntimeException(
+                'Khách hàng “'.$customer->name.'” đang nằm trong thùng rác. Hãy khôi phục khách trước khi lên đơn.'
+            );
+        }
+
+        if (!$customer) {
+            $customer = Customer::query()->create([
+                'user_id' => $draft->sale_id,
+                'assigned_to' => $draft->sale_id,
+                'current_owner_sale_id' => $draft->sale_id,
+                'name' => $customerName,
+                'phone' => $draft->phone,
+                'address' => $draft->address,
+                'delivery_time' => $draft->delivery_time,
+                'use_truck_station' => (bool) $truckStation,
+                'truck_station_id' => $truckStation?->id,
+                'truck_station_address' => $draft->truck_station_address ?: $truckStation?->address,
+                'status' => 'active',
+            ]);
+            $draft->update(['customer_id' => $customer->id]);
+            app(CustomerPriorityService::class)->attachSale($customer, (int) $draft->sale_id, 1, 'text_order_import');
+
+            return $customer->fresh();
+        }
+
+        // Gắn bản nháp với khách đã có trước, để admin nhìn thấy và có thể xử lý lại
+        // ngay cả khi sale đang chọn không phải người hiện quản lý khách.
+        $draft->update(['customer_id' => $customer->id]);
+
+        $updates = [];
+        foreach (['phone', 'address', 'delivery_time'] as $field) {
+            if (blank($customer->{$field}) && filled($draft->{$field})) {
+                $updates[$field] = $draft->{$field};
+            }
+        }
+        if ($truckStation && !$customer->use_truck_station) {
+            $updates = array_merge($updates, [
+                'use_truck_station' => true,
+                'truck_station_id' => $truckStation->id,
+                'truck_station_address' => $draft->truck_station_address ?: $truckStation->address,
+            ]);
+        }
+        if ($updates !== []) {
+            $customer->update($updates);
+        }
+
+        if ($customer->assigned_to && (int) $customer->assigned_to !== (int) $draft->sale_id) {
+            $ownerName = User::query()->whereKey($customer->assigned_to)->value('name') ?: ('ID '.$customer->assigned_to);
+            throw new \RuntimeException(
+                'Đã tìm thấy khách hàng “'.$customer->name.'”, nhưng khách đang thuộc NVKD '.$ownerName.'. '
+                .'Hãy chọn đúng Sale hoặc chuyển quyền khách trước khi lên đơn.'
+            );
+        }
+
+        app(CustomerPriorityService::class)->attachSale(
+            $customer,
+            (int) $draft->sale_id,
+            1,
+            'text_order_import_existing_customer'
+        );
+
+        return $customer->fresh();
     }
 
     private function copyDraft(Request $request, TextOrderDraft $draft): TextOrderDraft
