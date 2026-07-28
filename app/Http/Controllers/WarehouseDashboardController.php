@@ -3790,7 +3790,7 @@ class WarehouseDashboardController extends Controller
             ], 422);
         }
 
-        $document->load('items.productVariant.product');
+        $document->load('items.productVariant.product', 'supplier', 'warehouse');
 
         return response()->json([
             'ok' => true,
@@ -3798,21 +3798,30 @@ class WarehouseDashboardController extends Controller
                 'id' => $document->id,
                 'document_number' => $document->document_number ?? '#'.$document->id,
                 'document_date' => $document->document_date->format('Y-m-d'),
+                'supplier_name' => $document->supplier?->name ?? 'Không có nhà cung cấp',
+                'warehouse_name' => $document->warehouse?->name ?? 'Kho #'.$document->warehouse_id,
                 'notes' => $document->notes,
                 'shipping_fee' => (float) $document->shipping_fee,
                 'edit_count' => $document->edit_count,
                 'max_edits' => $maxEdits,
             ],
-            'items' => $document->items->map(fn ($item) => [
-                'id' => $item->id,
-                'product_variant_id' => $item->product_variant_id,
-                'variant_name' => $item->productVariant?->name
-                                        ?? $item->productVariant?->product?->name
-                                        ?? 'SP #'.$item->product_variant_id,
-                'sku' => $item->productVariant?->sku ?? '',
-                'quantity' => (int) $item->quantity,
-                'unit_cost' => (float) $item->unit_cost,
-            ])->values(),
+            'items' => $document->items->map(function ($item) {
+                $variant = $item->productVariant;
+                $product = $variant?->product;
+
+                return [
+                    'id' => $item->id,
+                    'product_variant_id' => $item->product_variant_id,
+                    'product_name' => $product?->name ?? 'Sản phẩm',
+                    'variant_name' => $variant?->name ?? $product?->name ?? 'SP #'.$item->product_variant_id,
+                    'sku' => $variant?->sku ?? '',
+                    'unit_label' => $product?->unit_label ?? 'Cái',
+                    'weight_per_unit' => (float) ($variant?->effective_kg ?? 1),
+                    'quantity' => (int) $item->quantity,
+                    'unit_cost' => (float) $item->unit_cost,
+                    'note' => $item->note,
+                ];
+            })->values(),
         ]);
     }
 
@@ -3846,6 +3855,7 @@ class WarehouseDashboardController extends Controller
             'items.*.id' => 'required|integer|exists:inventory_document_items,id',
             'items.*.quantity' => 'required|integer|min:0',
             'items.*.unit_cost' => 'required|numeric|min:0',
+            'items.*.note' => 'nullable|string|max:500',
         ]);
 
         try {
@@ -3869,9 +3879,11 @@ class WarehouseDashboardController extends Controller
                     $newQty = (int) $row['quantity'];
                     $oldCost = (float) $item->unit_cost;
                     $newCost = (float) $row['unit_cost'];
+                    $oldNote = (string) ($item->note ?? '');
+                    $newNote = trim((string) ($row['note'] ?? ''));
                     $delta = $newQty - $oldQty;
 
-                    if ($delta === 0 && $newCost === $oldCost) {
+                    if ($delta === 0 && $newCost === $oldCost && $newNote === $oldNote) {
                         continue; // Nothing changed for this item
                     }
 
@@ -3944,9 +3956,15 @@ class WarehouseDashboardController extends Controller
                         'new_qty' => $newQty,
                         'old_cost' => $oldCost,
                         'new_cost' => $newCost,
+                        'old_note' => $oldNote,
+                        'new_note' => $newNote,
                     ];
 
-                    $item->update(['quantity' => $newQty, 'unit_cost' => $newCost]);
+                    $item->update([
+                        'quantity' => $newQty,
+                        'unit_cost' => $newCost,
+                        'note' => $newNote !== '' ? $newNote : null,
+                    ]);
                 }
 
                 // Update document header.
@@ -4002,6 +4020,7 @@ class WarehouseDashboardController extends Controller
             'items.*.product_variant_id' => 'required|exists:product_variants,id',
             'items.*.quantity' => 'required|integer|min:1',
             'items.*.unit_cost' => 'required|numeric|min:0',
+            'items.*.note' => 'nullable|string|max:500',
             'items.*.source_price_id' => 'nullable|exists:supplier_product_prices,id',
         ]);
 
@@ -4038,6 +4057,7 @@ class WarehouseDashboardController extends Controller
                         'product_variant_id' => $itemData['product_variant_id'],
                         'quantity' => $itemData['quantity'],
                         'unit_cost' => $itemData['unit_cost'],
+                        'note' => $itemData['note'] ?? null,
                         'source_price_id' => $sourcePriceId,
                     ]);
 

@@ -14,6 +14,7 @@ class InventoryDocumentItem extends Model
         'product_variant_id',
         'quantity',
         'unit_cost',
+        'note',
         'source_price_id',
     ];
 

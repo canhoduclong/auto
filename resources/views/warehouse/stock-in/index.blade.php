@@ -52,10 +52,10 @@
 .item-remove { color: #ef4444; background: none; border: 0; font-size: 1.1rem; line-height: 1; padding: 2px 4px; cursor: pointer; }
 .item-remove:hover { color: #b91c1c; }
 .edit-stock-items-scroll {
-    max-height: min(46vh, 460px);
+    max-height: min(48vh, 520px);
     overflow-y: auto;
     overflow-x: auto;
-    border: 1px solid #fde68a;
+    border: 1px solid #dbe3ec;
     border-radius: 8px;
     background: #fff;
     scrollbar-gutter: stable;
@@ -66,18 +66,60 @@
     position: sticky;
     top: 0;
     z-index: 2;
-    background: #fef3c7;
-    box-shadow: 0 1px 0 #fcd34d;
+    background: #f8fafc;
+    box-shadow: 0 1px 0 #cbd5e1;
+    text-align: center;
+    vertical-align: middle;
+    white-space: nowrap;
 }
 .edit-stock-items-scroll tfoot td {
     position: sticky;
     bottom: 0;
     z-index: 2;
-    background: #fffbeb;
-    box-shadow: 0 -1px 0 #fde68a;
+    background: #f8fafc;
+    box-shadow: 0 -1px 0 #cbd5e1;
 }
+.edit-stock-modal-dialog { max-width: min(1580px, calc(100vw - 32px)); }
+.edit-stock-modal-body { background: #f8fafc; }
+.edit-stock-info-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; }
+.edit-stock-info-value { min-height: 38px; display: flex; align-items: center; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 7px 10px; color: #334155; }
+.edit-stock-product {
+    width: 260px;
+    min-width: 260px;
+    max-width: 260px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+.edit-stock-product-name {
+    color: #0f172a;
+    font-size: .84rem;
+    font-weight: 700;
+    line-height: 1.25;
+    margin-bottom: 3px;
+}
+.edit-stock-variant-name {
+    display: block;
+    color: #64748b;
+    font-size: .74rem;
+    line-height: 1.2;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+.edit-stock-weight { background: #f0fdfa !important; color: #0f766e; font-weight: 700; }
+.edit-stock-hint { color: #64748b; font-size: .76rem; }
+.edit-stock-items-scroll table {
+    width: 100%;
+    min-width: 1100px;
+    table-layout: fixed;
+}
+.edit-stock-items-scroll td { vertical-align: middle; }
 @media (max-height: 760px) {
     .edit-stock-items-scroll { max-height: 38vh; }
+}
+@media (max-width: 767.98px) {
+    .edit-stock-modal-dialog { max-width: none; margin: .5rem; }
+    .edit-stock-modal-body { padding: 12px; }
 }
 </style>
 @endpush
@@ -395,7 +437,7 @@
 
 {{-- ─── Modal Điều Chỉnh Phiếu Nhập ──────────────────────────────────────── --}}
 <div class="modal fade" id="modalEditStockIn" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-dialog modal-dialog-scrollable edit-stock-modal-dialog">
         <div class="modal-content">
             <div class="modal-header" style="background:linear-gradient(135deg,#f59e0b,#b45309);color:#fff;">
                 <h5 class="modal-title fw-800">
@@ -417,50 +459,74 @@
                     @csrf
                     @method('PUT')
 
-                    <div class="modal-body" style="background:#fffbeb;">
+                    <div class="modal-body edit-stock-modal-body">
                         {{-- Lượt còn lại --}}
                         <div id="editLimitBadge" class="alert alert-warning py-2 px-3 mb-3 small fw-600">
                             <i class="bi bi-info-circle me-1"></i>
                             <span id="editLimitText"></span>
                         </div>
 
-                        {{-- Header --}}
-                        <div class="row g-3 mb-3">
-                            <div class="col-md-4">
+                        {{-- Thông tin phiếu --}}
+                        <div class="edit-stock-info-card mb-3">
+                            <div class="row g-3">
+                            <div class="col-sm-6 col-lg-2">
+                                <label class="form-label fw-600 small">Ngày nhập</label>
+                                <div class="edit-stock-info-value" id="editDocumentDate">—</div>
+                            </div>
+                            <div class="col-sm-6 col-lg-3">
+                                <label class="form-label fw-600 small">Nhà cung cấp</label>
+                                <div class="edit-stock-info-value" id="editSupplierName">—</div>
+                            </div>
+                            <div class="col-sm-6 col-lg-3">
+                                <label class="form-label fw-600 small">Kho nhập</label>
+                                <div class="edit-stock-info-value" id="editWarehouseName">—</div>
+                            </div>
+                            <div class="col-sm-6 col-lg-4">
                                 <label class="form-label fw-600 small">Phí vận chuyển (đ)</label>
                                 <input type="number" name="shipping_fee" id="editShippingFee" class="form-control" min="0" step="1000" value="0">
                             </div>
-                            <div class="col-md-8">
+                            <div class="col-lg-5">
                                 <label class="form-label fw-600 small">Ghi chú phiếu</label>
                                 <input type="text" name="notes" id="editNotes" class="form-control" placeholder="Ghi chú về phiếu nhập…">
                             </div>
-                            <div class="col-12">
-                                <label class="form-label fw-600 small text-warning">
+                            <div class="col-lg-7">
+                                <label class="form-label fw-600 small" style="color:#b45309;">
                                     <i class="bi bi-chat-left-text me-1"></i>Lý do điều chỉnh <span class="text-danger">*</span>
                                 </label>
                                 <input type="text" name="edit_notes" id="editReasonNotes" class="form-control" required
                                        placeholder="Ví dụ: Nhập nhầm số lượng, điều chỉnh đơn giá theo hoá đơn thực tế…">
                             </div>
+                            </div>
                         </div>
 
                         {{-- Items table --}}
-                        <div class="fw-700 mb-2" style="color:#0f172a;">
-                            <i class="bi bi-list-ul me-1"></i>Danh sách hàng hoá
+                        <div class="d-flex justify-content-between align-items-end flex-wrap gap-2 mb-2">
+                            <div>
+                                <div class="fw-700" style="color:#0f172a;">
+                                    <i class="bi bi-list-ul me-1"></i>Danh sách hàng hoá
+                                </div>
+                                <div class="edit-stock-hint">Sản phẩm được giữ nguyên để bảo toàn lịch sử kho. Có thể sửa số lượng, đơn giá và ghi chú.</div>
+                            </div>
+                            <div class="small text-muted"><i class="bi bi-arrow-down-up me-1"></i>Cuộn trong bảng để xem toàn bộ sản phẩm</div>
                         </div>
                         <div class="table-responsive edit-stock-items-scroll">
-                            <table class="table table-sm align-middle" style="font-size:.85rem;">
-                                <thead style="background:#fef3c7;">
+                            <table class="table table-bordered table-sm align-middle" style="font-size:.85rem;">
+                                <thead>
                                     <tr>
-                                        <th>Sản phẩm / Biến thể</th>
-                                        <th class="text-center" style="width:130px;">Số lượng mới</th>
-                                        <th class="text-center" style="width:150px;">Đơn giá mới (đ)</th>
-                                        <th class="text-end" style="width:120px;">Thành tiền</th>
+                                        <th style="width:48px;">STT</th>
+                                        <th style="width:260px;">Sản phẩm / Biến thể</th>
+                                        <th style="width:110px;">Số lượng</th>
+                                        <th style="width:90px;">ĐVT</th>
+                                        <th style="width:130px;">Khối lượng</th>
+                                        <th style="width:150px;">Đơn giá nhập (đ)</th>
+                                        <th style="width:180px;">Ghi chú</th>
+                                        <th style="width:135px;">Thành tiền</th>
                                     </tr>
                                 </thead>
                                 <tbody id="editItemsBody"></tbody>
                                 <tfoot>
                                     <tr>
-                                        <td colspan="3" class="text-end fw-700">Tổng cộng</td>
+                                        <td colspan="7" class="text-end fw-700">Tổng cộng</td>
                                         <td class="text-end fw-800 text-warning" id="editGrandTotal">0đ</td>
                                     </tr>
                                 </tfoot>
@@ -571,11 +637,25 @@
         document.querySelectorAll('#editItemsBody tr[data-item-row]').forEach(function (row) {
             const qty  = parseFloat(row.querySelector('.eq-qty').value)  || 0;
             const cost = parseFloat(row.querySelector('.eq-cost').value) || 0;
+            const weightPerUnit = parseFloat(row.dataset.weightPerUnit) || 1;
             const line = qty * cost;
             row.querySelector('.eq-line').textContent = line.toLocaleString('vi-VN') + 'đ';
+            row.querySelector('.eq-weight').value = formatEditWeight(qty * weightPerUnit) + ' Kg';
             total += line;
         });
         document.getElementById('editGrandTotal').textContent = total.toLocaleString('vi-VN') + 'đ';
+    }
+
+    function formatEditWeight(value) {
+        return (Math.round((value + Number.EPSILON) * 1000) / 1000).toLocaleString('vi-VN', {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 3
+        });
+    }
+
+    function formatEditDate(value) {
+        const parts = String(value || '').split('-');
+        return parts.length === 3 ? parts[2] + '/' + parts[1] + '/' + parts[0] : (value || '—');
     }
 
     document.getElementById('editItemsBody').addEventListener('input', calcEditTotal);
@@ -614,6 +694,9 @@
             const items = data.items;
 
             document.getElementById('editDocCode').textContent      = doc.document_number;
+            document.getElementById('editDocumentDate').textContent = formatEditDate(doc.document_date);
+            document.getElementById('editSupplierName').textContent = doc.supplier_name || '—';
+            document.getElementById('editWarehouseName').textContent = doc.warehouse_name || '—';
             document.getElementById('editShippingFee').value        = doc.shipping_fee;
             document.getElementById('editNotes').value              = doc.notes || '';
             document.getElementById('editLimitText').textContent    =
@@ -626,22 +709,35 @@
             // Build items table
             const tbody = document.getElementById('editItemsBody');
             tbody.innerHTML = '';
-            items.forEach(function (item) {
+            items.forEach(function (item, index) {
                 const tr = document.createElement('tr');
                 tr.dataset.itemRow = '1';
+                tr.dataset.weightPerUnit = item.weight_per_unit || 1;
                 tr.innerHTML =
-                    '<td>' +
-                        '<div class="fw-600" style="font-size:.85rem;">' + escHtml(item.variant_name) + '</div>' +
-                        (item.sku ? '<small class="text-muted">' + escHtml(item.sku) + '</small>' : '') +
+                    '<td class="text-center fw-600">' + (index + 1) + '</td>' +
+                    '<td class="edit-stock-product" title="' + escHtml(item.product_name + ' - ' + item.variant_name) + '">' +
+                        '<div class="edit-stock-product-name">' + escHtml(item.product_name) + '</div>' +
+                        '<span class="edit-stock-variant-name">' + escHtml(item.variant_name) +
+                            (item.sku ? ' · ' + escHtml(item.sku) : '') + '</span>' +
                         '<input type="hidden" name="items[' + item.id + '][id]" value="' + item.id + '">' +
                     '</td>' +
                     '<td class="text-center">' +
                         '<input type="number" name="items[' + item.id + '][quantity]" class="form-control form-control-sm eq-qty text-center" ' +
                                'min="0" value="' + item.quantity + '" required>' +
                     '</td>' +
+                    '<td>' +
+                        '<input type="text" class="form-control form-control-sm text-center" value="' + escHtml(item.unit_label || 'Cái') + '" readonly tabindex="-1">' +
+                    '</td>' +
+                    '<td>' +
+                        '<input type="text" class="form-control form-control-sm text-center edit-stock-weight eq-weight" value="0 Kg" readonly tabindex="-1">' +
+                    '</td>' +
                     '<td class="text-center">' +
                         '<input type="number" name="items[' + item.id + '][unit_cost]" class="form-control form-control-sm eq-cost text-center" ' +
                                'min="0" step="1000" value="' + item.unit_cost + '" required>' +
+                    '</td>' +
+                    '<td>' +
+                        '<input type="text" name="items[' + item.id + '][note]" class="form-control form-control-sm" maxlength="500" ' +
+                               'value="' + escHtml(item.note || '') + '" placeholder="Ghi chú dòng hàng">' +
                     '</td>' +
                     '<td class="text-end fw-700 eq-line" style="color:#b45309;">0đ</td>';
                 tbody.appendChild(tr);
