@@ -148,6 +148,12 @@
 								<span>Nhập đơn text</span>
 							</a>
 						</li>
+						<li class="nav-item">
+							<a href="{{ route('admin.imported-sales-orders.index') }}" class="nav-link{{ request()->routeIs('admin.imported-sales-orders.*') ? ' active' : '' }}">
+								<i class="ph-clipboard-text"></i>
+								<span>Hoàn chỉnh đơn lịch sử</span>
+							</a>
+						</li>
 						@endif
 						<li class="nav-item">
 							<a href="{{ route('order-returns.index') }}" class="nav-link{{ request()->routeIs('order-returns.*') ? ' active' : '' }}">

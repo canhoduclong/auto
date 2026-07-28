@@ -219,6 +219,11 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/department-notifications/{notificationId}/read', [AdminNotificationController::class, 'markAsRead'])->name('department-notifications.read');
     });
 
+    Route::middleware('role:admin,warehouse,account,accountant,accounting')->group(function () {
+        Route::get('/admin/imported-sales-orders', [\App\Http\Controllers\ImportedSalesOrderCompletionController::class, 'index'])->name('admin.imported-sales-orders.index');
+        Route::put('/admin/imported-sales-orders/{order}', [\App\Http\Controllers\ImportedSalesOrderCompletionController::class, 'update'])->name('admin.imported-sales-orders.update');
+    });
+
     Route::prefix('leader')->name('leader.')->middleware('role:leader,leader_sale,sale_manager,admin')->group(function () {
         Route::get('/requests', [DepartmentFinanceRequestController::class, 'leaderIndex'])->name('finance-requests.index');
         Route::post('/requests', [DepartmentFinanceRequestController::class, 'leaderStore'])->name('finance-requests.store');
@@ -232,6 +237,14 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     });
 
     Route::prefix('accounting')->name('accounting.')->middleware('role:account,accountant,accounting,admin')->group(function () {
+        Route::get('/sales-ledger/export', [\App\Http\Controllers\AccountingSalesLedgerController::class, 'export'])->name('sales-ledger.export');
+        Route::post('/sales-ledger/import', [\App\Http\Controllers\AccountingSalesLedgerController::class, 'import'])->name('sales-ledger.import');
+        Route::post('/sales-ledger/sync', [\App\Http\Controllers\AccountingSalesLedgerController::class, 'sync'])->name('sales-ledger.sync');
+        Route::delete('/sales-ledger/batches/{batch}', [\App\Http\Controllers\AccountingSalesLedgerController::class, 'destroyBatch'])->name('sales-ledger.batches.destroy');
+        Route::get('/sales-ledger', [\App\Http\Controllers\AccountingSalesLedgerController::class, 'index'])->name('sales-ledger.index');
+        Route::get('/sales-ledger/{entry}/edit', [\App\Http\Controllers\AccountingSalesLedgerController::class, 'edit'])->name('sales-ledger.edit');
+        Route::put('/sales-ledger/{entry}', [\App\Http\Controllers\AccountingSalesLedgerController::class, 'update'])->name('sales-ledger.update');
+        Route::delete('/sales-ledger/{entry}', [\App\Http\Controllers\AccountingSalesLedgerController::class, 'destroy'])->name('sales-ledger.destroy');
         Route::get('/', [AccountingDashboardController::class, 'index'])->name('dashboard');
         Route::get('/orders', [AccountingDashboardController::class, 'orders'])->name('orders');
         Route::get('/orders/{order}/detail', [AccountingDashboardController::class, 'orderDetail'])->name('orders.detail');

@@ -1,0 +1,115 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\AccountingReconciliation;
+use App\Models\AccountingSalesEntry;
+use App\Models\Customer;
+use App\Models\Order;
+use App\Models\Product;
+use App\Models\Role;
+use App\Models\User;
+use App\Models\Warehouse;
+use App\Services\AccountingSalesImportService;
+use App\Services\AccountingSalesLedgerService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+class AccountingSalesLedgerTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_it_imports_vietnamese_accounting_numbers_and_maps_short_sale_name(): void
+    {
+        $admin = User::factory()->create();
+        $admin->roles()->attach(Role::create(['name' => 'admin']));
+        $sale = User::factory()->create(['name' => 'Nhân viên Duệ', 'short_name' => 'Duệ']);
+        $sale->roles()->attach(Role::create(['name' => 'sale']));
+        $customer = Customer::create(['name' => 'Cty Phạm Gia Phát', 'customer_code' => '6024', 'status' => 'active']);
+        $text = "Ngày tháng\tTháng\tMã KH\tKhách hàng\tNVKD\tDVT\tSL\tKg/con\tTổng\tĐơn giá\tTổng tiền\n"
+            ."28/07/2026\t7\t6024\tCty Phạm Gia Phát\tDuệ\tCon\t51,0\t2,35\t120,0\t72.000\t8.640.000\n"
+            ."28/07/2026\t7\t6024\tCty Phạm Gia Phát\tDuệ\tvat\t120,0\t1,00\t120,0\t\t-\n"
+            ."28/07/2026\t7\t6024\tCty Phạm Gia Phát\tDuệ\tGiảm trừ\t1,0\t1,00\t1,0\t- 75.000\t- 75.000";
+
+        $result = app(AccountingSalesImportService::class)->import($text, $admin);
+
+        $this->assertTrue($result['imported']);
+        $this->assertSame(3, AccountingSalesEntry::count());
+        $this->assertDatabaseHas('accounting_sales_entries', [
+            'customer_id' => $customer->id,
+            'sale_id' => $sale->id,
+            'unit_price' => 72000,
+            'total_amount' => 8640000,
+        ]);
+        $this->assertDatabaseHas('accounting_sales_entries', [
+            'unit' => 'Giảm trừ',
+            'unit_price' => -75000,
+            'total_amount' => -75000,
+        ]);
+        $order = Order::where('accounting_sales_import_batch_id', $result['batch_id'])->sole();
+        $this->assertSame($sale->id, (int) $order->user_id);
+        $this->assertSame(Order::STATUS_COMPLETED, $order->status);
+        $this->assertTrue($order->needs_operational_completion);
+        $this->assertSame(8565000.0, (float) $order->accountingReconciliation->recognized_revenue);
+        $this->assertSame(3, AccountingSalesEntry::where('order_id', $order->id)->count());
+
+        $warehouse = Warehouse::create(['name' => 'Kho lịch sử', 'status' => true]);
+        $shipper = User::factory()->create();
+        $shipper->roles()->attach(Role::create(['name' => 'shipper']));
+        $this->actingAs($admin)->put(route('admin.imported-sales-orders.update', $order), [
+            'warehouse_id' => $warehouse->id,
+            'shipper_id' => $shipper->id,
+        ])->assertRedirect();
+        $this->assertDatabaseHas('orders', [
+            'id' => $order->id,
+            'warehouse_id' => $warehouse->id,
+            'shipper_id' => $shipper->id,
+            'needs_operational_completion' => 0,
+        ]);
+    }
+
+    public function test_confirmed_order_sync_is_idempotent_and_balances_to_recognized_revenue(): void
+    {
+        $sale = User::factory()->create();
+        $customer = Customer::create(['name' => 'Khách đồng bộ', 'customer_code' => 'SYNC1', 'status' => 'active']);
+        $product = Product::create(['user_id' => $sale->id, 'name' => 'Vịt nguyên con', 'unit' => 'con', 'status' => true]);
+        $order = Order::create([
+            'customer_id' => $customer->id,
+            'user_id' => $sale->id,
+            'total' => 3500000,
+            'status' => 'completed',
+        ]);
+        $item = $order->items()->create([
+            'product_id' => $product->id,
+            'quantity' => 20,
+            'unit_weight' => 2.5,
+            'total_weight' => 50,
+            'price' => 71000,
+            'total' => 3550000,
+        ]);
+        AccountingReconciliation::create([
+            'order_id' => $order->id,
+            'sale_id' => $sale->id,
+            'total_amount' => 3500000,
+            'recognized_revenue' => 3500000,
+            'status' => AccountingReconciliation::STATUS_CONFIRMED,
+            'confirmed_by' => $sale->id,
+            'confirmed_at' => now(),
+        ]);
+
+        $service = app(AccountingSalesLedgerService::class);
+        $service->syncOrder($order);
+        $service->syncOrder($order->fresh());
+
+        $this->assertSame(2, AccountingSalesEntry::where('order_id', $order->id)->count());
+        $this->assertSame(3500000.0, (float) AccountingSalesEntry::where('order_id', $order->id)->sum('total_amount'));
+        $this->assertDatabaseHas('accounting_sales_entries', [
+            'order_item_id' => $item->id,
+            'total_amount' => 3550000,
+        ]);
+        $this->assertDatabaseHas('accounting_sales_entries', [
+            'unit' => 'Giảm trừ',
+            'total_amount' => -50000,
+        ]);
+    }
+}

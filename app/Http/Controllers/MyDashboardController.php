@@ -742,26 +742,30 @@ class MyDashboardController extends Controller
      */
     private function confirmedRevenueByUser(array $memberIds, Carbon $from, Carbon $to): Collection
     {
-        if (empty($memberIds) || !Schema::hasTable('accounting_reconciliations')) {
+        if (empty($memberIds)) {
             return collect();
+        }
+
+        if (!Schema::hasTable('accounting_reconciliations')) {
+            return $this->importedSalesRevenueByUser($memberIds, $from, $to);
         }
 
         $table = 'accounting_reconciliations';
         $requiredColumns = ['status', 'recognized_revenue'];
         if (!Schema::hasColumns($table, $requiredColumns)) {
-            return collect();
+            return $this->importedSalesRevenueByUser($memberIds, $from, $to);
         }
 
         $dateColumn = Schema::hasColumn($table, 'confirmed_at')
             ? 'confirmed_at'
             : (Schema::hasColumn($table, 'updated_at') ? 'updated_at' : null);
         if ($dateColumn === null) {
-            return collect();
+            return $this->importedSalesRevenueByUser($memberIds, $from, $to);
         }
 
         try {
             if (Schema::hasColumn($table, 'sale_id')) {
-                return DB::table($table)
+                $confirmed = DB::table($table)
                     ->selectRaw('sale_id, COALESCE(SUM(recognized_revenue), 0) as revenue')
                     ->whereIn('sale_id', $memberIds)
                     ->where('status', 'confirmed')
@@ -769,11 +773,12 @@ class MyDashboardController extends Controller
                     ->whereNotNull('sale_id')
                     ->groupBy('sale_id')
                     ->pluck('revenue', 'sale_id');
+                return $this->mergeImportedSalesRevenue($confirmed, $memberIds, $from, $to);
             }
 
             // Tương thích database cũ chưa có sale_id: lấy sale theo đơn hàng.
             if (Schema::hasColumn($table, 'order_id')) {
-                return DB::table($table . ' as ar')
+                $confirmed = DB::table($table . ' as ar')
                     ->join('orders as revenue_orders', 'revenue_orders.id', '=', 'ar.order_id')
                     ->selectRaw('revenue_orders.user_id as sale_id, COALESCE(SUM(ar.recognized_revenue), 0) as revenue')
                     ->whereIn('revenue_orders.user_id', $memberIds)
@@ -781,12 +786,39 @@ class MyDashboardController extends Controller
                     ->whereBetween('ar.' . $dateColumn, [$from, $to])
                     ->groupBy('revenue_orders.user_id')
                     ->pluck('revenue', 'sale_id');
+                return $this->mergeImportedSalesRevenue($confirmed, $memberIds, $from, $to);
             }
         } catch (\Illuminate\Database\QueryException $exception) {
             report($exception);
         }
 
-        return collect();
+        return $this->importedSalesRevenueByUser($memberIds, $from, $to);
+    }
+
+    private function importedSalesRevenueByUser(array $memberIds, Carbon $from, Carbon $to): Collection
+    {
+        if (!Schema::hasTable('accounting_sales_entries')) {
+            return collect();
+        }
+
+        return DB::table('accounting_sales_entries')
+            ->selectRaw('sale_id, COALESCE(SUM(total_amount), 0) as revenue')
+            ->where('source', 'import')
+            ->whereNull('order_id')
+            ->whereIn('sale_id', $memberIds)
+            ->whereBetween('entry_date', [$from->toDateString(), $to->toDateString()])
+            ->whereNotNull('sale_id')
+            ->groupBy('sale_id')
+            ->pluck('revenue', 'sale_id');
+    }
+
+    private function mergeImportedSalesRevenue(Collection $confirmed, array $memberIds, Carbon $from, Carbon $to): Collection
+    {
+        $imported = $this->importedSalesRevenueByUser($memberIds, $from, $to);
+        foreach ($imported as $saleId => $revenue) {
+            $confirmed[$saleId] = (float) ($confirmed[$saleId] ?? 0) + (float) $revenue;
+        }
+        return $confirmed;
     }
 
     private function buildProductPriceBoard(): Collection

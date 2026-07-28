@@ -2077,6 +2077,8 @@ class AccountingDashboardController extends Controller
             ])->save();
 
             $this->createCommissionForCompletedOrder($order, $recognizedRevenue, (int) $request->user()->id);
+            $order->unsetRelation('accountingReconciliation');
+            app(\App\Services\AccountingSalesLedgerService::class)->syncOrder($order->fresh());
         });
 
         $reconciliation?->load(['order', 'sale']);

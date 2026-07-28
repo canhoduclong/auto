@@ -36,6 +36,8 @@ class Order extends Model
         'warehouse_adjustment_confirmed_by', 'warehouse_adjustment_confirmed_at',
         'warehouse_adjustment_rejected_by', 'warehouse_adjustment_rejected_at', 'warehouse_adjustment_rejected_reason',
         'cancelled_by', 'cancelled_at', 'cancel_reason', 'cancel_images', 'trash_at',
+        'accounting_sales_import_batch_id', 'imported_sales_group_key', 'needs_operational_completion',
+        'operational_completion_note', 'operational_completed_by', 'operational_completed_at',
     ];
 
     protected $casts = [
@@ -65,6 +67,8 @@ class Order extends Model
         'commission_percent_snapshot' => 'decimal:2',
         'commission_amount_snapshot' => 'decimal:2',
         'commission_created_at' => 'datetime',
+        'needs_operational_completion' => 'boolean',
+        'operational_completed_at' => 'datetime',
     ];
 
     public function truckStation()
@@ -322,6 +326,7 @@ class Order extends Model
     public function adjustments() { return $this->hasMany(OrderAdjustment::class); }
     public function warehouseTransfers() { return $this->hasMany(WarehouseTransfer::class); }
     public function accountingReconciliation() { return $this->hasOne(AccountingReconciliation::class); }
+    public function accountingSalesEntries() { return $this->hasMany(AccountingSalesEntry::class); }
     public function shippingFeeRequest() { return $this->belongsTo(Transaction::class, 'shipping_fee_transaction_id'); }
 
     public function canRequestAdjustment(): bool

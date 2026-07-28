@@ -243,6 +243,9 @@
             <a href="{{ route('warehouse.orders') }}" class="wh-nav-link {{ request()->routeIs('warehouse.orders') ? 'active' : '' }}">
                 <i class="bi bi-box2-fill"></i> Đơn cần đóng gói
             </a>
+            <a href="{{ route('admin.imported-sales-orders.index') }}" class="wh-nav-link {{ request()->routeIs('admin.imported-sales-orders.*') ? 'active' : '' }}">
+                <i class="bi bi-clipboard-check"></i> Hoàn chỉnh đơn lịch sử
+            </a>
             <a href="{{ route('warehouse.transfers.incoming') }}" class="wh-nav-link {{ request()->routeIs('warehouse.transfers.incoming') ? 'active' : '' }}">
                 <i class="bi bi-arrow-left-right"></i> Tiếp nhận Đơn
             </a>

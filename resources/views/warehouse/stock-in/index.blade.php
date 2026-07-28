@@ -51,6 +51,34 @@
 .btn-add-row:hover { background: #dbeafe; }
 .item-remove { color: #ef4444; background: none; border: 0; font-size: 1.1rem; line-height: 1; padding: 2px 4px; cursor: pointer; }
 .item-remove:hover { color: #b91c1c; }
+.edit-stock-items-scroll {
+    max-height: min(46vh, 460px);
+    overflow-y: auto;
+    overflow-x: auto;
+    border: 1px solid #fde68a;
+    border-radius: 8px;
+    background: #fff;
+    scrollbar-gutter: stable;
+    overscroll-behavior: contain;
+}
+.edit-stock-items-scroll table { margin-bottom: 0; }
+.edit-stock-items-scroll thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #fef3c7;
+    box-shadow: 0 1px 0 #fcd34d;
+}
+.edit-stock-items-scroll tfoot td {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    background: #fffbeb;
+    box-shadow: 0 -1px 0 #fde68a;
+}
+@media (max-height: 760px) {
+    .edit-stock-items-scroll { max-height: 38vh; }
+}
 </style>
 @endpush
 
@@ -419,7 +447,7 @@
                         <div class="fw-700 mb-2" style="color:#0f172a;">
                             <i class="bi bi-list-ul me-1"></i>Danh sách hàng hoá
                         </div>
-                        <div class="table-responsive">
+                        <div class="table-responsive edit-stock-items-scroll">
                             <table class="table table-sm align-middle" style="font-size:.85rem;">
                                 <thead style="background:#fef3c7;">
                                     <tr>
