@@ -59,7 +59,7 @@ class AccountingSalesLedgerController extends Controller
         ]);
     }
 
-    public function update(Request $request, AccountingSalesEntry $entry)
+    public function update(Request $request, AccountingSalesEntry $entry, AccountingSalesImportService $importService)
     {
         abort_unless($entry->source === AccountingSalesEntry::SOURCE_IMPORT, 403, 'Dòng sinh từ đơn hàng không được sửa trực tiếp.');
         $data = $request->validate([
@@ -87,6 +87,7 @@ class AccountingSalesLedgerController extends Controller
         $data['sale_name'] = $sale->name;
         $data['updated_by'] = $request->user()->id;
         $entry->update($data);
+        $importService->syncEntryOrderItem($entry->fresh());
         $this->refreshBatch($entry->import_batch_id);
         $this->refreshImportedOrder($entry->order_id);
         return redirect()->route('accounting.sales-ledger.index')->with('success', 'Đã cập nhật dòng doanh số #'.$entry->id.'.');
@@ -115,6 +116,16 @@ class AccountingSalesLedgerController extends Controller
     {
         $result = $service->syncAllConfirmed();
         return back()->with('success', 'Đã đồng bộ '.$result['orders'].' đơn xác nhận thành '.$result['entries'].' dòng doanh số.');
+    }
+
+    public function repairItems(AccountingSalesImportService $service)
+    {
+        $result = $service->repairHistoricalOrderItems();
+
+        return back()->with(
+            'success',
+            'Đã bổ sung '.$result['created'].' dòng sản phẩm còn thiếu và đồng bộ '.$result['updated'].' dòng sản phẩm đơn lịch sử.'
+        );
     }
 
     public function export(Request $request)

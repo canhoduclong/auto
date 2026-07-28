@@ -94,6 +94,86 @@ class CustomerController extends Controller
         return redirect()->route('customers.index')->with('success', "Đã gán $count khách hàng cho sale.");
     }
 
+    public function bulkUpdateCommission(Request $request)
+    {
+        abort_unless($request->user()?->isAdmin(), 403);
+
+        $validated = $request->validate([
+            'ids' => ['required', 'string'],
+            'commission_percent' => ['required', 'numeric', 'min:0', 'max:100'],
+            'recalculate_existing' => ['nullable', 'boolean'],
+        ], [
+            'ids.required' => 'Vui lòng chọn ít nhất một khách hàng.',
+            'commission_percent.required' => 'Vui lòng nhập mức hoa hồng sale.',
+        ]);
+
+        $customerIds = collect(explode(',', $validated['ids']))
+            ->map(fn ($id) => (int) trim($id))
+            ->filter(fn ($id) => $id > 0)
+            ->unique()
+            ->values();
+        if ($customerIds->isEmpty()) {
+            return back()->withErrors(['ids' => 'Vui lòng chọn ít nhất một khách hàng.']);
+        }
+
+        $percent = round((float) $validated['commission_percent'], 2);
+        $recalculate = (bool) ($validated['recalculate_existing'] ?? false);
+        $updatedCustomers = 0;
+        $updatedOrders = 0;
+
+        DB::transaction(function () use ($customerIds, $percent, $recalculate, &$updatedCustomers, &$updatedOrders): void {
+            $updatedCustomers = Customer::query()
+                ->whereIn('id', $customerIds)
+                ->update(['commission_percent' => $percent, 'updated_at' => now()]);
+
+            if (Schema::hasTable('accounting_customer_commissions')) {
+                $now = now();
+                DB::table('accounting_customer_commissions')->insert(
+                    $customerIds->map(fn (int $customerId) => [
+                        'customer_id' => $customerId,
+                        'type' => 'percent',
+                        'value' => $percent,
+                        'effective_date' => $now->toDateString(),
+                        'note' => 'Cập nhật hàng loạt từ danh sách khách hàng',
+                        'is_active' => true,
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ])->all()
+                );
+            }
+
+            if (! $recalculate || ! Schema::hasTable('order_commissions')) {
+                return;
+            }
+
+            $commissions = DB::table('order_commissions')
+                ->whereIn('customer_id', $customerIds)
+                ->get(['id', 'order_id', 'order_total']);
+            $updatedOrders = $commissions->count();
+
+            foreach ($commissions as $commission) {
+                $amount = round((float) $commission->order_total * $percent / 100, 2);
+                DB::table('order_commissions')->where('id', $commission->id)->update([
+                    'commission_percent' => $percent,
+                    'commission_amount' => $amount,
+                    'updated_at' => now(),
+                ]);
+                Order::query()->whereKey($commission->order_id)->update([
+                    'commission_percent_snapshot' => $percent,
+                    'commission_amount_snapshot' => $amount,
+                    'commission_created_at' => DB::raw('COALESCE(commission_created_at, NOW())'),
+                ]);
+            }
+        });
+
+        $message = 'Đã gán hoa hồng '.number_format($percent, 2, ',', '.').'% cho '.$updatedCustomers.' khách hàng.';
+        if ($recalculate) {
+            $message .= ' Đã tính lại '.$updatedOrders.' đơn hàng.';
+        }
+
+        return back()->with('success', $message);
+    }
+
     // Export excel
     public function export()
     {

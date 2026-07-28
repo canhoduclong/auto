@@ -3,16 +3,66 @@
 namespace Tests\Feature;
 
 use App\Models\Customer;
+use App\Models\Order;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class CustomerOwnershipTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_admin_can_bulk_assign_customer_commission_from_customer_list(): void
+    {
+        $admin = User::factory()->create();
+        $admin->roles()->attach(Role::create(['name' => 'admin']));
+        $sale = User::factory()->create();
+        $sale->roles()->attach(Role::create(['name' => 'sale']));
+        $firstCustomer = Customer::create(['name' => 'Khách hàng hoa hồng A', 'status' => 'active']);
+        $secondCustomer = Customer::create(['name' => 'Khách hàng hoa hồng B', 'status' => 'active']);
+        $order = Order::create([
+            'customer_id' => $firstCustomer->id,
+            'user_id' => $sale->id,
+            'total' => 2000000,
+            'status' => Order::STATUS_COMPLETED,
+        ]);
+        DB::table('order_commissions')->insert([
+            'order_id' => $order->id,
+            'sale_user_id' => $sale->id,
+            'customer_id' => $firstCustomer->id,
+            'order_total' => 2000000,
+            'commission_percent' => 0,
+            'commission_amount' => 0,
+            'status' => 'confirmed',
+            'confirmed_by' => $admin->id,
+            'confirmed_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($admin)->post(route('customers.bulkUpdateCommission'), [
+            'ids' => $firstCustomer->id.','.$secondCustomer->id,
+            'commission_percent' => 3.5,
+            'recalculate_existing' => 1,
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('customers', ['id' => $firstCustomer->id, 'commission_percent' => 3.5]);
+        $this->assertDatabaseHas('customers', ['id' => $secondCustomer->id, 'commission_percent' => 3.5]);
+        $this->assertDatabaseHas('order_commissions', [
+            'order_id' => $order->id,
+            'commission_percent' => 3.5,
+            'commission_amount' => 70000,
+        ]);
+        $this->assertDatabaseHas('orders', [
+            'id' => $order->id,
+            'commission_percent_snapshot' => 3.5,
+            'commission_amount_snapshot' => 70000,
+        ]);
+    }
 
     public function test_sale_only_sees_customers_still_owned_by_them(): void
     {

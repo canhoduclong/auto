@@ -9,8 +9,10 @@ class OrderItem extends Model
 
     protected $fillable = [
         'order_id',
+        'accounting_sales_entry_id',
         'product_id',
         'product_variant_id',
+        'imported_name',
         'quantity',
         'price',
         'base_price',
@@ -90,6 +92,15 @@ class OrderItem extends Model
         return $this->formatDisplayTotalValue($this->display_total_value) . ' ' . $this->display_total_unit;
     }
 
+    public function getDisplayNameAttribute(): string
+    {
+        return $this->product?->name
+            ?? $this->variant?->product?->name
+            ?? $this->imported_name
+            ?? $this->variant?->name
+            ?? 'Sản phẩm';
+    }
+
     private function formatDisplayTotalValue(float $value): string
     {
         $formatted = number_format($value, 3, ',', '.');
@@ -98,6 +109,7 @@ class OrderItem extends Model
     }
 
     public function order() { return $this->belongsTo(Order::class); }
+    public function accountingSalesEntry() { return $this->belongsTo(AccountingSalesEntry::class); }
     public function product() { return $this->belongsTo(Product::class); }
     public function variant() { return $this->belongsTo(ProductVariant::class, 'product_variant_id'); }
 }

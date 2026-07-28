@@ -7,6 +7,8 @@ use App\Models\AccountingSalesImportBatch;
 use App\Models\AccountingReconciliation;
 use App\Models\Customer;
 use App\Models\Order;
+use App\Models\OrderItem;
+use App\Models\Product;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -16,6 +18,8 @@ use Illuminate\Support\Str;
 
 class AccountingSalesImportService
 {
+    private ?Collection $importProductCatalog = null;
+
     private const ALIASES = [
         'date' => ['ngay thang', 'ngay', 'date'],
         'month' => ['thang', 'month'],
@@ -392,6 +396,11 @@ class AccountingSalesImportService
             AccountingSalesEntry::whereIn('id', $group->pluck('entry_id'))
                 ->update(['order_id' => $order->id, 'accounting_reconciliation_id' => $reconciliation->id]);
 
+            AccountingSalesEntry::query()
+                ->whereIn('id', $group->pluck('entry_id'))
+                ->get()
+                ->each(fn (AccountingSalesEntry $entry) => $this->syncEntryOrderItem($entry));
+
             if (Schema::hasTable('order_commissions')) {
                 $percent = (float) ($customer->commission_percent ?? 0);
                 $commission = round($total * $percent / 100, 2);
@@ -417,5 +426,152 @@ class AccountingSalesImportService
         }
 
         return $created;
+    }
+
+    public function repairHistoricalOrderItems(): array
+    {
+        if (! Schema::hasColumn('order_items', 'accounting_sales_entry_id')) {
+            return ['created' => 0, 'updated' => 0];
+        }
+
+        $created = 0;
+        $updated = 0;
+
+        AccountingSalesEntry::query()
+            ->where('source', AccountingSalesEntry::SOURCE_IMPORT)
+            ->whereNotNull('order_id')
+            ->orderBy('id')
+            ->chunkById(500, function ($entries) use (&$created, &$updated): void {
+                foreach ($entries as $entry) {
+                    $exists = OrderItem::query()
+                        ->where('accounting_sales_entry_id', $entry->id)
+                        ->exists();
+                    $this->syncEntryOrderItem($entry);
+                    $exists ? $updated++ : $created++;
+                }
+            });
+
+        return compact('created', 'updated');
+    }
+
+    public function syncEntryOrderItem(AccountingSalesEntry $entry): ?OrderItem
+    {
+        if (! $entry->order_id || ! Schema::hasColumn('order_items', 'accounting_sales_entry_id')) {
+            return null;
+        }
+
+        $unit = trim((string) $entry->unit);
+        [$product, $variant] = $this->resolveImportedProduct($unit, (float) $entry->unit_weight);
+        $quantity = max(0, (int) round((float) $entry->quantity));
+        $unitWeight = max(0.001, (float) $entry->unit_weight);
+        $totalWeight = max(0, (float) $entry->total_quantity);
+        $unitPrice = (float) ($entry->unit_price ?? 0);
+        $totalAmount = (float) $entry->total_amount;
+        $isPricedByKg = $this->isImportedLinePricedByWeight(
+            $unit,
+            $quantity,
+            $totalWeight,
+            $unitPrice,
+            $totalAmount,
+            $variant?->effective_priced_by_kg ?? $product?->is_priced_by_kg
+        );
+
+        $item = OrderItem::query()->updateOrCreate(
+            ['accounting_sales_entry_id' => $entry->id],
+            [
+                'order_id' => $entry->order_id,
+                'product_id' => $product?->id,
+                'product_variant_id' => $variant?->id,
+                'imported_name' => $this->importedLineName($unit),
+                'quantity' => $quantity,
+                'price' => $unitPrice,
+                'base_price' => $unitPrice,
+                'unit_discount' => 0,
+                'discount_total' => 0,
+                'unit_weight' => round($unitWeight, 3),
+                'is_priced_by_kg' => $isPricedByKg,
+                'total_weight' => round($totalWeight, 3),
+                'total' => round($totalAmount, 2),
+            ]
+        );
+
+        if ((int) $entry->order_item_id !== (int) $item->id) {
+            AccountingSalesEntry::query()->whereKey($entry->id)->update(['order_item_id' => $item->id]);
+        }
+
+        return $item;
+    }
+
+    private function resolveImportedProduct(string $unit, float $unitWeight): array
+    {
+        $key = $this->key($unit);
+        if (in_array($key, ['vat', 'nha xe', 'shiper', 'shipper', 'thung xop', 'giam tru'], true)) {
+            return [null, null];
+        }
+
+        $catalog = $this->importProductCatalog ??= Product::query()
+            ->with('variants')
+            ->where('status', true)
+            ->get();
+
+        $product = $catalog
+            ->map(function (Product $product) use ($key): array {
+                $name = $this->key($product->name);
+                $score = 0;
+                if ($key === 'con') {
+                    if (str_contains($name, 'vit nguyen con')) $score += 100;
+                    if ((string) $product->unit === 'con') $score += 40;
+                    if (str_contains($name, 'bam')) $score -= 100;
+                } elseif ($key !== '' && str_contains($name, $key)) {
+                    $score += 80;
+                }
+
+                return ['product' => $product, 'score' => $score];
+            })
+            ->filter(fn (array $candidate) => $candidate['score'] > 0)
+            ->sortByDesc('score')
+            ->first()['product'] ?? null;
+
+        if (! $product) {
+            return [null, null];
+        }
+
+        $variant = $product->variants
+            ->sortBy(fn ($variant) => abs((float) $variant->effective_kg - max($unitWeight, 0.001)))
+            ->first();
+
+        return [$product, $variant];
+    }
+
+    private function importedLineName(string $unit): string
+    {
+        return match ($this->key($unit)) {
+            'con' => 'Vịt nguyên con',
+            'vat' => 'VAT',
+            'nha xe' => 'Phí nhà xe',
+            'shiper', 'shipper' => 'Phí shipper',
+            'thung xop' => 'Thùng xốp',
+            'giam tru' => 'Giảm trừ',
+            default => $unit !== '' ? $unit : 'Dòng doanh số',
+        };
+    }
+
+    private function isImportedLinePricedByWeight(
+        string $unit,
+        int $quantity,
+        float $totalWeight,
+        float $unitPrice,
+        float $totalAmount,
+        ?bool $catalogDefault
+    ): bool {
+        if ($unitPrice != 0.0) {
+            $weightDifference = abs($totalAmount - ($unitPrice * $totalWeight));
+            $quantityDifference = abs($totalAmount - ($unitPrice * $quantity));
+            if (abs($weightDifference - $quantityDifference) > 0.01) {
+                return $weightDifference < $quantityDifference;
+            }
+        }
+
+        return $catalogDefault ?? in_array($this->key($unit), ['con', 'uc', 'long', 'huyet', 'vat'], true);
     }
 }

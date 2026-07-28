@@ -240,6 +240,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/sales-ledger/export', [\App\Http\Controllers\AccountingSalesLedgerController::class, 'export'])->name('sales-ledger.export');
         Route::post('/sales-ledger/import', [\App\Http\Controllers\AccountingSalesLedgerController::class, 'import'])->name('sales-ledger.import');
         Route::post('/sales-ledger/sync', [\App\Http\Controllers\AccountingSalesLedgerController::class, 'sync'])->name('sales-ledger.sync');
+        Route::post('/sales-ledger/repair-items', [\App\Http\Controllers\AccountingSalesLedgerController::class, 'repairItems'])->name('sales-ledger.repair-items');
         Route::delete('/sales-ledger/batches/{batch}', [\App\Http\Controllers\AccountingSalesLedgerController::class, 'destroyBatch'])->name('sales-ledger.batches.destroy');
         Route::get('/sales-ledger', [\App\Http\Controllers\AccountingSalesLedgerController::class, 'index'])->name('sales-ledger.index');
         Route::get('/sales-ledger/{entry}/edit', [\App\Http\Controllers\AccountingSalesLedgerController::class, 'edit'])->name('sales-ledger.edit');
@@ -280,6 +281,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/shipping-costs/shipping-fee-requests', [ShipperDashboardController::class, 'createShippingFeeRequest'])->name('shipping-costs.shipping-fee-requests.store');
         Route::post('/shipping-costs/update-return-fee/{orderReturn}', [ShipperDashboardController::class, 'updateReturnFee'])->name('shipping-costs.update-return-fee');
         Route::get('/commissions', [AccountingDashboardController::class, 'commissions'])->name('commissions');
+        Route::post('/commissions/bulk', [AccountingDashboardController::class, 'bulkUpdateCommissions'])->name('commissions.bulk-update');
         Route::post('/commissions', [AccountingDashboardController::class, 'storeCommission'])->name('commissions.store');
         Route::get('/discounts', [AccountingDashboardController::class, 'discounts'])->name('discounts');
         Route::post('/discounts', [AccountingDashboardController::class, 'storeDiscount'])->name('discounts.store');
@@ -796,6 +798,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
 
     // Xóa nhiều khách hàng
     Route::post('customers/bulk-assign-sale', [CustomerController::class, 'bulkAssignSale'])->name('customers.bulkAssignSale')->middleware('permission');
+    Route::post('customers/bulk-update-commission', [CustomerController::class, 'bulkUpdateCommission'])->name('customers.bulkUpdateCommission')->middleware('permission');
     Route::post('customers/bulk-delete', [CustomerController::class, 'bulkDelete'])->name('customers.bulkDelete')->middleware('permission');
     Route::post('customers/bulk-mark-employee', [CustomerController::class, 'bulkMarkEmployee'])->name('customers.bulkMarkEmployee')->middleware('permission');
     Route::post('customers/bulk-unmark-employee', [CustomerController::class, 'bulkUnmarkEmployee'])->name('customers.bulkUnmarkEmployee')->middleware('permission');
@@ -1027,6 +1030,9 @@ Route::middleware(['auth', 'role:sale,leader,leader_sale,sale_manager,manager,ma
     Route::get('/my-orders/{order}', [PageController::class, 'myOrderDetail'])->name('site.orders.show');
     Route::post('/my-orders/{order}/cancel', [OrderController::class, 'cancel'])->name('site.orders.cancel');
     Route::post('/my-orders/{order}/trash', [PageController::class, 'moveOrderToTrash'])->name('site.orders.trash');
+    Route::delete('/my-orders/{order}/admin-delete', [\App\Http\Controllers\AdminOrderDeletionController::class, 'destroy'])
+        ->name('site.orders.admin-delete')
+        ->middleware('role:admin');
     Route::post('/my-orders/{order}/customer-feedback', [PageController::class, 'storeOrderCustomerFeedback'])->name('site.orders.customer-feedback');
     Route::get('/my-orders/{order}/edit', [PageController::class, 'myOrderEdit'])->name('site.orders.edit');
     Route::put('/my-orders/{order}', [PageController::class, 'myOrderUpdate'])->name('site.orders.update');

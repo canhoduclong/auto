@@ -140,6 +140,11 @@
             <i class="ph ph-check-circle me-1"></i>{{ session('success') }}
         </div>
     @endif
+    @if($errors->any())
+        <div class="alert alert-danger border-0 rounded-3 mb-3 py-2 px-3" style="font-size:.875rem;">
+            <i class="ph ph-warning-circle me-1"></i>{{ $errors->first() }}
+        </div>
+    @endif
 
     <div class="cust-panel">
 
@@ -299,6 +304,24 @@
             </select>
             <button type="submit" class="btn btn-sm btn-primary">Gán sale cho khách đã chọn</button>
         </form>
+
+        <form id="bulkCommissionForm" action="{{ route('customers.bulkUpdateCommission') }}" method="POST" class="mb-3 d-flex align-items-center flex-wrap gap-2">
+            @csrf
+            <input type="hidden" name="ids" id="bulkCommissionIds">
+            <div class="input-group input-group-sm" style="max-width:210px;">
+                <span class="input-group-text"><i class="ph ph-percent"></i></span>
+                <input type="number" name="commission_percent" class="form-control" min="0" max="100" step="0.01" placeholder="% hoa hồng sale" required>
+                <span class="input-group-text">%</span>
+            </div>
+            <div class="form-check mb-0">
+                <input type="hidden" name="recalculate_existing" value="0">
+                <input class="form-check-input" type="checkbox" name="recalculate_existing" value="1" id="bulkCommissionRecalculate">
+                <label class="form-check-label small" for="bulkCommissionRecalculate">Tính lại đơn đã có hoa hồng</label>
+            </div>
+            <button type="submit" class="btn btn-sm btn-success">
+                <i class="ph ph-coins me-1"></i>Gán % hoa hồng cho khách đã chọn
+            </button>
+        </form>
         @endif
 
         <div class="table-responsive">
@@ -312,6 +335,7 @@
                         <th>Mã Code cũ</th>
                         <th class="cust-manage">Phụ trách &amp; hạn giữ</th>
                         @if($isAdmin)
+                        <th class="text-center" style="min-width:130px;">Hoa hồng sale</th>
                         <th style="min-width:230px;">Gán sale</th>
                         @endif
                         <th style="width:200px;">Thao tác</th>
@@ -402,6 +426,11 @@
                         </td>
 
                         @if($isAdmin)
+                        <td class="text-center">
+                            <span class="badge {{ (float)$customer->commission_percent > 0 ? 'bg-success' : 'bg-secondary' }}">
+                                {{ number_format((float)$customer->commission_percent, 2, ',', '.') }}%
+                            </span>
+                        </td>
                         <td>
                             @if($customer->is_employee)
                                 <span class="text-muted" style="font-size:.78rem;">Không áp dụng</span>
@@ -536,6 +565,28 @@ document.addEventListener('DOMContentLoaded', function () {
                 return false;
             }
             document.getElementById('bulkAssignSaleIds').value = ids.join(',');
+        });
+    }
+
+    const bulkCommissionForm = document.getElementById('bulkCommissionForm');
+    if (bulkCommissionForm) {
+        bulkCommissionForm.addEventListener('submit', function (e) {
+            const ids = Array.from(document.querySelectorAll('.row-check:not(#checkAll):checked')).map(cb => cb.value);
+            if (ids.length === 0) {
+                alert('Vui lòng chọn ít nhất 1 khách hàng để gán hoa hồng!');
+                e.preventDefault();
+                return false;
+            }
+
+            const percent = bulkCommissionForm.querySelector('[name="commission_percent"]').value;
+            const recalculate = document.getElementById('bulkCommissionRecalculate')?.checked;
+            const message = 'Áp dụng hoa hồng ' + percent + '% cho ' + ids.length + ' khách hàng đã chọn?'
+                + (recalculate ? '\nHoa hồng của các đơn hiện có cũng sẽ được tính lại.' : '');
+            if (!confirm(message)) {
+                e.preventDefault();
+                return false;
+            }
+            document.getElementById('bulkCommissionIds').value = ids.join(',');
         });
     }
 

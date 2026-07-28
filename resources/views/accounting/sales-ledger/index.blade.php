@@ -15,6 +15,9 @@
     <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
         <div><h3 class="mb-1">Sổ doanh số kế toán</h3><div class="text-muted">Dữ liệu lịch sử và đơn hàng đã được kế toán xác nhận doanh thu.</div></div>
         <div class="d-flex gap-2">
+            <form method="POST" action="{{ route('accounting.sales-ledger.repair-items') }}">@csrf
+                <button class="btn btn-outline-warning" onclick="return confirm('Bổ sung và đồng bộ sản phẩm cho toàn bộ đơn lịch sử HIS-*?')"><i class="bi bi-tools me-1"></i>Sửa sản phẩm đơn HIS</button>
+            </form>
             <form method="POST" action="{{ route('accounting.sales-ledger.sync') }}">@csrf
                 <button class="btn btn-outline-primary" onclick="return confirm('Đồng bộ toàn bộ đơn đã xác nhận vào sổ doanh số?')"><i class="bi bi-arrow-repeat me-1"></i>Đồng bộ đơn xác nhận</button>
             </form>

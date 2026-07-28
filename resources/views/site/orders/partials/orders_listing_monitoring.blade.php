@@ -135,7 +135,7 @@
                                     @php
                                         $variant = $item->variant;
                                         $product = $item->product ?: $variant?->product;
-                                        $productName = $product?->name ?? $variant?->name ?? 'Sản phẩm';
+                                        $productName = $item->display_name;
                                         $imagePath = $variant?->avatar?->media?->file_path ?? $product?->avatar?->media?->file_path;
                                         $lineTotal = (float) ($item->total ?? 0);
                                     @endphp

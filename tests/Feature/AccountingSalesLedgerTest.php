@@ -13,11 +13,74 @@ use App\Models\Warehouse;
 use App\Services\AccountingSalesImportService;
 use App\Services\AccountingSalesLedgerService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class AccountingSalesLedgerTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_accounting_can_apply_commission_to_multiple_customers_and_recalculate_orders(): void
+    {
+        $admin = User::factory()->create();
+        $admin->roles()->attach(Role::create(['name' => 'admin']));
+        $sale = User::factory()->create();
+        $sale->roles()->attach(Role::create(['name' => 'sale']));
+        $firstCustomer = Customer::create([
+            'name' => 'Khách hoa hồng 1',
+            'assigned_to' => $sale->id,
+            'commission_percent' => 0,
+            'status' => 'active',
+        ]);
+        $secondCustomer = Customer::create([
+            'name' => 'Khách hoa hồng 2',
+            'assigned_to' => $sale->id,
+            'commission_percent' => 0,
+            'status' => 'active',
+        ]);
+        $order = Order::create([
+            'customer_id' => $firstCustomer->id,
+            'user_id' => $sale->id,
+            'total' => 1000000,
+            'status' => Order::STATUS_COMPLETED,
+            'commission_percent_snapshot' => 0,
+            'commission_amount_snapshot' => 0,
+        ]);
+        DB::table('order_commissions')->insert([
+            'order_id' => $order->id,
+            'sale_user_id' => $sale->id,
+            'customer_id' => $firstCustomer->id,
+            'order_total' => 1000000,
+            'commission_percent' => 0,
+            'commission_amount' => 0,
+            'status' => 'confirmed',
+            'confirmed_by' => $admin->id,
+            'confirmed_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($admin)->post(route('accounting.commissions.bulk-update'), [
+            'customer_ids' => [$firstCustomer->id, $secondCustomer->id],
+            'commission_percent' => 2.5,
+            'recalculate_existing' => 1,
+            'note' => 'Áp dụng hàng loạt',
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('customers', ['id' => $firstCustomer->id, 'commission_percent' => 2.5]);
+        $this->assertDatabaseHas('customers', ['id' => $secondCustomer->id, 'commission_percent' => 2.5]);
+        $this->assertDatabaseHas('order_commissions', [
+            'order_id' => $order->id,
+            'commission_percent' => 2.5,
+            'commission_amount' => 25000,
+        ]);
+        $this->assertDatabaseHas('orders', [
+            'id' => $order->id,
+            'commission_percent_snapshot' => 2.5,
+            'commission_amount_snapshot' => 25000,
+        ]);
+        $this->assertSame(2, DB::table('accounting_customer_commissions')->count());
+    }
 
     public function test_it_imports_vietnamese_accounting_numbers_and_maps_short_sale_name(): void
     {
@@ -52,6 +115,26 @@ class AccountingSalesLedgerTest extends TestCase
         $this->assertTrue($order->needs_operational_completion);
         $this->assertSame(8565000.0, (float) $order->accountingReconciliation->recognized_revenue);
         $this->assertSame(3, AccountingSalesEntry::where('order_id', $order->id)->count());
+        $this->assertSame(3, $order->items()->count());
+        $this->assertDatabaseHas('order_items', [
+            'order_id' => $order->id,
+            'imported_name' => 'Vịt nguyên con',
+            'quantity' => 51,
+            'unit_weight' => 2.35,
+            'total_weight' => 120,
+            'total' => 8640000,
+        ]);
+        $this->assertDatabaseHas('order_items', [
+            'order_id' => $order->id,
+            'imported_name' => 'VAT',
+            'total' => 0,
+        ]);
+        $this->assertDatabaseHas('order_items', [
+            'order_id' => $order->id,
+            'imported_name' => 'Giảm trừ',
+            'price' => -75000,
+            'total' => -75000,
+        ]);
 
         $warehouse = Warehouse::create(['name' => 'Kho lịch sử', 'status' => true]);
         $shipper = User::factory()->create();

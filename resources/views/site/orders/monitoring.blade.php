@@ -1254,9 +1254,12 @@
                             $deliveryTime = $order->delivery_time ?: ($order->customer?->delivery_time ?: 'Chưa cập nhật');
                             $canManageOrder = (int) $order->user_id === (int) auth()->id();
                             $canViewOrderDetail = !$isSaleViewingRole || $canManageOrder;
-                            $canDeleteCancelledOrder = $isCancelled
+                            $isAdminUser = auth()->user()?->isAdmin() ?? false;
+                            $canDeleteCancelledOrder = !$isAdminUser
+                                && $isCancelled
                                 && empty($order->trash_at)
-                                && ($canManageOrder || auth()->user()?->isAdmin());
+                                && $canManageOrder;
+                            $canAdminDeleteOrder = $isAdminUser;
                             $isEditable = $canManageOrder && $order->canBeDirectlyEditedByOwner();
                             $canCancel = $canManageOrder
                                 && $order->created_at?->isToday()
@@ -1319,10 +1322,7 @@
                                         <tbody>
                                             @forelse($order->items as $item)
                                                 @php
-                                                    $itemName = $item->product?->name
-                                                        ?? $item->variant?->product?->name
-                                                        ?? $item->variant?->name
-                                                        ?? 'Sản phẩm';
+                                                    $itemName = $item->display_name;
                                                     $lineTotal = (float) ($item->total ?? 0);
                                                     if ($lineTotal <= 0) {
                                                         $lineTotal = (float) ($item->quantity ?? 0) * (float) ($item->price ?? 0);
@@ -1500,6 +1500,17 @@
                                             </button>
                                         </form>
                                     @endif
+                                    @if($canAdminDeleteOrder)
+                                        <form method="POST" class="monitor-cancel-form" action="{{ route('site.orders.admin-delete', $order) }}"
+                                              onsubmit="return monitorAdminDeleteOrder(this, @js($order->code ?: ('#'.$order->id)), @js($order->user?->name ?? 'sale'), @js((float)$order->total));">
+                                            @csrf
+                                            @method('DELETE')
+                                            <input type="hidden" name="reason" value="">
+                                            <button type="submit" class="btn btn-sm btn-danger" title="Xóa vĩnh viễn và loại khỏi doanh số sale">
+                                                <i class="bi bi-trash3 me-1"></i>Xóa &amp; loại doanh số
+                                            </button>
+                                        </form>
+                                    @endif
                                 </div>
                             </div>
                             @if($canViewOrderDetail)
@@ -1571,6 +1582,27 @@
 
 @push('scripts')
 <script>
+window.monitorAdminDeleteOrder = function (form, orderCode, saleName, orderTotal) {
+    const amount = new Intl.NumberFormat('vi-VN').format(Number(orderTotal) || 0) + 'đ';
+    const confirmed = window.confirm(
+        'XÓA VĨNH VIỄN đơn ' + orderCode + '?\n\n'
+        + 'Đơn sẽ bị loại khỏi doanh số và hoa hồng của ' + saleName + '.\n'
+        + 'Giá trị bị loại: ' + amount + '.\n'
+        + 'Thao tác này không thể hoàn tác từ giao diện.'
+    );
+    if (!confirmed) return false;
+
+    const reason = window.prompt('Nhập lý do xóa đơn (ít nhất 5 ký tự):', 'Xóa đơn nhập sai');
+    if (reason === null) return false;
+    if (reason.trim().length < 5) {
+        window.alert('Lý do xóa đơn phải có ít nhất 5 ký tự.');
+        return false;
+    }
+    form.querySelector('input[name="reason"]').value = reason.trim();
+    form.querySelector('button[type="submit"]').disabled = true;
+    return true;
+};
+
 (() => {
     const createPanel = document.getElementById('monitorCreateOrder');
     const openButton = document.getElementById('monitorOpenCreate');

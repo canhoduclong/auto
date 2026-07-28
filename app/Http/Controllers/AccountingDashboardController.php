@@ -2,13 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Company;
 use App\Models\Account;
 use App\Models\AccountBalanceRefreshLog;
 use App\Models\AccountingReconciliation;
+use App\Models\Company;
 use App\Models\Customer;
 use App\Models\Inventory;
-use App\Models\InventoryDocument;
 use App\Models\InventoryDocumentItem;
 use App\Models\Order;
 use App\Models\OrderAdjustment;
@@ -18,8 +17,8 @@ use App\Models\User;
 use App\Models\Warehouse;
 use App\Notifications\AccountingOrderRevenueConfirmed;
 use Carbon\Carbon;
-use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -163,7 +162,7 @@ class AccountingDashboardController extends Controller
                 'latest_debt_at' => $latestDebtAt,
                 'unpaid_days' => $debt > 0 && $firstDebtAt ? $firstDebtAt->diffInDays(now()) : 0,
                 'status' => $debt <= 0 ? 'Đã thanh toán' : 'Còn nợ',
-                'payment_history' => $lastPaymentAt ? ('Lần gần nhất: ' . Carbon::parse($lastPaymentAt)->format('d/m/Y H:i')) : 'Chưa có thanh toán',
+                'payment_history' => $lastPaymentAt ? ('Lần gần nhất: '.Carbon::parse($lastPaymentAt)->format('d/m/Y H:i')) : 'Chưa có thanh toán',
             ];
         })
             ->filter(function (array $row) use ($debtDaysMin, $debtDaysMax): bool {
@@ -272,7 +271,7 @@ class AccountingDashboardController extends Controller
 
             return [
                 'date' => $order->created_at,
-                'label' => $order->code ?: ('#' . $order->id),
+                'label' => $order->code ?: ('#'.$order->id),
                 'description' => $order->note ?: 'Phát sinh công nợ theo đơn hàng',
                 'amount' => $total,
                 'paid' => $paid,
@@ -385,7 +384,7 @@ class AccountingDashboardController extends Controller
         $options = $this->customerDebtTypeOptions();
 
         $validated = $request->validate([
-            'debt_type' => ['required', 'in:' . implode(',', array_keys($options))],
+            'debt_type' => ['required', 'in:'.implode(',', array_keys($options))],
         ]);
 
         $customer->update([
@@ -409,7 +408,7 @@ class AccountingDashboardController extends Controller
             'note' => ['required', 'string', 'max:255'],
         ]);
 
-        $createdAt = !empty($validated['effective_date'])
+        $createdAt = ! empty($validated['effective_date'])
             ? Carbon::parse($validated['effective_date'])->setTimeFrom(now())
             : now();
 
@@ -819,6 +818,7 @@ class AccountingDashboardController extends Controller
                     ->values();
                 $matchedCodes = $codes->filter(function (string $code) use ($transferTokens) {
                     $normalized = $this->normalizePaymentText($code);
+
                     return $normalized !== '' && collect($transferTokens)->contains(function (string $token) use ($normalized) {
                         return str_contains($token, $normalized) || str_contains($normalized, $token);
                     });
@@ -866,7 +866,7 @@ class AccountingDashboardController extends Controller
 
                 return [
                     'id' => $order->id,
-                    'code' => $order->code ?: ('#' . $order->id),
+                    'code' => $order->code ?: ('#'.$order->id),
                     'created_at' => $order->created_at?->format('d/m/Y'),
                     'note' => $order->note ?: 'Đơn hàng',
                     'total' => (float) ($order->total ?? 0),
@@ -917,7 +917,7 @@ class AccountingDashboardController extends Controller
         }
 
         $categoryId = $validated['transaction_category_id'] ?? null;
-        if (!$categoryId) {
+        if (! $categoryId) {
             $categoryId = TransactionCategory::active()->where('flow_direction', 'in')->orderBy('sort_order')->value('id');
         }
 
@@ -945,7 +945,7 @@ class AccountingDashboardController extends Controller
                 'method' => 'bank',
                 'transaction_category_id' => $categoryId,
                 'account_id' => $validated['account_id'] ?? null,
-                'note' => mb_substr('Thanh toán CK: ' . $validated['transfer_content'], 0, 255),
+                'note' => mb_substr('Thanh toán CK: '.$validated['transfer_content'], 0, 255),
                 'status' => Transaction::STATUS_APPROVED,
                 'submitted_by' => $request->user()->id,
                 'approved_by' => $request->user()->id,
@@ -956,13 +956,13 @@ class AccountingDashboardController extends Controller
         });
 
         return redirect()->route(accounting_route_name('payment-matching'))
-            ->with('success', 'Đã ghi nhận thanh toán #' . ($transaction?->id ?? '') . ' cho đơn ' . ($order->code ?: ('#' . $order->id)) . '.');
+            ->with('success', 'Đã ghi nhận thanh toán #'.($transaction?->id ?? '').' cho đơn '.($order->code ?: ('#'.$order->id)).'.');
     }
 
     public function inventory(Request $request)
     {
         $timeFilter = (string) $request->input('time_filter', 'today');
-        if (!in_array($timeFilter, ['today', 'date'], true)) {
+        if (! in_array($timeFilter, ['today', 'date'], true)) {
             $timeFilter = 'today';
         }
 
@@ -970,11 +970,11 @@ class AccountingDashboardController extends Controller
         $targetDate = $timeFilter === 'today' ? now()->toDateString() : $selectedDate;
         $warehouseId = (int) $request->input('warehouse_id', 0);
         $sortBy = (string) $request->input('sort_by', 'product_variant');
-        if (!in_array($sortBy, ['product_variant', 'warehouse', 'quantity', 'selling_price', 'amount'], true)) {
+        if (! in_array($sortBy, ['product_variant', 'warehouse', 'quantity', 'selling_price', 'amount'], true)) {
             $sortBy = 'product_variant';
         }
         $sortDir = strtolower((string) $request->input('sort_dir', 'asc'));
-        if (!in_array($sortDir, ['asc', 'desc'], true)) {
+        if (! in_array($sortDir, ['asc', 'desc'], true)) {
             $sortDir = 'asc';
         }
 
@@ -983,11 +983,11 @@ class AccountingDashboardController extends Controller
             ->selectRaw('ppr_s.product_variant_id, MAX(ppr_s.id) as latest_rule_id')
             ->where(function ($q) use ($today) {
                 $q->whereNull('ppr_s.start_date')
-                  ->orWhereDate('ppr_s.start_date', '<=', $today);
+                    ->orWhereDate('ppr_s.start_date', '<=', $today);
             })
             ->where(function ($q) use ($today) {
                 $q->whereNull('ppr_s.end_date')
-                  ->orWhereDate('ppr_s.end_date', '>=', $today);
+                    ->orWhereDate('ppr_s.end_date', '>=', $today);
             })
             ->groupBy('ppr_s.product_variant_id');
 
@@ -1022,14 +1022,14 @@ class AccountingDashboardController extends Controller
                 ->orderBy('wh.name');
         } elseif ($sortBy === 'selling_price') {
             $inventoryQuery
-                ->orderByRaw('COALESCE(ppr.price, p.price, 0) ' . strtoupper($sortDir))
+                ->orderByRaw('COALESCE(ppr.price, p.price, 0) '.strtoupper($sortDir))
                 ->orderBy('p.name')
                 ->orderByRaw("COALESCE(pv.name, '')")
                 ->orderByRaw("COALESCE(pv.size, '')")
                 ->orderBy('wh.name');
         } elseif ($sortBy === 'amount') {
             $inventoryQuery
-                ->orderByRaw('inventories.quantity * COALESCE(ppr.price, p.price, 0) ' . strtoupper($sortDir))
+                ->orderByRaw('inventories.quantity * COALESCE(ppr.price, p.price, 0) '.strtoupper($sortDir))
                 ->orderBy('p.name')
                 ->orderByRaw("COALESCE(pv.name, '')")
                 ->orderByRaw("COALESCE(pv.size, '')")
@@ -1071,7 +1071,7 @@ class AccountingDashboardController extends Controller
 
         $rangeLabel = $timeFilter === 'today'
             ? 'Hom nay'
-            : ('Ngay da chon: ' . Carbon::parse($targetDate)->format('d/m/Y'));
+            : ('Ngay da chon: '.Carbon::parse($targetDate)->format('d/m/Y'));
 
         return view('accounting.inventory', [
             'inventories' => $inventories,
@@ -1091,10 +1091,47 @@ class AccountingDashboardController extends Controller
 
     public function commissions(Request $request)
     {
-        if (!Schema::hasTable('accounting_customer_commissions')) {
+        $salesUsers = User::query()
+            ->whereHas('roles', fn ($query) => $query->whereIn(DB::raw('LOWER(name)'), [
+                'sale', 'leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale',
+            ]))
+            ->orderBy('name')
+            ->get(['id', 'name', 'short_name']);
+
+        $customerQuery = Customer::query()
+            ->with(['currentOwner:id,name,short_name', 'assignedTo:id,name,short_name'])
+            ->select([
+                'id', 'name', 'customer_code', 'commission_percent',
+                'current_owner_sale_id', 'assigned_to',
+            ])
+            ->when($request->filled('sale_id'), function ($query) use ($request): void {
+                $saleId = (int) $request->input('sale_id');
+                $query->where(function ($ownerQuery) use ($saleId): void {
+                    $ownerQuery->where('current_owner_sale_id', $saleId)
+                        ->orWhere(function ($fallbackQuery) use ($saleId): void {
+                            $fallbackQuery->whereNull('current_owner_sale_id')
+                                ->where('assigned_to', $saleId);
+                        });
+                });
+            })
+            ->when($request->filled('q'), function ($query) use ($request): void {
+                $term = trim((string) $request->input('q'));
+                $query->where(function ($searchQuery) use ($term): void {
+                    $searchQuery->where('name', 'like', '%'.$term.'%')
+                        ->orWhere('customer_code', 'like', '%'.$term.'%');
+                });
+            })
+            ->when($request->input('commission_status') === 'configured', fn ($query) => $query->where('commission_percent', '>', 0))
+            ->when($request->input('commission_status') === 'not_configured', fn ($query) => $query->where('commission_percent', '<=', 0))
+            ->orderBy('name');
+
+        $customerRows = $customerQuery->paginate(50, ['*'], 'customer_page')->withQueryString();
+
+        if (! Schema::hasTable('accounting_customer_commissions')) {
             return view('accounting.commissions', [
                 'rows' => collect(),
-                'customers' => Customer::query()->orderBy('name')->limit(200)->get(),
+                'customerRows' => $customerRows,
+                'salesUsers' => $salesUsers,
                 'missingTable' => true,
             ]);
         }
@@ -1103,18 +1140,93 @@ class AccountingDashboardController extends Controller
             ->leftJoin('customers', 'customers.id', '=', 'c.customer_id')
             ->select('c.*', 'customers.name as customer_name')
             ->orderByDesc('c.effective_date')
-            ->paginate(25);
+            ->orderByDesc('c.id')
+            ->paginate(25, ['*'], 'commission_history_page');
 
         return view('accounting.commissions', [
             'rows' => $rows,
-            'customers' => Customer::query()->orderBy('name')->limit(200)->get(),
+            'customerRows' => $customerRows,
+            'salesUsers' => $salesUsers,
             'missingTable' => false,
         ]);
     }
 
+    public function bulkUpdateCommissions(Request $request)
+    {
+        $validated = $request->validate([
+            'customer_ids' => ['required', 'array', 'min:1'],
+            'customer_ids.*' => ['required', 'integer', 'distinct', 'exists:customers,id'],
+            'commission_percent' => ['required', 'numeric', 'min:0', 'max:100'],
+            'note' => ['nullable', 'string', 'max:500'],
+            'recalculate_existing' => ['nullable', 'boolean'],
+        ], [
+            'customer_ids.required' => 'Vui lòng chọn ít nhất một khách hàng.',
+            'commission_percent.required' => 'Vui lòng nhập mức hoa hồng.',
+        ]);
+
+        $customerIds = array_values(array_unique(array_map('intval', $validated['customer_ids'])));
+        $percent = round((float) $validated['commission_percent'], 2);
+        $recalculate = (bool) ($validated['recalculate_existing'] ?? false);
+        $affectedCommissions = 0;
+
+        DB::transaction(function () use ($customerIds, $percent, $recalculate, $validated, &$affectedCommissions): void {
+            Customer::query()->whereIn('id', $customerIds)->update([
+                'commission_percent' => $percent,
+                'updated_at' => now(),
+            ]);
+
+            if (Schema::hasTable('accounting_customer_commissions')) {
+                $now = now();
+                $historyRows = array_map(fn (int $customerId) => [
+                    'customer_id' => $customerId,
+                    'type' => 'percent',
+                    'value' => $percent,
+                    'effective_date' => $now->toDateString(),
+                    'note' => $validated['note'] ?? 'Cập nhật hoa hồng hàng loạt',
+                    'is_active' => true,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ], $customerIds);
+                DB::table('accounting_customer_commissions')->insert($historyRows);
+            }
+
+            if (! $recalculate || ! Schema::hasTable('order_commissions')) {
+                return;
+            }
+
+            $commissions = DB::table('order_commissions')
+                ->whereIn('customer_id', $customerIds)
+                ->get(['id', 'order_id', 'order_total']);
+            $affectedCommissions = $commissions->count();
+
+            foreach ($commissions->chunk(500) as $chunk) {
+                foreach ($chunk as $commission) {
+                    $amount = round((float) $commission->order_total * $percent / 100, 2);
+                    DB::table('order_commissions')->where('id', $commission->id)->update([
+                        'commission_percent' => $percent,
+                        'commission_amount' => $amount,
+                        'updated_at' => now(),
+                    ]);
+                    Order::query()->whereKey($commission->order_id)->update([
+                        'commission_percent_snapshot' => $percent,
+                        'commission_amount_snapshot' => $amount,
+                        'commission_created_at' => DB::raw('COALESCE(commission_created_at, NOW())'),
+                    ]);
+                }
+            }
+        });
+
+        $message = 'Đã áp dụng hoa hồng '.number_format($percent, 2, ',', '.').'% cho '.count($customerIds).' khách hàng.';
+        if ($recalculate) {
+            $message .= ' Đã tính lại '.$affectedCommissions.' bản ghi hoa hồng đơn hàng.';
+        }
+
+        return back()->with('success', $message);
+    }
+
     public function storeCommission(Request $request)
     {
-        if (!Schema::hasTable('accounting_customer_commissions')) {
+        if (! Schema::hasTable('accounting_customer_commissions')) {
             return back()->with('error', 'Bang hoa hong chua duoc tao. Vui long chay migrate.');
         }
 
@@ -1137,12 +1249,19 @@ class AccountingDashboardController extends Controller
             'updated_at' => now(),
         ]);
 
+        if ($validated['type'] === 'percent') {
+            Customer::query()->whereKey($validated['customer_id'])->update([
+                'commission_percent' => $validated['value'],
+                'updated_at' => now(),
+            ]);
+        }
+
         return back()->with('success', 'Da luu muc hoa hong khach hang.');
     }
 
     public function discounts(Request $request)
     {
-        if (!Schema::hasTable('accounting_customer_discounts')) {
+        if (! Schema::hasTable('accounting_customer_discounts')) {
             return view('accounting.discounts', [
                 'rows' => collect(),
                 'customers' => Customer::query()->orderBy('name')->limit(200)->get(),
@@ -1165,7 +1284,7 @@ class AccountingDashboardController extends Controller
 
     public function storeDiscount(Request $request)
     {
-        if (!Schema::hasTable('accounting_customer_discounts')) {
+        if (! Schema::hasTable('accounting_customer_discounts')) {
             return back()->with('error', 'Bang chiet khau chua duoc tao. Vui long chay migrate.');
         }
 
@@ -1194,7 +1313,7 @@ class AccountingDashboardController extends Controller
     public function dailyOrders(Request $request)
     {
         $filterMode = (string) $request->input('filter_mode', 'day');
-        if (!in_array($filterMode, ['day', 'month', 'custom'], true)) {
+        if (! in_array($filterMode, ['day', 'month', 'custom'], true)) {
             $filterMode = 'day';
         }
 
@@ -1261,13 +1380,13 @@ class AccountingDashboardController extends Controller
 
         $allowedPerPage = [10, 20, 50, 100];
         $perPage = (int) $request->input('per_page', 20);
-        if (!in_array($perPage, $allowedPerPage, true)) {
+        if (! in_array($perPage, $allowedPerPage, true)) {
             $perPage = 20;
         }
 
         $allowedSortBy = ['created_at', 'code', 'total', 'customer_name', 'sale_name'];
         $sortBy = (string) $request->input('sort_by', 'created_at');
-        if (!in_array($sortBy, $allowedSortBy, true)) {
+        if (! in_array($sortBy, $allowedSortBy, true)) {
             $sortBy = 'created_at';
         }
 
@@ -1285,12 +1404,12 @@ class AccountingDashboardController extends Controller
                 'accountingReconciliation.confirmer:id,name',
                 'adjustments' => function ($q) {
                     $q->with(['requester:id,name', 'items.variant.product'])
-                      ->whereIn('status', [
-                          OrderAdjustment::STATUS_PENDING_APPROVAL,
-                          OrderAdjustment::STATUS_APPROVED,
-                          OrderAdjustment::STATUS_REJECTED,
-                      ])
-                      ->latest();
+                        ->whereIn('status', [
+                            OrderAdjustment::STATUS_PENDING_APPROVAL,
+                            OrderAdjustment::STATUS_APPROVED,
+                            OrderAdjustment::STATUS_REJECTED,
+                        ])
+                        ->latest();
                 },
             ])
             ->withSum('items as total_item_quantity', 'quantity')
@@ -1371,21 +1490,21 @@ class AccountingDashboardController extends Controller
     public function dailySales(Request $request)
     {
         $fromDate = (string) $request->input('from_date', now()->toDateString());
-        $toDate   = (string) $request->input('to_date', now()->toDateString());
+        $toDate = (string) $request->input('to_date', now()->toDateString());
         $from = Carbon::parse($fromDate)->startOfDay();
-        $to   = Carbon::parse($toDate)->endOfDay();
+        $to = Carbon::parse($toDate)->endOfDay();
         if ($from->gt($to)) {
             [$from, $to] = [$to->copy()->startOfDay(), $from->copy()->endOfDay()];
             [$fromDate, $toDate] = [$toDate, $fromDate];
         }
 
-        $saleId     = (int) $request->input('sale_id', 0);
+        $saleId = (int) $request->input('sale_id', 0);
         $customerId = (int) $request->input('customer_id', 0);
-        $sort       = (string) $request->input('sort', 'date_desc');
+        $sort = (string) $request->input('sort', 'date_desc');
 
         $allowedPerPage = [10, 20, 50, 100, 200];
         $perPage = (int) $request->input('per_page', 20);
-        if (!in_array($perPage, $allowedPerPage, true)) {
+        if (! in_array($perPage, $allowedPerPage, true)) {
             $perPage = 20;
         }
 
@@ -1393,7 +1512,7 @@ class AccountingDashboardController extends Controller
         $approvedAdjSub = DB::table('order_adjustment_items as oai_s')
             ->join('order_adjustments as oa_s', function ($j) {
                 $j->on('oa_s.id', '=', 'oai_s.order_adjustment_id')
-                  ->where('oa_s.status', '=', OrderAdjustment::STATUS_APPROVED);
+                    ->where('oa_s.status', '=', OrderAdjustment::STATUS_APPROVED);
             })
             ->selectRaw('oai_s.order_item_id, MAX(oai_s.id) as adj_item_id')
             ->groupBy('oai_s.order_item_id');
@@ -1431,40 +1550,40 @@ class AccountingDashboardController extends Controller
             'order_items.total',
             'order_items.total_weight',
             'order_items.is_priced_by_kg',
-            DB::raw("COALESCE(adj.adjusted_quantity, order_items.quantity) as eff_qty"),
-            DB::raw("COALESCE(adj.adjusted_price,    order_items.price)    as eff_price"),
-            DB::raw("COALESCE(adj.adjusted_weight,   order_items.total_weight) as eff_weight"),
-            DB::raw("CASE WHEN adj.id IS NOT NULL THEN 1 ELSE 0 END as has_adj"),
-            DB::raw("CASE WHEN adj.id IS NOT NULL THEN
+            DB::raw('COALESCE(adj.adjusted_quantity, order_items.quantity) as eff_qty'),
+            DB::raw('COALESCE(adj.adjusted_price,    order_items.price)    as eff_price'),
+            DB::raw('COALESCE(adj.adjusted_weight,   order_items.total_weight) as eff_weight'),
+            DB::raw('CASE WHEN adj.id IS NOT NULL THEN 1 ELSE 0 END as has_adj'),
+            DB::raw('CASE WHEN adj.id IS NOT NULL THEN
                         CASE WHEN order_items.is_priced_by_kg = 1
                             THEN COALESCE(adj.adjusted_weight, order_items.total_weight) * COALESCE(adj.adjusted_price, order_items.price)
                             ELSE COALESCE(adj.adjusted_quantity, order_items.quantity)   * COALESCE(adj.adjusted_price, order_items.price)
                         END
-                     ELSE order_items.total END as eff_total"),
+                     ELSE order_items.total END as eff_total'),
         ]);
 
         match ($sort) {
-            'date_asc'     => $listQ->orderBy('orders.created_at'),
-            'product_asc'  => $listQ->orderBy('products.name')->orderByDesc('orders.created_at'),
+            'date_asc' => $listQ->orderBy('orders.created_at'),
+            'product_asc' => $listQ->orderBy('products.name')->orderByDesc('orders.created_at'),
             'product_desc' => $listQ->orderByDesc('products.name')->orderByDesc('orders.created_at'),
-            'amount_asc'   => $listQ->orderBy('order_items.total')->orderByDesc('orders.created_at'),
-            'amount_desc'  => $listQ->orderByDesc('order_items.total')->orderByDesc('orders.created_at'),
-            'qty_asc'      => $listQ->orderBy('order_items.quantity')->orderByDesc('orders.created_at'),
-            'qty_desc'     => $listQ->orderByDesc('order_items.quantity')->orderByDesc('orders.created_at'),
-            'weight_asc'   => $listQ->orderBy('order_items.total_weight')->orderByDesc('orders.created_at'),
-            'weight_desc'  => $listQ->orderByDesc('order_items.total_weight')->orderByDesc('orders.created_at'),
-            default        => $listQ->orderByDesc('orders.created_at'),
+            'amount_asc' => $listQ->orderBy('order_items.total')->orderByDesc('orders.created_at'),
+            'amount_desc' => $listQ->orderByDesc('order_items.total')->orderByDesc('orders.created_at'),
+            'qty_asc' => $listQ->orderBy('order_items.quantity')->orderByDesc('orders.created_at'),
+            'qty_desc' => $listQ->orderByDesc('order_items.quantity')->orderByDesc('orders.created_at'),
+            'weight_asc' => $listQ->orderBy('order_items.total_weight')->orderByDesc('orders.created_at'),
+            'weight_desc' => $listQ->orderByDesc('order_items.total_weight')->orderByDesc('orders.created_at'),
+            default => $listQ->orderByDesc('orders.created_at'),
         };
 
         $items = $listQ->paginate($perPage)->appends($request->query());
 
         // ── Grand summary (all pages) ──────────────────────────────────
-        $effTotalExpr = "CASE WHEN adj.id IS NOT NULL THEN
+        $effTotalExpr = 'CASE WHEN adj.id IS NOT NULL THEN
             CASE WHEN order_items.is_priced_by_kg = 1
                 THEN COALESCE(adj.adjusted_weight, order_items.total_weight) * COALESCE(adj.adjusted_price, order_items.price)
                 ELSE COALESCE(adj.adjusted_quantity, order_items.quantity)   * COALESCE(adj.adjusted_price, order_items.price)
             END
-         ELSE order_items.total END";
+         ELSE order_items.total END';
 
         $summary = $makeBase()->selectRaw("
             COUNT(DISTINCT order_items.id)                                                          as item_count,
@@ -1479,14 +1598,14 @@ class AccountingDashboardController extends Controller
             'products.id as product_id',
             'products.name as product_name',
             'products.unit as product_unit',
-            DB::raw("SUM(COALESCE(adj.adjusted_quantity,  order_items.quantity))         as total_qty"),
-            DB::raw("SUM(COALESCE(adj.adjusted_weight,    order_items.total_weight))     as total_weight"),
+            DB::raw('SUM(COALESCE(adj.adjusted_quantity,  order_items.quantity))         as total_qty'),
+            DB::raw('SUM(COALESCE(adj.adjusted_weight,    order_items.total_weight))     as total_weight'),
             DB::raw("SUM({$effTotalExpr})                                                as total_amount"),
         ])->groupBy('products.id', 'products.name', 'products.unit')
-          ->orderByDesc('total_amount')
-          ->get();
+            ->orderByDesc('total_amount')
+            ->get();
 
-        $sales     = User::query()->orderBy('name')->select('id', 'name')->get();
+        $sales = User::query()->orderBy('name')->select('id', 'name')->get();
         $customers = Customer::query()->orderBy('name')->select('id', 'name', 'customer_code')->get();
 
         return view('accounting.daily_sales', compact(
@@ -1532,7 +1651,7 @@ class AccountingDashboardController extends Controller
             ->with([
                 'transactionCategory:id,code,name,flow_direction',
                 'customer:id,name',
-                'account:id,name,type'
+                'account:id,name,type',
             ])
             ->whereBetween('created_at', [$from, $to])
             ->where('status', Transaction::STATUS_APPROVED)
@@ -1552,18 +1671,18 @@ class AccountingDashboardController extends Controller
 
             // Get unique customers and accounts for this category
             $customers = $transactions
-                ->filter(fn($t) => $t->customer_id)
-                ->map(fn($t) => ['id' => $t->customer_id, 'name' => $t->customer?->name ?? 'N/A'])
+                ->filter(fn ($t) => $t->customer_id)
+                ->map(fn ($t) => ['id' => $t->customer_id, 'name' => $t->customer?->name ?? 'N/A'])
                 ->unique('id')
                 ->values();
 
             $accounts = $transactions
-                ->filter(fn($t) => $t->account_id)
-                ->map(fn($t) => ['id' => $t->account_id, 'name' => $t->account?->name ?? 'N/A', 'type' => $t->account?->type ?? 'N/A'])
+                ->filter(fn ($t) => $t->account_id)
+                ->map(fn ($t) => ['id' => $t->account_id, 'name' => $t->account?->name ?? 'N/A', 'type' => $t->account?->type ?? 'N/A'])
                 ->unique('id')
                 ->values();
 
-            $catStats->push((object)[
+            $catStats->push((object) [
                 'transaction_category_id' => $categoryId,
                 'transactionCategory' => $transactions->first()?->transactionCategory,
                 'total_count' => $totalCount,
@@ -1625,6 +1744,7 @@ class AccountingDashboardController extends Controller
     {
         $transactionCategories = \App\Models\TransactionCategory::active()->orderBy('sort_order')->get();
         $accounts = \App\Models\Account::active()->orderBy('name')->get(['id', 'name', 'type', 'balance', 'warning_threshold']);
+
         return view('accounting.transaction_create', compact('transactionCategories', 'accounts'));
     }
 
@@ -1645,16 +1765,16 @@ class AccountingDashboardController extends Controller
         $request->merge(['amount' => $raw]);
 
         $data = $request->validate([
-            'order_id'        => 'nullable|exists:orders,id',
-            'customer_id'     => 'nullable|exists:customers,id',
-            'amount'          => 'required|numeric|min:0.01',
+            'order_id' => 'nullable|exists:orders,id',
+            'customer_id' => 'nullable|exists:customers,id',
+            'amount' => 'required|numeric|min:0.01',
             'expense_type_id' => 'nullable|exists:expense_types,id',
-            'payee_user_id'   => 'nullable|exists:users,id',
-            'method'          => 'nullable|string|max:50',
+            'payee_user_id' => 'nullable|exists:users,id',
+            'method' => 'nullable|string|max:50',
             'transaction_category_id' => 'required|exists:transaction_categories,id',
-            'account_id'      => 'nullable|exists:accounts,id',
-            'note'            => 'nullable|string|max:1000',
-            'receipt_image'   => 'nullable|image|max:5120',
+            'account_id' => 'nullable|exists:accounts,id',
+            'note' => 'nullable|string|max:1000',
+            'receipt_image' => 'nullable|image|max:5120',
         ]);
 
         // Infer 'type' from transaction category's flow_direction
@@ -1675,7 +1795,7 @@ class AccountingDashboardController extends Controller
         $approvalService = app(\App\Services\ApprovalService::class);
         $hasWorkflow = $approvalService->initTransactionApproval($transaction);
 
-        if (!$hasWorkflow) {
+        if (! $hasWorkflow) {
             // No workflow configured → auto-approve
             $transaction->update([
                 'status' => Transaction::STATUS_APPROVED,
@@ -1683,12 +1803,13 @@ class AccountingDashboardController extends Controller
                 'approved_at' => now(),
             ]);
             $this->applyTransactionToOrder($transaction);
+
             return redirect()->route(accounting_route_name('transactions.create'))
-                ->with('success', 'Da tao va duyet giao dich #' . $transaction->id . ' thanh cong.');
+                ->with('success', 'Da tao va duyet giao dich #'.$transaction->id.' thanh cong.');
         }
 
         return redirect()->route(accounting_route_name('transactions.create'))
-            ->with('success', 'Da gui giao dich #' . $transaction->id . ' cho quy trinh duyet. Cho cap tren xac nhan.');
+            ->with('success', 'Da gui giao dich #'.$transaction->id.' cho quy trinh duyet. Cho cap tren xac nhan.');
     }
 
     public function transactionUpdate(Request $request, Transaction $transaction)
@@ -1700,16 +1821,16 @@ class AccountingDashboardController extends Controller
         $request->merge(['amount' => $raw]);
 
         $data = $request->validate([
-            'order_id'        => 'nullable|exists:orders,id',
-            'customer_id'     => 'nullable|exists:customers,id',
-            'amount'          => 'required|numeric|min:0.01',
+            'order_id' => 'nullable|exists:orders,id',
+            'customer_id' => 'nullable|exists:customers,id',
+            'amount' => 'required|numeric|min:0.01',
             'expense_type_id' => 'nullable|exists:expense_types,id',
-            'payee_user_id'   => 'nullable|exists:users,id',
-            'method'          => 'nullable|string|max:50',
+            'payee_user_id' => 'nullable|exists:users,id',
+            'method' => 'nullable|string|max:50',
             'transaction_category_id' => 'required|exists:transaction_categories,id',
-            'account_id'      => 'nullable|exists:accounts,id',
-            'note'            => 'nullable|string|max:1000',
-            'receipt_image'   => 'nullable|image|max:5120',
+            'account_id' => 'nullable|exists:accounts,id',
+            'note' => 'nullable|string|max:1000',
+            'receipt_image' => 'nullable|image|max:5120',
         ]);
 
         $category = \App\Models\TransactionCategory::find($data['transaction_category_id']);
@@ -1726,7 +1847,7 @@ class AccountingDashboardController extends Controller
         $this->syncTransactionAccountingState($transaction, $previousAccountId, $previousOrderId);
 
         return redirect()->route(accounting_route_name('cashflow.show'), $transaction)
-            ->with('success', 'Đã cập nhật giao dịch #' . $transaction->id . '.');
+            ->with('success', 'Đã cập nhật giao dịch #'.$transaction->id.'.');
     }
 
     public function transactionApprove(Request $request, Transaction $transaction)
@@ -1763,7 +1884,7 @@ class AccountingDashboardController extends Controller
                 ->where('flow_direction', $requestedFlow)
                 ->first();
 
-            if (!$category) {
+            if (! $category) {
                 throw \Illuminate\Validation\ValidationException::withMessages([
                     'transaction_category_id' => 'Danh mục kế toán không phù hợp với dòng tiền của phiếu.',
                 ]);
@@ -1801,7 +1922,7 @@ class AccountingDashboardController extends Controller
                     'approved_at' => now(),
                 ]);
 
-                return back()->with('success', 'Director đã duyệt phiếu #' . $transaction->id . '. Phiếu đã chuyển về kế toán để hoàn thành chuyển tiền.');
+                return back()->with('success', 'Director đã duyệt phiếu #'.$transaction->id.'. Phiếu đã chuyển về kế toán để hoàn thành chuyển tiền.');
             }
 
             $transaction->update([
@@ -1810,7 +1931,8 @@ class AccountingDashboardController extends Controller
                 'approved_at' => now(),
             ]);
             $this->applyTransactionToOrder($transaction);
-            return back()->with('success', 'Da duyet giao dich #' . $transaction->id . ' thanh cong.');
+
+            return back()->with('success', 'Da duyet giao dich #'.$transaction->id.' thanh cong.');
         }
 
         return back()->with('success', 'Da duyet buoc nay. Giao dich chuyen sang buoc tiep theo.');
@@ -1825,7 +1947,7 @@ class AccountingDashboardController extends Controller
             403
         );
 
-        if (!$transaction->request_source || $transaction->status !== Transaction::STATUS_APPROVED_PENDING_COMPLETION) {
+        if (! $transaction->request_source || $transaction->status !== Transaction::STATUS_APPROVED_PENDING_COMPLETION) {
             return back()->with('error', 'Phiếu không ở trạng thái chờ kế toán hoàn thành.');
         }
 
@@ -1833,7 +1955,7 @@ class AccountingDashboardController extends Controller
             'note' => ['nullable', 'string', 'max:1000'],
         ]);
 
-        if (!$transaction->transaction_category_id || !$transaction->account_id) {
+        if (! $transaction->transaction_category_id || ! $transaction->account_id) {
             throw \Illuminate\Validation\ValidationException::withMessages([
                 'account_id' => 'Phiếu chưa có danh mục kế toán hoặc tài khoản thực hiện. Vui lòng quay lại bước kế toán xác nhận.',
             ]);
@@ -1843,13 +1965,13 @@ class AccountingDashboardController extends Controller
         $currentNote = trim((string) $transaction->note);
 
         $transaction->forceFill([
-            'note' => $note !== '' ? trim($currentNote . "\nKế toán hoàn thành: " . $note) : $transaction->note,
+            'note' => $note !== '' ? trim($currentNote."\nKế toán hoàn thành: ".$note) : $transaction->note,
             'status' => Transaction::STATUS_APPROVED,
         ])->save();
 
         $this->applyTransactionToOrder($transaction);
 
-        return back()->with('success', 'Đã hoàn thành phiếu #' . $transaction->id . ' và ghi nhận chuyển tiền thực tế.');
+        return back()->with('success', 'Đã hoàn thành phiếu #'.$transaction->id.' và ghi nhận chuyển tiền thực tế.');
     }
 
     public function transactionReject(Request $request, Transaction $transaction)
@@ -1884,7 +2006,7 @@ class AccountingDashboardController extends Controller
             'reject_reason' => $data['reason'],
         ]);
 
-        return back()->with('success', 'Da tu choi giao dich #' . $transaction->id . '.');
+        return back()->with('success', 'Da tu choi giao dich #'.$transaction->id.'.');
     }
 
     public function reconciliationDetail(Order $order)
@@ -1932,7 +2054,7 @@ class AccountingDashboardController extends Controller
         return response()->json([
             'order' => [
                 'id' => $order->id,
-                'code' => $order->code ?: ('#' . $order->id),
+                'code' => $order->code ?: ('#'.$order->id),
                 'status' => $order->status,
                 'payment_status' => $order->payment_status,
                 'total' => (float) $order->total,
@@ -2024,7 +2146,7 @@ class AccountingDashboardController extends Controller
 
     public function confirmReconciliation(Request $request, Order $order)
     {
-        if (!Schema::hasTable('accounting_reconciliations')) {
+        if (! Schema::hasTable('accounting_reconciliations')) {
             return response()->json(['message' => 'Bang doi soat ke toan chua duoc tao. Vui long chay migrate.'], 500);
         }
 
@@ -2034,7 +2156,7 @@ class AccountingDashboardController extends Controller
 
         $order->load(['returnRecords.returnItems', 'accountingReconciliation', 'user']);
         [$canConfirm, $blockReason] = $this->canAccountingConfirmOrder($order);
-        if (!$canConfirm) {
+        if (! $canConfirm) {
             return response()->json(['message' => $blockReason], 422);
         }
 
@@ -2121,25 +2243,25 @@ class AccountingDashboardController extends Controller
         $paginated = $query->paginate($perPage)->appends($request->query());
 
         $items = $paginated->getCollection()->map(fn ($o) => [
-            'id'             => $o->id,
-            'code'           => $o->code ?: ('#' . $o->id),
-            'customer_name'  => $o->customer?->name ?? '-',
-            'customer_id'    => $o->customer_id,
-            'sale_name'      => $o->user?->name ?? '-',
-            'total'          => (float) $o->total,
-            'amount_due'     => (float) $o->amount_due,
-            'amount_paid'    => (float) $o->amount_paid,
+            'id' => $o->id,
+            'code' => $o->code ?: ('#'.$o->id),
+            'customer_name' => $o->customer?->name ?? '-',
+            'customer_id' => $o->customer_id,
+            'sale_name' => $o->user?->name ?? '-',
+            'total' => (float) $o->total,
+            'amount_due' => (float) $o->amount_due,
+            'amount_paid' => (float) $o->amount_paid,
             'payment_status' => $o->payment_status,
-            'status'         => $o->status,
-            'created_at'     => $o->created_at?->format('d/m/Y H:i'),
+            'status' => $o->status,
+            'created_at' => $o->created_at?->format('d/m/Y H:i'),
         ]);
 
         return response()->json([
-            'data'          => $items,
-            'current_page'  => $paginated->currentPage(),
-            'last_page'     => $paginated->lastPage(),
-            'total'         => $paginated->total(),
-            'per_page'      => $paginated->perPage(),
+            'data' => $items,
+            'current_page' => $paginated->currentPage(),
+            'last_page' => $paginated->lastPage(),
+            'total' => $paginated->total(),
+            'per_page' => $paginated->perPage(),
         ]);
     }
 
@@ -2147,7 +2269,7 @@ class AccountingDashboardController extends Controller
     {
         $perPage = min((int) $request->input('per_page', 15), 100);
         $keyword = trim((string) $request->input('keyword', ''));
-        $sortBy  = in_array($request->input('sort_by'), ['name', 'id'], true) ? $request->input('sort_by') : 'name';
+        $sortBy = in_array($request->input('sort_by'), ['name', 'id'], true) ? $request->input('sort_by') : 'name';
         $sortDir = $request->input('sort_dir', 'asc') === 'desc' ? 'desc' : 'asc';
 
         $paginated = Customer::query()
@@ -2161,18 +2283,18 @@ class AccountingDashboardController extends Controller
             ->appends($request->query());
 
         $items = $paginated->getCollection()->map(fn ($c) => [
-            'id'    => $c->id,
-            'name'  => $c->name,
+            'id' => $c->id,
+            'name' => $c->name,
             'phone' => $c->phone,
-            'code'  => $c->customer_code,
+            'code' => $c->customer_code,
         ]);
 
         return response()->json([
-            'data'         => $items,
+            'data' => $items,
             'current_page' => $paginated->currentPage(),
-            'last_page'    => $paginated->lastPage(),
-            'total'        => $paginated->total(),
-            'per_page'     => $paginated->perPage(),
+            'last_page' => $paginated->lastPage(),
+            'total' => $paginated->total(),
+            'per_page' => $paginated->perPage(),
         ]);
     }
 
@@ -2193,18 +2315,18 @@ class AccountingDashboardController extends Controller
 
         return response()->json([
             'order' => [
-                'id'             => $order->id,
-                'code'           => $order->code ?: ('#' . $order->id),
-                'total'          => (float) $order->total,
-                'amount_paid'    => (float) $order->amount_paid,
-                'amount_due'     => (float) $order->amount_due,
+                'id' => $order->id,
+                'code' => $order->code ?: ('#'.$order->id),
+                'total' => (float) $order->total,
+                'amount_paid' => (float) $order->amount_paid,
+                'amount_due' => (float) $order->amount_due,
                 'payment_status' => $order->payment_status,
-                'status'         => $order->status,
-                'created_at'     => $order->created_at?->format('d/m/Y H:i'),
+                'status' => $order->status,
+                'created_at' => $order->created_at?->format('d/m/Y H:i'),
             ],
             'customer' => $customer ? [
-                'id'    => $customer->id,
-                'name'  => $customer->name,
+                'id' => $customer->id,
+                'name' => $customer->name,
                 'phone' => $customer->phone,
                 'email' => $customer->email,
                 'total_debt' => $customerDebt,
@@ -2226,14 +2348,14 @@ class AccountingDashboardController extends Controller
         $lastOrder = Order::where('customer_id', $customer->id)->latest()->first();
 
         return response()->json([
-            'id'          => $customer->id,
-            'name'        => $customer->name,
-            'phone'       => $customer->phone,
-            'email'       => $customer->email,
-            'address'     => $customer->address,
-            'code'        => $customer->customer_code,
-            'total_debt'  => $totalDebt,
-            'total_orders'=> $totalOrders,
+            'id' => $customer->id,
+            'name' => $customer->name,
+            'phone' => $customer->phone,
+            'email' => $customer->email,
+            'address' => $customer->address,
+            'code' => $customer->customer_code,
+            'total_debt' => $totalDebt,
+            'total_orders' => $totalOrders,
             'total_spent' => $totalSpent,
             'last_order_at' => $lastOrder?->created_at?->format('d/m/Y'),
         ]);
@@ -2315,7 +2437,7 @@ class AccountingDashboardController extends Controller
     private function refreshAccountBalanceById(int $accountId): void
     {
         $account = Account::query()->find($accountId);
-        if (!$account) {
+        if (! $account) {
             return;
         }
 
@@ -2356,15 +2478,15 @@ class AccountingDashboardController extends Controller
                    - (float) $order->transactions()->where('status', Transaction::STATUS_APPROVED)->where('type', 'refund')->sum('amount');
 
         $order->amount_paid = $totalPaid;
-        $order->amount_due  = max(0, (float) $order->total - $totalPaid);
+        $order->amount_due = max(0, (float) $order->total - $totalPaid);
         $order->payment_status = match (true) {
             $totalPaid >= (float) $order->total => 'paid',
-            $totalPaid > 0                      => 'partially_paid',
-            default                             => 'unpaid',
+            $totalPaid > 0 => 'partially_paid',
+            default => 'unpaid',
         };
 
         $isFullyPaid = $totalPaid >= (float) $order->total;
-        if ($isFullyPaid && !in_array((string) $order->status, ['completed', 'cancelled', 'returned', 'returned_completed'], true)) {
+        if ($isFullyPaid && ! in_array((string) $order->status, ['completed', 'cancelled', 'returned', 'returned_completed'], true)) {
             $order->status = 'completed';
         }
 
@@ -2377,12 +2499,12 @@ class AccountingDashboardController extends Controller
             return [false, 'Don da huy hoac bi tu choi, khong the xac nhan doanh thu.'];
         }
 
-        if (!in_array((string) $order->status, ['delivered', 'completed'], true)) {
+        if (! in_array((string) $order->status, ['delivered', 'completed'], true)) {
             return [false, 'Don chua giao thanh cong.'];
         }
 
         $pendingReturn = $order->returnRecords
-            ->filter(fn ($return) => !in_array((string) $return->status, ['warehouse_confirmed', 'completed', 'cancelled', 'rejected'], true))
+            ->filter(fn ($return) => ! in_array((string) $return->status, ['warehouse_confirmed', 'completed', 'cancelled', 'rejected'], true))
             ->first();
         if ($pendingReturn) {
             return [false, 'Don co hang tra chua duoc kho xu ly xong.'];
@@ -2393,7 +2515,7 @@ class AccountingDashboardController extends Controller
 
     private function returnAmountForOrder(Order $order): float
     {
-        if (!$order->relationLoaded('returnRecords')) {
+        if (! $order->relationLoaded('returnRecords')) {
             $order->load('returnRecords');
         }
 
@@ -2424,7 +2546,7 @@ class AccountingDashboardController extends Controller
 
     private function createCommissionForCompletedOrder(Order $order, ?float $recognizedRevenue = null, ?int $confirmedBy = null): void
     {
-        if (!Schema::hasTable('order_commissions')) {
+        if (! Schema::hasTable('order_commissions')) {
             return;
         }
 
@@ -2553,7 +2675,7 @@ class AccountingDashboardController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => "Da kiem tra va cap nhat " . $totalUpdated . " tai khoan. Tong sai khac: " . number_format($totalAmount) . "d",
+            'message' => 'Da kiem tra va cap nhat '.$totalUpdated.' tai khoan. Tong sai khac: '.number_format($totalAmount).'d',
             'accounts_reconciled' => count($accountsToReconcile),
             'accounts_updated' => $totalUpdated,
             'total_amount_adjusted' => $totalAmount,
