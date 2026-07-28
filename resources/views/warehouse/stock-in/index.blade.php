@@ -80,6 +80,31 @@
     box-shadow: 0 -1px 0 #cbd5e1;
 }
 .edit-stock-modal-dialog { max-width: min(1580px, calc(100vw - 32px)); }
+.edit-stock-modal-dialog .modal-content { overflow: hidden; }
+#editModalBody {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+}
+#formEditStockIn {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+}
+#formEditStockIn > .modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+}
+#formEditStockIn > .modal-footer {
+    flex: 0 0 auto;
+    min-height: 62px;
+    position: relative;
+    z-index: 5;
+    border-top: 1px solid #e2e8f0;
+    box-shadow: 0 -6px 16px rgba(15, 23, 42, .08);
+}
 .edit-stock-modal-body { background: #f8fafc; }
 .edit-stock-info-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; }
 .edit-stock-info-value { min-height: 38px; display: flex; align-items: center; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 7px 10px; color: #334155; }
