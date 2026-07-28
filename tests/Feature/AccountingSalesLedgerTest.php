@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\AccountingReconciliation;
 use App\Models\AccountingSalesEntry;
+use App\Models\AccountingSalesImportBatch;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\Product;
@@ -149,6 +150,28 @@ class AccountingSalesLedgerTest extends TestCase
             'shipper_id' => $shipper->id,
             'needs_operational_completion' => 0,
         ]);
+    }
+
+    public function test_source_can_be_imported_again_after_all_imported_orders_were_deleted(): void
+    {
+        $admin = User::factory()->create();
+        $admin->roles()->attach(Role::create(['name' => 'admin']));
+        $sale = User::factory()->create(['short_name' => 'Duệ']);
+        $sale->roles()->attach(Role::create(['name' => 'sale']));
+        Customer::create(['name' => 'Khách nhập lại', 'customer_code' => 'REIMPORT', 'status' => 'active']);
+        $text = "Ngày tháng\tTháng\tMã KH\tKhách hàng\tNVKD\tDVT\tSL\tKg/con\tTổng\tĐơn giá\tTổng tiền\n"
+            ."28/07/2026\t7\tREIMPORT\tKhách nhập lại\tDuệ\tCon\t10\t2,5\t25\t70.000\t1.750.000";
+        $service = app(AccountingSalesImportService::class);
+
+        $first = $service->import($text, $admin);
+        Order::where('accounting_sales_import_batch_id', $first['batch_id'])->sole()->delete();
+        AccountingSalesImportBatch::findOrFail($first['batch_id'])->update(['row_count' => 0, 'total_amount' => 0]);
+
+        $second = $service->import($text, $admin);
+
+        $this->assertTrue($second['imported']);
+        $this->assertNotSame($first['batch_id'], $second['batch_id']);
+        $this->assertSame(1, Order::where('accounting_sales_import_batch_id', $second['batch_id'])->count());
     }
 
     public function test_confirmed_order_sync_is_idempotent_and_balances_to_recognized_revenue(): void

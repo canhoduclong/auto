@@ -74,9 +74,9 @@ class SaleApiController extends BaseApiController
             ->values();
 
         $ordersQuery = Order::query()
-            ->with(['customer:id,name,phone,address', 'items.product:id,name', 'items.variant:id,name,sku,size,product_id', 'approvals.step', 'histories.user:id,name'])
-            ->where('user_id', (int) $request->user()->id)
+            ->with(['user:id,name,team_id', 'customer:id,name,phone,address', 'items.product:id,name', 'items.variant:id,name,sku,size,product_id', 'approvals.step', 'histories.user:id,name'])
             ->when(Schema::hasColumn('orders', 'trash_at'), fn ($query) => $query->whereNull('trash_at'));
+        $this->applySaleOrderVisibility($request, $ordersQuery);
 
         $todayOrders = (clone $ordersQuery)
             ->whereDate('created_at', today())
@@ -492,11 +492,10 @@ class SaleApiController extends BaseApiController
     public function orders(Request $request): JsonResponse
     {
         $this->ensureSaleRole($request);
-        $userId = (int) $request->user()->id;
         $trash = $request->boolean('trash');
         $query = Order::query()
-            ->with(['customer:id,name,phone,address', 'items.product:id,name', 'items.variant:id,name,sku,size,product_id', 'approvals.step', 'histories.user:id,name'])
-            ->where('user_id', $userId);
+            ->with(['user:id,name,team_id', 'customer:id,name,phone,address', 'items.product:id,name', 'items.variant:id,name,sku,size,product_id', 'approvals.step', 'histories.user:id,name']);
+        $this->applySaleOrderVisibility($request, $query);
         if (Schema::hasColumn('orders', 'trash_at')) {
             $trash ? $query->whereNotNull('trash_at') : $query->whereNull('trash_at');
         }
@@ -519,7 +518,7 @@ class SaleApiController extends BaseApiController
         if (!$isOwner && !$isLeaderInTeam && !$isManager && !$user->hasRole('admin')) {
             abort(403);
         }
-        $order->load(['customer', 'items.product', 'items.variant', 'approvals.step', 'approvals.approver', 'histories.user']);
+        $order->load(['user:id,name,team_id', 'customer', 'items.product', 'items.variant', 'approvals.step', 'approvals.approver', 'histories.user']);
 
         return $this->ok($this->orderPayload($order, true));
     }
@@ -761,6 +760,34 @@ class SaleApiController extends BaseApiController
         $query->orderBy($sortBy, strtolower((string) $request->query('sort_dir')) === 'asc' ? 'asc' : 'desc');
     }
 
+    /**
+     * Keep the Sale workspace useful for every role that is allowed to open it.
+     * A sale only sees their own orders, a leader sees their team, while sales
+     * management and admins can monitor all orders.
+     */
+    private function applySaleOrderVisibility(Request $request, $query): void
+    {
+        $user = $request->user();
+
+        if ($user->hasRole(['admin', 'manager', 'manager_sale', 'director'])) {
+            return;
+        }
+
+        if ($user->hasRole(['leader', 'leader_sale', 'sale_manager'])) {
+            $query->where(function ($scope) use ($user) {
+                $scope->where('user_id', (int) $user->id);
+
+                if ($user->team_id) {
+                    $scope->orWhereHas('user', fn ($sale) => $sale->where('team_id', (int) $user->team_id));
+                }
+            });
+
+            return;
+        }
+
+        $query->where('user_id', (int) $user->id);
+    }
+
     private function ensureApprovalScope(Request $request, string $scope): bool
     {
         $user = $request->user();
@@ -842,6 +869,8 @@ class SaleApiController extends BaseApiController
         $payload = [
             'id' => (int) $order->id,
             'code' => (string) ($order->code ?: '#' . $order->id),
+            'sale_id' => (int) $order->user_id,
+            'sale_name' => (string) ($order->user?->name ?? ''),
             'daily_sequence' => $order->daily_sequence ? (int) $order->daily_sequence : null,
             'status' => (string) $order->status,
             'payment_status' => (string) ($order->payment_status ?? ''),

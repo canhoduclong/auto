@@ -154,8 +154,11 @@ class AccountingSalesImportService
         }
 
         $hash = hash('sha256', $this->normalizeSource($text));
-        $duplicate = Schema::hasTable('accounting_sales_import_batches')
-            && AccountingSalesImportBatch::where('source_hash', $hash)->exists();
+        $existingBatch = Schema::hasTable('accounting_sales_import_batches')
+            ? AccountingSalesImportBatch::where('source_hash', $hash)->first()
+            : null;
+        $duplicate = $existingBatch
+            && ((int) $existingBatch->row_count > 0 || $existingBatch->entries()->exists());
         if ($duplicate) {
             foreach ($rows as &$row) {
                 $row['action'] = 'error';
@@ -180,6 +183,15 @@ class AccountingSalesImportService
         if (($result['counts']['error'] ?? 0) > 0) return $result + ['imported' => false];
 
         DB::transaction(function () use (&$result, $text, $actor): void {
+            // An admin deletion intentionally removes the linked revenue rows
+            // but keeps the empty batch as an audit record. Remove only that
+            // empty shell so the corrected source can be imported again.
+            AccountingSalesImportBatch::query()
+                ->where('source_hash', $result['source_hash'])
+                ->where('row_count', 0)
+                ->whereDoesntHave('entries')
+                ->delete();
+
             $batch = AccountingSalesImportBatch::create([
                 'imported_by' => $actor->id,
                 'source_hash' => $result['source_hash'],
