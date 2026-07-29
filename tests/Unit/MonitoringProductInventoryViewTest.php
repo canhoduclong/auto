@@ -19,4 +19,17 @@ class MonitoringProductInventoryViewTest extends TestCase
         $this->assertStringContainsString('Sản phẩm / Biến thể', $template);
         $this->assertStringContainsString('Khả dụng:', $template);
     }
+
+    public function test_sale_product_picker_shows_variant_factory_inventory_status(): void
+    {
+        $controller = file_get_contents(app_path('Http/Controllers/OrderAjaxController.php'));
+        $template = file_get_contents(resource_path('views/orders/_product_variant_search_results.blade.php'));
+
+        $this->assertStringContainsString("withSum('inventories as on_hand_stock', 'quantity')", $controller);
+        $this->assertStringContainsString("withSum('inventories as reserved_stock', 'reserved_quantity')", $controller);
+        $this->assertStringContainsString('Khả dụng:', $template);
+        $this->assertStringContainsString('Tồn nhà máy:', $template);
+        $this->assertStringContainsString('Đã giữ:', $template);
+        $this->assertStringContainsString('Ngày SX:', $template);
+    }
 }

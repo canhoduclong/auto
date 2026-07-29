@@ -36,7 +36,7 @@ class SaleApiController extends BaseApiController
         $this->ensureSaleRole($request);
         $this->bindWebAuth($request);
 
-        $payload = app(MyDashboardController::class)->stats()->getData(true);
+        $payload = app(MyDashboardController::class)->stats($request)->getData(true);
         $adjustments = collect($payload['pendingWarehouseAdjustments'] ?? [])
             ->map(function ($order) {
                 $changes = collect($order['warehouse_adjustment_changes'] ?? [])

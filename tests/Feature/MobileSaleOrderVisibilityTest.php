@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Http\Controllers\Api\Mobile\SaleApiController;
+use App\Http\Controllers\MyDashboardController;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\Role;
@@ -10,6 +11,7 @@ use App\Models\Team;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
+use Mockery;
 use Tests\TestCase;
 
 class MobileSaleOrderVisibilityTest extends TestCase
@@ -56,6 +58,30 @@ class MobileSaleOrderVisibilityTest extends TestCase
         $payload = $this->ordersFor($admin);
 
         $this->assertSame(2, $payload['meta']['total']);
+    }
+
+    public function test_sale_dashboard_passes_the_mobile_request_to_dashboard_stats(): void
+    {
+        [$sale] = $this->salesInSeparateTeams();
+        $request = Request::create('/api/mobile/sale/dashboard', 'GET');
+        $request->setUserResolver(fn () => $sale->load('roles'));
+
+        $dashboard = Mockery::mock(MyDashboardController::class);
+        $dashboard->shouldReceive('stats')
+            ->once()
+            ->with($request)
+            ->andReturn(response()->json([
+                'dashboardStats' => ['orders_this_month' => 0],
+                'pendingWarehouseAdjustments' => [],
+            ]));
+        $this->app->instance(MyDashboardController::class, $dashboard);
+
+        $payload = app(SaleApiController::class)->dashboard($request)->getData(true);
+
+        $this->assertTrue($payload['success']);
+        $this->assertSame(0, $payload['data']['stats']['orders_this_month']);
+        $this->assertSame([], $payload['data']['today_orders']);
+        $this->assertSame([], $payload['data']['recent_orders']);
     }
 
     private function salesInSeparateTeams(): array

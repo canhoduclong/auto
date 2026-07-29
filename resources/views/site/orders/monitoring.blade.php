@@ -650,11 +650,16 @@
     .monitor-product-card.is-open .monitor-product-choice-label i { transform: rotate(180deg); }
     .monitor-product-variants { padding: 10px; border-top: 1px solid #e5e7eb; background: #f8fafc; }
     .monitor-variant-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-    .monitor-variant-option { display: grid; gap: 2px; min-height: 74px; padding: 8px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #334155; text-align: left; font-size: .72rem; }
+    .monitor-variant-option { display: grid; gap: 2px; min-height: 98px; padding: 8px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #334155; text-align: left; font-size: .72rem; }
     .monitor-variant-option:hover, .monitor-variant-option.is-selected { border-color: #0f766e; background: #ecfdf5; }
     .monitor-variant-option.is-selected { box-shadow: inset 0 0 0 1px #0f766e; }
     .monitor-variant-size { color: #0f172a; font-size: .84rem; font-weight: 900; }
     .monitor-variant-option small { color: #64748b; }
+    .monitor-variant-option .monitor-variant-availability { font-weight: 800; }
+    .monitor-variant-option .monitor-variant-availability.is-available { color: #047857; }
+    .monitor-variant-option .monitor-variant-availability.is-unavailable { color: #b45309; }
+    .monitor-variant-option .monitor-variant-inventory,
+    .monitor-variant-option .monitor-variant-production { color: #64748b; }
     .monitor-create .pagination { margin-bottom: 0; }
     @media (max-width: 1199.98px) {
         .monitor-shell { max-width: 960px; }

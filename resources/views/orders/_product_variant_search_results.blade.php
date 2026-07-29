@@ -56,6 +56,10 @@
                                     ? asset('storage/' . $variant->media->file_path)
                                     : $imageUrl;
                                 $size = $variant->size ?: ($variant->name ?: 'Mặc định');
+                                $availableStock = max(0, (float) ($variant->available_stock ?? 0));
+                                $onHandStock = max(0, (float) ($variant->on_hand_stock ?? 0));
+                                $reservedStock = max(0, (float) ($variant->reserved_stock ?? 0));
+                                $stockUnit = strtolower((string) $product->unit_label);
                             @endphp
                             <button
                                 type="button"
@@ -66,14 +70,24 @@
                                 data-variant-size="{{ $size }}"
                                 data-variant-price="{{ $price }}"
                                 data-variant-min-price="{{ $minPrice }}"
-                                data-variant-stock="{{ $variant->available_stock }}"
+                                data-variant-stock="{{ $availableStock }}"
+                                data-variant-on-hand-stock="{{ $onHandStock }}"
+                                data-variant-reserved-stock="{{ $reservedStock }}"
                                 data-variant-unit-label="{{ $product->unit_label }}"
                                 data-variant-weight="{{ number_format($weight, 3, '.', '') }}"
                                 data-variant-is-priced-by-kg="{{ $isPricedByKg ? '1' : '0' }}"
                                 data-variant-image="{{ $variantImage }}">
                                 <span class="monitor-variant-size">{{ $size }}</span>
                                 <span>{{ number_format($price, 0, ',', '.') }}đ</span>
-                                <small>{{ $variant->available_stock > 0 ? 'Còn ' . number_format($variant->available_stock) . ' ' . strtolower($product->unit_label) : 'Hết hàng - vẫn lên đơn' }}</small>
+                                <small class="monitor-variant-availability {{ $availableStock > 0 ? 'is-available' : 'is-unavailable' }}">
+                                    Khả dụng: {{ number_format($availableStock) }} {{ $stockUnit }}{{ $availableStock <= 0 ? ' · vẫn lên đơn' : '' }}
+                                </small>
+                                <small class="monitor-variant-inventory">
+                                    Tồn nhà máy: {{ number_format($onHandStock) }} · Đã giữ: {{ number_format($reservedStock) }}
+                                </small>
+                                @if($variant->production_date)
+                                    <small class="monitor-variant-production">Ngày SX: {{ \Carbon\Carbon::parse($variant->production_date)->format('d/m/Y') }}</small>
+                                @endif
                             </button>
                         @endforeach
                     </div>

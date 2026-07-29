@@ -93,6 +93,8 @@ class OrderAjaxController extends Controller
 
         $activeVariants = static function ($query) use ($excludeIds): void {
             $query->withAvailableStock()
+                ->withSum('inventories as on_hand_stock', 'quantity')
+                ->withSum('inventories as reserved_stock', 'reserved_quantity')
                 ->with(['latestPriceRule', 'mediaLink.media'])
                 ->where('product_variants.status', true)
                 ->when($excludeIds !== [], fn ($variantQuery) => $variantQuery->whereNotIn('product_variants.id', $excludeIds))
