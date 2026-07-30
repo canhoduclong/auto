@@ -28,9 +28,20 @@ class ProcurementController extends Controller
         $this->middleware(['auth', 'role:procurement_manager,admin']);
     }
 
-    public function dashboard()
+    public function dashboard(Request $request)
     {
         $today = now()->startOfDay();
+        $period = in_array($request->input('period'), ['day', 'week', 'month'], true) ? $request->input('period') : 'month';
+        try {
+            $referenceDate = Carbon::parse($request->input('date', today()->toDateString()))->startOfDay();
+        } catch (Throwable) {
+            $referenceDate = today();
+        }
+        [$from, $to] = match ($period) {
+            'day' => [$referenceDate->copy()->startOfDay(), $referenceDate->copy()->endOfDay()],
+            'week' => [$referenceDate->copy()->startOfWeek(), $referenceDate->copy()->endOfWeek()],
+            default => [$referenceDate->copy()->startOfMonth(), $referenceDate->copy()->endOfMonth()],
+        };
         $purchaseFarms = DuckFarm::query()->where('is_active', true)->orderBy('name')->get();
         $farms = $purchaseFarms->map(function (DuckFarm $farm) use ($today) {
             $base = $farm->last_purchase_at?->copy()->startOfDay();
@@ -44,11 +55,71 @@ class ProcurementController extends Controller
             && $farm->raising_age_days <= 50
         )->sortBy('raising_age_days')->values();
 
-        $todayPurchases = ProcurementPurchase::with(['farm', 'supplier', 'warehouse', 'paymentRequest'])->whereDate('purchased_at', today())->latest('purchased_at')->get();
+        $dashboardPurchases = ProcurementPurchase::with(['farm', 'supplier', 'warehouse', 'paymentRequest', 'items'])
+            ->whereBetween('purchased_at', [$from, $to])->latest('purchased_at')->get();
+        $receivedPurchases = $dashboardPurchases->where('status', ProcurementPurchase::STATUS_RECEIVED);
+        $quantity = (int) $dashboardPurchases->sum('quantity');
+        $weight = (float) $dashboardPurchases->sum('total_weight');
+        $subtotal = (float) $dashboardPurchases->sum('subtotal');
+        $transportCost = (float) $dashboardPurchases->sum('transportation_fee');
+        $operatingCost = (float) $dashboardPurchases->sum(fn (ProcurementPurchase $purchase) =>
+            (float) $purchase->broker_fee + (float) $purchase->processing_fee + (float) $purchase->procurement_fee + (float) $purchase->other_fee
+        );
+        $receivedQuantity = (int) $receivedPurchases->sum(fn (ProcurementPurchase $purchase) => $purchase->items->where('stage', 'received')->whereIn('item_type', ['processed_duck', 'reject'])->sum('quantity'));
+        $rejectQuantity = (int) $receivedPurchases->sum(fn (ProcurementPurchase $purchase) => $purchase->items->where('stage', 'received')->where('item_type', 'reject')->sum('quantity'));
+        $receivedBaseQuantity = (int) $receivedPurchases->sum('quantity');
+        $lossQuantity = max(0, $receivedBaseQuantity - $receivedQuantity);
+        $lossRate = $receivedBaseQuantity > 0 ? $lossQuantity * 100 / $receivedBaseQuantity : 0;
+        $rejectRate = $receivedBaseQuantity > 0 ? $rejectQuantity * 100 / $receivedBaseQuantity : 0;
+        $averageRating = (float) ($receivedPurchases->whereNotNull('warehouse_rating')->avg('warehouse_rating') ?? 0);
+
+        $dailyData = collect();
+        for ($cursor = $from->copy()->startOfDay(); $cursor->lte($to); $cursor->addDay()) {
+            $dayPurchases = $dashboardPurchases->filter(fn (ProcurementPurchase $purchase) => $purchase->purchased_at->isSameDay($cursor));
+            $dailyData->push([
+                'label' => $cursor->format('d/m'),
+                'quantity' => (int) $dayPurchases->sum('quantity'),
+                'price' => (float) ($dayPurchases->sum('total_weight') > 0 ? $dayPurchases->sum('subtotal') / $dayPurchases->sum('total_weight') : 0),
+                'transport_per_duck' => (float) ($dayPurchases->sum('quantity') > 0 ? $dayPurchases->sum('transportation_fee') / $dayPurchases->sum('quantity') : 0),
+            ]);
+        }
+        $sourceStructure = $dashboardPurchases->groupBy(fn (ProcurementPurchase $purchase) => $purchase->farm?->name ?? $purchase->supplier?->name ?? 'Khác')
+            ->map(fn ($purchases, $name) => ['name' => $name, 'quantity' => (int) $purchases->sum('quantity')])
+            ->sortByDesc('quantity')->values();
+        $supplierRanking = $dashboardPurchases->groupBy(fn (ProcurementPurchase $purchase) => $purchase->farm?->name ?? $purchase->supplier?->name ?? 'Khác')
+            ->map(function ($purchases, $name) {
+                $totalWeight = (float) $purchases->sum('total_weight');
+                $received = $purchases->where('status', ProcurementPurchase::STATUS_RECEIVED);
+                return [
+                    'name' => $name,
+                    'quantity' => (int) $purchases->sum('quantity'),
+                    'average_price' => $totalWeight > 0 ? (float) $purchases->sum('subtotal') / $totalWeight : 0,
+                    'rating' => (float) ($received->whereNotNull('warehouse_rating')->avg('warehouse_rating') ?? 0),
+                    'reject_rate' => $received->sum('quantity') > 0 ? (float) $received->sum(fn ($purchase) => $purchase->items->where('stage', 'received')->where('item_type', 'reject')->sum('quantity')) * 100 / $received->sum('quantity') : 0,
+                ];
+            })->sortByDesc(fn ($supplier) => $supplier['rating'] * 1000000 + $supplier['quantity'])->values();
+
         return view('procurement.dashboard', [
             'farms' => $farms,
             'purchaseFarms' => $purchaseFarms,
-            'todayPurchases' => $todayPurchases,
+            'dashboardPurchases' => $dashboardPurchases,
+            'period' => $period,
+            'referenceDate' => $referenceDate,
+            'from' => $from,
+            'to' => $to,
+            'dailyData' => $dailyData,
+            'sourceStructure' => $sourceStructure,
+            'supplierRanking' => $supplierRanking,
+            'metrics' => [
+                'trip_count' => $dashboardPurchases->count(), 'quantity' => $quantity, 'weight' => $weight,
+                'average_price' => $weight > 0 ? $subtotal / $weight : 0, 'loss_rate' => $lossRate,
+                'reject_rate' => $rejectRate, 'transport_cost' => $transportCost,
+                'transport_per_duck' => $quantity > 0 ? $transportCost / $quantity : 0,
+                'operating_cost' => $operatingCost, 'operating_per_duck' => $quantity > 0 ? $operatingCost / $quantity : 0,
+                'total_cost' => (float) $dashboardPurchases->sum('total_amount'), 'average_rating' => $averageRating,
+                'pending_warehouse' => $dashboardPurchases->where('status', ProcurementPurchase::STATUS_SENT)->count(),
+                'unpaid' => (float) $dashboardPurchases->sum('remaining_amount'),
+            ],
             'suppliers' => Supplier::active()->orderBy('name')->get(),
             'warehouses' => Warehouse::orderBy('name')->get(),
             'liveSizes' => self::LIVE_SIZES,
@@ -87,6 +158,8 @@ class ProcurementController extends Controller
             'unit_price' => ['required', 'numeric', 'min:0'],
             'broker_fee' => ['nullable', 'numeric', 'min:0'],
             'processing_fee' => ['nullable', 'numeric', 'min:0'],
+            'procurement_fee' => ['nullable', 'numeric', 'min:0'],
+            'transportation_fee' => ['nullable', 'numeric', 'min:0'],
             'other_fee' => ['nullable', 'numeric', 'min:0'],
             'paid_amount' => ['nullable', 'numeric', 'min:0'],
             'payment_due_date' => ['nullable', 'date'],
@@ -111,7 +184,7 @@ class ProcurementController extends Controller
             $quantity = (int) $validated['quantity'];
             $weight = (float) $validated['total_weight'];
             $subtotal = round($weight * (float) $validated['unit_price'], 2);
-            $total = $subtotal + (float) ($validated['broker_fee'] ?? 0) + (float) ($validated['processing_fee'] ?? 0) + (float) ($validated['other_fee'] ?? 0);
+            $total = $subtotal + (float) ($validated['broker_fee'] ?? 0) + (float) ($validated['processing_fee'] ?? 0) + (float) ($validated['procurement_fee'] ?? 0) + (float) ($validated['transportation_fee'] ?? 0) + (float) ($validated['other_fee'] ?? 0);
             $paid = (float) ($validated['paid_amount'] ?? 0);
             $remaining = max(0, $total - $paid);
             $purchase = ProcurementPurchase::create([
@@ -122,6 +195,8 @@ class ProcurementController extends Controller
                 'subtotal' => $subtotal,
                 'broker_fee' => (float) ($validated['broker_fee'] ?? 0),
                 'processing_fee' => (float) ($validated['processing_fee'] ?? 0),
+                'procurement_fee' => (float) ($validated['procurement_fee'] ?? 0),
+                'transportation_fee' => (float) ($validated['transportation_fee'] ?? 0),
                 'other_fee' => (float) ($validated['other_fee'] ?? 0),
                 'total_amount' => $total,
                 'paid_amount' => $paid,
@@ -364,6 +439,8 @@ class ProcurementController extends Controller
         ];
         if ((float) $purchase->broker_fee > 0) $items[] = ['stt' => count($items) + 1, 'content' => 'Phí cò giới thiệu', 'unit' => 'lần', 'quantity' => 1, 'unit_price' => (float) $purchase->broker_fee, 'line_total' => (float) $purchase->broker_fee];
         if ((float) $purchase->processing_fee > 0) $items[] = ['stt' => count($items) + 1, 'content' => 'Chi phí xử lý sơ chế', 'unit' => 'lần', 'quantity' => 1, 'unit_price' => (float) $purchase->processing_fee, 'line_total' => (float) $purchase->processing_fee];
+        if ((float) $purchase->procurement_fee > 0) $items[] = ['stt' => count($items) + 1, 'content' => 'Chi phí thu mua chuyến', 'unit' => 'chuyến', 'quantity' => 1, 'unit_price' => (float) $purchase->procurement_fee, 'line_total' => (float) $purchase->procurement_fee];
+        if ((float) $purchase->transportation_fee > 0) $items[] = ['stt' => count($items) + 1, 'content' => 'Chi phí vận chuyển', 'unit' => 'chuyến', 'quantity' => 1, 'unit_price' => (float) $purchase->transportation_fee, 'line_total' => (float) $purchase->transportation_fee];
         if ((float) $purchase->other_fee > 0) $items[] = ['stt' => count($items) + 1, 'content' => 'Chi phí khác', 'unit' => 'lần', 'quantity' => 1, 'unit_price' => (float) $purchase->other_fee, 'line_total' => (float) $purchase->other_fee];
         $requestAmount = (float) $purchase->remaining_amount;
         if ((float) $purchase->paid_amount > 0) {

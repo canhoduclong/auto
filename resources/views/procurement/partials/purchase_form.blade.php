@@ -84,7 +84,7 @@
                 </div>
             </div>
 
-            @foreach([6 => ['Phí cò', 'broker_fee', 'brokerFee'], 7 => ['Phí sơ chế (gia công)', 'processing_fee', 'processingFee'], 8 => ['Phí khác', 'other_fee', 'otherFee']] as $number => [$label, $name, $id])
+            @foreach([6 => ['Phí cò', 'broker_fee', 'brokerFee'], 7 => ['Phí sơ chế (gia công)', 'processing_fee', 'processingFee'], 8 => ['Chi phí thu mua chuyến', 'procurement_fee', 'procurementFee'], 9 => ['Chi phí vận chuyển', 'transportation_fee', 'transportationFee'], 10 => ['Phí khác', 'other_fee', 'otherFee']] as $number => [$label, $name, $id])
                 <div class="purchase-form-line">
                     <div class="purchase-form-number">{{ $number }}</div>
                     <div class="flex-grow-1"><label class="form-label fw-semibold">{{ $label }}</label><input type="number" min="0" step=".01" class="form-control calc" name="{{ $name }}" id="{{ $id }}" value="{{ old($name, 0) }}"></div>
@@ -92,7 +92,7 @@
             @endforeach
 
             <div class="purchase-form-line">
-                <div class="purchase-form-number">9</div>
+                <div class="purchase-form-number">11</div>
                 <div class="flex-grow-1"><label class="form-label fw-semibold">Ghi chú</label><textarea class="form-control" name="notes" rows="3" placeholder="Ghi nhận thêm tình trạng vịt, thỏa thuận hoặc chi phí...">{{ old('notes') }}</textarea></div>
             </div>
 
@@ -160,9 +160,11 @@
                     const price = +document.getElementById('price').value || 0;
                     const broker = +document.getElementById('brokerFee').value || 0;
                     const processing = +document.getElementById('processingFee').value || 0;
+                    const procurement = +document.getElementById('procurementFee').value || 0;
+                    const transportation = +document.getElementById('transportationFee').value || 0;
                     const other = +document.getElementById('otherFee').value || 0;
                     const paid = +document.getElementById('paidAmount').value || 0;
-                    const total = weight * price + broker + processing + other;
+                    const total = weight * price + broker + processing + procurement + transportation + other;
                     if (!averageWasEdited && quantity && weight) document.getElementById('averageSize').value = (weight / quantity).toFixed(3);
                     document.getElementById('subtotalPreview').value = (weight * price).toLocaleString('vi-VN') + 'đ';
                     document.getElementById('totalPreview').textContent = total.toLocaleString('vi-VN') + 'đ';
