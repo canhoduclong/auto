@@ -1093,7 +1093,7 @@
                                 <div class="feature__item__icon">
                                     <img src="img/feature/feature-3.png" alt="">
                                 </div>
-                                <h6>Bò</h6>
+                                <h6>...</h6>
                             </div>
                         </div>
                         <div class="col-lg-6 col-md-4 col-6">
@@ -1101,7 +1101,7 @@
                                 <div class="feature__item__icon">
                                     <img src="img/feature/feature-4.png" alt="">
                                 </div>
-                                <h6>Heo</h6>
+                                <h6>....</h6>
                             </div>
                         </div>
                         <div class="col-lg-6 col-md-4 col-6">
@@ -1117,7 +1117,7 @@
                                 <div class="feature__item__icon">
                                     <img src="img/feature/feature-6.png" alt="">
                                 </div>
-                                <h6>Trái cây</h6>
+                                <h6>...</h6>
                             </div>
                         </div>
                     </div>
@@ -1127,48 +1127,7 @@
     </section>
 
     <div class="section-divider" aria-hidden="true"></div>
-
-    <section class="latest latest-news-section">
-        <div class="container">
-            <div class="latest-news-shell">
-                <div class="latest-pro-head">
-                    <div>
-                        <span>Newsroom</span>
-                        <h2>TIN MỚI CẬP NHẬT</h2>
-                        <p>Tổng hợp các bài viết mới về thị trường, sản phẩm, hoạt động vận hành và thông tin hữu ích để khách hàng theo dõi nhanh.</p>
-                    </div>
-                    <a href="{{ route('posts.list') }}" class="btn btn-outline-dark btn-sm">Xem tất cả</a>
-                </div>
-                <div class="latest-news-grid"> 
-                    @foreach($posts as $post) 
-                        <div class="latest-news-col {{ $loop->first ? 'is-featured' : '' }}">
-                            <div class="latest__blog__item latest-card">
-                                @if($post->image)
-                                <div class="latest__blog__item__pic set-bg" 
-                                    data-setbg="{{ asset('storage/' . $post->image) }}" 
-                                    style="background-image: url(&quot;{{ asset('storage/' . $post->image) }}&quot;);"
-                                    > 
-                                @else
-                                    <div class="latest__blog__item__pic set-bg" 
-                                    data-setbg="img/latest-blog/lb-1.jpg" 
-                                    style="background-image: url(&quot;img/latest-blog/lb-1.jpg&quot;);"
-                                    >
-                                @endif 
-                                    
-                                </div>
-                                <div class="latest__blog__item__text">
-                                    <div class="news-meta">{{ optional($post->created_at)->format('d/m/Y') ?? 'Mới cập nhật' }}</div>
-                                    <h5>{{ $post->title }}</h5>
-                                    <p>{{ $post->excerpt }}.</p>
-                                    <a href="{{ route('posts.show', $post) }}">Xem thêm <i class="fa fa-long-arrow-right"></i></a>
-                                </div>
-                            </div>
-                        </div>
-                    @endforeach  
-                </div>
-            </div>
-        </div>
-    </section>
+ 
     <div class="map">
         <div class="container-fluid">
             <div class="row">
