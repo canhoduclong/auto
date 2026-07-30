@@ -4,7 +4,7 @@
 
 @php
     $formatNumber = static fn ($value) => rtrim(rtrim(number_format((float) $value, 3, ',', ''), '0'), ',');
-    $calculationSizes = collect($processedSizes)->filter(fn ($size) => (float) $size >= 2.2 && (float) $size <= 3.1);
+    $calculationSizes = collect($processedSizes);
 @endphp
 
 @section('content')
