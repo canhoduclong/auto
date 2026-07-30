@@ -30,7 +30,7 @@
         <div class="row g-3 mb-3">
             <div class="col-md-4">
                 <label class="form-label fw-600 small">Ngày nhập <span class="text-danger">*</span></label>
-                <input type="date" name="document_date" class="form-control" value="{{ old('document_date', date('Y-m-d')) }}" required>
+                <input type="date" name="document_date" class="form-control" value="{{ old('document_date', request('date', date('Y-m-d'))) }}" required>
             </div>
             <div class="col-md-4">
                 <label class="form-label fw-600 small">Nhà cung cấp <span class="text-danger">*</span></label>

@@ -208,7 +208,10 @@
             $customer = $order->customer;
             $shipper = $order->shipper;
             $alreadyRequested = (bool) $order->shipping_fee_transaction_id;
-            $feeLocked = $alreadyRequested || $order->accountingReconciliation?->status === \App\Models\AccountingReconciliation::STATUS_CONFIRMED;
+            $feeLocked = $alreadyRequested || (
+                $order->accountingReconciliation?->status === \App\Models\AccountingReconciliation::STATUS_CONFIRMED
+                && !$order->accounting_sales_import_batch_id
+            );
             $requestEligible = !$alreadyRequested
                 && in_array($order->status, [\App\Models\Order::STATUS_DELIVERED, \App\Models\Order::STATUS_COMPLETED], true)
                 && (float) ($order->shipping_fee ?? 0) > 0;

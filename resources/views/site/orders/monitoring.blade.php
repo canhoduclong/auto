@@ -16,6 +16,9 @@
         display: grid;
         grid-template-columns: max-content minmax(0, 1fr);
         align-items: center;
+        position: relative;
+        z-index: 30;
+        overflow: visible;
         column-gap: 14px;
         row-gap: 16px;
         padding: 5px 3px 16px;
@@ -31,8 +34,10 @@
         justify-self: start;
         grid-column: 1 / -1;
     }
-    .monitor-date-form { display: flex; align-items: center; gap: 8px; }
+    .monitor-date-form { display: flex; align-items: center; gap: 8px; position: relative; z-index: 31; overflow: visible; }
+    .monitor-date-form .form-select { position: relative; z-index: 32; }
     .monitor-date-form .form-control { width: 160px; height: 36px; border-radius: 4px; }
+    .monitor-date-form .form-select { width: 180px; height: 36px; border-radius: 4px; }
     .monitor-date-form .btn { height: 36px; border-radius: 3px; font-weight: 700; }
     .monitor-panel {
         border: 1px solid var(--monitor-border);
@@ -677,7 +682,7 @@
         .monitor-toolbar { grid-template-columns: 1fr; align-items: flex-start; row-gap: 10px; padding-top: 0; }
         .monitor-toolbar > * { grid-column: 1; }
         .monitor-date-form { width: 100%; }
-        .monitor-date-form .form-control { flex: 1; width: auto; }
+        .monitor-date-form .form-control,.monitor-date-form .form-select { flex: 1; width: auto; }
         .monitor-sidebar { grid-template-columns: 1fr; }
         .monitor-order-head { grid-template-columns: 1fr; }
         .monitor-order { display: block; }
@@ -784,7 +789,7 @@
                     <a class="monitor-tab-link" href="{{ route('pages.my_dashboard') }}">
                         <i class="bi bi-house-door"></i><span>Bảng điều khiển</span>
                     </a>
-                    <a class="monitor-tab-link {{ $activeTab === 'today' ? 'active' : '' }}" href="{{ route('pages.my_orders.monitoring', ['tab' => 'today', 'date' => $selectedDate]) }}">
+                    <a class="monitor-tab-link {{ $activeTab === 'today' ? 'active' : '' }}" href="{{ route('pages.my_orders.monitoring', ['tab' => 'today', 'date' => $selectedDate, 'date_field' => $selectedDateField]) }}">
                         <i class="bi bi-file-earmark-text"></i><span>Đơn hôm nay</span>
                     </a>
                     <a class="monitor-tab-link {{ $activeTab === 'drafts' ? 'active' : '' }}" href="{{ route('pages.my_orders.monitoring', ['tab' => 'drafts']) }}">
@@ -865,6 +870,11 @@
             @if($activeTab === 'today')
             <form class="monitor-date-form" method="GET" action="{{ route('pages.my_orders.monitoring') }}">
                 <input type="hidden" name="tab" value="today">
+                <select name="date_field" class="form-select form-select-sm" aria-label="Tiêu chí ngày">
+                    <option value="business_date" @selected($selectedDateField === 'business_date')>Ngày nghiệp vụ</option>
+                    <option value="created_at" @selected($selectedDateField === 'created_at')>Ngày tạo đơn</option>
+                    <option value="delivery_date" @selected($selectedDateField === 'delivery_date')>Ngày giao hàng</option>
+                </select>
                 <input type="date" name="date" class="form-control form-control-sm" value="{{ $selectedDate }}">
                 @if($keyword !== '')<input type="hidden" name="keyword" value="{{ $keyword }}">@endif
                 @if($selectedStatus !== '')<input type="hidden" name="status" value="{{ $selectedStatus }}">@endif
@@ -911,6 +921,7 @@
                 <form method="POST" action="{{ route('pages.my_orders.monitoring.refresh_sequence') }}" onsubmit="return confirm('Quét duyệt tự động các đơn đủ điều kiện và cập nhật lại số thứ tự ưu tiên?');">
                     @csrf
                     <input type="hidden" name="date" value="{{ $selectedDate }}">
+                    <input type="hidden" name="date_field" value="{{ $selectedDateField }}">
                     <input type="hidden" name="keyword" value="{{ $keyword }}">
                     <input type="hidden" name="status" value="{{ $selectedStatus }}">
                     <input type="hidden" name="sale_id" value="{{ $selectedSaleId }}">
@@ -923,6 +934,7 @@
                     <form method="POST" action="{{ route('pages.my_orders.monitoring.approve_sales') }}" onsubmit="return confirm('Duyệt các đơn của sale thuộc phạm vi bạn quản lý?');">
                         @csrf
                         <input type="hidden" name="date" value="{{ $selectedDate }}">
+                        <input type="hidden" name="date_field" value="{{ $selectedDateField }}">
                         <input type="hidden" name="keyword" value="{{ $keyword }}">
                         <input type="hidden" name="status" value="{{ $selectedStatus }}">
                         <input type="hidden" name="sale_id" value="{{ $selectedSaleId }}">
@@ -939,6 +951,7 @@
                     <form method="POST" action="{{ route('pages.my_orders.monitoring.approve_all') }}" onsubmit="return confirm('Manager duyệt tất cả đơn đang tới lượt theo bộ lọc hiện tại?');">
                         @csrf
                         <input type="hidden" name="date" value="{{ $selectedDate }}">
+                        <input type="hidden" name="date_field" value="{{ $selectedDateField }}">
                         <input type="hidden" name="keyword" value="{{ $keyword }}">
                         <input type="hidden" name="status" value="{{ $selectedStatus }}">
                         <input type="hidden" name="sale_id" value="{{ $selectedSaleId }}">

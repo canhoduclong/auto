@@ -729,7 +729,21 @@ class AccountingDashboardController extends Controller
             ])
             ->withSum('items as total_item_quantity', 'quantity')
             ->withSum('returnRecords as return_amount_sum', 'refund_amount')
-            ->whereDate('delivered_at', $targetDate)
+            ->where(function ($dateQuery) use ($targetDate, $request): void {
+                if ($request->boolean('business_date')) {
+                    $dateQuery->where(function ($importQuery) use ($targetDate): void {
+                        $importQuery->whereNotNull('accounting_sales_import_batch_id')
+                            ->whereDate('delivery_date', $targetDate);
+                    })->orWhere(function ($normalQuery) use ($targetDate): void {
+                        $normalQuery->whereNull('accounting_sales_import_batch_id')
+                            ->whereDate('delivered_at', $targetDate);
+                    });
+
+                    return;
+                }
+
+                $dateQuery->whereDate('delivered_at', $targetDate);
+            })
             ->when($orderId > 0, fn ($q) => $q->whereKey($orderId))
             ->when($saleId > 0, fn ($q) => $q->where('user_id', $saleId))
             ->when($shipperId > 0, fn ($q) => $q->where('shipper_id', $shipperId))
@@ -2191,6 +2205,12 @@ class AccountingDashboardController extends Controller
             $order->forceFill([
                 'status' => Order::STATUS_COMPLETED,
                 'amount_due' => $amountDue,
+                'needs_operational_completion' => false,
+                'operational_completion_note' => $order->accounting_sales_import_batch_id
+                    ? 'Đã giao hàng và được kế toán xác nhận doanh thu.'
+                    : $order->operational_completion_note,
+                'operational_completed_by' => $order->accounting_sales_import_batch_id ? $request->user()->id : $order->operational_completed_by,
+                'operational_completed_at' => $order->accounting_sales_import_batch_id ? now() : $order->operational_completed_at,
                 'payment_status' => match (true) {
                     $amountDue <= 0.0001 => 'paid',
                     $effectivePaid > 0 => 'partially_paid',

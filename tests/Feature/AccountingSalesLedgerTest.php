@@ -90,12 +90,26 @@ class AccountingSalesLedgerTest extends TestCase
         $sale = User::factory()->create(['name' => 'Nhân viên Duệ', 'short_name' => 'Duệ']);
         $sale->roles()->attach(Role::create(['name' => 'sale']));
         $customer = Customer::create(['name' => 'Cty Phạm Gia Phát', 'customer_code' => '6024', 'status' => 'active']);
+        $sourceWarehouse = Warehouse::create(['name' => 'Kho Long An', 'status' => true]);
+        $targetWarehouse = Warehouse::create(['name' => 'Kho Chiến Lược', 'status' => true]);
+        $transferShipper = User::factory()->create(['name' => 'Shipper điều chuyển', 'warehouse_id' => $sourceWarehouse->id]);
+        $transferShipper->roles()->attach(Role::create(['name' => 'shipper']));
+        $product = Product::create(['user_id' => $admin->id, 'name' => 'Vịt Nguyên Con', 'unit' => 'con', 'status' => true]);
+        $product->variants()->create(['name' => '2.5 kg', 'size' => 2.5, 'kg' => 2.5, 'stock' => 0]);
         $text = "Ngày tháng\tTháng\tMã KH\tKhách hàng\tNVKD\tDVT\tSL\tKg/con\tTổng\tĐơn giá\tTổng tiền\n"
             ."28/07/2026\t7\t6024\tCty Phạm Gia Phát\tDuệ\tCon\t51,0\t2,35\t120,0\t72.000\t8.640.000\n"
             ."28/07/2026\t7\t6024\tCty Phạm Gia Phát\tDuệ\tvat\t120,0\t1,00\t120,0\t\t-\n"
             ."28/07/2026\t7\t6024\tCty Phạm Gia Phát\tDuệ\tGiảm trừ\t1,0\t1,00\t1,0\t- 75.000\t- 75.000";
 
-        $result = app(AccountingSalesImportService::class)->import($text, $admin);
+        $result = app(AccountingSalesImportService::class)->import(
+            $text,
+            $admin,
+            [],
+            '2026-07-28',
+            null,
+            $sourceWarehouse->id,
+            $targetWarehouse->id
+        );
 
         $this->assertTrue($result['imported']);
         $this->assertSame(3, AccountingSalesEntry::count());
@@ -113,10 +127,14 @@ class AccountingSalesLedgerTest extends TestCase
         $order = Order::where('accounting_sales_import_batch_id', $result['batch_id'])->sole();
         $this->assertSame($sale->id, (int) $order->user_id);
         $this->assertSame(Order::STATUS_COMPLETED, $order->status);
+        $this->assertSame('2026-07-28 00:00:00', $order->created_at->format('Y-m-d H:i:s'));
+        $this->assertSame($targetWarehouse->id, (int) $order->warehouse_id);
+        $this->assertNull($order->shipper_id);
         $this->assertTrue($order->needs_operational_completion);
-        $this->assertSame(8565000.0, (float) $order->accountingReconciliation->recognized_revenue);
+        $this->assertSame(AccountingReconciliation::STATUS_CONFIRMED, $order->accountingReconciliation?->status);
+        $this->assertSame(8565000.0, (float) $order->accountingReconciliation?->recognized_revenue);
         $this->assertSame(3, AccountingSalesEntry::where('order_id', $order->id)->count());
-        $this->assertSame(3, $order->items()->count());
+        $this->assertSame(1, $order->items()->count());
         $this->assertDatabaseHas('order_items', [
             'order_id' => $order->id,
             'imported_name' => 'Vịt nguyên con',
@@ -125,30 +143,55 @@ class AccountingSalesLedgerTest extends TestCase
             'total_weight' => 120,
             'total' => 8640000,
         ]);
-        $this->assertDatabaseHas('order_items', [
+        $this->assertDatabaseHas('accounting_reconciliations', [
             'order_id' => $order->id,
-            'imported_name' => 'VAT',
-            'total' => 0,
+            'status' => AccountingReconciliation::STATUS_CONFIRMED,
+            'recognized_revenue' => 8565000,
         ]);
-        $this->assertDatabaseHas('order_items', [
+        $this->assertDatabaseHas('order_commissions', [
             'order_id' => $order->id,
-            'imported_name' => 'Giảm trừ',
-            'price' => -75000,
-            'total' => -75000,
+            'sale_user_id' => $sale->id,
+            'status' => 'confirmed',
+        ]);
+        $this->assertDatabaseHas('order_histories', [
+            'order_id' => $order->id,
+            'user_id' => $sale->id,
+            'action' => 'create_order',
+            'status_after' => 'pending_leader_approval',
+            'created_at' => '2026-07-28 00:00:00',
+        ]);
+        $this->assertDatabaseHas('order_histories', [
+            'order_id' => $order->id,
+            'action' => 'accounting_confirmed',
+            'status_after' => Order::STATUS_COMPLETED,
+        ]);
+        $this->assertDatabaseHas('warehouse_transfers', [
+            'order_id' => $order->id,
+            'source_warehouse_id' => $sourceWarehouse->id,
+            'target_warehouse_id' => $targetWarehouse->id,
+            'shipper_id' => $transferShipper->id,
+            'status' => \App\Models\WarehouseTransfer::STATUS_RECEIVED_COMPLETED,
+        ]);
+        $this->assertDatabaseHas('order_histories', [
+            'order_id' => $order->id,
+            'action' => 'transfer_shipper_pickup',
+            'user_id' => $transferShipper->id,
         ]);
 
-        $warehouse = Warehouse::create(['name' => 'Kho lịch sử', 'status' => true]);
-        $shipper = User::factory()->create();
-        $shipper->roles()->attach(Role::create(['name' => 'shipper']));
-        $this->actingAs($admin)->put(route('admin.imported-sales-orders.update', $order), [
-            'warehouse_id' => $warehouse->id,
-            'shipper_id' => $shipper->id,
+        $this->actingAs($admin)->post(route('accounting.shipping-costs.update-fee', $order), [
+            'shipping_fee' => 120000,
+            'notes' => 'Bổ sung phí ship sau import',
         ])->assertRedirect();
         $this->assertDatabaseHas('orders', [
             'id' => $order->id,
-            'warehouse_id' => $warehouse->id,
-            'shipper_id' => $shipper->id,
-            'needs_operational_completion' => 0,
+            'status' => Order::STATUS_COMPLETED,
+            'total' => 8565000,
+            'shipping_fee' => 120000,
+        ]);
+        $this->assertDatabaseHas('accounting_reconciliations', [
+            'order_id' => $order->id,
+            'recognized_revenue' => 8565000,
+            'shipping_fee' => 120000,
         ]);
     }
 
@@ -159,6 +202,8 @@ class AccountingSalesLedgerTest extends TestCase
         $sale = User::factory()->create(['short_name' => 'Duệ']);
         $sale->roles()->attach(Role::create(['name' => 'sale']));
         Customer::create(['name' => 'Khách nhập lại', 'customer_code' => 'REIMPORT', 'status' => 'active']);
+        $product = Product::create(['user_id' => $admin->id, 'name' => 'Vịt Nguyên Con', 'unit' => 'con', 'status' => true]);
+        $product->variants()->create(['name' => '2.5 kg', 'size' => 2.5, 'kg' => 2.5, 'stock' => 0]);
         $text = "Ngày tháng\tTháng\tMã KH\tKhách hàng\tNVKD\tDVT\tSL\tKg/con\tTổng\tĐơn giá\tTổng tiền\n"
             ."28/07/2026\t7\tREIMPORT\tKhách nhập lại\tDuệ\tCon\t10\t2,5\t25\t70.000\t1.750.000";
         $service = app(AccountingSalesImportService::class);

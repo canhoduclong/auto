@@ -6,10 +6,13 @@ use App\Models\AccountingSalesEntry;
 use App\Models\AccountingSalesImportBatch;
 use App\Models\AccountingReconciliation;
 use App\Models\Customer;
+use App\Models\InventoryDocument;
 use App\Models\Order;
+use App\Models\OrderHistory;
 use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\User;
+use App\Models\WarehouseTransfer;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -19,6 +22,8 @@ use Illuminate\Support\Str;
 class AccountingSalesImportService
 {
     private ?Collection $importProductCatalog = null;
+
+    private const NON_STOCK_UNITS = ['vat', 'nha xe', 'shiper', 'shipper', 'thung xop', 'giam tru'];
 
     private const ALIASES = [
         'date' => ['ngay thang', 'ngay', 'date'],
@@ -34,7 +39,13 @@ class AccountingSalesImportService
         'total_amount' => ['tong tien', 'thanh tien', 'amount'],
     ];
 
-    public function preview(string $text, User $actor, array $saleMappings = []): array
+    public function preview(
+        string $text,
+        User $actor,
+        array $saleMappings = [],
+        ?string $businessDate = null,
+        ?int $stockInDocumentId = null
+    ): array
     {
         $parsed = $this->parse($text);
         $sales = $this->saleUsers();
@@ -55,6 +66,7 @@ class AccountingSalesImportService
             $customerName = $this->clean($raw['customer_name'] ?? null);
             $importedSaleName = $this->clean($raw['sale_name'] ?? null);
             $unit = $this->clean($raw['unit'] ?? null);
+            $mappedVariantId = null;
             if (!$customerName) $errors[] = 'Thiếu tên khách hàng.';
             if (!$importedSaleName) $errors[] = 'Thiếu NVKD.';
             if (!$unit) $errors[] = 'Thiếu DVT.';
@@ -107,6 +119,14 @@ class AccountingSalesImportService
             if ($quantity === null) $errors[] = 'SL không hợp lệ.';
             if ($unitWeight === null) $errors[] = 'Kg/con không hợp lệ.';
             if ($totalQuantity === null) $errors[] = 'Cột Tổng không hợp lệ.';
+            if ($unit && ! in_array($this->key($unit), self::NON_STOCK_UNITS, true)) {
+                [$product, $variant] = $this->resolveImportedProduct($unit, (float) ($unitWeight ?? 0));
+                if (! $product || ! $variant) {
+                    $warnings[] = 'Không ánh xạ được DVT “'.$unit.'” với sản phẩm tồn kho; dòng vẫn được ghi nhận doanh số lịch sử.';
+                } else {
+                    $mappedVariantId = (int) $variant->id;
+                }
+            }
             if ($date && isset($raw['month']) && (int) $this->parseNumber($raw['month'], false) !== $date->month) {
                 $warnings[] = 'Tháng được lấy theo ngày: '.$date->month.'.';
             }
@@ -130,6 +150,7 @@ class AccountingSalesImportService
                     'total_quantity' => $totalQuantity,
                     'unit_price' => $unitPrice,
                     'total_amount' => $totalAmount,
+                    'product_variant_id' => $mappedVariantId,
                 ],
             ];
         }
@@ -150,6 +171,45 @@ class AccountingSalesImportService
                     $rows[$index]['action'] = 'error';
                     $rows[$index]['errors'][] = 'Cùng ngày và khách hàng nhưng có nhiều NVKD; một đơn chỉ được thuộc một sale.';
                 }
+            }
+        }
+
+        if ($businessDate) {
+            foreach ($rows as &$row) {
+                if ($row['data']['entry_date'] && $row['data']['entry_date'] !== $businessDate) {
+                    $row['action'] = 'error';
+                    $row['errors'][] = 'Ngày dữ liệu phải trùng ngày thực hiện '.Carbon::parse($businessDate)->format('d/m/Y').'.';
+                }
+            }
+            unset($row);
+        }
+
+        if ($stockInDocumentId) {
+            $stockQuantities = InventoryDocument::query()
+                ->whereKey($stockInDocumentId)
+                ->where('type', 'import')
+                ->first()?->items()
+                ->selectRaw('product_variant_id, SUM(quantity) as total_quantity')
+                ->groupBy('product_variant_id')
+                ->pluck('total_quantity', 'product_variant_id') ?? collect();
+            $requirements = collect($rows)
+                ->filter(fn (array $row) => ! empty($row['data']['product_variant_id']))
+                ->groupBy('data.product_variant_id')
+                ->map(fn (Collection $group) => (int) round($group->sum('data.quantity')));
+
+            foreach ($requirements as $variantId => $requiredQuantity) {
+                $stockInQuantity = (int) ($stockQuantities[$variantId] ?? 0);
+                if ($stockInQuantity >= $requiredQuantity) {
+                    continue;
+                }
+                foreach ($rows as &$row) {
+                    if ((int) ($row['data']['product_variant_id'] ?? 0) !== (int) $variantId) {
+                        continue;
+                    }
+                    $row['action'] = 'error';
+                    $row['errors'][] = 'Phiếu nhập chỉ có '.$stockInQuantity.' con cho biến thể này, cần tối thiểu '.$requiredQuantity.' con để đóng các đơn import.';
+                }
+                unset($row);
             }
         }
 
@@ -177,12 +237,28 @@ class AccountingSalesImportService
         ];
     }
 
-    public function import(string $text, User $actor, array $saleMappings = []): array
+    public function import(
+        string $text,
+        User $actor,
+        array $saleMappings = [],
+        ?string $businessDate = null,
+        ?int $stockInDocumentId = null,
+        ?int $sourceWarehouseId = null,
+        ?int $targetWarehouseId = null
+    ): array
     {
-        $result = $this->preview($text, $actor, $saleMappings);
+        $result = $this->preview($text, $actor, $saleMappings, $businessDate, $stockInDocumentId);
         if (($result['counts']['error'] ?? 0) > 0) return $result + ['imported' => false];
 
-        DB::transaction(function () use (&$result, $text, $actor): void {
+        DB::transaction(function () use (
+            &$result,
+            $text,
+            $actor,
+            $businessDate,
+            $stockInDocumentId,
+            $sourceWarehouseId,
+            $targetWarehouseId
+        ): void {
             // An admin deletion intentionally removes the linked revenue rows
             // but keeps the empty batch as an audit record. Remove only that
             // empty shell so the corrected source can be imported again.
@@ -194,6 +270,10 @@ class AccountingSalesImportService
 
             $batch = AccountingSalesImportBatch::create([
                 'imported_by' => $actor->id,
+                'business_date' => $businessDate,
+                'stock_in_document_id' => $stockInDocumentId,
+                'source_warehouse_id' => $sourceWarehouseId,
+                'target_warehouse_id' => $targetWarehouseId,
                 'source_hash' => $result['source_hash'],
                 'row_count' => count($result['rows']),
                 'total_amount' => collect($result['rows'])->sum('data.total_amount'),
@@ -243,7 +323,7 @@ class AccountingSalesImportService
                 $row['customer_id'] = $customer->id;
             }
             unset($row);
-            $result['orders_created'] = $this->createHistoricalOrders($batch, $result['rows'], $actor);
+            $result['orders_created'] = $this->createCompletedHistoricalOrders($batch, $result['rows'], $actor);
             $result['batch_id'] = $batch->id;
         });
 
@@ -354,10 +434,17 @@ class AccountingSalesImportService
     private function mappingKey(?string $name): string { return sha1($this->key($name)); }
     private function normalizeSource(string $text): string { return trim(str_replace(["\r\n", "\r"], "\n", $text)); }
 
-    private function createHistoricalOrders(AccountingSalesImportBatch $batch, array $rows, User $actor): int
+    private function createCompletedHistoricalOrders(AccountingSalesImportBatch $batch, array $rows, User $actor): int
     {
         $groups = collect($rows)->groupBy(fn ($row) => $row['data']['entry_date'].'|'.$row['customer_id']);
         $created = 0;
+        $transferShipper = $this->defaultTransferShipper($batch->source_warehouse_id);
+
+        if ($batch->source_warehouse_id && $batch->target_warehouse_id
+            && (int) $batch->source_warehouse_id !== (int) $batch->target_warehouse_id
+            && ! $transferShipper) {
+            throw new \InvalidArgumentException('Chưa có tài khoản Shipper để gán mặc định cho chặng điều chuyển từ Kho Long An.');
+        }
 
         foreach ($groups as $group) {
             $first = $group->first();
@@ -383,16 +470,24 @@ class AccountingSalesImportService
                 'recipient_address' => $customer->address,
                 'delivery_date' => $entryDate->toDateString(),
                 'delivered_at' => $entryDate->copy()->endOfDay(),
+                'warehouse_id' => $batch->source_warehouse_id,
+                'shipper_id' => null,
                 'accounting_sales_import_batch_id' => $batch->id,
                 'imported_sales_group_key' => $groupKey,
                 'needs_operational_completion' => true,
-                'operational_completion_note' => 'Đơn lịch sử từ sổ kế toán; cần bổ sung Kho và Shipper. Không tự động trừ tồn kho.',
-                'note' => 'Tạo từ phiên import doanh số kế toán #'.$batch->id.'.',
+                'operational_completion_note' => 'Đơn lịch sử đã hoàn tất và kế toán xác nhận; chờ bổ sung shipper điều phối và phí ship.',
+                'note' => 'Tạo hồi tố từ phiên import doanh số kế toán #'.$batch->id.'. Ngày nghiệp vụ '.$entryDate->format('d/m/Y').'.',
+                'created_at' => $entryDate->copy()->startOfDay(),
+                'updated_at' => $entryDate->copy()->endOfDay(),
             ])->save();
+            // Không lấy shipper mặc định của khách; bộ phận shipper sẽ bổ sung
+            // điều phối và phí ship sau khi dữ liệu lịch sử được ghi nhận.
+            $order->forceFill(['shipper_id' => null])->saveQuietly();
 
             $reconciliation = AccountingReconciliation::create([
                 'order_id' => $order->id,
                 'sale_id' => $saleId,
+                'shipper_id' => null,
                 'total_amount' => $total,
                 'paid_amount' => 0,
                 'shipping_fee' => 0,
@@ -401,10 +496,10 @@ class AccountingSalesImportService
                 'status' => AccountingReconciliation::STATUS_CONFIRMED,
                 'confirmed_by' => $actor->id,
                 'confirmed_at' => $entryDate->copy()->endOfDay(),
-                'note' => 'Xác nhận tự động từ phiên import doanh số kế toán #'.$batch->id.'.',
+                'note' => 'Kế toán xác nhận tự động từ phiên import hoàn tất #'.$batch->id.'.',
             ]);
 
-            $order->forceFill(['amount_due' => $total])->save();
+            $order->forceFill(['amount_due' => $total])->saveQuietly();
             AccountingSalesEntry::whereIn('id', $group->pluck('entry_id'))
                 ->update(['order_id' => $order->id, 'accounting_reconciliation_id' => $reconciliation->id]);
 
@@ -412,6 +507,46 @@ class AccountingSalesImportService
                 ->whereIn('id', $group->pluck('entry_id'))
                 ->get()
                 ->each(fn (AccountingSalesEntry $entry) => $this->syncEntryOrderItem($entry));
+
+            $transfer = null;
+            if ($transferShipper && $batch->source_warehouse_id && $batch->target_warehouse_id
+                && (int) $batch->source_warehouse_id !== (int) $batch->target_warehouse_id) {
+                $transfer = new WarehouseTransfer();
+                $transfer->forceFill([
+                    'order_id' => $order->id,
+                    'source_warehouse_id' => $batch->source_warehouse_id,
+                    'target_warehouse_id' => $batch->target_warehouse_id,
+                    'shipper_id' => $transferShipper->id,
+                    'status' => WarehouseTransfer::STATUS_RECEIVED_COMPLETED,
+                    'note' => 'Điều chuyển lịch sử đã hoàn tất; tự động gán shipper mặc định khi import #'.$batch->id.'.',
+                    'shipper_pickup_note' => 'Đã nhận hàng tại Kho Long An.',
+                    'shipper_delivery_note' => 'Đã bàn giao hàng tại kho đích.',
+                    'picked_up_by' => $transferShipper->id,
+                    'picked_up_at' => $entryDate->copy()->startOfDay()->addHours(6),
+                    'delivered_by' => $transferShipper->id,
+                    'delivered_at' => $entryDate->copy()->startOfDay()->addHours(7),
+                    'received_by' => $actor->id,
+                    'received_at' => $entryDate->copy()->startOfDay()->addHours(8),
+                    'packed_total_weight' => (float) $order->items()->sum('total_weight'),
+                    'received_total_weight' => (float) $order->items()->sum('total_weight'),
+                    'weight_loss' => 0,
+                    'created_at' => $entryDate->copy()->startOfDay()->addHours(5),
+                    'updated_at' => $entryDate->copy()->startOfDay()->addHours(8),
+                ])->save();
+
+                // Đơn đã được kho đích tiếp nhận. shipper_id của đơn vẫn để trống
+                // để bộ phận điều phối bổ sung người giao khách sau import.
+                $order->forceFill(['warehouse_id' => $batch->target_warehouse_id])->saveQuietly();
+            }
+
+            $this->createCompletedWorkflowHistory(
+                $order,
+                $saleId,
+                $actor->id,
+                $entryDate,
+                $batch->id,
+                $transferShipper?->id
+            );
 
             if (Schema::hasTable('order_commissions')) {
                 $percent = (float) ($customer->commission_percent ?? 0);
@@ -425,19 +560,72 @@ class AccountingSalesImportService
                     'status' => 'confirmed',
                     'confirmed_by' => $actor->id,
                     'confirmed_at' => $entryDate->copy()->endOfDay(),
-                    'created_at' => now(),
-                    'updated_at' => now(),
+                    'created_at' => $entryDate->copy()->endOfDay(),
+                    'updated_at' => $entryDate->copy()->endOfDay(),
                 ]);
                 $order->forceFill([
                     'commission_percent_snapshot' => $percent,
                     'commission_amount_snapshot' => $commission,
                     'commission_created_at' => $entryDate->copy()->endOfDay(),
-                ])->save();
+                ])->saveQuietly();
             }
+
             $created++;
         }
 
         return $created;
+    }
+
+    private function createCompletedWorkflowHistory(
+        Order $order,
+        int $saleId,
+        int $accountingId,
+        Carbon $date,
+        int $batchId,
+        ?int $transferShipperId = null
+    ): void
+    {
+        $steps = [
+            ['create_order', $saleId, 'sale', null, 'pending_leader_approval', 'Sale đã tạo đơn'],
+            ['leader_approved', $accountingId, 'leader_sale', 'pending_leader_approval', 'pending_manager_approval', 'Trưởng phòng đã duyệt'],
+            ['manager_approved', $accountingId, 'manager_sale', 'pending_manager_approval', 'approved', 'Manager đã duyệt'],
+            ['warehouse_confirm_pack', $accountingId, 'warehouse', 'approved', Order::STATUS_PACKING, 'Kho đã xác nhận đơn'],
+            ['complete_packing', $accountingId, 'package', Order::STATUS_PACKING, Order::STATUS_READY_TO_SHIP, 'Đã hoàn tất đóng hàng'],
+            ['warehouse_handover_ship', $accountingId, 'warehouse', Order::STATUS_READY_TO_SHIP, Order::STATUS_READY_TO_SHIP, 'Kho đã bàn giao cho ship'],
+            ['transfer_shipper_pickup', $transferShipperId ?: $accountingId, 'shipper', Order::STATUS_READY_TO_SHIP, Order::STATUS_DELIVERING, 'Ship đã nhận hàng chuyển đến Kho Chiến Lược'],
+            ['strategic_warehouse_received', $accountingId, 'warehouse', Order::STATUS_DELIVERING, Order::STATUS_DELIVERING, 'Kho Chiến Lược đã nhận hàng'],
+            ['strategic_warehouse_dispatched', $accountingId, 'manager_shipper', Order::STATUS_DELIVERING, Order::STATUS_DELIVERING, 'Kho Chiến Lược đã điều phối giao hàng'],
+            ['shipper_delivered', $accountingId, 'shipper', Order::STATUS_DELIVERING, Order::STATUS_DELIVERED, 'Shipper đã giao hàng; hình thức thanh toán được ghi nhận trả sau'],
+            ['accounting_confirmed', $accountingId, 'accounting', Order::STATUS_DELIVERED, Order::STATUS_COMPLETED, 'Kế toán đã xác nhận giao dịch, doanh số và hoa hồng'],
+        ];
+
+        foreach ($steps as $index => [$action, $userId, $role, $before, $after, $note]) {
+            $timestamp = $date->copy()->startOfDay()->addMinutes($index * 60);
+            $history = new OrderHistory();
+            $history->forceFill([
+                'order_id' => $order->id,
+                'user_id' => $userId,
+                'role' => $role,
+                'action' => $action,
+                'status_before' => $before,
+                'status_after' => $after,
+                'note' => $note.' (mô phỏng từ import #'.$batchId.').',
+                'created_at' => $timestamp,
+                'updated_at' => $timestamp,
+            ])->save();
+        }
+    }
+
+    private function defaultTransferShipper(?int $sourceWarehouseId): ?User
+    {
+        $query = User::query()
+            ->whereHas('roles', fn ($roles) => $roles->whereRaw('LOWER(name) = ?', ['shipper']));
+
+        if ($sourceWarehouseId) {
+            $query->orderByRaw('CASE WHEN warehouse_id = ? THEN 0 ELSE 1 END', [$sourceWarehouseId]);
+        }
+
+        return $query->orderBy('id')->first();
     }
 
     public function repairHistoricalOrderItems(): array
@@ -474,6 +662,12 @@ class AccountingSalesImportService
 
         $unit = trim((string) $entry->unit);
         [$product, $variant] = $this->resolveImportedProduct($unit, (float) $entry->unit_weight);
+        if (! $product || ! $variant) {
+            OrderItem::query()->where('accounting_sales_entry_id', $entry->id)->delete();
+            AccountingSalesEntry::query()->whereKey($entry->id)->update(['order_item_id' => null]);
+
+            return null;
+        }
         $quantity = max(0, (int) round((float) $entry->quantity));
         $unitWeight = max(0.001, (float) $entry->unit_weight);
         $totalWeight = max(0, (float) $entry->total_quantity);
@@ -517,7 +711,7 @@ class AccountingSalesImportService
     private function resolveImportedProduct(string $unit, float $unitWeight): array
     {
         $key = $this->key($unit);
-        if (in_array($key, ['vat', 'nha xe', 'shiper', 'shipper', 'thung xop', 'giam tru'], true)) {
+        if (in_array($key, self::NON_STOCK_UNITS, true)) {
             return [null, null];
         }
 

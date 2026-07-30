@@ -37,7 +37,15 @@ class OrderTransferController extends Controller
         // Lấy danh sách đơn chưa điều chuyển, chỉ thuộc kho user quản lý
         $orders = Order::whereNull('order_transfer_id')
             ->whereIn('status', ['ready_to_ship', 'packing', 'packed', 'packed_waiting_pickup'])
-            ->whereBetween(DB::raw('DATE(created_at)'), [$from, $to])
+            ->where(function ($dateQuery) use ($from, $to): void {
+                $dateQuery->where(function ($normalQuery) use ($from, $to): void {
+                    $normalQuery->whereNull('accounting_sales_import_batch_id')
+                        ->whereBetween(DB::raw('DATE(created_at)'), [$from, $to]);
+                })->orWhere(function ($importQuery) use ($from, $to): void {
+                    $importQuery->whereNotNull('accounting_sales_import_batch_id')
+                        ->whereBetween('delivery_date', [$from, $to]);
+                });
+            })
             ->where(function ($query) use ($warehouseId) {
                 $query->where('warehouse_id', $warehouseId)
                       ->orWhereNull('warehouse_id');

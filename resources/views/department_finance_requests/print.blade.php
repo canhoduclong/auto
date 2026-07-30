@@ -341,16 +341,8 @@
                         @if($transaction->destinationAccount?->bank_name)
                             ({{ $transaction->destinationAccount->bank_name }})
                         @endif
-                    @elseif($transaction->destination_type === 'cash')
-                        Tiền mặt
                     @else
                         {{ $transaction->external_recipient ?: 'Bên ngoài' }}
-                        @if($transaction->external_account_number)
-                            - STK: {{ $transaction->external_account_number }}
-                        @endif
-                        @if($transaction->external_bank_name)
-                            - {{ $transaction->external_bank_name }}{{ $transaction->external_bank_branch ? ' / ' . $transaction->external_bank_branch : '' }}
-                        @endif
                     @endif
                 </span>
             </div>
@@ -418,15 +410,15 @@
                 <div class="signature-hint">(Ký, ghi rõ họ tên)</div>
             </div>
             <div class="signature-box">
-                <div class="signature-title">Kế toán xác nhận</div>
+                <div class="signature-title">Trưởng bộ phận</div>
                 <div class="signature-hint">(Ký, ghi rõ họ tên)</div>
             </div>
             <div class="signature-box">
-                <div class="signature-title">Director</div>
+                <div class="signature-title">Kế toán</div>
                 <div class="signature-hint">(Ký, ghi rõ họ tên)</div>
             </div>
             <div class="signature-box">
-                <div class="signature-title">Kế toán hoàn thành</div>
+                <div class="signature-title">Giám Đốc</div>
                 <div class="signature-hint">(Ký, ghi rõ họ tên)</div>
             </div>
         </div>

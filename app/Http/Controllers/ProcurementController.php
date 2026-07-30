@@ -21,7 +21,7 @@ use Throwable;
 class ProcurementController extends Controller
 {
     private const LIVE_SIZES = [3.0, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7];
-    private const PROCESSED_SIZES = [2.0, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 3.0, 3.1, 3.2];
+    private const PROCESSED_SIZES = [2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 3.0, 3.1, 3.2];
 
     public function __construct()
     {

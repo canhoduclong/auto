@@ -131,7 +131,7 @@ class ShipperDashboardController extends Controller
     {
         $orders = Order::query()
             ->where('shipper_id', $shipperId)
-            ->whereIn('status', $this->assignmentStatuses())
+            ->where(fn ($query) => $this->constrainAssignmentStatuses($query))
             ->whereDate('created_at', $dateString)
             ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
             ->orderBy('daily_sequence', 'asc')
@@ -152,14 +152,14 @@ class ShipperDashboardController extends Controller
     private function moveOrderWithinShipper(Order $order, int $direction, string $dateString): void
     {
         abort_if(!$order->shipper_id, 422, 'Đơn chưa được gán cho shipper nào.');
-        abort_if(!in_array($order->status, $this->assignmentStatuses(), true), 422, 'Đơn chưa ở trạng thái có thể sắp xếp.');
+        abort_if(! $this->isAssignmentEligible($order), 422, 'Đơn chưa ở trạng thái có thể sắp xếp.');
 
         DB::transaction(function () use ($order, $direction, $dateString): void {
             $this->reorderShipperDailySequences((int) $order->shipper_id, $dateString);
 
             $orders = Order::query()
                 ->where('shipper_id', $order->shipper_id)
-                ->whereIn('status', $this->assignmentStatuses())
+                ->where(fn ($query) => $this->constrainAssignmentStatuses($query))
                 ->whereDate('created_at', $dateString)
                 ->orderBy('daily_sequence', 'asc')
                 ->orderBy('created_at', 'asc')
@@ -369,7 +369,8 @@ class ShipperDashboardController extends Controller
                     $today = Carbon::today()->toDateString();
 
                     $query->whereDate('updated_at', $today)
-                        ->orWhereDate('created_at', $today);
+                        ->orWhereDate('created_at', $today)
+                        ->orWhereNotNull('accounting_sales_import_batch_id');
                 })
                 ->lockForUpdate()
                 ->first();
@@ -1512,7 +1513,7 @@ class ShipperDashboardController extends Controller
                 'user',
                 'warehouse',
             ])
-            ->whereIn('status', $this->assignmentStatuses())
+            ->where(fn ($query) => $this->constrainAssignmentStatuses($query))
             ->whereDate('created_at', $selectedDate)
             ->orderByRaw("CASE WHEN delivery_time IS NULL OR delivery_time = '' THEN 1 ELSE 0 END")
             ->orderBy('delivery_time', 'asc')
@@ -1617,7 +1618,7 @@ class ShipperDashboardController extends Controller
     {
         $orders = Order::with(['customer.defaultShipper'])
             ->whereNull('shipper_id')
-            ->whereIn('status', $this->assignmentStatuses())
+            ->where(fn ($query) => $this->constrainAssignmentStatuses($query))
             ->whereDate('created_at', $selectedDate)
             ->whereHas('customer', fn ($query) => $query->whereNotNull('default_shipper_id'))
             ->whereDoesntHave('histories', fn ($query) => $query->where('action', 'shipper_unassigned'))
@@ -1701,7 +1702,7 @@ class ShipperDashboardController extends Controller
     {
         return Order::with(['customer', 'items.variant'])
             ->where('shipper_id', $shipperId)
-            ->whereIn('status', $this->assignmentStatuses())
+            ->where(fn ($query) => $this->constrainAssignmentStatuses($query))
             ->whereDate('created_at', $selectedDate)
             ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
             ->orderBy('daily_sequence', 'asc')
@@ -1753,7 +1754,7 @@ class ShipperDashboardController extends Controller
             'date' => 'nullable|date',
         ]);
 
-        abort_if(!in_array($order->status, $this->assignmentStatuses(), true), 422, 'Đơn chưa ở trạng thái có thể gán shipper.');
+        abort_if(! $this->isAssignmentEligible($order), 422, 'Đơn chưa ở trạng thái có thể gán shipper.');
         abort_if(!($shipper->hasRole('shipper') || $shipper->hasRole('manager_shipper')), 422, 'Người dùng không phải shipper.');
 
         $previousShipper = $order->shipper;
@@ -1813,7 +1814,7 @@ class ShipperDashboardController extends Controller
             $transferredOrders = Order::query()
                 ->where('customer_id', $customer->id)
                 ->where('shipper_id', $previousShipperId)
-                ->whereIn('status', $this->assignmentStatuses())
+                ->where(fn ($query) => $this->constrainAssignmentStatuses($query))
                 ->lockForUpdate()
                 ->get();
 
@@ -1864,7 +1865,7 @@ class ShipperDashboardController extends Controller
 
         $ordersQuery = Order::query()
             ->where('shipper_id', $fromShipper->id)
-            ->whereIn('status', $this->assignmentStatuses())
+            ->where(fn ($query) => $this->constrainAssignmentStatuses($query))
             ->whereDate('created_at', $date);
 
         $orders = DB::transaction(function () use ($ordersQuery, $fromShipper, $toShipper, $validated) {
@@ -1903,7 +1904,7 @@ class ShipperDashboardController extends Controller
     {
         $this->authorizeManagerShipper();
 
-        abort_if(!in_array($order->status, $this->assignmentStatuses(), true), 422, 'Đơn chưa ở trạng thái có thể gỡ ra.');
+        abort_if(! $this->isAssignmentEligible($order), 422, 'Đơn chưa ở trạng thái có thể gỡ ra.');
         abort_if(!$order->shipper_id, 422, 'Đơn chưa được gán cho shipper nào.');
 
         $previousShipper = $order->shipper;
@@ -1981,7 +1982,7 @@ class ShipperDashboardController extends Controller
         // Lấy danh sách tất cả shippers có đơn đã gán trong ngày
         $shipperIds = Order::query()
             ->whereNotNull('shipper_id')
-            ->whereIn('status', $this->assignmentStatuses())
+            ->where(fn ($query) => $this->constrainAssignmentStatuses($query))
             ->whereDate('created_at', $date)
             ->distinct('shipper_id')
             ->pluck('shipper_id')
@@ -2079,7 +2080,7 @@ class ShipperDashboardController extends Controller
 
         $orders = Order::with(['items', 'accountingReconciliation'])
             ->whereIn('id', $plannedOrders->keys()->all())
-            ->whereIn('status', $this->assignmentStatuses())
+            ->where(fn ($query) => $this->constrainAssignmentStatuses($query))
             ->whereDate('created_at', $date)
             ->get()
             ->keyBy('id');
@@ -2091,7 +2092,8 @@ class ShipperDashboardController extends Controller
             $oldFee = (float) ($order->shipping_fee ?? 0);
 
             return abs($oldFee - $newFee) >= 0.01
-                && $order->accountingReconciliation?->status === \App\Models\AccountingReconciliation::STATUS_CONFIRMED;
+                && $order->accountingReconciliation?->status === \App\Models\AccountingReconciliation::STATUS_CONFIRMED
+                && $order->accounting_sales_import_batch_id === null;
         });
         abort_if($hasLockedFeeChange, 422, 'Có đơn đã được kế toán xác nhận nên không thể đổi phí ship. Bạn vẫn có thể gửi nếu giữ nguyên phí của đơn đó.');
 
@@ -2113,10 +2115,14 @@ class ShipperDashboardController extends Controller
                 });
                 $foamBoxFee = (float) (($order->charge_foam_box_fee ?? false) ? ($order->foam_box_price ?? 0) : 0);
 
-                $order->update([
-                    'shipping_fee' => $newFee,
-                    'total' => $itemsSubtotal + $newFee + $foamBoxFee,
-                ]);
+                $updates = ['shipping_fee' => $newFee];
+                if ($order->accounting_sales_import_batch_id === null) {
+                    $updates['total'] = $itemsSubtotal + $newFee + $foamBoxFee;
+                }
+                $order->update($updates);
+                if ($order->accounting_sales_import_batch_id) {
+                    $order->accountingReconciliation?->update(['shipping_fee' => $newFee]);
+                }
 
                 OrderHistory::create([
                     'order_id' => $order->id,
@@ -2368,7 +2374,7 @@ class ShipperDashboardController extends Controller
 
         $orders = Order::query()
             ->where('shipper_id', $userId)
-            ->whereIn('status', $this->assignmentStatuses())
+            ->where(fn ($query) => $this->constrainAssignmentStatuses($query))
             ->whereDate('created_at', $selectedDate)
             ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
             ->orderBy('daily_sequence', 'asc')
@@ -2408,6 +2414,21 @@ class ShipperDashboardController extends Controller
             Order::STATUS_PACKED,
             Order::STATUS_READY_TO_SHIP,
         ];
+    }
+
+    private function constrainAssignmentStatuses($query): void
+    {
+        $query->whereIn('status', $this->assignmentStatuses())
+            ->orWhere(function ($imported): void {
+                $imported->where('status', Order::STATUS_COMPLETED)
+                    ->whereNotNull('accounting_sales_import_batch_id');
+            });
+    }
+
+    private function isAssignmentEligible(Order $order): bool
+    {
+        return in_array($order->status, $this->assignmentStatuses(), true)
+            || ($order->status === Order::STATUS_COMPLETED && $order->accounting_sales_import_batch_id !== null);
     }
 
     /**
@@ -2463,7 +2484,12 @@ class ShipperDashboardController extends Controller
     {
         $this->authorizeManagerShipper();
 
-        abort_if($order->accountingReconciliation?->status === \App\Models\AccountingReconciliation::STATUS_CONFIRMED, 422, 'Kế toán đã xác nhận đơn, không thể điều chỉnh phí ship.');
+        abort_if(
+            $order->accountingReconciliation?->status === \App\Models\AccountingReconciliation::STATUS_CONFIRMED
+                && $order->accounting_sales_import_batch_id === null,
+            422,
+            'Kế toán đã xác nhận đơn, không thể điều chỉnh phí ship.'
+        );
         abort_if($order->shipping_fee_transaction_id, 422, 'Đơn đã được đưa vào phiếu yêu cầu chi phí ship.');
 
         $request->validate([
@@ -2485,9 +2511,11 @@ class ShipperDashboardController extends Controller
         $foamBoxFee = (float) (($order->charge_foam_box_fee ?? false) ? ($order->foam_box_price ?? 0) : 0);
         $newTotal = $itemsSubtotal + $newFee + $foamBoxFee;
 
-        $order->update([
-            'total' => $newTotal,
-        ]);
+        if ($order->accounting_sales_import_batch_id) {
+            $order->accountingReconciliation?->update(['shipping_fee' => $newFee]);
+        } else {
+            $order->update(['total' => $newTotal]);
+        }
 
         OrderHistory::create([
             'order_id'      => $order->id,
@@ -2520,7 +2548,8 @@ class ShipperDashboardController extends Controller
         ]);
 
         $orders = Order::with('accountingReconciliation')->whereIn('id', $request->input('order_ids'))->get();
-        abort_if($orders->contains(fn (Order $order) => $order->accountingReconciliation?->status === \App\Models\AccountingReconciliation::STATUS_CONFIRMED), 422, 'Danh sách có đơn đã được kế toán xác nhận. Vui lòng bỏ các đơn đã chốt.');
+        abort_if($orders->contains(fn (Order $order) => $order->accountingReconciliation?->status === \App\Models\AccountingReconciliation::STATUS_CONFIRMED
+            && $order->accounting_sales_import_batch_id === null), 422, 'Danh sách có đơn đã được kế toán xác nhận. Vui lòng bỏ các đơn đã chốt.');
         abort_if($orders->contains(fn (Order $order) => $order->shipping_fee_transaction_id), 422, 'Danh sách có đơn đã được đưa vào phiếu yêu cầu chi phí ship.');
         $adjustmentType = $request->input('adjustment_type');
         $adjustmentValue = (float) $request->input('fee_adjustment');
@@ -2542,7 +2571,11 @@ class ShipperDashboardController extends Controller
                 $foamBoxFee = (float) (($order->charge_foam_box_fee ?? false) ? ($order->foam_box_price ?? 0) : 0);
                 $newTotal = $itemsSubtotal + $newFee + $foamBoxFee;
 
-                $order->update(['total' => $newTotal]);
+                if ($order->accounting_sales_import_batch_id) {
+                    $order->accountingReconciliation?->update(['shipping_fee' => $newFee]);
+                } else {
+                    $order->update(['total' => $newTotal]);
+                }
 
                 OrderHistory::create([
                     'order_id'      => $order->id,

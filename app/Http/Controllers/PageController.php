@@ -954,6 +954,7 @@ class PageController extends Controller
         } catch (\Throwable) {
             $selectedDate = now()->toDateString();
         }
+        $selectedDateField = $this->monitoringDateField($request);
 
         $dateQuery = Order::query()
             ->with([
@@ -967,8 +968,8 @@ class PageController extends Controller
                 'items.product',
                 'items.variant.product',
                 'items.variant.latestPriceRule',
-            ])
-            ->whereDate('created_at', $selectedDate);
+            ]);
+        $this->applyMonitoringDateFilter($dateQuery, $selectedDate, $selectedDateField);
 
         if ($this->hasOrderColumn('trash_at')) {
             $dateQuery->whereNull('trash_at');
@@ -1261,6 +1262,7 @@ class PageController extends Controller
             'perPage' => $perPage,
             'keyword' => $keyword,
             'selectedDate' => $selectedDate,
+            'selectedDateField' => $selectedDateField,
             'selectedStatus' => (string) $request->input('status', ''),
             'selectedSaleId' => $selectedSaleId,
             'selectedCustomerId' => $selectedCustomerId,
@@ -2657,7 +2659,7 @@ class PageController extends Controller
             $selectedDate = now()->toDateString();
         }
 
-        $query->whereDate('created_at', $selectedDate);
+        $this->applyMonitoringDateFilter($query, $selectedDate, $this->monitoringDateField($request));
 
         $keyword = trim((string) $request->input('keyword', ''));
         if ($keyword !== '') {
@@ -2683,6 +2685,38 @@ class PageController extends Controller
         if ((int) $request->input('customer_id', 0) > 0) {
             $query->where('customer_id', (int) $request->input('customer_id'));
         }
+    }
+
+    private function monitoringDateField(Request $request): string
+    {
+        $dateField = (string) $request->input('date_field', 'business_date');
+
+        return in_array($dateField, ['business_date', 'created_at', 'delivery_date'], true)
+            ? $dateField
+            : 'business_date';
+    }
+
+    private function applyMonitoringDateFilter(Builder $query, string $selectedDate, string $dateField): void
+    {
+        if ($dateField === 'created_at') {
+            $query->whereDate('created_at', $selectedDate);
+            return;
+        }
+
+        if ($dateField === 'delivery_date') {
+            $query->whereDate('delivery_date', $selectedDate);
+            return;
+        }
+
+        $query->where(function (Builder $dateQuery) use ($selectedDate): void {
+            $dateQuery->where(function (Builder $regularOrders) use ($selectedDate): void {
+                $regularOrders->whereNull('accounting_sales_import_batch_id')
+                    ->whereDate('created_at', $selectedDate);
+            })->orWhere(function (Builder $importedOrders) use ($selectedDate): void {
+                $importedOrders->whereNotNull('accounting_sales_import_batch_id')
+                    ->whereDate('delivery_date', $selectedDate);
+            });
+        });
     }
 
     private function applyCurrentApprovalStepScope(Builder $query, $roleNames): Builder

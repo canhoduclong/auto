@@ -55,7 +55,7 @@
                                 </div>
                                 <h6 class="fw-bold">Chi tiết thực nhập vịt sơ chế</h6>
                                 <div id="items{{ $p->id }}">
-                                    @foreach([2.0,2.2,2.3,2.4,2.5,2.6,2.7,2.8,2.9,3.0,3.1,3.2] as $idx=>$size)
+                                    @foreach([2.0,2.1,2.2,2.3,2.4,2.5,2.6,2.7,2.8,2.9,3.0,3.1,3.2] as $idx=>$size)
                                         <div class="row g-2 mb-1"><input type="hidden" name="items[{{ $idx }}][item_type]" value="processed_duck"><input type="hidden" name="items[{{ $idx }}][size]" value="{{ $size }}"><div class="col-2"><span class="form-control-plaintext">Size {{ $size }}</span></div><div class="col-3"><input type="number" min="0" value="0" name="items[{{ $idx }}][quantity]" class="form-control form-control-sm" placeholder="Số con"></div><div class="col-3"><input type="number" min="0" step=".001" value="0" name="items[{{ $idx }}][weight]" class="form-control form-control-sm" placeholder="Kg"></div><div class="col-4"><input name="items[{{ $idx }}][condition]" class="form-control form-control-sm" placeholder="Tình trạng"></div></div>
                                     @endforeach
                                     @foreach(['feathers'=>'Bộ lông','offal'=>'Bộ lòng','reject'=>'Vịt loại / lỗi'] as $type=>$label)@php $idx=20+$loop->index; @endphp

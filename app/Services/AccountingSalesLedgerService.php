@@ -17,7 +17,9 @@ class AccountingSalesLedgerService
         $reconciliation = $order->accountingReconciliation;
         if (!$reconciliation || $reconciliation->status !== AccountingReconciliation::STATUS_CONFIRMED) return 0;
 
-        $date = ($reconciliation->confirmed_at ?? $order->delivered_at ?? $order->created_at)->toDateString();
+        $date = ($order->accounting_sales_import_batch_id && $order->delivery_date
+            ? $order->delivery_date
+            : ($reconciliation->confirmed_at ?? $order->delivered_at ?? $order->created_at))->toDateString();
         $base = [
             'entry_date' => $date,
             'entry_month' => (int) substr($date, 5, 2),

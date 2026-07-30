@@ -708,7 +708,15 @@ class WarehouseDashboardController extends Controller
 
         $todayOrdersQuery = Order::with(['items.product', 'items.variant.product'])
             ->whereIn('status', $queueStatuses)
-            ->whereDate('created_at', $selectedDate);
+            ->where(function ($dateQuery) use ($selectedDate): void {
+                $dateQuery->where(function ($normalQuery) use ($selectedDate): void {
+                    $normalQuery->whereNull('accounting_sales_import_batch_id')
+                        ->whereDate('created_at', $selectedDate);
+                })->orWhere(function ($importQuery) use ($selectedDate): void {
+                    $importQuery->whereNotNull('accounting_sales_import_batch_id')
+                        ->whereDate('delivery_date', $selectedDate);
+                });
+            });
 
         if ($managedWarehouseId && Auth::user()?->hasRole('warehouse')) {
             $todayOrdersQuery->where(function ($warehouseScope) use ($managedWarehouseId, $queueStatuses) {
@@ -841,7 +849,15 @@ class WarehouseDashboardController extends Controller
                 $query->whereNull('is_return_order')
                     ->orWhere('is_return_order', false);
             })
-            ->whereDate('created_at', $selectedDate);
+            ->where(function ($dateQuery) use ($selectedDate): void {
+                $dateQuery->where(function ($normalQuery) use ($selectedDate): void {
+                    $normalQuery->whereNull('accounting_sales_import_batch_id')
+                        ->whereDate('created_at', $selectedDate);
+                })->orWhere(function ($importQuery) use ($selectedDate): void {
+                    $importQuery->whereNotNull('accounting_sales_import_batch_id')
+                        ->whereDate('delivery_date', $selectedDate);
+                });
+            });
 
         if ($managedWarehouseId && ($currentUser?->hasRole('warehouse') || $currentUser?->hasRole('package'))) {
             $ordersQuery->where(function ($warehouseScope) use ($managedWarehouseId, $sharedQueueStatuses) {
@@ -1413,7 +1429,7 @@ class WarehouseDashboardController extends Controller
             return back()->with('error', $message);
         }
 
-        if (! $order->created_at || ! $order->created_at->isToday()) {
+        if (! $this->canProcessOrderOnCurrentRun($order)) {
             $message = 'Chỉ được xử lý đơn có ngày hôm nay.';
 
             if ($request->expectsJson()) {
@@ -2052,7 +2068,7 @@ class WarehouseDashboardController extends Controller
 
         $expectsJson = $request->expectsJson();
 
-        if (! $order->created_at || ! $order->created_at->isToday()) {
+        if (! $this->canProcessOrderOnCurrentRun($order)) {
             $message = 'Chỉ được xử lý đơn có ngày hôm nay.';
 
             if ($expectsJson) {
@@ -2173,7 +2189,7 @@ class WarehouseDashboardController extends Controller
     {
         $this->authorizePackingOrderAccess($order);
 
-        if (! $order->created_at || ! $order->created_at->isToday()) {
+        if (! $this->canProcessOrderOnCurrentRun($order)) {
             if ($request->expectsJson()) {
                 return response()->json(['ok' => false, 'message' => 'Chỉ được điều chỉnh đơn có ngày hôm nay.'], 422);
             }
@@ -2382,7 +2398,7 @@ class WarehouseDashboardController extends Controller
     {
         $this->authorizePackingOrderAccess($order);
 
-        if (! $order->created_at || ! $order->created_at->isToday()) {
+        if (! $this->canProcessOrderOnCurrentRun($order)) {
             if ($request->expectsJson()) {
                 return response()->json(['ok' => false, 'message' => 'Chỉ được xử lý đơn có ngày hôm nay.'], 422);
             }
@@ -2470,7 +2486,7 @@ class WarehouseDashboardController extends Controller
             return back()->with('error', 'Sale đã từ chối yêu cầu điều chỉnh. Vui lòng xử lý lại thay đổi trước khi hoàn tất đóng gói.');
         }
 
-        if (! $order->created_at || ! $order->created_at->isToday()) {
+        if (! $this->canProcessOrderOnCurrentRun($order)) {
             if ($request->expectsJson()) {
                 return response()->json(['ok' => false, 'message' => 'Chỉ được xử lý đơn có ngày hôm nay.'], 422);
             }
@@ -2598,7 +2614,7 @@ class WarehouseDashboardController extends Controller
 
         abort_unless($user?->hasRole('admin'), 403);
 
-        if (! $order->created_at || ! $order->created_at->isToday()) {
+        if (! $this->canProcessOrderOnCurrentRun($order)) {
             return back()->with('error', 'Chỉ được xử lý đơn có ngày hôm nay.');
         }
 
@@ -4566,6 +4582,12 @@ class WarehouseDashboardController extends Controller
         if (! $user?->hasRole('admin') && $isPackingOperator && $managedWarehouseId && $orderWarehouseId && $managedWarehouseId !== $orderWarehouseId) {
             abort(403, 'Đơn hàng thuộc kho khác.');
         }
+    }
+
+    private function canProcessOrderOnCurrentRun(Order $order): bool
+    {
+        return $order->accounting_sales_import_batch_id !== null
+            || ($order->created_at && $order->created_at->isToday());
     }
 
     private function packingActorRole(): string
