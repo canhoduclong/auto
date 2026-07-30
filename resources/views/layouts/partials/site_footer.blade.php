@@ -193,8 +193,7 @@
                         @endif
                     </a>
                     <p>
-                        {{ $brandName }} cam ket mang den trai nghiem mua sam linh kien va phu tung xe chat luong,
-                        quy trinh minh bach va ho tro tan tam cho tung don hang.
+                        {{ $brandName }} Cam kết mang đến cho khách hàng những sản phẩm và dịch vụ chất lượng, uy tín, đáp ứng nhu cầu và mong đợi của khách hàng. Chúng tôi luôn nỗ lực không ngừng để cải thiện và phát triển, nhằm mang lại sản phẩm tươi, chất lượng tốt nhất cho khách hàng.
                     </p>
                     <a href="{{ $policyLink }}" class="site-footer-pro__contact-btn">
                         <i class="fa fa-shield"></i>
