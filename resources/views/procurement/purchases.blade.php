@@ -2,10 +2,24 @@
 @section('title', request()->routeIs('procurement.warehouse-shipments.*') ? 'Danh sách nhập kho' : 'Nhật ký thu mua')
 @section('subtitle', 'Theo dõi mua vịt lông, vịt thịt, thanh toán và tiếp nhận kho')
 @section('content')
+<div class="card border-0 shadow-sm mb-3"><div class="card-body d-flex justify-content-between align-items-end gap-3 flex-wrap">
+    <form class="row g-2 flex-grow-1">
+        <div class="col-md-4 col-xl-3"><label class="form-label">Từ ngày</label><input type="date" name="from_date" value="{{ $from }}" class="form-control"></div>
+        <div class="col-md-4 col-xl-3"><label class="form-label">Đến ngày</label><input type="date" name="to_date" value="{{ $to }}" class="form-control"></div>
+        <div class="col-md-3 col-xl-2 align-self-end"><button class="btn btn-primary w-100"><i class="bi bi-funnel me-1"></i>Lọc</button></div>
+    </form>
+    @unless(request()->routeIs('procurement.warehouse-shipments.*'))
+        <div class="d-flex gap-2 ms-lg-auto">
+            <button type="button" class="btn btn-success" data-import-form-toggle><i class="bi bi-cloud-arrow-up me-1"></i>Nhập nhật ký</button>
+            <button type="button" class="btn btn-primary" data-purchase-form-toggle><i class="bi bi-plus-circle me-1"></i>Tạo thu mua</button>
+        </div>
+    @endunless
+</div></div>
+
 @unless(request()->routeIs('procurement.warehouse-shipments.*'))
-    <div class="d-flex justify-content-end mb-3"><button type="button" class="btn btn-primary" data-purchase-form-toggle><i class="bi bi-plus-circle me-1"></i>Tạo thu mua</button></div>
-    <div class="card border-0 shadow-sm mb-3">
-        <div class="card-header bg-white"><strong><i class="bi bi-clipboard-plus me-1"></i>Dán nhật ký từ Excel / Google Sheets</strong></div>
+    @php($pasteImportOpen = old('paste_data') !== null || session()->has('import_errors'))
+    <div class="card border-0 shadow-sm mb-3 {{ $pasteImportOpen ? '' : 'd-none' }}" id="pasteImportCard">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center"><strong><i class="bi bi-clipboard-plus me-1"></i>Dán nhật ký từ Excel / Google Sheets</strong><button type="button" class="btn-close" data-import-form-close aria-label="Đóng"></button></div>
         <div class="card-body">
             <p class="small text-muted mb-2">Copy cả dòng tiêu đề và các dòng dữ liệu rồi dán vào ô dưới đây. Hệ thống nhận các cột theo tên nên có thể bỏ trống cột chưa có dữ liệu.</p>
             <form method="POST" action="{{ route('procurement.purchases.import-pasted') }}" id="pasteImportForm">
@@ -14,12 +28,11 @@
                 <div class="d-flex justify-content-between align-items-center mt-2 gap-2 flex-wrap"><span class="small text-muted" id="pasteRowCount">Chưa có dữ liệu.</span><button class="btn btn-success"><i class="bi bi-cloud-arrow-up me-1"></i>Nhập nhật ký</button></div>
             </form>
             <div class="table-responsive mt-3 d-none" id="pastePreviewWrap"><table class="table table-sm table-bordered mb-0"><thead id="pastePreviewHead"></thead><tbody id="pastePreviewBody"></tbody></table><div class="small text-muted mt-1">Xem trước tối đa 5 dòng đầu.</div></div>
+            @if(session('import_errors'))<div class="alert alert-warning mt-3 mb-0"><strong>Một số dòng chưa nhập được:</strong><ul class="mb-0 mt-1">@foreach(session('import_errors') as $importError)<li>{{ $importError }}</li>@endforeach</ul></div>@endif
         </div>
     </div>
-    @if(session('import_errors'))<div class="alert alert-warning"><strong>Một số dòng chưa nhập được:</strong><ul class="mb-0 mt-1">@foreach(session('import_errors') as $importError)<li>{{ $importError }}</li>@endforeach</ul></div>@endif
     @include('procurement.partials.purchase_form')
 @endunless
-<div class="card border-0 shadow-sm mb-3"><div class="card-body"><form class="row g-2"><div class="col-md-3"><label>Từ ngày</label><input type="date" name="from_date" value="{{ $from }}" class="form-control"></div><div class="col-md-3"><label>Đến ngày</label><input type="date" name="to_date" value="{{ $to }}" class="form-control"></div><div class="col-md-2 align-self-end"><button class="btn btn-primary w-100">Lọc</button></div></form></div></div>
 <div class="card border-0 shadow-sm"><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th>Thời gian/Mã</th><th>Loại/Nguồn</th><th>Số lượng</th><th>Tình trạng</th><th class="text-end">Tổng tiền</th><th>Thanh toán</th><th>Nhập kho</th><th>Thao tác</th></tr></thead><tbody>
 @forelse($purchases as $p)
     <tr><td>{{ $p->purchased_at->format('d/m/Y H:i') }}<div class="fw-bold">{{ $p->code }}</div></td><td>{{ $p->purchase_type === 'live_duck' ? 'Vịt lông' : 'Vịt thịt' }}<div class="small text-muted">{{ $p->farm?->name ?? $p->supplier?->name }}</div><div class="small">{{ $p->duck_type ?: '—' }} · Trại {{ $p->farm_type ?: '—' }}</div></td><td>{{ number_format($p->quantity) }} con<div class="small">{{ number_format($p->total_weight, 1) }}kg · TB {{ number_format($p->average_weight, 2) }}</div></td><td>{{ $p->notes ?: ($p->duck_condition ?: '—') }}</td><td class="text-end"><div class="fw-bold">{{ number_format($p->total_amount) }}đ</div><div class="small text-muted">Thu mua: {{ number_format($p->procurement_fee) }}đ</div><div class="small text-muted">Vận chuyển: {{ number_format($p->transportation_fee) }}đ</div></td><td><span class="badge {{ $p->payment_status === 'paid' ? 'bg-success' : 'bg-warning text-dark' }}">{{ $p->payment_status }}</span><div class="small text-success">Đã trả: {{ number_format($p->paid_amount) }}đ</div><div class="small text-danger">Còn: {{ number_format($p->remaining_amount) }}đ</div>@if($p->payment_due_date)<div class="small">Hạn: {{ $p->payment_due_date->format('d/m/Y') }}</div>@endif @if($p->payment_transaction_id)<div class="small">Phiếu #{{ $p->payment_transaction_id }}</div>@endif</td><td><span class="badge bg-secondary">{{ $p->status }}</span><div class="small">{{ $p->warehouse?->name }}</div>@if($p->received_at)<div class="small text-success">{{ $p->received_at->format('d/m H:i') }} · {{ $p->warehouse_rating }}★</div><div class="small text-muted">{{ $p->warehouse_condition }}</div>@endif</td><td>@if(!$p->payment_transaction_id && (float) $p->remaining_amount > 0)<button type="button" class="btn btn-sm btn-outline-danger js-preview-payment" data-action="{{ route('procurement.purchases.request-payment', $p) }}" data-code="{{ $p->code }}" data-source="{{ $p->farm?->name ?? $p->supplier?->name ?? 'Nhà cung cấp' }}" data-date="{{ $p->purchased_at->format('d/m/Y H:i') }}" data-description="{{ $p->purchase_type === 'live_duck' ? 'Vịt lông' : 'Vịt thịt' }} · {{ number_format($p->quantity) }} con · {{ number_format($p->total_weight, 1) }}kg" data-subtotal="{{ (float) $p->subtotal }}" data-broker="{{ (float) $p->broker_fee }}" data-processing="{{ (float) $p->processing_fee }}" data-procurement="{{ (float) $p->procurement_fee }}" data-transportation="{{ (float) $p->transportation_fee }}" data-other="{{ (float) $p->other_fee }}" data-total="{{ (float) $p->total_amount }}" data-paid="{{ (float) $p->paid_amount }}" data-remaining="{{ (float) $p->remaining_amount }}" data-due="{{ $p->payment_due_date?->format('d/m/Y') ?? 'Chưa đặt hạn' }}" data-notes="{{ $p->notes ?: 'Không có ghi chú' }}">Yêu cầu thanh toán</button>@else — @endif</td></tr>
@@ -52,6 +65,20 @@
 @endsection
 @push('scripts')
 <script>
+(() => {
+    const importCard = document.getElementById('pasteImportCard');
+    const purchaseCard = document.getElementById('purchaseFormCard');
+    const importButton = document.querySelector('[data-import-form-toggle]');
+    if (!importCard || !importButton) return;
+
+    importButton.addEventListener('click', () => {
+        purchaseCard?.classList.add('d-none');
+        importCard.classList.remove('d-none');
+        setTimeout(() => importCard.scrollIntoView({behavior: 'smooth', block: 'start'}), 30);
+    });
+    document.querySelector('[data-import-form-close]')?.addEventListener('click', () => importCard.classList.add('d-none'));
+    document.querySelectorAll('[data-purchase-form-toggle]').forEach(button => button.addEventListener('click', () => importCard.classList.add('d-none')));
+})();
 (() => {
     const input = document.getElementById('pasteData');
     if (!input) return;
