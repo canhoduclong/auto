@@ -578,6 +578,13 @@ class ProcurementController extends Controller
 
     public function storeConversions(Request $request)
     {
+        $request->merge([
+            'rates' => collect((array) $request->input('rates', []))->map(fn ($sizes) =>
+                collect((array) $sizes)->map(fn ($value) => is_string($value)
+                    ? str_replace([' ', ','], ['', '.'], trim($value))
+                    : $value)->all()
+            )->all(),
+        ]);
         $data = $request->validate(['rates' => ['required', 'array'], 'rates.*.*' => ['nullable', 'numeric', 'min:0', 'max:100']]);
         DB::transaction(function () use ($data): void {
             foreach ($data['rates'] as $liveSize => $sizes) {
