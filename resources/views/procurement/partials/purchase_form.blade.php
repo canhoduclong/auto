@@ -117,6 +117,16 @@
                         </tbody>
                     </table>
                 </div>
+                <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap p-3 border-top bg-white">
+                    <div class="small text-muted" id="farmPickerRange">Chưa có dữ liệu</div>
+                    <div class="d-flex align-items-center gap-2">
+                        <label class="small text-muted text-nowrap" for="farmPickerPerPage">Hiển thị</label>
+                        <select class="form-select form-select-sm" id="farmPickerPerPage" style="width:105px"><option value="10">10 / trang</option><option value="20">20 / trang</option><option value="50">50 / trang</option></select>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="farmPickerPrevious" aria-label="Trang trước"><i class="bi bi-chevron-left"></i></button>
+                        <span class="small fw-semibold text-nowrap" id="farmPickerPage">Trang 1 / 1</span>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="farmPickerNext" aria-label="Trang sau"><i class="bi bi-chevron-right"></i></button>
+                    </div>
+                </div>
             </div>
             <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Đóng</button></div>
         </div>
@@ -144,9 +154,15 @@
                 const farmPickerSort = document.getElementById('farmPickerSort');
                 const farmPickerRowsBody = document.getElementById('farmPickerRows');
                 const farmPickerEmpty = document.getElementById('farmPickerEmpty');
+                const farmPickerPerPage = document.getElementById('farmPickerPerPage');
+                const farmPickerPrevious = document.getElementById('farmPickerPrevious');
+                const farmPickerNext = document.getElementById('farmPickerNext');
+                const farmPickerPageLabel = document.getElementById('farmPickerPage');
+                const farmPickerRange = document.getElementById('farmPickerRange');
                 const farmRows = [...document.querySelectorAll('.farm-picker-row')];
                 const normalizeText = value => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd').toLowerCase().replace(/\s+/g, ' ').trim();
                 const collator = new Intl.Collator('vi', {sensitivity: 'base', numeric: true});
+                let farmPickerCurrentPage = 1;
                 const showForm = () => { card.classList.remove('d-none'); setTimeout(() => card.scrollIntoView({behavior:'smooth', block:'start'}), 30); };
                 document.querySelectorAll('[data-purchase-form-toggle]').forEach(button => button.addEventListener('click', showForm));
                 document.querySelector('[data-purchase-form-close]')?.addEventListener('click', () => card.classList.add('d-none'));
@@ -170,19 +186,31 @@
                             : Number(left.dataset[sortKey] || 0) - Number(right.dataset[sortKey] || 0);
                         return sortDirection === 'desc' ? -result : result;
                     });
+                    const perPage = Number(farmPickerPerPage?.value || 10);
+                    const lastPage = Math.max(1, Math.ceil(visibleRows.length / perPage));
+                    farmPickerCurrentPage = Math.min(Math.max(1, farmPickerCurrentPage), lastPage);
+                    const firstIndex = (farmPickerCurrentPage - 1) * perPage;
+                    const pageRows = visibleRows.slice(firstIndex, firstIndex + perPage);
                     farmRows.forEach(row => row.classList.add('d-none'));
-                    visibleRows.forEach(row => { row.classList.remove('d-none'); farmPickerRowsBody.insertBefore(row, farmPickerEmpty); });
+                    pageRows.forEach(row => { row.classList.remove('d-none'); farmPickerRowsBody.insertBefore(row, farmPickerEmpty); });
                     if (farmPickerEmpty) farmPickerEmpty.classList.toggle('d-none', visibleRows.length > 0 || farmRows.length === 0);
                     const count = document.getElementById('farmPickerCount');
                     if (count) count.textContent = visibleRows.length.toLocaleString('vi-VN');
+                    if (farmPickerRange) farmPickerRange.textContent = visibleRows.length ? `Hiển thị ${firstIndex + 1}–${firstIndex + pageRows.length} trong ${visibleRows.length} trang trại` : 'Không có trang trại phù hợp';
+                    if (farmPickerPageLabel) farmPickerPageLabel.textContent = `Trang ${farmPickerCurrentPage} / ${lastPage}`;
+                    if (farmPickerPrevious) farmPickerPrevious.disabled = farmPickerCurrentPage <= 1;
+                    if (farmPickerNext) farmPickerNext.disabled = farmPickerCurrentPage >= lastPage;
                 };
                 document.querySelector('[data-farm-picker-open]')?.addEventListener('click', () => {
                     refreshFarmRows();
                     bootstrap.Modal.getOrCreateInstance(farmPickerModalElement).show();
                     farmPickerModalElement.addEventListener('shown.bs.modal', () => farmPickerSearch?.focus(), {once: true});
                 });
-                farmPickerSearch?.addEventListener('input', refreshFarmRows);
-                farmPickerSort?.addEventListener('change', refreshFarmRows);
+                farmPickerSearch?.addEventListener('input', () => { farmPickerCurrentPage = 1; refreshFarmRows(); });
+                farmPickerSort?.addEventListener('change', () => { farmPickerCurrentPage = 1; refreshFarmRows(); });
+                farmPickerPerPage?.addEventListener('change', () => { farmPickerCurrentPage = 1; refreshFarmRows(); });
+                farmPickerPrevious?.addEventListener('click', () => { farmPickerCurrentPage--; refreshFarmRows(); });
+                farmPickerNext?.addEventListener('click', () => { farmPickerCurrentPage++; refreshFarmRows(); });
                 farmRows.forEach(row => row.querySelector('[data-select-farm]')?.addEventListener('click', () => {
                     farm.value = row.dataset.id;
                     farmPickerLabel.textContent = row.dataset.name;

@@ -4,6 +4,7 @@
 
 @php
     $formatNumber = static fn ($value) => rtrim(rtrim(number_format((float) $value, 3, ',', ''), '0'), ',');
+    $calculationSizes = collect($processedSizes)->filter(fn ($size) => (float) $size >= 2.2 && (float) $size <= 3.1);
 @endphp
 
 @section('content')
@@ -36,15 +37,30 @@
 <div class="card border-0 shadow-sm mt-4">
     <div class="card-header bg-white"><strong>Tính thử sản lượng sơ chế</strong></div>
     <div class="card-body">
-        <div class="row g-2">
-            <div class="col-md-3"><label>Số lượng vịt lông</label><input id="calcQuantity" type="number" value="1000" class="form-control"></div>
-            <div class="col-md-3"><label>Size vịt lông</label><select id="calcLiveSize" class="form-select">@foreach($liveSizes as $size)<option value="{{ $size }}">{{ $formatNumber($size) }}</option>@endforeach</select></div>
-            <div class="col-md-2 align-self-end"><button type="button" id="calculateBtn" class="btn btn-warning w-100">Tính sản lượng</button></div>
+        <div class="row g-2 align-items-end">
+            <div class="col-md-3"><label class="form-label">Số lượng vịt lông</label><input id="calcQuantity" type="number" min="0" value="800" class="form-control"></div>
+            <div class="col-md-3"><label class="form-label">Size vịt lông</label><select id="calcLiveSize" class="form-select">@foreach($liveSizes as $size)<option value="{{ $size }}" @selected((float) $size === 3.5)>{{ $formatNumber($size) }}</option>@endforeach</select></div>
+            <div class="col-md-3"><button type="button" id="calculateBtn" class="btn btn-warning w-100"><i class="bi bi-calculator me-1"></i>Tính sản lượng</button></div>
         </div>
-        <div id="conversionResult" class="mt-3"></div>
+        <div class="table-responsive conversion-result-wrap mt-3">
+            <table class="table table-sm align-middle mb-0 conversion-result-table">
+                <thead><tr><th>Sản phẩm</th><th>ĐVT</th><th class="text-end">Số lượng</th></tr></thead>
+                <tbody>
+                    @foreach($calculationSizes as $size)
+                        <tr data-output-size="{{ $size }}"><td>{{ $formatNumber($size) }} kg</td><td>Con</td><td class="text-end conversion-quantity">0</td></tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 @endsection
+
+@push('styles')
+<style>
+    .conversion-result-wrap{max-width:720px;border:1px solid #d9e1e8;border-radius:8px;overflow:hidden}.conversion-result-table thead th{background:#713d17;color:#fff;border:0;padding:.65rem .8rem}.conversion-result-table tbody td{padding:.48rem .8rem;border-color:#dce4ea;background:#fafdff}.conversion-result-table tbody tr:nth-child(even) td{background:#f5f9fb}.conversion-quantity{color:#1546e8;font-weight:700;font-variant-numeric:tabular-nums}
+</style>
+@endpush
 
 @push('scripts')
 <script>
@@ -82,16 +98,12 @@
         const quantity = Number(document.getElementById('calcQuantity').value) || 0;
         const liveSize = document.getElementById('calcLiveSize').value;
         const row = [...document.querySelectorAll('[data-rate-row]')].find(item => parseNumber(item.querySelector('th').textContent) === Number(liveSize));
-        let html = '<div class="row g-2">';
-        if (row) {
-            [...row.querySelectorAll('.rate-input')].forEach(input => {
-                const size = input.name.match(/\[([^\]]+)\]$/)[1];
-                const percentage = parseNumber(input.value);
-                if (percentage > 0) html += `<div class="col-4 col-md-2"><div class="border rounded p-2"><small>Size ${formatNumber(size)}</small><div class="fw-bold">${Math.round(quantity * percentage / 100).toLocaleString('vi-VN')} con</div></div></div>`;
-            });
-        }
-        html += `<div class="col-4 col-md-2"><div class="border rounded p-2"><small>Bộ lông</small><div class="fw-bold">${quantity.toLocaleString('vi-VN')} con</div></div></div><div class="col-4 col-md-2"><div class="border rounded p-2"><small>Bộ lòng</small><div class="fw-bold">${quantity.toLocaleString('vi-VN')} con</div></div></div></div>`;
-        document.getElementById('conversionResult').innerHTML = html;
+        const ratesBySize = new Map();
+        if (row) [...row.querySelectorAll('.rate-input')].forEach(input => ratesBySize.set(Number(input.name.match(/\[([^\]]+)\]$/)[1]), parseNumber(input.value)));
+        document.querySelectorAll('[data-output-size]').forEach(outputRow => {
+            const percentage = ratesBySize.get(Number(outputRow.dataset.outputSize)) || 0;
+            outputRow.querySelector('.conversion-quantity').textContent = Math.round(quantity * percentage / 100).toLocaleString('vi-VN');
+        });
     });
 })();
 </script>

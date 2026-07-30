@@ -11,7 +11,7 @@
     @stack('styles')
     <style>
         :root {
-            --sidebar-width: 240px;
+            --sidebar-width: 190px;
             --theme-primary: #0f766e;
             --theme-primary-hover: #115e59;
             --theme-accent: #ffc107;
@@ -50,7 +50,7 @@
         .wh-nav-link:hover { color: #fff; background: rgba(255,255,255,.08); border-left-color: var(--theme-accent); }
         .wh-nav-link.active { color: #fff; background: rgba(255,193,7,.16); border-left-color: var(--sidebar-active); }
         .wh-nav-link .badge { margin-left: auto; font-size: .65rem; }
-        .wh-main { margin-left: var(--sidebar-width); min-height: 100vh; display: flex; flex-direction: column; }
+        .wh-main { margin-left: var(--sidebar-width); width: calc(100% - var(--sidebar-width)); min-height: 100vh; display: flex; flex-direction: column; }
         .wh-topbar {
             background: #fff; border-bottom: 1px solid #d8ece9; padding: .8rem 1.5rem;
             display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100;
@@ -203,7 +203,7 @@
                 transition: transform .22s ease;
             }
             .wh-sidebar.mobile-open { transform: translateX(0); }
-            .wh-main { margin-left: 0; }
+            .wh-main { margin-left: 0; width: 100%; }
             .wh-topbar { padding: .65rem .85rem; }
             .wh-content {
                 padding: .9rem;
@@ -219,6 +219,17 @@
             -webkit-overflow-scrolling: touch;
             overscroll-behavior: contain;
             padding-bottom: .35rem;
+        }
+        @media (min-width: 768px) {
+            .wh-sidebar {
+                display: flex !important;
+                visibility: visible !important;
+                transform: none !important;
+            }
+            .wh-main {
+                margin-left: var(--sidebar-width) !important;
+                width: calc(100% - var(--sidebar-width)) !important;
+            }
         }
     </style>
 </head>

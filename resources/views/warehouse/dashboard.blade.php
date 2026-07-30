@@ -356,10 +356,13 @@
     </div>
     <!-- Cột phải: Nghiệp vụ mới nhất -->
     <div class="col-md-12 col-lg-6">
-        <div class="mb-3 toolsdaily">
+        <div class="mb-3 toolsdaily d-flex align-items-center gap-3 flex-wrap">
             <a href="{{ route('warehouse.stock-in.create') }}" class="btn btn-success fw-700" >
                 <i class="bi bi-plus-circle me-1"></i> Tạo phiếu nhập kho
-            </a> 
+            </a>
+            <a href="{{ route('warehouse.stocktakes.index') }}" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-clipboard2-check me-1"></i>Kiểm kê kho
+            </a>
         </div>
         @if(($deferredComponentImportRequests ?? collect())->isNotEmpty())
             <div class="card border-warning shadow-sm mb-4">
@@ -429,11 +432,8 @@
             </div>
         @endif
         <!-- Thống kê tồn kho -->
-        <div class="underline mb-4 d-flex align-items-center justify-content-between gap-2">
+        <div class="underline mb-4 d-flex align-items-center gap-2">
             <span class="fw-semibold progress-title-underline d-flex align-items-center text-uppercase">Thống kê tồn kho</span>
-            <a href="{{ route('warehouse.stocktakes.index') }}" class="btn btn-sm btn-outline-primary">
-                <i class="bi bi-clipboard2-check me-1"></i>Kiểm kê kho
-            </a>
         </div>
         @include('warehouse._inventory_summary', [
             'title' => 'Tồn kho hôm nay - kho đang quản lý',
