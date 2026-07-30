@@ -452,9 +452,38 @@ class ProcurementController extends Controller
         return back()->with('success', 'Đã gửi phiếu yêu cầu thanh toán #' . $transaction->id . '.');
     }
 
-    public function farms()
+    public function farms(Request $request)
     {
-        return view('procurement.farms', ['farms' => DuckFarm::with(['reviews.user'])->latest()->get()]);
+        $perPage = in_array((int) $request->input('per_page', 20), [10, 20, 50, 100], true)
+            ? (int) $request->input('per_page', 20)
+            : 20;
+        $query = DuckFarm::query()->with(['reviews.user']);
+
+        if ($request->filled('q')) {
+            $keyword = trim((string) $request->input('q'));
+            $query->where(function ($farmQuery) use ($keyword): void {
+                $farmQuery->where('name', 'like', '%' . $keyword . '%')
+                    ->orWhere('phone', 'like', '%' . $keyword . '%')
+                    ->orWhere('address', 'like', '%' . $keyword . '%')
+                    ->orWhere('duck_breed', 'like', '%' . $keyword . '%');
+            });
+        }
+        if (in_array($request->input('status'), ['active', 'inactive'], true)) {
+            $query->where('is_active', $request->input('status') === 'active');
+        }
+        if (in_array($request->input('business_type'), ['individual', 'household', 'company', 'cooperative'], true)) {
+            $query->where('business_type', $request->input('business_type'));
+        }
+        if ($request->filled('duck_breed')) {
+            $query->where('duck_breed', $request->input('duck_breed'));
+        }
+
+        return view('procurement.farms', [
+            'farms' => $query->orderBy('name')->paginate($perPage)->withQueryString(),
+            'totalFarms' => DuckFarm::count(),
+            'duckBreeds' => DuckFarm::query()->whereNotNull('duck_breed')->where('duck_breed', '!=', '')->distinct()->orderBy('duck_breed')->pluck('duck_breed'),
+            'perPage' => $perPage,
+        ]);
     }
 
     public function farmDebts(Request $request)

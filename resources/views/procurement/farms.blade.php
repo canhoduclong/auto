@@ -4,8 +4,41 @@
 
 @section('content')
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <div class="text-muted">Tổng cộng <strong>{{ $farms->count() }}</strong> trang trại</div>
+    <div class="text-muted">Tổng cộng <strong>{{ number_format($totalFarms) }}</strong> trang trại</div>
     <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addFarmModal"><i class="bi bi-plus-circle me-1"></i>Thêm trang trại</button>
+</div>
+
+<div class="card border-0 shadow-sm mb-3">
+    <div class="card-body">
+        <form method="GET" action="{{ route('procurement.farms.index') }}" class="row g-2 align-items-end">
+            <div class="col-lg-4 col-md-6">
+                <label class="form-label small fw-semibold">Tìm kiếm trang trại</label>
+                <div class="input-group"><span class="input-group-text bg-white"><i class="bi bi-search"></i></span><input type="search" name="q" value="{{ request('q') }}" class="form-control" placeholder="Tên trại, SĐT, địa chỉ, loại vịt..."></div>
+            </div>
+            <div class="col-lg-2 col-md-3">
+                <label class="form-label small fw-semibold">Trạng thái</label>
+                <select name="status" class="form-select"><option value="">Tất cả</option><option value="active" @selected(request('status') === 'active')>Đang sử dụng</option><option value="inactive" @selected(request('status') === 'inactive')>Tạm ngưng</option></select>
+            </div>
+            <div class="col-lg-2 col-md-3">
+                <label class="form-label small fw-semibold">Loại hình</label>
+                <select name="business_type" class="form-select"><option value="">Tất cả</option>@foreach(['individual'=>'Cá nhân','household'=>'Hộ kinh doanh','company'=>'Công ty','cooperative'=>'Hợp tác xã'] as $key=>$label)<option value="{{ $key }}" @selected(request('business_type') === $key)>{{ $label }}</option>@endforeach</select>
+            </div>
+            <div class="col-lg-2 col-md-4">
+                <label class="form-label small fw-semibold">Loại vịt</label>
+                <select name="duck_breed" class="form-select"><option value="">Tất cả</option>@foreach($duckBreeds as $breed)<option value="{{ $breed }}" @selected(request('duck_breed') === $breed)>{{ $breed }}</option>@endforeach</select>
+            </div>
+            <div class="col-lg-2 col-md-4 d-flex gap-2">
+                <button class="btn btn-primary flex-grow-1"><i class="bi bi-funnel me-1"></i>Lọc</button>
+                <a href="{{ route('procurement.farms.index') }}" class="btn btn-outline-secondary" title="Đặt lại bộ lọc"><i class="bi bi-arrow-counterclockwise"></i></a>
+            </div>
+            <div class="col-12 d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3 pt-3 border-top">
+                <div class="small text-muted">
+                    @if($farms->total()) Hiển thị <strong>{{ $farms->firstItem() }}–{{ $farms->lastItem() }}</strong> trong <strong>{{ number_format($farms->total()) }}</strong> kết quả @else Không tìm thấy kết quả phù hợp @endif
+                </div>
+                <div class="d-flex align-items-center gap-2"><label class="small text-muted text-nowrap">Hiển thị</label><select name="per_page" class="form-select form-select-sm" style="width:105px" onchange="this.form.submit()">@foreach([10,20,50,100] as $option)<option value="{{ $option }}" @selected($perPage === $option)>{{ $option }} / trang</option>@endforeach</select></div>
+            </div>
+        </form>
+    </div>
 </div>
 
 <div class="card border-0 shadow-sm">
@@ -30,11 +63,17 @@
                     </td>
                 </tr>
             @empty
-                <tr><td colspan="8" class="text-center text-muted py-5">Chưa có trang trại nào.</td></tr>
+                <tr><td colspan="8" class="text-center text-muted py-5"><i class="bi bi-search fs-3 d-block mb-2"></i>{{ request()->hasAny(['q','status','business_type','duck_breed']) ? 'Không tìm thấy trang trại phù hợp với bộ lọc.' : 'Chưa có trang trại nào.' }}</td></tr>
             @endforelse
             </tbody>
         </table>
     </div>
+    @if($farms->hasPages())
+        <div class="card-footer bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <span class="small text-muted">Trang {{ $farms->currentPage() }} / {{ $farms->lastPage() }}</span>
+            {{ $farms->onEachSide(1)->links() }}
+        </div>
+    @endif
 </div>
 
 <div class="modal fade" id="addFarmModal" tabindex="-1"><div class="modal-dialog modal-lg"><form method="POST" action="{{ route('procurement.farms.store') }}" class="modal-content">@csrf
