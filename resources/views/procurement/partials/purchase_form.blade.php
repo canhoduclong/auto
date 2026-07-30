@@ -1,4 +1,5 @@
 @php($purchaseFormOpen = isset($errors) && $errors->any() && old('paste_data') === null)
+@php($selectedPurchaseFarm = $purchaseFarms->firstWhere('id', (int) old('duck_farm_id')))
 <div class="card border-0 shadow-sm mb-4 {{ $purchaseFormOpen ? '' : 'd-none' }}" id="purchaseFormCard">
     <div class="card-header bg-white d-flex justify-content-between align-items-center">
         <div><strong>Form thu mua</strong><span id="selectedFarmLabel" class="badge bg-success ms-2 d-none"></span></div>
@@ -23,7 +24,10 @@
                     </div>
                     <div class="col-xl-6 live-field">
                         <label class="form-label">Trang trại <span class="text-danger">*</span></label>
-                        <select class="form-select" name="duck_farm_id" id="farmSelect"><option value="">Chọn trang trại</option>@foreach($purchaseFarms as $farm)<option value="{{ $farm->id }}" @selected((string) old('duck_farm_id') === (string) $farm->id)>{{ $farm->name }}</option>@endforeach</select>
+                        <input type="hidden" name="duck_farm_id" id="farmSelect" value="{{ old('duck_farm_id') }}">
+                        <button type="button" class="form-control farm-picker-button d-flex justify-content-between align-items-center text-start {{ $selectedPurchaseFarm ? 'has-value' : '' }}" id="farmPickerButton" data-farm-picker-open>
+                            <span><i class="bi bi-houses me-2"></i><span id="farmPickerLabel">{{ $selectedPurchaseFarm?->name ?? 'Chọn trang trại' }}</span></span><i class="bi bi-chevron-right"></i>
+                        </button>
                     </div>
                     <div class="col-xl-6 processed-field d-none">
                         <label class="form-label">Nhà cung cấp vịt thịt <span class="text-danger">*</span></label>
@@ -81,10 +85,48 @@
     </div>
 </div>
 
+<div class="modal fade" id="farmPickerModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header"><div><h5 class="modal-title">Chọn trang trại thu mua</h5><div class="small text-muted">Tìm kiếm theo tên, điện thoại, địa chỉ, loại vịt và ghi chú.</div></div><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body p-0">
+                <div class="farm-picker-toolbar p-3 border-bottom bg-light">
+                    <div class="row g-2">
+                        <div class="col-md-8"><div class="input-group"><span class="input-group-text bg-white"><i class="bi bi-search"></i></span><input type="search" class="form-control" id="farmPickerSearch" placeholder="Tìm tên trại, SĐT, địa chỉ, loại vịt, ghi chú..."></div></div>
+                        <div class="col-md-4"><select class="form-select" id="farmPickerSort"><option value="name_asc">Tên trại A → Z</option><option value="name_desc">Tên trại Z → A</option><option value="scale_desc">Quy mô lớn nhất</option><option value="rating_desc">Đánh giá cao nhất</option><option value="recent_desc">Thu mua gần nhất</option></select></div>
+                    </div>
+                    <div class="small text-muted mt-2"><strong id="farmPickerCount">{{ $purchaseFarms->count() }}</strong> trang trại phù hợp</div>
+                </div>
+                <div class="table-responsive farm-picker-table-wrap">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light sticky-top"><tr><th>Trang trại</th><th>Liên hệ</th><th>Quy mô / Loại vịt</th><th>Đánh giá</th><th>Ghi chú</th><th></th></tr></thead>
+                        <tbody id="farmPickerRows">
+                        @forelse($purchaseFarms as $farm)
+                            <tr class="farm-picker-row" data-id="{{ $farm->id }}" data-name="{{ $farm->name }}" data-scale="{{ (int) ($farm->scale ?? 0) }}" data-rating="{{ (float) $farm->rating }}" data-recent="{{ $farm->last_purchase_at?->timestamp ?? 0 }}" data-search="{{ implode(' ', array_filter([$farm->name, $farm->phone, $farm->address, $farm->duck_breed, $farm->notes])) }}">
+                                <td><div class="fw-semibold">{{ $farm->name }}</div><div class="small text-muted">{{ $farm->address ?: 'Chưa có địa chỉ' }}</div></td>
+                                <td>{{ $farm->phone ?: '—' }}<div class="small text-muted">{{ ['individual'=>'Cá nhân','household'=>'Hộ kinh doanh','company'=>'Công ty','cooperative'=>'Hợp tác xã'][$farm->business_type] ?? $farm->business_type }}</div></td>
+                                <td>{{ number_format($farm->scale ?? 0) }} con<div class="small text-muted">{{ $farm->duck_breed ?: 'Chưa rõ loại vịt' }}</div></td>
+                                <td><span class="text-warning">★</span> {{ number_format((float) $farm->rating, 1) }}<div class="small text-muted">Lần bắt: {{ $farm->last_purchase_at?->format('d/m/Y') ?? '—' }}</div></td>
+                                <td><div class="small farm-note" title="{{ $farm->notes }}">{{ $farm->notes ?: '—' }}</div></td>
+                                <td class="text-end"><button type="button" class="btn btn-sm btn-outline-success text-nowrap" data-select-farm>Chọn trại</button></td>
+                            </tr>
+                        @empty
+                            <tr data-empty-farms><td colspan="6" class="text-center text-muted py-5">Chưa có trang trại đang hoạt động.</td></tr>
+                        @endforelse
+                        <tr class="d-none" id="farmPickerEmpty"><td colspan="6" class="text-center text-muted py-5"><i class="bi bi-search d-block fs-3 mb-2"></i>Không tìm thấy trang trại phù hợp.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Đóng</button></div>
+        </div>
+    </div>
+</div>
+
 @once
     @push('styles')
         <style>
-            .purchase-section{border:1px solid #f0dfc5;border-radius:10px;padding:1rem;background:#fffdf9}.purchase-section-title{font-size:.82rem;font-weight:800;text-transform:uppercase;color:#92400e;margin-bottom:.65rem}.purchase-section .form-label{font-size:.78rem;font-weight:600;color:#475569;margin-bottom:.3rem}.purchase-section .form-control,.purchase-section .form-select,.purchase-section .input-group-text{min-height:38px}.purchase-total-bar{background:#fff7e6;border:1px solid #f3d39f;border-radius:10px;padding:.8rem 1rem}@media(max-width:576px){.purchase-section{padding:.75rem}.purchase-total-bar .btn{width:100%}}
+            .purchase-section{border:1px solid #f0dfc5;border-radius:10px;padding:1rem;background:#fffdf9}.purchase-section-title{font-size:.82rem;font-weight:800;text-transform:uppercase;color:#92400e;margin-bottom:.65rem}.purchase-section .form-label{font-size:.78rem;font-weight:600;color:#475569;margin-bottom:.3rem}.purchase-section .form-control,.purchase-section .form-select,.purchase-section .input-group-text{min-height:38px}.purchase-total-bar{background:#fff7e6;border:1px solid #f3d39f;border-radius:10px;padding:.8rem 1rem}.farm-picker-button{background:#fff;color:#64748b}.farm-picker-button:hover,.farm-picker-button:focus{border-color:#92400e;box-shadow:0 0 0 .2rem rgba(146,64,14,.12)}.farm-picker-button.has-value{color:#1f2937;font-weight:600}.farm-picker-table-wrap{max-height:58vh}.farm-picker-row.is-selected td{background:#f0fdf4}.farm-note{max-width:260px;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}@media(max-width:576px){.purchase-section{padding:.75rem}.purchase-total-bar .btn{width:100%}}
         </style>
     @endpush
     @push('scripts')
@@ -95,6 +137,16 @@
                 if (!card || !type) return;
                 const farm = document.getElementById('farmSelect');
                 const supplier = document.getElementById('supplierSelect');
+                const farmPickerButton = document.getElementById('farmPickerButton');
+                const farmPickerLabel = document.getElementById('farmPickerLabel');
+                const farmPickerModalElement = document.getElementById('farmPickerModal');
+                const farmPickerSearch = document.getElementById('farmPickerSearch');
+                const farmPickerSort = document.getElementById('farmPickerSort');
+                const farmPickerRowsBody = document.getElementById('farmPickerRows');
+                const farmPickerEmpty = document.getElementById('farmPickerEmpty');
+                const farmRows = [...document.querySelectorAll('.farm-picker-row')];
+                const normalizeText = value => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd').toLowerCase().replace(/\s+/g, ' ').trim();
+                const collator = new Intl.Collator('vi', {sensitivity: 'base', numeric: true});
                 const showForm = () => { card.classList.remove('d-none'); setTimeout(() => card.scrollIntoView({behavior:'smooth', block:'start'}), 30); };
                 document.querySelectorAll('[data-purchase-form-toggle]').forEach(button => button.addEventListener('click', showForm));
                 document.querySelector('[data-purchase-form-close]')?.addEventListener('click', () => card.classList.add('d-none'));
@@ -107,6 +159,41 @@
                 };
                 type.addEventListener('change', syncType);
                 syncType();
+                const refreshFarmRows = () => {
+                    if (!farmPickerRowsBody) return;
+                    const keywords = normalizeText(farmPickerSearch?.value).split(' ').filter(Boolean);
+                    const visibleRows = farmRows.filter(row => keywords.every(keyword => normalizeText(row.dataset.search).includes(keyword)));
+                    const [sortKey, sortDirection] = (farmPickerSort?.value || 'name_asc').split('_');
+                    visibleRows.sort((left, right) => {
+                        let result = sortKey === 'name'
+                            ? collator.compare(left.dataset.name, right.dataset.name)
+                            : Number(left.dataset[sortKey] || 0) - Number(right.dataset[sortKey] || 0);
+                        return sortDirection === 'desc' ? -result : result;
+                    });
+                    farmRows.forEach(row => row.classList.add('d-none'));
+                    visibleRows.forEach(row => { row.classList.remove('d-none'); farmPickerRowsBody.insertBefore(row, farmPickerEmpty); });
+                    if (farmPickerEmpty) farmPickerEmpty.classList.toggle('d-none', visibleRows.length > 0 || farmRows.length === 0);
+                    const count = document.getElementById('farmPickerCount');
+                    if (count) count.textContent = visibleRows.length.toLocaleString('vi-VN');
+                };
+                document.querySelector('[data-farm-picker-open]')?.addEventListener('click', () => {
+                    refreshFarmRows();
+                    bootstrap.Modal.getOrCreateInstance(farmPickerModalElement).show();
+                    farmPickerModalElement.addEventListener('shown.bs.modal', () => farmPickerSearch?.focus(), {once: true});
+                });
+                farmPickerSearch?.addEventListener('input', refreshFarmRows);
+                farmPickerSort?.addEventListener('change', refreshFarmRows);
+                farmRows.forEach(row => row.querySelector('[data-select-farm]')?.addEventListener('click', () => {
+                    farm.value = row.dataset.id;
+                    farmPickerLabel.textContent = row.dataset.name;
+                    farmPickerButton.classList.add('has-value');
+                    farmRows.forEach(item => item.classList.toggle('is-selected', item === row));
+                    const selectedLabel = document.getElementById('selectedFarmLabel');
+                    selectedLabel.textContent = 'Đã chọn: ' + row.dataset.name;
+                    selectedLabel.classList.remove('d-none');
+                    bootstrap.Modal.getInstance(farmPickerModalElement)?.hide();
+                }));
+                farmRows.forEach(row => row.classList.toggle('is-selected', String(row.dataset.id) === String(farm?.value || '')));
                 document.querySelectorAll('.js-other-select').forEach(select => {
                     const syncOther = () => {
                         const input = document.getElementById(select.dataset.otherTarget);
@@ -141,6 +228,8 @@
                     document.querySelectorAll('.farm-card').forEach(item => item.classList.remove('selected'));
                     farmCard.classList.add('selected');
                     farm.value = farmCard.dataset.farmId;
+                    if (farmPickerLabel) farmPickerLabel.textContent = farmCard.dataset.farmName;
+                    farmPickerButton?.classList.add('has-value');
                     type.value = 'live_duck';
                     syncType();
                     const label = document.getElementById('selectedFarmLabel');
