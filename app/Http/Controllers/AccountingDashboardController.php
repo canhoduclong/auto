@@ -532,7 +532,7 @@ class AccountingDashboardController extends Controller
             : null;
 
         $query = ProcurementPurchase::query()->with([
-            'farm', 'supplier', 'warehouse', 'paymentRequest', 'items',
+            'farm', 'supplier', 'warehouse', 'paymentRequest', 'items', 'productItems.productVariant.product',
             'debtPayments' => fn ($paymentQuery) => $paymentQuery->with(['transaction', 'recorder:id,name'])->latest('paid_at'),
         ]);
 

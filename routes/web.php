@@ -434,6 +434,8 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/purchases/import-pasted', [\App\Http\Controllers\ProcurementController::class, 'importPastedPurchases'])->name('purchases.import-pasted');
         Route::post('/purchases/{purchase}/send-warehouse', [\App\Http\Controllers\ProcurementController::class, 'sendToWarehouse'])->name('purchases.send-warehouse');
         Route::post('/purchases/{purchase}/request-payment', [\App\Http\Controllers\ProcurementController::class, 'requestPayment'])->name('purchases.request-payment');
+        Route::post('/purchase-templates', [\App\Http\Controllers\ProcurementPurchaseTemplateController::class, 'store'])->name('purchase-templates.store');
+        Route::delete('/purchase-templates/{template}', [\App\Http\Controllers\ProcurementPurchaseTemplateController::class, 'destroy'])->name('purchase-templates.destroy');
         Route::get('/farms', [\App\Http\Controllers\ProcurementController::class, 'farms'])->name('farms.index');
         Route::get('/farm-debts', [\App\Http\Controllers\ProcurementController::class, 'farmDebts'])->name('farm-debts.index');
         Route::post('/farms', [\App\Http\Controllers\ProcurementController::class, 'storeFarm'])->name('farms.store');

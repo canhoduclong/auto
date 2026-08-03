@@ -7,6 +7,10 @@ use App\Models\DuckFarmReview;
 use App\Models\DuckProcessingConversionRate;
 use App\Models\ProcurementPurchase;
 use App\Models\ProcurementPurchaseItem;
+use App\Models\ProcurementPurchaseProductItem;
+use App\Models\ProcurementPurchaseTemplate;
+use App\Models\ProductVariant;
+use App\Models\SupplierProductPrice;
 use App\Models\Supplier;
 use App\Models\Transaction;
 use App\Models\TransactionCategory;
@@ -56,7 +60,7 @@ class ProcurementController extends Controller
             && $farm->raising_age_days <= 50
         )->sortBy('raising_age_days')->values();
 
-        $dashboardPurchases = ProcurementPurchase::with(['farm', 'supplier', 'warehouse', 'paymentRequest', 'items'])
+        $dashboardPurchases = ProcurementPurchase::with(['farm', 'supplier', 'warehouse', 'paymentRequest', 'items', 'productItems.productVariant.product'])
             ->whereBetween('purchased_at', [$from, $to])->latest('purchased_at')->get();
         $receivedPurchases = $dashboardPurchases->where('status', ProcurementPurchase::STATUS_RECEIVED);
         $quantity = (int) $dashboardPurchases->sum('quantity');
@@ -125,6 +129,8 @@ class ProcurementController extends Controller
             'warehouses' => Warehouse::orderBy('name')->get(),
             'liveSizes' => self::LIVE_SIZES,
             'processedSizes' => self::PROCESSED_SIZES,
+            'purchaseProductVariants' => $this->purchaseProductVariants(),
+            'purchaseTemplates' => $this->purchaseTemplates(),
         ]);
     }
 
@@ -132,7 +138,7 @@ class ProcurementController extends Controller
     {
         $from = $request->filled('from_date') ? Carbon::parse($request->input('from_date'))->toDateString() : today()->startOfMonth()->toDateString();
         $to = $request->filled('to_date') ? Carbon::parse($request->input('to_date'))->toDateString() : today()->toDateString();
-        $purchases = ProcurementPurchase::with(['farm', 'supplier', 'warehouse', 'paymentRequest', 'items'])
+        $purchases = ProcurementPurchase::with(['farm', 'supplier', 'warehouse', 'paymentRequest', 'items', 'productItems.productVariant.product'])
             ->whereDate('purchased_at', '>=', $from)->whereDate('purchased_at', '<=', $to)->latest('purchased_at')->paginate(30)->withQueryString();
         return view('procurement.purchases', [
             'purchases' => $purchases,
@@ -141,22 +147,24 @@ class ProcurementController extends Controller
             'purchaseFarms' => DuckFarm::query()->where('is_active', true)->orderBy('name')->get(),
             'suppliers' => Supplier::active()->orderBy('name')->get(),
             'processedSizes' => self::PROCESSED_SIZES,
+            'purchaseProductVariants' => $this->purchaseProductVariants(),
+            'purchaseTemplates' => $this->purchaseTemplates(),
         ]);
     }
 
     public function storePurchase(Request $request)
     {
         $validated = $request->validate([
-            'purchase_type' => ['required', 'in:live_duck,processed_duck'],
+            'purchase_type' => ['required', 'in:live_duck,processed_duck,product_purchase'],
             'duck_farm_id' => ['nullable', 'required_if:purchase_type,live_duck', 'exists:duck_farms,id'],
-            'supplier_id' => ['nullable', 'required_if:purchase_type,processed_duck', 'exists:suppliers,id'],
-            'duck_type' => ['required', 'string', 'max:255'],
+            'supplier_id' => ['nullable', 'required_unless:purchase_type,live_duck', 'exists:suppliers,id'],
+            'duck_type' => ['nullable', 'required_unless:purchase_type,product_purchase', 'string', 'max:255'],
             'duck_type_other' => ['nullable', 'string', 'max:255', 'required_if:duck_type,other'],
-            'farm_type' => ['required', 'string', 'max:255'],
+            'farm_type' => ['nullable', 'required_unless:purchase_type,product_purchase', 'string', 'max:255'],
             'farm_type_other' => ['nullable', 'string', 'max:255', 'required_if:farm_type,other'],
-            'quantity' => ['required', 'integer', 'min:1'],
-            'total_weight' => ['required', 'numeric', 'min:0.001'],
-            'unit_price' => ['required', 'numeric', 'min:0'],
+            'quantity' => ['nullable', 'required_unless:purchase_type,product_purchase', 'integer', 'min:1'],
+            'total_weight' => ['nullable', 'required_unless:purchase_type,product_purchase', 'numeric', 'min:0.001'],
+            'unit_price' => ['nullable', 'required_unless:purchase_type,product_purchase', 'numeric', 'min:0'],
             'broker_fee' => ['nullable', 'numeric', 'min:0'],
             'processing_fee' => ['nullable', 'numeric', 'min:0'],
             'procurement_fee' => ['nullable', 'numeric', 'min:0'],
@@ -171,7 +179,34 @@ class ProcurementController extends Controller
             'live_size' => ['nullable', 'numeric', 'min:0.1', 'max:10'],
             'sizes' => ['nullable', 'array'],
             'sizes.*' => ['nullable', 'integer', 'min:0'],
+            'product_items' => ['nullable', 'required_if:purchase_type,product_purchase', 'array', 'min:1'],
+            'product_items.*.product_variant_id' => ['required', 'distinct', 'exists:product_variants,id'],
+            'product_items.*.quantity' => ['required', 'numeric', 'gt:0'],
+            'product_items.*.weight' => ['nullable', 'numeric', 'min:0'],
+            'product_items.*.unit_cost' => ['required', 'numeric', 'min:0'],
+            'product_items.*.source_price_id' => ['nullable', 'exists:supplier_product_prices,id'],
+            'product_items.*.note' => ['nullable', 'string', 'max:500'],
         ]);
+
+        $isProductPurchase = $validated['purchase_type'] === 'product_purchase';
+        $normalizedProductItems = collect();
+        if ($isProductPurchase) {
+            $variantIds = collect($validated['product_items'])->pluck('product_variant_id');
+            $variants = ProductVariant::query()->with('product')->whereIn('id', $variantIds)
+                ->whereHas('product.suppliers', fn($q) => $q->where('suppliers.id', $validated['supplier_id'])->where('supplier_products.active', true))->get()->keyBy('id');
+            if ($variants->count() !== $variantIds->count()) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['product_items'=>'Có sản phẩm không thuộc nhà cung cấp đã chọn.']);
+            }
+            $normalizedProductItems = collect($validated['product_items'])->map(function($item) use ($variants, $validated) {
+                $variant = $variants[(int)$item['product_variant_id']];
+                if (!empty($item['source_price_id'])) {
+                    $validPrice = SupplierProductPrice::whereKey($item['source_price_id'])->where('supplier_id', $validated['supplier_id'])->where('product_id', $variant->product_id)->exists();
+                    if (!$validPrice) throw \Illuminate\Validation\ValidationException::withMessages(['product_items'=>'Bảng giá không khớp nhà cung cấp hoặc sản phẩm.']);
+                }
+                $quantity=(float)$item['quantity']; $weight=(float)($item['weight'] ?? ($quantity*(float)($variant->effective_kg ?? 1))); $unitCost=(float)$item['unit_cost'];
+                return [...$item, 'quantity'=>$quantity, 'weight'=>$weight, 'unit_cost'=>$unitCost, 'line_total'=>round($quantity*$unitCost, 2)];
+            });
+        }
 
         $validated['duck_type'] = ($validated['duck_type'] ?? null) === 'other'
             ? $validated['duck_type_other']
@@ -181,18 +216,24 @@ class ProcurementController extends Controller
             : ($validated['farm_type'] ?? null);
         unset($validated['duck_type_other'], $validated['farm_type_other']);
 
-        $purchase = DB::transaction(function () use ($validated): ProcurementPurchase {
-            $quantity = (int) $validated['quantity'];
-            $weight = (float) $validated['total_weight'];
-            $subtotal = round($weight * (float) $validated['unit_price'], 2);
+        $purchase = DB::transaction(function () use ($validated, $isProductPurchase, $normalizedProductItems): ProcurementPurchase {
+            $quantity = $isProductPurchase ? max(1, (int)ceil($normalizedProductItems->sum('quantity'))) : (int) $validated['quantity'];
+            $weight = $isProductPurchase ? (float)$normalizedProductItems->sum('weight') : (float) $validated['total_weight'];
+            $subtotal = $isProductPurchase ? (float)$normalizedProductItems->sum('line_total') : round($weight * (float) $validated['unit_price'], 2);
             $total = $subtotal + (float) ($validated['broker_fee'] ?? 0) + (float) ($validated['processing_fee'] ?? 0) + (float) ($validated['procurement_fee'] ?? 0) + (float) ($validated['transportation_fee'] ?? 0) + (float) ($validated['other_fee'] ?? 0);
             $paid = (float) ($validated['paid_amount'] ?? 0);
             $remaining = max(0, $total - $paid);
             $purchase = ProcurementPurchase::create([
-                ...$validated,
+                ...collect($validated)->except(['product_items'])->all(),
                 'code' => 'TM-' . now()->format('Ymd-His') . '-' . random_int(10, 99),
+                'purchase_type' => $isProductPurchase ? 'processed_duck' : $validated['purchase_type'],
+                'entry_mode' => $isProductPurchase ? 'product_lines' : 'duck_batch',
                 'created_by' => auth()->id(),
+                'duck_type' => $isProductPurchase ? 'Theo sản phẩm' : $validated['duck_type'],
+                'farm_type' => $isProductPurchase ? 'Nhà cung cấp' : $validated['farm_type'],
                 'average_weight' => round((float) ($validated['live_size'] ?? ($weight / $quantity)), 3),
+                'quantity' => $quantity, 'total_weight' => $weight,
+                'unit_price' => $isProductPurchase ? ($quantity > 0 ? $subtotal/$quantity : 0) : (float)$validated['unit_price'],
                 'subtotal' => $subtotal,
                 'broker_fee' => (float) ($validated['broker_fee'] ?? 0),
                 'processing_fee' => (float) ($validated['processing_fee'] ?? 0),
@@ -206,7 +247,9 @@ class ProcurementController extends Controller
                 'status' => ProcurementPurchase::STATUS_DRAFT,
             ]);
 
-            if ($validated['purchase_type'] === 'live_duck') {
+            if ($isProductPurchase) {
+                foreach ($normalizedProductItems as $item) $purchase->productItems()->create($item);
+            } elseif ($validated['purchase_type'] === 'live_duck') {
                 $liveSize = round((float) ($validated['live_size'] ?? ($weight / $quantity)), 1);
                 $rates = DuckProcessingConversionRate::where('live_size', $liveSize)->where('percentage', '>', 0)->get();
                 foreach ($rates as $rate) {
@@ -432,6 +475,7 @@ class ProcurementController extends Controller
 
     public function requestPayment(ProcurementPurchase $purchase)
     {
+        $purchase->loadMissing('productItems.productVariant.product');
         if ($purchase->paymentRequest?->status === Transaction::STATUS_REJECTED) {
             $purchase->update(['payment_transaction_id' => null]);
             $purchase->unsetRelation('paymentRequest');
@@ -441,9 +485,9 @@ class ProcurementController extends Controller
         $category = TransactionCategory::where('flow_direction', 'out')->where('is_active', true)->where(fn ($q) => $q->where('name', 'like', '%thu mua%')->orWhere('name', 'like', '%mua hàng%'))->first();
         $category ??= TransactionCategory::updateOrCreate(['code' => 'PROCUREMENT'], ['name' => 'Chi phí thu mua', 'flow_direction' => 'out', 'sort_order' => (int) TransactionCategory::max('sort_order') + 1, 'is_active' => true]);
         $source = $purchase->farm?->name ?? $purchase->supplier?->name ?? 'Nhà cung cấp';
-        $items = [
-            ['stt' => 1, 'content' => 'Thu mua ' . ($purchase->purchase_type === 'live_duck' ? 'vịt lông' : 'vịt thịt') . ' - ' . $source . ' - ' . $purchase->code, 'unit' => 'kg', 'quantity' => (float) $purchase->total_weight, 'unit_price' => (float) $purchase->unit_price, 'line_total' => (float) $purchase->subtotal],
-        ];
+        $items = $purchase->entry_mode === 'product_lines'
+            ? $purchase->productItems->values()->map(fn($item, $index) => ['stt'=>$index+1, 'content'=>trim(($item->productVariant?->product?->name ?? 'Sản phẩm').' - '.($item->productVariant?->name ?? 'Biến thể')).' - '.$source.' - '.$purchase->code, 'unit'=>$item->productVariant?->product?->unit_label ?? 'Đơn vị', 'quantity'=>(float)$item->quantity, 'unit_price'=>(float)$item->unit_cost, 'line_total'=>(float)$item->line_total])->all()
+            : [['stt' => 1, 'content' => 'Thu mua ' . ($purchase->purchase_type === 'live_duck' ? 'vịt lông' : 'vịt thịt') . ' - ' . $source . ' - ' . $purchase->code, 'unit' => 'kg', 'quantity' => (float) $purchase->total_weight, 'unit_price' => (float) $purchase->unit_price, 'line_total' => (float) $purchase->subtotal]];
         if ((float) $purchase->broker_fee > 0) $items[] = ['stt' => count($items) + 1, 'content' => 'Phí cò giới thiệu', 'unit' => 'lần', 'quantity' => 1, 'unit_price' => (float) $purchase->broker_fee, 'line_total' => (float) $purchase->broker_fee];
         if ((float) $purchase->processing_fee > 0) $items[] = ['stt' => count($items) + 1, 'content' => 'Chi phí xử lý sơ chế', 'unit' => 'lần', 'quantity' => 1, 'unit_price' => (float) $purchase->processing_fee, 'line_total' => (float) $purchase->processing_fee];
         if ((float) $purchase->procurement_fee > 0) $items[] = ['stt' => count($items) + 1, 'content' => 'Chi phí thu mua chuyến', 'unit' => 'chuyến', 'quantity' => 1, 'unit_price' => (float) $purchase->procurement_fee, 'line_total' => (float) $purchase->procurement_fee];
@@ -601,5 +645,25 @@ class ProcurementController extends Controller
             }
         });
         return back()->with('success', 'Đã lưu ma trận tỷ lệ quy đổi sơ chế.');
+    }
+
+    private function purchaseProductVariants()
+    {
+        return ProductVariant::query()->with(['product', 'inventories'])->where('status', true)->orderBy('product_id')->orderBy('name')->get()->map(function (ProductVariant $variant) {
+            return [
+                'variant_id'=>(int)$variant->id, 'product_id'=>(int)$variant->product_id,
+                'product_name'=>$variant->product?->name ?? 'Sản phẩm', 'product_sku'=>$variant->product?->sku ?? '',
+                'variant_name'=>$variant->name ?? 'Biến thể', 'variant_sku'=>$variant->sku ?? '', 'attributes'=>'',
+                'label'=>trim(($variant->product?->name ?? 'Sản phẩm').' - '.($variant->name ?? 'Biến thể')),
+                'unit_label'=>$variant->product?->unit_label ?? 'Cái', 'weight_per_unit'=>(float)($variant->effective_kg ?? 1),
+                'available'=>(float)$variant->inventories->sum(fn($inventory)=>(float)$inventory->quantity-(float)$inventory->reserved_quantity),
+            ];
+        })->values();
+    }
+
+    private function purchaseTemplates()
+    {
+        return ProcurementPurchaseTemplate::query()->with(['supplier','items.productVariant.product'])->orderBy('name')->get()
+            ->map(fn($template) => \App\Http\Controllers\ProcurementPurchaseTemplateController::payload($template))->values();
     }
 }

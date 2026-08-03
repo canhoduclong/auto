@@ -7,7 +7,7 @@
         <div class="modal-content">
             <div class="modal-header bg-light">
                 <h5 class="modal-title" id="productSelectionModalLabel">
-                    <i class="bi bi-box-seam me-2"></i>Chọn sản phẩm nhập kho
+                    <i class="bi bi-box-seam me-2"></i>{{ $productSelectionTitle ?? 'Chọn sản phẩm nhập kho' }}
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
             </div>
