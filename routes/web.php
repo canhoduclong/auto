@@ -237,6 +237,17 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     });
 
     Route::prefix('accounting')->name('accounting.')->middleware('role:account,accountant,accounting,admin')->group(function () {
+        Route::get('/workflow-simulation', [\App\Http\Controllers\AccountingWorkflowSimulationController::class, 'index'])->name('workflow-simulation.index');
+        Route::post('/workflow-simulation/stock-in', [\App\Http\Controllers\AccountingWorkflowSimulationController::class, 'stockIn'])->name('workflow-simulation.stock-in');
+        Route::post('/workflow-simulation/orders', [\App\Http\Controllers\AccountingWorkflowSimulationController::class, 'createOrder'])->name('workflow-simulation.orders.create');
+        Route::post('/workflow-simulation/orders/bulk', [\App\Http\Controllers\AccountingWorkflowSimulationController::class, 'bulkOrders'])->name('workflow-simulation.orders.bulk');
+        Route::post('/workflow-simulation/orders/advance', [\App\Http\Controllers\AccountingWorkflowSimulationController::class, 'advanceOrders'])->name('workflow-simulation.orders.advance');
+        Route::post('/workflow-simulation/transfers', [\App\Http\Controllers\AccountingWorkflowSimulationController::class, 'createTransfers'])->name('workflow-simulation.transfers.create');
+        Route::post('/workflow-simulation/transfers/advance', [\App\Http\Controllers\AccountingWorkflowSimulationController::class, 'advanceTransfers'])->name('workflow-simulation.transfers.advance');
+        Route::post('/workflow-simulation/transfers/receive-all', [\App\Http\Controllers\AccountingWorkflowSimulationController::class, 'receiveAll'])->name('workflow-simulation.transfers.receive-all');
+        Route::post('/workflow-simulation/assign-orders', [\App\Http\Controllers\AccountingWorkflowSimulationController::class, 'assignOrders'])->name('workflow-simulation.assign-orders');
+        Route::post('/workflow-simulation/deliver-orders', [\App\Http\Controllers\AccountingWorkflowSimulationController::class, 'deliverOrders'])->name('workflow-simulation.deliver-orders');
+        Route::post('/workflow-simulation/confirm-orders', [\App\Http\Controllers\AccountingWorkflowSimulationController::class, 'confirmOrders'])->name('workflow-simulation.confirm-orders');
         Route::get('/sales-ledger/export', [\App\Http\Controllers\AccountingSalesLedgerController::class, 'export'])->name('sales-ledger.export');
         Route::post('/sales-ledger/import', [\App\Http\Controllers\AccountingSalesLedgerController::class, 'import'])->name('sales-ledger.import');
         Route::post('/sales-ledger/sync', [\App\Http\Controllers\AccountingSalesLedgerController::class, 'sync'])->name('sales-ledger.sync');
@@ -254,6 +265,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/customer-debts/{customer}/debt-type', [AccountingDashboardController::class, 'customerDebtTypeUpdate'])->name('customer-debts.debt-type.update');
         Route::post('/customer-debts/{customer}/adjustments', [AccountingDashboardController::class, 'customerDebtAdjustmentStore'])->name('customer-debts.adjustments.store');
         Route::get('/supplier-debts', [AccountingDashboardController::class, 'supplierDebts'])->name('supplier-debts');
+        Route::post('/supplier-debts/{purchase}/payments', [AccountingDashboardController::class, 'supplierDebtPaymentStore'])->name('supplier-debts.payments.store');
         Route::get('/cashflow', [AccountingDashboardController::class, 'cashflow'])->name('cashflow');
         Route::get('/cashflow/refresh-history', [AccountingDashboardController::class, 'refreshHistory'])->name('refresh-history');
         Route::get('/cashflow/{transaction}/edit', [AccountingDashboardController::class, 'transactionEdit'])->name('transactions.edit');

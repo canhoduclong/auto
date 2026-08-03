@@ -5,17 +5,18 @@ namespace App\Http\Controllers;
 use App\Models\Account;
 use App\Models\AccountBalanceRefreshLog;
 use App\Models\AccountingReconciliation;
-use App\Models\Company;
 use App\Models\Customer;
 use App\Models\Inventory;
 use App\Models\InventoryDocumentItem;
 use App\Models\Order;
 use App\Models\OrderAdjustment;
+use App\Models\ProcurementPurchase;
 use App\Models\Transaction;
 use App\Models\TransactionCategory;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Notifications\AccountingOrderRevenueConfirmed;
+use App\Services\SupplierDebtService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -37,8 +38,8 @@ class AccountingDashboardController extends Controller
             ? (float) Order::query()->where('amount_due', '>', 0)->sum('amount_due')
             : 0.0;
 
-        $payableTotal = Schema::hasTable('accounting_supplier_payables')
-            ? (float) DB::table('accounting_supplier_payables')->whereIn('status', ['pending', 'partial', 'overdue'])->sum('amount')
+        $payableTotal = Schema::hasTable('procurement_purchases')
+            ? (float) ProcurementPurchase::query()->where('remaining_amount', '>', 0)->sum('remaining_amount')
             : 0.0;
 
         $todayIncome = (float) Transaction::query()
@@ -48,7 +49,8 @@ class AccountingDashboardController extends Controller
 
         $todayExpense = (float) Transaction::query()
             ->whereDate('created_at', now()->toDateString())
-            ->whereIn('type', ['refund', 'expense'])
+            ->whereIn('type', ['refund', 'fee', 'expense', 'extra_expense'])
+            ->where('status', Transaction::STATUS_APPROVED)
             ->sum('amount');
 
         $unpaidOrders = Schema::hasColumn('orders', 'amount_due')
@@ -522,30 +524,158 @@ class AccountingDashboardController extends Controller
     public function supplierDebts(Request $request)
     {
         $keyword = trim((string) $request->input('keyword', ''));
+        $debtStatus = in_array($request->input('debt_status'), ['outstanding', 'overdue', 'due_soon', 'paid', 'all'], true)
+            ? $request->input('debt_status')
+            : 'outstanding';
+        $sourceType = in_array($request->input('source_type'), ['farm', 'supplier'], true)
+            ? $request->input('source_type')
+            : null;
 
-        $companies = Company::query()
-            ->when($keyword !== '', function ($q) use ($keyword) {
-                $q->where('name', 'like', "%{$keyword}%");
-            })
-            ->orderBy('name')
-            ->paginate(20)
-            ->appends($request->query());
+        $query = ProcurementPurchase::query()->with([
+            'farm', 'supplier', 'warehouse', 'paymentRequest', 'items',
+            'debtPayments' => fn ($paymentQuery) => $paymentQuery->with(['transaction', 'recorder:id,name'])->latest('paid_at'),
+        ]);
 
-        $supplierPayables = collect();
-        if (Schema::hasTable('accounting_supplier_payables')) {
-            $supplierPayables = DB::table('accounting_supplier_payables')
-                ->whereIn('company_id', $companies->pluck('id'))
-                ->selectRaw('company_id, SUM(amount) as amount_due, MAX(due_date) as due_date, MAX(status) as status')
-                ->groupBy('company_id')
-                ->get()
-                ->keyBy('company_id');
+        $query->when($keyword !== '', function ($purchaseQuery) use ($keyword): void {
+            $purchaseQuery->where(function ($sourceQuery) use ($keyword): void {
+                $sourceQuery->where('code', 'like', '%'.$keyword.'%')
+                    ->orWhereHas('farm', fn ($farmQuery) => $farmQuery
+                        ->where('name', 'like', '%'.$keyword.'%')
+                        ->orWhere('phone', 'like', '%'.$keyword.'%'))
+                    ->orWhereHas('supplier', fn ($supplierQuery) => $supplierQuery
+                        ->where('name', 'like', '%'.$keyword.'%')
+                        ->orWhere('phone', 'like', '%'.$keyword.'%'));
+            });
+        });
+
+        if ($sourceType === 'farm') {
+            $query->whereNotNull('duck_farm_id');
+        } elseif ($sourceType === 'supplier') {
+            $query->whereNotNull('supplier_id');
         }
 
+        $query->when($request->filled('from_date'), fn ($q) => $q->whereDate('purchased_at', '>=', $request->input('from_date')))
+            ->when($request->filled('to_date'), fn ($q) => $q->whereDate('purchased_at', '<=', $request->input('to_date')));
+
+        match ($debtStatus) {
+            'overdue' => $query->where('remaining_amount', '>', 0)->whereNotNull('payment_due_date')->whereDate('payment_due_date', '<', today()),
+            'due_soon' => $query->where('remaining_amount', '>', 0)->whereBetween('payment_due_date', [today(), today()->addDays(7)]),
+            'paid' => $query->where('remaining_amount', '<=', 0),
+            'all' => null,
+            default => $query->where('remaining_amount', '>', 0),
+        };
+
+        $purchases = $query->latest('purchased_at')->get();
+        $supplierDebts = $purchases
+            ->groupBy(fn (ProcurementPurchase $purchase) => $purchase->duck_farm_id
+                ? 'farm:'.$purchase->duck_farm_id
+                : 'supplier:'.$purchase->supplier_id)
+            ->map(function ($sourcePurchases, string $key): array {
+                $source = $sourcePurchases->first()->farm ?? $sourcePurchases->first()->supplier;
+                $overdue = $sourcePurchases->filter(fn ($purchase) => (float) $purchase->remaining_amount > 0
+                    && $purchase->payment_due_date?->isBefore(today()));
+
+                return [
+                    'key' => str_replace(':', '-', $key),
+                    'type' => str_starts_with($key, 'farm:') ? 'Trang trại' : 'Nhà cung cấp',
+                    'source' => $source,
+                    'purchases' => $sourcePurchases,
+                    'purchase_count' => $sourcePurchases->count(),
+                    'quantity' => (int) $sourcePurchases->sum('quantity'),
+                    'weight' => (float) $sourcePurchases->sum('total_weight'),
+                    'total_amount' => (float) $sourcePurchases->sum('total_amount'),
+                    'paid_amount' => (float) $sourcePurchases->sum('paid_amount'),
+                    'remaining_amount' => (float) $sourcePurchases->sum('remaining_amount'),
+                    'overdue_amount' => (float) $overdue->sum('remaining_amount'),
+                    'nearest_due_date' => $sourcePurchases->where('remaining_amount', '>', 0)->whereNotNull('payment_due_date')->min('payment_due_date'),
+                ];
+            })
+            ->sortByDesc('remaining_amount')
+            ->values();
+
+        $legacyPayables = Schema::hasTable('accounting_supplier_payables')
+            ? DB::table('accounting_supplier_payables as payable')
+                ->join('companies as company', 'company.id', '=', 'payable.company_id')
+                ->select('payable.*', 'company.name as company_name')
+                ->orderByDesc('payable.amount')
+                ->get()
+            : collect();
+
         return view('accounting.supplier_debts', [
-            'companies' => $companies,
-            'supplierPayables' => $supplierPayables,
+            'supplierDebts' => $supplierDebts,
+            'totalDebt' => (float) $supplierDebts->sum('remaining_amount'),
+            'totalPaid' => (float) $supplierDebts->sum('paid_amount'),
+            'totalOverdue' => (float) $supplierDebts->sum('overdue_amount'),
+            'accounts' => Account::active()->orderBy('name')->get(['id', 'name', 'balance']),
+            'legacyPayables' => $legacyPayables,
             'keyword' => $keyword,
+            'debtStatus' => $debtStatus,
+            'sourceType' => $sourceType,
         ]);
+    }
+
+    public function supplierDebtPaymentStore(Request $request, ProcurementPurchase $purchase, SupplierDebtService $debtService)
+    {
+        if ((float) $purchase->remaining_amount <= 0) {
+            return back()->with('error', 'Lần mua '.$purchase->code.' đã được thanh toán đủ.');
+        }
+        if (in_array($purchase->paymentRequest?->status, [
+            Transaction::STATUS_PENDING_APPROVAL,
+            Transaction::STATUS_APPROVED_PENDING_COMPLETION,
+        ], true)) {
+            return back()->with('error', 'Lần mua '.$purchase->code.' đang có phiếu thanh toán chưa hoàn tất. Vui lòng xử lý trên phiếu để tránh ghi nhận trùng.');
+        }
+
+        $validated = $request->validate([
+            'amount' => ['required', 'numeric', 'gt:0', 'lte:'.$purchase->remaining_amount],
+            'account_id' => ['required', 'integer', 'exists:accounts,id'],
+            'paid_at' => ['required', 'date'],
+            'note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $account = Account::active()->findOrFail((int) $validated['account_id']);
+        $category = TransactionCategory::query()
+            ->where('flow_direction', 'out')
+            ->where('is_active', true)
+            ->where(fn ($q) => $q->where('name', 'like', '%thu mua%')->orWhere('name', 'like', '%mua hàng%'))
+            ->first();
+        $category ??= TransactionCategory::updateOrCreate(
+            ['code' => 'PROCUREMENT'],
+            ['name' => 'Chi phí thu mua', 'flow_direction' => 'out', 'sort_order' => (int) TransactionCategory::max('sort_order') + 1, 'is_active' => true]
+        );
+        $sourceName = $purchase->farm?->name ?? $purchase->supplier?->name ?? 'Nhà cung cấp';
+
+        $transaction = DB::transaction(function () use ($validated, $purchase, $account, $category, $sourceName, $debtService): Transaction {
+            $transaction = Transaction::create([
+                'amount' => (float) $validated['amount'],
+                'type' => 'extra_expense',
+                'transaction_category_id' => $category->id,
+                'account_id' => $account->id,
+                'destination_type' => 'external',
+                'external_recipient' => $sourceName,
+                'note' => 'Thanh toán công nợ '.$purchase->code.($validated['note'] ? ': '.$validated['note'] : ''),
+                'status' => Transaction::STATUS_APPROVED,
+                'submitted_by' => auth()->id(),
+                'approved_by' => auth()->id(),
+                'approved_at' => now(),
+            ]);
+            $transaction->forceFill(['created_at' => Carbon::parse($validated['paid_at'])])->save();
+
+            $debtService->recordPayment(
+                $purchase,
+                (float) $validated['amount'],
+                Carbon::parse($validated['paid_at']),
+                auth()->id(),
+                $validated['note'] ?? 'Kế toán ghi nhận thanh toán trực tiếp',
+                $transaction->id,
+            );
+
+            return $transaction;
+        });
+
+        $this->applyTransactionToOrder($transaction);
+
+        return back()->with('success', 'Đã ghi nhận thanh toán '.number_format((float) $validated['amount']).'đ cho '.$purchase->code.'.');
     }
 
     public function cashflow(Request $request)
@@ -1978,12 +2108,15 @@ class AccountingDashboardController extends Controller
         $note = trim((string) ($validated['note'] ?? ''));
         $currentNote = trim((string) $transaction->note);
 
-        $transaction->forceFill([
-            'note' => $note !== '' ? trim($currentNote."\nKế toán hoàn thành: ".$note) : $transaction->note,
-            'status' => Transaction::STATUS_APPROVED,
-        ])->save();
+        DB::transaction(function () use ($transaction, $note, $currentNote): void {
+            $transaction->forceFill([
+                'note' => $note !== '' ? trim($currentNote."\nKế toán hoàn thành: ".$note) : $transaction->note,
+                'status' => Transaction::STATUS_APPROVED,
+            ])->save();
 
-        $this->applyTransactionToOrder($transaction);
+            app(SupplierDebtService::class)->recordApprovedTransaction($transaction);
+            $this->applyTransactionToOrder($transaction);
+        });
 
         return back()->with('success', 'Đã hoàn thành phiếu #'.$transaction->id.' và ghi nhận chuyển tiền thực tế.');
     }
@@ -2019,6 +2152,10 @@ class AccountingDashboardController extends Controller
             'rejected_at' => now(),
             'reject_reason' => $data['reason'],
         ]);
+
+        ProcurementPurchase::query()
+            ->where('payment_transaction_id', $transaction->id)
+            ->update(['payment_transaction_id' => null]);
 
         return back()->with('success', 'Da tu choi giao dich #'.$transaction->id.'.');
     }

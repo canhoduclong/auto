@@ -12,6 +12,7 @@ use App\Models\Transaction;
 use App\Models\TransactionCategory;
 use App\Models\Warehouse;
 use App\Services\ApprovalService;
+use App\Services\SupplierDebtService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -229,6 +230,7 @@ class ProcurementController extends Controller
             if ($purchase->farm) {
                 $purchase->farm->update(['last_purchase_at' => $purchase->purchased_at]);
             }
+            app(SupplierDebtService::class)->recordOpeningPayment($purchase, $paid, auth()->id());
             return $purchase;
         });
 
@@ -357,6 +359,7 @@ class ProcurementController extends Controller
                     foreach (['feathers', 'offal'] as $itemType) {
                         ProcurementPurchaseItem::create(['procurement_purchase_id' => $purchase->id, 'stage' => 'expected', 'item_type' => $itemType, 'quantity' => $quantity]);
                     }
+                    app(SupplierDebtService::class)->recordOpeningPayment($purchase, $paid, auth()->id());
                 });
 
                 if (!$farm->last_purchase_at || $purchasedAt->greaterThan($farm->last_purchase_at)) {
@@ -429,6 +432,10 @@ class ProcurementController extends Controller
 
     public function requestPayment(ProcurementPurchase $purchase)
     {
+        if ($purchase->paymentRequest?->status === Transaction::STATUS_REJECTED) {
+            $purchase->update(['payment_transaction_id' => null]);
+            $purchase->unsetRelation('paymentRequest');
+        }
         abort_if($purchase->payment_transaction_id, 422, 'Lần thu mua đã có phiếu yêu cầu thanh toán.');
         abort_if((float) $purchase->remaining_amount <= 0, 422, 'Lần thu mua này đã thanh toán đủ.');
         $category = TransactionCategory::where('flow_direction', 'out')->where('is_active', true)->where(fn ($q) => $q->where('name', 'like', '%thu mua%')->orWhere('name', 'like', '%mua hàng%'))->first();

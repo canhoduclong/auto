@@ -7,9 +7,11 @@ use App\Models\AccountingSalesEntry;
 use App\Models\AccountingSalesImportBatch;
 use App\Models\Customer;
 use App\Models\Inventory;
+use App\Models\InventoryDocument;
 use App\Models\InventoryMovement;
 use App\Models\InventoryReservation;
 use App\Models\Order;
+use App\Models\OrderReturn;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Role;
@@ -114,6 +116,54 @@ class AdminOrderDeletionTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+        $orderReturn = OrderReturn::create([
+            'order_id' => $order->id,
+            'customer_id' => $customer->id,
+            'warehouse_id' => $warehouse->id,
+            'created_by' => $admin->id,
+            'status' => 'warehouse_received',
+            'reason' => 'Khách trả lại một phần',
+            'refund_amount' => 400000,
+            'warehouse_confirmed_by' => $admin->id,
+            'warehouse_confirmed_at' => now(),
+        ]);
+        $orderReturn->returnItems()->create([
+            'product_variant_id' => $variant->id,
+            'quantity' => 4,
+            'condition' => 'good',
+        ]);
+        $inventory->increment('quantity', 4);
+        InventoryMovement::create([
+            'inventory_id' => $inventory->id,
+            'quantity' => 4,
+            'type' => 'import',
+            'reference_id' => $orderReturn->id,
+            'reference_type' => OrderReturn::class,
+            'user_id' => $admin->id,
+        ]);
+        DB::table('transactions')->insert([
+            'order_id' => $order->id,
+            'order_return_id' => $orderReturn->id,
+            'customer_id' => $customer->id,
+            'amount' => 400000,
+            'type' => 'refund',
+            'method' => 'return_refund',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $returnReceipt = InventoryDocument::create([
+            'type' => 'import',
+            'warehouse_id' => $warehouse->id,
+            'document_date' => now()->toDateString(),
+            'notes' => 'Đồng bộ trả hàng [order_return:#'.$orderReturn->id.']',
+            'shipping_fee' => 0,
+            'user_id' => $admin->id,
+        ]);
+        $returnReceipt->items()->create([
+            'product_variant_id' => $variant->id,
+            'quantity' => 4,
+            'unit_cost' => 100000,
+        ]);
 
         $this->actingAs($admin)->delete(route('site.orders.admin-delete', $order), [
             'reason' => 'Đơn được nhập nhầm',
@@ -125,6 +175,11 @@ class AdminOrderDeletionTest extends TestCase
         $this->assertDatabaseMissing('accounting_reconciliations', ['order_id' => $order->id]);
         $this->assertDatabaseHas('inventories', ['id' => $inventory->id, 'quantity' => 100, 'reserved_quantity' => 0]);
         $this->assertDatabaseMissing('inventory_movements', ['reference_type' => Order::class, 'reference_id' => $order->id]);
+        $this->assertDatabaseMissing('order_returns', ['id' => $orderReturn->id]);
+        $this->assertDatabaseMissing('return_items', ['order_return_id' => $orderReturn->id]);
+        $this->assertDatabaseMissing('inventory_movements', ['reference_type' => OrderReturn::class, 'reference_id' => $orderReturn->id]);
+        $this->assertDatabaseMissing('transactions', ['order_return_id' => $orderReturn->id]);
+        $this->assertDatabaseMissing('inventory_documents', ['id' => $returnReceipt->id]);
         $this->assertDatabaseHas('accounting_sales_import_batches', ['id' => $batch->id, 'row_count' => 0, 'total_amount' => 0]);
         $this->assertDatabaseHas('admin_deleted_orders', [
             'order_id' => $order->id,
@@ -134,5 +189,8 @@ class AdminOrderDeletionTest extends TestCase
             'reason' => 'Đơn được nhập nhầm',
             'deleted_by' => $admin->id,
         ]);
+        $snapshot = json_decode((string) DB::table('admin_deleted_orders')->where('order_id', $order->id)->value('snapshot'), true);
+        $this->assertSame($orderReturn->id, $snapshot['returns'][0]['id']);
+        $this->assertSame(4, $snapshot['returns'][0]['items'][0]['quantity']);
     }
 }

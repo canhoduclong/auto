@@ -350,6 +350,9 @@
             </a>
 
             <div class="nav-section">Đơn hàng</div>
+            <a href="{{ route('accounting.workflow-simulation.index') }}" class="{{ request()->routeIs('accounting.workflow-simulation.*') ? 'active' : '' }}">
+                <i class="bi bi-diagram-3-fill"></i> Mô phỏng quy trình
+            </a>
             <a href="{{ route('accounting.orders') }}" class="{{ request()->routeIs('accounting.orders*') ? 'active' : '' }}">
                 <i class="bi bi-bag-check"></i> Danh sách đơn hàng
             </a>

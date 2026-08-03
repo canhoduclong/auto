@@ -18,5 +18,6 @@ class ProcurementPurchase extends Model
     public function warehouse() { return $this->belongsTo(Warehouse::class); }
     public function receiver() { return $this->belongsTo(User::class, 'received_by'); }
     public function paymentRequest() { return $this->belongsTo(Transaction::class, 'payment_transaction_id'); }
+    public function debtPayments() { return $this->hasMany(SupplierDebtPayment::class); }
     public function items() { return $this->hasMany(ProcurementPurchaseItem::class); }
 }

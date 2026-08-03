@@ -331,6 +331,85 @@ class AccountingSalesImportService
         return $result;
     }
 
+    public function importPendingOrders(
+        string $text,
+        User $actor,
+        array $saleMappings,
+        string $businessDate,
+        int $sourceWarehouseId
+    ): array {
+        $result = $this->preview($text, $actor, $saleMappings, $businessDate);
+        if (($result['counts']['error'] ?? 0) > 0) {
+            return $result + ['imported' => false];
+        }
+
+        DB::transaction(function () use (&$result, $text, $actor, $businessDate, $sourceWarehouseId): void {
+            AccountingSalesImportBatch::query()
+                ->where('source_hash', $result['source_hash'])
+                ->where('row_count', 0)
+                ->whereDoesntHave('entries')
+                ->delete();
+
+            $batch = AccountingSalesImportBatch::create([
+                'imported_by' => $actor->id,
+                'business_date' => $businessDate,
+                'source_warehouse_id' => $sourceWarehouseId,
+                'source_hash' => $result['source_hash'],
+                'row_count' => count($result['rows']),
+                'total_amount' => collect($result['rows'])->sum('data.total_amount'),
+                'raw_text' => $text,
+            ]);
+
+            foreach ($result['rows'] as &$row) {
+                $data = $row['data'];
+                $customer = $row['customer_id'] ? Customer::find($row['customer_id']) : null;
+                $customer ??= Customer::query()
+                    ->where('name_normalized', Customer::normalizeName($data['customer_name']))
+                    ->first();
+                if (! $customer) {
+                    $customer = Customer::create([
+                        'user_id' => $actor->id,
+                        'name' => $data['customer_name'],
+                        'customer_code' => $data['customer_code'],
+                        'assigned_to' => $row['sale_id'],
+                        'current_owner_sale_id' => $row['sale_id'],
+                        'assigned_at' => $row['sale_id'] ? now() : null,
+                        'customer_status' => $row['sale_id'] ? 'active' : 'free',
+                        'current_cycle_no' => 1,
+                        'status' => 'active',
+                    ]);
+                    if ($row['sale_id']) {
+                        app(CustomerPriorityService::class)->attachSale($customer, (int) $row['sale_id'], 1, 'workflow_bulk_order');
+                    }
+                } elseif (! $customer->customer_code && $data['customer_code']) {
+                    $customer->update(['customer_code' => $data['customer_code']]);
+                }
+
+                $entry = AccountingSalesEntry::create(array_merge($data, [
+                    'customer_id' => $customer->id,
+                    'sale_id' => $row['sale_id'],
+                    'sale_name' => User::whereKey($row['sale_id'])->value('name') ?: $data['sale_name'],
+                    'source' => AccountingSalesEntry::SOURCE_IMPORT,
+                    'source_key' => 'batch:'.$batch->id.':row:'.$row['line'],
+                    'import_batch_id' => $batch->id,
+                    'import_row' => $row['line'],
+                    'created_by' => $actor->id,
+                    'updated_by' => $actor->id,
+                ]));
+                $row['entry_id'] = $entry->id;
+                $row['customer_id'] = $customer->id;
+            }
+            unset($row);
+
+            $result['orders_created'] = $this->createPendingWorkflowOrders($batch, $result['rows'], $actor, $sourceWarehouseId);
+            $result['batch_id'] = $batch->id;
+        });
+
+        $result['imported'] = true;
+
+        return $result;
+    }
+
     private function parse(string $text): array
     {
         $lines = preg_split('/\R/u', str_replace("\xEF\xBB\xBF", '', trim($text))) ?: [];
@@ -570,6 +649,99 @@ class AccountingSalesImportService
                 ])->saveQuietly();
             }
 
+            $created++;
+        }
+
+        return $created;
+    }
+
+    private function createPendingWorkflowOrders(
+        AccountingSalesImportBatch $batch,
+        array $rows,
+        User $actor,
+        int $sourceWarehouseId
+    ): int {
+        $groups = collect($rows)->groupBy(fn ($row) => $row['data']['entry_date'].'|'.$row['customer_id']);
+        $created = 0;
+
+        foreach ($groups as $group) {
+            $first = $group->first();
+            $customer = Customer::findOrFail($first['customer_id']);
+            $saleId = (int) $first['sale_id'];
+            $entryDate = Carbon::parse($first['data']['entry_date']);
+            $total = max(0, round((float) $group->sum('data.total_amount'), 2));
+            $shippingFee = round((float) $group
+                ->filter(fn ($row) => in_array($this->key($row['data']['unit']), ['shiper', 'shipper', 'nha xe'], true))
+                ->sum('data.total_amount'), 2);
+            $foamBoxFee = round((float) $group
+                ->filter(fn ($row) => $this->key($row['data']['unit']) === 'thung xop')
+                ->sum('data.total_amount'), 2);
+
+            $order = new Order();
+            $order->forceFill([
+                'customer_id' => $customer->id,
+                'user_id' => $saleId,
+                'code' => 'SIM-'.$batch->id.'-'.str_pad((string) ($created + 1), 4, '0', STR_PAD_LEFT),
+                'total' => $total,
+                'subtotal_amount' => $total,
+                'status' => Order::STATUS_PENDING_LEADER_APPROVAL,
+                'payment_status' => 'unpaid',
+                'amount_paid' => 0,
+                'amount_due' => 0,
+                'recipient_name' => $customer->name,
+                'recipient_phone' => $customer->phone,
+                'recipient_address' => $customer->address,
+                'delivery_date' => $entryDate->copy()->addDay()->toDateString(),
+                'warehouse_id' => $sourceWarehouseId,
+                'shipper_id' => null,
+                'shipping_fee' => $shippingFee,
+                'charge_shipping_fee' => $shippingFee > 0,
+                'foam_box_price' => $foamBoxFee,
+                'charge_foam_box_fee' => $foamBoxFee > 0,
+                'accounting_sales_import_batch_id' => $batch->id,
+                'imported_sales_group_key' => hash('sha256', 'pending:'.$batch->id.'|'.$entryDate->toDateString().'|customer:'.$customer->id),
+                'note' => 'Lên đơn hàng loạt từ trung tâm mô phỏng; phiên #'.$batch->id.'.',
+                'created_at' => $entryDate->copy()->setTime(9, 0),
+                'updated_at' => $entryDate->copy()->setTime(9, 0),
+            ])->save();
+            $order->forceFill(['shipper_id' => null])->saveQuietly();
+
+            AccountingSalesEntry::query()->whereIn('id', $group->pluck('entry_id'))->update(['order_id' => $order->id]);
+            AccountingSalesEntry::query()->whereIn('id', $group->pluck('entry_id'))->get()->each(function (AccountingSalesEntry $entry) use ($order): void {
+                $item = $this->syncEntryOrderItem($entry);
+                if ($item) {
+                    return;
+                }
+                $item = OrderItem::query()->updateOrCreate(
+                    ['accounting_sales_entry_id' => $entry->id],
+                    [
+                        'order_id' => $order->id,
+                        'product_id' => null,
+                        'product_variant_id' => null,
+                        'imported_name' => $this->importedLineName((string) $entry->unit),
+                        'quantity' => 1,
+                        'price' => (float) $entry->total_amount,
+                        'base_price' => (float) $entry->total_amount,
+                        'unit_weight' => 1,
+                        'is_priced_by_kg' => false,
+                        'total_weight' => 0,
+                        'total' => (float) $entry->total_amount,
+                    ]
+                );
+                $entry->update(['order_item_id' => $item->id]);
+            });
+
+            $stockWeight = (float) $order->items()->whereNotNull('product_variant_id')->sum('total_weight');
+            $order->forceFill(['total_weight' => round($stockWeight, 3)])->saveQuietly();
+            OrderHistory::create([
+                'order_id' => $order->id,
+                'user_id' => $saleId ?: $actor->id,
+                'action' => 'create_order',
+                'role' => 'sale',
+                'status_before' => null,
+                'status_after' => Order::STATUS_PENDING_LEADER_APPROVAL,
+                'note' => 'Sale lên đơn hàng loạt từ bảng dữ liệu mô phỏng #'.$batch->id.'.',
+            ]);
             $created++;
         }
 

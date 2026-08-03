@@ -7,6 +7,7 @@ use App\Models\Inventory;
 use App\Models\InventoryMovement;
 use App\Models\InventoryReservation;
 use App\Models\Order;
+use App\Models\OrderReturn;
 use App\Models\ProductVariant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -26,16 +27,12 @@ class AdminOrderDeletionController extends Controller
             'reason.min' => 'Lý do xóa đơn phải có ít nhất 5 ký tự.',
         ]);
 
-        if (Schema::hasTable('order_returns') && DB::table('order_returns')->where('order_id', $order->id)->exists()) {
-            return back()->with('error', 'Không thể xóa đơn đã phát sinh trả hàng. Hãy hoàn tất hoặc xử lý phiếu trả hàng trước.');
-        }
-
         try {
             $deletedCode = $order->code ?: '#'.$order->id;
 
             DB::transaction(function () use ($order, $request, $validated): void {
                 $lockedOrder = Order::query()->lockForUpdate()->findOrFail($order->id);
-                $lockedOrder->load(['items.product', 'items.variant', 'customer', 'user']);
+                $lockedOrder->load(['items.product', 'items.variant', 'customer', 'user', 'returnRecords.returnItems']);
 
                 $batchIds = collect([$lockedOrder->accounting_sales_import_batch_id])
                     ->merge(Schema::hasTable('accounting_sales_entries')
@@ -78,6 +75,19 @@ class AdminOrderDeletionController extends Controller
                             'price' => $item->price,
                             'total' => $item->total,
                         ])->values()->all(),
+                        'returns' => $lockedOrder->returnRecords->map(fn (OrderReturn $return) => [
+                            'id' => $return->id,
+                            'status' => $return->status,
+                            'warehouse_id' => $return->warehouse_id,
+                            'refund_amount' => $return->refund_amount,
+                            'return_shipping_fee' => $return->return_shipping_fee,
+                            'reason' => $return->reason,
+                            'items' => $return->returnItems->map(fn ($item) => [
+                                'product_variant_id' => $item->product_variant_id,
+                                'quantity' => $item->quantity,
+                                'condition' => $item->condition,
+                            ])->values()->all(),
+                        ])->values()->all(),
                     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
                     'deleted_by' => $request->user()->id,
                     'deleted_at' => now(),
@@ -85,6 +95,7 @@ class AdminOrderDeletionController extends Controller
                     'updated_at' => now(),
                 ]);
 
+                $this->reverseReturnEffects($lockedOrder);
                 $this->reverseInventoryEffects($lockedOrder);
                 $lockedOrder->delete();
 
@@ -105,6 +116,61 @@ class AdminOrderDeletionController extends Controller
             report($exception);
 
             return back()->with('error', 'Không thể xóa đơn vì còn dữ liệu nghiệp vụ liên quan. Vui lòng kiểm tra log hoặc xử lý chứng từ liên quan trước.');
+        }
+    }
+
+    private function reverseReturnEffects(Order $order): void
+    {
+        if (! Schema::hasTable('order_returns')) {
+            return;
+        }
+
+        $returns = OrderReturn::query()
+            ->where('order_id', $order->id)
+            ->lockForUpdate()
+            ->get();
+        if ($returns->isEmpty()) {
+            return;
+        }
+
+        $returnIds = $returns->pluck('id')->map(fn ($id) => (int) $id);
+        $movements = InventoryMovement::query()
+            ->where('reference_type', OrderReturn::class)
+            ->whereIn('reference_id', $returnIds)
+            ->lockForUpdate()
+            ->get();
+        $variantIds = [];
+        foreach ($movements->groupBy('inventory_id') as $inventoryId => $inventoryMovements) {
+            $inventory = Inventory::query()->lockForUpdate()->find($inventoryId);
+            if (! $inventory) {
+                continue;
+            }
+            $inventory->quantity = (float) $inventory->quantity - (float) $inventoryMovements->sum('quantity');
+            $inventory->save();
+            $variantIds[] = (int) $inventory->product_variant_id;
+        }
+        if ($movements->isNotEmpty()) {
+            InventoryMovement::query()->whereIn('id', $movements->pluck('id'))->delete();
+        }
+
+        if (Schema::hasTable('transactions') && Schema::hasColumn('transactions', 'order_return_id')) {
+            DB::table('transactions')->whereIn('order_return_id', $returnIds)->delete();
+        }
+        if (Schema::hasTable('inventory_documents')) {
+            foreach ($returnIds as $returnId) {
+                DB::table('inventory_documents')
+                    ->where('type', 'import')
+                    ->where('notes', 'like', '%[order_return:#'.$returnId.']%')
+                    ->delete();
+            }
+        }
+
+        OrderReturn::query()->whereIn('id', $returnIds)->delete();
+
+        foreach (array_unique($variantIds) as $variantId) {
+            ProductVariant::query()->whereKey($variantId)->update([
+                'stock' => (float) Inventory::query()->where('product_variant_id', $variantId)->sum('quantity'),
+            ]);
         }
     }
 
