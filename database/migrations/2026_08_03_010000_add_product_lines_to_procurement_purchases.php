@@ -15,9 +15,9 @@ return new class extends Migration
 
         Schema::create('procurement_purchase_product_items', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('procurement_purchase_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('product_variant_id')->constrained()->restrictOnDelete();
-            $table->foreignId('source_price_id')->nullable()->constrained('supplier_product_prices')->nullOnDelete();
+            $table->unsignedBigInteger('procurement_purchase_id');
+            $table->unsignedBigInteger('product_variant_id');
+            $table->unsignedBigInteger('source_price_id')->nullable();
             $table->decimal('quantity', 12, 3);
             $table->decimal('weight', 12, 3)->default(0);
             $table->decimal('unit_cost', 15, 2)->default(0);
@@ -27,6 +27,9 @@ return new class extends Migration
             $table->string('condition')->nullable();
             $table->string('note', 500)->nullable();
             $table->timestamps();
+            $table->foreign('procurement_purchase_id', 'proc_product_item_purchase_fk')->references('id')->on('procurement_purchases')->cascadeOnDelete();
+            $table->foreign('product_variant_id', 'proc_product_item_variant_fk')->references('id')->on('product_variants')->restrictOnDelete();
+            $table->foreign('source_price_id', 'proc_product_item_price_fk')->references('id')->on('supplier_product_prices')->nullOnDelete();
             $table->unique(['procurement_purchase_id', 'product_variant_id'], 'proc_purchase_variant_unique');
         });
 
@@ -40,11 +43,13 @@ return new class extends Migration
 
         Schema::create('procurement_purchase_template_items', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('procurement_purchase_template_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('product_variant_id')->constrained()->cascadeOnDelete();
+            $table->unsignedBigInteger('procurement_purchase_template_id');
+            $table->unsignedBigInteger('product_variant_id');
             $table->decimal('quantity', 12, 3)->default(1);
             $table->decimal('weight', 12, 3)->default(0);
             $table->timestamps();
+            $table->foreign('procurement_purchase_template_id', 'proc_template_item_template_fk')->references('id')->on('procurement_purchase_templates')->cascadeOnDelete();
+            $table->foreign('product_variant_id', 'proc_template_item_variant_fk')->references('id')->on('product_variants')->cascadeOnDelete();
             $table->unique(['procurement_purchase_template_id', 'product_variant_id'], 'proc_template_variant_unique');
         });
     }

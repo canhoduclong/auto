@@ -173,6 +173,7 @@
                 const productRows = document.getElementById('purchaseProductRows');
                 let purchaseVariants = [];
                 let purchaseTemplates = @json($purchaseTemplates ?? []);
+                const oldProductItems = @json(old('product_items', []));
                 let productRowIndex = 0;
                 const farmRows = [...document.querySelectorAll('.farm-picker-row')];
                 const normalizeText = value => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -317,7 +318,7 @@
                 document.getElementById('purchaseForm')?.addEventListener('submit',event=>{if(type.value==='product_purchase'&&!productRows.querySelector('[data-product-row]')){event.preventDefault();alert('Vui lòng chọn ít nhất một sản phẩm thu mua.');}});
                 renderTemplates();
                 syncType();
-                if(type.value==='product_purchase'&&supplier?.value)loadPurchaseSupplierProducts(supplier.value);
+                if(type.value==='product_purchase'&&supplier?.value)loadPurchaseSupplierProducts(supplier.value).then(()=>oldProductItems.forEach(item=>{const meta=variantById(item.product_variant_id);if(meta)window.addOrIncreaseVariantRow({...item,...meta,product_variant_id:item.product_variant_id,unit_cost:item.unit_cost,source_price_id:item.source_price_id},item.quantity);}));
                 calculate();
                 document.querySelectorAll('.farm-card').forEach(farmCard => farmCard.addEventListener('click', () => {
                     document.querySelectorAll('.farm-card').forEach(item => item.classList.remove('selected'));
