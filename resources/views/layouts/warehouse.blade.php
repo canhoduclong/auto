@@ -246,13 +246,19 @@
         <nav class="mt-1 flex-grow-1 overflow-auto">
             <div class="wh-nav-section">Tổng quan</div>
             <a href="{{ route('warehouse.dashboard') }}" class="wh-nav-link {{ request()->routeIs('warehouse.dashboard') ? 'active' : '' }}">
-                <i class="bi bi-speedometer2"></i> Dashboard
+                <i class="bi bi-speedometer2"></i> Bảng điều khiển
             </a>
             <a href="{{ route('department-notifications.index', ['layout' => 'warehouse']) }}" class="wh-nav-link {{ request()->routeIs('department-notifications.*') && request('layout') === 'warehouse' ? 'active' : '' }}">
                 <i class="bi bi-megaphone"></i> Tạo thông báo
             </a>
             <a href="{{ route('warehouse.orders') }}" class="wh-nav-link {{ request()->routeIs('warehouse.orders') ? 'active' : '' }}">
                 <i class="bi bi-box2-fill"></i> Đơn cần đóng gói
+            </a>
+            <a href="{{ route('warehouse.order-adjustments.index') }}" class="wh-nav-link {{ request()->routeIs('warehouse.order-adjustments.*') ? 'active' : '' }}">
+                <i class="bi bi-clipboard2-check-fill"></i> Duyệt điều chỉnh sản lượng
+                @if(($warehouseAdjustmentQueueCount ?? 0) > 0)
+                    <span class="badge rounded-pill bg-danger ms-auto">{{ $warehouseAdjustmentQueueCount }}</span>
+                @endif
             </a>
             <a href="{{ route('admin.imported-sales-orders.index') }}" class="wh-nav-link {{ request()->routeIs('admin.imported-sales-orders.*') ? 'active' : '' }}">
                 <i class="bi bi-clipboard-check"></i> Hoàn chỉnh đơn lịch sử
@@ -400,12 +406,23 @@
                     @endphp
                     <a href="#" class="position-relative" id="dropdownNotification" data-bs-toggle="dropdown" aria-expanded="false" title="Thông báo">
                         <i class="bi bi-bell fs-4"></i>
-                        @if($recentWarehouseNotifications->count())
-                            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size:0.7rem;" id="notification-badge">{{ $recentWarehouseNotifications->count() }}</span>
+                        @if($recentWarehouseNotifications->count() || ($warehouseAdjustmentQueueCount ?? 0) > 0)
+                            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size:0.7rem;" id="notification-badge">{{ $recentWarehouseNotifications->count() + ($warehouseAdjustmentQueueCount ?? 0) }}</span>
                         @endif
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end shadow-sm wh-notification-menu" aria-labelledby="dropdownNotification">
                         <li class="dropdown-header">Thông báo gần đây</li>
+                        @if(($warehouseAdjustmentQueueCount ?? 0) > 0)
+                            <li>
+                                <a class="dropdown-item d-flex align-items-start gap-2 bg-warning-subtle" href="{{ route('warehouse.order-adjustments.index') }}">
+                                    <i class="bi bi-clipboard2-check-fill text-warning flex-shrink-0 mt-1"></i>
+                                    <div class="wh-notification-content">
+                                        <div class="fw-semibold small">{{ $warehouseAdjustmentQueueCount }} yêu cầu điều chỉnh sản lượng cần xác nhận</div>
+                                        <div class="text-muted small">Đã được Kế toán duyệt và chuyển tới Kho</div>
+                                    </div>
+                                </a>
+                            </li>
+                        @endif
                         @if($recentWarehouseNotifications->count())
                             @foreach($recentWarehouseNotifications as $noti)
                                 <li>

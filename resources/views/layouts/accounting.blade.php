@@ -140,6 +140,22 @@
             box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.35);
         }
         .acc-nav a.active i { opacity: 1; }
+        .acc-nav-badge {
+            margin-left: auto;
+            min-width: 20px;
+            padding: 2px 6px;
+            border-radius: 999px;
+            background: #ef4444;
+            color: #fff;
+            font-size: 11px;
+            font-weight: 800;
+            line-height: 1.35;
+            text-align: center;
+        }
+        .acc-notification-menu { width: min(390px, 92vw); max-height: 440px; overflow-y: auto; }
+        .acc-notification-item { white-space: normal; }
+        .acc-notification-button { position: relative; }
+        .acc-notification-button .badge { font-size: 9px; }
         .acc-nav .nav-section {
             font-size: 10px;
             font-weight: 700;
@@ -175,6 +191,12 @@
         body.acc-sidebar-collapsed .acc-nav a i {
             font-size: 19px;
             margin: 0;
+        }
+        body.acc-sidebar-collapsed .acc-nav-badge {
+            position: absolute;
+            top: -4px;
+            right: -3px;
+            font-size: 9px;
         }
         body.acc-sidebar-collapsed .acc-nav a:hover::after {
             content: attr(data-label);
@@ -345,6 +367,12 @@
             <a href="{{ route('accounting.dashboard') }}" class="{{ request()->routeIs('accounting.dashboard') ? 'active' : '' }}">
                 <i class="bi bi-speedometer2"></i> Dashboard
             </a>
+            <a href="{{ route('accounting.order-adjustments') }}" class="{{ request()->routeIs('accounting.order-adjustments') ? 'active' : '' }}" data-label="Thông báo cần duyệt">
+                <i class="bi bi-bell-fill"></i> Thông báo cần duyệt
+                @if(($pendingAccountingAdjustmentCount ?? 0) > 0)
+                    <span class="acc-nav-badge">{{ $pendingAccountingAdjustmentCount }}</span>
+                @endif
+            </a>
             <a href="{{ route('department-notifications.index', ['layout' => 'accounting']) }}" class="{{ request()->routeIs('department-notifications.*') && request('layout') === 'accounting' ? 'active' : '' }}">
                 <i class="bi bi-megaphone"></i> Tạo thông báo
             </a>
@@ -456,6 +484,30 @@
             <div class="d-flex align-items-center gap-2">
                 @include('layouts.partials.role_switcher')
                 <span class="text-muted small" style="white-space: nowrap;">{{ auth()->user()->name ?? 'Accounting' }} | {{ now()->format('d/m/Y H:i') }}</span>
+                <div class="dropdown">
+                    <button class="btn btn-light btn-sm acc-notification-button" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Yêu cầu điều chỉnh chờ Kế toán">
+                        <i class="bi bi-bell"></i>
+                        @if(($pendingAccountingAdjustmentCount ?? 0) > 0)
+                            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">{{ $pendingAccountingAdjustmentCount }}</span>
+                        @endif
+                    </button>
+                    <div class="dropdown-menu dropdown-menu-end shadow acc-notification-menu p-0">
+                        <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
+                            <strong>Cần Kế toán xác nhận</strong>
+                            <span class="badge text-bg-danger">{{ $pendingAccountingAdjustmentCount ?? 0 }}</span>
+                        </div>
+                        @forelse(($pendingAccountingAdjustments ?? collect())->take(5) as $pendingAdjustment)
+                            <a class="dropdown-item acc-notification-item border-bottom py-2" href="{{ route('accounting.order-adjustments') }}#adjustment-{{ $pendingAdjustment->id }}">
+                                <div class="fw-semibold">{{ $pendingAdjustment->order?->code ?? ('Đơn #'.$pendingAdjustment->order_id) }}</div>
+                                <div class="small text-muted">{{ $pendingAdjustment->order?->customer?->name ?? 'Khách hàng' }} · Sale: {{ $pendingAdjustment->order?->user?->name ?? '—' }}</div>
+                                <div class="small text-primary">Yêu cầu #{{ $pendingAdjustment->id }} · {{ optional($pendingAdjustment->submitted_at)->format('d/m/Y H:i') }}</div>
+                            </a>
+                        @empty
+                            <div class="px-3 py-4 text-center text-muted">Không có yêu cầu điều chỉnh đang chờ.</div>
+                        @endforelse
+                        <a class="dropdown-item text-center text-primary fw-semibold py-2" href="{{ route('accounting.order-adjustments') }}">Xem tất cả yêu cầu</a>
+                    </div>
+                </div>
             </div>
                     <div class="dropdown">
                         <button class="btn btn-light btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -492,6 +544,12 @@
             @endif
             @if(session('error'))
                 <div class="alert alert-danger">{{ session('error') }}</div>
+            @endif
+            @if(($pendingAccountingAdjustmentCount ?? 0) > 0 && !request()->routeIs('accounting.order-adjustments'))
+                <div class="alert alert-warning d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <div><i class="bi bi-exclamation-triangle-fill me-2"></i><strong>{{ $pendingAccountingAdjustmentCount }} yêu cầu điều chỉnh</strong> giá hoặc số lượng đang chờ Kế toán xác nhận.</div>
+                    <a href="{{ route('accounting.order-adjustments') }}" class="btn btn-warning btn-sm">Kiểm tra và duyệt</a>
+                </div>
             @endif
             @yield('accounting_content')
         </section>

@@ -347,7 +347,7 @@ class ProductVariantController extends Controller
         }
         // Tạo price rule đầu tiên
         $price = $data['price'] ?? null;
-        if (!$price) {
+        if ($price === null) {
             $product = \App\Models\Product::find($data['product_id']);
             $price = $product?->default_price ?? 0;
         }

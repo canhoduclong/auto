@@ -92,6 +92,10 @@
                 $statusLabel = $isWaitingWarehouse ? 'Chờ Kho Ráp Hàng' : ($statusLabels[$order->status] ?? str_replace('_', ' ', $order->status));
                 $canEdit = !$isTrashView && (int) $order->user_id === (int) $user->id && $order->canBeDirectlyEditedByOwner();
                 $canCancel = !$isTrashView && (int) $order->user_id === (int) $user->id && $order->canBeCancelled();
+                $canRequestAdjustment = !$isTrashView
+                    && (int) $order->user_id === (int) $user->id
+                    && $order->status === \App\Models\Order::STATUS_COMPLETED
+                    && $order->canRequestAdjustment();
                 $canApprove = !$isTrashView && !$isCancelled && $user->hasRole(['admin', 'manager', 'manager_sale', 'director']);
                 $defaultAddress = $order->customer?->addresses?->firstWhere('is_default', 1) ?? $order->customer?->addresses?->first();
                 $address = $order->recipient_address ?: ($defaultAddress?->note ?: ($order->customer?->address ?: 'Chưa cập nhật'));
@@ -166,6 +170,11 @@
                     @endif
                     @if($canEdit)<a href="{{ route('site.orders.edit', $order) }}" class="btn btn-sm btn-success"><i class="bi bi-pencil"></i>Sửa</a>@endif
                     <a href="{{ route('site.orders.show', $order) }}" class="btn btn-sm btn-outline-info"><i class="bi bi-eye"></i>Chi tiết</a>
+                    @if($canRequestAdjustment)
+                        <a href="{{ route('site.order-adjustments.create', $order) }}" class="btn btn-sm btn-warning text-dark">
+                            <i class="bi bi-arrow-left-right"></i>Gửi yêu cầu điều chỉnh
+                        </a>
+                    @endif
                     @if(!$isTrashView)<a href="{{ route('site.orders.copy', $order->id) }}" class="btn btn-sm btn-outline-secondary" onclick="return confirm('Sao chép đơn {{ $order->code }}?')"><i class="bi bi-files"></i>Sao chép đơn</a>@endif
                     @if($canCancel)<form class="monitor-my-order-cancel" method="POST" action="{{ route('site.orders.cancel', $order) }}" onsubmit="return confirm('Bạn chắc chắn muốn hủy đơn hàng này?');">@csrf<button class="btn btn-sm btn-outline-danger"><i class="bi bi-x-circle"></i>Hủy đơn hàng</button></form>@endif
                 </div>

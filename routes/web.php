@@ -239,9 +239,11 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::prefix('accounting')->name('accounting.')->middleware('role:account,accountant,accounting,admin')->group(function () {
         Route::get('/workflow-simulation', [\App\Http\Controllers\AccountingWorkflowSimulationController::class, 'index'])->name('workflow-simulation.index');
         Route::post('/workflow-simulation/stock-in', [\App\Http\Controllers\AccountingWorkflowSimulationController::class, 'stockIn'])->name('workflow-simulation.stock-in');
+        Route::post('/workflow-simulation/stocktake', [\App\Http\Controllers\AccountingWorkflowSimulationController::class, 'stocktake'])->name('workflow-simulation.stocktake');
         Route::post('/workflow-simulation/orders', [\App\Http\Controllers\AccountingWorkflowSimulationController::class, 'createOrder'])->name('workflow-simulation.orders.create');
         Route::post('/workflow-simulation/orders/bulk', [\App\Http\Controllers\AccountingWorkflowSimulationController::class, 'bulkOrders'])->name('workflow-simulation.orders.bulk');
         Route::post('/workflow-simulation/orders/advance', [\App\Http\Controllers\AccountingWorkflowSimulationController::class, 'advanceOrders'])->name('workflow-simulation.orders.advance');
+        Route::put('/workflow-simulation/orders/{order}/adjust-stock', [\App\Http\Controllers\AccountingWorkflowSimulationController::class, 'adjustOrderToStock'])->name('workflow-simulation.orders.adjust-stock');
         Route::post('/workflow-simulation/transfers', [\App\Http\Controllers\AccountingWorkflowSimulationController::class, 'createTransfers'])->name('workflow-simulation.transfers.create');
         Route::post('/workflow-simulation/transfers/advance', [\App\Http\Controllers\AccountingWorkflowSimulationController::class, 'advanceTransfers'])->name('workflow-simulation.transfers.advance');
         Route::post('/workflow-simulation/transfers/receive-all', [\App\Http\Controllers\AccountingWorkflowSimulationController::class, 'receiveAll'])->name('workflow-simulation.transfers.receive-all');
@@ -258,6 +260,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::put('/sales-ledger/{entry}', [\App\Http\Controllers\AccountingSalesLedgerController::class, 'update'])->name('sales-ledger.update');
         Route::delete('/sales-ledger/{entry}', [\App\Http\Controllers\AccountingSalesLedgerController::class, 'destroy'])->name('sales-ledger.destroy');
         Route::get('/', [AccountingDashboardController::class, 'index'])->name('dashboard');
+        Route::get('/order-adjustments', [AccountingDashboardController::class, 'orderAdjustments'])->name('order-adjustments');
         Route::get('/orders', [AccountingDashboardController::class, 'orders'])->name('orders');
         Route::get('/orders/{order}/detail', [AccountingDashboardController::class, 'orderDetail'])->name('orders.detail');
         Route::get('/customer-debts', [AccountingDashboardController::class, 'customerDebts'])->name('customer-debts');
@@ -370,6 +373,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::delete('/order-transfers/{id}', [\App\Http\Controllers\Warehouse\OrderTransferController::class, 'destroy'])->name('order-transfers.destroy');
         Route::post('/order-transfers/{transfer}/orders/{order}/detach', [\App\Http\Controllers\Warehouse\OrderTransferController::class, 'detachWaitingTransfer'])->name('order-transfers.orders.detach');
         Route::get('/', [WarehouseDashboardController::class, 'index'])->name('dashboard');
+        Route::get('/order-adjustments', [\App\Http\Controllers\OrderAdjustmentController::class, 'warehouseIndex'])->name('order-adjustments.index');
         Route::get('/cutting/{variant}', [WarehouseDashboardController::class, 'cuttingForm'])->name('cutting.form');
         Route::post('/cutting/{variant}', [WarehouseDashboardController::class, 'executeCutting'])->name('cutting.execute');
         Route::post('/cutting/{variant}/confirm', [WarehouseDashboardController::class, 'confirmCuttingMaterials'])->name('cutting.confirm');
@@ -1036,6 +1040,9 @@ Route::middleware(['auth', 'role:sale,leader,leader_sale,sale_manager,manager,ma
         ->name('pages.my_orders.monitoring.store');
     Route::get('/my-orders/daily-prices', [PageController::class, 'dailyProductPrices'])->name('pages.my_orders.daily_prices');
     Route::get('/my-orders/daily-inventories', [PageController::class, 'dailyInventories'])->name('pages.my_orders.daily_inventories');
+    Route::get('/my-orders/fix-data', [\App\Http\Controllers\OrderAdjustmentController::class, 'index'])
+        ->name('site.order-adjustments.index')
+        ->middleware('role:leader,leader_sale,sale_manager,manager,manager_sale,admin');
     Route::get('/my-products', [PageController::class, 'myProducts'])->name('pages.my_products');
     Route::post('/my-products/{variant}/preference', [PageController::class, 'updateMyProductPreference'])->name('pages.my_products.preference');
     Route::get('/my-orders/customers/ajax', [PageController::class, 'myOrderCustomersAjax'])->name('site.orders.customers.ajax');

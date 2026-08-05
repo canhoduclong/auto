@@ -440,6 +440,7 @@ class MyDashboardController extends Controller
         }
 
         $salesChart = $this->buildSalesChart($memberIds, $monthStart, $now);
+        $weeklyCustomerProduction = $this->buildWeeklyCustomerProduction($memberIds, $now);
 
         $pendingWarehouseAdjustments = Order::query()
             ->with(['customer', 'warehouse', 'items.variant.product'])
@@ -522,11 +523,69 @@ class MyDashboardController extends Controller
             ],
             'commissionFeed' => $commissionFeed,
             'salesChart' => $salesChart,
+            'weeklyCustomerProduction' => $weeklyCustomerProduction,
             'timeline' => $timeline,
             'assignedCustomers' => $assignedCustomers,
             'pendingWarehouseAdjustments' => $pendingWarehouseAdjustments,
             'productPriceBoard' => $productPriceBoard,
             'productPriceAppliedDates' => $productPriceAppliedDates,
+        ];
+    }
+
+    /**
+     * Ma trận sản lượng khách nhận trong tuần hiện tại (thứ Hai - Chủ nhật).
+     * Sản lượng được tính theo tổng số lượng của các dòng hàng trên đơn hợp lệ.
+     */
+    private function buildWeeklyCustomerProduction(array $memberIds, Carbon $referenceDate): array
+    {
+        $weekStart = $referenceDate->copy()->startOfWeek(Carbon::MONDAY)->startOfDay();
+        $weekEnd = $weekStart->copy()->addDays(6)->endOfDay();
+        $dayNames = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'CN'];
+
+        $days = collect(range(0, 6))->map(function (int $offset) use ($weekStart, $dayNames, $referenceDate) {
+            $date = $weekStart->copy()->addDays($offset);
+
+            return [
+                'date' => $date->toDateString(),
+                'label' => $dayNames[$offset],
+                'display_date' => $date->format('d/m'),
+                'is_today' => $date->isSameDay($referenceDate),
+            ];
+        })->values();
+
+        $rows = DB::table('orders as o')
+            ->join('customers as c', 'c.id', '=', 'o.customer_id')
+            ->join('order_items as oi', 'oi.order_id', '=', 'o.id')
+            ->whereIn('o.user_id', $memberIds)
+            ->whereBetween('o.delivery_date', [$weekStart->toDateString(), $weekEnd->toDateString()])
+            ->whereNotIn('o.status', ['draft', 'cancelled', 'rejected'])
+            ->when(Schema::hasColumn('orders', 'is_return_order'), fn ($query) => $query->where(function ($nested) {
+                $nested->whereNull('o.is_return_order')->orWhere('o.is_return_order', false);
+            }))
+            ->whereNull('c.deleted_at')
+            ->groupBy('c.id', 'c.name', 'o.delivery_date')
+            ->orderBy('c.name')
+            ->selectRaw('c.id as customer_id, c.name as customer_name, o.delivery_date, COALESCE(SUM(oi.quantity), 0) as quantity')
+            ->get();
+
+        $quantitiesByCustomer = $rows->groupBy('customer_id');
+        $customers = $quantitiesByCustomer->map(function (Collection $customerRows) use ($days) {
+            $first = $customerRows->first();
+            $quantitiesByDate = $customerRows->keyBy(fn ($row) => Carbon::parse($row->delivery_date)->toDateString());
+
+            return [
+                'customer_id' => (int) $first->customer_id,
+                'customer_name' => (string) $first->customer_name,
+                'quantities' => $days->mapWithKeys(fn (array $day) => [
+                    $day['date'] => (int) ($quantitiesByDate->get($day['date'])->quantity ?? 0),
+                ])->all(),
+            ];
+        })->sortBy('customer_name', SORT_NATURAL | SORT_FLAG_CASE)->values();
+
+        return [
+            'week_label' => $weekStart->format('d/m/Y') . ' - ' . $weekEnd->format('d/m/Y'),
+            'days' => $days->all(),
+            'customers' => $customers->all(),
         ];
     }
 

@@ -785,23 +785,7 @@
     <div class="container monitor-shell">
         <div class="monitor-layout">
             <aside class="monitor-sidebar">
-                <nav class="monitor-tab-nav" aria-label="Nhóm đơn hàng">
-                    <a class="monitor-tab-link" href="{{ route('pages.my_dashboard') }}">
-                        <i class="bi bi-house-door"></i><span>Bảng điều khiển</span>
-                    </a>
-                    <a class="monitor-tab-link {{ $activeTab === 'today' ? 'active' : '' }}" href="{{ route('pages.my_orders.monitoring', ['tab' => 'today', 'date' => $selectedDate, 'date_field' => $selectedDateField]) }}">
-                        <i class="bi bi-file-earmark-text"></i><span>Đơn hôm nay</span>
-                    </a>
-                    <a class="monitor-tab-link {{ $activeTab === 'drafts' ? 'active' : '' }}" href="{{ route('pages.my_orders.monitoring', ['tab' => 'drafts']) }}">
-                        <i class="bi bi-file-earmark-text"></i><span>Đơn hàng Mẫu</span>
-                    </a>
-                    <a class="monitor-tab-link {{ $activeTab === 'my_orders' ? 'active' : '' }}" href="{{ route('pages.my_orders.monitoring', ['tab' => 'my_orders']) }}">
-                        <i class="bi bi-bag-check"></i><span>Đơn của tôi</span>
-                    </a>
-                    <a class="monitor-tab-link {{ $activeTab === 'customers' ? 'active' : '' }}" href="{{ route('pages.my_orders.monitoring', ['tab' => 'customers']) }}">
-                        <i class="bi bi-person-check"></i><span>Khách hàng</span>
-                    </a>
-                </nav>
+                @include('site.orders.partials.monitor_sidebar_nav')
 
                 @if($activeTab === 'today')
                 <div class="monitor-panel monitor-filter-block">

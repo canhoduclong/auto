@@ -39,6 +39,11 @@
 .sort-link:hover { color:#3b82f6; }
 .sort-link .bi { font-size:.65rem; opacity:.5; }
 .sort-link.active .bi { opacity:1; color:#3b82f6; }
+.ds-priority-badge {
+    display:inline-flex; align-items:center; justify-content:center;
+    min-width:32px; height:32px; padding:0 7px; border-radius:999px;
+    background:#64748b; color:#fff; font-weight:800; font-size:.8rem;
+}
 
 /* ── toolbar ── */
 .ds-toolbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:space-between; margin-bottom:10px; }
@@ -235,6 +240,7 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                 <thead class="table-light">
                     <tr>
                         <th>#</th>
+                        <th class="text-center">Ưu tiên</th>
                         <th>
                             <a href="{{ request()->fullUrlWithQuery(['sort' => $sort === 'date_asc' ? 'date_desc' : 'date_asc', 'page' => 1]) }}"
                                class="sort-link {{ in_array($sort, ['date_asc','date_desc']) ? 'active' : '' }}">
@@ -306,6 +312,11 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                     @endphp
                     <tr>
                         <td class="text-muted">{{ $rowNo++ }}</td>
+                        <td class="text-center">
+                            <span class="ds-priority-badge" title="Số thứ tự ưu tiên của đơn">
+                                {{ $row->daily_sequence ?? '—' }}
+                            </span>
+                        </td>
                         <td>
                             <a href="{{ route('orders.show', $row->order_id_val) }}" class="text-decoration-none small" target="_blank">
                                 {{ \Carbon\Carbon::parse($row->order_date)->format('d/m') }}
@@ -341,7 +352,7 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="11" class="text-center text-muted py-4">
+                        <td colspan="12" class="text-center text-muted py-4">
                             <i class="bi bi-inbox fs-4 d-block mb-2"></i>
                             Không có dữ liệu cho bộ lọc này.
                         </td>
@@ -351,7 +362,7 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                 @if($items->isNotEmpty())
                 <tfoot class="table-light fw-semibold">
                     <tr>
-                        <td colspan="6" class="text-end text-muted small">Tổng trang này:</td>
+                        <td colspan="7" class="text-end text-muted small">Tổng trang này:</td>
                         <td class="text-end">
                             {{ $fmtN((float)$items->sum('eff_qty')) }}
                         </td>

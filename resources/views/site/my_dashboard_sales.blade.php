@@ -95,6 +95,33 @@
         margin-bottom: 27px;
         padding: 15px 11px 10px;
     }
+    .weekly-production-card {
+        margin-bottom: 14px;
+        padding: 14px 12px 12px;
+    }
+    .weekly-production-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 10px;
+    }
+    .weekly-production-range { color: #64748b; font-size: .7rem; white-space: nowrap; }
+    .weekly-production-table { min-width: 650px; margin: 0; border-collapse: separate; border-spacing: 0; font-size: .73rem; }
+    .weekly-production-table th,
+    .weekly-production-table td { padding: 8px 6px; border-right: 1px solid #e5edf3; border-bottom: 1px solid #e5edf3; text-align: center; }
+    .weekly-production-table thead th { background: #f3f7fa; color: #475569; font-weight: 800; }
+    .weekly-production-table th:first-child,
+    .weekly-production-table td:first-child { position: sticky; left: 0; z-index: 1; min-width: 150px; text-align: left; }
+    .weekly-production-table thead th:first-child { z-index: 2; }
+    .weekly-production-table tbody td:first-child { background: #fff; }
+    .weekly-production-table th:last-child,
+    .weekly-production-table td:last-child { border-right: 0; }
+    .weekly-production-table .is-today { background: #fff6da; color: #854d0e; }
+    .weekly-production-table .customer-name { color: var(--dashboard-blue); font-weight: 750; text-decoration: none; }
+    .weekly-production-table .customer-name:hover { text-decoration: underline; }
+    .weekly-production-table .has-quantity { color: #0f766e; font-weight: 850; }
+    .weekly-production-table .no-quantity { color: #cbd5e1; }
     .dashboard-chart-head {
         display: flex;
         align-items: center;
@@ -276,7 +303,6 @@
 
 @section('content')
 @php
-    $monitorRoute = fn (string $tab) => route('pages.my_orders.monitoring', ['tab' => $tab]);
     $latestPriceBoardDate = collect($productPriceAppliedDates ?? [])
         ->filter()
         ->map(fn ($date) => \Carbon\Carbon::parse($date))
@@ -286,18 +312,11 @@
 <div class="my-dashboard">
     <div class="dashboard-shell">
         <aside class="dashboard-sidebar" aria-label="Điều hướng đơn hàng">
-            <a href="{{ route('pages.my_dashboard') }}" class="dashboard-menu-link is-active" aria-current="page">
-                <i class="bi bi-house-door"></i><span>Bảng điều khiển</span>
-            </a>
-            <a href="{{ $monitorRoute('today') }}" class="dashboard-menu-link">
-                <i class="bi bi-file-earmark-text"></i><span>Đơn hôm nay</span>
-            </a>
-            <a href="{{ $monitorRoute('drafts') }}" class="dashboard-menu-link">
-                <i class="bi bi-file-earmark-text"></i><span>Đơn hàng Mẫu</span>
-            </a>
-            <a href="{{ $monitorRoute('my_orders') }}" class="dashboard-menu-link">
-                <i class="bi bi-bag-check"></i><span>Đơn của tôi</span>
-            </a>
+            @include('site.orders.partials.order_navigation_links', [
+                'activeTab' => 'dashboard',
+                'linkClass' => 'dashboard-menu-link',
+                'activeClass' => 'is-active',
+            ])
         </aside>
 
         <main class="dashboard-main">
@@ -319,6 +338,50 @@
                         <div class="dashboard-empty">Chưa có bản ghi hoa hồng.</div>
                     @endforelse
                 </div>
+            </section>
+
+            <section class="dashboard-card weekly-production-card" id="weekly-customer-production">
+                <div class="weekly-production-head">
+                    <h2 class="dashboard-section-title">Sản lượng khách hàng lấy trong tuần</h2>
+                    <span class="weekly-production-range">{{ $weeklyCustomerProduction['week_label'] ?? '' }}</span>
+                </div>
+                <div class="table-responsive">
+                    <table class="weekly-production-table" aria-label="Sản lượng khách hàng lấy hàng theo 7 ngày trong tuần">
+                        <thead>
+                            <tr>
+                                <th scope="col">Khách hàng</th>
+                                @foreach(($weeklyCustomerProduction['days'] ?? []) as $day)
+                                    <th scope="col" class="{{ $day['is_today'] ? 'is-today' : '' }}">
+                                        <span class="d-block">{{ $day['label'] }}</span>
+                                        <small>{{ $day['display_date'] }}</small>
+                                    </th>
+                                @endforeach
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse(($weeklyCustomerProduction['customers'] ?? []) as $customerProduction)
+                                <tr>
+                                    <td>
+                                        <a class="customer-name" href="{{ route('my_customer.show', $customerProduction['customer_id']) }}">
+                                            {{ $customerProduction['customer_name'] }}
+                                        </a>
+                                    </td>
+                                    @foreach(($weeklyCustomerProduction['days'] ?? []) as $day)
+                                        @php
+                                            $quantity = (int) ($customerProduction['quantities'][$day['date']] ?? 0);
+                                        @endphp
+                                        <td class="{{ $day['is_today'] ? 'is-today' : '' }} {{ $quantity > 0 ? 'has-quantity' : 'no-quantity' }}">
+                                            {{ $quantity > 0 ? number_format($quantity, 0, ',', '.') : '—' }}
+                                        </td>
+                                    @endforeach
+                                </tr>
+                            @empty
+                                <tr><td colspan="8" class="dashboard-empty py-3 text-center">Chưa có khách hàng lấy hàng trong tuần này.</td></tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+                <div class="dashboard-empty mt-2">Đơn vị: số lượng sản phẩm trên các đơn giao trong ngày.</div>
             </section>
 
             <section class="dashboard-card dashboard-chart-card">

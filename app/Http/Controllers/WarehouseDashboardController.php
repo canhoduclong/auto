@@ -16,6 +16,8 @@ use App\Models\OrderReturn;
 use App\Models\Product;
 use App\Models\ProductCuttingBatch;
 use App\Models\ProductVariant;
+use App\Models\ProcurementPurchase;
+use App\Models\ProcurementPurchaseItem;
 use App\Models\ReturnItem;
 use App\Models\Setting;
 use App\Models\User;
@@ -352,6 +354,7 @@ class WarehouseDashboardController extends Controller
             ->whereDate('request_date', Carbon::today()->toDateString())
             ->orderByDesc('id')
             ->get();
+        $productionDashboard = $this->buildProductionDashboard($managedWarehouseId, $selectedDate);
 
         return view('warehouse.dashboard', compact(
             'stats',
@@ -361,8 +364,157 @@ class WarehouseDashboardController extends Controller
             'approvalStats',
             'inventorySummary',
             'cuttingShortages',
-            'deferredComponentImportRequests'
+            'deferredComponentImportRequests',
+            'productionDashboard'
         ));
+    }
+
+    /**
+     * Tổng hợp vận hành nhà máy theo ngày: đầu vào thu mua, phân loại,
+     * sản lượng pha lóc, hao hụt và các chi phí trực tiếp liên quan.
+     */
+    private function buildProductionDashboard(?int $warehouseId, Carbon $selectedDate): array
+    {
+        $date = $selectedDate->toDateString();
+        $purchases = ProcurementPurchase::query()
+            ->where('status', ProcurementPurchase::STATUS_RECEIVED)
+            ->whereDate('received_at', $date)
+            ->when($warehouseId, fn ($query) => $query->where('warehouse_id', $warehouseId))
+            ->get();
+
+        $purchaseIds = $purchases->pluck('id');
+        $classificationLabels = [
+            'processed_duck' => 'Vịt đã làm',
+            'feathers' => 'Lông',
+            'offal' => 'Phụ phẩm',
+            'reject' => 'Hàng loại',
+        ];
+        $classifications = ProcurementPurchaseItem::query()
+            ->whereIn('procurement_purchase_id', $purchaseIds)
+            ->where('stage', 'received')
+            ->get()
+            ->groupBy(fn (ProcurementPurchaseItem $item) => $item->item_type . '|' . ($item->size ?? ''))
+            ->map(function (Collection $items) use ($classificationLabels) {
+                $first = $items->first();
+
+                return [
+                    'type' => (string) $first->item_type,
+                    'type_label' => $classificationLabels[$first->item_type] ?? ucfirst((string) $first->item_type),
+                    'size' => $first->size !== null ? (float) $first->size : null,
+                    'quantity' => (int) $items->sum('quantity'),
+                    'weight' => (float) $items->sum('weight'),
+                ];
+            })
+            ->sortByDesc('weight')
+            ->values();
+
+        $batches = ProductCuttingBatch::query()
+            ->with('targetVariant.product')
+            ->where('status', ProductCuttingBatch::STATUS_COMPLETED)
+            ->whereDate('completed_at', $date)
+            ->when($warehouseId, fn ($query) => $query->where('warehouse_id', $warehouseId))
+            ->get();
+
+        $productionByVariant = $batches
+            ->groupBy('target_product_variant_id')
+            ->map(function (Collection $variantBatches) {
+                $variant = $variantBatches->first()?->targetVariant;
+
+                return [
+                    'product_name' => (string) ($variant?->product?->name ?? 'Sản phẩm'),
+                    'variant_name' => (string) ($variant?->name ?? ''),
+                    'size' => is_numeric($variant?->size) ? (float) $variant->size : null,
+                    'batch_count' => $variantBatches->count(),
+                    'input_weight' => (float) $variantBatches->sum('input_weight'),
+                    'finished_weight' => (float) $variantBatches->sum('actual_finished_weight'),
+                    'component_weight' => (float) $variantBatches->sum('actual_component_weight'),
+                    'loss_weight' => (float) $variantBatches->sum('loss_weight'),
+                ];
+            })
+            ->sortByDesc('finished_weight')
+            ->values();
+
+        $inputWeight = (float) $purchases->sum('total_weight');
+        $inputQuantity = (int) $purchases->sum('quantity');
+        $purchaseCost = (float) $purchases->sum('subtotal');
+        $operatingCosts = [
+            'Môi giới' => (float) $purchases->sum('broker_fee'),
+            'Gia công' => (float) $purchases->sum('processing_fee'),
+            'Thu mua' => (float) $purchases->sum('procurement_fee'),
+            'Vận chuyển' => (float) $purchases->sum('transportation_fee'),
+            'Chi phí khác' => (float) $purchases->sum('other_fee'),
+        ];
+        $operatingCost = array_sum($operatingCosts);
+        $totalCost = (float) $purchases->sum('total_amount');
+        $productionInput = (float) $batches->sum('input_weight');
+        $finishedWeight = (float) $batches->sum('actual_finished_weight');
+        $componentWeight = (float) $batches->sum('actual_component_weight');
+        $lossWeight = (float) $batches->sum('loss_weight');
+        $averageInputCost = $inputWeight > 0 ? $totalCost / $inputWeight : 0.0;
+
+        $trendStart = $selectedDate->copy()->subDays(6)->startOfDay();
+        $trendRows = ProductCuttingBatch::query()
+            ->where('status', ProductCuttingBatch::STATUS_COMPLETED)
+            ->whereBetween('completed_at', [$trendStart, $selectedDate->copy()->endOfDay()])
+            ->when($warehouseId, fn ($query) => $query->where('warehouse_id', $warehouseId))
+            ->selectRaw('DATE(completed_at) as production_date, SUM(actual_finished_weight) as finished_weight, SUM(loss_weight) as loss_weight')
+            ->groupBy('production_date')
+            ->get()
+            ->keyBy('production_date');
+        $trend = collect(range(0, 6))->map(function (int $offset) use ($trendStart, $trendRows) {
+            $day = $trendStart->copy()->addDays($offset);
+            $row = $trendRows->get($day->toDateString());
+
+            return [
+                'date' => $day->toDateString(),
+                'label' => $day->format('d/m'),
+                'finished_weight' => (float) ($row->finished_weight ?? 0),
+                'loss_weight' => (float) ($row->loss_weight ?? 0),
+            ];
+        })->values();
+
+        $inputTypes = $purchases
+            ->groupBy(fn (ProcurementPurchase $purchase) => trim((string) $purchase->duck_type) ?: ($purchase->purchase_type === 'live_duck' ? 'Vịt sống' : 'Vịt đã làm'))
+            ->map(fn (Collection $rows, string $label) => [
+                'label' => $label,
+                'quantity' => (int) $rows->sum('quantity'),
+                'weight' => (float) $rows->sum('total_weight'),
+                'cost' => (float) $rows->sum('total_amount'),
+            ])
+            ->sortByDesc('weight')
+            ->values();
+
+        return [
+            'date' => $date,
+            'summary' => [
+                'receipt_count' => $purchases->count(),
+                'input_quantity' => $inputQuantity,
+                'input_weight' => $inputWeight,
+                'production_batch_count' => $batches->count(),
+                'production_input_weight' => $productionInput,
+                'finished_weight' => $finishedWeight,
+                'component_weight' => $componentWeight,
+                'loss_weight' => $lossWeight,
+                'loss_percent' => $productionInput > 0 ? round($lossWeight * 100 / $productionInput, 2) : 0.0,
+                'yield_percent' => $productionInput > 0 ? round(($finishedWeight + $componentWeight) * 100 / $productionInput, 2) : 0.0,
+                'reject_weight' => (float) $classifications->where('type', 'reject')->sum('weight'),
+                'purchase_cost' => $purchaseCost,
+                'operating_cost' => $operatingCost,
+                'total_cost' => $totalCost,
+                'average_input_cost' => $averageInputCost,
+                'estimated_loss_cost' => $lossWeight * $averageInputCost,
+            ],
+            'input_types' => $inputTypes->all(),
+            'classifications' => $classifications->all(),
+            'production_by_variant' => $productionByVariant->all(),
+            'operating_costs' => collect($operatingCosts)
+                ->map(fn (float $amount, string $label) => ['label' => $label, 'amount' => $amount])
+                ->sortByDesc('amount')
+                ->values()
+                ->all(),
+            'trend' => $trend->all(),
+            'trend_max' => max(1, (float) $trend->max('finished_weight')),
+        ];
     }
 
     public function cuttingForm(Request $request, ProductVariant $variant)

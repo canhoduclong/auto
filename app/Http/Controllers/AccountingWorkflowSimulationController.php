@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AccountingReconciliation;
 use App\Models\Customer;
+use App\Models\Inventory;
 use App\Models\InventoryDocument;
 use App\Models\Order;
 use App\Models\ProductVariant;
@@ -14,6 +15,7 @@ use App\Services\AccountingWorkflowSimulationService;
 use App\Services\AccountingSalesImportService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
@@ -24,6 +26,7 @@ class AccountingWorkflowSimulationController extends Controller
         $date = Carbon::parse($request->input('date', now()->toDateString()))->toDateString();
         $orders = Order::query()->with([
             'customer:id,name', 'user:id,name', 'shipper:id,name', 'warehouse:id,name',
+            'items.variant.product',
             'histories:id,order_id,action', 'accountingReconciliation:id,order_id,status',
             'warehouseTransfers' => fn ($query) => $query->with(['shipper:id,name', 'sourceWarehouse:id,name', 'targetWarehouse:id,name'])->latest('id'),
         ])->whereDate('created_at', $date)->orderBy('created_at')->orderBy('id')->get();
@@ -45,6 +48,77 @@ class AccountingWorkflowSimulationController extends Controller
         ];
 
         $transferredOrderIds = WarehouseTransfer::query()->pluck('order_id');
+        $workflowService = app(AccountingWorkflowSimulationService::class);
+        $orderInventory = $orders->mapWithKeys(fn (Order $order) => [
+            $order->id => $workflowService->inventoryStatus($order),
+        ]);
+        $inventoryRows = Inventory::query()
+            ->with(['warehouse:id,name', 'productVariant.product:id,name'])
+            ->orderBy('warehouse_id')
+            ->orderBy('product_variant_id')
+            ->get()
+            ->map(fn (Inventory $inventory) => [
+                'inventory_id' => (int) $inventory->id,
+                'warehouse_id' => (int) $inventory->warehouse_id,
+                'warehouse_name' => (string) ($inventory->warehouse?->name ?? 'Kho'),
+                'variant_id' => (int) $inventory->product_variant_id,
+                'product_name' => (string) ($inventory->productVariant?->product?->name ?? 'Sản phẩm'),
+                'variant_name' => (string) ($inventory->productVariant?->name ?: $inventory->productVariant?->sku ?: ('#'.$inventory->product_variant_id)),
+                'on_hand' => (float) $inventory->quantity,
+                'reserved' => (float) $inventory->reserved_quantity,
+                'available' => max(0, (float) $inventory->quantity - (float) $inventory->reserved_quantity),
+                'low_stock_threshold' => (float) $inventory->low_stock_threshold,
+            ]);
+        $inventoryByWarehouseVariant = $inventoryRows->keyBy(fn (array $row) => $row['warehouse_id'].':'.$row['variant_id']);
+        $stocktakeStatuses = [
+            'pending',
+            Order::STATUS_PENDING_LEADER_APPROVAL,
+            Order::STATUS_PENDING_MANAGER_APPROVAL,
+            Order::STATUS_APPROVED,
+            Order::STATUS_READY_TO_PACK,
+            Order::STATUS_PACKING,
+        ];
+        $fulfillmentRows = $orders
+            ->whereIn('status', $stocktakeStatuses)
+            ->filter(fn (Order $order) => $order->warehouse_id)
+            ->flatMap(function (Order $order) {
+                return $order->items->map(fn ($item) => [
+                    'warehouse_id' => (int) $order->warehouse_id,
+                    'warehouse_name' => (string) ($order->warehouse?->name ?? 'Kho'),
+                    'variant_id' => (int) $item->product_variant_id,
+                    'product_name' => (string) ($item->variant?->product?->name ?? 'Sản phẩm'),
+                    'variant_name' => (string) ($item->variant?->name ?: $item->variant?->sku ?: ('#'.$item->product_variant_id)),
+                    'quantity' => (float) $item->quantity,
+                    'order_code' => (string) ($order->code ?: '#'.$order->id),
+                ]);
+            })
+            ->filter(fn (array $row) => $row['variant_id'] > 0 && $row['quantity'] > 0)
+            ->groupBy(fn (array $row) => $row['warehouse_id'].':'.$row['variant_id'])
+            ->map(function (Collection $rows, string $key) use ($inventoryByWarehouseVariant) {
+                $first = $rows->first();
+                $inventory = $inventoryByWarehouseVariant->get($key, []);
+                $onHand = (float) ($inventory['on_hand'] ?? 0);
+                $reserved = (float) ($inventory['reserved'] ?? 0);
+                $available = max(0, $onHand - $reserved);
+                $required = (float) $rows->sum('quantity');
+
+                return [
+                    'warehouse_id' => $first['warehouse_id'],
+                    'warehouse_name' => $first['warehouse_name'],
+                    'variant_id' => $first['variant_id'],
+                    'product_name' => $first['product_name'],
+                    'variant_name' => $first['variant_name'],
+                    'on_hand' => $onHand,
+                    'reserved' => $reserved,
+                    'available' => $available,
+                    'required' => $required,
+                    'shortage' => max(0, $required - $available),
+                    'minimum_counted' => $required + $reserved,
+                    'orders' => $rows->pluck('order_code')->unique()->values()->all(),
+                ];
+            })
+            ->sortByDesc('shortage')
+            ->values();
 
         return view('accounting.workflow-simulation', [
             'date' => $date,
@@ -68,6 +142,12 @@ class AccountingWorkflowSimulationController extends Controller
             'bulkSales' => User::query()->whereHas('roles', fn ($query) => $query->whereIn(DB::raw('LOWER(name)'), ['sale', 'leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale']))->orderBy('name')->get(['id', 'name', 'short_name']),
             'shippers' => User::query()->whereHas('roles', fn ($query) => $query->whereIn(DB::raw('LOWER(name)'), ['shipper', 'manager_shipper']))->orderBy('name')->get(['id', 'name']),
             'variants' => ProductVariant::query()->with('product:id,name')->orderBy('product_id')->orderBy('name')->get(),
+            'inventoryRows' => $inventoryRows,
+            'inventoryMap' => $inventoryRows->mapWithKeys(fn (array $row) => [
+                $row['warehouse_id'].':'.$row['variant_id'] => $row['available'],
+            ])->all(),
+            'orderInventory' => $orderInventory,
+            'fulfillmentRows' => $fulfillmentRows,
             'bulkResult' => session('workflow_bulk_result'),
         ]);
     }
@@ -127,6 +207,33 @@ class AccountingWorkflowSimulationController extends Controller
         return $this->back($data['date'], 'Đã nhập '.count($data['items']).' sản phẩm và tạo phiếu #'.$document->id.'.');
     }
 
+    public function stocktake(Request $request, AccountingWorkflowSimulationService $service)
+    {
+        $data = $request->validate([
+            'date' => ['required', 'date'],
+            'warehouse_id' => ['required', 'integer', 'exists:warehouses,id'],
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.product_variant_id' => ['required', 'integer', 'distinct', 'exists:product_variants,id'],
+            'items.*.expected_quantity' => ['required', 'numeric', 'min:0'],
+            'items.*.counted_quantity' => ['nullable', 'numeric', 'min:0'],
+        ]);
+
+        try {
+            $stocktake = $service->stocktakeForWorkflow(
+                (int) $data['warehouse_id'],
+                $data['items'],
+                $data['date'],
+                $request->user()
+            );
+        } catch (\RuntimeException $exception) {
+            return redirect()->route('accounting.workflow-simulation.index', ['date' => $data['date'], 'step' => 2])
+                ->with('error', $exception->getMessage());
+        }
+
+        return redirect()->route('accounting.workflow-simulation.index', ['date' => $data['date'], 'step' => 2])
+            ->with('success', 'Đã hoàn tất phiếu kiểm kê '.$stocktake->code.', cập nhật tồn và kiểm tra lại các đơn trong ngày.');
+    }
+
     public function createOrder(Request $request, AccountingWorkflowSimulationService $service)
     {
         $data = $request->validate([
@@ -162,6 +269,38 @@ class AccountingWorkflowSimulationController extends Controller
         ];
 
         return $this->back($data['date'], $labels[$data['action']]." {$count} đơn.");
+    }
+
+    public function adjustOrderToStock(Request $request, Order $order, AccountingWorkflowSimulationService $service)
+    {
+        $data = $request->validate([
+            'date' => ['required', 'date'],
+            'return_step' => ['nullable', 'integer', 'between:2,5'],
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.item_id' => ['required', 'integer', 'distinct'],
+            'items.*.product_variant_id' => ['required', 'integer', 'exists:product_variants,id'],
+            'items.*.quantity' => ['required', 'integer', 'min:0', 'max:1000000'],
+        ]);
+
+        abort_unless($order->created_at?->toDateString() === Carbon::parse($data['date'])->toDateString(), 404);
+
+        try {
+            $status = $service->adjustOrderToInventory($order, $data['items'], $request->user());
+        } catch (\RuntimeException $exception) {
+            return redirect()->route('accounting.workflow-simulation.index', [
+                'date' => $data['date'],
+                'step' => (int) ($data['return_step'] ?? 2),
+            ])->with('error', $exception->getMessage());
+        }
+
+        $message = $status['sufficient']
+            ? 'Đã sửa đơn '.$order->code.'. Tồn kho hiện đã đủ, có thể tiếp tục đóng hàng.'
+            : 'Đã sửa đơn '.$order->code.' nhưng vẫn còn sản phẩm thiếu. Vui lòng điều chỉnh thêm hoặc nhập kho.';
+
+        return redirect()->route('accounting.workflow-simulation.index', [
+            'date' => $data['date'],
+            'step' => (int) ($data['return_step'] ?? 2),
+        ])->with($status['sufficient'] ? 'success' : 'warning', $message);
     }
 
     public function createTransfers(Request $request, AccountingWorkflowSimulationService $service)

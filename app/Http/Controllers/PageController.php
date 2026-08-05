@@ -594,6 +594,7 @@ class PageController extends Controller
             'customer.truckStation.province',
             'customer.truckStation.ward',
             'user',
+            'accountingReconciliation',
             'customerFeedbackUser:id,name',
             'items.product.avatar.media',
             'items.variant.avatar.media',

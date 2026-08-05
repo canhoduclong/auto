@@ -97,4 +97,27 @@ class OrderAdjustment extends Model
     {
         return $this->hasMany(\App\Models\ApprovalOrder::class, 'order_adjustment_id');
     }
+
+    public function requiresWarehouseConfirmation(): bool
+    {
+        if (!$this->relationLoaded('items')) {
+            $this->load('items.orderItem');
+        } else {
+            $this->items
+                ->filter(fn (OrderAdjustmentItem $item): bool => !$item->relationLoaded('orderItem'))
+                ->each->load('orderItem');
+        }
+
+        return $this->items->contains(function (OrderAdjustmentItem $item): bool {
+            $orderItem = $item->orderItem;
+
+            // Kho chỉ tham gia bước xác nhận cuối khi hàng thực tế thay đổi:
+            // thay đổi số lượng, đổi loại hàng, hoặc thêm một loại hàng mới.
+            // Thay đổi giá/cân nặng không làm phát sinh bước xác nhận Kho.
+            return (int) $item->original_quantity !== (int) $item->adjusted_quantity
+                || (!$orderItem && (int) $item->adjusted_quantity > 0)
+                || ($orderItem && (int) $item->product_id !== (int) $orderItem->product_id)
+                || ($orderItem && (int) $item->product_variant_id !== (int) $orderItem->product_variant_id);
+        });
+    }
 }

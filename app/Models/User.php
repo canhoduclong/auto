@@ -172,6 +172,18 @@ class User extends Authenticatable
             || $this->hasRole('manager_sale');
     }
 
+    public function canManageOrderAdjustments(): bool
+    {
+        return $this->hasRole([
+            'leader',
+            'leader_sale',
+            'sale_manager',
+            'manager',
+            'manager_sale',
+            'admin',
+        ]);
+    }
+
     public function canAccessSalesDailyFeatures(): bool
     {
         if ($this->hasRole('admin')) {

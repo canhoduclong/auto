@@ -57,7 +57,7 @@
         </div>
         <div class="mb-3">
             <label class="form-label">Giá bán (VNĐ)</label>
-            <input type="number" name="price" class="form-control" min="0" step="1000">
+            <input type="number" name="price" class="form-control" min="0" step="1" value="{{ old('price') }}">
         </div>
         <button class="btn btn-primary">Thêm biến thể</button>
         <a href="{{ route('product-variants.index') }}" class="btn btn-secondary">Quay lại</a>

@@ -5,8 +5,10 @@ namespace App\Services;
 use App\Models\AccountingReconciliation;
 use App\Models\Customer;
 use App\Models\Inventory;
+use App\Models\InventoryAdjustment;
 use App\Models\InventoryDocument;
 use App\Models\InventoryMovement;
+use App\Models\InventoryStocktake;
 use App\Models\Order;
 use App\Models\OrderHistory;
 use App\Models\ProductVariant;
@@ -51,6 +53,99 @@ class AccountingWorkflowSimulationService
             }
 
             return $document;
+        });
+    }
+
+    public function stocktakeForWorkflow(int $warehouseId, array $items, string $date, User $actor): InventoryStocktake
+    {
+        $countedRows = collect($items)
+            ->filter(fn (array $row) => array_key_exists('counted_quantity', $row) && $row['counted_quantity'] !== null && $row['counted_quantity'] !== '');
+        if ($countedRows->isEmpty()) {
+            throw new \RuntimeException('Vui lòng nhập số lượng kiểm đếm thực tế cho ít nhất một sản phẩm.');
+        }
+
+        return DB::transaction(function () use ($warehouseId, $countedRows, $date, $actor): InventoryStocktake {
+            $variantIds = $countedRows->pluck('product_variant_id')->map(fn ($id) => (int) $id)->unique();
+            foreach ($variantIds as $variantId) {
+                Inventory::firstOrCreate(
+                    ['warehouse_id' => $warehouseId, 'product_variant_id' => $variantId],
+                    ['quantity' => 0, 'reserved_quantity' => 0, 'low_stock_threshold' => 0]
+                );
+            }
+            $inventories = Inventory::query()
+                ->where('warehouse_id', $warehouseId)
+                ->whereIn('product_variant_id', $variantIds)
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('product_variant_id');
+
+            foreach ($countedRows as $row) {
+                $inventory = $inventories->get((int) $row['product_variant_id']);
+                $expected = round((float) $row['expected_quantity'], 3);
+                if (! $inventory || abs($expected - (float) $inventory->quantity) >= 0.001) {
+                    throw new \RuntimeException('Tồn kho đã thay đổi trong lúc kiểm kê. Vui lòng tải lại bước 2 và kiểm đếm lại.');
+                }
+            }
+
+            $stocktake = InventoryStocktake::create([
+                'warehouse_id' => $warehouseId,
+                'counted_at' => Carbon::parse($date)->endOfDay()->min(now()),
+                'status' => InventoryStocktake::STATUS_COMPLETED,
+                'note' => 'Kiểm kê từ mô phỏng kế toán để hoàn thiện các đơn ngày '.Carbon::parse($date)->format('d/m/Y').'.',
+                'created_by' => $actor->id,
+            ]);
+            $stocktake->update(['code' => 'KKK-WF-'.now()->format('Ymd').'-'.str_pad((string) $stocktake->id, 5, '0', STR_PAD_LEFT)]);
+
+            foreach ($countedRows as $row) {
+                $inventory = $inventories->get((int) $row['product_variant_id']);
+                $systemQuantity = round((float) $inventory->quantity, 3);
+                $countedQuantity = round((float) $row['counted_quantity'], 3);
+                $difference = round($countedQuantity - $systemQuantity, 3);
+                $stocktake->items()->create([
+                    'inventory_id' => $inventory->id,
+                    'product_variant_id' => $inventory->product_variant_id,
+                    'system_quantity' => $systemQuantity,
+                    'counted_quantity' => $countedQuantity,
+                    'difference' => $difference,
+                ]);
+                if (abs($difference) >= 0.001) {
+                    InventoryAdjustment::create([
+                        'inventory_id' => $inventory->id,
+                        'quantity' => $difference,
+                        'reason' => 'Kiểm kê hoàn thiện đơn '.$stocktake->code,
+                        'user_id' => $actor->id,
+                    ]);
+                    InventoryMovement::create([
+                        'inventory_id' => $inventory->id,
+                        'quantity' => $difference,
+                        'type' => 'stocktake_adjustment',
+                        'reference_id' => $stocktake->id,
+                        'reference_type' => InventoryStocktake::class,
+                        'user_id' => $actor->id,
+                    ]);
+                }
+                $inventory->update(['quantity' => $countedQuantity]);
+                ProductVariant::query()->whereKey($inventory->product_variant_id)->update([
+                    'stock' => Inventory::query()->where('product_variant_id', $inventory->product_variant_id)->sum('quantity'),
+                ]);
+            }
+
+            $orders = Order::query()
+                ->with(['items.variant.product', 'warehouse'])
+                ->where('warehouse_id', $warehouseId)
+                ->whereDate('created_at', Carbon::parse($date)->toDateString())
+                ->whereIn('status', ['pending', Order::STATUS_PENDING_LEADER_APPROVAL, Order::STATUS_PENDING_MANAGER_APPROVAL, Order::STATUS_APPROVED, Order::STATUS_READY_TO_PACK, Order::STATUS_PACKING])
+                ->get();
+            foreach ($orders as $order) {
+                $status = $this->inventoryStatus($order);
+                $order->update([
+                    'stock_sufficient' => $status['sufficient'],
+                    'stock_shortage_detail' => $status['sufficient'] ? null : collect($status['items'])->where('sufficient', false)->values()->all(),
+                    'stock_alert_status' => $status['sufficient'] ? 'ready' : 'shortage',
+                ]);
+            }
+
+            return $stocktake;
         });
     }
 
@@ -141,6 +236,146 @@ class AccountingWorkflowSimulationService
         }
 
         return $processed;
+    }
+
+    public function inventoryStatus(Order $order): array
+    {
+        $order->loadMissing('items.variant.product', 'warehouse');
+        $requirements = $order->items
+            ->filter(fn ($item) => $item->product_variant_id && (int) $item->quantity > 0)
+            ->groupBy('product_variant_id')
+            ->map(function (Collection $items, $variantId) use ($order) {
+                $first = $items->first();
+                $required = (float) $items->sum('quantity');
+                $inventory = $order->warehouse_id
+                    ? Inventory::query()
+                        ->where('product_variant_id', $variantId)
+                        ->where('warehouse_id', $order->warehouse_id)
+                        ->selectRaw('COALESCE(SUM(quantity), 0) as total_on_hand, COALESCE(SUM(reserved_quantity), 0) as total_reserved')
+                        ->first()
+                    : null;
+                $onHand = (float) ($inventory->total_on_hand ?? 0);
+                $reserved = (float) ($inventory->total_reserved ?? 0);
+                $available = max(0, $onHand - $reserved);
+
+                return [
+                    'variant_id' => (int) $variantId,
+                    'label' => trim((string) ($first?->variant?->product?->name ?? 'Sản phẩm').' — '.(string) ($first?->variant?->name ?: $first?->variant?->sku ?: '#'.$variantId)),
+                    'required' => $required,
+                    'on_hand' => $onHand,
+                    'reserved' => $reserved,
+                    'available' => $available,
+                    'shortage' => max(0, $required - $available),
+                    'sufficient' => $available >= $required,
+                ];
+            })
+            ->values();
+
+        return [
+            'warehouse_id' => $order->warehouse_id ? (int) $order->warehouse_id : null,
+            'warehouse_name' => (string) ($order->warehouse?->name ?? 'Chưa chọn kho'),
+            'sufficient' => $order->warehouse_id !== null && $requirements->every(fn (array $row) => $row['sufficient']),
+            'items' => $requirements->all(),
+        ];
+    }
+
+    public function adjustOrderToInventory(Order $order, array $submittedItems, User $actor): array
+    {
+        $editableStatuses = [
+            'pending',
+            Order::STATUS_PENDING_LEADER_APPROVAL,
+            Order::STATUS_PENDING_MANAGER_APPROVAL,
+            Order::STATUS_APPROVED,
+            Order::STATUS_READY_TO_PACK,
+            Order::STATUS_PACKING,
+        ];
+        if (! in_array((string) $order->status, $editableStatuses, true)) {
+            throw new \RuntimeException('Đơn '.$order->code.' đã qua bước đóng hàng và không thể sửa tại đây.');
+        }
+
+        return DB::transaction(function () use ($order, $submittedItems, $actor): array {
+            $order->loadMissing('items.variant.product');
+            $itemsById = $order->items->keyBy('id');
+            $submitted = collect($submittedItems);
+            if ($submitted->pluck('item_id')->contains(fn ($itemId) => ! $itemsById->has((int) $itemId))) {
+                throw new \RuntimeException('Dòng hàng không thuộc đơn '.$order->code.'.');
+            }
+            if ($submitted->sum(fn (array $row) => max(0, (int) $row['quantity'])) <= 0) {
+                throw new \RuntimeException('Đơn phải còn ít nhất một sản phẩm có số lượng lớn hơn 0.');
+            }
+
+            $variantIds = $submitted->pluck('product_variant_id')->map(fn ($id) => (int) $id)->unique();
+            $variants = ProductVariant::query()->with('product')->whereIn('id', $variantIds)->get()->keyBy('id');
+
+            foreach ($submitted as $row) {
+                $item = $itemsById->get((int) $row['item_id']);
+                $quantity = max(0, (int) $row['quantity']);
+                if ($quantity === 0) {
+                    $item->delete();
+                    continue;
+                }
+
+                $variant = $variants->get((int) $row['product_variant_id']);
+                if (! $variant) {
+                    throw new \RuntimeException('Sản phẩm thay thế không tồn tại.');
+                }
+                $variantChanged = (int) $item->product_variant_id !== (int) $variant->id;
+                $unitWeight = round(max(0.001, (float) $variant->effective_kg), 3);
+                $pricedByKg = (bool) $variant->effective_priced_by_kg;
+                $price = $variantChanged ? (float) $variant->final_price : (float) ($item->price ?? 0);
+                $basePrice = $variantChanged ? $price : (float) ($item->base_price ?? $price);
+                $unitDiscount = $variantChanged ? 0.0 : (float) ($item->unit_discount ?? 0);
+                $discountType = $variantChanged ? 'decrease' : (string) ($item->discount_type ?? 'decrease');
+                $factor = $pricedByKg ? $unitWeight : 1.0;
+                $discountTotal = round(($discountType === 'increase' ? -1 : 1) * $unitDiscount * $quantity * $factor, 2);
+
+                $item->update([
+                    'product_id' => $variant->product_id,
+                    'product_variant_id' => $variant->id,
+                    'quantity' => $quantity,
+                    'price' => $price,
+                    'base_price' => $basePrice,
+                    'unit_discount' => $unitDiscount,
+                    'discount_type' => $discountType,
+                    'discount_total' => $discountTotal,
+                    'unit_weight' => $unitWeight,
+                    'is_priced_by_kg' => $pricedByKg,
+                    'total_weight' => round($quantity * $unitWeight, 3),
+                    'actual_weight' => null,
+                    'packed_weight' => null,
+                    'total' => round($price * $quantity * $factor, 2),
+                ]);
+            }
+
+            $order->load('items');
+            $subtotal = (float) $order->items->sum(function ($item) {
+                $factor = (bool) $item->is_priced_by_kg ? max(0.001, (float) $item->unit_weight) : 1.0;
+                return (float) ($item->base_price ?? $item->price ?? 0) * (int) $item->quantity * $factor;
+            });
+            $itemDiscount = (float) $order->items->sum('discount_total');
+            $lineTotal = (float) $order->items->sum('total');
+            $extraDiscount = (float) ($order->extra_discount_total ?? 0);
+            $total = max(0, round($lineTotal - $extraDiscount, 2));
+            $order->update([
+                'subtotal_amount' => round($subtotal, 2),
+                'item_discount_total' => round($itemDiscount, 2),
+                'total_discount' => round($itemDiscount + $extraDiscount, 2),
+                'total_weight' => round((float) $order->items->sum('total_weight'), 3),
+                'actual_weight' => null,
+                'total' => $total,
+                'amount_due' => max(0, $total - (float) ($order->amount_paid ?? 0)),
+            ]);
+
+            $status = $this->inventoryStatus($order->fresh(['items.variant.product', 'warehouse']));
+            $order->update([
+                'stock_sufficient' => $status['sufficient'],
+                'stock_shortage_detail' => $status['sufficient'] ? null : collect($status['items'])->where('sufficient', false)->values()->all(),
+                'stock_alert_status' => $status['sufficient'] ? 'ready' : 'shortage',
+            ]);
+            $this->history($order, $actor, 'workflow_adjust_order_to_stock', 'accounting', 'Đã điều chỉnh sản phẩm/số lượng theo tồn kho để tiếp tục đóng hàng.');
+
+            return $status;
+        });
     }
 
     public function createTransfers(array $orderIds, int $targetWarehouseId, int $shipperId, User $actor): int
@@ -379,15 +614,16 @@ class AccountingWorkflowSimulationService
         if (! $order->warehouse_id) {
             throw new \RuntimeException('Đơn #'.$order->code.' chưa có kho xử lý.');
         }
-        foreach ($order->items as $item) {
-            if (! $item->product_variant_id) continue;
-            $available = (float) Inventory::query()
-                ->where('product_variant_id', $item->product_variant_id)
-                ->where('warehouse_id', $order->warehouse_id)
-                ->sum(DB::raw('quantity - reserved_quantity'));
-            if ($available < (int) $item->quantity) {
-                throw new \RuntimeException('Không đủ tồn kho cho đơn #'.$order->code.'. Hãy nhập kho trước khi xác nhận đóng hàng.');
-            }
+        $status = $this->inventoryStatus($order);
+        if (! $status['sufficient']) {
+            $shortages = collect($status['items'])
+                ->where('sufficient', false)
+                ->map(fn (array $row) => $row['label'].' thiếu '.number_format($row['shortage'], 0, ',', '.'))
+                ->implode('; ');
+
+            throw new \RuntimeException(
+                'Không đủ tồn kho cho đơn #'.$order->code.'. '.$shortages.'. Hãy sửa đơn hoặc nhập kho trước khi xác nhận đóng hàng.'
+            );
         }
     }
 

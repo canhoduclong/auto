@@ -17,6 +17,7 @@ use App\Models\User;
 use App\Models\Warehouse;
 use App\Notifications\AccountingOrderRevenueConfirmed;
 use App\Services\SupplierDebtService;
+use App\Services\ApprovalService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -74,6 +75,38 @@ class AccountingDashboardController extends Controller
                 'unpaid_orders' => $unpaidOrders,
                 'overdue_orders' => $overdueOrders,
             ],
+        ]);
+    }
+
+    public function orderAdjustments(Request $request, ApprovalService $approvalService)
+    {
+        $keyword = trim((string) $request->input('keyword', ''));
+        $adjustments = $approvalService->pendingAccountingAdjustments();
+
+        if ($keyword !== '') {
+            $needle = mb_strtolower($keyword);
+            $adjustments = $adjustments->filter(function (OrderAdjustment $adjustment) use ($needle): bool {
+                return str_contains(mb_strtolower((string) $adjustment->order?->code), $needle)
+                    || str_contains(mb_strtolower((string) $adjustment->order?->customer?->name), $needle)
+                    || str_contains(mb_strtolower((string) $adjustment->order?->user?->name), $needle)
+                    || str_contains(mb_strtolower((string) $adjustment->requester?->name), $needle)
+                    || str_contains((string) $adjustment->id, $needle);
+            })->values();
+        }
+
+        $perPage = 20;
+        $page = max(1, (int) $request->input('page', 1));
+        $paginator = new LengthAwarePaginator(
+            $adjustments->forPage($page, $perPage)->values(),
+            $adjustments->count(),
+            $perPage,
+            $page,
+            ['path' => $request->url(), 'query' => $request->query()]
+        );
+
+        return view('accounting.order_adjustments', [
+            'adjustments' => $paginator,
+            'keyword' => $keyword,
         ]);
     }
 
@@ -1682,6 +1715,7 @@ class AccountingDashboardController extends Controller
             'orders.id as order_id_val',
             'orders.created_at as order_date',
             'orders.code as order_code',
+            'orders.daily_sequence',
             'products.name as product_name',
             'products.unit as product_unit',
             DB::raw("COALESCE(product_variants.size, '') as variant_size"),
@@ -1706,8 +1740,19 @@ class AccountingDashboardController extends Controller
                      ELSE order_items.total END as eff_total'),
         ]);
 
+        $orderByDateAndPriority = static function ($query, string $direction) {
+            return $query
+                ->orderByRaw('DATE(orders.created_at) '.$direction)
+                ->orderByRaw('CASE WHEN orders.daily_sequence IS NULL THEN 1 ELSE 0 END')
+                ->orderBy('orders.daily_sequence')
+                ->orderBy('orders.created_at')
+                ->orderBy('orders.id')
+                ->orderBy('order_items.id');
+        };
+
         match ($sort) {
-            'date_asc' => $listQ->orderBy('orders.created_at'),
+            'date_asc' => $orderByDateAndPriority($listQ, 'asc'),
+            'date_desc' => $orderByDateAndPriority($listQ, 'desc'),
             'product_asc' => $listQ->orderBy('products.name')->orderByDesc('orders.created_at'),
             'product_desc' => $listQ->orderByDesc('products.name')->orderByDesc('orders.created_at'),
             'amount_asc' => $listQ->orderBy('order_items.total')->orderByDesc('orders.created_at'),
@@ -1716,7 +1761,7 @@ class AccountingDashboardController extends Controller
             'qty_desc' => $listQ->orderByDesc('order_items.quantity')->orderByDesc('orders.created_at'),
             'weight_asc' => $listQ->orderBy('order_items.total_weight')->orderByDesc('orders.created_at'),
             'weight_desc' => $listQ->orderByDesc('order_items.total_weight')->orderByDesc('orders.created_at'),
-            default => $listQ->orderByDesc('orders.created_at'),
+            default => $orderByDateAndPriority($listQ, 'desc'),
         };
 
         $items = $listQ->paginate($perPage)->appends($request->query());

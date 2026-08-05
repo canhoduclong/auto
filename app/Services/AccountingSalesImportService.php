@@ -2,9 +2,9 @@
 
 namespace App\Services;
 
+use App\Models\AccountingReconciliation;
 use App\Models\AccountingSalesEntry;
 use App\Models\AccountingSalesImportBatch;
-use App\Models\AccountingReconciliation;
 use App\Models\Customer;
 use App\Models\InventoryDocument;
 use App\Models\Order;
@@ -45,8 +45,7 @@ class AccountingSalesImportService
         array $saleMappings = [],
         ?string $businessDate = null,
         ?int $stockInDocumentId = null
-    ): array
-    {
+    ): array {
         $parsed = $this->parse($text);
         $sales = $this->saleUsers();
         [$saleAliases, $salesById] = $this->saleMaps($sales);
@@ -60,16 +59,24 @@ class AccountingSalesImportService
             $errors = [];
             $warnings = [];
             $date = $this->parseDate($raw['date'] ?? null);
-            if (!$date) $errors[] = 'Ngày không hợp lệ, cần định dạng dd/mm/yyyy.';
+            if (! $date) {
+                $errors[] = 'Ngày không hợp lệ, cần định dạng dd/mm/yyyy.';
+            }
 
             $customerCode = $this->clean($raw['customer_code'] ?? null);
             $customerName = $this->clean($raw['customer_name'] ?? null);
             $importedSaleName = $this->clean($raw['sale_name'] ?? null);
             $unit = $this->clean($raw['unit'] ?? null);
             $mappedVariantId = null;
-            if (!$customerName) $errors[] = 'Thiếu tên khách hàng.';
-            if (!$importedSaleName) $errors[] = 'Thiếu NVKD.';
-            if (!$unit) $errors[] = 'Thiếu DVT.';
+            if (! $customerName) {
+                $errors[] = 'Thiếu tên khách hàng.';
+            }
+            if (! $importedSaleName) {
+                $errors[] = 'Thiếu NVKD.';
+            }
+            if (! $unit) {
+                $errors[] = 'Thiếu DVT.';
+            }
 
             $normalizedCustomerName = Customer::normalizeName($customerName);
             if ($customerCode && isset($seenCustomerCodes[mb_strtolower($customerCode)])
@@ -90,7 +97,7 @@ class AccountingSalesImportService
             $selectedId = (int) ($saleMappings[$mappingKey] ?? 0);
             $selectedSale = $selectedId ? $salesById->get((string) $selectedId) : null;
             $sale = $selectedSale ?: $automaticSale;
-            if ($importedSaleName && !isset($mappingRows[$mappingKey])) {
+            if ($importedSaleName && ! isset($mappingRows[$mappingKey])) {
                 $mappingRows[$mappingKey] = [
                     'key' => $mappingKey,
                     'imported_name' => $importedSaleName,
@@ -99,8 +106,12 @@ class AccountingSalesImportService
                     'selected_user_name' => $sale?->name,
                 ];
             }
-            if ($importedSaleName && !$sale) $errors[] = 'Chưa ánh xạ NVKD “'.$importedSaleName.'”.';
-            if ($selectedId && !$selectedSale) $errors[] = 'Tài khoản ánh xạ không thuộc nhóm kinh doanh.';
+            if ($importedSaleName && ! $sale) {
+                $errors[] = 'Chưa ánh xạ NVKD “'.$importedSaleName.'”.';
+            }
+            if ($selectedId && ! $selectedSale) {
+                $errors[] = 'Tài khoản ánh xạ không thuộc nhóm kinh doanh.';
+            }
 
             $customer = $this->findCustomer($customerCode, $customerName);
             if ($customer?->trashed()) {
@@ -116,9 +127,15 @@ class AccountingSalesImportService
             $totalQuantity = $this->parseNumber($raw['total_quantity'] ?? null, false);
             $unitPrice = $this->parseNumber($raw['unit_price'] ?? null, true);
             $totalAmount = $this->parseNumber($raw['total_amount'] ?? null, true) ?? 0.0;
-            if ($quantity === null) $errors[] = 'SL không hợp lệ.';
-            if ($unitWeight === null) $errors[] = 'Kg/con không hợp lệ.';
-            if ($totalQuantity === null) $errors[] = 'Cột Tổng không hợp lệ.';
+            if ($quantity === null) {
+                $errors[] = 'SL không hợp lệ.';
+            }
+            if ($unitWeight === null) {
+                $errors[] = 'Kg/con không hợp lệ.';
+            }
+            if ($totalQuantity === null) {
+                $errors[] = 'Cột Tổng không hợp lệ.';
+            }
             if ($unit && ! in_array($this->key($unit), self::NON_STOCK_UNITS, true)) {
                 [$product, $variant] = $this->resolveImportedProduct($unit, (float) ($unitWeight ?? 0));
                 if (! $product || ! $variant) {
@@ -157,7 +174,9 @@ class AccountingSalesImportService
 
         $groups = [];
         foreach ($rows as $index => $row) {
-            if (!$row['data']['entry_date'] || !$row['data']['customer_name']) continue;
+            if (! $row['data']['entry_date'] || ! $row['data']['customer_name']) {
+                continue;
+            }
             $customerKey = $row['customer_id']
                 ? 'id:'.$row['customer_id']
                 : 'name:'.Customer::normalizeName($row['data']['customer_name']);
@@ -245,10 +264,11 @@ class AccountingSalesImportService
         ?int $stockInDocumentId = null,
         ?int $sourceWarehouseId = null,
         ?int $targetWarehouseId = null
-    ): array
-    {
+    ): array {
         $result = $this->preview($text, $actor, $saleMappings, $businessDate, $stockInDocumentId);
-        if (($result['counts']['error'] ?? 0) > 0) return $result + ['imported' => false];
+        if (($result['counts']['error'] ?? 0) > 0) {
+            return $result + ['imported' => false];
+        }
 
         DB::transaction(function () use (
             &$result,
@@ -283,12 +303,12 @@ class AccountingSalesImportService
             foreach ($result['rows'] as &$row) {
                 $data = $row['data'];
                 $customer = $row['customer_id'] ? Customer::find($row['customer_id']) : null;
-                if (!$customer) {
+                if (! $customer) {
                     $customer = Customer::query()
                         ->where('name_normalized', Customer::normalizeName($data['customer_name']))
                         ->first();
                 }
-                if (!$customer) {
+                if (! $customer) {
                     $customer = Customer::create([
                         'user_id' => $actor->id,
                         'name' => $data['customer_name'],
@@ -303,7 +323,7 @@ class AccountingSalesImportService
                     if ($row['sale_id']) {
                         app(CustomerPriorityService::class)->attachSale($customer, (int) $row['sale_id'], 1, 'accounting_sales_import');
                     }
-                } elseif (!$customer->customer_code && $data['customer_code']) {
+                } elseif (! $customer->customer_code && $data['customer_code']) {
                     $customer->update(['customer_code' => $data['customer_code']]);
                 }
 
@@ -328,6 +348,7 @@ class AccountingSalesImportService
         });
 
         $result['imported'] = true;
+
         return $result;
     }
 
@@ -414,15 +435,25 @@ class AccountingSalesImportService
     {
         $lines = preg_split('/\R/u', str_replace("\xEF\xBB\xBF", '', trim($text))) ?: [];
         $lines = array_values(array_filter($lines, fn ($line) => trim($line) !== ''));
-        if (!$lines) throw new \InvalidArgumentException('Vui lòng dán dữ liệu doanh số.');
+        if (! $lines) {
+            throw new \InvalidArgumentException('Vui lòng dán dữ liệu doanh số.');
+        }
         $headers = array_map(fn ($value) => $this->resolveHeader($value), $this->splitLine(array_shift($lines)));
         foreach (['date', 'customer_name', 'sale_name', 'unit', 'quantity', 'unit_weight', 'total_quantity', 'total_amount'] as $required) {
-            if (!in_array($required, $headers, true)) throw new \InvalidArgumentException('Thiếu cột bắt buộc: '.$required.'.');
+            if (! in_array($required, $headers, true)) {
+                throw new \InvalidArgumentException('Thiếu cột bắt buộc: '.$required.'.');
+            }
         }
+
         return array_map(function ($line) use ($headers): array {
             $values = $this->splitLine($line);
             $row = [];
-            foreach ($headers as $index => $field) if ($field) $row[$field] = $values[$index] ?? null;
+            foreach ($headers as $index => $field) {
+                if ($field) {
+                    $row[$field] = $values[$index] ?? null;
+                }
+            }
+
             return $row;
         }, $lines);
     }
@@ -431,43 +462,62 @@ class AccountingSalesImportService
     {
         $line = rtrim($line, "\r\n");
         $parts = str_contains($line, "\t") ? explode("\t", $line) : (preg_split('/\s{2,}/u', trim($line)) ?: []);
+
         return array_map(fn ($value) => trim(str_replace('**', '', $value)), $parts);
     }
 
     private function resolveHeader(string $header): ?string
     {
         $key = $this->key($header);
-        foreach (self::ALIASES as $field => $aliases) if (in_array($key, array_map(fn ($v) => $this->key($v), $aliases), true)) return $field;
+        foreach (self::ALIASES as $field => $aliases) {
+            if (in_array($key, array_map(fn ($v) => $this->key($v), $aliases), true)) {
+                return $field;
+            }
+        }
+
         return null;
     }
 
     private function parseDate(mixed $value): ?Carbon
     {
         $value = $this->clean($value);
-        if (!$value) return null;
+        if (! $value) {
+            return null;
+        }
         foreach (['d/m/Y', 'd-m-Y', 'Y-m-d'] as $format) {
             try {
                 $date = Carbon::createFromFormat('!'.$format, $value);
-                if ($date && $date->format($format) === $value) return $date;
-            } catch (\Throwable) {}
+                if ($date && $date->format($format) === $value) {
+                    return $date;
+                }
+            } catch (\Throwable) {
+            }
         }
+
         return null;
     }
 
     private function parseNumber(mixed $value, bool $blankAllowed): ?float
     {
         $value = $this->clean($value);
-        if ($value === null || preg_match('/^-+$/', str_replace(' ', '', $value))) return $blankAllowed ? null : null;
+        if ($value === null || preg_match('/^-+$/', str_replace(' ', '', $value))) {
+            return $blankAllowed ? null : null;
+        }
         $negative = str_contains($value, '-');
         $number = preg_replace('/[^0-9,.]/', '', $value) ?? '';
-        if ($number === '') return $blankAllowed ? null : null;
+        if ($number === '') {
+            return $blankAllowed ? null : null;
+        }
         if (str_contains($number, ',')) {
             $number = str_replace('.', '', $number);
             $number = str_replace(',', '.', $number);
         } elseif (preg_match('/^\d{1,3}(\.\d{3})+$/', $number)) {
             $number = str_replace('.', '', $number);
         }
-        if (!is_numeric($number)) return null;
+        if (! is_numeric($number)) {
+            return null;
+        }
+
         return ($negative ? -1 : 1) * (float) $number;
     }
 
@@ -475,8 +525,11 @@ class AccountingSalesImportService
     {
         if ($code) {
             $customer = Customer::withTrashed()->where('customer_code', $code)->first();
-            if ($customer) return $customer;
+            if ($customer) {
+                return $customer;
+            }
         }
+
         return $name ? Customer::withTrashed()->where('name_normalized', Customer::normalizeName($name))->first() : null;
     }
 
@@ -490,18 +543,29 @@ class AccountingSalesImportService
     private function saleMaps(Collection $users): array
     {
         $aliases = [];
-        foreach ($users as $user) foreach ([$user->name, $user->short_name] as $name) if ($name) {
-            $key = $this->key($name);
-            if (!array_key_exists($key, $aliases)) $aliases[$key] = $user;
-            elseif (!$aliases[$key] || $aliases[$key]->id !== $user->id) $aliases[$key] = null;
+        foreach ($users as $user) {
+            foreach ([$user->name, $user->short_name] as $name) {
+                if ($name) {
+                    $key = $this->key($name);
+                    if (! array_key_exists($key, $aliases)) {
+                        $aliases[$key] = $user;
+                    } elseif (! $aliases[$key] || $aliases[$key]->id !== $user->id) {
+                        $aliases[$key] = null;
+                    }
+                }
+            }
         }
+
         return [$aliases, $users->keyBy(fn ($user) => (string) $user->id)];
     }
 
     private function clean(mixed $value): ?string
     {
-        if ($value === null) return null;
+        if ($value === null) {
+            return null;
+        }
         $value = trim(str_replace(["\xc2\xa0", '**'], [' ', ''], (string) $value));
+
         return $value === '' ? null : $value;
     }
 
@@ -510,13 +574,21 @@ class AccountingSalesImportService
         return strtolower(trim(preg_replace('/\s+/', ' ', Str::ascii((string) $value)) ?? ''));
     }
 
-    private function mappingKey(?string $name): string { return sha1($this->key($name)); }
-    private function normalizeSource(string $text): string { return trim(str_replace(["\r\n", "\r"], "\n", $text)); }
+    private function mappingKey(?string $name): string
+    {
+        return sha1($this->key($name));
+    }
+
+    private function normalizeSource(string $text): string
+    {
+        return trim(str_replace(["\r\n", "\r"], "\n", $text));
+    }
 
     private function createCompletedHistoricalOrders(AccountingSalesImportBatch $batch, array $rows, User $actor): int
     {
         $groups = collect($rows)->groupBy(fn ($row) => $row['data']['entry_date'].'|'.$row['customer_id']);
         $created = 0;
+        $nextDailySequenceByDate = [];
         $transferShipper = $this->defaultTransferShipper($batch->source_warehouse_id);
 
         if ($batch->source_warehouse_id && $batch->target_warehouse_id
@@ -531,13 +603,15 @@ class AccountingSalesImportService
             $saleId = (int) $first['sale_id'];
             $total = max(0, round((float) $group->sum('data.total_amount'), 2));
             $entryDate = Carbon::parse($first['data']['entry_date']);
+            $dailySequence = $this->nextDailySequence($entryDate, $nextDailySequenceByDate);
             $groupKey = hash('sha256', 'batch:'.$batch->id.'|'.$entryDate->toDateString().'|customer:'.$customer->id);
 
-            $order = new Order();
+            $order = new Order;
             $order->forceFill([
                 'customer_id' => $customer->id,
                 'user_id' => $saleId,
                 'code' => 'HIS-'.$batch->id.'-'.str_pad((string) ($created + 1), 4, '0', STR_PAD_LEFT),
+                'daily_sequence' => $dailySequence,
                 'total' => $total,
                 'subtotal_amount' => $total,
                 'status' => Order::STATUS_COMPLETED,
@@ -590,7 +664,7 @@ class AccountingSalesImportService
             $transfer = null;
             if ($transferShipper && $batch->source_warehouse_id && $batch->target_warehouse_id
                 && (int) $batch->source_warehouse_id !== (int) $batch->target_warehouse_id) {
-                $transfer = new WarehouseTransfer();
+                $transfer = new WarehouseTransfer;
                 $transfer->forceFill([
                     'order_id' => $order->id,
                     'source_warehouse_id' => $batch->source_warehouse_id,
@@ -663,12 +737,14 @@ class AccountingSalesImportService
     ): int {
         $groups = collect($rows)->groupBy(fn ($row) => $row['data']['entry_date'].'|'.$row['customer_id']);
         $created = 0;
+        $nextDailySequenceByDate = [];
 
         foreach ($groups as $group) {
             $first = $group->first();
             $customer = Customer::findOrFail($first['customer_id']);
             $saleId = (int) $first['sale_id'];
             $entryDate = Carbon::parse($first['data']['entry_date']);
+            $dailySequence = $this->nextDailySequence($entryDate, $nextDailySequenceByDate);
             $total = max(0, round((float) $group->sum('data.total_amount'), 2));
             $shippingFee = round((float) $group
                 ->filter(fn ($row) => in_array($this->key($row['data']['unit']), ['shiper', 'shipper', 'nha xe'], true))
@@ -677,11 +753,12 @@ class AccountingSalesImportService
                 ->filter(fn ($row) => $this->key($row['data']['unit']) === 'thung xop')
                 ->sum('data.total_amount'), 2);
 
-            $order = new Order();
+            $order = new Order;
             $order->forceFill([
                 'customer_id' => $customer->id,
                 'user_id' => $saleId,
                 'code' => 'SIM-'.$batch->id.'-'.str_pad((string) ($created + 1), 4, '0', STR_PAD_LEFT),
+                'daily_sequence' => $dailySequence,
                 'total' => $total,
                 'subtotal_amount' => $total,
                 'status' => Order::STATUS_PENDING_LEADER_APPROVAL,
@@ -748,6 +825,19 @@ class AccountingSalesImportService
         return $created;
     }
 
+    private function nextDailySequence(Carbon $date, array &$nextByDate): int
+    {
+        $dateString = $date->toDateString();
+
+        if (! array_key_exists($dateString, $nextByDate)) {
+            $nextByDate[$dateString] = (int) Order::query()
+                ->whereDate('created_at', $dateString)
+                ->max('daily_sequence');
+        }
+
+        return ++$nextByDate[$dateString];
+    }
+
     private function createCompletedWorkflowHistory(
         Order $order,
         int $saleId,
@@ -755,8 +845,7 @@ class AccountingSalesImportService
         Carbon $date,
         int $batchId,
         ?int $transferShipperId = null
-    ): void
-    {
+    ): void {
         $steps = [
             ['create_order', $saleId, 'sale', null, 'pending_leader_approval', 'Sale đã tạo đơn'],
             ['leader_approved', $accountingId, 'leader_sale', 'pending_leader_approval', 'pending_manager_approval', 'Trưởng phòng đã duyệt'],
@@ -773,7 +862,7 @@ class AccountingSalesImportService
 
         foreach ($steps as $index => [$action, $userId, $role, $before, $after, $note]) {
             $timestamp = $date->copy()->startOfDay()->addMinutes($index * 60);
-            $history = new OrderHistory();
+            $history = new OrderHistory;
             $history->forceFill([
                 'order_id' => $order->id,
                 'user_id' => $userId,
@@ -897,9 +986,15 @@ class AccountingSalesImportService
                 $name = $this->key($product->name);
                 $score = 0;
                 if ($key === 'con') {
-                    if (str_contains($name, 'vit nguyen con')) $score += 100;
-                    if ((string) $product->unit === 'con') $score += 40;
-                    if (str_contains($name, 'bam')) $score -= 100;
+                    if (str_contains($name, 'vit nguyen con')) {
+                        $score += 100;
+                    }
+                    if ((string) $product->unit === 'con') {
+                        $score += 40;
+                    }
+                    if (str_contains($name, 'bam')) {
+                        $score -= 100;
+                    }
                 } elseif ($key !== '' && str_contains($name, $key)) {
                     $score += 80;
                 }

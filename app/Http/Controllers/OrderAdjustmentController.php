@@ -7,6 +7,7 @@ use App\Models\Order;
 use App\Models\OrderAdjustment;
 use App\Models\OrderAdjustmentItem;
 use App\Models\OrderReturn;
+use App\Models\ProductVariant;
 use App\Models\ReturnItem;
 use App\Models\Warehouse;
 use App\Models\User;
@@ -30,6 +31,91 @@ class OrderAdjustmentController extends Controller
             return Setting::all()->keyBy('key');
         });
     }
+
+    public function index(Request $request): View
+    {
+        $user = $request->user();
+        abort_unless($user, 403);
+        abort_unless($user->canManageOrderAdjustments(), 403, 'Chỉ Leader hoặc Manager được truy cập Fix số liệu.');
+
+        $managerRoles = ['manager', 'manager_sale', 'director'];
+        $leaderRoles = ['leader', 'leader_sale', 'sale_manager'];
+        $isAdminOrManager = $user->hasRole('admin') || $user->hasRole($managerRoles);
+        $isLeader = $user->hasRole($leaderRoles);
+        $status = (string) $request->input('status', OrderAdjustment::STATUS_PENDING_APPROVAL);
+        $keyword = trim((string) $request->input('keyword', ''));
+
+        $query = OrderAdjustment::query()
+            ->with([
+                'order.customer:id,name,customer_code',
+                'order.user:id,name,team_id',
+                'requester:id,name',
+                'items.variant.product:id,name',
+                'approvalSteps.step:id,role_slug,step_order',
+                'approvalSteps.approver:id,name',
+            ])
+            ->whereHas('order', fn ($orderQuery) => $orderQuery->where('status', Order::STATUS_COMPLETED));
+
+        if (!$isAdminOrManager) {
+            if ($isLeader) {
+                $query->whereHas('order', function ($orderQuery) use ($user): void {
+                    $orderQuery->where(function ($scope) use ($user): void {
+                        $scope->where('user_id', $user->id);
+                        if ((int) ($user->team_id ?? 0) > 0) {
+                            $scope->orWhereHas('user', fn ($saleQuery) => $saleQuery->where('team_id', $user->team_id));
+                        }
+                    });
+                });
+            } else {
+                $query->where('requested_by', $user->id);
+            }
+        }
+
+        if ($status !== '' && in_array($status, [
+            OrderAdjustment::STATUS_DRAFT,
+            OrderAdjustment::STATUS_PENDING_APPROVAL,
+            OrderAdjustment::STATUS_APPROVED,
+            OrderAdjustment::STATUS_REJECTED,
+            OrderAdjustment::STATUS_COMPLETED,
+        ], true)) {
+            $query->where('status', $status);
+        }
+
+        if ($keyword !== '') {
+            $query->where(function ($scope) use ($keyword): void {
+                $scope->where('id', $keyword)
+                    ->orWhereHas('order', function ($orderQuery) use ($keyword): void {
+                        $orderQuery->where('code', 'like', "%{$keyword}%")
+                            ->orWhereHas('customer', fn ($customerQuery) => $customerQuery->where('name', 'like', "%{$keyword}%"));
+                    });
+            });
+        }
+
+        $adjustments = $query
+            ->latest('submitted_at')
+            ->latest('id')
+            ->paginate(20)
+            ->appends($request->query());
+
+        $approvalService = app(ApprovalService::class);
+        $currentSteps = [];
+        $canApproveByAdjustment = [];
+        foreach ($adjustments as $adjustment) {
+            $currentSteps[$adjustment->id] = $approvalService->getCurrentPendingAdjustmentStep($adjustment);
+            $canApproveByAdjustment[$adjustment->id] = $adjustment->status === OrderAdjustment::STATUS_PENDING_APPROVAL
+                && ($user->hasRole('admin') || $approvalService->canApproveAdjustmentStep($adjustment, $user));
+        }
+
+        return view('site.orders.adjustments.index', [
+            'adjustments' => $adjustments,
+            'currentSteps' => $currentSteps,
+            'canApproveByAdjustment' => $canApproveByAdjustment,
+            'status' => $status,
+            'keyword' => $keyword,
+            'settings' => $this->settings,
+        ]);
+    }
+
     public function create(Order $order): View
     {
         $this->authorizeCreate($order);
@@ -58,7 +144,8 @@ class OrderAdjustmentController extends Controller
             'adjustment_note' => 'nullable|string|max:5000',
             'return_warehouse_id' => 'nullable|exists:warehouses,id',
             'items' => 'required|array|min:1',
-            'items.*.order_item_id' => 'required|exists:order_items,id',
+            'items.*.order_item_id' => 'nullable|required_without:items.*.product_variant_id|exists:order_items,id',
+            'items.*.product_variant_id' => 'nullable|required_without:items.*.order_item_id|exists:product_variants,id',
             'items.*.adjusted_quantity' => 'required|integer|min:0',
             'items.*.adjusted_price' => 'required|numeric|min:0',
             'items.*.adjusted_weight' => 'nullable|numeric|min:0',
@@ -69,17 +156,89 @@ class OrderAdjustmentController extends Controller
 
         $order->load(['items.variant.product']);
         $orderItems = $order->items->keyBy('id');
+        $newVariantIds = collect($data['items'])
+            ->filter(fn (array $itemData): bool => empty($itemData['order_item_id']))
+            ->pluck('product_variant_id')
+            ->filter()
+            ->map(fn ($id): int => (int) $id)
+            ->values();
+        $newVariants = ProductVariant::query()
+            ->with('product')
+            ->whereIn('id', $newVariantIds->unique()->all())
+            ->where('status', true)
+            ->whereHas('product', fn ($query) => $query->where('status', true))
+            ->get()
+            ->keyBy('id');
 
         $requiresReturn = false;
+        $requiresWarehouse = false;
+        $preparedItems = [];
+        $seenNewVariantIds = [];
         foreach ($data['items'] as $itemData) {
-            $orderItem = $orderItems->get((int) $itemData['order_item_id']);
+            $orderItemId = (int) ($itemData['order_item_id'] ?? 0);
+            $orderItem = $orderItemId > 0 ? $orderItems->get($orderItemId) : null;
+
+            if ($orderItemId > 0 && !$orderItem) {
+                return back()->withErrors(['items' => 'Có sản phẩm không thuộc đơn gốc.'])->withInput();
+            }
+
             if (!$orderItem) {
-                return back()->withErrors(['items' => 'Co san pham khong thuoc don goc.'])->withInput();
+                $variantId = (int) ($itemData['product_variant_id'] ?? 0);
+                $variant = $newVariants->get($variantId);
+                if (!$variant) {
+                    return back()->withErrors(['items' => 'Loại hàng thêm mới không tồn tại hoặc đã ngừng sử dụng.'])->withInput();
+                }
+                if ($order->items->contains(fn ($existingItem): bool => (int) $existingItem->product_variant_id === $variantId)) {
+                    return back()->withErrors(['items' => 'Loại hàng này đã có trong đơn. Hãy điều chỉnh số lượng ở dòng hiện có.'])->withInput();
+                }
+                if (in_array($variantId, $seenNewVariantIds, true)) {
+                    return back()->withErrors(['items' => 'Không thể thêm trùng một loại hàng mới trong cùng yêu cầu.'])->withInput();
+                }
+                if ((int) $itemData['adjusted_quantity'] <= 0) {
+                    return back()->withErrors(['items' => 'Số lượng hàng thêm mới phải lớn hơn 0.'])->withInput();
+                }
+
+                $seenNewVariantIds[] = $variantId;
+                $requiresWarehouse = true;
+                $defaultWeight = (float) ($variant->effective_kg ?? 0) * (int) $itemData['adjusted_quantity'];
+                $preparedItems[] = [
+                    'order_item_id' => null,
+                    'product_id' => (int) $variant->product_id,
+                    'product_variant_id' => $variantId,
+                    'original_quantity' => 0,
+                    'adjusted_quantity' => (int) $itemData['adjusted_quantity'],
+                    'original_price' => 0,
+                    'adjusted_price' => (float) $itemData['adjusted_price'],
+                    'original_weight' => 0,
+                    'adjusted_weight' => isset($itemData['adjusted_weight'])
+                        ? (float) $itemData['adjusted_weight']
+                        : $defaultWeight,
+                    'note' => $itemData['note'] ?? 'Bổ sung hàng thiếu trong đơn',
+                ];
+                continue;
             }
 
             if ((int) $itemData['adjusted_quantity'] < (int) ($orderItem->quantity ?? 0)) {
                 $requiresReturn = true;
             }
+
+            if ((int) $itemData['adjusted_quantity'] !== (int) ($orderItem->quantity ?? 0)) {
+                $requiresWarehouse = true;
+            }
+
+            $originalWeight = (float) ($orderItem->actual_weight ?? $orderItem->total_weight ?? $orderItem->display_total_value ?? 0);
+            $preparedItems[] = [
+                'order_item_id' => (int) $orderItem->id,
+                'product_id' => $orderItem->product_id ? (int) $orderItem->product_id : null,
+                'product_variant_id' => $orderItem->product_variant_id ? (int) $orderItem->product_variant_id : null,
+                'original_quantity' => (int) ($orderItem->quantity ?? 0),
+                'adjusted_quantity' => (int) $itemData['adjusted_quantity'],
+                'original_price' => (float) ($orderItem->price ?? 0),
+                'adjusted_price' => (float) $itemData['adjusted_price'],
+                'original_weight' => $originalWeight,
+                'adjusted_weight' => isset($itemData['adjusted_weight']) ? (float) $itemData['adjusted_weight'] : $originalWeight,
+                'note' => $itemData['note'] ?? null,
+            ];
         }
 
         if ($requiresReturn && empty($data['return_warehouse_id'])) {
@@ -95,7 +254,7 @@ class OrderAdjustmentController extends Controller
             ? OrderAdjustment::STATUS_PENDING_APPROVAL
             : OrderAdjustment::STATUS_DRAFT;
 
-        $adjustment = DB::transaction(function () use ($order, $data, $status, $requiresReturn, $imagePaths) {
+        $adjustment = DB::transaction(function () use ($order, $data, $preparedItems, $status, $requiresWarehouse, $imagePaths) {
             $adjustment = OrderAdjustment::create([
                 'order_id' => $order->id,
                 'requested_by' => (int) auth()->id(),
@@ -104,27 +263,14 @@ class OrderAdjustmentController extends Controller
                 'adjustment_note' => $data['adjustment_note'] ?? null,
                 'evidence_images' => $imagePaths ?: null,
                 'return_warehouse_id' => $data['return_warehouse_id'] ?? null,
-                'warehouse_confirmation_status' => $requiresReturn ? 'pending' : 'not_required',
+                'warehouse_confirmation_status' => $requiresWarehouse ? 'pending' : 'not_required',
                 'submitted_at' => $status === OrderAdjustment::STATUS_PENDING_APPROVAL ? now() : null,
             ]);
 
-            foreach ($data['items'] as $itemData) {
-                $orderItem = $order->items->firstWhere('id', (int) $itemData['order_item_id']);
-                $originalWeight = (float) ($orderItem->actual_weight ?? $orderItem->total_weight ?? $orderItem->display_total_value ?? 0);
-
-                OrderAdjustmentItem::create([
+            foreach ($preparedItems as $itemData) {
+                OrderAdjustmentItem::create(array_merge($itemData, [
                     'order_adjustment_id' => $adjustment->id,
-                    'order_item_id' => $orderItem->id,
-                    'product_id' => $orderItem->product_id,
-                    'product_variant_id' => $orderItem->product_variant_id,
-                    'original_quantity' => (int) ($orderItem->quantity ?? 0),
-                    'adjusted_quantity' => (int) $itemData['adjusted_quantity'],
-                    'original_price' => (float) ($orderItem->price ?? 0),
-                    'adjusted_price' => (float) $itemData['adjusted_price'],
-                    'original_weight' => $originalWeight,
-                    'adjusted_weight' => $itemData['adjusted_weight'] !== null ? (float) $itemData['adjusted_weight'] : $originalWeight,
-                    'note' => $itemData['note'] ?? null,
-                ]);
+                ]));
             }
 
             return $adjustment;
@@ -171,6 +317,26 @@ class OrderAdjustmentController extends Controller
             'canApprove' => $user ? $this->canApprove($user, $orderAdjustment) : false,
             'canWarehouseConfirm' => $user ? $this->canWarehouseConfirm($user, $orderAdjustment) : false,
             'settings' => $settings,
+        ]);
+    }
+
+    public function warehouseIndex(Request $request, ApprovalService $approvalService): View
+    {
+        $keyword = mb_strtolower(trim((string) $request->input('keyword', '')));
+        $adjustments = $approvalService->warehouseAdjustmentQueue();
+
+        if ($keyword !== '') {
+            $adjustments = $adjustments->filter(function (OrderAdjustment $adjustment) use ($keyword): bool {
+                return str_contains(mb_strtolower((string) $adjustment->order?->code), $keyword)
+                    || str_contains(mb_strtolower((string) $adjustment->order?->customer?->name), $keyword)
+                    || str_contains(mb_strtolower((string) $adjustment->requester?->name), $keyword)
+                    || str_contains((string) $adjustment->id, $keyword);
+            })->values();
+        }
+
+        return view('warehouse.order_adjustments', [
+            'adjustments' => $adjustments,
+            'keyword' => trim((string) $request->input('keyword', '')),
         ]);
     }
 
@@ -222,7 +388,7 @@ class OrderAdjustmentController extends Controller
         }
 
         if ($orderAdjustment->status === OrderAdjustment::STATUS_APPROVED) {
-            return back()->with('success', 'Da duyet yeu cau dieu chinh. Cho kho xac nhan hang tra.');
+            return back()->with('success', 'Đã duyệt yêu cầu điều chỉnh. Chờ Kho xác nhận hàng hóa và sản lượng.');
         }
 
         return back()->with('success', 'Da duyet buoc nay. Yeu cau chuyen sang buoc tiep theo.');
@@ -399,6 +565,17 @@ class OrderAdjustmentController extends Controller
             return;
         }
 
+        $orderAdjustment->loadMissing('order.user');
+        if ($user->hasRole(['manager', 'manager_sale', 'director'])) {
+            return;
+        }
+
+        if ($user->hasRole(['leader', 'leader_sale', 'sale_manager'])
+            && (int) ($user->team_id ?? 0) > 0
+            && (int) ($orderAdjustment->order?->user?->team_id ?? 0) === (int) $user->team_id) {
+            return;
+        }
+
         abort(403);
     }
 
@@ -432,7 +609,8 @@ class OrderAdjustmentController extends Controller
         }
 
         return $adjustment->status === OrderAdjustment::STATUS_APPROVED
-            && $adjustment->warehouse_confirmation_status === 'pending';
+            && $adjustment->warehouse_confirmation_status === 'pending'
+            && $adjustment->requiresWarehouseConfirmation();
     }
 
     private function createOrSyncReturnOrder(OrderAdjustment $adjustment): void
@@ -457,7 +635,7 @@ class OrderAdjustmentController extends Controller
 
         if ($returnItemsPayload->isEmpty()) {
             $adjustment->update([
-                'warehouse_confirmation_status' => 'not_required',
+                'warehouse_confirmation_status' => $adjustment->requiresWarehouseConfirmation() ? 'pending' : 'not_required',
                 'order_return_id' => null,
             ]);
             return;
@@ -515,7 +693,7 @@ class OrderAdjustmentController extends Controller
             return;
         }
 
-        $adjustment->loadMissing(['order.items.variant.product', 'items']);
+        $adjustment->loadMissing(['order.items.variant.product', 'items.variant.product']);
         $order = $adjustment->order;
         if (!$order) {
             return;
@@ -527,6 +705,35 @@ class OrderAdjustmentController extends Controller
             foreach ($adjustment->items as $adjItem) {
                 $orderItem = $orderItems->get((int) $adjItem->order_item_id);
                 if (!$orderItem) {
+                    $variant = $adjItem->variant;
+                    $adjustedQty = (int) $adjItem->adjusted_quantity;
+                    if (!$variant || $adjustedQty <= 0) {
+                        continue;
+                    }
+
+                    $unitWeight = (float) ($variant->effective_kg ?? 1);
+                    $isPricedByKg = (bool) ($variant->effective_priced_by_kg ?? true);
+                    $finalWeight = (float) ($adjItem->adjusted_weight ?? 0);
+                    if ($finalWeight <= 0) {
+                        $finalWeight = $adjustedQty * max($unitWeight, 0);
+                    }
+                    $finalPrice = (float) $adjItem->adjusted_price;
+
+                    $order->items()->create([
+                        'product_id' => $adjItem->product_id ?: $variant->product_id,
+                        'product_variant_id' => $variant->id,
+                        'quantity' => $adjustedQty,
+                        'price' => $finalPrice,
+                        'base_price' => $finalPrice,
+                        'unit_discount' => 0,
+                        'discount_type' => 'decrease',
+                        'discount_total' => 0,
+                        'unit_weight' => $unitWeight,
+                        'is_priced_by_kg' => $isPricedByKg,
+                        'actual_weight' => $finalWeight,
+                        'total_weight' => $finalWeight,
+                        'total' => round($finalPrice * ($isPricedByKg ? $finalWeight : $adjustedQty), 2),
+                    ]);
                     continue;
                 }
 
@@ -547,14 +754,25 @@ class OrderAdjustmentController extends Controller
 
                 $finalPrice = (float) $adjItem->adjusted_price;
                 $finalWeight = (float) ($adjItem->adjusted_weight ?? $adjItem->original_weight ?? 0);
+                $targetVariant = $adjItem->variant;
+                $isPricedByKg = $targetVariant
+                    ? (bool) ($targetVariant->effective_priced_by_kg ?? true)
+                    : (bool) $orderItem->effective_priced_by_kg;
+                $unitWeight = $targetVariant
+                    ? (float) ($targetVariant->effective_kg ?? $orderItem->unit_weight ?? 1)
+                    : (float) ($orderItem->unit_weight ?? 1);
 
-                $lineTotal = $orderItem->effective_priced_by_kg
+                $lineTotal = $isPricedByKg
                     ? ($finalPrice * max($finalWeight, 0))
                     : ($finalPrice * max($finalQty, 0));
 
                 $orderItem->update([
+                    'product_id' => $adjItem->product_id ?: $orderItem->product_id,
+                    'product_variant_id' => $adjItem->product_variant_id ?: $orderItem->product_variant_id,
                     'quantity' => $finalQty,
                     'price' => $finalPrice,
+                    'unit_weight' => $unitWeight,
+                    'is_priced_by_kg' => $isPricedByKg,
                     'actual_weight' => $finalWeight > 0 ? $finalWeight : $orderItem->actual_weight,
                     'total_weight' => $finalWeight > 0 ? $finalWeight : $orderItem->total_weight,
                     'total' => round($lineTotal, 2),

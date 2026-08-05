@@ -179,7 +179,6 @@
                                 $adjustmentClass = match($adjustment->status) {'approved','completed' => 'success', 'rejected' => 'danger', 'pending_approval' => 'warning', default => 'secondary'};
                                 $canApproveAdjustment = $adjustment->status === \App\Models\OrderAdjustment::STATUS_PENDING_APPROVAL && (
                                     $authUser?->hasRole('admin') ||
-                                    $authUser?->hasRole('accountant') ||
                                     app(\App\Services\ApprovalService::class)->canApproveAdjustmentStep($adjustment, $authUser)
                                 );
                             @endphp

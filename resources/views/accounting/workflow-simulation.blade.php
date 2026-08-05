@@ -22,6 +22,12 @@
 .wf-stock-row{background:#fff;border:0;border-bottom:1px solid #e2e8f0;border-radius:0;padding:6px 8px}.wf-stock-row:last-child{border-bottom:0}
 .wf-stock-row .form-label{display:none}.wf-stock-row .form-control,.wf-stock-row .form-select,.wf-stock-row .btn{min-height:34px;padding-top:.3rem;padding-bottom:.3rem}
 .wf-product-picker{max-height:55vh;overflow:auto}.wf-product-picker thead{position:sticky;top:0;z-index:2}.wf-product-picker td{vertical-align:middle}
+.wf-inventory-table{max-height:360px;overflow:auto}.wf-inventory-table thead{position:sticky;top:0;z-index:1}
+.wf-stock-ok{color:#15803d;font-weight:700}.wf-stock-short{color:#b91c1c;font-weight:800}.wf-shortage-order{border:1px solid #fecaca;border-left:4px solid #dc2626;border-radius:12px;background:#fff}
+.wf-adjust-row{padding:8px 0;border-top:1px solid #e5e7eb}.wf-adjust-row:first-child{border-top:0}.wf-available-hint{font-size:12px;color:#64748b}.wf-available-hint.is-short{color:#b91c1c;font-weight:700}
+.wf-stocktake-card{border:1px solid #bae6fd;border-left:4px solid #0284c7}.wf-stocktake-input{min-width:125px;text-align:right}.wf-fulfillment-short{background:#fff7ed}.wf-stocktake-help{border-radius:10px;background:#f0f9ff;color:#075985}
+.wf-stocktake-card>summary{cursor:pointer;list-style:none}.wf-stocktake-card>summary::-webkit-details-marker{display:none}.wf-stocktake-toggle{color:#0369a1;font-size:.8rem;font-weight:700}.wf-stocktake-toggle .bi-chevron-down{transition:transform .2s ease}.wf-stocktake-card[open] .wf-stocktake-toggle .bi-chevron-down{transform:rotate(180deg)}
+.wf-select-all-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:.5rem 0;padding:.45rem .65rem;border:1px solid #dbe4ee;border-radius:8px;background:#f8fafc}.wf-select-all-btn{padding:0;border:0;background:transparent;color:#1d4ed8;font-size:.82rem;font-weight:750}.wf-select-all-count{color:#64748b;font-size:.75rem}
 @media(max-width:991px){.wf-nav{grid-template-columns:repeat(6,155px)}.wf-stock-columns{display:none}.wf-stock-list{border-radius:10px}.wf-stock-row{padding:10px}.wf-stock-row .form-label{display:block}.wf-stock-row .form-control,.wf-stock-row .form-select,.wf-stock-row .btn{min-height:38px}}
 </style>
 
@@ -82,6 +88,153 @@
                 <div class="d-flex flex-wrap justify-content-between gap-2 mt-3"><div class="d-flex flex-wrap gap-2"><button class="btn btn-outline-primary" type="button" id="wf-add-stock"><i class="bi bi-plus-lg me-1"></i>Thêm một sản phẩm</button><button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#wf-product-picker-modal"><i class="bi bi-ui-checks-grid me-1"></i>Chọn nhiều sản phẩm</button></div><div class="d-flex gap-2"><button class="btn btn-outline-secondary" type="button" data-wf-go="3">Bỏ qua nhập kho</button><button class="btn btn-success" @disabled($variants->isEmpty() || $warehouses->isEmpty())><i class="bi bi-box-arrow-in-down me-1"></i>Nhập kho &amp; sang bước 3</button></div></div>
             </form>
         </div></div>
+
+        @php
+            $shortageOrders = $orders->filter(function ($order) use ($orderInventory) {
+                return !($orderInventory->get($order->id)['sufficient'] ?? false)
+                    && $order->items->isNotEmpty()
+                    && in_array((string) $order->status, [
+                        'pending',
+                        \App\Models\Order::STATUS_PENDING_LEADER_APPROVAL,
+                        \App\Models\Order::STATUS_PENDING_MANAGER_APPROVAL,
+                        \App\Models\Order::STATUS_APPROVED,
+                        \App\Models\Order::STATUS_READY_TO_PACK,
+                        \App\Models\Order::STATUS_PACKING,
+                    ], true);
+            });
+            $fulfillmentByWarehouse = $fulfillmentRows->groupBy('warehouse_id');
+        @endphp
+        <details class="card wf-card wf-stocktake-card mt-3">
+            <summary class="card-header bg-white py-3 d-flex justify-content-between align-items-center gap-2 flex-wrap">
+                <div><b><i class="bi bi-clipboard2-check me-1 text-info"></i>Kiểm kê kho để hoàn thiện đơn</b><div class="small text-muted">Kiểm đếm thực tế các SKU liên quan, ghi nhận chênh lệch và tự kiểm tra lại khả năng đóng toàn bộ đơn trong ngày.</div></div>
+                <span class="d-flex align-items-center gap-2"><span class="badge {{ $fulfillmentRows->sum('shortage') > 0 ? 'bg-danger' : 'bg-success' }}">Thiếu tổng {{ number_format($fulfillmentRows->sum('shortage'), 0, ',', '.') }}</span><span class="wf-stocktake-toggle">Mở / thu gọn <i class="bi bi-chevron-down ms-1"></i></span></span>
+            </summary>
+            <div class="card-body">
+                <div class="wf-stocktake-help p-3 mb-3 small"><i class="bi bi-info-circle me-1"></i><b>Quy trình:</b> cân/đếm hàng thực tế → nhập cột “Thực đếm” → hoàn tất kiểm kê. Hệ thống tạo phiếu kiểm kê, lịch sử điều chỉnh và cập nhật lại trạng thái đủ/thiếu của đơn. Không nhập số ước lượng nếu chưa kiểm đếm thực tế.</div>
+                @forelse($fulfillmentByWarehouse as $stocktakeWarehouseId => $warehouseRows)
+                    <form method="POST" action="{{ route('accounting.workflow-simulation.stocktake') }}" class="border rounded mb-3" data-workflow-stocktake-form>
+                        @csrf
+                        <input type="hidden" name="date" value="{{ $date }}">
+                        <input type="hidden" name="warehouse_id" value="{{ $stocktakeWarehouseId }}">
+                        <div class="p-2 px-3 bg-light border-bottom d-flex justify-content-between align-items-center"><b>{{ $warehouseRows->first()['warehouse_name'] }}</b><span class="small text-muted">{{ $warehouseRows->count() }} SKU phục vụ đơn</span></div>
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-0">
+                                <thead><tr><th>Sản phẩm / quy cách</th><th>Đơn liên quan</th><th class="text-end">Tồn hệ thống</th><th class="text-end">Đang giữ</th><th class="text-end">Tổng cần</th><th class="text-end">Thiếu</th><th class="text-end">Thực đếm</th></tr></thead>
+                                <tbody>
+                                @foreach($warehouseRows as $stocktakeIndex => $fulfillmentRow)
+                                    <tr class="{{ $fulfillmentRow['shortage'] > 0 ? 'wf-fulfillment-short' : '' }}">
+                                        <td><b>{{ $fulfillmentRow['product_name'] }}</b><div class="small text-muted">{{ $fulfillmentRow['variant_name'] }}</div></td>
+                                        <td class="small">{{ implode(', ', $fulfillmentRow['orders']) }}</td>
+                                        <td class="text-end">{{ number_format($fulfillmentRow['on_hand'], 0, ',', '.') }}</td>
+                                        <td class="text-end">{{ number_format($fulfillmentRow['reserved'], 0, ',', '.') }}</td>
+                                        <td class="text-end fw-semibold">{{ number_format($fulfillmentRow['required'], 0, ',', '.') }}</td>
+                                        <td class="text-end {{ $fulfillmentRow['shortage'] > 0 ? 'wf-stock-short' : 'wf-stock-ok' }}">{{ number_format($fulfillmentRow['shortage'], 0, ',', '.') }}</td>
+                                        <td class="text-end">
+                                            <input type="hidden" name="items[{{ $stocktakeIndex }}][product_variant_id]" value="{{ $fulfillmentRow['variant_id'] }}">
+                                            <input type="hidden" name="items[{{ $stocktakeIndex }}][expected_quantity]" value="{{ $fulfillmentRow['on_hand'] }}">
+                                            <input class="form-control form-control-sm wf-stocktake-input ms-auto" type="number" min="0" step="0.001" name="items[{{ $stocktakeIndex }}][counted_quantity]" placeholder="Nhập thực tế" aria-label="Số lượng thực đếm {{ $fulfillmentRow['product_name'] }} {{ $fulfillmentRow['variant_name'] }}">
+                                            @if($fulfillmentRow['shortage'] > 0)<div class="small text-danger mt-1">Để đủ đơn cần thực có ≥ {{ number_format($fulfillmentRow['minimum_counted'], 0, ',', '.') }}</div>@endif
+                                        </td>
+                                    </tr>
+                                @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="p-3 border-top d-flex justify-content-between align-items-center gap-2 flex-wrap"><span class="small text-muted">Chỉ các dòng đã nhập “Thực đếm” mới được ghi vào phiếu.</span><button class="btn btn-info text-white" onclick="return confirm('Xác nhận số liệu đã được cân/đếm thực tế và cập nhật tồn kho?')"><i class="bi bi-check2-square me-1"></i>Hoàn tất kiểm kê &amp; kiểm tra lại đơn</button></div>
+                    </form>
+                @empty
+                    <div class="text-center text-muted py-4">Chưa có sản phẩm từ đơn hàng ngày này để kiểm kê.</div>
+                @endforelse
+            </div>
+        </details>
+        <div class="row g-3 mt-1">
+            <div class="col-xl-7">
+                <div class="card wf-card h-100">
+                    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center gap-2">
+                        <div><b><i class="bi bi-boxes me-1 text-primary"></i>Tồn kho hiện tại</b><div class="small text-muted">Tồn khả dụng = tồn thực tế − số lượng đang giữ.</div></div>
+                        <span class="badge bg-primary">{{ $inventoryRows->count() }} SKU/kho</span>
+                    </div>
+                    <div class="table-responsive wf-inventory-table">
+                        <table class="table table-sm table-hover align-middle mb-0">
+                            <thead class="table-light"><tr><th>Kho</th><th>Sản phẩm / quy cách</th><th class="text-end">Thực tế</th><th class="text-end">Đang giữ</th><th class="text-end">Khả dụng</th><th>Trạng thái</th></tr></thead>
+                            <tbody>
+                            @forelse($inventoryRows as $inventoryRow)
+                                @php
+                                    $isLowStock = $inventoryRow['available'] <= $inventoryRow['low_stock_threshold'];
+                                @endphp
+                                <tr>
+                                    <td>{{ $inventoryRow['warehouse_name'] }}</td>
+                                    <td><b>{{ $inventoryRow['product_name'] }}</b><div class="small text-muted">{{ $inventoryRow['variant_name'] }}</div></td>
+                                    <td class="text-end">{{ number_format($inventoryRow['on_hand'], 0, ',', '.') }}</td>
+                                    <td class="text-end">{{ number_format($inventoryRow['reserved'], 0, ',', '.') }}</td>
+                                    <td class="text-end {{ $inventoryRow['available'] > 0 ? 'wf-stock-ok' : 'wf-stock-short' }}">{{ number_format($inventoryRow['available'], 0, ',', '.') }}</td>
+                                    <td><span class="badge {{ $isLowStock ? 'bg-warning text-dark' : 'bg-success' }}">{{ $isLowStock ? 'Sắp hết' : 'Sẵn sàng' }}</span></td>
+                                </tr>
+                            @empty
+                                <tr><td colspan="6" class="text-center text-muted py-4">Chưa có tồn kho tại các kho.</td></tr>
+                            @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-5">
+                <div class="card wf-card h-100">
+                    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center gap-2">
+                        <div><b><i class="bi bi-exclamation-triangle me-1 text-danger"></i>Đơn thiếu hàng cần chỉnh</b><div class="small text-muted">Giảm số lượng, bỏ dòng hoặc đổi sang SKU còn tồn.</div></div>
+                        <span class="badge {{ $shortageOrders->isEmpty() ? 'bg-success' : 'bg-danger' }}">{{ $shortageOrders->count() }} đơn</span>
+                    </div>
+                    <div class="card-body">
+                        @forelse($shortageOrders as $shortageOrder)
+                            @php
+                                $stockStatus = $orderInventory->get($shortageOrder->id, []);
+                            @endphp
+                            <div class="wf-shortage-order p-3 mb-3">
+                                <div class="d-flex justify-content-between gap-2 mb-2">
+                                    <div><b>{{ $shortageOrder->code ?: '#'.$shortageOrder->id }}</b> — {{ $shortageOrder->customer?->name }}<div class="small text-muted">{{ $stockStatus['warehouse_name'] ?? 'Chưa chọn kho' }} · {{ $shortageOrder->status }}</div></div>
+                                    <span class="badge bg-danger align-self-start">Thiếu hàng</span>
+                                </div>
+                                <div class="small mb-2">
+                                    @foreach(($stockStatus['items'] ?? []) as $stockItem)
+                                        <div class="d-flex justify-content-between gap-2 {{ $stockItem['sufficient'] ? 'text-muted' : 'wf-stock-short' }}">
+                                            <span>{{ $stockItem['label'] }}</span>
+                                            <span>Cần {{ number_format($stockItem['required'], 0, ',', '.') }} / Có {{ number_format($stockItem['available'], 0, ',', '.') }}@if(!$stockItem['sufficient']) · Thiếu {{ number_format($stockItem['shortage'], 0, ',', '.') }}@endif</span>
+                                        </div>
+                                    @endforeach
+                                </div>
+                                <form method="POST" action="{{ route('accounting.workflow-simulation.orders.adjust-stock', $shortageOrder) }}" data-adjust-stock-form>
+                                    @csrf
+                                    @method('PUT')
+                                    <input type="hidden" name="date" value="{{ $date }}">
+                                    <input type="hidden" name="return_step" value="2">
+                                    @foreach($shortageOrder->items as $itemIndex => $orderItem)
+                                        @php
+                                            $available = $inventoryMap[((int) $shortageOrder->warehouse_id).':'.((int) $orderItem->product_variant_id)] ?? 0;
+                                        @endphp
+                                        <div class="wf-adjust-row" data-adjust-row data-warehouse-id="{{ $shortageOrder->warehouse_id }}">
+                                            <input type="hidden" name="items[{{ $itemIndex }}][item_id]" value="{{ $orderItem->id }}">
+                                            <label class="form-label small mb-1">Sản phẩm / quy cách</label>
+                                            <select class="form-select form-select-sm mb-1" name="items[{{ $itemIndex }}][product_variant_id]" data-adjust-variant required>
+                                                @foreach($variants as $variant)
+                                                    <option value="{{ $variant->id }}" @selected((int) $orderItem->product_variant_id === (int) $variant->id)>{{ $variant->product?->name }} — {{ $variant->name ?: $variant->sku }}</option>
+                                                @endforeach
+                                            </select>
+                                            <div class="row g-2 align-items-center">
+                                                <div class="col-5"><input class="form-control form-control-sm" type="number" min="0" name="items[{{ $itemIndex }}][quantity]" value="{{ (int) $orderItem->quantity }}" data-adjust-quantity required></div>
+                                                <div class="col-7"><div class="wf-available-hint {{ (int) $orderItem->quantity > $available ? 'is-short' : '' }}" data-available-hint>Khả dụng: {{ number_format($available, 0, ',', '.') }} · nhập 0 để bỏ</div></div>
+                                            </div>
+                                        </div>
+                                    @endforeach
+                                    <button class="btn btn-danger btn-sm mt-2" onclick="return confirm('Lưu thay đổi đơn và kiểm tra lại tồn kho?')"><i class="bi bi-pencil-square me-1"></i>Lưu đơn &amp; kiểm tra lại tồn</button>
+                                </form>
+                            </div>
+                        @empty
+                            <div class="text-center py-4"><i class="bi bi-check-circle-fill text-success fs-2"></i><div class="fw-semibold text-success mt-2">Các đơn hiện đủ tồn kho</div><div class="small text-muted">Có thể chuyển sang bước Kho &amp; điều chuyển để tiếp tục đóng hàng.</div></div>
+                        @endforelse
+                    </div>
+                </div>
+            </div>
+        </div>
         <template id="wf-stock-template"><div class="wf-stock-row" data-stock-row><div class="row g-2 align-items-end"><div class="col-lg-6"><label class="form-label small">Sản phẩm / quy cách</label><select class="form-select" name="items[__INDEX__][product_variant_id]" required><option value="">Chọn sản phẩm</option>@foreach($variants as $variant)<option value="{{ $variant->id }}">{{ $variant->product?->name }} — {{ $variant->name ?: $variant->sku }}</option>@endforeach</select></div><div class="col-5 col-lg-2"><label class="form-label small">Số lượng</label><input class="form-control" type="number" min="1" name="items[__INDEX__][quantity]" value="10" required></div><div class="col-5 col-lg-3"><label class="form-label small">Giá vốn / đơn vị</label><input class="form-control" type="number" min="0" step="1000" name="items[__INDEX__][unit_cost]" value="0" required></div><div class="col-2 col-lg-1"><button class="btn btn-outline-danger w-100" type="button" data-remove-stock><i class="bi bi-x-lg"></i></button></div></div></div></template>
 
         <div class="modal fade" id="wf-product-picker-modal" tabindex="-1" aria-labelledby="wf-product-picker-title" aria-hidden="true">
@@ -175,6 +328,54 @@ window.initAccountingWorkflowWizard = function (requestedStep) {
         window.scrollTo({top: page.offsetTop - 20, behavior: 'smooth'});
     };
     page.querySelectorAll('[data-wf-go]').forEach(button => button.addEventListener('click', () => show(button.dataset.wfGo)));
+
+    page.querySelectorAll('[data-wf-panel="5"] form').forEach(form => {
+        const checkboxes = Array.from(form.querySelectorAll('input[name="order_ids[]"]:not(:disabled)'));
+        const list = form.querySelector('.wf-form-list');
+        if (!list || !checkboxes.length || form.querySelector('[data-wf-select-all]')) return;
+
+        const bar = document.createElement('div');
+        bar.className = 'wf-select-all-bar';
+        bar.setAttribute('data-wf-select-all', '');
+        bar.innerHTML = '<button type="button" class="wf-select-all-btn"><i class="bi bi-check2-square me-1"></i><span>Chọn tất cả</span></button><span class="wf-select-all-count"></span>';
+        list.before(bar);
+
+        const button = bar.querySelector('button');
+        const label = bar.querySelector('.wf-select-all-btn span');
+        const count = bar.querySelector('.wf-select-all-count');
+        const refresh = () => {
+            const selected = checkboxes.filter(checkbox => checkbox.checked).length;
+            const allSelected = selected === checkboxes.length;
+            label.textContent = allSelected ? 'Bỏ chọn tất cả' : 'Chọn tất cả';
+            count.textContent = selected.toLocaleString('vi-VN') + '/' + checkboxes.length.toLocaleString('vi-VN') + ' đơn đã chọn';
+        };
+        button.addEventListener('click', () => {
+            const shouldCheck = !checkboxes.every(checkbox => checkbox.checked);
+            checkboxes.forEach(checkbox => { checkbox.checked = shouldCheck; });
+            refresh();
+        });
+        checkboxes.forEach(checkbox => checkbox.addEventListener('change', refresh));
+        refresh();
+    });
+
+    const inventoryMap = @json($inventoryMap ?? []);
+    page.querySelectorAll('[data-adjust-row]').forEach(row => {
+        const variant = row.querySelector('[data-adjust-variant]');
+        const quantity = row.querySelector('[data-adjust-quantity]');
+        const hint = row.querySelector('[data-available-hint]');
+        const refreshAvailability = () => {
+            const key = String(row.dataset.warehouseId || '') + ':' + String(variant?.value || '');
+            const available = Number(inventoryMap[key] || 0);
+            const requested = Number(quantity?.value || 0);
+            if (hint) {
+                hint.textContent = 'Khả dụng: ' + available.toLocaleString('vi-VN') + ' · nhập 0 để bỏ';
+                hint.classList.toggle('is-short', requested > available);
+            }
+        };
+        variant?.addEventListener('change', refreshAvailability);
+        quantity?.addEventListener('input', refreshAvailability);
+        refreshAvailability();
+    });
 
     const stockItems = page.querySelector('#wf-stock-items');
     const template = page.querySelector('#wf-stock-template');

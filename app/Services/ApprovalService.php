@@ -10,6 +10,7 @@ use App\Models\OrderAdjustment;
 use App\Models\Transaction;
 use App\Models\User;
 use Exception;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB; 
 
 class ApprovalService
@@ -73,6 +74,74 @@ class ApprovalService
     public function financeAccountingRoleSlugs(): array
     {
         return ['account', 'accountant', 'accounting'];
+    }
+
+    public function pendingAccountingAdjustments(): Collection
+    {
+        return $this->pendingAdjustmentsForRoles($this->financeAccountingRoleSlugs());
+    }
+
+    public function pendingWarehouseAdjustments(): Collection
+    {
+        return $this->pendingAdjustmentsForRoles(['warehouse'])
+            ->filter(fn (OrderAdjustment $adjustment) => $adjustment->requiresWarehouseConfirmation())
+            ->values();
+    }
+
+    public function warehouseAdjustmentQueue(): Collection
+    {
+        $waitingForConfirmation = OrderAdjustment::query()
+            ->where('status', OrderAdjustment::STATUS_APPROVED)
+            ->where('warehouse_confirmation_status', 'pending')
+            ->with($this->adjustmentQueueRelations())
+            ->latest('submitted_at')
+            ->get()
+            ->filter(fn (OrderAdjustment $adjustment) => $adjustment->requiresWarehouseConfirmation())
+            ->values();
+
+        return $this->pendingWarehouseAdjustments()
+            ->concat($waitingForConfirmation)
+            ->unique('id')
+            ->sortByDesc(fn (OrderAdjustment $adjustment) => $adjustment->submitted_at?->timestamp ?? 0)
+            ->values();
+    }
+
+    private function pendingAdjustmentsForRoles(array $roleSlugs): Collection
+    {
+        $roleSlugs = array_values(array_unique(array_map('strtolower', $roleSlugs)));
+
+        return OrderAdjustment::query()
+            ->where('status', OrderAdjustment::STATUS_PENDING_APPROVAL)
+            ->whereHas('approvalSteps', function ($query) use ($roleSlugs): void {
+                $query->where('status', 'pending')
+                    ->whereHas('step', fn ($step) => $step->whereIn(DB::raw('LOWER(role_slug)'), $roleSlugs));
+            })
+            ->with($this->adjustmentQueueRelations())
+            ->latest('submitted_at')
+            ->get()
+            ->filter(function (OrderAdjustment $adjustment) use ($roleSlugs): bool {
+                $currentStep = $adjustment->approvalSteps
+                    ->where('status', 'pending')
+                    ->sortBy(fn (ApprovalOrder $approval) => $approval->step?->step_order ?? PHP_INT_MAX)
+                    ->first();
+
+                return $currentStep?->step
+                    && in_array(strtolower((string) $currentStep->step->role_slug), $roleSlugs, true);
+            })
+            ->values();
+    }
+
+    private function adjustmentQueueRelations(): array
+    {
+        return [
+            'order:id,code,customer_id,user_id,status',
+            'order.customer:id,name',
+            'order.user:id,name',
+            'requester:id,name',
+            'items.orderItem:id,product_id,product_variant_id,quantity,price',
+            'items.variant.product',
+            'approvalSteps.step:id,role_slug,step_order',
+        ];
     }
 
     private function financeApprovalRoleSlugs(): array
@@ -173,7 +242,16 @@ class ApprovalService
         }
 
         $requiredRole = strtolower((string) $current->step->role_slug);
-        return $user->roles->contains(fn ($role) => strtolower((string) $role->name) === $requiredRole);
+        $acceptedRoles = match (true) {
+            in_array($requiredRole, $this->leaderRoleSlugs(), true) => $this->leaderRoleSlugs(),
+            in_array($requiredRole, $this->managerRoleSlugs(), true) => $this->managerRoleSlugs(),
+            in_array($requiredRole, $this->financeAccountingRoleSlugs(), true) => $this->financeAccountingRoleSlugs(),
+            default => [$requiredRole],
+        };
+
+        return $user->roles->contains(
+            fn ($role) => in_array(strtolower((string) $role->name), $acceptedRoles, true)
+        );
     }
 
     public function canApproveCurrentRole(User $user, string $requiredRole): bool
@@ -299,6 +377,8 @@ class ApprovalService
                     'status' => 'pending',
                 ]);
             }
+
+            $this->skipUnneededWarehouseAdjustmentSteps($adjustment);
         });
 
         return true;
@@ -329,7 +409,16 @@ class ApprovalService
         }
 
         $requiredRole = strtolower((string) $current->step->role_slug);
-        return $user->roles->contains(fn ($role) => strtolower((string) $role->name) === $requiredRole);
+        $acceptedRoles = match (true) {
+            in_array($requiredRole, $this->leaderRoleSlugs(), true) => $this->leaderRoleSlugs(),
+            in_array($requiredRole, $this->managerRoleSlugs(), true) => $this->managerRoleSlugs(),
+            in_array($requiredRole, $this->financeAccountingRoleSlugs(), true) => $this->financeAccountingRoleSlugs(),
+            default => [$requiredRole],
+        };
+
+        return $user->roles->contains(
+            fn ($role) => in_array(strtolower((string) $role->name), $acceptedRoles, true)
+        );
     }
 
     public function approveAdjustmentStep(OrderAdjustment $adjustment, User $user, ?string $note = null): bool
@@ -351,11 +440,34 @@ class ApprovalService
             'note'        => $note,
         ]);
 
+        $this->skipUnneededWarehouseAdjustmentSteps($adjustment);
+
         $hasPending = ApprovalOrder::where('order_adjustment_id', $adjustment->id)
             ->where('status', 'pending')
             ->exists();
 
         return !$hasPending; // returns true when all steps approved (adjustment can proceed)
+    }
+
+    private function skipUnneededWarehouseAdjustmentSteps(OrderAdjustment $adjustment): int
+    {
+        if ($adjustment->requiresWarehouseConfirmation()) {
+            return 0;
+        }
+
+        $skipped = ApprovalOrder::query()
+            ->where('order_adjustment_id', $adjustment->id)
+            ->where('status', 'pending')
+            ->whereHas('step', fn ($query) => $query->whereRaw('LOWER(role_slug) = ?', ['warehouse']))
+            ->update([
+                'status' => 'approved',
+                'approved_at' => now(),
+                'note' => 'Tự động bỏ qua: yêu cầu không thay đổi số lượng hoặc loại hàng.',
+            ]);
+
+        $adjustment->update(['warehouse_confirmation_status' => 'not_required']);
+
+        return $skipped;
     }
 
     public function rejectAdjustmentStep(OrderAdjustment $adjustment, User $user, ?string $note = null): void
