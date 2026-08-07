@@ -1,6 +1,28 @@
 <style>
     .mcl-page { padding-bottom: 36px; }
     .mcl-title { margin: 0 0 34px; color: #111827; font-size: 1.22rem; font-weight: 800; }
+    .mcl-classification-panel { margin-bottom: 18px; border: 1px solid #dbe5ef; border-radius: 10px; background: #fff; overflow: hidden; }
+    .mcl-classification-panel summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 16px; color: #0f3b76; font-weight: 900; cursor: pointer; list-style: none; }
+    .mcl-classification-panel summary::-webkit-details-marker { display: none; }
+    .mcl-classification-body { padding: 0 16px 16px; border-top: 1px solid #e5edf5; }
+    .mcl-classification-table { min-width: 900px; margin: 14px 0 10px; font-size: .72rem; text-align: center; vertical-align: middle; }
+    .mcl-classification-table th { padding: 10px 8px; color: #fff; background: #123b78; }
+    .mcl-classification-table th:nth-child(3) { background: #28943d; }
+    .mcl-classification-table th:nth-child(4) { background: #2585c4; }
+    .mcl-classification-table th:nth-child(5) { background: #f59e0b; }
+    .mcl-classification-table th:nth-child(6) { background: #dc2626; }
+    .mcl-classification-table td:nth-child(3) { background: #f0faf2; }
+    .mcl-classification-table td:nth-child(4) { background: #eff8fe; }
+    .mcl-classification-table td:nth-child(5) { background: #fff9eb; }
+    .mcl-classification-table td:nth-child(6) { background: #fff1f2; }
+    .mcl-rule-input { width: 72px; display: inline-block; padding: 3px 5px; font-size: .7rem; text-align: center; }
+    .mcl-weight-input { width: 58px; }
+    .mcl-config-footer { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
+    .mcl-config-field { width: 125px; }
+    .mcl-config-field label { margin-bottom: 3px; color: #475569; font-size: .68rem; font-weight: 700; }
+    .mcl-grade { display: inline-flex; align-items: center; gap: 5px; margin-left: 7px; padding: 3px 8px; border-radius: 999px; color: #fff; font-size: .65rem; font-weight: 900; vertical-align: middle; }
+    .mcl-grade-A { background: #28943d; }.mcl-grade-B { background: #2585c4; }.mcl-grade-C { background: #f59e0b; }.mcl-grade-D { background: #dc2626; }
+    .mcl-metrics { display: flex; flex-wrap: wrap; gap: 5px 12px; margin-top: 7px; color: #64748b; font-size: .66rem; }
     .mcl-toolbar {
         display: flex;
         align-items: center;
@@ -139,6 +161,7 @@
         .mcl-updated { margin-left: 0; }
         .mcl-actions { top: 105px; width: 150px; }
         .mcl-pagination { align-items: stretch; flex-direction: column; }
+        .mcl-classification-body { padding-inline: 10px; }
     }
 </style>
 
@@ -150,24 +173,84 @@
         'view' => $viewMode,
         'sale_id' => $selectedSaleId ?: null,
         'per_page' => $perPage,
+        'classification_sort' => $classificationSort ?: null,
     ]);
+    $classificationLabels = [
+        'volume' => ['unit' => 'con/tháng', 'd' => 'Dưới ngưỡng C'],
+        'frequency' => ['unit' => 'đơn/tháng', 'd' => 'Dưới ngưỡng C'],
+        'trend' => ['unit' => '%', 'd' => 'Giảm dưới ngưỡng C'],
+        'payment' => ['unit' => '%', 'd' => 'Dưới ngưỡng C'],
+        'debt' => ['unit' => 'ngày', 'd' => 'Trên ngưỡng C'],
+        'history' => ['unit' => 'tháng', 'd' => 'Dưới ngưỡng C'],
+        'relationship' => ['unit' => '%', 'd' => 'Dưới ngưỡng C'],
+    ];
 @endphp
 
 <section class="mcl-page">
     <h1 class="mcl-title">Danh sách khách hàng</h1>
+
+    <details class="mcl-classification-panel" @if($errors->has('criteria') || $errors->has('overall')) open @endif>
+        <summary>
+            <span><i class="bi bi-bar-chart-steps me-2"></i>Bảng nhận diện &amp; phân loại khách hàng</span>
+            <small class="text-muted fw-normal">Nhấn để xem {{ $canConfigureClassification ? 'và điều chỉnh' : '' }} tiêu chí</small>
+        </summary>
+        <div class="mcl-classification-body">
+            @if($errors->has('criteria') || $errors->has('overall'))
+                <div class="alert alert-danger py-2 mt-3 mb-0">{{ $errors->first('criteria') ?: $errors->first('overall') }}</div>
+            @endif
+            <form method="POST" action="{{ route('pages.my_orders.monitoring.customer_classification') }}">
+                @csrf
+                @method('PUT')
+                <div class="table-responsive">
+                    <table class="table table-bordered mcl-classification-table">
+                        <thead><tr><th>Tiêu chí nhận diện</th><th>Trọng số</th><th>A – Chiến lược</th><th>B – Ổn định</th><th>C – Phổ thông</th><th>D – Rủi ro</th></tr></thead>
+                        <tbody>
+                        @foreach($classificationLabels as $key => $meta)
+                            @php $rule = $classificationConfig[$key]; $bound = $key === 'debt' ? 'max' : 'min'; @endphp
+                            <tr>
+                                <td class="text-start"><strong>{{ $rule['label'] }}</strong><br><small class="text-muted">{{ $meta['unit'] }}</small></td>
+                                <td><input class="form-control mcl-rule-input mcl-weight-input" type="number" step="0.01" min="0" max="100" name="criteria[{{ $key }}][weight]" value="{{ old("criteria.$key.weight", $rule['weight']) }}" @disabled(!$canConfigureClassification)>%</td>
+                                @foreach(['a' => 'A', 'b' => 'B', 'c' => 'C'] as $gradeKey => $gradeLabel)
+                                    <td>{{ $key === 'debt' ? '≤' : '≥' }} <input class="form-control mcl-rule-input" type="number" step="0.01" name="criteria[{{ $key }}][{{ $gradeKey }}_{{ $bound }}]" value="{{ old("criteria.$key.{$gradeKey}_{$bound}", $rule[$gradeKey.'_'.$bound]) }}" @disabled(!$canConfigureClassification)> {{ $meta['unit'] }}</td>
+                                @endforeach
+                                <td>{{ $meta['d'] }}</td>
+                            </tr>
+                        @endforeach
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mcl-config-footer">
+                    <div class="mcl-config-field"><label>Cửa sổ thống kê</label><div class="input-group input-group-sm"><input class="form-control" type="number" min="1" max="12" name="window_months" value="{{ old('window_months', $classificationConfig['window_months']) }}" @disabled(!$canConfigureClassification)><span class="input-group-text">tháng</span></div></div>
+                    @foreach(['a' => 'Điểm A từ', 'b' => 'Điểm B từ', 'c' => 'Điểm C từ'] as $gradeKey => $label)
+                        <div class="mcl-config-field"><label>{{ $label }}</label><input class="form-control form-control-sm" type="number" step="0.1" min="0" max="100" name="overall[{{ $gradeKey }}_min]" value="{{ old("overall.{$gradeKey}_min", $classificationConfig['overall'][$gradeKey.'_min']) }}" @disabled(!$canConfigureClassification)></div>
+                    @endforeach
+                    <div class="mcl-config-field"><label>Ngừng mua → D</label><div class="input-group input-group-sm"><input class="form-control" type="number" min="1" max="24" name="inactivity_risk_months" value="{{ old('inactivity_risk_months', $classificationConfig['inactivity_risk_months']) }}" @disabled(!$canConfigureClassification)><span class="input-group-text">tháng</span></div></div>
+                    @if($canConfigureClassification)<button class="btn btn-primary btn-sm" type="submit"><i class="bi bi-check2-circle me-1"></i>Lưu bảng phân loại</button>@endif
+                </div>
+                <p class="small text-muted mb-0 mt-3">Điểm tiêu chí: A = 100, B = 75, C = 50, D = 0 rồi nhân trọng số. Khách có nợ quá ngưỡng C hoặc ngừng mua đủ số tháng cấu hình sẽ tự động chuyển nhóm D.</p>
+            </form>
+        </div>
+    </details>
 
     <div class="mcl-toolbar">
         <div class="mcl-toolbar-left">
             <button type="button" class="btn btn-outline-danger" id="mclBulkDelete" disabled><i class="bi bi-trash"></i> Xóa</button>
             <form method="GET" action="{{ route('pages.my_orders.monitoring') }}" class="mcl-filter-form">
                 @foreach($sharedFilters as $name => $value)
-                    @if($name !== 'per_page')<input type="hidden" name="{{ $name }}" value="{{ $value }}">@endif
+                    @if(!in_array($name, ['per_page', 'classification_sort'], true))<input type="hidden" name="{{ $name }}" value="{{ $value }}">@endif
                 @endforeach
                 @if($search !== '')<input type="hidden" name="search" value="{{ $search }}">@endif
                 <select name="per_page" class="form-select mcl-per-page" onchange="this.form.submit()" aria-label="Số khách hàng mỗi trang">
                     @foreach([10, 20, 50, 100] as $size)
                         <option value="{{ $size }}" @selected($perPage === $size)>{{ $size }} Khách / trang</option>
                     @endforeach
+                </select>
+                <select name="classification_sort" class="form-select mcl-per-page" onchange="this.form.submit()" aria-label="Sắp xếp theo phân loại">
+                    <option value="">Sắp xếp mặc định</option>
+                    <option value="a_first" @selected($classificationSort === 'a_first')>Phân loại A → D</option>
+                    <option value="d_first" @selected($classificationSort === 'd_first')>Phân loại D → A</option>
+                    <option value="score_desc" @selected($classificationSort === 'score_desc')>Điểm cao → thấp</option>
+                    <option value="score_asc" @selected($classificationSort === 'score_asc')>Điểm thấp → cao</option>
                 </select>
             </form>
             <div class="mcl-view-switch" aria-label="Kiểu hiển thị">
@@ -203,12 +286,14 @@
                     'ordered' => 'ordered',
                     default => (string) ($customer->status ?: 'active'),
                 };
+                $classification = $customer->classification_result ?? ['grade' => 'D', 'score' => 0, 'metrics' => [], 'risk_override' => false];
+                $grade = $classification['grade'];
             @endphp
             <article class="mcl-row {{ $viewMode === 'compact' ? 'is-compact' : '' }}" data-customer-row data-customer-id="{{ $customer->id }}">
                 <div class="mcl-card">
                     <div class="mcl-main">
                         <div>
-                            <div class="mcl-name">{{ $customer->name }}</div>
+                            <div class="mcl-name">{{ $customer->name }} <span class="mcl-grade mcl-grade-{{ $grade }}">Nhóm {{ $grade }} · {{ number_format((float) $classification['score'], 1, ',', '.') }} điểm</span></div>
                             <div class="mcl-contact">
                                 @if($address)<span><i class="bi bi-geo-alt me-1"></i>{{ $address }}</span>@endif
                                 @if($customer->email)<span><i class="bi bi-envelope me-1"></i>{{ $customer->email }}</span>@endif
@@ -225,6 +310,10 @@
                             @if($customer->size)<span>Size: <strong>{{ $customer->size }}</strong></span>@endif
                             <span>Đơn: <strong>{{ (int) $customer->orders_count }}</strong></span>
                             <span>Công nợ: <strong>{{ number_format((float) ($customer->total_debt ?? 0), 0, ',', '.') }} đ</strong></span>
+                            <span>SL TB: <strong>{{ number_format((float) ($classification['metrics']['volume'] ?? 0), 1, ',', '.') }}/tháng</strong></span>
+                            <span>Tần suất: <strong>{{ number_format((float) ($classification['metrics']['frequency'] ?? 0), 1, ',', '.') }} đơn/tháng</strong></span>
+                            <span>Xu hướng: <strong>{{ number_format((float) ($classification['metrics']['trend'] ?? 0), 1, ',', '.') }}%</strong></span>
+                            @if($classification['risk_override'] ?? false)<span class="text-danger"><strong>Áp dụng cảnh báo rủi ro</strong></span>@endif
                             <span class="mcl-updated">{{ $customer->updated_at?->format('d/m/Y') }}</span>
                         </div>
                     @elseif($canManage)

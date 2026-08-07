@@ -27,6 +27,7 @@ use App\Models\Warehouse;
 use App\Models\Transaction;
 use App\Services\AdminActivityService;
 use App\Services\CustomerPriorityService;
+use App\Services\CustomerClassificationService;
 use Carbon\Carbon;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Enums\DeliveryStatus;
@@ -38,6 +39,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Pagination\LengthAwarePaginator;
 use App\Models\Province;
 use App\Models\District;
 use App\Models\TruckBrand;
@@ -1320,8 +1322,11 @@ class PageController extends Controller
             ? (string) $request->input('view')
             : 'default';
         $search = trim((string) $request->input('search', ''));
+        $classificationSort = in_array($request->input('classification_sort'), ['a_first', 'd_first', 'score_desc', 'score_asc'], true)
+            ? (string) $request->input('classification_sort')
+            : '';
 
-        $customers = Customer::query()
+        $customersQuery = Customer::query()
             ->where(function ($query) use ($userId) {
                 $query->where('user_id', $userId)
                     ->orWhere('assigned_to', $userId);
@@ -1346,18 +1351,120 @@ class PageController extends Controller
                 'user:id,name',
             ]);
 
-        $this->applyCustomerPinnedSort($customers);
-        $customers = $customers->orderByDesc('id')->paginate($perPage)->withQueryString();
+        $classificationService = app(CustomerClassificationService::class);
+        $classificationConfig = $classificationService->config();
+
+        if ($classificationSort !== '') {
+            $allCustomers = $customersQuery->orderByDesc('id')->get();
+            $classifications = $classificationService->classifyMany($allCustomers);
+            $allCustomers->each(function (Customer $customer) use ($classifications) {
+                $customer->setAttribute('classification_result', $classifications->get($customer->id));
+            });
+            $gradeRank = ['A' => 1, 'B' => 2, 'C' => 3, 'D' => 4];
+            $allCustomers = (match ($classificationSort) {
+                'd_first' => $allCustomers->sortByDesc(fn (Customer $customer) => $gradeRank[$customer->classification_result['grade'] ?? 'D']),
+                'score_desc' => $allCustomers->sortByDesc(fn (Customer $customer) => $customer->classification_result['score'] ?? 0),
+                'score_asc' => $allCustomers->sortBy(fn (Customer $customer) => $customer->classification_result['score'] ?? 0),
+                default => $allCustomers->sortBy(fn (Customer $customer) => $gradeRank[$customer->classification_result['grade'] ?? 'D']),
+            })->values();
+
+            $page = max(1, (int) $request->input('page', 1));
+            $customers = new LengthAwarePaginator(
+                $allCustomers->forPage($page, $perPage)->values(),
+                $allCustomers->count(),
+                $perPage,
+                $page,
+                ['path' => $request->url(), 'query' => $request->query()]
+            );
+        } else {
+            $this->applyCustomerPinnedSort($customersQuery);
+            $customers = $customersQuery->orderByDesc('id')->paginate($perPage)->withQueryString();
+            $classifications = $classificationService->classifyMany($customers->getCollection());
+            $customers->getCollection()->each(function (Customer $customer) use ($classifications) {
+                $customer->setAttribute('classification_result', $classifications->get($customer->id));
+            });
+        }
+
+        $canConfigureClassification = $user->isAdmin()
+            || $user->hasRole(['leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale', 'director']);
 
         return view('site.my_customer.monitoring-list', [
             'customers' => $customers,
             'perPage' => $perPage,
             'viewMode' => $viewMode,
             'search' => $search,
+            'classificationSort' => $classificationSort,
+            'classificationConfig' => $classificationConfig,
+            'canConfigureClassification' => $canConfigureClassification,
             'selectedSaleId' => 0,
             'manageableSaleIds' => [$userId],
             'monitoringEmbedded' => true,
         ]);
+    }
+
+    public function updateCustomerClassificationConfig(Request $request)
+    {
+        $user = $request->user();
+        if (!$user || (!$user->isAdmin() && !$user->hasRole(['leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale', 'director']))) {
+            abort(403, 'Bạn không có quyền điều chỉnh bảng phân loại khách hàng.');
+        }
+
+        $criteria = ['volume', 'frequency', 'trend', 'payment', 'debt', 'history', 'relationship'];
+        $rules = [
+            'window_months' => ['required', 'integer', 'min:1', 'max:12'],
+            'inactivity_risk_months' => ['required', 'integer', 'min:1', 'max:24'],
+            'overall.a_min' => ['required', 'numeric', 'min:0', 'max:100'],
+            'overall.b_min' => ['required', 'numeric', 'min:0', 'max:100'],
+            'overall.c_min' => ['required', 'numeric', 'min:0', 'max:100'],
+        ];
+        $defaults = CustomerClassificationService::defaults();
+        foreach ($criteria as $criterion) {
+            $rules["criteria.{$criterion}.weight"] = ['required', 'numeric', 'min:0', 'max:100'];
+            $bound = $criterion === 'debt' ? 'max' : 'min';
+            foreach (['a', 'b', 'c'] as $grade) {
+                $rules["criteria.{$criterion}.{$grade}_{$bound}"] = ['required', 'numeric', 'min:-1000000', 'max:1000000'];
+            }
+        }
+
+        $validated = $request->validate($rules);
+        $weightTotal = collect($validated['criteria'])->sum(fn ($criterion) => (float) $criterion['weight']);
+        if (abs($weightTotal - 100) > 0.001) {
+            return back()->withErrors(['criteria' => 'Tổng trọng số của 7 tiêu chí phải bằng 100%.'])->withInput();
+        }
+        if (!($validated['overall']['a_min'] > $validated['overall']['b_min']
+            && $validated['overall']['b_min'] > $validated['overall']['c_min'])) {
+            return back()->withErrors(['overall' => 'Ngưỡng tổng điểm phải theo thứ tự A > B > C.'])->withInput();
+        }
+        foreach ($criteria as $criterion) {
+            $rule = $validated['criteria'][$criterion];
+            $validOrder = $criterion === 'debt'
+                ? $rule['a_max'] <= $rule['b_max'] && $rule['b_max'] <= $rule['c_max']
+                : $rule['a_min'] >= $rule['b_min'] && $rule['b_min'] >= $rule['c_min'];
+            if (!$validOrder) {
+                return back()->withErrors([
+                    'criteria' => "Ngưỡng {$defaults[$criterion]['label']} không đúng thứ tự A, B, C.",
+                ])->withInput();
+            }
+        }
+
+        $config = [
+            'window_months' => (int) $validated['window_months'],
+            'inactivity_risk_months' => (int) $validated['inactivity_risk_months'],
+            'overall' => $validated['overall'],
+        ];
+        foreach ($criteria as $criterion) {
+            $config[$criterion] = array_merge(
+                ['label' => $defaults[$criterion]['label']],
+                $validated['criteria'][$criterion]
+            );
+        }
+
+        Setting::set(CustomerClassificationService::SETTING_KEY, json_encode($config, JSON_UNESCAPED_UNICODE));
+        Cache::forget('settings');
+
+        return redirect()
+            ->route('pages.my_orders.monitoring', ['tab' => 'customers'])
+            ->with('success', 'Đã cập nhật bảng phân loại khách hàng.');
     }
 
     private function monitoringVisibleSales(User $user)
