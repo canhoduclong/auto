@@ -547,7 +547,8 @@
     .monitor-profit-value.is-profit strong { color: #15803d; }
     .monitor-profit-value.is-loss strong { color: #dc2626; }
     .monitor-profit-warning { margin-top: 7px; color: #b45309; font-size: .67rem; }
-    .monitor-simple-list { overflow: hidden; }
+    /* Native select menus must be allowed to escape the table panel. */
+    .monitor-simple-list { overflow: visible !important; }
     .monitor-simple-list table { margin: 0; font-size: .79rem; }
     .monitor-simple-list thead th { border-bottom: 2px solid #cbd5e1; background: #f8fafc; color: #1e293b; white-space: nowrap; }
     .monitor-simple-list td { border-color: #e2e8f0; vertical-align: middle; }
@@ -725,6 +726,7 @@
         .monitor-order { width: 100%; grid-template-columns: minmax(0, 1fr) 180px; }
     }
     @media (max-width: 767.98px) {
+        .monitor-simple-list { overflow-x: auto !important; overflow-y: visible !important; }
         .monitor-page { padding-top: 18px; }
         .monitor-toolbar { grid-template-columns: 1fr; align-items: flex-start; row-gap: 10px; padding-top: 0; }
         .monitor-toolbar > * { grid-column: 1; }
