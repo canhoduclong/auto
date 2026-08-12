@@ -1040,6 +1040,8 @@ Route::middleware(['auth', 'role:sale,leader,leader_sale,sale_manager,manager,ma
         ->name('pages.my_orders.monitoring.customer_classification');
     Route::post('/my-orders/monitoring/orders', [OrderController::class, 'storeFromMonitoring'])
         ->name('pages.my_orders.monitoring.store');
+    Route::put('/my-orders/monitoring/orders/{order}/supplier', [PageController::class, 'myOrdersMonitoringSupplier'])
+        ->name('pages.my_orders.monitoring.supplier');
     Route::get('/my-orders/daily-prices', [PageController::class, 'dailyProductPrices'])->name('pages.my_orders.daily_prices');
     Route::get('/my-orders/daily-inventories', [PageController::class, 'dailyInventories'])->name('pages.my_orders.daily_inventories');
     Route::get('/my-orders/fix-data', [\App\Http\Controllers\OrderAdjustmentController::class, 'index'])

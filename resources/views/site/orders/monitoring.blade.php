@@ -512,6 +512,37 @@
     .monitor-bulk-actions form { margin: 0; }
     .monitor-bulk-actions .form-select { width: 158px; min-height: 38px; }
     .monitor-bulk-actions .btn { min-height: 38px; padding-inline: 14px; }
+    .monitor-view-switch { display: inline-flex; gap: 4px; }
+    .monitor-source-panel { margin: 10px 0 14px; padding: 10px 12px; }
+    .monitor-source-tabs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+    .monitor-source-label { margin-right: 4px; color: #334155; font-size: .78rem; font-weight: 900; text-transform: uppercase; }
+    .monitor-source-tab {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 10px;
+        border: 1px solid #dbe4ee;
+        border-radius: 5px;
+        background: #fff;
+        color: #475569;
+        font-size: .76rem;
+        font-weight: 700;
+        text-decoration: none;
+    }
+    .monitor-source-tab:hover,
+    .monitor-source-tab.active { border-color: #0f766e; background: #ecfdf5; color: #0f766e; }
+    .monitor-source-tab-count { color: #64748b; font-size: .68rem; }
+    .monitor-simple-list { overflow: hidden; }
+    .monitor-simple-list table { margin: 0; font-size: .79rem; }
+    .monitor-simple-list thead th { border-bottom: 2px solid #cbd5e1; background: #f8fafc; color: #1e293b; white-space: nowrap; }
+    .monitor-simple-list td { border-color: #e2e8f0; vertical-align: middle; }
+    .monitor-simple-list .monitor-list-customer { min-width: 150px; color: #075985; font-weight: 800; text-transform: uppercase; }
+    .monitor-simple-list .monitor-list-products { min-width: 160px; }
+    .monitor-simple-list .monitor-list-supplier { min-width: 205px; }
+    .monitor-supplier-actions { display: flex; align-items: center; gap: 5px; }
+    .monitor-supplier-actions form:first-child { flex: 1; }
+    .monitor-supplier-actions .form-select { min-width: 150px; font-size: .75rem; }
+    .monitor-supplier-remove { width: 32px; padding-inline: 0 !important; font-size: 1rem; line-height: 1; }
     .monitor-auto-approval { margin: 0 0 18px; overflow: hidden; border: 1px solid #d3e0ed; border-radius: 10px; background: #fff; }
     .monitor-auto-approval-head { display: flex; min-height: 40px; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 14px; border-bottom: 1px solid #dce6f1; color: #075985; font-size: .76rem; font-weight: 900; text-transform: uppercase; }
     .monitor-auto-approval-head-meta { display: flex; align-items: center; justify-content: flex-end; gap: 18px; }
@@ -704,6 +735,7 @@
         .monitor-confirm-grid { grid-template-columns: 1fr; }
         .monitor-inline-edit-fields { grid-template-columns: 1fr; }
         .monitor-inline-edit-fields .is-wide { grid-column: auto; }
+        .monitor-simple-list { border-radius: 7px; }
         .monitor-auto-approval-grid { grid-template-columns: 1fr; gap: 18px; }
         .monitor-auto-bulk-fields { grid-template-columns: 1fr; }
         .monitor-auto-bottom { align-items: stretch; flex-direction: column; }
@@ -854,6 +886,8 @@
             @if($activeTab === 'today')
             <form class="monitor-date-form" method="GET" action="{{ route('pages.my_orders.monitoring') }}">
                 <input type="hidden" name="tab" value="today">
+                <input type="hidden" name="view" value="{{ $viewMode }}">
+                @if($supplierFilter !== '')<input type="hidden" name="supplier_id" value="{{ $supplierFilter }}">@endif
                 <select name="date_field" class="form-select form-select-sm" aria-label="Tiêu chí ngày">
                     <option value="business_date" @selected($selectedDateField === 'business_date')>Ngày nghiệp vụ</option>
                     <option value="created_at" @selected($selectedDateField === 'created_at')>Ngày tạo đơn</option>
@@ -875,7 +909,7 @@
         @php
             $sequenceOrders = $orders->getCollection()->sortBy(fn ($order) => $order->daily_sequence ?? PHP_INT_MAX)->values();
         @endphp
-        @if($sequenceOrders->isNotEmpty())
+        @if($viewMode === 'cards' && $sequenceOrders->isNotEmpty())
         <div class="monitor-panel monitor-sequence-panel mb-3">
             <div class="monitor-sequences" aria-label="Điều hướng nhanh theo số thứ tự đơn">
                 @foreach($sequenceOrders as $sequenceOrder)
@@ -899,6 +933,14 @@
                         @endforeach
                     </select>
                 </form>
+                <div class="monitor-view-switch" role="group" aria-label="Kiểu hiển thị đơn hàng">
+                    <a class="btn btn-sm {{ $viewMode === 'cards' ? 'btn-primary' : 'btn-outline-primary' }}" href="{{ request()->fullUrlWithQuery(['view' => 'cards', 'page' => 1]) }}" title="Xem chi tiết">
+                        <i class="bi bi-grid"></i><span class="ms-1">Chi tiết</span>
+                    </a>
+                    <a class="btn btn-sm {{ $viewMode === 'list' ? 'btn-primary' : 'btn-outline-primary' }}" href="{{ request()->fullUrlWithQuery(['view' => 'list', 'page' => 1]) }}" title="Xem danh sách gọn">
+                        <i class="bi bi-list-ul"></i><span class="ms-1">Danh sách</span>
+                    </a>
+                </div>
                 <button class="btn btn-sm btn-outline-primary monitor-summary-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#monitorProductSummary" aria-expanded="false">
                     <i class="bi bi-inbox me-1"></i>Hàng - Số lượng
                 </button>
@@ -960,6 +1002,26 @@
                 <i class="bi bi-plus-circle me-1"></i>Thêm đơn
             </button>
         </div>
+
+        @if($viewMode === 'list')
+            @php $supplierFilterQuery = request()->except(['supplier_id', 'page']); @endphp
+            <div class="monitor-panel monitor-source-panel">
+                <nav class="monitor-source-tabs" aria-label="Lọc đơn theo nhà cung cấp">
+                    <span class="monitor-source-label">Nguồn</span>
+                    <a class="monitor-source-tab {{ $supplierFilter === '' ? 'active' : '' }}" href="{{ route('pages.my_orders.monitoring', $supplierFilterQuery) }}">
+                        Tất cả <span class="monitor-source-tab-count">{{ $supplierCounts->sum() }}</span>
+                    </a>
+                    <a class="monitor-source-tab {{ $supplierFilter === 'unassigned' ? 'active' : '' }}" href="{{ route('pages.my_orders.monitoring', array_merge($supplierFilterQuery, ['supplier_id' => 'unassigned'])) }}">
+                        Chưa gắn <span class="monitor-source-tab-count">{{ $supplierCounts->get('', 0) }}</span>
+                    </a>
+                    @foreach($suppliers as $supplier)
+                        <a class="monitor-source-tab {{ $supplierFilter === (string) $supplier->id ? 'active' : '' }}" href="{{ route('pages.my_orders.monitoring', array_merge($supplierFilterQuery, ['supplier_id' => $supplier->id])) }}">
+                            {{ $supplier->name }} <span class="monitor-source-tab-count">{{ $supplierCounts->get($supplier->id, 0) }}</span>
+                        </a>
+                    @endforeach
+                </nav>
+            </div>
+        @endif
 
         @if($canConfigureAutoApproval)
             @php
@@ -1238,6 +1300,80 @@
             </div>
         </section>
 
+                @if($viewMode === 'list')
+                    <div class="monitor-panel monitor-simple-list table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th class="text-center">STT</th>
+                                    <th>Khách hàng</th>
+                                    <th>Sale</th>
+                                    <th>Sản phẩm</th>
+                                    <th>Size</th>
+                                    <th class="text-end">Số lượng</th>
+                                    <th class="text-end">Giá</th>
+                                    <th class="text-end">Thành tiền</th>
+                                    <th>Nhà cung cấp</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @forelse($orders as $order)
+                                    @php
+                                        $listPrices = $order->items->pluck('price')->map(fn ($price) => (float) $price)->filter(fn ($price) => $price > 0);
+                                        $listMinPrice = (float) ($listPrices->min() ?? 0);
+                                        $listMaxPrice = (float) ($listPrices->max() ?? 0);
+                                        $listPriceLabel = abs($listMaxPrice - $listMinPrice) < 0.01
+                                            ? number_format($listMinPrice, 0, ',', '.')
+                                            : number_format($listMinPrice, 0, ',', '.') . '–' . number_format($listMaxPrice, 0, ',', '.');
+                                        $listProducts = $order->items->map(fn ($item) => $item->display_name)->filter()->unique()->implode(', ');
+                                        $listSizes = $order->items->map(fn ($item) => $item->variant?->size)->filter()->unique()->implode(', ');
+                                        $canAssignSupplier = !$isSaleViewingRole || (int) $order->user_id === (int) $monitorUser?->id;
+                                    @endphp
+                                    <tr class="{{ $order->status === \App\Models\Order::STATUS_CANCELLED ? 'table-danger' : '' }}">
+                                        <td class="text-center fw-bold">{{ $order->daily_sequence ?? (($orders->firstItem() ?? 1) + $loop->index) }}</td>
+                                        <td class="monitor-list-customer">
+                                            {{ $order->customer?->name ?? 'Khách hàng' }}
+                                            <small class="d-block text-muted text-lowercase">{{ $order->code ?: ('#' . $order->id) }}</small>
+                                        </td>
+                                        <td>{{ $order->user?->name ?? '—' }}</td>
+                                        <td class="monitor-list-products">{{ $listProducts ?: '—' }}</td>
+                                        <td>{{ $listSizes ?: '—' }}</td>
+                                        <td class="text-end fw-semibold">{{ $formatQuantity($order->items->sum('quantity')) }}</td>
+                                        <td class="text-end">{{ $listPriceLabel }}đ</td>
+                                        <td class="text-end fw-bold">{{ number_format((float) $order->total, 0, ',', '.') }}đ</td>
+                                        <td class="monitor-list-supplier">
+                                            @if($canAssignSupplier)
+                                            <div class="monitor-supplier-actions">
+                                                <form method="POST" action="{{ route('pages.my_orders.monitoring.supplier', $order) }}">
+                                                    @csrf
+                                                    @method('PUT')
+                                                    <select class="form-select form-select-sm" name="supplier_id" onchange="this.form.submit()" aria-label="Gắn nhà cung cấp cho đơn {{ $order->code ?: $order->id }}">
+                                                        <option value="">-- Chọn nhà cung cấp --</option>
+                                                        @foreach($suppliers as $supplier)
+                                                            <option value="{{ $supplier->id }}" @selected((int) $order->supplier_id === (int) $supplier->id)>{{ $supplier->name }}</option>
+                                                        @endforeach
+                                                    </select>
+                                                </form>
+                                                @if($order->supplier_id)
+                                                    <form method="POST" action="{{ route('pages.my_orders.monitoring.supplier', $order) }}" onsubmit="return confirm('Gỡ đơn này khỏi nhà cung cấp {{ addslashes($order->supplier?->name ?? '') }}?');">
+                                                        @csrf
+                                                        @method('PUT')
+                                                        <button class="btn btn-sm btn-outline-danger monitor-supplier-remove" type="submit" title="Gỡ khỏi nhà cung cấp" aria-label="Gỡ đơn khỏi nhà cung cấp">×</button>
+                                                    </form>
+                                                @endif
+                                            </div>
+                                            @else
+                                                <span class="text-muted">{{ $order->supplier?->name ?? 'Chưa gắn' }}</span>
+                                            @endif
+                                        </td>
+                                    </tr>
+                                @empty
+                                    <tr><td colspan="9" class="py-4 text-center text-muted">Không có đơn hàng phù hợp.</td></tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+                @else
                 <div class="monitor-orders">
                     @forelse($orders as $order)
                         @php
@@ -1538,6 +1674,7 @@
                         </div>
                     @endforelse
                 </div>
+                @endif
 
                 @if($orders->hasPages())
                     <div class="monitor-pagination">{{ $orders->links('pagination::bootstrap-5') }}</div>

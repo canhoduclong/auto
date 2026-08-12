@@ -22,6 +22,7 @@ use App\Services\ApprovalService;
 use App\Services\OrderAutoApprovalService;
 use App\Models\Order;
 use App\Models\OrderAutoApprovalRule;
+use App\Models\Supplier;
 use App\Models\Inventory;
 use App\Models\Warehouse;
 use App\Models\Transaction;
@@ -966,6 +967,7 @@ class PageController extends Controller
                 'truckStation',
                 'user.roles',
                 'shipper',
+                'supplier',
                 'accountingReconciliation',
                 'approvals.step',
                 'items.product',
@@ -1009,6 +1011,25 @@ class PageController extends Controller
         $selectedCustomerId = max(0, (int) $request->input('customer_id', 0));
         if ($selectedCustomerId > 0) {
             $dateQuery->where('customer_id', $selectedCustomerId);
+        }
+
+        $viewMode = in_array($request->input('view'), ['cards', 'list'], true)
+            ? (string) $request->input('view')
+            : 'cards';
+        $supplierFilter = trim((string) $request->input('supplier_id', ''));
+        $suppliers = Supplier::query()->active()->orderBy('name')->get(['id', 'name']);
+        $supplierCountsQuery = clone $dateQuery;
+        $supplierCounts = $supplierCountsQuery
+            ->selectRaw('supplier_id, COUNT(*) as aggregate')
+            ->groupBy('supplier_id')
+            ->pluck('aggregate', 'supplier_id');
+
+        if ($supplierFilter === 'unassigned') {
+            $dateQuery->whereNull('supplier_id');
+        } elseif (ctype_digit($supplierFilter) && (int) $supplierFilter > 0) {
+            $dateQuery->where('supplier_id', (int) $supplierFilter);
+        } else {
+            $supplierFilter = '';
         }
 
         $roleNames = $this->normalizedRoleNames($user);
@@ -1269,6 +1290,10 @@ class PageController extends Controller
             'selectedStatus' => (string) $request->input('status', ''),
             'selectedSaleId' => $selectedSaleId,
             'selectedCustomerId' => $selectedCustomerId,
+            'viewMode' => $viewMode,
+            'supplierFilter' => $supplierFilter,
+            'suppliers' => $suppliers,
+            'supplierCounts' => $supplierCounts,
             'sortBy' => $sortBy,
             'sortDir' => $sortDir,
             'productRows' => $productRows,
@@ -1293,6 +1318,34 @@ class PageController extends Controller
                 ->orderBy('name')
                 ->get(),
         ]);
+    }
+
+    public function myOrdersMonitoringSupplier(Request $request, Order $order)
+    {
+        $user = $request->user();
+        if (!$user || (!$user->isAdmin() && !$user->isSalesFlowRole() && !$user->hasRole('director') && !$user->hasPermission('orders.monitoring'))) {
+            abort(403, 'Bạn không có quyền cập nhật nhà cung cấp của đơn hàng.');
+        }
+
+        $activeRole = strtolower(trim((string) (session('active_role') ?: $user->defaultRole?->name)));
+        if ($activeRole === 'sale' && (int) $order->user_id !== (int) $user->id) {
+            abort(403, 'Bạn chỉ có thể cập nhật nhà cung cấp cho đơn hàng của mình.');
+        }
+
+        $validated = $request->validate([
+            'supplier_id' => ['nullable', 'integer', 'exists:suppliers,id'],
+        ]);
+        $supplierId = isset($validated['supplier_id']) ? (int) $validated['supplier_id'] : null;
+
+        if ($supplierId !== null && !Supplier::query()->active()->whereKey($supplierId)->exists()) {
+            return back()->withErrors(['supplier_id' => 'Nhà cung cấp đã ngừng hoạt động.']);
+        }
+
+        $order->update(['supplier_id' => $supplierId]);
+
+        return back()->with('success', $supplierId
+            ? 'Đã gắn đơn vào nhà cung cấp.'
+            : 'Đã gỡ đơn khỏi nhà cung cấp.');
     }
 
     private function monitoringTabResponse(string $tab, Request $request)

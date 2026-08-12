@@ -26,6 +26,11 @@ class Supplier extends Model
         return $this->hasMany(InventoryDocument::class);
     }
 
+    public function orders()
+    {
+        return $this->hasMany(Order::class);
+    }
+
     public function supplierProducts()
     {
         return $this->hasMany(SupplierProduct::class);

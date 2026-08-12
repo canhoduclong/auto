@@ -14,7 +14,7 @@ class Order extends Model
 {
     use HasFactory;
     protected $fillable = [
-        'customer_id', 'user_id', 'shipper_id', 'code', 'total', 'status',
+        'customer_id', 'user_id', 'shipper_id', 'supplier_id', 'code', 'total', 'status',
         'commission_percent_snapshot', 'commission_amount_snapshot', 'commission_created_at',
         'copied_from_order_id', 'order_type', 'workflow_code', 'is_return_order', 'parent_order_id',
         'warehouse_id', 'warehouse_can_adjust', 'return_warehouse_id',
@@ -74,6 +74,11 @@ class Order extends Model
     public function truckStation()
     {
         return $this->belongsTo(TruckStation::class);
+    }
+
+    public function supplier()
+    {
+        return $this->belongsTo(Supplier::class);
     }
 
     protected static function booted(): void
