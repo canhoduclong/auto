@@ -23,6 +23,7 @@ use App\Services\OrderAutoApprovalService;
 use App\Models\Order;
 use App\Models\OrderAutoApprovalRule;
 use App\Models\Supplier;
+use App\Models\SupplierProductPrice;
 use App\Models\Inventory;
 use App\Models\Warehouse;
 use App\Models\Transaction;
@@ -1018,8 +1019,8 @@ class PageController extends Controller
             : 'cards';
         $supplierFilter = trim((string) $request->input('supplier_id', ''));
         $suppliers = Supplier::query()->active()->orderBy('name')->get(['id', 'name']);
-        $supplierCountsQuery = clone $dateQuery;
-        $supplierCounts = $supplierCountsQuery
+        $supplierAnalysisOrders = (clone $dateQuery)->get();
+        $supplierCounts = (clone $dateQuery)
             ->selectRaw('supplier_id, COUNT(*) as aggregate')
             ->groupBy('supplier_id')
             ->pluck('aggregate', 'supplier_id');
@@ -1076,6 +1077,10 @@ class PageController extends Controller
         }
 
         $filteredOrders = (clone $dateQuery)->get();
+        [$supplierProfitByOrder, $supplierProfitSummaries] = $this->monitoringSupplierProfitability(
+            $supplierAnalysisOrders,
+            $selectedDate
+        );
         $statsQuery = clone $dateQuery;
         $stats = [
             'total_orders' => (clone $statsQuery)->count(),
@@ -1294,6 +1299,8 @@ class PageController extends Controller
             'supplierFilter' => $supplierFilter,
             'suppliers' => $suppliers,
             'supplierCounts' => $supplierCounts,
+            'supplierProfitByOrder' => $supplierProfitByOrder,
+            'supplierProfitSummaries' => $supplierProfitSummaries,
             'sortBy' => $sortBy,
             'sortDir' => $sortDir,
             'productRows' => $productRows,
@@ -1318,6 +1325,100 @@ class PageController extends Controller
                 ->orderBy('name')
                 ->get(),
         ]);
+    }
+
+    private function monitoringSupplierProfitability($orders, string $selectedDate): array
+    {
+        $supplierIds = $orders->pluck('supplier_id')->filter()->map(fn ($id) => (int) $id)->unique()->values();
+        $productIds = $orders->flatMap(fn (Order $order) => $order->items)
+            ->map(fn ($item) => (int) ($item->product_id ?: $item->variant?->product_id ?: 0))
+            ->filter()
+            ->unique()
+            ->values();
+
+        $prices = ($supplierIds->isEmpty() || $productIds->isEmpty())
+            ? collect()
+            : SupplierProductPrice::query()
+                ->whereIn('supplier_id', $supplierIds)
+                ->whereIn('product_id', $productIds)
+                ->whereDate('effective_date', '<=', $selectedDate)
+                ->orderByDesc('effective_date')
+                ->orderByDesc('id')
+                ->get()
+                ->groupBy(fn (SupplierProductPrice $price) => $price->supplier_id . ':' . $price->product_id)
+                ->map(fn ($group) => $group->first());
+
+        $byOrder = [];
+        foreach ($orders as $order) {
+            $saleTotal = 0.0;
+            $purchaseTotal = 0.0;
+            $missingItems = [];
+
+            foreach ($order->items as $item) {
+                $lineTotal = (float) ($item->total ?? 0);
+                $saleTotal += $lineTotal > 0
+                    ? $lineTotal
+                    : (float) ($item->price ?? 0) * (float) $item->display_total_value;
+
+                if (!$order->supplier_id) {
+                    $missingItems[] = $item->display_name;
+                    continue;
+                }
+
+                $productId = (int) ($item->product_id ?: $item->variant?->product_id ?: 0);
+                $price = $prices->get($order->supplier_id . ':' . $productId);
+                $unitCost = $price ? (float) $price->stock_in_unit_cost : 0.0;
+                if (!$price || $unitCost <= 0) {
+                    $missingItems[] = $item->display_name;
+                    continue;
+                }
+
+                $purchaseTotal += $unitCost * (float) $item->display_total_value;
+            }
+
+            $missingItems = collect($missingItems)->filter()->unique()->values();
+            $isComplete = $order->supplier_id && $order->items->isNotEmpty() && $missingItems->isEmpty();
+            $byOrder[$order->id] = [
+                'sale_total' => $saleTotal,
+                'purchase_total' => $purchaseTotal,
+                'profit' => $isComplete ? $saleTotal - $purchaseTotal : null,
+                'margin_percent' => $isComplete && $saleTotal > 0
+                    ? (($saleTotal - $purchaseTotal) / $saleTotal) * 100
+                    : null,
+                'is_complete' => $isComplete,
+                'missing_items' => $missingItems,
+            ];
+        }
+
+        $summaries = $orders
+            ->filter(fn (Order $order) => (int) $order->supplier_id > 0)
+            ->groupBy('supplier_id')
+            ->map(function ($supplierOrders) use ($byOrder) {
+                $first = $supplierOrders->first();
+                $rows = $supplierOrders->map(fn (Order $order) => $byOrder[$order->id]);
+                $saleTotal = (float) $rows->sum('sale_total');
+                $purchaseTotal = (float) $rows->sum('purchase_total');
+                $missingItems = $rows->flatMap(fn ($row) => $row['missing_items'])->unique()->values();
+                $isComplete = $rows->every(fn ($row) => $row['is_complete']);
+
+                return [
+                    'supplier_id' => (int) $first->supplier_id,
+                    'supplier_name' => $first->supplier?->name ?? 'Nhà cung cấp',
+                    'order_count' => $supplierOrders->count(),
+                    'sale_total' => $saleTotal,
+                    'purchase_total' => $purchaseTotal,
+                    'profit' => $isComplete ? $saleTotal - $purchaseTotal : null,
+                    'margin_percent' => $isComplete && $saleTotal > 0
+                        ? (($saleTotal - $purchaseTotal) / $saleTotal) * 100
+                        : null,
+                    'is_complete' => $isComplete,
+                    'missing_items' => $missingItems,
+                ];
+            })
+            ->sortBy('supplier_name')
+            ->values();
+
+        return [$byOrder, $summaries];
     }
 
     public function myOrdersMonitoringSupplier(Request $request, Order $order)

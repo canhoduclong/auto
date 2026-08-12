@@ -532,6 +532,21 @@
     .monitor-source-tab:hover,
     .monitor-source-tab.active { border-color: #0f766e; background: #ecfdf5; color: #0f766e; }
     .monitor-source-tab-count { color: #64748b; font-size: .68rem; }
+    .monitor-profit-summary { margin: 0 0 14px; padding: 13px; }
+    .monitor-profit-summary-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 10px; }
+    .monitor-profit-summary-title { margin: 0; color: #0f172a; font-size: .86rem; font-weight: 900; text-transform: uppercase; }
+    .monitor-profit-summary-note { color: #64748b; font-size: .7rem; }
+    .monitor-profit-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+    .monitor-profit-card { padding: 11px 12px; border: 1px solid #dbe4ee; border-radius: 7px; background: #f8fafc; }
+    .monitor-profit-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+    .monitor-profit-card-name { color: #075985; font-size: .82rem; font-weight: 900; text-decoration: none; }
+    .monitor-profit-card-count { color: #64748b; font-size: .68rem; }
+    .monitor-profit-values { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    .monitor-profit-value small { display: block; color: #64748b; font-size: .62rem; text-transform: uppercase; }
+    .monitor-profit-value strong { display: block; margin-top: 2px; color: #0f172a; font-size: .82rem; }
+    .monitor-profit-value.is-profit strong { color: #15803d; }
+    .monitor-profit-value.is-loss strong { color: #dc2626; }
+    .monitor-profit-warning { margin-top: 7px; color: #b45309; font-size: .67rem; }
     .monitor-simple-list { overflow: hidden; }
     .monitor-simple-list table { margin: 0; font-size: .79rem; }
     .monitor-simple-list thead th { border-bottom: 2px solid #cbd5e1; background: #f8fafc; color: #1e293b; white-space: nowrap; }
@@ -543,6 +558,7 @@
     .monitor-supplier-actions form:first-child { flex: 1; }
     .monitor-supplier-actions .form-select { min-width: 150px; font-size: .75rem; }
     .monitor-supplier-remove { width: 32px; padding-inline: 0 !important; font-size: 1rem; line-height: 1; }
+    .monitor-profit-incomplete { color: #b45309; font-size: .67rem; font-weight: 700; white-space: nowrap; }
     .monitor-auto-approval { margin: 0 0 18px; overflow: hidden; border: 1px solid #d3e0ed; border-radius: 10px; background: #fff; }
     .monitor-auto-approval-head { display: flex; min-height: 40px; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 14px; border-bottom: 1px solid #dce6f1; color: #075985; font-size: .76rem; font-weight: 900; text-transform: uppercase; }
     .monitor-auto-approval-head-meta { display: flex; align-items: center; justify-content: flex-end; gap: 18px; }
@@ -737,6 +753,7 @@
         .monitor-inline-edit-fields .is-wide { grid-column: auto; }
         .monitor-simple-list { border-radius: 7px; }
         .monitor-auto-approval-grid { grid-template-columns: 1fr; gap: 18px; }
+        .monitor-profit-grid { grid-template-columns: 1fr; }
         .monitor-auto-bulk-fields { grid-template-columns: 1fr; }
         .monitor-auto-bottom { align-items: stretch; flex-direction: column; }
         .monitor-auto-footer .btn { width: 100%; }
@@ -1021,6 +1038,38 @@
                     @endforeach
                 </nav>
             </div>
+
+            @if($supplierProfitSummaries->isNotEmpty())
+                <section class="monitor-panel monitor-profit-summary" aria-label="Lợi nhuận theo nhà cung cấp">
+                    <div class="monitor-profit-summary-head">
+                        <h2 class="monitor-profit-summary-title">Lợi nhuận theo nhà cung cấp</h2>
+                        <span class="monitor-profit-summary-note">Giá nhập gần nhất có hiệu lực đến {{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}</span>
+                    </div>
+                    <div class="monitor-profit-grid">
+                        @foreach($supplierProfitSummaries as $summary)
+                            @php $summaryProfit = $summary['profit']; @endphp
+                            <article class="monitor-profit-card">
+                                <div class="monitor-profit-card-head">
+                                    <a class="monitor-profit-card-name" href="{{ route('pages.my_orders.monitoring', array_merge($supplierFilterQuery, ['supplier_id' => $summary['supplier_id']])) }}">{{ $summary['supplier_name'] }}</a>
+                                    <span class="monitor-profit-card-count">{{ $summary['order_count'] }} đơn</span>
+                                </div>
+                                <div class="monitor-profit-values">
+                                    <div class="monitor-profit-value"><small>Tiền bán</small><strong>{{ number_format($summary['sale_total'], 0, ',', '.') }}đ</strong></div>
+                                    <div class="monitor-profit-value"><small>Tiền nhập</small><strong>{{ number_format($summary['purchase_total'], 0, ',', '.') }}đ</strong></div>
+                                    <div class="monitor-profit-value {{ $summaryProfit !== null && $summaryProfit < 0 ? 'is-loss' : 'is-profit' }}">
+                                        <small>Lợi nhuận</small>
+                                        <strong>{{ $summaryProfit === null ? 'Chưa đủ giá' : number_format($summaryProfit, 0, ',', '.') . 'đ' }}</strong>
+                                        @if($summary['margin_percent'] !== null)<small>{{ number_format($summary['margin_percent'], 1, ',', '.') }}% doanh thu</small>@endif
+                                    </div>
+                                </div>
+                                @if(!$summary['is_complete'])
+                                    <div class="monitor-profit-warning"><i class="bi bi-exclamation-triangle me-1"></i>Thiếu giá nhập: {{ $summary['missing_items']->implode(', ') }}</div>
+                                @endif
+                            </article>
+                        @endforeach
+                    </div>
+                </section>
+            @endif
         @endif
 
         @if($canConfigureAutoApproval)
@@ -1312,7 +1361,9 @@
                                     <th>Size</th>
                                     <th class="text-end">Số lượng</th>
                                     <th class="text-end">Giá</th>
-                                    <th class="text-end">Thành tiền</th>
+                                    <th class="text-end">Tiền bán</th>
+                                    <th class="text-end">Tiền nhập</th>
+                                    <th class="text-end">Lợi nhuận</th>
                                     <th>Nhà cung cấp</th>
                                 </tr>
                             </thead>
@@ -1328,6 +1379,14 @@
                                         $listProducts = $order->items->map(fn ($item) => $item->display_name)->filter()->unique()->implode(', ');
                                         $listSizes = $order->items->map(fn ($item) => $item->variant?->size)->filter()->unique()->implode(', ');
                                         $canAssignSupplier = !$isSaleViewingRole || (int) $order->user_id === (int) $monitorUser?->id;
+                                        $orderProfit = $supplierProfitByOrder[$order->id] ?? [
+                                            'sale_total' => 0,
+                                            'purchase_total' => 0,
+                                            'profit' => null,
+                                            'margin_percent' => null,
+                                            'is_complete' => false,
+                                            'missing_items' => collect(),
+                                        ];
                                     @endphp
                                     <tr class="{{ $order->status === \App\Models\Order::STATUS_CANCELLED ? 'table-danger' : '' }}">
                                         <td class="text-center fw-bold">{{ $order->daily_sequence ?? (($orders->firstItem() ?? 1) + $loop->index) }}</td>
@@ -1340,7 +1399,17 @@
                                         <td>{{ $listSizes ?: '—' }}</td>
                                         <td class="text-end fw-semibold">{{ $formatQuantity($order->items->sum('quantity')) }}</td>
                                         <td class="text-end">{{ $listPriceLabel }}đ</td>
-                                        <td class="text-end fw-bold">{{ number_format((float) $order->total, 0, ',', '.') }}đ</td>
+                                        <td class="text-end fw-bold">{{ number_format($orderProfit['sale_total'], 0, ',', '.') }}đ</td>
+                                        <td class="text-end fw-semibold">
+                                            {{ number_format($orderProfit['purchase_total'], 0, ',', '.') }}đ
+                                            @if(!$orderProfit['is_complete'])
+                                                <span class="d-block monitor-profit-incomplete" title="{{ $orderProfit['missing_items']->implode(', ') }}">Thiếu giá nhập</span>
+                                            @endif
+                                        </td>
+                                        <td class="text-end fw-bold {{ $orderProfit['profit'] !== null && $orderProfit['profit'] < 0 ? 'text-danger' : 'text-success' }}">
+                                            {{ $orderProfit['profit'] === null ? '—' : number_format($orderProfit['profit'], 0, ',', '.') . 'đ' }}
+                                            @if($orderProfit['margin_percent'] !== null)<small class="d-block">{{ number_format($orderProfit['margin_percent'], 1, ',', '.') }}%</small>@endif
+                                        </td>
                                         <td class="monitor-list-supplier">
                                             @if($canAssignSupplier)
                                             <div class="monitor-supplier-actions">
@@ -1368,7 +1437,7 @@
                                         </td>
                                     </tr>
                                 @empty
-                                    <tr><td colspan="9" class="py-4 text-center text-muted">Không có đơn hàng phù hợp.</td></tr>
+                                    <tr><td colspan="11" class="py-4 text-center text-muted">Không có đơn hàng phù hợp.</td></tr>
                                 @endforelse
                             </tbody>
                         </table>
