@@ -508,11 +508,13 @@
         min-height: 54px;
         padding: 8px 0;
     }
-    .monitor-bulk-actions > div { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
+    .monitor-bulk-actions > div { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
     .monitor-bulk-actions form { margin: 0; }
     .monitor-bulk-actions .form-select { width: 158px; min-height: 38px; }
     .monitor-bulk-actions .btn { min-height: 38px; padding-inline: 14px; }
     .monitor-view-switch { display: inline-flex; gap: 4px; }
+    .monitor-view-switch .btn,
+    .monitor-icon-action { width: 42px; padding-inline: 0 !important; }
     .monitor-source-panel { margin: 10px 0 14px; padding: 10px 12px; }
     .monitor-source-tabs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
     .monitor-source-label { margin-right: 4px; color: #334155; font-size: .78rem; font-weight: 900; text-transform: uppercase; }
@@ -953,16 +955,18 @@
                     </select>
                 </form>
                 <div class="monitor-view-switch" role="group" aria-label="Kiểu hiển thị đơn hàng">
-                    <a class="btn btn-sm {{ $viewMode === 'cards' ? 'btn-primary' : 'btn-outline-primary' }}" href="{{ request()->fullUrlWithQuery(['view' => 'cards', 'page' => 1]) }}" title="Xem chi tiết">
-                        <i class="bi bi-grid"></i><span class="ms-1">Chi tiết</span>
+                    <a class="btn btn-sm {{ $viewMode === 'cards' ? 'btn-primary' : 'btn-outline-primary' }}" href="{{ request()->fullUrlWithQuery(['view' => 'cards', 'page' => 1]) }}" title="Xem dạng thẻ" aria-label="Xem dạng thẻ">
+                        <i class="bi bi-grid"></i>
                     </a>
-                    <a class="btn btn-sm {{ $viewMode === 'list' ? 'btn-primary' : 'btn-outline-primary' }}" href="{{ request()->fullUrlWithQuery(['view' => 'list', 'page' => 1]) }}" title="Xem danh sách gọn">
-                        <i class="bi bi-list-ul"></i><span class="ms-1">Danh sách</span>
+                    <a class="btn btn-sm {{ $viewMode === 'list' ? 'btn-primary' : 'btn-outline-primary' }}" href="{{ request()->fullUrlWithQuery(['view' => 'list', 'page' => 1]) }}" title="Xem dạng danh sách" aria-label="Xem dạng danh sách">
+                        <i class="bi bi-list-ul"></i>
                     </a>
                 </div>
-                <button class="btn btn-sm btn-outline-primary monitor-summary-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#monitorProductSummary" aria-expanded="false">
-                    <i class="bi bi-inbox me-1"></i>Hàng - Số lượng
-                </button>
+                @if($canConfigureAutoApproval)
+                    <button type="button" class="btn btn-sm btn-outline-primary monitor-icon-action" data-bs-toggle="collapse" data-bs-target="#monitorAutoApproval" aria-expanded="{{ $hasAutoApprovalErrors ? 'true' : 'false' }}" title="Cài đặt duyệt đơn tự động" aria-label="Cài đặt duyệt đơn tự động">
+                        <i class="bi bi-gear"></i>
+                    </button>
+                @endif
                 <form method="POST" action="{{ route('pages.my_orders.monitoring.refresh_sequence') }}" onsubmit="return confirm('Quét duyệt tự động các đơn đủ điều kiện và cập nhật lại số thứ tự ưu tiên?');">
                     @csrf
                     <input type="hidden" name="date" value="{{ $selectedDate }}">
@@ -971,8 +975,8 @@
                     <input type="hidden" name="status" value="{{ $selectedStatus }}">
                     <input type="hidden" name="sale_id" value="{{ $selectedSaleId }}">
                     <input type="hidden" name="customer_id" value="{{ $selectedCustomerId }}">
-                    <button type="submit" class="btn btn-sm btn-outline-primary">
-                        <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+                    <button type="submit" class="btn btn-sm btn-primary monitor-icon-action" title="Làm mới danh sách và số thứ tự" aria-label="Làm mới danh sách và số thứ tự">
+                        <i class="bi bi-arrow-clockwise"></i>
                     </button>
                 </form>
                 @if($canApproveManagedSales)
@@ -1011,11 +1015,9 @@
                         </button>
                     </form>
                 @endif
-                @if($canConfigureAutoApproval)
-                    <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="collapse" data-bs-target="#monitorAutoApproval" aria-expanded="{{ $hasAutoApprovalErrors ? 'true' : 'false' }}" title="Cấu hình duyệt đơn tự động">
-                        <i class="bi bi-gear"></i>
-                    </button>
-                @endif
+                <button class="btn btn-sm btn-outline-primary monitor-summary-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#monitorProductSummary" aria-expanded="false">
+                    <i class="bi bi-inbox me-1"></i>Hàng - Số lượng
+                </button>
             </div>
             <button type="button" class="btn btn-sm btn-success" id="monitorOpenCreate">
                 <i class="bi bi-plus-circle me-1"></i>Thêm đơn
@@ -1364,8 +1366,6 @@
                                     <th class="text-end">Số lượng</th>
                                     <th class="text-end">Giá</th>
                                     <th class="text-end">Tiền bán</th>
-                                    <th class="text-end">Tiền nhập</th>
-                                    <th class="text-end">Lợi nhuận</th>
                                     <th>Nhà cung cấp</th>
                                 </tr>
                             </thead>
@@ -1402,16 +1402,6 @@
                                         <td class="text-end fw-semibold">{{ $formatQuantity($order->items->sum('quantity')) }}</td>
                                         <td class="text-end">{{ $listPriceLabel }}đ</td>
                                         <td class="text-end fw-bold">{{ number_format($orderProfit['sale_total'], 0, ',', '.') }}đ</td>
-                                        <td class="text-end fw-semibold">
-                                            {{ number_format($orderProfit['purchase_total'], 0, ',', '.') }}đ
-                                            @if(!$orderProfit['is_complete'])
-                                                <span class="d-block monitor-profit-incomplete" title="{{ $orderProfit['missing_items']->implode(', ') }}">Thiếu giá nhập</span>
-                                            @endif
-                                        </td>
-                                        <td class="text-end fw-bold {{ $orderProfit['profit'] !== null && $orderProfit['profit'] < 0 ? 'text-danger' : 'text-success' }}">
-                                            {{ $orderProfit['profit'] === null ? '—' : number_format($orderProfit['profit'], 0, ',', '.') . 'đ' }}
-                                            @if($orderProfit['margin_percent'] !== null)<small class="d-block">{{ number_format($orderProfit['margin_percent'], 1, ',', '.') }}%</small>@endif
-                                        </td>
                                         <td class="monitor-list-supplier">
                                             @if($canAssignSupplier)
                                             <div class="monitor-supplier-actions">
@@ -1439,7 +1429,7 @@
                                         </td>
                                     </tr>
                                 @empty
-                                    <tr><td colspan="11" class="py-4 text-center text-muted">Không có đơn hàng phù hợp.</td></tr>
+                                    <tr><td colspan="9" class="py-4 text-center text-muted">Không có đơn hàng phù hợp.</td></tr>
                                 @endforelse
                             </tbody>
                         </table>
