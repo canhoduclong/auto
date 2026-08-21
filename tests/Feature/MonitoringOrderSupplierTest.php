@@ -9,6 +9,7 @@ use App\Models\ProductPriceRule;
 use App\Models\ProductVariant;
 use App\Models\Role;
 use App\Models\Supplier;
+use App\Models\SupplierProduct;
 use App\Models\SupplierProductPrice;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -119,7 +120,7 @@ class MonitoringOrderSupplierTest extends TestCase
         ]);
     }
 
-    public function test_profit_uses_latest_positive_variant_minimum_cost_for_ancillary_items(): void
+    public function test_profit_uses_current_system_price_for_supplier_foam_box(): void
     {
         $saleRole = Role::query()->create(['name' => 'sale']);
         $sale = User::factory()->create();
@@ -139,13 +140,11 @@ class MonitoringOrderSupplierTest extends TestCase
             'kg' => 1,
             'is_priced_by_kg' => false,
         ]);
-
-        ProductPriceRule::query()->create([
-            'product_variant_id' => $foamBoxVariant->id,
-            'price' => 70000,
-            'min_price' => 70000,
-            'start_date' => now()->subDay(),
-            'end_date' => now(),
+        SupplierProduct::query()->create([
+            'supplier_id' => $supplier->id,
+            'product_id' => $foamBox->id,
+            'active' => true,
+            'price_calculation_type' => SupplierProductPrice::TYPE_DIRECT_PURCHASE,
         ]);
         ProductPriceRule::query()->create([
             'product_variant_id' => $foamBoxVariant->id,

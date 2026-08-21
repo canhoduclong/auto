@@ -9,20 +9,19 @@
         @method('PUT')
 
         <div class="mb-3">
-            <label class="form-label">Giá bán hiện tại</label>
+            <label class="form-label">Giá hiện tại</label>
             <input type="text" class="form-control" 
                    value="{{ number_format($variant->final_price, 0, ',', '.') }}" readonly>
         </div>
 
         <div class="mb-3">
-            <label class="form-label">Giá bán mới</label>
+            <label class="form-label">Giá mới</label>
             <input type="number" step="0.01" name="price" class="form-control" required>
         </div>
 
         <div class="mb-3">
-            <label class="form-label">Giá Min (giá vốn dự phòng)</label>
+            <label class="form-label">Giá Min</label>
             <input type="number" step="0.01" min="0" name="min_price" class="form-control" value="0" required>
-            <div class="form-text">Trang lợi nhuận ưu tiên giá nhập theo nhà cung cấp. Với mặt hàng phụ không thuộc nhà cung cấp của đơn, Giá Min dương gần nhất sẽ được dùng làm giá vốn dự phòng.</div>
         </div>
 
         <div class="mb-3">

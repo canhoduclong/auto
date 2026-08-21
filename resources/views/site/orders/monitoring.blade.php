@@ -1047,7 +1047,7 @@
                 <section class="monitor-panel monitor-profit-summary" aria-label="Lợi nhuận theo nhà cung cấp">
                     <div class="monitor-profit-summary-head">
                         <h2 class="monitor-profit-summary-title">Lợi nhuận theo nhà cung cấp</h2>
-                        <span class="monitor-profit-summary-note">Giá nhập NCC; mặt hàng phụ dùng Giá Min dương gần nhất đến {{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}</span>
+                        <span class="monitor-profit-summary-note">Giá nhập NCC; Thùng xốp dùng giá hiện tại trên hệ thống</span>
                     </div>
                     <div class="monitor-profit-grid">
                         @foreach($supplierProfitSummaries as $summary)

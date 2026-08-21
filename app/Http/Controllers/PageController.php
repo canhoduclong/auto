@@ -7,7 +7,6 @@ use App\Models\Setting;
 use App\Models\Page;
 use App\Models\Product;
 use App\Models\Category;
-use App\Models\ProductPriceRule;
 use App\Models\ProductVariant;
 use App\Models\UserProductVariantPreference;
 use App\Support\ProductVariantSorter;
@@ -24,7 +23,6 @@ use App\Services\OrderAutoApprovalService;
 use App\Models\Order;
 use App\Models\OrderAutoApprovalRule;
 use App\Models\Supplier;
-use App\Models\SupplierProduct;
 use App\Models\SupplierProductPrice;
 use App\Models\Inventory;
 use App\Models\Warehouse;
@@ -41,6 +39,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -1332,16 +1331,9 @@ class PageController extends Controller
     private function monitoringSupplierProfitability($orders, string $selectedDate): array
     {
         $supplierIds = $orders->pluck('supplier_id')->filter()->map(fn ($id) => (int) $id)->unique()->values();
-        $items = $orders->flatMap(fn (Order $order) => $order->items);
-        $productIds = $items
+        $productIds = $orders->flatMap(fn (Order $order) => $order->items)
             ->map(fn ($item) => (int) ($item->product_id ?: $item->variant?->product_id ?: 0))
             ->filter()
-            ->unique()
-            ->values();
-        $variantIds = $items
-            ->pluck('product_variant_id')
-            ->filter()
-            ->map(fn ($id) => (int) $id)
             ->unique()
             ->values();
 
@@ -1356,36 +1348,6 @@ class PageController extends Controller
                 ->get()
                 ->groupBy(fn (SupplierProductPrice $price) => $price->supplier_id . ':' . $price->product_id)
                 ->map(fn ($group) => $group->first());
-        $supplierProductKeys = ($supplierIds->isEmpty() || $productIds->isEmpty())
-            ? collect()
-            : SupplierProduct::query()
-                ->whereIn('supplier_id', $supplierIds)
-                ->whereIn('product_id', $productIds)
-                ->where('active', true)
-                ->get(['supplier_id', 'product_id'])
-                ->mapWithKeys(fn (SupplierProduct $row) => [
-                    $row->supplier_id . ':' . $row->product_id => true,
-                ]);
-
-        // A single order is assigned to one supplier, but it may also contain
-        // packaging or another ancillary item bought from elsewhere. In that
-        // case there is intentionally no supplier/product price for the order's
-        // supplier. Use the latest known positive minimum price of the exact
-        // variant as its generic stock-in cost; never use the selling price.
-        $variantFallbackCosts = $variantIds->isEmpty()
-            ? collect()
-            : ProductPriceRule::query()
-                ->whereIn('product_variant_id', $variantIds)
-                ->where('min_price', '>', 0)
-                ->where(function ($query) use ($selectedDate) {
-                    $query->whereNull('start_date')
-                        ->orWhereDate('start_date', '<=', $selectedDate);
-                })
-                ->orderByDesc('start_date')
-                ->orderByDesc('id')
-                ->get()
-                ->groupBy('product_variant_id')
-                ->map(fn ($group) => (float) $group->first()->min_price);
 
         $byOrder = [];
         foreach ($orders as $order) {
@@ -1405,15 +1367,18 @@ class PageController extends Controller
                 }
 
                 $productId = (int) ($item->product_id ?: $item->variant?->product_id ?: 0);
-                $supplierProductKey = $order->supplier_id . ':' . $productId;
-                $price = $prices->get($supplierProductKey);
+                $price = $prices->get($order->supplier_id . ':' . $productId);
                 $unitCost = $price ? (float) $price->stock_in_unit_cost : 0.0;
-                if (
-                    $unitCost <= 0
-                    && !$supplierProductKeys->has($supplierProductKey)
-                    && $item->product_variant_id
-                ) {
-                    $unitCost = (float) $variantFallbackCosts->get((int) $item->product_variant_id, 0);
+
+                // Thùng xốp is entered by the supplier as the product's current
+                // system price. It may not have a separate daily supplier-price
+                // row, so use that active variant price as its stock-in cost.
+                if ($unitCost <= 0 && $this->isFoamBoxOrderItem($item)) {
+                    $unitCost = (float) (
+                        $item->variant?->latestPriceRule?->price
+                        ?? $item->variant?->final_price
+                        ?? 0
+                    );
                 }
 
                 if ($unitCost <= 0) {
@@ -1467,6 +1432,13 @@ class PageController extends Controller
             ->values();
 
         return [$byOrder, $summaries];
+    }
+
+    private function isFoamBoxOrderItem($item): bool
+    {
+        $name = Str::lower(Str::ascii((string) $item->display_name));
+
+        return Str::contains($name, 'thung xop');
     }
 
     public function myOrdersMonitoringSupplier(Request $request, Order $order)
