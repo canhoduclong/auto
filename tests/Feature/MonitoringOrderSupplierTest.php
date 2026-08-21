@@ -209,8 +209,9 @@ class MonitoringOrderSupplierTest extends TestCase
             ->assertSee('6.780.000đ')
             ->assertSee('6.070.000đ')
             ->assertSee('710.000đ')
-            ->assertSee('Vịt nguyên con: 67.000đ')
-            ->assertSee('Thùng xốp: 80.000đ')
+            ->assertSee('Vịt nguyên con')
+            ->assertSee('Thùng xốp')
+            ->assertSee('rowspan="2"', false)
             ->assertDontSee('67.000–80.000')
             ->assertDontSee('Thiếu giá nhập: Thùng xốp');
     }

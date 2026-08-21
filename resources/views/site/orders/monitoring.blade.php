@@ -1396,7 +1396,7 @@
                                     <th>Sản phẩm</th>
                                     <th>Size</th>
                                     <th class="text-end">Số lượng</th>
-                                    <th class="text-end">Giá bán từng SP</th>
+                                    <th class="text-end">Giá bán</th>
                                     <th class="text-end">Tiền bán</th>
                                     <th>Nhà cung cấp</th>
                                 </tr>
@@ -1404,67 +1404,61 @@
                             <tbody>
                                 @forelse($orders as $order)
                                     @php
-                                        $listSalePrices = $order->items
-                                            ->filter(fn ($item) => (float) $item->price > 0)
-                                            ->map(fn ($item) => $item->display_name . ': ' . number_format((float) $item->price, 0, ',', '.') . 'đ')
-                                            ->unique()
-                                            ->values();
-                                        $listProducts = $order->items->map(fn ($item) => $item->display_name)->filter()->unique()->implode(', ');
-                                        $listSizes = $order->items->map(fn ($item) => $item->variant?->size)->filter()->unique()->implode(', ');
+                                        $listItems = $order->items->isNotEmpty() ? $order->items->values() : collect([null]);
+                                        $listRowspan = $listItems->count();
                                         $canAssignSupplier = !$isSaleViewingRole || (int) $order->user_id === (int) $monitorUser?->id;
-                                        $orderProfit = $supplierProfitByOrder[$order->id] ?? [
-                                            'sale_total' => 0,
-                                            'purchase_total' => 0,
-                                            'profit' => null,
-                                            'margin_percent' => null,
-                                            'is_complete' => false,
-                                            'missing_items' => collect(),
-                                        ];
                                     @endphp
-                                    <tr class="{{ $order->status === \App\Models\Order::STATUS_CANCELLED ? 'table-danger' : '' }}">
-                                        <td class="text-center fw-bold">{{ $order->daily_sequence ?? (($orders->firstItem() ?? 1) + $loop->index) }}</td>
-                                        <td class="monitor-list-customer">
-                                            {{ $order->customer?->name ?? 'Khách hàng' }}
-                                            <small class="d-block text-muted text-lowercase">{{ $order->code ?: ('#' . $order->id) }}</small>
-                                        </td>
-                                        <td>{{ $order->user?->name ?? '—' }}</td>
-                                        <td class="monitor-list-products">{{ $listProducts ?: '—' }}</td>
-                                        <td>{{ $listSizes ?: '—' }}</td>
-                                        <td class="text-end fw-semibold">{{ $formatQuantity($order->items->sum('quantity')) }}</td>
-                                        <td class="text-end">
-                                            @forelse($listSalePrices as $salePriceLabel)
-                                                <span class="d-block text-nowrap">{{ $salePriceLabel }}</span>
-                                            @empty
-                                                —
-                                            @endforelse
-                                        </td>
-                                        <td class="text-end fw-bold">{{ number_format($orderProfit['sale_total'], 0, ',', '.') }}đ</td>
-                                        <td class="monitor-list-supplier">
-                                            @if($canAssignSupplier)
-                                            <div class="monitor-supplier-actions">
-                                                <form method="POST" action="{{ route('pages.my_orders.monitoring.supplier', $order) }}">
-                                                    @csrf
-                                                    @method('PUT')
-                                                    <select class="form-select form-select-sm" name="supplier_id" onchange="this.form.submit()" aria-label="Gắn nhà cung cấp cho đơn {{ $order->code ?: $order->id }}">
-                                                        <option value="">-- Chọn nhà cung cấp --</option>
-                                                        @foreach($suppliers as $supplier)
-                                                            <option value="{{ $supplier->id }}" @selected((int) $order->supplier_id === (int) $supplier->id)>{{ $supplier->name }}</option>
-                                                        @endforeach
-                                                    </select>
-                                                </form>
-                                                @if($order->supplier_id)
-                                                    <form method="POST" action="{{ route('pages.my_orders.monitoring.supplier', $order) }}" onsubmit="return confirm('Gỡ đơn này khỏi nhà cung cấp {{ addslashes($order->supplier?->name ?? '') }}?');">
-                                                        @csrf
-                                                        @method('PUT')
-                                                        <button class="btn btn-sm btn-outline-danger monitor-supplier-remove" type="submit" title="Gỡ khỏi nhà cung cấp" aria-label="Gỡ đơn khỏi nhà cung cấp">×</button>
-                                                    </form>
-                                                @endif
-                                            </div>
-                                            @else
-                                                <span class="text-muted">{{ $order->supplier?->name ?? 'Chưa gắn' }}</span>
+                                    @foreach($listItems as $listItem)
+                                        @php
+                                            $listItemSaleTotal = $listItem
+                                                ? ((float) ($listItem->total ?? 0) > 0
+                                                    ? (float) $listItem->total
+                                                    : (float) ($listItem->price ?? 0) * (float) $listItem->display_total_value)
+                                                : 0;
+                                        @endphp
+                                        <tr class="{{ $order->status === \App\Models\Order::STATUS_CANCELLED ? 'table-danger' : '' }}">
+                                            @if($loop->first)
+                                                <td rowspan="{{ $listRowspan }}" class="text-center fw-bold">{{ $order->daily_sequence ?? (($orders->firstItem() ?? 1) + $loop->parent->index) }}</td>
+                                                <td rowspan="{{ $listRowspan }}" class="monitor-list-customer">
+                                                    {{ $order->customer?->name ?? 'Khách hàng' }}
+                                                    <small class="d-block text-muted text-lowercase">{{ $order->code ?: ('#' . $order->id) }}</small>
+                                                </td>
+                                                <td rowspan="{{ $listRowspan }}">{{ $order->user?->name ?? '—' }}</td>
                                             @endif
-                                        </td>
-                                    </tr>
+                                            <td class="monitor-list-products">{{ $listItem?->display_name ?? '—' }}</td>
+                                            <td>{{ $listItem?->variant?->size ?: '—' }}</td>
+                                            <td class="text-end fw-semibold">{{ $listItem ? $formatQuantity($listItem->quantity) : '—' }}</td>
+                                            <td class="text-end text-nowrap">{{ $listItem && (float) $listItem->price > 0 ? number_format((float) $listItem->price, 0, ',', '.') . 'đ' : '—' }}</td>
+                                            <td class="text-end fw-bold text-nowrap">{{ number_format($listItemSaleTotal, 0, ',', '.') }}đ</td>
+                                            @if($loop->first)
+                                                <td rowspan="{{ $listRowspan }}" class="monitor-list-supplier">
+                                                    @if($canAssignSupplier)
+                                                    <div class="monitor-supplier-actions">
+                                                        <form method="POST" action="{{ route('pages.my_orders.monitoring.supplier', $order) }}">
+                                                            @csrf
+                                                            @method('PUT')
+                                                            <select class="form-select form-select-sm" name="supplier_id" onchange="this.form.submit()" aria-label="Gắn nhà cung cấp cho đơn {{ $order->code ?: $order->id }}">
+                                                                <option value="">-- Chọn nhà cung cấp --</option>
+                                                                @foreach($suppliers as $supplier)
+                                                                    <option value="{{ $supplier->id }}" @selected((int) $order->supplier_id === (int) $supplier->id)>{{ $supplier->name }}</option>
+                                                                @endforeach
+                                                            </select>
+                                                        </form>
+                                                        @if($order->supplier_id)
+                                                            <form method="POST" action="{{ route('pages.my_orders.monitoring.supplier', $order) }}" onsubmit="return confirm('Gỡ đơn này khỏi nhà cung cấp {{ addslashes($order->supplier?->name ?? '') }}?');">
+                                                                @csrf
+                                                                @method('PUT')
+                                                                <button class="btn btn-sm btn-outline-danger monitor-supplier-remove" type="submit" title="Gỡ khỏi nhà cung cấp" aria-label="Gỡ đơn khỏi nhà cung cấp">×</button>
+                                                            </form>
+                                                        @endif
+                                                    </div>
+                                                    @else
+                                                        <span class="text-muted">{{ $order->supplier?->name ?? 'Chưa gắn' }}</span>
+                                                    @endif
+                                                </td>
+                                            @endif
+                                        </tr>
+                                    @endforeach
                                 @empty
                                     <tr><td colspan="9" class="py-4 text-center text-muted">Không có đơn hàng phù hợp.</td></tr>
                                 @endforelse
