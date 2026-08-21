@@ -695,6 +695,10 @@ class OrderController extends Controller
             'truck_station_address' => ['nullable', 'string', 'max:255'],
             'truck_station_phone' => ['nullable', 'string', 'max:30'],
             'truck_receive_time' => ['nullable', 'string', 'max:255'],
+            'charge_vat' => ['nullable', 'boolean'],
+            'vat_percent' => [Rule::requiredIf($request->boolean('charge_vat')), 'nullable', 'numeric', 'gt:0', 'max:100'],
+            'collect_customer_shipping_fee' => ['nullable', 'boolean'],
+            'customer_shipping_fee' => [Rule::requiredIf($request->boolean('collect_customer_shipping_fee')), 'nullable', 'numeric', 'gt:0', 'max:999999999999.99'],
         ]);
 
         $customerQuery = Customer::query()->whereKey((int) $validated['customer_id']);
@@ -744,6 +748,13 @@ class OrderController extends Controller
                     'truck_station_address' => $useTruckStation ? trim((string) ($validated['truck_station_address'] ?? '')) ?: null : null,
                     'truck_station_phone' => $useTruckStation ? trim((string) ($validated['truck_station_phone'] ?? '')) ?: null : null,
                     'truck_receive_time' => $useTruckStation ? trim((string) ($validated['truck_receive_time'] ?? '')) ?: null : null,
+                    // Phí ship do manager/shipper ấn định được lưu ở shipping_fee và không phải khoản thu khách tại đây.
+                    'charge_shipping_fee' => false,
+                    'shipping_fee' => 0,
+                    'charge_vat' => (bool) ($validated['charge_vat'] ?? false),
+                    'vat_percent' => (float) ($validated['vat_percent'] ?? 0),
+                    'collect_customer_shipping_fee' => (bool) ($validated['collect_customer_shipping_fee'] ?? false),
+                    'customer_shipping_fee' => (float) ($validated['customer_shipping_fee'] ?? 0),
                     'allow_backorder' => true,
                     'status' => OrderStatus::Pending->value,
                     'payment_status' => PaymentStatus::Unpaid->value,
@@ -1664,18 +1675,32 @@ class OrderController extends Controller
                 ? -1 * $orderLevelDiscountAmount
                 : $orderLevelDiscountAmount;
 
-            $customerShippingFee = $this->resolveCustomerShippingFee($customer);
+            $defaultCustomerShippingFee = $this->resolveCustomerShippingFee($customer);
             $shippingFee = array_key_exists('shipping_fee', $orderData)
                 ? round(max(0, (float) $orderData['shipping_fee']), 2)
-                : ($customerShippingFee ?? 0.0);
+                : ($defaultCustomerShippingFee ?? 0.0);
             $chargeShippingFee = array_key_exists('charge_shipping_fee', $orderData)
                 ? (bool) $orderData['charge_shipping_fee']
                 : true;
-            if ($customerShippingFee !== null) {
+            if (!array_key_exists('charge_shipping_fee', $orderData) && $defaultCustomerShippingFee !== null) {
                 $chargeShippingFee = true;
             }
 
-            $total = max($subtotalAfterItemAdjustment - $orderLevelDiscount + ($chargeShippingFee ? $shippingFee : 0), 0);
+            $productTotal = max($subtotalAfterItemAdjustment - $orderLevelDiscount, 0);
+            $chargeVat = (bool) ($orderData['charge_vat'] ?? false);
+            $vatPercent = $chargeVat
+                ? round(min(max((float) ($orderData['vat_percent'] ?? 0), 0), 100), 2)
+                : 0.0;
+            $vatAmount = $chargeVat ? round($productTotal * $vatPercent / 100, 2) : 0.0;
+            $collectCustomerShippingFee = (bool) ($orderData['collect_customer_shipping_fee'] ?? false);
+            $customerShippingFee = $collectCustomerShippingFee
+                ? round(max(0, (float) ($orderData['customer_shipping_fee'] ?? 0)), 2)
+                : 0.0;
+
+            $total = $productTotal
+                + ($chargeShippingFee ? $shippingFee : 0)
+                + $vatAmount
+                + $customerShippingFee;
             $totalDiscount = $itemDiscountTotal + $orderLevelDiscount;
 
             $commissionPercentSnapshot = $customer
@@ -1707,6 +1732,11 @@ class OrderController extends Controller
                 'delivery_status' => $orderData['delivery_status'] ?? DeliveryStatus::NotShipped->value,
                 'charge_shipping_fee' => $chargeShippingFee,
                 'shipping_fee' => $chargeShippingFee ? $shippingFee : 0,
+                'charge_vat' => $chargeVat,
+                'vat_percent' => $vatPercent,
+                'vat_amount' => $vatAmount,
+                'collect_customer_shipping_fee' => $collectCustomerShippingFee,
+                'customer_shipping_fee' => $customerShippingFee,
                 'total' => $total,
                 'commission_percent_snapshot' => $commissionPercentSnapshot,
                 'commission_amount_snapshot' => $commissionAmountSnapshot,
@@ -1976,6 +2006,18 @@ class OrderController extends Controller
             return (float) ($item->total_weight ?? 0);
         });
 
+        $productTotal = max($subtotalAfterItemDiscount - $orderLevelDiscount, 0);
+        $vatPercent = (bool) ($order->charge_vat ?? false)
+            ? min(max((float) ($order->vat_percent ?? 0), 0), 100)
+            : 0.0;
+        $vatAmount = round($productTotal * $vatPercent / 100, 2);
+        $customerShippingFee = (bool) ($order->collect_customer_shipping_fee ?? false)
+            ? max(0, (float) ($order->customer_shipping_fee ?? 0))
+            : 0.0;
+        $assignedShippingFee = (bool) ($order->charge_shipping_fee ?? false)
+            ? max(0, (float) ($order->shipping_fee ?? 0))
+            : 0.0;
+
         $order->update($this->filterExistingColumns('orders', [
             'subtotal_amount' => $subtotalAmount,
             'item_discount_total' => $itemDiscountTotal,
@@ -1984,7 +2026,8 @@ class OrderController extends Controller
             'order_discount_type' => $orderLevelDiscountType,
             'total_discount' => $itemDiscountTotal + $orderLevelDiscount,
             'total_weight' => round($totalWeight, 3),
-            'total' => max($subtotalAfterItemDiscount - $orderLevelDiscount, 0),
+            'vat_amount' => $vatAmount,
+            'total' => $productTotal + $vatAmount + $customerShippingFee + $assignedShippingFee,
         ]));
     }
 

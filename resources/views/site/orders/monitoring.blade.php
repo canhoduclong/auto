@@ -1332,7 +1332,39 @@
                         <div class="monitor-confirm-card">
                             <h3>Sản phẩm</h3>
                             <div id="monitorConfirmItems"></div>
-                            <div class="border-top mt-2 pt-2 text-end fw-bold text-success">Tổng cộng: <span id="monitorConfirmTotal">0đ</span></div>
+                            <div class="border-top mt-3 pt-3">
+                                <h3 class="mb-2">Chi phí khác <span class="fw-normal text-muted">(nếu có)</span></h3>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" id="monitorChargeVat">
+                                    <label class="form-check-label small fw-bold" for="monitorChargeVat">Tính chi phí VAT</label>
+                                </div>
+                                <div id="monitorVatFields" class="mb-3" hidden>
+                                    <label class="form-label small" for="monitorVatPercent">Thuế VAT (%)</label>
+                                    <div class="input-group input-group-sm">
+                                        <input class="form-control" type="number" id="monitorVatPercent" min="0.01" max="100" step="0.01" placeholder="Ví dụ: 8 hoặc 10">
+                                        <span class="input-group-text">%</span>
+                                    </div>
+                                    <div class="form-text">Tiền VAT được tự động tính trên tổng tiền sản phẩm.</div>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" id="monitorCollectCustomerShippingFee">
+                                    <label class="form-check-label small fw-bold" for="monitorCollectCustomerShippingFee">Thu tiền ship của khách hàng</label>
+                                </div>
+                                <div id="monitorCustomerShippingFeeFields" class="mb-2" hidden>
+                                    <label class="form-label small" for="monitorCustomerShippingFee">Số tiền thu thêm</label>
+                                    <div class="input-group input-group-sm">
+                                        <input class="form-control" type="number" id="monitorCustomerShippingFee" min="1" step="1000" placeholder="Nhập số tiền">
+                                        <span class="input-group-text">đ</span>
+                                    </div>
+                                    <div class="form-text">Khoản này độc lập với phí ship do shipper manager ấn định.</div>
+                                </div>
+                            </div>
+                            <div class="border-top mt-3 pt-2 small">
+                                <div class="d-flex justify-content-between"><span>Tạm tính sản phẩm:</span><strong id="monitorConfirmSubtotal">0đ</strong></div>
+                                <div class="d-flex justify-content-between mt-1" id="monitorConfirmVatLine" hidden><span>VAT:</span><strong id="monitorConfirmVatAmount">0đ</strong></div>
+                                <div class="d-flex justify-content-between mt-1" id="monitorConfirmCustomerShippingLine" hidden><span>Thu tiền ship:</span><strong id="monitorConfirmCustomerShippingAmount">0đ</strong></div>
+                                <div class="d-flex justify-content-between border-top mt-2 pt-2 fs-6 fw-bold text-success"><span>Tổng cộng:</span><span id="monitorConfirmTotal">0đ</span></div>
+                            </div>
                         </div>
                     </div>
                     <div class="monitor-create-actions justify-content-between">
@@ -1475,7 +1507,7 @@
                                             <div class="monitor-order-code">
                                                 {{ $order->code ?: ('#' . $order->id) }}
                                                 · Sale: {{ $order->user?->name ?? '—' }}
-                                                · {{ $order->created_at?->format('H:i') }}
+                                                · {{ $order->created_at?->format('H:i d/m/Y') }}
                                             </div>
                                         </div>
                                     </div>
@@ -1822,7 +1854,15 @@ window.monitorAdminDeleteOrder = function (form, orderCode, saleName, orderTotal
         ? item.price + item.discount
         : Math.max(0, item.price - item.discount);
     const itemLineTotal = item => itemAdjustedPrice(item) * item.quantity * (item.isPricedByKg ? item.weight : 1);
-    const orderTotal = () => Array.from(selectedItems.values()).reduce((sum, item) => sum + itemLineTotal(item), 0);
+    const itemsSubtotal = () => Array.from(selectedItems.values()).reduce((sum, item) => sum + itemLineTotal(item), 0);
+    const selectedVatPercent = () => document.getElementById('monitorChargeVat').checked
+        ? Math.min(100, Math.max(0, Number(document.getElementById('monitorVatPercent').value) || 0))
+        : 0;
+    const calculatedVatAmount = () => itemsSubtotal() * selectedVatPercent() / 100;
+    const selectedCustomerShippingFee = () => document.getElementById('monitorCollectCustomerShippingFee').checked
+        ? Math.max(0, Number(document.getElementById('monitorCustomerShippingFee').value) || 0)
+        : 0;
+    const orderTotal = () => itemsSubtotal() + calculatedVatAmount() + selectedCustomerShippingFee();
     const notify = (message, type = 'error') => {
         if (typeof window.showToast === 'function') window.showToast(message, type);
         else window.alert(message);
@@ -1862,7 +1902,7 @@ window.monitorAdminDeleteOrder = function (form, orderCode, saleName, orderTotal
                     <td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger monitor-remove-item" aria-label="Xóa"><i class="bi bi-x"></i></button></td>
                 </tr>`).join('');
         }
-        document.getElementById('monitorCreateTotal').textContent = money(orderTotal());
+        document.getElementById('monitorCreateTotal').textContent = money(itemsSubtotal());
     }
 
     function escapeHtml(value) {
@@ -1947,6 +1987,17 @@ window.monitorAdminDeleteOrder = function (form, orderCode, saleName, orderTotal
                 </span>
                 <strong>${money(itemLineTotal(item))}</strong>
             </div>`).join('');
+        updateConfirmationTotals();
+    }
+
+    function updateConfirmationTotals() {
+        const chargeVat = document.getElementById('monitorChargeVat').checked;
+        const collectShipping = document.getElementById('monitorCollectCustomerShippingFee').checked;
+        document.getElementById('monitorConfirmSubtotal').textContent = money(itemsSubtotal());
+        document.getElementById('monitorConfirmVatLine').hidden = !chargeVat;
+        document.getElementById('monitorConfirmVatAmount').textContent = money(calculatedVatAmount());
+        document.getElementById('monitorConfirmCustomerShippingLine').hidden = !collectShipping;
+        document.getElementById('monitorConfirmCustomerShippingAmount').textContent = money(selectedCustomerShippingFee());
         document.getElementById('monitorConfirmTotal').textContent = money(orderTotal());
     }
 
@@ -2040,7 +2091,7 @@ window.monitorAdminDeleteOrder = function (form, orderCode, saleName, orderTotal
             row.querySelector('.monitor-sale-price-value').textContent = money(adjustedPrice);
             row.querySelector('.monitor-price-decrease').disabled = adjustedPrice <= item.minPrice;
             row.querySelector('.monitor-item-line-total').textContent = money(itemLineTotal(item));
-            document.getElementById('monitorCreateTotal').textContent = money(orderTotal());
+            document.getElementById('monitorCreateTotal').textContent = money(itemsSubtotal());
             return;
         }
 
@@ -2082,6 +2133,11 @@ window.monitorAdminDeleteOrder = function (form, orderCode, saleName, orderTotal
     });
 
     createPanel.addEventListener('input', event => {
+        if (event.target.matches('#monitorVatPercent, #monitorCustomerShippingFee')) {
+            updateConfirmationTotals();
+            return;
+        }
+
         const row = event.target.closest('[data-selected-variant]');
         if (!row) return;
         const item = selectedItems.get(Number(row.dataset.selectedVariant));
@@ -2091,10 +2147,23 @@ window.monitorAdminDeleteOrder = function (form, orderCode, saleName, orderTotal
             item.quantity = Math.max(1, Number.parseInt(event.target.value || '1', 10));
         }
         row.querySelector('.monitor-item-line-total').textContent = money(itemLineTotal(item));
-        document.getElementById('monitorCreateTotal').textContent = money(orderTotal());
+        document.getElementById('monitorCreateTotal').textContent = money(itemsSubtotal());
+        updateConfirmationTotals();
     });
 
     createPanel.addEventListener('change', event => {
+        if (event.target.matches('#monitorChargeVat')) {
+            document.getElementById('monitorVatFields').hidden = !event.target.checked;
+            if (event.target.checked) document.getElementById('monitorVatPercent').focus();
+            updateConfirmationTotals();
+            return;
+        }
+        if (event.target.matches('#monitorCollectCustomerShippingFee')) {
+            document.getElementById('monitorCustomerShippingFeeFields').hidden = !event.target.checked;
+            if (event.target.checked) document.getElementById('monitorCustomerShippingFee').focus();
+            updateConfirmationTotals();
+            return;
+        }
         if (event.target.matches('#monitorUseTruckStation')) {
             document.getElementById('monitorTruckStationFields').hidden = !event.target.checked;
             return;
@@ -2118,6 +2187,20 @@ window.monitorAdminDeleteOrder = function (form, orderCode, saleName, orderTotal
 
     document.getElementById('monitorSubmitOrder').addEventListener('click', async event => {
         const button = event.currentTarget;
+        const chargeVat = document.getElementById('monitorChargeVat').checked;
+        const vatPercent = selectedVatPercent();
+        const collectCustomerShippingFee = document.getElementById('monitorCollectCustomerShippingFee').checked;
+        const customerShippingFee = selectedCustomerShippingFee();
+        if (chargeVat && vatPercent <= 0) {
+            notify('Vui lòng nhập phần trăm VAT lớn hơn 0.');
+            document.getElementById('monitorVatPercent').focus();
+            return;
+        }
+        if (collectCustomerShippingFee && customerShippingFee <= 0) {
+            notify('Vui lòng nhập số tiền ship thu của khách hàng.');
+            document.getElementById('monitorCustomerShippingFee').focus();
+            return;
+        }
         button.disabled = true;
         button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Đang tạo...';
         try {
@@ -2145,7 +2228,11 @@ window.monitorAdminDeleteOrder = function (form, orderCode, saleName, orderTotal
                     truck_station_name: document.getElementById('monitorTruckStationName').value.trim(),
                     truck_station_address: document.getElementById('monitorTruckStationAddress').value.trim(),
                     truck_station_phone: document.getElementById('monitorTruckStationPhone').value.trim(),
-                    truck_receive_time: document.getElementById('monitorTruckReceiveTime').value.trim()
+                    truck_receive_time: document.getElementById('monitorTruckReceiveTime').value.trim(),
+                    charge_vat: chargeVat,
+                    vat_percent: chargeVat ? vatPercent : null,
+                    collect_customer_shipping_fee: collectCustomerShippingFee,
+                    customer_shipping_fee: collectCustomerShippingFee ? customerShippingFee : null
                 })
             });
             const data = await response.json();

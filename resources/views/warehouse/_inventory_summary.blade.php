@@ -8,6 +8,7 @@
                 <div class="inv-col-opening px-2 py-2 num" style="min-width:90px">Tồn đầu</div>
                 <div class="inv-col-import px-2 py-2 num" style="min-width:70px">Nhập</div>
                 <div class="inv-col-reserved px-2 py-2 num" style="min-width:90px">Book</div>
+                <div class="inv-col-available px-2 py-2 num" style="min-width:90px">Khả dụng</div>
                 <div class="inv-col-export px-2 py-2 num" style="min-width:70px">Xuất</div>
                 <div class="inv-col-closing px-2 py-2 num" style="min-width:80px">Tồn cuối</div>
             </div>
@@ -31,6 +32,7 @@
                         <div class="inv-col-opening num" style="min-width:90px"><strong>{{ number_format($row['opening']) }}</strong></div>
                         <div class="inv-col-import num" style="min-width:70px">{{ number_format($row['import']) }}</div>
                         <div class="inv-col-reserved num" style="min-width:90px;color:#1d4ed8;">{{ number_format($row['reserved']) }}</div>
+                        <div class="inv-col-available num" style="min-width:90px;color:#047857;font-weight:700;">{{ number_format($row['available']) }}</div>
                         <div class="inv-col-export num" style="min-width:70px">{{ number_format($row['export']) }}</div>
                         <div class="inv-col-closing num" style="min-width:80px">{{ number_format($row['closing']) }}</div>
                     </div>
@@ -45,6 +47,7 @@
                                     <div class="inv-col-opening num" style="min-width:90px">{{ number_format($variantRow['opening']) }}</div>
                                     <div class="inv-col-import num" style="min-width:70px">{{ number_format($variantRow['import']) }}</div>
                                     <div class="inv-col-reserved num" style="min-width:90px;color:#1d4ed8;">{{ number_format($variantRow['reserved']) }}</div>
+                                    <div class="inv-col-available num" style="min-width:90px;color:#047857;font-weight:700;">{{ number_format($variantRow['available']) }}</div>
                                     <div class="inv-col-export num" style="min-width:70px">{{ number_format($variantRow['export']) }}</div>
                                     <div class="inv-col-closing num" style="min-width:80px">{{ number_format($variantRow['closing']) }}</div>
                                 </div>

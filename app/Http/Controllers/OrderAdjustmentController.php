@@ -782,7 +782,21 @@ class OrderAdjustmentController extends Controller
             $order->load('items');
             $subtotal = (float) $order->items->sum(fn ($item) => (float) ($item->total ?? 0));
             $extraDiscount = (float) ($order->extra_discount_total ?? 0);
-            $newTotal = max($subtotal - $extraDiscount, 0);
+            $productTotal = max($subtotal - $extraDiscount, 0);
+            $vatPercent = (bool) ($order->charge_vat ?? false)
+                ? min(max((float) ($order->vat_percent ?? 0), 0), 100)
+                : 0;
+            $vatAmount = round($productTotal * $vatPercent / 100, 2);
+            $customerShippingFee = (bool) ($order->collect_customer_shipping_fee ?? false)
+                ? max(0, (float) ($order->customer_shipping_fee ?? 0))
+                : 0;
+            $assignedShippingFee = (bool) ($order->charge_shipping_fee ?? false)
+                ? max(0, (float) ($order->shipping_fee ?? 0))
+                : 0;
+            $foamBoxFee = (bool) ($order->charge_foam_box_fee ?? false)
+                ? max(0, (float) ($order->foam_box_price ?? 0))
+                : 0;
+            $newTotal = $productTotal + $vatAmount + $customerShippingFee + $assignedShippingFee + $foamBoxFee;
 
             $amountPaid = (float) $order->transactions()->where('type', 'payment')->sum('amount')
                 - (float) $order->transactions()->where('type', 'refund')->sum('amount');
@@ -791,6 +805,7 @@ class OrderAdjustmentController extends Controller
                 'subtotal_amount' => round($subtotal, 2),
                 'item_discount_total' => 0,
                 'total_discount' => round($extraDiscount, 2),
+                'vat_amount' => $vatAmount,
                 'total' => round($newTotal, 2),
                 'amount_paid' => round($amountPaid, 2),
                 'amount_due' => round(max($newTotal - $amountPaid, 0), 2),

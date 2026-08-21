@@ -1055,7 +1055,7 @@ class ShipperDashboardController extends Controller
         });
         $shippingFee = (float) ($order->shipping_fee ?? 0);
         $foamBoxFee  = (float) (($order->charge_foam_box_fee ?? false) ? ($order->foam_box_price ?? 0) : 0);
-        $newTotal    = $newSubtotal + $shippingFee + $foamBoxFee;
+        [$newTotal, $vatAmount] = $this->customerOrderTotal($order, $newSubtotal, $shippingFee, $foamBoxFee);
 
         $order->update([
             'status'           => 'delivered',
@@ -1063,6 +1063,7 @@ class ShipperDashboardController extends Controller
             'delivered_at'     => now(),
             'proof_images'     => $proofImages,
             'subtotal_amount'  => $newSubtotal,
+            'vat_amount'       => $vatAmount,
             'total'            => $newTotal,
         ]);
 
@@ -2114,10 +2115,12 @@ class ShipperDashboardController extends Controller
                     return (float) ($item->total ?? (($item->price ?? 0) * ($item->display_total_value ?? $item->quantity ?? 0)));
                 });
                 $foamBoxFee = (float) (($order->charge_foam_box_fee ?? false) ? ($order->foam_box_price ?? 0) : 0);
+                [$customerTotal, $vatAmount] = $this->customerOrderTotal($order, $itemsSubtotal, $newFee, $foamBoxFee);
 
                 $updates = ['shipping_fee' => $newFee];
                 if ($order->accounting_sales_import_batch_id === null) {
-                    $updates['total'] = $itemsSubtotal + $newFee + $foamBoxFee;
+                    $updates['vat_amount'] = $vatAmount;
+                    $updates['total'] = $customerTotal;
                 }
                 $order->update($updates);
                 if ($order->accounting_sales_import_batch_id) {
@@ -2509,12 +2512,12 @@ class ShipperDashboardController extends Controller
             return (float) ($item->total ?? (($item->price ?? 0) * ($item->display_total_value ?? 0)));
         });
         $foamBoxFee = (float) (($order->charge_foam_box_fee ?? false) ? ($order->foam_box_price ?? 0) : 0);
-        $newTotal = $itemsSubtotal + $newFee + $foamBoxFee;
+        [$newTotal, $vatAmount] = $this->customerOrderTotal($order, $itemsSubtotal, $newFee, $foamBoxFee);
 
         if ($order->accounting_sales_import_batch_id) {
             $order->accountingReconciliation?->update(['shipping_fee' => $newFee]);
         } else {
-            $order->update(['total' => $newTotal]);
+            $order->update(['vat_amount' => $vatAmount, 'total' => $newTotal]);
         }
 
         OrderHistory::create([
@@ -2569,12 +2572,12 @@ class ShipperDashboardController extends Controller
                     return (float) ($item->total ?? (($item->price ?? 0) * ($item->display_total_value ?? 0)));
                 });
                 $foamBoxFee = (float) (($order->charge_foam_box_fee ?? false) ? ($order->foam_box_price ?? 0) : 0);
-                $newTotal = $itemsSubtotal + $newFee + $foamBoxFee;
+                [$newTotal, $vatAmount] = $this->customerOrderTotal($order, $itemsSubtotal, $newFee, $foamBoxFee);
 
                 if ($order->accounting_sales_import_batch_id) {
                     $order->accountingReconciliation?->update(['shipping_fee' => $newFee]);
                 } else {
-                    $order->update(['total' => $newTotal]);
+                    $order->update(['vat_amount' => $vatAmount, 'total' => $newTotal]);
                 }
 
                 OrderHistory::create([
@@ -2981,6 +2984,33 @@ class ShipperDashboardController extends Controller
             'note' => $note ? mb_substr((string) $note, 0, 500) : 'Điều chỉnh riêng trên đơn hàng',
             'changed_at' => now(),
         ]);
+    }
+
+    /**
+     * Tính số tiền khách phải trả. shipping_fee chỉ được cộng khi đơn đánh dấu
+     * thu khoản phí nội bộ đó; customer_shipping_fee luôn là khoản thu khách riêng.
+     *
+     * @return array{0: float, 1: float}
+     */
+    private function customerOrderTotal(Order $order, float $itemsSubtotal, float $assignedShippingFee, float $foamBoxFee): array
+    {
+        $orderAdjustment = (float) ($order->extra_discount_total ?? 0);
+        $productTotal = max(0, $itemsSubtotal - $orderAdjustment);
+        $vatPercent = (bool) ($order->charge_vat ?? false)
+            ? min(max((float) ($order->vat_percent ?? 0), 0), 100)
+            : 0.0;
+        $vatAmount = round($productTotal * $vatPercent / 100, 2);
+        $customerShippingFee = (bool) ($order->collect_customer_shipping_fee ?? false)
+            ? max(0, (float) ($order->customer_shipping_fee ?? 0))
+            : 0.0;
+        $billableAssignedShippingFee = (bool) ($order->charge_shipping_fee ?? false)
+            ? max(0, $assignedShippingFee)
+            : 0.0;
+
+        return [
+            $productTotal + $vatAmount + $customerShippingFee + $billableAssignedShippingFee + max(0, $foamBoxFee),
+            $vatAmount,
+        ];
     }
 
     public function updateCustomerShippingFee(Request $request, Customer $customer)

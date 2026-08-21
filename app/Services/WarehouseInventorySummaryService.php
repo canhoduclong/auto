@@ -222,6 +222,7 @@ class WarehouseInventorySummaryService
                     'opening' => $closing - $import + $export,
                     'import' => $import,
                     'reserved' => $reserved,
+                    'available' => max(0, $closing - $reserved),
                     'export' => $export,
                     'closing' => $closing,
                 ];
@@ -243,6 +244,7 @@ class WarehouseInventorySummaryService
                 'opening' => (float) $variantRows->sum('opening'),
                 'import' => (float) $variantRows->sum('import'),
                 'reserved' => (float) $variantRows->sum('reserved'),
+                'available' => (float) $variantRows->sum('available'),
                 'export' => (float) $variantRows->sum('export'),
                 'closing' => (float) $variantRows->sum('closing'),
                 'variants' => $variantRows,
@@ -262,6 +264,7 @@ class WarehouseInventorySummaryService
             'opening' => (float) $rows->sum('opening'),
             'import' => (float) $rows->sum('import'),
             'reserved' => (float) $rows->sum('reserved'),
+            'available' => (float) $rows->sum('available'),
             'export' => (float) $rows->sum('export'),
             'closing' => (float) $rows->sum('closing'),
         ];

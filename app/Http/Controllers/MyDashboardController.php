@@ -292,11 +292,20 @@ class MyDashboardController extends Controller
             ? (float) ($order->foam_box_price ?? 0)
             : 0;
 
+        $productTotal = max(0, $subtotalAmount - $totalDiscount);
+        $vatPercent = (bool) ($order->charge_vat ?? false)
+            ? min(max((float) ($order->vat_percent ?? 0), 0), 100)
+            : 0;
+        $vatAmount = round($productTotal * $vatPercent / 100, 2);
+        $customerShippingFee = (bool) ($order->collect_customer_shipping_fee ?? false)
+            ? max(0, (float) ($order->customer_shipping_fee ?? 0))
+            : 0;
+
         $totalWeight = (float) $order->items->sum(function ($item) {
             return (float) ($item->total_weight ?? ((float) ($item->quantity ?? 0) * (float) ($item->unit_weight ?? 0)));
         });
 
-        $newTotal = max(0, round($subtotalAmount - $totalDiscount + $shippingFee + $foamBoxFee, 2));
+        $newTotal = round($productTotal + $vatAmount + $customerShippingFee + $shippingFee + $foamBoxFee, 2);
         $amountPaid = (float) ($order->amount_paid ?? 0);
 
         $order->update([
@@ -304,6 +313,7 @@ class MyDashboardController extends Controller
             'item_discount_total' => round($itemDiscountTotal, 2),
             'total_discount' => round($totalDiscount, 2),
             'total_weight' => round($totalWeight, 3),
+            'vat_amount' => $vatAmount,
             'total' => $newTotal,
             'amount_due' => max(0, round($newTotal - $amountPaid, 2)),
         ]);

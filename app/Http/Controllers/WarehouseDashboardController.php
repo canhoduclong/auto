@@ -354,8 +354,6 @@ class WarehouseDashboardController extends Controller
             ->whereDate('request_date', Carbon::today()->toDateString())
             ->orderByDesc('id')
             ->get();
-        $productionDashboard = $this->buildProductionDashboard($managedWarehouseId, $selectedDate);
-
         return view('warehouse.dashboard', compact(
             'stats',
             'recentPacked',
@@ -364,9 +362,23 @@ class WarehouseDashboardController extends Controller
             'approvalStats',
             'inventorySummary',
             'cuttingShortages',
-            'deferredComponentImportRequests',
-            'productionDashboard'
+            'deferredComponentImportRequests'
         ));
+    }
+
+    public function productionDashboard(Request $request)
+    {
+        $managedWarehouseId = Auth::user()?->warehouse_id
+            ? (int) Auth::user()->warehouse_id
+            : null;
+        $selectedDate = $request->filled('date')
+            ? Carbon::parse($request->input('date'))->startOfDay()
+            : Carbon::today();
+
+        return view('warehouse.production-dashboard', [
+            'selectedDate' => $selectedDate,
+            'productionDashboard' => $this->buildProductionDashboard($managedWarehouseId, $selectedDate),
+        ]);
     }
 
     /**

@@ -248,6 +248,9 @@
             <a href="{{ route('warehouse.dashboard') }}" class="wh-nav-link {{ request()->routeIs('warehouse.dashboard') ? 'active' : '' }}">
                 <i class="bi bi-speedometer2"></i> Bảng điều khiển
             </a>
+            <a href="{{ route('warehouse.production-dashboard') }}" class="wh-nav-link {{ request()->routeIs('warehouse.production-dashboard') ? 'active' : '' }}">
+                <i class="bi bi-bar-chart-line-fill"></i> Bảng điều khiển sản xuất
+            </a>
             <a href="{{ route('department-notifications.index', ['layout' => 'warehouse']) }}" class="wh-nav-link {{ request()->routeIs('department-notifications.*') && request('layout') === 'warehouse' ? 'active' : '' }}">
                 <i class="bi bi-megaphone"></i> Tạo thông báo
             </a>

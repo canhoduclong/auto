@@ -4987,7 +4987,21 @@ public function apiTruckRoutes(Request $request)
             $orderAdjustment = $orderDiscountType === 'increase'
                 ? -1 * $orderDiscountAmount
                 : $orderDiscountAmount;
-            $newTotal = max($totalBeforeOrderDiscount - $orderAdjustment, 0);
+            $productTotal = max($totalBeforeOrderDiscount - $orderAdjustment, 0);
+            $vatPercent = (bool) ($order->charge_vat ?? false)
+                ? min(max((float) ($order->vat_percent ?? 0), 0), 100)
+                : 0;
+            $vatAmount = round($productTotal * $vatPercent / 100, 2);
+            $customerShippingFee = (bool) ($order->collect_customer_shipping_fee ?? false)
+                ? max(0, (float) ($order->customer_shipping_fee ?? 0))
+                : 0;
+            $assignedShippingFee = (bool) ($order->charge_shipping_fee ?? false)
+                ? max(0, (float) ($order->shipping_fee ?? 0))
+                : 0;
+            $foamBoxFee = (bool) ($order->charge_foam_box_fee ?? false)
+                ? max(0, (float) ($order->foam_box_price ?? 0))
+                : 0;
+            $newTotal = $productTotal + $vatAmount + $customerShippingFee + $assignedShippingFee + $foamBoxFee;
             $totalDiscount = $itemDiscountTotal + $orderAdjustment;
 
             $paid = (float) $order->transactions()->where('type', 'payment')->sum('amount')
@@ -5010,6 +5024,7 @@ public function apiTruckRoutes(Request $request)
                 'order_discount_type' => $orderDiscountType,
                 'warehouse_can_adjust' => (bool) ($validated['warehouse_can_adjust'] ?? false),
                 'total_discount' => $totalDiscount,
+                'vat_amount' => $vatAmount,
                 'total' => $newTotal,
                 'amount_due' => max($newTotal - $paid, 0),
                 'stock_sufficient' => true,

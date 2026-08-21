@@ -373,6 +373,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::delete('/order-transfers/{id}', [\App\Http\Controllers\Warehouse\OrderTransferController::class, 'destroy'])->name('order-transfers.destroy');
         Route::post('/order-transfers/{transfer}/orders/{order}/detach', [\App\Http\Controllers\Warehouse\OrderTransferController::class, 'detachWaitingTransfer'])->name('order-transfers.orders.detach');
         Route::get('/', [WarehouseDashboardController::class, 'index'])->name('dashboard');
+        Route::get('/production-dashboard', [WarehouseDashboardController::class, 'productionDashboard'])->name('production-dashboard');
         Route::get('/order-adjustments', [\App\Http\Controllers\OrderAdjustmentController::class, 'warehouseIndex'])->name('order-adjustments.index');
         Route::get('/cutting/{variant}', [WarehouseDashboardController::class, 'cuttingForm'])->name('cutting.form');
         Route::post('/cutting/{variant}', [WarehouseDashboardController::class, 'executeCutting'])->name('cutting.execute');
