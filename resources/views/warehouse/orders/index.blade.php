@@ -696,6 +696,112 @@
         gap: 10px;
         align-items: center;
     }
+    .wh-adjustment-picker-results .monitor-product-toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 10px;
+    }
+    .wh-adjustment-picker-results .monitor-product-list {
+        display: grid;
+        gap: 9px;
+    }
+    .wh-adjustment-picker-results .monitor-product-card {
+        overflow: hidden;
+        border: 1px solid #dbe4ee;
+        border-radius: 9px;
+        background: #fff;
+    }
+    .wh-adjustment-picker-results .monitor-product-card.is-open {
+        border-color: #0f766e;
+        box-shadow: 0 0 0 2px rgba(15, 118, 110, .08);
+    }
+    .wh-adjustment-picker-results .monitor-product-choice {
+        display: flex;
+        width: 100%;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 12px;
+        border: 0;
+        background: #fff;
+        color: #0f172a;
+        text-align: left;
+    }
+    .wh-adjustment-picker-results .monitor-product-choice:hover {
+        background: #f8fafc;
+    }
+    .wh-adjustment-picker-results .monitor-product-main {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+    }
+    .wh-adjustment-picker-results .monitor-product-thumb {
+        width: 48px;
+        height: 48px;
+        flex: 0 0 48px;
+        object-fit: cover;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+    }
+    .wh-adjustment-picker-results .monitor-product-name,
+    .wh-adjustment-picker-results .monitor-product-meta {
+        display: block;
+    }
+    .wh-adjustment-picker-results .monitor-product-name {
+        color: #0f172a;
+    }
+    .wh-adjustment-picker-results .monitor-product-meta {
+        color: #64748b;
+        font-size: .76rem;
+    }
+    .wh-adjustment-picker-results .monitor-product-choice-label {
+        flex-shrink: 0;
+        color: #0f766e;
+        font-size: .8rem;
+        font-weight: 700;
+    }
+    .wh-adjustment-picker-results .monitor-product-card.is-open .monitor-product-choice-label i {
+        transform: rotate(180deg);
+    }
+    .wh-adjustment-picker-results .monitor-product-variants {
+        padding: 10px 12px 12px;
+        border-top: 1px solid #e2e8f0;
+        background: #f8fafc;
+    }
+    .wh-adjustment-picker-results .monitor-variant-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+        gap: 8px;
+    }
+    .wh-adjustment-picker-results .monitor-variant-option {
+        display: grid;
+        gap: 3px;
+        padding: 9px 10px;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        background: #fff;
+        color: #334155;
+        text-align: left;
+    }
+    .wh-adjustment-picker-results .monitor-variant-option:hover {
+        border-color: #0f766e;
+        background: #ecfdf5;
+    }
+    .wh-adjustment-picker-results .monitor-variant-size {
+        color: #0f172a;
+        font-weight: 800;
+    }
+    .wh-adjustment-picker-results .monitor-variant-option small {
+        display: block;
+        color: #64748b;
+        font-size: .7rem;
+    }
+    .wh-adjustment-picker-results .monitor-variant-availability.is-available {
+        color: #15803d;
+    }
 
     [id^="order-card-"] {
         scroll-margin-top: 150px;
@@ -1098,7 +1204,7 @@
     <div class="modal-dialog modal-xl modal-dialog-scrollable wh-orders-scroll-modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="warehouseAdjustmentProductModalLabel">Chọn sản phẩm thêm vào đơn</h5>
+                <h5 class="modal-title" id="warehouseAdjustmentProductModalLabel">Chọn sản phẩm và biến thể</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
             </div>
             <div class="modal-body">
@@ -1110,10 +1216,8 @@
                         <select id="warehouse-adjustment-product-sort" class="form-select form-select-sm">
                             <option value="id|desc">Mới nhất</option>
                             <option value="id|asc">Cũ nhất</option>
-                            <option value="sku|asc">SKU A → Z</option>
-                            <option value="sku|desc">SKU Z → A</option>
-                            <option value="stock|desc">Tồn kho giảm dần</option>
-                            <option value="stock|asc">Tồn kho tăng dần</option>
+                            <option value="name|asc">Tên sản phẩm A → Z</option>
+                            <option value="name|desc">Tên sản phẩm Z → A</option>
                         </select>
                     </div>
                     <div class="col-md-3">
@@ -1231,6 +1335,8 @@
                 per_page: warehouseProductPerPage?.value || '10',
                 sort_by: sortBy || 'id',
                 sort_dir: sortDir || 'desc',
+                view: 'products',
+                in_stock_only: '1',
             });
 
             getExcludedVariantIds(currentAdjustmentOrderId).forEach((id) => {
@@ -1319,7 +1425,32 @@
         });
 
         warehouseProductResults?.addEventListener('click', function (event) {
-            const addButton = event.target.closest('.add-variant-to-cart');
+            const productChoice = event.target.closest('.monitor-product-choice');
+            if (productChoice) {
+                event.preventDefault();
+                const card = productChoice.closest('.monitor-product-card');
+                const variants = card?.querySelector('.monitor-product-variants');
+                if (!card || !variants) {
+                    return;
+                }
+
+                warehouseProductResults.querySelectorAll('.monitor-product-card.is-open').forEach((openCard) => {
+                    if (openCard === card) {
+                        return;
+                    }
+                    openCard.classList.remove('is-open');
+                    const openVariants = openCard.querySelector('.monitor-product-variants');
+                    if (openVariants) openVariants.hidden = true;
+                    openCard.querySelector('.monitor-product-choice')?.setAttribute('aria-expanded', 'false');
+                });
+
+                variants.hidden = !variants.hidden;
+                card.classList.toggle('is-open', !variants.hidden);
+                productChoice.setAttribute('aria-expanded', variants.hidden ? 'false' : 'true');
+                return;
+            }
+
+            const addButton = event.target.closest('.monitor-variant-option, .add-variant-to-cart');
             if (addButton && currentAdjustmentOrderId) {
                 event.preventDefault();
                 appendAdjustmentProduct(currentAdjustmentOrderId, {

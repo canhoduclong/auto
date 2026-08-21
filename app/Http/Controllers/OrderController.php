@@ -309,6 +309,10 @@ class OrderController extends Controller
 
     public function ajaxVariantSearch(Request $request)
     {
+        if ($request->input('view') === 'products') {
+            return app(OrderAjaxController::class)->variantsAjax($request);
+        }
+
         $perPage = $request->input('per_page', 5);
         // Safeguard against excessively large values
         if ($perPage > 50) {

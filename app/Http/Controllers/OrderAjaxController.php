@@ -1,20 +1,25 @@
 <?php
+
 namespace App\Http\Controllers;
-use Illuminate\Http\Request;
+
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Support\ProductVariantSorter;
+use Illuminate\Http\Request;
 
 class OrderAjaxController extends Controller
 {
     public function total(Request $request)
     {
         $order = Order::find($request->order_id);
-        if (!$order) return response()->json(['success'=>false]);
+        if (! $order) {
+            return response()->json(['success' => false]);
+        }
+
         return response()->json([
             'success' => true,
-            'total' => $order->total
+            'total' => $order->total,
         ]);
     }
 
@@ -39,14 +44,14 @@ class OrderAjaxController extends Controller
             });
 
         if ($keyword) {
-            $query->where(function($sub) use ($keyword) {
+            $query->where(function ($sub) use ($keyword) {
                 $sub->where('product_variants.sku', 'like', "%$keyword%")
-                     ->orWhere('product_variants.name', 'like', "%$keyword%")
-                     ->orWhere('product_variants.size', 'like', "%$keyword%")
-                     ->orWhere('product_variants.quality', 'like', "%$keyword%")
-                     ->orWhereHas('product', function($p) use ($keyword) {
-                         $p->where('name', 'like', "%$keyword%") ;
-                     });
+                    ->orWhere('product_variants.name', 'like', "%$keyword%")
+                    ->orWhere('product_variants.size', 'like', "%$keyword%")
+                    ->orWhere('product_variants.quality', 'like', "%$keyword%")
+                    ->orWhereHas('product', function ($p) use ($keyword) {
+                        $p->where('name', 'like', "%$keyword%");
+                    });
             });
         }
 
@@ -54,9 +59,9 @@ class OrderAjaxController extends Controller
         if (is_string($excludeIds)) {
             $excludeIds = array_filter(explode(',', $excludeIds));
         }
-        if (is_array($excludeIds) && !empty($excludeIds)) {
+        if (is_array($excludeIds) && ! empty($excludeIds)) {
             $excludeIds = array_values(array_filter(array_map('intval', $excludeIds)));
-            if (!empty($excludeIds)) {
+            if (! empty($excludeIds)) {
                 $query->whereNotIn('product_variants.id', $excludeIds);
             }
         }
@@ -72,17 +77,23 @@ class OrderAjaxController extends Controller
 
         if ($request->ajax()) {
             $html = view('orders._variant_search_results', ['variants' => $variants])->render();
+
             return response()->json(['success' => true, 'html' => $html]);
         }
 
         return response()->json([
             'success' => true,
-            'variants' => $variants
+            'variants' => $variants,
         ]);
     }
 
     private function productsWithVariants(Request $request, string $keyword, int $perPage)
     {
+        $inStockOnly = $request->boolean('in_stock_only');
+        $sortBy = in_array($request->input('sort_by'), ['id', 'name'], true)
+            ? (string) $request->input('sort_by')
+            : 'preferred';
+        $sortDir = $request->input('sort_dir') === 'desc' ? 'desc' : 'asc';
         $excludeIds = $request->input('exclude_ids', []);
         if (is_string($excludeIds)) {
             $excludeIds = array_filter(explode(',', $excludeIds));
@@ -91,12 +102,13 @@ class OrderAjaxController extends Controller
             ? array_values(array_filter(array_map('intval', $excludeIds)))
             : [];
 
-        $activeVariants = static function ($query) use ($excludeIds): void {
+        $activeVariants = static function ($query) use ($excludeIds, $inStockOnly): void {
             $query->withAvailableStock()
                 ->withSum('inventories as on_hand_stock', 'quantity')
                 ->withSum('inventories as reserved_stock', 'reserved_quantity')
                 ->with(['latestPriceRule', 'mediaLink.media'])
                 ->where('product_variants.status', true)
+                ->when($inStockOnly, fn ($variantQuery) => $variantQuery->inStock())
                 ->when($excludeIds !== [], fn ($variantQuery) => $variantQuery->whereNotIn('product_variants.id', $excludeIds))
                 ->orderByRaw('COALESCE(product_variants.sort_order, 999999)')
                 ->orderByRaw("LOWER(COALESCE(NULLIF(product_variants.size, ''), NULLIF(product_variants.name, ''), product_variants.sku, ''))")
@@ -106,28 +118,33 @@ class OrderAjaxController extends Controller
         $products = Product::query()
             ->with(['avatar.media', 'variants' => $activeVariants])
             ->where('products.status', true)
-            ->whereHas('variants', function ($query) use ($excludeIds): void {
+            ->whereHas('variants', function ($query) use ($excludeIds, $inStockOnly): void {
                 $query->where('product_variants.status', true)
+                    ->when($inStockOnly, fn ($variantQuery) => $variantQuery->inStock())
                     ->when($excludeIds !== [], fn ($variantQuery) => $variantQuery->whereNotIn('product_variants.id', $excludeIds));
             })
-            ->when($keyword !== '', function ($query) use ($keyword, $excludeIds): void {
-                $query->where(function ($search) use ($keyword, $excludeIds): void {
-                    $search->where('products.name', 'like', '%' . $keyword . '%')
-                        ->orWhereHas('variants', function ($variants) use ($keyword, $excludeIds): void {
+            ->when($keyword !== '', function ($query) use ($keyword, $excludeIds, $inStockOnly): void {
+                $query->where(function ($search) use ($keyword, $excludeIds, $inStockOnly): void {
+                    $search->where('products.name', 'like', '%'.$keyword.'%')
+                        ->orWhereHas('variants', function ($variants) use ($keyword, $excludeIds, $inStockOnly): void {
                             $variants->where('product_variants.status', true)
+                                ->when($inStockOnly, fn ($variantQuery) => $variantQuery->inStock())
                                 ->when($excludeIds !== [], fn ($variantQuery) => $variantQuery->whereNotIn('product_variants.id', $excludeIds))
                                 ->where(function ($variantSearch) use ($keyword): void {
-                                    $variantSearch->where('product_variants.sku', 'like', '%' . $keyword . '%')
-                                        ->orWhere('product_variants.name', 'like', '%' . $keyword . '%')
-                                        ->orWhere('product_variants.size', 'like', '%' . $keyword . '%')
-                                        ->orWhere('product_variants.quality', 'like', '%' . $keyword . '%');
+                                    $variantSearch->where('product_variants.sku', 'like', '%'.$keyword.'%')
+                                        ->orWhere('product_variants.name', 'like', '%'.$keyword.'%')
+                                        ->orWhere('product_variants.size', 'like', '%'.$keyword.'%')
+                                        ->orWhere('product_variants.quality', 'like', '%'.$keyword.'%');
                                 });
                         });
                 });
             })
-            ->orderByRaw('COALESCE(products.sort_order, 999999)')
-            ->orderByRaw("LOWER(COALESCE(products.name, ''))")
-            ->orderBy('products.id')
+            ->when($sortBy === 'id', fn ($query) => $query->orderBy('products.id', $sortDir))
+            ->when($sortBy === 'name', fn ($query) => $query->orderBy('products.name', $sortDir))
+            ->when($sortBy === 'preferred', fn ($query) => $query
+                ->orderByRaw('COALESCE(products.sort_order, 999999)')
+                ->orderByRaw("LOWER(COALESCE(products.name, ''))"))
+            ->when($sortBy !== 'id', fn ($query) => $query->orderBy('products.id'))
             ->paginate($perPage)
             ->appends($request->query());
 
