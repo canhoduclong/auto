@@ -15,8 +15,13 @@ class ShipperAssignmentViewTest extends TestCase
         $this->assertStringContainsString('class="form-control form-control-sm trip-shipping-fee-input js-order-shipping-fee"', $editor);
         $this->assertStringContainsString('<th style="width: 220px;">Tiền ship</th>', $template);
         $this->assertStringContainsString('Phí mặc định:', $editor);
+        $this->assertStringContainsString('class="shipping-fee-editor js-shipping-fee-editor js-shipping-fee-form"', $editor);
+        $this->assertStringContainsString('name="shipping_fee"', $editor);
+        $this->assertStringContainsString('type="submit" class="btn btn-success js-save-order-shipping-fee"', $editor);
+        $this->assertStringNotContainsString('js-save-order-shipping-fee" disabled', $editor);
         $this->assertStringContainsString('js-save-order-shipping-fee', $editor);
         $this->assertStringContainsString("'Accept': 'application/json'", $template);
+        $this->assertStringContainsString("form.classList.contains('js-shipping-fee-form')", $template);
         $this->assertStringNotContainsString('class="form-control form-control-sm js-order-extra-fee"', $template);
     }
 

@@ -419,6 +419,8 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/inventory-transfers', [WarehouseDashboardController::class, 'inventoryTransfers'])->name('inventory-transfers.index');
         Route::post('/inventory-transfers', [WarehouseDashboardController::class, 'storeInventoryTransfer'])->name('inventory-transfers.store');
         Route::get('/inventory-transfers/incoming', [WarehouseDashboardController::class, 'incomingInventoryTransfers'])->name('inventory-transfers.incoming');
+        Route::get('/inventory-transfers/{transfer}/edit', [WarehouseDashboardController::class, 'editInventoryTransfer'])->name('inventory-transfers.edit');
+        Route::put('/inventory-transfers/{transfer}', [WarehouseDashboardController::class, 'updateInventoryTransfer'])->name('inventory-transfers.update');
         Route::post('/inventory-transfers/{transfer}/confirm', [WarehouseDashboardController::class, 'confirmIncomingInventoryTransfer'])->name('inventory-transfers.confirm');
         Route::get('/inventory', [WarehouseDashboardController::class, 'inventory'])->name('inventory');
         Route::get('/stocktakes', [WarehouseStocktakeController::class, 'index'])->name('stocktakes.index');

@@ -1124,11 +1124,11 @@ document.addEventListener('DOMContentLoaded', function () {
         const isDirty = moneyValue(input?.value) !== numberValue(editor.dataset.savedFee);
         if (!button || button.dataset.saving === '1') return;
 
-        button.disabled = !isDirty;
+        // Luôn cho phép bấm lưu. Form HTML bên dưới còn là fallback nếu JavaScript
+        // bị gián đoạn, nên không khóa thao tác dựa hoàn toàn vào trạng thái JS.
+        button.disabled = false;
         button.className = 'btn btn-sm btn-success js-save-order-shipping-fee';
-        button.innerHTML = isDirty
-            ? '<i class="bi bi-save me-1"></i><span>Lưu</span>'
-            : '<i class="bi bi-check-lg me-1"></i><span>Đã lưu</span>';
+        button.innerHTML = '<i class="bi bi-save me-1"></i><span>' + (isDirty ? 'Lưu' : 'Lưu lại') + '</span>';
         if (status) {
             status.className = 'shipping-fee-save-status js-shipping-fee-save-status ' + (isDirty ? 'text-warning' : 'text-success');
             status.textContent = isDirty ? 'Phí mới chưa được lưu' : 'Phí ship hiện tại';
@@ -1560,6 +1560,7 @@ document.addEventListener('DOMContentLoaded', function () {
     document.addEventListener('click', function (event) {
         const saveShippingFeeButton = event.target.closest('.js-save-order-shipping-fee');
         if (saveShippingFeeButton) {
+            event.preventDefault();
             saveOrderShippingFee(saveShippingFeeButton);
             return;
         }
@@ -1723,6 +1724,11 @@ document.addEventListener('DOMContentLoaded', function () {
     document.addEventListener('submit', async function (event) {
         const form = event.target;
         if (!form.closest(appSelector) || form.method.toLowerCase() === 'get') return;
+        if (form.classList.contains('js-shipping-fee-form')) {
+            event.preventDefault();
+            saveOrderShippingFee(form.querySelector('.js-save-order-shipping-fee'));
+            return;
+        }
         if (form.classList.contains('js-route-review-form')) {
             const routePlanInput = document.getElementById('routePlanInput');
             const plan = collectTripPlan();

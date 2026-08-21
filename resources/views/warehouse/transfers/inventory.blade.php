@@ -1,6 +1,6 @@
 @extends('layouts.warehouse')
 
-@section('title', 'Điều chuyển kho')
+@section('title', $editingTransfer ? 'Sửa phiếu điều chuyển' : 'Điều chuyển kho')
 
 @push('styles')
 <style>
@@ -34,7 +34,7 @@
 @section('content')
 <div class="transfer-hero d-flex justify-content-between align-items-start flex-wrap gap-2">
     <div>
-        <h4 class="mb-1 fw-bold"><i class="bi bi-arrow-left-right me-2"></i>Tạo phiếu điều chuyển kho</h4>
+        <h4 class="mb-1 fw-bold"><i class="bi bi-arrow-left-right me-2"></i>{{ $editingTransfer ? 'Sửa phiếu điều chuyển '.($editingTransfer->transfer_code ?? '#'.$editingTransfer->id) : 'Tạo phiếu điều chuyển kho' }}</h4>
         <div class="small" style="opacity:.92;">Lấy hàng tồn tại kho đang quản lý để chuyển sang kho khác, kho nhận sẽ vào phần tiếp nhận để nhập kho.</div>
         <div class="small mt-2">Kho nguồn: <strong>{{ $sourceWarehouse?->name ?? '—' }}</strong></div>
     </div>
@@ -49,6 +49,12 @@
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
 @endif
+@if(session('error'))
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <i class="bi bi-exclamation-triangle me-1"></i>{{ session('error') }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+@endif
 @if($errors->any())
     <div class="alert alert-danger">
         <i class="bi bi-exclamation-triangle me-1"></i>
@@ -60,18 +66,19 @@
 
 <div class="card transfer-card mb-4">
     <div class="card-header bg-white">
-        <strong><i class="bi bi-file-earmark-plus me-1"></i>Thông tin phiếu điều chuyển</strong>
+        <strong><i class="bi bi-{{ $editingTransfer ? 'pencil-square' : 'file-earmark-plus' }} me-1"></i>{{ $editingTransfer ? 'Cập nhật phiếu điều chuyển' : 'Thông tin phiếu điều chuyển' }}</strong>
     </div>
     <div class="card-body">
-        <form action="{{ route('warehouse.inventory-transfers.store') }}" method="POST" id="inventoryTransferForm">
+        <form action="{{ $editingTransfer ? route('warehouse.inventory-transfers.update', $editingTransfer) : route('warehouse.inventory-transfers.store') }}" method="POST" id="inventoryTransferForm">
             @csrf
+            @if($editingTransfer) @method('PUT') @endif
             <div class="row g-3 mb-3">
                 <div class="col-md-5">
                     <label class="form-label fw-semibold small">Kho nhận <span class="text-danger">*</span></label>
                     <select name="target_warehouse_id" class="form-select" required>
                         <option value="">-- Chọn kho nhận --</option>
                         @foreach($targetWarehouses as $warehouse)
-                            <option value="{{ $warehouse->id }}" {{ (string) old('target_warehouse_id') === (string) $warehouse->id ? 'selected' : '' }}>
+                            <option value="{{ $warehouse->id }}" {{ (string) old('target_warehouse_id', $editingTransfer?->target_warehouse_id) === (string) $warehouse->id ? 'selected' : '' }}>
                                 {{ $warehouse->name }}
                             </option>
                         @endforeach
@@ -79,7 +86,7 @@
                 </div>
                 <div class="col-md-7">
                     <label class="form-label fw-semibold small">Ghi chú</label>
-                    <input type="text" class="form-control" name="note" maxlength="1000" value="{{ old('note') }}" placeholder="Ví dụ: điều chuyển bổ sung hàng bán nhanh cho kho trung tâm...">
+                    <input type="text" class="form-control" name="note" maxlength="1000" value="{{ old('note', $editingTransfer?->note) }}" placeholder="Ví dụ: điều chuyển bổ sung hàng bán nhanh cho kho trung tâm...">
                 </div>
             </div>
 
@@ -103,7 +110,15 @@
                     </thead>
                     <tbody id="transferItemsBody">
                         @php
-                            $oldItems = old('items', []);
+                            $oldItems = old('items');
+                            if ($oldItems === null && $editingTransfer) {
+                                $oldItems = $editingTransfer->items->map(fn ($item) => [
+                                    'product_variant_id' => $item->product_variant_id,
+                                    'quantity' => $item->quantity,
+                                    'unit_cost' => $item->unit_cost,
+                                ])->values()->all();
+                            }
+                            $oldItems = $oldItems ?? [];
                         @endphp
                         @foreach($oldItems as $index => $item)
                             @php
@@ -136,9 +151,12 @@
                 </table>
             </div>
 
-            <div class="d-flex justify-content-end">
+            <div class="d-flex justify-content-end gap-2">
+                @if($editingTransfer)
+                    <a href="{{ route('warehouse.inventory-transfers.index') }}" class="btn btn-outline-secondary">Hủy sửa</a>
+                @endif
                 <button type="submit" class="btn btn-success fw-semibold">
-                    <i class="bi bi-check2-circle me-1"></i>Tạo phiếu điều chuyển kho
+                    <i class="bi bi-check2-circle me-1"></i>{{ $editingTransfer ? 'Lưu thay đổi' : 'Tạo phiếu điều chuyển kho' }}
                 </button>
             </div>
         </form>
@@ -165,15 +183,18 @@
                         <th>Người tạo</th>
                         <th>Ngày tạo</th>
                         <th>Trạng thái</th>
+                        <th class="text-end">Thao tác</th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach($outgoingTransfers as $transfer)
                         @php
                             $status = (string) $transfer->status;
-                            $statusMeta = $status === 'received_completed'
-                                ? ['Đã tiếp nhận', 'bg-success']
-                                : ['Chờ kho nhận', 'bg-warning text-dark'];
+                            $statusMeta = match ($status) {
+                                'received_completed' => ['Đã tiếp nhận', 'bg-success'],
+                                'cancelled' => ['Đã hủy', 'bg-secondary'],
+                                default => ['Chờ kho nhận', 'bg-warning text-dark'],
+                            };
                         @endphp
                         <tr>
                             <td class="fw-semibold">{{ $transfer->transfer_code ?? ('#' . $transfer->id) }}</td>
@@ -189,6 +210,15 @@
                             <td>{{ $transfer->requester?->name ?? '—' }}</td>
                             <td>{{ optional($transfer->requested_at ?? $transfer->created_at)->format('d/m/Y H:i') }}</td>
                             <td><span class="badge transfer-pill {{ $statusMeta[1] }}">{{ $statusMeta[0] }}</span></td>
+                            <td class="text-end">
+                                @if($transfer->status === \App\Models\WarehouseInventoryTransfer::STATUS_PENDING_RECEIVE)
+                                    <a href="{{ route('warehouse.inventory-transfers.edit', $transfer) }}" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-pencil-square me-1"></i>Sửa
+                                    </a>
+                                @else
+                                    <span class="text-muted">—</span>
+                                @endif
+                            </td>
                         </tr>
                     @endforeach
                 </tbody>
