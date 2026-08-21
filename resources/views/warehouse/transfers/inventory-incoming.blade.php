@@ -64,7 +64,7 @@
                                     <tr>
                                         <th>Sản phẩm</th>
                                         <th class="text-center">SL</th>
-                                        <th class="text-end">KL xuất</th>
+                                        <th class="text-end">KL nhận</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -83,7 +83,7 @@
                                 </tbody>
                                 <tfoot>
                                     <tr class="table-light">
-                                        <th colspan="2" class="text-end">Tổng khối lượng xuất</th>
+                                        <th colspan="2" class="text-end">Tổng khối lượng nhận</th>
                                         <th class="text-end text-primary">{{ number_format((float) $transfer->items->sum('weight_kg'), 3, ',', '.') }} kg</th>
                                     </tr>
                                 </tfoot>

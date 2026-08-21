@@ -521,7 +521,19 @@ class ShipperDashboardController extends Controller
                 WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
                 WarehouseTransfer::STATUS_RECEIVED_COMPLETED,
             ])
-            ->whereHas('order', fn ($query) => $query->forDeliveryDate($today))
+            ->where(function ($query) use ($today): void {
+                // Phiếu đang hoạt động phải luôn hiện cho shipper được giao, kể cả
+                // ngày giao của đơn khác ngày tạo phiếu hoặc ngày đang xem.
+                $query->whereIn('status', [
+                    WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
+                    WarehouseTransfer::STATUS_IN_TRANSIT,
+                    WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
+                ])->orWhere(function ($completedQuery) use ($today): void {
+                    $completedQuery
+                        ->where('status', WarehouseTransfer::STATUS_RECEIVED_COMPLETED)
+                        ->whereHas('order', fn ($orderQuery) => $orderQuery->forDeliveryDate($today));
+                });
+            })
             ->orderByRaw("CASE WHEN status = 'pending_shipper_pickup' THEN 0 WHEN status = 'in_transit' THEN 1 WHEN status = 'delivered_waiting_receive' THEN 2 ELSE 3 END")
             ->orderByDesc('id')
             ->get()
