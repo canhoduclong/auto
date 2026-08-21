@@ -322,6 +322,7 @@ class OrderTransferController extends Controller
                     'target_warehouse_id' => $data['warehouse_id'],
                     'shipper_id' => $data['shipper_id'],
                     'status' => \App\Models\WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
+                    'packed_total_weight' => $order->transferBaselineWeight(),
                 ]);
             }
 

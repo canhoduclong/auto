@@ -1303,10 +1303,7 @@ class WarehouseDashboardController extends Controller
             return back()->with('error', 'Đơn này đang có phiếu điều chuyển chưa hoàn tất.');
         }
 
-        $order->loadMissing('items');
-        $packedTotalWeight = (float) $order->items->sum(function ($item) {
-            return (float) ($item->packed_weight ?? $item->total_weight ?? 0);
-        });
+        $packedTotalWeight = $order->transferBaselineWeight();
 
         $transfer = WarehouseTransfer::create([
             'order_id' => $order->id,
@@ -1351,11 +1348,22 @@ class WarehouseDashboardController extends Controller
                 'shipper',
             ])
             ->when($managedWarehouseId, fn ($query) => $query->where('target_warehouse_id', $managedWarehouseId))
-            ->whereHas('order', fn ($query) => $query->forDeliveryDate($selectedDate))
+            ->whereHas('order')
             ->whereIn('status', [
                 WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
                 WarehouseTransfer::STATUS_RECEIVED_COMPLETED,
             ])
+            ->where(function ($query) use ($selectedDate): void {
+                // Hàng đã được shipper giao phải luôn hiện cho kho đích để tiếp nhận,
+                // kể cả ngày giao của đơn khác ngày đang xem. Chỉ lịch sử hoàn tất
+                // mới tuân theo bộ lọc ngày.
+                $query->where('status', WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE)
+                    ->orWhere(function ($completedQuery) use ($selectedDate): void {
+                        $completedQuery
+                            ->where('status', WarehouseTransfer::STATUS_RECEIVED_COMPLETED)
+                            ->whereHas('order', fn ($orderQuery) => $orderQuery->forDeliveryDate($selectedDate));
+                    });
+            })
             ->orderByRaw("CASE WHEN status = 'delivered_waiting_receive' THEN 0 ELSE 1 END")
             ->orderByDesc('delivered_at')
             ->orderByDesc('id')

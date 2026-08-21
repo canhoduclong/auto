@@ -187,7 +187,10 @@
                                     <div class="transfer-order-row">
                                         <div>
                                             <div class="fw-semibold">#{{ $order->code ?? $order->id }} - {{ $order->customer?->name ?? '—' }}</div>
-                                            <div class="small text-muted">{{ optional($order->created_at)->format('d/m/Y H:i') }}</div>
+                                            <div class="small text-muted">
+                                                {{ optional($order->created_at)->format('d/m/Y H:i') }}
+                                                · KL bàn giao: <strong>{{ $latestTransfer?->packed_total_weight !== null ? number_format((float) $latestTransfer->packed_total_weight, 3, ',', '.') . ' kg' : '—' }}</strong>
+                                            </div>
                                         </div>
                                         <div class="text-end">
                                             <span class="badge {{ $orderCompleted ? 'bg-success' : 'bg-light text-dark border' }}">{{ $orderStatusLabel }}</span>

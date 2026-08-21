@@ -521,6 +521,7 @@ class ShipperDashboardController extends Controller
                 WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
                 WarehouseTransfer::STATUS_RECEIVED_COMPLETED,
             ])
+            ->whereHas('order')
             ->where(function ($query) use ($today): void {
                 // Phiếu đang hoạt động phải luôn hiện cho shipper được giao, kể cả
                 // ngày giao của đơn khác ngày tạo phiếu hoặc ngày đang xem.

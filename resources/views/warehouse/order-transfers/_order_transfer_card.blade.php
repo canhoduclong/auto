@@ -16,6 +16,7 @@
             <div class="text-end">
                 <span class="badge bg-info">{{ $order->status_label ?? $order->status }}</span>
                 <div class="small text-muted mt-1">SL: {{ $order->items->sum('quantity') }}</div>
+                <div class="small fw-semibold text-primary mt-1">KL bàn giao: {{ number_format($order->transferBaselineWeight(), 3, ',', '.') }} kg</div>
             </div>
         </div>
         <div class="mt-2">
@@ -27,6 +28,7 @@
                             <span class="text-muted">({{ $item->variant->sku }})</span>
                         @endif
                         - SL: {{ $item->quantity }}
+                        · KL: {{ number_format((float) ($item->packed_weight ?? $item->actual_weight ?? $item->total_weight ?? ((float) $item->quantity * $item->effective_unit_weight)), 3, ',', '.') }} kg
                     </li>
                 @endforeach
             </ul>

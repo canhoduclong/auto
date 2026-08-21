@@ -22,12 +22,16 @@
         <span class="badge {{ $statusMeta[1] }}">{{ $statusMeta[0] }}</span>
     </div>
     <div class="card-body">
-        <div class="row g-2 mb-3 small"> 
-            <div class="col-12 col-md-6">
+        <div class="row g-2 mb-3 small">
+            <div class="col-12 col-md-4">
+                <div class="text-muted">KL bàn giao</div>
+                <div class="fw-semibold">{{ $transfer->packed_total_weight !== null ? format_kg((float) $transfer->packed_total_weight) : '—' }}</div>
+            </div>
+            <div class="col-12 col-md-4">
                 <div class="text-muted">KL tiếp nhận</div>
                 <div class="fw-semibold">{{ $transfer->received_total_weight !== null ? format_kg((float) $transfer->received_total_weight) : '—' }}</div>
             </div>
-            <div class="col-12 col-md-6">
+            <div class="col-12 col-md-4">
                 <div class="text-muted">Hao hụt</div>
                 <div class="fw-semibold {{ (float) ($transfer->weight_loss ?? 0) > 0 ? 'text-danger' : 'text-success' }}">
                     {{ $transfer->weight_loss !== null ? format_kg((float) $transfer->weight_loss) : '—' }}

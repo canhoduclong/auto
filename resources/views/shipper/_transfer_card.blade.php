@@ -29,7 +29,7 @@
         <div class="small text-muted mb-1">Kho gửi: <strong class="text-dark">{{ $transfer->sourceWarehouse?->name ?? '—' }}</strong></div>
         <div class="small text-muted mb-1">Kho nhận: <strong class="text-dark">{{ $transfer->targetWarehouse?->name ?? '—' }}</strong></div>
         <div class="small text-muted mb-1">Shipper phụ trách: <strong class="text-dark">{{ $transfer->shipper?->name ?? '—' }}</strong></div>
-        <div class="small text-muted mb-2">KL đóng gói: <strong class="text-dark">{{ $transfer->packed_total_weight !== null ? number_format((float) $transfer->packed_total_weight, 3, ',', '.') . ' kg' : '—' }}</strong></div>
+        <div class="small text-muted mb-2">KL bàn giao: <strong class="text-dark">{{ $transfer->packed_total_weight !== null ? number_format((float) $transfer->packed_total_weight, 3, ',', '.') . ' kg' : '—' }}</strong></div>
         <div class="small text-muted mb-2">Ngày lên đơn: <strong class="text-dark">{{ optional($order?->created_at)->format('d/m/Y') ?: '—' }}</strong> · Ngày giao: <strong class="text-primary">{{ $deliveryDate }}</strong></div>
         <div class="border-top pt-2 mt-2">
             <div class="small fw-semibold mb-1">Sản phẩm</div>

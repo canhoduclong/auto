@@ -333,6 +333,29 @@ class Order extends Model
     public function warehouse() { return $this->belongsTo(Warehouse::class); }
     public function returnWarehouse() { return $this->belongsTo(Warehouse::class, 'return_warehouse_id'); }
     public function items() { return $this->hasMany(OrderItem::class); }
+
+    /**
+     * Snapshot weight used as the loss baseline for a warehouse transfer.
+     */
+    public function transferBaselineWeight(): float
+    {
+        $this->loadMissing(['items.variant.product', 'items.product']);
+
+        return round((float) $this->items->sum(function (OrderItem $item): float {
+            if ($item->packed_weight !== null) {
+                return max(0, (float) $item->packed_weight);
+            }
+            if ($item->actual_weight !== null) {
+                return max(0, (float) $item->actual_weight);
+            }
+            if ((float) ($item->total_weight ?? 0) > 0) {
+                return (float) $item->total_weight;
+            }
+
+            return max(0, (float) ($item->quantity ?? 0))
+                * max(0, (float) $item->effective_unit_weight);
+        }), 3);
+    }
     public function schedule() { return $this->hasOne(OrderSchedule::class, 'generated_order_id'); }
     public function adjustments() { return $this->hasMany(OrderAdjustment::class); }
     public function warehouseTransfers() { return $this->hasMany(WarehouseTransfer::class); }
