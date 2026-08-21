@@ -33,6 +33,7 @@
                             @endif
                         </a>
                     </th>
+                    <th>Sale phụ trách</th>
                     <th></th>
                 </tr>
             </thead>
@@ -52,6 +53,12 @@
                         </td>
                         <td>{{ $customer->phone ?: '—' }}</td>
                         <td class="text-muted small">{{ $customer->email ?: '—' }}</td>
+                        <td class="small">
+                            {{ $customer->currentOwner?->name
+                                ?: $customer->assignedTo?->name
+                                ?: $customer->user?->name
+                                ?: '—' }}
+                        </td>
                         <td class="text-end">
                             <button
                                 type="button"

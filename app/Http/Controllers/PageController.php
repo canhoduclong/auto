@@ -106,19 +106,28 @@ class PageController extends Controller
     {
         return Customer::query()
             ->where(function ($q) use ($userId) {
-                $q->where('assigned_to', $userId)
+                // current_owner_sale_id is the canonical owner. The older
+                // assignment/creator columns are only fallbacks for records
+                // which have not been migrated to the ownership lifecycle.
+                $q->where('current_owner_sale_id', $userId)
                     ->orWhere(function ($fallbackQuery) use ($userId) {
-                        $fallbackQuery->where(function ($emptyAssignQuery) {
-                            $emptyAssignQuery->whereNull('assigned_to')
-                                ->orWhere('assigned_to', 0);
-                        })->where('user_id', $userId);
+                        $fallbackQuery->whereNull('current_owner_sale_id')
+                            ->where('assigned_to', $userId);
+                    })
+                    ->orWhere(function ($legacyQuery) use ($userId) {
+                        $legacyQuery->whereNull('current_owner_sale_id')
+                            ->where(function ($emptyAssignQuery) {
+                                $emptyAssignQuery->whereNull('assigned_to')
+                                    ->orWhere('assigned_to', 0);
+                            })
+                            ->where('user_id', $userId);
                     });
             })
-                    ->where(function ($q) {
-                    $q->whereNull('is_employee')
-                        ->orWhere('is_employee', false)
-                        ->orWhere('is_employee', 0);
-                    })
+            ->where(function ($q) {
+                $q->whereNull('is_employee')
+                    ->orWhere('is_employee', false)
+                    ->orWhere('is_employee', 0);
+            })
             ->whereNull('deleted_at');
     }
 
@@ -2132,7 +2141,7 @@ class PageController extends Controller
         }
 
         $customers = $baseQuery
-            ->with('truckStation')
+            ->with(['truckStation', 'currentOwner:id,name', 'assignedTo:id,name', 'user:id,name'])
             ->when($search !== '', function ($q) use ($search) {
                 $q->where(function ($sub) use ($search) {
                     $sub->where('name', 'like', "%{$search}%")
@@ -2158,6 +2167,7 @@ class PageController extends Controller
 
         return response()->json([
             'html' => $html,
+            'total' => $customers->total(),
         ]);
     }
 
