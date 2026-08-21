@@ -420,6 +420,17 @@
         color: #111827;
         background: #fff;
     }
+    .shipping-fee-editor { min-width: 205px; }
+    .shipping-fee-default,
+    .shipping-fee-save-status {
+        display: block;
+        font-size: .67rem;
+        line-height: 1.25;
+        text-align: left;
+    }
+    .shipping-fee-default { color: #64748b; margin-bottom: 3px; }
+    .shipping-fee-save-status { margin-top: 3px; }
+    .shipping-fee-editor .js-save-order-shipping-fee { white-space: nowrap; }
     .trip-distance-cell,
     .trip-fixed-shipper-cell {
         color: #475569;
@@ -632,7 +643,7 @@
                                     <th style="width: 86px;"><button type="button" data-sort="time">Giờ giao</button></th>
                                     <th>Khách hàng</th>
                                     <th><button type="button" data-sort="address">Địa chỉ</button></th>
-                                    <th style="width: 110px;"><button type="button" data-sort="fee">Giá ship</button></th>
+                                    <th style="width: 220px;"><button type="button" data-sort="fee">Giá ship</button></th>
                                     <th style="width: 170px;">Shipper</th>
                                 </tr>
                             </thead>
@@ -642,10 +653,11 @@
                                         $customer = $order->customer;
                                         $address = $order->recipient_address ?: $customer?->address ?: 'Chưa cập nhật';
                                         $customerName = $customer?->name ?? $order->recipient_name ?? 'Khách hàng';
-                                        $shippingFee = (float) ($order->shipping_fee ?? $customer?->shipping_fee ?? 0);
+                                        $defaultShippingFee = (float) ($customer?->shipping_fee ?? 0);
+                                        $shippingFee = (float) ($order->shipping_fee ?? $defaultShippingFee);
                                         $deliveryTime = $order->delivery_time ?: $customer?->delivery_time ?: '';
                                         $saleName = $order->user?->name ?: 'Chưa có sale';
-                                        $originName = $order->warehouse?->name ?: 'Chưa chọn kho';
+                                        $originName = $order->assignment_origin_warehouse_name ?: 'Chưa chọn kho';
                                         $productPayload = $assignmentProductPayload($order);
                                     @endphp
                                     <tr id="order-{{ $order->id }}"
@@ -666,7 +678,7 @@
                                             </div>
                                         </td>
                                         <td class="text-muted">{{ \Illuminate\Support\Str::limit($address, 48) }}</td>
-                                        <td class="text-end fw-bold text-muted">{{ number_format($shippingFee, 0, ',', '.') }} đ</td>
+                                        <td>@include('shipper.partials.order-shipping-fee-editor')</td>
                                         <td>
                                             <button type="button"
                                                 class="btn btn-sm btn-assign-shipper js-open-shipper-picker"
@@ -806,7 +818,7 @@
                                                         <th style="width: 270px;" class="trip-head-strong">Đơn hàng</th>
                                                         <th style="width: 170px;">Điểm đi</th>
                                                         <th>Điểm đến</th>
-                                                        <th style="width: 116px;">Tiền ship</th>
+                                                        <th style="width: 220px;">Tiền ship</th>
                                                         <th style="width: 100px;">Khoảng cách</th>
                                                         <th style="width: 135px;">Cố định</th>
                                                         <th style="width: 130px;">Tính năng</th>
@@ -828,13 +840,12 @@
                                                                 ?: $customer?->address
                                                                 ?: 'Chưa cập nhật';
                                                             $quantity = (float) $order->items->sum('quantity');
-                                                            $baseFee = (bool) ($order->charge_shipping_fee ?? true)
-                                                                ? (float) ($order->shipping_fee ?? $customer?->shipping_fee ?? 0)
-                                                                : 0;
+                                                            $defaultShippingFee = (float) ($customer?->shipping_fee ?? 0);
+                                                            $baseFee = (float) ($order->shipping_fee ?? $defaultShippingFee);
                                                             $customerName = $customer?->name ?? $order->recipient_name ?? 'Khách hàng';
                                                             $deliveryTime = $order->delivery_time ?: $customer?->delivery_time ?: '';
                                                             $saleName = $order->user?->name ?: 'Chưa có sale';
-                                                            $originName = $order->warehouse?->name ?: 'Chưa chọn kho';
+                                                            $originName = $order->assignment_origin_warehouse_name ?: 'Chưa chọn kho';
                                                             $defaultShipperName = $customer?->defaultShipper?->name;
                                                             $productPayload = $assignmentProductPayload($order);
                                                             $productSummary = $assignmentProductSummary($order);
@@ -849,7 +860,7 @@
                                                             data-product-summary="{{ e($productSummary) }}"
                                                             data-sequence="{{ $order->daily_sequence ?: $loop->iteration }}"
                                                             data-destination="{{ e($destination) }}"
-                                                            data-origin="{{ e($order->warehouse?->name ?: 'Kho') }}"
+                                                            data-origin="{{ e($originName) }}"
                                                             data-quantity="{{ $quantity }}"
                                                             data-base-fee="{{ $baseFee }}">
                                                             <td class="text-center">
@@ -867,10 +878,10 @@
                                                             <td class="trip-order-address" title="{{ $destination }}"><span class="trip-cell-label">Gửi tới:</span>{{ $destination }}</td>
                                                             <td>
                                                                 <span class="trip-cell-label">Tiền ship:</span>
-                                                                <input type="text" inputmode="numeric" autocomplete="off"
-                                                                    class="form-control form-control-sm trip-shipping-fee-input js-order-shipping-fee"
-                                                                    value="{{ number_format($baseFee, 0, '', '') }}"
-                                                                    aria-label="Tiền ship đơn {{ $order->code ?: $order->id }}">
+                                                                @include('shipper.partials.order-shipping-fee-editor', [
+                                                                    'shippingFee' => $baseFee,
+                                                                    'defaultShippingFee' => $defaultShippingFee,
+                                                                ])
                                                             </td>
                                                             <td class="trip-distance-cell"><span class="trip-cell-label">Khoảng cách:</span><span class="js-order-distance">—</span></td>
                                                             <td class="trip-fixed-shipper-cell"><span class="trip-cell-label">Cố định:</span>{{ $defaultShipperName ?: 'Chưa có' }}</td>
@@ -1038,6 +1049,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const currency = new Intl.NumberFormat('vi-VN');
     const availableShippers = @json($availableShippersForPicker);
     const tripStorageKey = 'shipperTripPlan:' + @json($selectedDate);
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
     let isRestoringTrips = false;
 
     function escapeHtml(value) {
@@ -1101,6 +1113,99 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function formatShippingFeeInput(input) {
         if (input) input.value = currency.format(moneyValue(input.value));
+    }
+
+    function syncShippingFeeEditor(editor) {
+        if (!editor) return;
+
+        const input = editor.querySelector('.js-order-shipping-fee');
+        const button = editor.querySelector('.js-save-order-shipping-fee');
+        const status = editor.querySelector('.js-shipping-fee-save-status');
+        const isDirty = moneyValue(input?.value) !== numberValue(editor.dataset.savedFee);
+        if (!button || button.dataset.saving === '1') return;
+
+        button.disabled = !isDirty;
+        button.className = 'btn btn-sm btn-success js-save-order-shipping-fee';
+        button.innerHTML = isDirty
+            ? '<i class="bi bi-save me-1"></i><span>Lưu</span>'
+            : '<i class="bi bi-check-lg me-1"></i><span>Đã lưu</span>';
+        if (status) {
+            status.className = 'shipping-fee-save-status js-shipping-fee-save-status ' + (isDirty ? 'text-warning' : 'text-success');
+            status.textContent = isDirty ? 'Phí mới chưa được lưu' : 'Phí ship hiện tại';
+        }
+    }
+
+    function syncAllShippingFeeEditors() {
+        document.querySelectorAll('.js-shipping-fee-editor').forEach(syncShippingFeeEditor);
+    }
+
+    async function saveOrderShippingFee(button) {
+        const editor = button.closest('.js-shipping-fee-editor');
+        const input = editor?.querySelector('.js-order-shipping-fee');
+        const status = editor?.querySelector('.js-shipping-fee-save-status');
+        if (!editor || !input || button.disabled) return;
+
+        const shippingFee = moneyValue(input.value);
+        button.dataset.saving = '1';
+        button.disabled = true;
+        button.className = 'btn btn-sm btn-primary js-save-order-shipping-fee';
+        button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span><span>Đang lưu</span>';
+        if (status) {
+            status.className = 'shipping-fee-save-status js-shipping-fee-save-status text-primary';
+            status.textContent = 'Đang cập nhật phí ship...';
+        }
+
+        try {
+            const response = await fetch(editor.dataset.saveUrl, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({shipping_fee: shippingFee}),
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                const validationMessage = payload.errors
+                    ? Object.values(payload.errors).flat()[0]
+                    : null;
+                throw new Error(validationMessage || payload.message || 'Không thể lưu phí ship.');
+            }
+
+            const savedFee = numberValue(payload.shipping_fee ?? shippingFee);
+            editor.dataset.savedFee = String(savedFee);
+            input.value = currency.format(savedFee);
+
+            const row = editor.closest('tr');
+            if (row) {
+                row.dataset.fee = String(savedFee);
+                if (row.classList.contains('js-trip-order')) {
+                    row.dataset.baseFee = String(savedFee);
+                    const finalFee = row.querySelector('.js-order-final-fee');
+                    if (finalFee) finalFee.textContent = currency.format(savedFee);
+                    collectTripPlan(false);
+                    saveTripState();
+                }
+            }
+
+            notify(payload.message || 'Đã lưu phí ship.');
+        } catch (error) {
+            button.disabled = false;
+            button.className = 'btn btn-sm btn-danger js-save-order-shipping-fee';
+            button.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i><span>Thử lại</span>';
+            if (status) {
+                status.className = 'shipping-fee-save-status js-shipping-fee-save-status text-danger';
+                status.textContent = error.message;
+            }
+            notify(error.message, true);
+            return;
+        } finally {
+            delete button.dataset.saving;
+        }
+
+        syncShippingFeeEditor(editor);
     }
 
     function tripDefinitionsFor(shipperBlock) {
@@ -1326,17 +1431,12 @@ document.addEventListener('DOMContentLoaded', function () {
                     select.value = savedOrder.trip_code;
                 }
             }
-            const feeInput = row.querySelector('.js-order-shipping-fee');
-            if (feeInput) {
-                const baseFee = numberValue(row.dataset.baseFee);
-                feeInput.value = savedOrder.shipping_fee ?? (baseFee + numberValue(savedOrder.extra_fee));
-                formatShippingFeeInput(feeInput);
-            }
             const noteInput = row.querySelector('.js-order-trip-note');
             if (noteInput) noteInput.value = savedOrder.note ?? '';
         });
 
         document.querySelectorAll('.js-order-shipping-fee').forEach(formatShippingFeeInput);
+        syncAllShippingFeeEditors();
 
         isRestoringTrips = false;
         refreshTripBlocks();
@@ -1458,6 +1558,12 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     document.addEventListener('click', function (event) {
+        const saveShippingFeeButton = event.target.closest('.js-save-order-shipping-fee');
+        if (saveShippingFeeButton) {
+            saveOrderShippingFee(saveShippingFeeButton);
+            return;
+        }
+
         const addTripButton = event.target.closest('.js-add-trip');
         if (addTripButton) {
             const shipperBlock = addTripButton.closest('.js-trip-shipper');
@@ -1585,6 +1691,9 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     document.addEventListener('input', function (event) {
+        if (event.target.matches('.js-order-shipping-fee')) {
+            syncShippingFeeEditor(event.target.closest('.js-shipping-fee-editor'));
+        }
         if (!event.target.closest('.js-trip-shipper')) return;
         if (event.target.matches('.js-order-shipping-fee')) {
             collectTripPlan(false);

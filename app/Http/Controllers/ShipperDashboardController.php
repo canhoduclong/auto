@@ -1513,6 +1513,21 @@ class ShipperDashboardController extends Controller
                 'shipper',
                 'user',
                 'warehouse',
+                'warehouseTransfers' => fn ($query) => $query
+                    ->where('status', WarehouseTransfer::STATUS_RECEIVED_COMPLETED)
+                    ->with('targetWarehouse:id,name')
+                    ->orderByDesc('received_at')
+                    ->orderByDesc('id'),
+                'histories' => fn ($query) => $query
+                    ->whereIn('action', [
+                        'start_packing',
+                        'complete_packing',
+                        'warehouse_transfer_received',
+                        'undo_start_packing',
+                    ])
+                    ->with('user.warehouse:id,name')
+                    ->orderByDesc('created_at')
+                    ->orderByDesc('id'),
             ])
             ->where(fn ($query) => $this->constrainAssignmentStatuses($query))
             ->whereDate('created_at', $selectedDate)
@@ -1531,9 +1546,15 @@ class ShipperDashboardController extends Controller
             ->paginate(15)
             ->withQueryString();
 
-        $assignedOrders = (clone $ordersQuery)
+        $this->attachAssignmentOriginWarehouses($unassignedOrders->getCollection());
+
+        $assignedOrderCollection = (clone $ordersQuery)
             ->whereNotNull('shipper_id')
-            ->get()
+            ->get();
+
+        $this->attachAssignmentOriginWarehouses($assignedOrderCollection);
+
+        $assignedOrders = $assignedOrderCollection
             ->groupBy('shipper_id')
             ->map(function ($orders) {
                 return $orders
@@ -1581,6 +1602,46 @@ class ShipperDashboardController extends Controller
             'warehouses',
             'historyCount'
         ));
+    }
+
+    private function attachAssignmentOriginWarehouses($orders): void
+    {
+        foreach ($orders as $order) {
+            $warehouse = $this->resolveAssignmentOriginWarehouse($order);
+            $order->setAttribute('assignment_origin_warehouse_id', $warehouse?->id);
+            $order->setAttribute('assignment_origin_warehouse_name', $warehouse?->name);
+        }
+    }
+
+    private function resolveAssignmentOriginWarehouse(Order $order): ?Warehouse
+    {
+        if ($order->warehouse) {
+            return $order->warehouse;
+        }
+
+        $latestWarehouseHistory = $order->histories
+            ->sortByDesc(fn (OrderHistory $history) => sprintf(
+                '%s-%020d',
+                $history->created_at?->format('YmdHis.u') ?? '',
+                (int) $history->id
+            ))
+            ->first();
+
+        if ($latestWarehouseHistory?->action === 'undo_start_packing') {
+            return null;
+        }
+
+        if ($latestWarehouseHistory?->user?->warehouse) {
+            return $latestWarehouseHistory->user->warehouse;
+        }
+
+        return $order->warehouseTransfers
+            ->sortByDesc(fn (WarehouseTransfer $transfer) => sprintf(
+                '%s-%020d',
+                $transfer->received_at?->format('YmdHis.u') ?? '',
+                (int) $transfer->id
+            ))
+            ->first()?->targetWarehouse;
     }
 
     public function assignmentHistory(Request $request)
@@ -2501,7 +2562,7 @@ class ShipperDashboardController extends Controller
         ]);
 
         $oldFee = (float) ($order->shipping_fee ?? 0);
-        $newFee = (float) $request->input('shipping_fee');
+        $newFee = round((float) $request->input('shipping_fee'));
 
         $order->update([
             'shipping_fee' => $newFee,
@@ -2532,7 +2593,18 @@ class ShipperDashboardController extends Controller
 
         $this->syncCustomerShippingFeeHistory($order, $oldFee, $newFee, $request->input('notes'));
 
-        return back()->with('success', 'Cập nhật phí ship cho đơn #' . $order->code . ' thành công!');
+        $message = 'Cập nhật phí ship cho đơn #' . ($order->code ?: $order->id) . ' thành công!';
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => $message,
+                'order_id' => (int) $order->id,
+                'shipping_fee' => $newFee,
+                'total' => $newTotal,
+            ]);
+        }
+
+        return back()->with('success', $message);
     }
 
     /**
