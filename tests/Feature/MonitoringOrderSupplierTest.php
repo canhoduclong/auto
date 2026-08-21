@@ -212,6 +212,7 @@ class MonitoringOrderSupplierTest extends TestCase
             ->assertSee('Vịt nguyên con')
             ->assertSee('Thùng xốp')
             ->assertSee('rowspan="2"', false)
+            ->assertSee('title="Tổng tiền bán của đơn">6.780.000đ', false)
             ->assertDontSee('67.000–80.000')
             ->assertDontSee('Thiếu giá nhập: Thùng xốp');
     }

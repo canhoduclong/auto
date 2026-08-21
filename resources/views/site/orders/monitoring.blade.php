@@ -1406,16 +1406,16 @@
                                     @php
                                         $listItems = $order->items->isNotEmpty() ? $order->items->values() : collect([null]);
                                         $listRowspan = $listItems->count();
+                                        $listOrderSaleTotal = (float) $order->items->sum(function ($item) {
+                                            $lineTotal = (float) ($item->total ?? 0);
+
+                                            return $lineTotal > 0
+                                                ? $lineTotal
+                                                : (float) ($item->price ?? 0) * (float) $item->display_total_value;
+                                        });
                                         $canAssignSupplier = !$isSaleViewingRole || (int) $order->user_id === (int) $monitorUser?->id;
                                     @endphp
                                     @foreach($listItems as $listItem)
-                                        @php
-                                            $listItemSaleTotal = $listItem
-                                                ? ((float) ($listItem->total ?? 0) > 0
-                                                    ? (float) $listItem->total
-                                                    : (float) ($listItem->price ?? 0) * (float) $listItem->display_total_value)
-                                                : 0;
-                                        @endphp
                                         <tr class="{{ $order->status === \App\Models\Order::STATUS_CANCELLED ? 'table-danger' : '' }}">
                                             @if($loop->first)
                                                 <td rowspan="{{ $listRowspan }}" class="text-center fw-bold">{{ $order->daily_sequence ?? (($orders->firstItem() ?? 1) + $loop->parent->index) }}</td>
@@ -1429,8 +1429,8 @@
                                             <td>{{ $listItem?->variant?->size ?: '—' }}</td>
                                             <td class="text-end fw-semibold">{{ $listItem ? $formatQuantity($listItem->quantity) : '—' }}</td>
                                             <td class="text-end text-nowrap">{{ $listItem && (float) $listItem->price > 0 ? number_format((float) $listItem->price, 0, ',', '.') . 'đ' : '—' }}</td>
-                                            <td class="text-end fw-bold text-nowrap">{{ number_format($listItemSaleTotal, 0, ',', '.') }}đ</td>
                                             @if($loop->first)
+                                                <td rowspan="{{ $listRowspan }}" class="text-end fw-bold text-nowrap" title="Tổng tiền bán của đơn">{{ number_format($listOrderSaleTotal, 0, ',', '.') }}đ</td>
                                                 <td rowspan="{{ $listRowspan }}" class="monitor-list-supplier">
                                                     @if($canAssignSupplier)
                                                     <div class="monitor-supplier-actions">
