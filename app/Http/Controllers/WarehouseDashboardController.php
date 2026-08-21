@@ -3660,6 +3660,7 @@ class WarehouseDashboardController extends Controller
                     'variant_sku' => $variant->sku ?? '',
                     'label' => $product->name.' - '.($variant->name ?? 'Biến thể'),
                     'unit_label' => $product->unit_label ?? 'Cái',
+                    'weight_per_unit' => round((float) ($variant->effective_kg ?? 1), 3),
                     'available' => $available,
                     'product_id' => $product->id,
                     'product_name' => $product->name,
@@ -3689,6 +3690,7 @@ class WarehouseDashboardController extends Controller
                         'name' => $v['variant_name'],
                         'sku' => $v['variant_sku'],
                         'unit_label' => $v['unit_label'],
+                        'weight_per_unit' => $v['weight_per_unit'],
                         'available' => $v['available'],
                         'attributes' => $v['attributes'] ?? '',
                     ];
@@ -3738,6 +3740,7 @@ class WarehouseDashboardController extends Controller
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_variant_id' => ['required', 'integer', 'exists:product_variants,id'],
             'items.*.quantity' => ['required', 'integer', 'min:1'],
+            'items.*.weight_kg' => ['required', 'numeric', 'min:0.001'],
             'items.*.unit_cost' => ['nullable', 'numeric', 'min:0'],
         ]);
 
@@ -3753,6 +3756,7 @@ class WarehouseDashboardController extends Controller
                 return [
                     'product_variant_id' => (int) $row['product_variant_id'],
                     'quantity' => (int) $row['quantity'],
+                    'weight_kg' => round((float) $row['weight_kg'], 3),
                     'unit_cost' => (float) ($row['unit_cost'] ?? 0),
                 ];
             })
@@ -3761,6 +3765,7 @@ class WarehouseDashboardController extends Controller
                 return [
                     'product_variant_id' => $variantId,
                     'quantity' => (int) $rows->sum('quantity'),
+                    'weight_kg' => round((float) $rows->sum('weight_kg'), 3),
                     'unit_cost' => (float) $rows->last()['unit_cost'],
                 ];
             })
@@ -3816,6 +3821,7 @@ class WarehouseDashboardController extends Controller
                         'transfer_id' => $transfer->id,
                         'product_variant_id' => $variantId,
                         'quantity' => $qty,
+                        'weight_kg' => (float) $item['weight_kg'],
                         'unit_cost' => $unitCost,
                     ]);
 
@@ -3877,6 +3883,7 @@ class WarehouseDashboardController extends Controller
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_variant_id' => ['required', 'integer', 'exists:product_variants,id'],
             'items.*.quantity' => ['required', 'integer', 'min:1'],
+            'items.*.weight_kg' => ['required', 'numeric', 'min:0.001'],
             'items.*.unit_cost' => ['nullable', 'numeric', 'min:0'],
         ]);
 
@@ -3891,12 +3898,14 @@ class WarehouseDashboardController extends Controller
             ->map(fn (array $row) => [
                 'product_variant_id' => (int) $row['product_variant_id'],
                 'quantity' => (int) $row['quantity'],
+                'weight_kg' => round((float) $row['weight_kg'], 3),
                 'unit_cost' => (float) ($row['unit_cost'] ?? 0),
             ])
             ->groupBy('product_variant_id')
             ->map(fn (Collection $rows, int $variantId) => [
                 'product_variant_id' => $variantId,
                 'quantity' => (int) $rows->sum('quantity'),
+                'weight_kg' => round((float) $rows->sum('weight_kg'), 3),
                 'unit_cost' => (float) $rows->last()['unit_cost'],
             ])
             ->keyBy('product_variant_id');
@@ -3933,6 +3942,8 @@ class WarehouseDashboardController extends Controller
                     $newQty = (int) ($newItem['quantity'] ?? 0);
                     $oldCost = (float) ($oldItem?->unit_cost ?? 0);
                     $newCost = (float) ($newItem['unit_cost'] ?? 0);
+                    $oldWeight = (float) ($oldItem?->weight_kg ?? 0);
+                    $newWeight = (float) ($newItem['weight_kg'] ?? 0);
                     $inventoryDelta = $oldQty - $newQty;
 
                     if ($inventoryDelta !== 0) {
@@ -3973,13 +3984,15 @@ class WarehouseDashboardController extends Controller
                         ProductVariant::query()->where('id', $variantId)->update(['stock' => $totalStock]);
                     }
 
-                    if ($oldQty !== $newQty || $oldCost !== $newCost) {
+                    if ($oldQty !== $newQty || $oldCost !== $newCost || abs($oldWeight - $newWeight) >= 0.0005) {
                         $changes[] = [
                             'variant_id' => $variantId,
                             'old_qty' => $oldQty,
                             'new_qty' => $newQty,
                             'old_cost' => $oldCost,
                             'new_cost' => $newCost,
+                            'old_weight_kg' => $oldWeight,
+                            'new_weight_kg' => $newWeight,
                         ];
                     }
                 }
@@ -4005,7 +4018,11 @@ class WarehouseDashboardController extends Controller
 
                 $exportDocument->items()->delete();
                 foreach ($normalizedItems as $item) {
-                    $exportDocument->items()->create($item);
+                    $exportDocument->items()->create([
+                        'product_variant_id' => $item['product_variant_id'],
+                        'quantity' => $item['quantity'],
+                        'unit_cost' => $item['unit_cost'],
+                    ]);
                 }
                 $exportDocument->update([
                     'notes' => 'Điều chuyển kho #'.($lockedTransfer->transfer_code ?? $lockedTransfer->id)

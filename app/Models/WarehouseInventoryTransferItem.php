@@ -13,7 +13,14 @@ class WarehouseInventoryTransferItem extends Model
         'transfer_id',
         'product_variant_id',
         'quantity',
+        'weight_kg',
         'unit_cost',
+    ];
+
+    protected $casts = [
+        'quantity' => 'integer',
+        'weight_kg' => 'decimal:3',
+        'unit_cost' => 'decimal:2',
     ];
 
     public function transfer()

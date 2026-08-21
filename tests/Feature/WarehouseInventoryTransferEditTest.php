@@ -17,6 +17,39 @@ class WarehouseInventoryTransferEditTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_new_transfer_saves_measured_weight_for_loss_baseline(): void
+    {
+        $source = Warehouse::factory()->create();
+        $target = Warehouse::factory()->create();
+        $user = User::factory()->create(['warehouse_id' => $source->id]);
+        $user->roles()->attach(\App\Models\Role::create(['name' => 'warehouse']));
+        $variant = ProductVariant::factory()->create(['kg' => 2.5, 'stock' => 10]);
+        Inventory::create([
+            'warehouse_id' => $source->id,
+            'product_variant_id' => $variant->id,
+            'quantity' => 10,
+            'reserved_quantity' => 0,
+        ]);
+
+        $this->actingAs($user)
+            ->post(route('warehouse.inventory-transfers.store'), [
+                'target_warehouse_id' => $target->id,
+                'items' => [[
+                    'product_variant_id' => $variant->id,
+                    'quantity' => 3,
+                    'weight_kg' => 7.35,
+                    'unit_cost' => 10000,
+                ]],
+            ])
+            ->assertRedirect(route('warehouse.inventory-transfers.index'));
+
+        $this->assertDatabaseHas('warehouse_inventory_transfer_items', [
+            'product_variant_id' => $variant->id,
+            'quantity' => 3,
+            'weight_kg' => 7.35,
+        ]);
+    }
+
     public function test_source_warehouse_can_edit_pending_transfer_and_stock_is_adjusted(): void
     {
         $source = Warehouse::factory()->create();
@@ -54,6 +87,7 @@ class WarehouseInventoryTransferEditTest extends TestCase
         $transfer->items()->create([
             'product_variant_id' => $variant->id,
             'quantity' => 3,
+            'weight_kg' => 7.5,
             'unit_cost' => 10000,
         ]);
 
@@ -65,6 +99,7 @@ class WarehouseInventoryTransferEditTest extends TestCase
                 'items' => [[
                     'product_variant_id' => $variant->id,
                     'quantity' => 5,
+                    'weight_kg' => 12.25,
                     'unit_cost' => 12000,
                 ]],
             ]
@@ -81,6 +116,7 @@ class WarehouseInventoryTransferEditTest extends TestCase
             'transfer_id' => $transfer->id,
             'product_variant_id' => $variant->id,
             'quantity' => 5,
+            'weight_kg' => 12.25,
             'unit_cost' => 12000,
         ]);
         $this->assertDatabaseHas('inventory_document_items', [
@@ -119,6 +155,7 @@ class WarehouseInventoryTransferEditTest extends TestCase
         $transfer->items()->create([
             'product_variant_id' => $variant->id,
             'quantity' => 3,
+            'weight_kg' => 7.5,
             'unit_cost' => 10000,
         ]);
 
@@ -129,6 +166,7 @@ class WarehouseInventoryTransferEditTest extends TestCase
                 'items' => [[
                     'product_variant_id' => $variant->id,
                     'quantity' => 1,
+                    'weight_kg' => 2.5,
                     'unit_cost' => 10000,
                 ]],
             ]

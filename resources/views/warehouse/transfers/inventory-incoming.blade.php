@@ -64,6 +64,7 @@
                                     <tr>
                                         <th>Sản phẩm</th>
                                         <th class="text-center">SL</th>
+                                        <th class="text-end">KL xuất</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -76,9 +77,16 @@
                                                 @endif
                                             </td>
                                             <td class="text-center fw-semibold">{{ number_format((int) $item->quantity) }}</td>
+                                            <td class="text-end fw-semibold">{{ number_format((float) $item->weight_kg, 3, ',', '.') }} kg</td>
                                         </tr>
                                     @endforeach
                                 </tbody>
+                                <tfoot>
+                                    <tr class="table-light">
+                                        <th colspan="2" class="text-end">Tổng khối lượng xuất</th>
+                                        <th class="text-end text-primary">{{ number_format((float) $transfer->items->sum('weight_kg'), 3, ',', '.') }} kg</th>
+                                    </tr>
+                                </tfoot>
                             </table>
                         </div>
                     </div>

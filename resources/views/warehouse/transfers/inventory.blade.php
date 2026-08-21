@@ -104,6 +104,7 @@
                             <th style="min-width:320px;">Sản phẩm</th>
                             <th class="text-center" style="min-width:120px;">Tồn khả dụng</th>
                             <th class="text-center" style="min-width:120px;">Số lượng chuyển</th>
+                            <th class="text-center" style="min-width:145px;">Khối lượng xuất (kg)</th>
                             <th class="text-center" style="min-width:120px;">Đơn giá</th>
                             <th class="text-center" style="width:40px;"></th>
                         </tr>
@@ -115,6 +116,7 @@
                                 $oldItems = $editingTransfer->items->map(fn ($item) => [
                                     'product_variant_id' => $item->product_variant_id,
                                     'quantity' => $item->quantity,
+                                    'weight_kg' => $item->weight_kg,
                                     'unit_cost' => $item->unit_cost,
                                 ])->values()->all();
                             }
@@ -138,6 +140,10 @@
                                     <input type="number" min="1" max="{{ max(1, $variant['available']) }}" name="items[{{ $index }}][quantity]" class="form-control text-center qty-input" value="{{ $item['quantity'] ?? 1 }}" required>
                                 </td>
                                 <td>
+                                    <input type="number" min="0.001" step="0.001" name="items[{{ $index }}][weight_kg]" class="form-control text-end weight-input" value="{{ number_format((float) ($item['weight_kg'] ?? (($item['quantity'] ?? 1) * $variant['weight_per_unit'])), 3, '.', '') }}" data-unit-weight="{{ $variant['weight_per_unit'] }}" data-auto-weight="0" required>
+                                    <div class="small text-muted text-end">Chuẩn: {{ number_format($variant['weight_per_unit'], 3, ',', '.') }} kg/đv</div>
+                                </td>
+                                <td>
                                     <input type="number" min="0" step="1000" name="items[{{ $index }}][unit_cost]" class="form-control text-end" value="{{ $item['unit_cost'] ?? 0 }}">
                                 </td>
                                 <td class="text-center">
@@ -151,13 +157,16 @@
                 </table>
             </div>
 
-            <div class="d-flex justify-content-end gap-2">
+            <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+                <div class="fw-semibold text-primary">Tổng khối lượng xuất: <span id="transferTotalWeight">0,000</span> kg</div>
+                <div class="d-flex justify-content-end gap-2">
                 @if($editingTransfer)
                     <a href="{{ route('warehouse.inventory-transfers.index') }}" class="btn btn-outline-secondary">Hủy sửa</a>
                 @endif
                 <button type="submit" class="btn btn-success fw-semibold">
                     <i class="bi bi-check2-circle me-1"></i>{{ $editingTransfer ? 'Lưu thay đổi' : 'Tạo phiếu điều chuyển kho' }}
                 </button>
+                </div>
             </div>
         </form>
     </div>
@@ -203,9 +212,10 @@
                                 @foreach($transfer->items as $item)
                                     <div class="small">
                                         {{ $item->variant?->product?->name ?? 'Sản phẩm' }} - {{ $item->variant?->name ?? 'Biến thể' }}
-                                        <span class="text-muted">x {{ number_format((int) $item->quantity) }}</span>
+                                        <span class="text-muted">x {{ number_format((int) $item->quantity) }} · {{ number_format((float) $item->weight_kg, 3, ',', '.') }} kg</span>
                                     </div>
                                 @endforeach
+                                <div class="small fw-semibold text-primary mt-1">Tổng: {{ number_format((float) $transfer->items->sum('weight_kg'), 3, ',', '.') }} kg</div>
                             </td>
                             <td>{{ $transfer->requester?->name ?? '—' }}</td>
                             <td>{{ optional($transfer->requested_at ?? $transfer->created_at)->format('d/m/Y H:i') }}</td>
@@ -289,7 +299,8 @@
                                             <button type="button" class="btn btn-sm btn-outline-success js-select-product" 
                                                 data-id="{{ $variant['variant_id'] }}"
                                                 data-label="{{ $group['product']['name'] }} - {{ $variant['name'] }}"
-                                                data-available="{{ $variant['available'] }}">
+                                                data-available="{{ $variant['available'] }}"
+                                                data-unit-weight="{{ $variant['weight_per_unit'] }}">
                                                 <i class="bi bi-plus-circle me-1"></i>Chọn
                                             </button>
                                         </td>
@@ -313,10 +324,19 @@
     const form = document.getElementById('inventoryTransferForm');
     const searchInput = document.getElementById('productSearchInput');
     const noProductsFound = document.getElementById('noProductsFound');
+    const totalWeight = document.getElementById('transferTotalWeight');
     let rowIndex = tableBody.querySelectorAll('.transfer-item-row').length || 0;
+
+    function updateTotalWeight() {
+        const total = Array.from(tableBody.querySelectorAll('.weight-input')).reduce(function (sum, input) {
+            return sum + (parseFloat(input.value || '0') || 0);
+        }, 0);
+        if (totalWeight) totalWeight.textContent = total.toLocaleString('vi-VN', {minimumFractionDigits: 3, maximumFractionDigits: 3});
+    }
 
     function attachRowHandlers(row) {
         const qtyInput = row.querySelector('.qty-input');
+        const weightInput = row.querySelector('.weight-input');
         const removeBtn = row.querySelector('.remove-row-btn');
 
         if (qtyInput) {
@@ -326,12 +346,25 @@
                 if (max > 0 && value > max) {
                     qtyInput.value = String(max);
                 }
+                if (weightInput?.dataset.autoWeight === '1') {
+                    const unitWeight = parseFloat(weightInput.dataset.unitWeight || '1') || 1;
+                    weightInput.value = (Math.max(1, parseInt(qtyInput.value || '1', 10)) * unitWeight).toFixed(3);
+                }
+                updateTotalWeight();
+            });
+        }
+
+        if (weightInput) {
+            weightInput.addEventListener('input', function () {
+                weightInput.dataset.autoWeight = '0';
+                updateTotalWeight();
             });
         }
 
         if (removeBtn) {
             removeBtn.addEventListener('click', function () {
                 row.remove();
+                updateTotalWeight();
             });
         }
     }
@@ -342,6 +375,7 @@
             const variantId = this.getAttribute('data-id');
             const label = this.getAttribute('data-label');
             const available = parseInt(this.getAttribute('data-available') || '0', 10);
+            const unitWeight = parseFloat(this.getAttribute('data-unit-weight') || '1') || 1;
             // Check if already in table
             let exists = false;
             tableBody.querySelectorAll('.transfer-item-row').forEach(function (row) {
@@ -367,6 +401,10 @@
                     <input type="number" min="1" max="${Math.max(1, available)}" name="items[${rowIndex}][quantity]" class="form-control text-center qty-input" value="1" required>
                 </td>
                 <td>
+                    <input type="number" min="0.001" step="0.001" name="items[${rowIndex}][weight_kg]" class="form-control text-end weight-input" value="${unitWeight.toFixed(3)}" data-unit-weight="${unitWeight}" data-auto-weight="1" required>
+                    <div class="small text-muted text-end">Chuẩn: ${unitWeight.toLocaleString('vi-VN', {minimumFractionDigits: 3, maximumFractionDigits: 3})} kg/đv</div>
+                </td>
+                <td>
                     <input type="number" min="0" step="1000" name="items[${rowIndex}][unit_cost]" class="form-control text-end" value="0">
                 </td>
                 <td class="text-center">
@@ -377,6 +415,7 @@
             `;
             tableBody.appendChild(tr);
             attachRowHandlers(tr);
+            updateTotalWeight();
             rowIndex++;
 
             // Đóng modal
@@ -389,6 +428,9 @@
             }
         });
     });
+
+    tableBody.querySelectorAll('.transfer-item-row').forEach(attachRowHandlers);
+    updateTotalWeight();
 
     // Giữ lại các logic kiểm tra submit form
     form.addEventListener('submit', function (event) {
