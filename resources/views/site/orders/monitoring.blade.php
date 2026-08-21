@@ -1047,7 +1047,7 @@
                 <section class="monitor-panel monitor-profit-summary" aria-label="Lợi nhuận theo nhà cung cấp">
                     <div class="monitor-profit-summary-head">
                         <h2 class="monitor-profit-summary-title">Lợi nhuận theo nhà cung cấp</h2>
-                        <span class="monitor-profit-summary-note">Giá nhập NCC; Thùng xốp dùng giá hiện tại trên hệ thống</span>
+                        <span class="monitor-profit-summary-note">Mỗi đơn dùng đúng một giá nhập có hiệu lực tại ngày nghiệp vụ của đơn</span>
                     </div>
                     <div class="monitor-profit-grid">
                         @foreach($supplierProfitSummaries as $summary)
@@ -1396,7 +1396,7 @@
                                     <th>Sản phẩm</th>
                                     <th>Size</th>
                                     <th class="text-end">Số lượng</th>
-                                    <th class="text-end">Giá</th>
+                                    <th class="text-end">Giá bán từng SP</th>
                                     <th class="text-end">Tiền bán</th>
                                     <th>Nhà cung cấp</th>
                                 </tr>
@@ -1404,12 +1404,11 @@
                             <tbody>
                                 @forelse($orders as $order)
                                     @php
-                                        $listPrices = $order->items->pluck('price')->map(fn ($price) => (float) $price)->filter(fn ($price) => $price > 0);
-                                        $listMinPrice = (float) ($listPrices->min() ?? 0);
-                                        $listMaxPrice = (float) ($listPrices->max() ?? 0);
-                                        $listPriceLabel = abs($listMaxPrice - $listMinPrice) < 0.01
-                                            ? number_format($listMinPrice, 0, ',', '.')
-                                            : number_format($listMinPrice, 0, ',', '.') . '–' . number_format($listMaxPrice, 0, ',', '.');
+                                        $listSalePrices = $order->items
+                                            ->filter(fn ($item) => (float) $item->price > 0)
+                                            ->map(fn ($item) => $item->display_name . ': ' . number_format((float) $item->price, 0, ',', '.') . 'đ')
+                                            ->unique()
+                                            ->values();
                                         $listProducts = $order->items->map(fn ($item) => $item->display_name)->filter()->unique()->implode(', ');
                                         $listSizes = $order->items->map(fn ($item) => $item->variant?->size)->filter()->unique()->implode(', ');
                                         $canAssignSupplier = !$isSaleViewingRole || (int) $order->user_id === (int) $monitorUser?->id;
@@ -1432,7 +1431,13 @@
                                         <td class="monitor-list-products">{{ $listProducts ?: '—' }}</td>
                                         <td>{{ $listSizes ?: '—' }}</td>
                                         <td class="text-end fw-semibold">{{ $formatQuantity($order->items->sum('quantity')) }}</td>
-                                        <td class="text-end">{{ $listPriceLabel }}đ</td>
+                                        <td class="text-end">
+                                            @forelse($listSalePrices as $salePriceLabel)
+                                                <span class="d-block text-nowrap">{{ $salePriceLabel }}</span>
+                                            @empty
+                                                —
+                                            @endforelse
+                                        </td>
                                         <td class="text-end fw-bold">{{ number_format($orderProfit['sale_total'], 0, ',', '.') }}đ</td>
                                         <td class="monitor-list-supplier">
                                             @if($canAssignSupplier)

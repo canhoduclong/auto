@@ -7,6 +7,7 @@ use App\Models\Setting;
 use App\Models\Page;
 use App\Models\Product;
 use App\Models\Category;
+use App\Models\ProductPriceRule;
 use App\Models\ProductVariant;
 use App\Models\UserProductVariantPreference;
 use App\Support\ProductVariantSorter;
@@ -1331,29 +1332,53 @@ class PageController extends Controller
     private function monitoringSupplierProfitability($orders, string $selectedDate): array
     {
         $supplierIds = $orders->pluck('supplier_id')->filter()->map(fn ($id) => (int) $id)->unique()->values();
-        $productIds = $orders->flatMap(fn (Order $order) => $order->items)
+        $items = $orders->flatMap(fn (Order $order) => $order->items);
+        $productIds = $items
             ->map(fn ($item) => (int) ($item->product_id ?: $item->variant?->product_id ?: 0))
             ->filter()
             ->unique()
             ->values();
+        $variantIds = $items
+            ->pluck('product_variant_id')
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+        $businessDates = $orders->mapWithKeys(fn (Order $order) => [
+            $order->id => $this->monitoringOrderBusinessDate($order, $selectedDate),
+        ]);
+        $latestBusinessDate = (string) ($businessDates->max() ?: $selectedDate);
 
-        $prices = ($supplierIds->isEmpty() || $productIds->isEmpty())
+        $pricesBySupplierProduct = ($supplierIds->isEmpty() || $productIds->isEmpty())
             ? collect()
             : SupplierProductPrice::query()
                 ->whereIn('supplier_id', $supplierIds)
                 ->whereIn('product_id', $productIds)
-                ->whereDate('effective_date', '<=', $selectedDate)
+                ->whereDate('effective_date', '<=', $latestBusinessDate)
                 ->orderByDesc('effective_date')
                 ->orderByDesc('id')
                 ->get()
-                ->groupBy(fn (SupplierProductPrice $price) => $price->supplier_id . ':' . $price->product_id)
-                ->map(fn ($group) => $group->first());
+                ->groupBy(fn (SupplierProductPrice $price) => $price->supplier_id . ':' . $price->product_id);
+        $variantPriceRules = $variantIds->isEmpty()
+            ? collect()
+            : ProductPriceRule::query()
+                ->whereIn('product_variant_id', $variantIds)
+                ->where('price', '>', 0)
+                ->where(function ($query) use ($latestBusinessDate) {
+                    $query->whereNull('start_date')
+                        ->orWhereDate('start_date', '<=', $latestBusinessDate);
+                })
+                ->orderByDesc('start_date')
+                ->orderByDesc('id')
+                ->get()
+                ->groupBy('product_variant_id');
 
         $byOrder = [];
         foreach ($orders as $order) {
             $saleTotal = 0.0;
             $purchaseTotal = 0.0;
             $missingItems = [];
+            $businessDate = (string) $businessDates->get($order->id, $selectedDate);
 
             foreach ($order->items as $item) {
                 $lineTotal = (float) ($item->total ?? 0);
@@ -1367,18 +1392,19 @@ class PageController extends Controller
                 }
 
                 $productId = (int) ($item->product_id ?: $item->variant?->product_id ?: 0);
-                $price = $prices->get($order->supplier_id . ':' . $productId);
+                $price = $pricesBySupplierProduct
+                    ->get($order->supplier_id . ':' . $productId, collect())
+                    ->first(fn (SupplierProductPrice $candidate) => $candidate->effective_date?->toDateString() <= $businessDate);
                 $unitCost = $price ? (float) $price->stock_in_unit_cost : 0.0;
 
-                // Thùng xốp is entered by the supplier as the product's current
-                // system price. It may not have a separate daily supplier-price
-                // row, so use that active variant price as its stock-in cost.
+                // Thùng xốp has one supplier-entered system price per business
+                // day. Resolve the rule for the order's own date, not today's
+                // active price and not the order item's snapshotted sale price.
                 if ($unitCost <= 0 && $this->isFoamBoxOrderItem($item)) {
-                    $unitCost = (float) (
-                        $item->variant?->latestPriceRule?->price
-                        ?? $item->variant?->final_price
-                        ?? 0
-                    );
+                    $rule = $variantPriceRules
+                        ->get((int) $item->product_variant_id, collect())
+                        ->first(fn (ProductPriceRule $candidate) => $this->priceRuleAppliesOnDate($candidate, $businessDate));
+                    $unitCost = (float) ($rule?->price ?? 0);
                 }
 
                 if ($unitCost <= 0) {
@@ -1439,6 +1465,25 @@ class PageController extends Controller
         $name = Str::lower(Str::ascii((string) $item->display_name));
 
         return Str::contains($name, 'thung xop');
+    }
+
+    private function monitoringOrderBusinessDate(Order $order, string $fallbackDate): string
+    {
+        $date = $order->accounting_sales_import_batch_id
+            ? $order->delivery_date
+            : $order->created_at;
+
+        return $date ? Carbon::parse($date)->toDateString() : $fallbackDate;
+    }
+
+    private function priceRuleAppliesOnDate(ProductPriceRule $rule, string $businessDate): bool
+    {
+        $startsOnTime = !$rule->start_date
+            || Carbon::parse($rule->start_date)->toDateString() <= $businessDate;
+        $hasNotEnded = !$rule->end_date
+            || Carbon::parse($rule->end_date)->toDateString() >= $businessDate;
+
+        return $startsOnTime && $hasNotEnded;
     }
 
     public function myOrdersMonitoringSupplier(Request $request, Order $order)

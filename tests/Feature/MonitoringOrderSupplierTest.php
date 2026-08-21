@@ -120,7 +120,7 @@ class MonitoringOrderSupplierTest extends TestCase
         ]);
     }
 
-    public function test_profit_uses_current_system_price_for_supplier_foam_box(): void
+    public function test_profit_uses_one_system_price_for_supplier_foam_box_on_order_business_date(): void
     {
         $saleRole = Role::query()->create(['name' => 'sale']);
         $sale = User::factory()->create();
@@ -145,6 +145,13 @@ class MonitoringOrderSupplierTest extends TestCase
             'product_id' => $foamBox->id,
             'active' => true,
             'price_calculation_type' => SupplierProductPrice::TYPE_DIRECT_PURCHASE,
+        ]);
+        ProductPriceRule::query()->create([
+            'product_variant_id' => $foamBoxVariant->id,
+            'price' => 80000,
+            'min_price' => 0,
+            'start_date' => now()->subDay(),
+            'end_date' => now(),
         ]);
         ProductPriceRule::query()->create([
             'product_variant_id' => $foamBoxVariant->id,
@@ -202,6 +209,9 @@ class MonitoringOrderSupplierTest extends TestCase
             ->assertSee('6.780.000đ')
             ->assertSee('6.070.000đ')
             ->assertSee('710.000đ')
+            ->assertSee('Vịt nguyên con: 67.000đ')
+            ->assertSee('Thùng xốp: 80.000đ')
+            ->assertDontSee('67.000–80.000')
             ->assertDontSee('Thiếu giá nhập: Thùng xốp');
     }
 }
