@@ -872,11 +872,15 @@ class WarehouseDashboardController extends Controller
 
         $todayOrdersQuery = Order::with(['items.product', 'items.variant.product'])
             ->whereIn('status', $queueStatuses)
-            ->where(fn ($dateQuery) => $this->constrainWarehouseWorkflowDate(
-                $dateQuery,
-                $selectedDate,
-                $queueStatuses
-            ));
+            ->where(function ($dateQuery) use ($selectedDate): void {
+                $dateQuery->where(function ($normalQuery) use ($selectedDate): void {
+                    $normalQuery->whereNull('accounting_sales_import_batch_id')
+                        ->whereDate('created_at', $selectedDate);
+                })->orWhere(function ($importQuery) use ($selectedDate): void {
+                    $importQuery->whereNotNull('accounting_sales_import_batch_id')
+                        ->whereDate('delivery_date', $selectedDate);
+                });
+            });
 
         if ($managedWarehouseId && Auth::user()?->hasRole('warehouse')) {
             $todayOrdersQuery->where(function ($warehouseScope) use ($managedWarehouseId, $queueStatuses) {
@@ -1009,15 +1013,15 @@ class WarehouseDashboardController extends Controller
                 $query->whereNull('is_return_order')
                     ->orWhere('is_return_order', false);
             })
-            ->where(fn ($dateQuery) => $this->constrainWarehouseWorkflowDate(
-                $dateQuery,
-                $selectedDate,
-                array_merge(self::READY_TO_PACK_STATUSES, [
-                    Order::STATUS_PACKING,
-                    Order::STATUS_PACKED,
-                    Order::STATUS_READY_TO_SHIP,
-                ])
-            ));
+            ->where(function ($dateQuery) use ($selectedDate): void {
+                $dateQuery->where(function ($normalQuery) use ($selectedDate): void {
+                    $normalQuery->whereNull('accounting_sales_import_batch_id')
+                        ->whereDate('created_at', $selectedDate);
+                })->orWhere(function ($importQuery) use ($selectedDate): void {
+                    $importQuery->whereNotNull('accounting_sales_import_batch_id')
+                        ->whereDate('delivery_date', $selectedDate);
+                });
+            });
 
         if ($managedWarehouseId && ($currentUser?->hasRole('warehouse') || $currentUser?->hasRole('package'))) {
             $ordersQuery->where(function ($warehouseScope) use ($managedWarehouseId, $sharedQueueStatuses) {
@@ -5038,24 +5042,6 @@ class WarehouseDashboardController extends Controller
         return $order->accounting_sales_import_batch_id !== null
             || (bool) $order->skip_auto_cancel
             || ($order->created_at && $order->created_at->isToday());
-    }
-
-    private function constrainWarehouseWorkflowDate($dateQuery, string $date, array $restoredStatuses): void
-    {
-        $dateQuery->where(function ($normalQuery) use ($date): void {
-            $normalQuery->whereNull('accounting_sales_import_batch_id')
-                ->whereDate('created_at', $date);
-        })->orWhere(function ($importQuery) use ($date): void {
-            $importQuery->whereNotNull('accounting_sales_import_batch_id')
-                ->whereDate('delivery_date', $date);
-        });
-
-        if (Carbon::parse($date)->isToday()) {
-            $dateQuery->orWhere(function ($restoredQuery) use ($restoredStatuses): void {
-                $restoredQuery->where('skip_auto_cancel', true)
-                    ->whereIn('status', $restoredStatuses);
-            });
-        }
     }
 
     private function packingActorRole(): string

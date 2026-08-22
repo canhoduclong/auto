@@ -132,6 +132,11 @@ class AdminRestoreCancelledOrderTest extends TestCase
         $this->actingAs($admin)
             ->get(route('warehouse.orders', ['date' => now()->toDateString()]))
             ->assertOk()
+            ->assertDontSee('order-card-'.$order->id, false);
+
+        $this->actingAs($admin)
+            ->get(route('warehouse.orders', ['date' => $order->created_at->toDateString()]))
+            ->assertOk()
             ->assertSee('order-card-'.$order->id, false)
             ->assertSee(route('warehouse.orders.complete-packing', $order), false);
 
