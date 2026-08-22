@@ -10,6 +10,7 @@ use Google\Service\Sheets\ClearValuesRequest;
 use Google\Service\Sheets\Request as SheetsRequest;
 use Google\Service\Sheets\ValueRange;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use RuntimeException;
 
 class GoogleSheetsJournalService
@@ -42,52 +43,82 @@ class GoogleSheetsJournalService
         }
 
         $service = new Sheets($this->client());
-        $sheetId = $this->ensureSheetExists($service, $spreadsheetId, $sheetName);
+        $sheet = $this->resolveSheet($service, $spreadsheetId, $sheetName);
+        $sheetId = $sheet['id'];
+        $sheetName = $sheet['title'];
         $rangePrefix = "'".str_replace("'", "''", $sheetName)."'";
 
         $values = collect([self::HEADERS])
-            ->concat($rows->map(fn ($row) => [
-                Carbon::parse($row->entry_date)->format('d/m/Y'),
-                (int) $row->entry_month,
-                (string) $row->customer_code,
-                (string) $row->customer_name,
-                (string) $row->sale_name,
-                (string) $row->unit,
-                (float) $row->quantity,
-                (float) $row->unit_weight,
-                (float) $row->total_quantity,
-                $row->unit_price === null ? '' : (float) $row->unit_price,
-                (float) $row->total_amount,
-            ]))
+            ->concat($this->journalValues($rows))
             ->values()
             ->all();
 
-        $service->spreadsheets_values->update(
-            $spreadsheetId,
-            $rangePrefix.'!A1',
-            new ValueRange([
-                'majorDimension' => 'ROWS',
-                'values' => $values,
-            ]),
-            ['valueInputOption' => 'RAW']
-        );
-
-        // Only remove rows left over from a previous, larger export. Writing
-        // first means a temporary Google API failure never leaves the sheet
-        // completely blank.
-        $service->spreadsheets_values->clear(
-            $spreadsheetId,
-            $rangePrefix.'!A'.(count($values) + 1).':K',
-            new ClearValuesRequest
-        );
-
-        $this->formatSheet($service, $spreadsheetId, $sheetId, count($values));
+        $this->writeValues($service, $spreadsheetId, $sheetId, $rangePrefix, $values);
 
         return [
             'rows' => $rows->count(),
             'spreadsheet_url' => 'https://docs.google.com/spreadsheets/d/'.$spreadsheetId.'/edit',
             'sheet_name' => $sheetName,
         ];
+    }
+
+    /**
+     * Read the worksheet and replace only rows belonging to the supplied dates.
+     * Rows from every other date remain untouched.
+     *
+     * @param  array<int, string>  $dates
+     * @return array{rows:int, dates:int, spreadsheet_url:string, sheet_name:string}
+     */
+    public function syncJournalDates(Collection $rows, array $dates): array
+    {
+        $targetDates = collect($dates)
+            ->map(fn ($date) => Carbon::parse($date)->toDateString())
+            ->unique()
+            ->values();
+
+        if ($targetDates->isEmpty()) {
+            throw new RuntimeException('Không có ngày bán hàng để đồng bộ Google Sheets.');
+        }
+
+        return Cache::lock('google-sheets-journal-sync', 120)->block(30, function () use ($rows, $targetDates): array {
+            $spreadsheetId = trim((string) config('services.google_sheets.spreadsheet_id'));
+            $sheetName = trim((string) config('services.google_sheets.sheet_name', 'Nhật ký bán hàng'));
+            if ($spreadsheetId === '' || $sheetName === '') {
+                throw new RuntimeException('Chưa cấu hình Google Sheets spreadsheet hoặc tên trang tính.');
+            }
+
+            $service = new Sheets($this->client());
+            $sheet = $this->resolveSheet($service, $spreadsheetId, $sheetName);
+            $sheetId = $sheet['id'];
+            $sheetName = $sheet['title'];
+            $rangePrefix = "'".str_replace("'", "''", $sheetName)."'";
+            $response = $service->spreadsheets_values->get($spreadsheetId, $rangePrefix.'!A:K');
+            $existingRows = collect($response->getValues() ?? [])->skip(1);
+
+            $preservedRows = $existingRows
+                ->filter(function (array $row) use ($targetDates): bool {
+                    $date = $this->normalizeSheetDate($row[0] ?? null);
+
+                    return $date === null || ! $targetDates->contains($date);
+                });
+
+            $mergedRows = $preservedRows
+                ->concat($this->journalValues($rows))
+                ->sortByDesc(function (array $row): string {
+                    return $this->normalizeSheetDate($row[0] ?? null) ?? '0000-00-00';
+                })
+                ->values();
+            $values = collect([self::HEADERS])->concat($mergedRows)->all();
+
+            $this->writeValues($service, $spreadsheetId, $sheetId, $rangePrefix, $values);
+
+            return [
+                'rows' => $rows->count(),
+                'dates' => $targetDates->count(),
+                'spreadsheet_url' => 'https://docs.google.com/spreadsheets/d/'.$spreadsheetId.'/edit',
+                'sheet_name' => $sheetName,
+            ];
+        });
     }
 
     public function isConfigured(): bool
@@ -135,16 +166,25 @@ class GoogleSheetsJournalService
         return $path;
     }
 
-    private function ensureSheetExists(Sheets $service, string $spreadsheetId, string $sheetName): int
+    /** @return array{id:int, title:string} */
+    private function resolveSheet(Sheets $service, string $spreadsheetId, string $sheetName): array
     {
+        $configuredSheetId = (int) config('services.google_sheets.sheet_id', 0);
         $spreadsheet = $service->spreadsheets->get($spreadsheetId, [
             'fields' => 'sheets.properties(sheetId,title)',
         ]);
 
         foreach ($spreadsheet->getSheets() ?? [] as $sheet) {
             $properties = $sheet->getProperties();
+            if ($configuredSheetId > 0 && (int) $properties?->getSheetId() === $configuredSheetId) {
+                return ['id' => $configuredSheetId, 'title' => (string) $properties->getTitle()];
+            }
+        }
+
+        foreach ($spreadsheet->getSheets() ?? [] as $sheet) {
+            $properties = $sheet->getProperties();
             if ($properties?->getTitle() === $sheetName) {
-                return (int) $properties->getSheetId();
+                return ['id' => (int) $properties->getSheetId(), 'title' => $sheetName];
             }
         }
 
@@ -164,7 +204,70 @@ class GoogleSheetsJournalService
             throw new RuntimeException('Google Sheets không trả về ID của trang tính vừa tạo.');
         }
 
-        return (int) $sheetId;
+        return ['id' => (int) $sheetId, 'title' => $sheetName];
+    }
+
+    private function journalValues(Collection $rows): Collection
+    {
+        return $rows->map(fn ($row) => [
+            Carbon::parse($row->entry_date)->format('d/m/Y'),
+            (int) $row->entry_month,
+            (string) $row->customer_code,
+            (string) $row->customer_name,
+            (string) $row->sale_name,
+            (string) $row->unit,
+            (float) $row->quantity,
+            (float) $row->unit_weight,
+            (float) $row->total_quantity,
+            $row->unit_price === null ? '' : (float) $row->unit_price,
+            (float) $row->total_amount,
+        ]);
+    }
+
+    private function normalizeSheetDate(mixed $value): ?string
+    {
+        $value = trim((string) $value);
+        foreach (['d/m/Y', 'Y-m-d', 'd-m-Y'] as $format) {
+            try {
+                $date = Carbon::createFromFormat('!'.$format, $value);
+                if ($date !== false && $date->format($format) === $value) {
+                    return $date->toDateString();
+                }
+            } catch (\Throwable) {
+                // Preserve rows whose date is not in a supported format.
+            }
+        }
+
+        return null;
+    }
+
+    private function writeValues(
+        Sheets $service,
+        string $spreadsheetId,
+        int $sheetId,
+        string $rangePrefix,
+        array $values
+    ): void {
+        $service->spreadsheets_values->update(
+            $spreadsheetId,
+            $rangePrefix.'!A1',
+            new ValueRange([
+                'majorDimension' => 'ROWS',
+                'values' => $values,
+            ]),
+            ['valueInputOption' => 'RAW']
+        );
+
+        // Only remove rows left over from a previous, larger export. Writing
+        // first means a temporary Google API failure never leaves the sheet
+        // completely blank.
+        $service->spreadsheets_values->clear(
+            $spreadsheetId,
+            $rangePrefix.'!A'.(count($values) + 1).':K',
+            new ClearValuesRequest
+        );
+
+        $this->formatSheet($service, $spreadsheetId, $sheetId, count($values));
     }
 
     private function formatSheet(Sheets $service, string $spreadsheetId, int $sheetId, int $rowCount): void

@@ -127,7 +127,7 @@ class AccountingSalesJournalTest extends TestCase
             ->assertSee('thùng xốp')
             ->assertSee('80.000')
             ->assertSee('Khách đơn ngoại lệ chưa giao')
-            ->assertSee('Ghi vào Google Sheets');
+            ->assertSee('Đồng bộ Google Sheets');
 
         $journal = app(CompletedSalesJournalService::class)->paginate(
             '2026-08-10',
@@ -152,11 +152,15 @@ class AccountingSalesJournalTest extends TestCase
         );
 
         $this->mock(\App\Services\GoogleSheetsJournalService::class)
-            ->shouldReceive('replaceJournal')
+            ->shouldReceive('syncJournalDates')
             ->once()
-            ->with(\Mockery::on(fn ($rows) => $rows->count() === 4))
+            ->with(
+                \Mockery::on(fn ($rows) => $rows->count() === 4),
+                ['2026-08-10']
+            )
             ->andReturn([
                 'rows' => 4,
+                'dates' => 1,
                 'spreadsheet_url' => 'https://docs.google.com/spreadsheets/d/test/edit',
                 'sheet_name' => 'Nhật ký bán hàng',
             ]);
@@ -168,7 +172,7 @@ class AccountingSalesJournalTest extends TestCase
             'customer_id' => 0,
             'sort' => 'date_asc',
         ])->assertRedirect()
-            ->assertSessionHas('success', 'Đã ghi toàn bộ 4 dòng vào trang tính “Nhật ký bán hàng”.')
+            ->assertSessionHas('success', 'Đã đồng bộ 4 dòng của 1 ngày vào trang tính “Nhật ký bán hàng”.')
             ->assertSessionHas('google_sheets_url', 'https://docs.google.com/spreadsheets/d/test/edit');
     }
 }

@@ -4,17 +4,22 @@ namespace App\Providers;
 
 use App\Models\Customer;
 use App\Models\Order;
+use App\Models\OrderAdjustment;
+use App\Models\OrderAdjustmentItem;
+use App\Models\OrderItem;
 use App\Models\Product;
 use App\Observers\CustomerObserver;
+use App\Observers\OrderAdjustmentItemObserver;
+use App\Observers\OrderAdjustmentObserver;
+use App\Observers\OrderItemObserver;
 use App\Observers\OrderObserver;
 use App\Observers\ProductObserver;
-use Illuminate\Support\ServiceProvider;
 use Illuminate\Database\Eloquent\Relations\Relation;
-
 use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Facades\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\View;
+use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -64,13 +69,16 @@ class AppServiceProvider extends ServiceProvider
         Product::observe(ProductObserver::class);
         Customer::observe(CustomerObserver::class);
         Order::observe(OrderObserver::class);
+        OrderItem::observe(OrderItemObserver::class);
+        OrderAdjustment::observe(OrderAdjustmentObserver::class);
+        OrderAdjustmentItem::observe(OrderAdjustmentItemObserver::class);
 
         Relation::morphMap([
-            'product'           => \App\Models\Product::class,
-            'post'              => \App\Models\Post::class,
-            'user'              => \App\Models\User::class,
-            'role'              => \App\Models\Role::class,
-            'productvariant'    => \App\Models\ProductVariant::class,
+            'product' => \App\Models\Product::class,
+            'post' => \App\Models\Post::class,
+            'user' => \App\Models\User::class,
+            'role' => \App\Models\Role::class,
+            'productvariant' => \App\Models\ProductVariant::class,
         ]);
     }
 }

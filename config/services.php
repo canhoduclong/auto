@@ -46,7 +46,8 @@ return [
             'GOOGLE_SHEETS_CREDENTIALS',
             env('GOOGLE_APPLICATION_CREDENTIALS', storage_path('app/google/service-account.json'))
         ),
-        'spreadsheet_id' => env('GOOGLE_SHEETS_SPREADSHEET_ID', '1-8AJdim75RgLGTYD6DPpuKc7Or-5tHwHJzb_qljITp4'),
+        'spreadsheet_id' => env('GOOGLE_SHEETS_SPREADSHEET_ID', '1cF3MDe5TwbE7gahUUoB4rQqVaH0mtEmgqVTlhSCKLTQ'),
+        'sheet_id' => (int) env('GOOGLE_SHEETS_JOURNAL_SHEET_ID', 2119826902),
         'sheet_name' => env('GOOGLE_SHEETS_JOURNAL_SHEET', 'Nhật ký bán hàng'),
     ],
 

@@ -204,9 +204,9 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                     <input type="hidden" name="customer_id" value="{{ $customerId }}">
                     <input type="hidden" name="sort" value="{{ $sort }}">
                     <button class="btn btn-sm btn-success" type="submit" @disabled(! $googleSheetsConfigured)
-                            title="{{ $googleSheetsConfigured ? 'Ghi đè toàn bộ dữ liệu theo bộ lọc hiện tại' : 'Chưa cài khóa JSON của service account trên máy chủ' }}"
-                            onclick="return confirm('Ghi đè toàn bộ trang tính Nhật ký bán hàng bằng dữ liệu theo bộ lọc hiện tại?')">
-                        <i class="bi bi-file-earmark-spreadsheet me-1"></i>Ghi vào Google Sheets
+                            title="{{ $googleSheetsConfigured ? 'Đồng bộ các ngày trong bộ lọc và giữ nguyên dữ liệu ngày khác' : 'Chưa cài khóa JSON của service account trên máy chủ' }}"
+                            onclick="return confirm('Đồng bộ lại dữ liệu các ngày đang lọc lên Google Sheets?')">
+                        <i class="bi bi-file-earmark-spreadsheet me-1"></i>Đồng bộ Google Sheets
                     </button>
                 </form>
             </div>

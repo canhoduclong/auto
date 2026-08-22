@@ -1867,7 +1867,11 @@ class AccountingDashboardController extends Controller
                 (int) ($validated['customer_id'] ?? 0),
                 (string) ($validated['sort'] ?? 'date_desc')
             );
-            $result = $googleSheets->replaceJournal($rows);
+            $dates = collect();
+            for ($date = Carbon::parse($fromDate); $date->lte(Carbon::parse($toDate)); $date->addDay()) {
+                $dates->push($date->toDateString());
+            }
+            $result = $googleSheets->syncJournalDates($rows, $dates->all());
         } catch (\Throwable $exception) {
             report($exception);
 
@@ -1875,7 +1879,7 @@ class AccountingDashboardController extends Controller
         }
 
         return back()
-            ->with('success', "Đã ghi toàn bộ {$result['rows']} dòng vào trang tính “{$result['sheet_name']}”.")
+            ->with('success', "Đã đồng bộ {$result['rows']} dòng của {$result['dates']} ngày vào trang tính “{$result['sheet_name']}”.")
             ->with('google_sheets_url', $result['spreadsheet_url']);
     }
 
