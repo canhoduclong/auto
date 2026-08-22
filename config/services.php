@@ -41,4 +41,13 @@ return [
         'redirect' => env('GOOGLE_REDIRECT_URI'),
     ],
 
+    'google_sheets' => [
+        'credentials' => env(
+            'GOOGLE_SHEETS_CREDENTIALS',
+            env('GOOGLE_APPLICATION_CREDENTIALS', storage_path('app/google/service-account.json'))
+        ),
+        'spreadsheet_id' => env('GOOGLE_SHEETS_SPREADSHEET_ID', '1-8AJdim75RgLGTYD6DPpuKc7Or-5tHwHJzb_qljITp4'),
+        'sheet_name' => env('GOOGLE_SHEETS_JOURNAL_SHEET', 'Nhật ký bán hàng'),
+    ],
+
 ];

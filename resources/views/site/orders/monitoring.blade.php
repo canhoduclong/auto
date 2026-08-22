@@ -58,15 +58,22 @@
         width: 34px;
         height: 34px;
         border-radius: 50%;
-        background: #64748b;
+        background: var(--monitor-state-color, #64748b);
         color: #fff;
         font-size: .78rem;
         font-weight: 800;
         text-decoration: none;
         box-shadow: 0 2px 5px rgba(15, 23, 42, .18);
     }
-    .monitor-sequence:hover { background: var(--monitor-teal); color: #fff; transform: translateY(-1px); }
+    .monitor-sequence:hover { background: var(--monitor-state-color, #64748b); color: #fff; filter: brightness(.88); transform: translateY(-1px); }
     .monitor-sequence.is-empty { cursor: default; }
+    .monitor-sequence.status-pending { --monitor-state-color: #6b7280; }
+    .monitor-sequence.status-approved { --monitor-state-color: #16a34a; }
+    .monitor-sequence.status-packed { --monitor-state-color: #174a8b; }
+    .monitor-sequence.status-transit { --monitor-state-color: #d97706; }
+    .monitor-sequence.status-delivered { --monitor-state-color: #8b5e3c; }
+    .monitor-sequence.status-accounted { --monitor-state-color: #581c87; }
+    .monitor-sequence.status-cancelled { --monitor-state-color: #dc2626; }
     .monitor-summary-head {
         display: flex;
         flex-wrap: wrap;
@@ -195,6 +202,8 @@
     }
     .monitor-orders { display: grid; gap: 18px; margin-top: 8px; }
     .monitor-order {
+        --monitor-state-color: #6b7280;
+        --monitor-state-soft: #f3f4f6;
         scroll-margin-top: 100px;
         overflow: visible;
         display: grid;
@@ -209,10 +218,17 @@
         min-width: 0;
         padding: 18px 20px 16px;
         border: 1px solid var(--monitor-border);
+        border-left: 6px solid var(--monitor-state-color);
         border-radius: 10px;
-        background: #fff;
+        background: linear-gradient(90deg, var(--monitor-state-soft) 0, #fff 150px);
         box-shadow: 0 5px 20px rgba(15, 23, 42, .05);
     }
+    .monitor-order.status-pending { --monitor-state-color: #6b7280; --monitor-state-soft: #f3f4f6; }
+    .monitor-order.status-approved { --monitor-state-color: #16a34a; --monitor-state-soft: #f0fdf4; }
+    .monitor-order.status-packed { --monitor-state-color: #174a8b; --monitor-state-soft: #eff6ff; }
+    .monitor-order.status-transit { --monitor-state-color: #d97706; --monitor-state-soft: #fffbeb; }
+    .monitor-order.status-delivered { --monitor-state-color: #8b5e3c; --monitor-state-soft: #faf5f0; }
+    .monitor-order.status-accounted { --monitor-state-color: #581c87; --monitor-state-soft: #faf5ff; }
     .monitor-order.is-cancelled .monitor-order-main {
         border-color: #ef4444;
         background: #fef2f2;
@@ -245,7 +261,7 @@
         align-items: center;
         justify-content: center;
         border-radius: 50%;
-        background: #64748b;
+        background: var(--monitor-state-color, #64748b);
         color: #fff;
         font-weight: 900;
     }
@@ -815,6 +831,47 @@
         \App\Models\Order::STATUS_RETURNED => 4,
         \App\Models\Order::STATUS_RETURNED_COMPLETED => 4,
     ];
+    $monitorStateLabels = [
+        'pending' => 'Đã lên đơn, chờ duyệt',
+        'approved' => 'Đã duyệt, chờ đóng gói',
+        'packed' => 'Đã đóng gói, chờ giao',
+        'transit' => 'Đang vận chuyển',
+        'delivered' => 'Đã giao hàng',
+        'accounted' => 'Kế toán đã xác nhận và tính doanh số',
+        'cancelled' => 'Đã hủy',
+    ];
+    $monitorStateForOrder = static function ($order): string {
+        if ($order->status === \App\Models\Order::STATUS_CANCELLED) {
+            return 'cancelled';
+        }
+
+        if ($order->accountingReconciliation?->status === \App\Models\AccountingReconciliation::STATUS_CONFIRMED) {
+            return 'accounted';
+        }
+
+        return match ((string) $order->status) {
+            \App\Models\Order::STATUS_ORDER_CONFIRMED,
+            \App\Models\Order::STATUS_APPROVED,
+            \App\Models\Order::STATUS_READY_TO_PACK,
+            \App\Models\Order::STATUS_PACKING,
+            'confirmed',
+            'picking' => 'approved',
+
+            \App\Models\Order::STATUS_PACKED,
+            \App\Models\Order::STATUS_READY_TO_SHIP => 'packed',
+
+            \App\Models\Order::STATUS_SHIPPING,
+            \App\Models\Order::STATUS_DELIVERING,
+            \App\Models\Order::STATUS_IN_DELIVERY,
+            \App\Models\Order::STATUS_RETURNING,
+            'picked_up' => 'transit',
+
+            \App\Models\Order::STATUS_DELIVERED,
+            \App\Models\Order::STATUS_COMPLETED => 'delivered',
+
+            default => 'pending',
+        };
+    };
     $formatQuantity = static fn ($value) => rtrim(rtrim(number_format((float) $value, 3, ',', '.'), '0'), ',');
     $sortUrl = static function (string $field) use ($sortBy, $sortDir): string {
         $nextDirection = $sortBy === $field && $sortDir === 'asc' ? 'desc' : 'asc';
@@ -935,7 +992,10 @@
         <div class="monitor-panel monitor-sequence-panel mb-3">
             <div class="monitor-sequences" aria-label="Điều hướng nhanh theo số thứ tự đơn">
                 @foreach($sequenceOrders as $sequenceOrder)
-                    <a class="monitor-sequence" href="#monitor-order-{{ $sequenceOrder->id }}" title="{{ $sequenceOrder->customer?->name ?? $sequenceOrder->code }}">
+                    @php
+                        $sequenceState = $monitorStateForOrder($sequenceOrder);
+                    @endphp
+                    <a class="monitor-sequence status-{{ $sequenceState }}" href="#monitor-order-{{ $sequenceOrder->id }}" title="{{ $sequenceOrder->customer?->name ?? $sequenceOrder->code }} · {{ $monitorStateLabels[$sequenceState] }}">
                         {{ $sequenceOrder->daily_sequence ?? $loop->iteration }}
                     </a>
                 @endforeach
@@ -1491,6 +1551,7 @@
                     @forelse($orders as $order)
                         @php
                             $isCancelled = $order->status === \App\Models\Order::STATUS_CANCELLED;
+                            $monitorState = $monitorStateForOrder($order);
                             $canApprove = !$isCancelled && ($canApproveByOrder[$order->id] ?? false);
                             $hasInvalidSizeItems = $order->items->contains(
                                 fn ($item) => (float) ($item->effective_unit_weight ?? 0) <= 0
@@ -1520,7 +1581,7 @@
                                 && in_array($order->status, \App\Models\Order::CANCELLABLE_STATUSES, true);
                             $canRequestAdjustment = $canManageOrder && $order->canRequestAdjustment();
                         @endphp
-                        <article class="monitor-panel monitor-order {{ $canManageOrder ? 'is-mine' : '' }} {{ $isCancelled ? 'is-cancelled' : '' }}" id="monitor-order-{{ $order->id }}">
+                        <article class="monitor-panel monitor-order status-{{ $monitorState }} {{ $canManageOrder ? 'is-mine' : '' }} {{ $isCancelled ? 'is-cancelled' : '' }}" id="monitor-order-{{ $order->id }}" title="{{ $monitorStateLabels[$monitorState] }}">
                             <div class="monitor-order-main">
                                 <div class="monitor-order-head">
                                     <div class="monitor-order-person">

@@ -30,6 +30,36 @@ class CompletedSalesJournalService
         string $path,
         array $query = []
     ): array {
+        $rows = $this->all($fromDate, $toDate, $saleId, $customerId, $sort);
+        $page = max(1, $page);
+
+        return [
+            'rows' => new LengthAwarePaginator(
+                $rows->forPage($page, $perPage)->values(),
+                $rows->count(),
+                $perPage,
+                $page,
+                ['path' => $path, 'query' => $query]
+            ),
+            'summary' => [
+                'rows' => $rows->count(),
+                'orders' => $rows->pluck('order_id')->unique()->count(),
+                'quantity' => (float) $rows->sum('total_quantity'),
+                'amount' => (float) $rows->sum('total_amount'),
+            ],
+        ];
+    }
+
+    /**
+     * Return every journal row matching the filters, without pagination.
+     */
+    public function all(
+        string $fromDate,
+        string $toDate,
+        int $saleId = 0,
+        int $customerId = 0,
+        string $sort = 'date_desc'
+    ): Collection {
         $dateExpression = 'COALESCE(orders.delivery_date, DATE(orders.delivered_at), DATE(orders.updated_at))';
 
         $orders = Order::query()
@@ -52,24 +82,8 @@ class CompletedSalesJournalService
             ->get();
 
         $rows = $orders->flatMap(fn (Order $order) => $this->rowsForOrder($order));
-        $rows = $this->sortRows($rows, $sort)->values();
-        $page = max(1, $page);
 
-        return [
-            'rows' => new LengthAwarePaginator(
-                $rows->forPage($page, $perPage)->values(),
-                $rows->count(),
-                $perPage,
-                $page,
-                ['path' => $path, 'query' => $query]
-            ),
-            'summary' => [
-                'rows' => $rows->count(),
-                'orders' => $rows->pluck('order_id')->unique()->count(),
-                'quantity' => (float) $rows->sum('total_quantity'),
-                'amount' => (float) $rows->sum('total_amount'),
-            ],
-        ];
+        return $this->sortRows($rows, $sort)->values();
     }
 
     private function rowsForOrder(Order $order): Collection

@@ -19,6 +19,7 @@ use App\Notifications\AccountingOrderRevenueConfirmed;
 use App\Services\SupplierDebtService;
 use App\Services\ApprovalService;
 use App\Services\CompletedSalesJournalService;
+use App\Services\GoogleSheetsJournalService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -1719,6 +1720,7 @@ class AccountingDashboardController extends Controller
                 'perPage' => $perPage,
                 'sales' => $sales,
                 'customers' => $customers,
+                'googleSheetsConfigured' => app(GoogleSheetsJournalService::class)->isConfigured(),
             ]);
         }
 
@@ -1836,6 +1838,46 @@ class AccountingDashboardController extends Controller
             'fromDate', 'toDate', 'saleId', 'customerId',
             'sort', 'perPage', 'sales', 'customers', 'tab',
         ));
+    }
+
+    public function syncDailySalesJournalToGoogleSheets(
+        Request $request,
+        CompletedSalesJournalService $journalService,
+        GoogleSheetsJournalService $googleSheets
+    ) {
+        $validated = $request->validate([
+            'from_date' => ['required', 'date_format:Y-m-d'],
+            'to_date' => ['required', 'date_format:Y-m-d'],
+            'sale_id' => ['nullable', 'integer', 'min:0'],
+            'customer_id' => ['nullable', 'integer', 'min:0'],
+            'sort' => ['nullable', 'in:date_desc,date_asc,product_asc,product_desc,amount_desc,amount_asc,qty_desc,qty_asc,weight_desc,weight_asc'],
+        ]);
+
+        $fromDate = $validated['from_date'];
+        $toDate = $validated['to_date'];
+        if ($fromDate > $toDate) {
+            [$fromDate, $toDate] = [$toDate, $fromDate];
+        }
+
+        try {
+            $rows = $journalService->all(
+                $fromDate,
+                $toDate,
+                (int) ($validated['sale_id'] ?? 0),
+                (int) ($validated['customer_id'] ?? 0),
+                (string) ($validated['sort'] ?? 'date_desc')
+            );
+            $result = $googleSheets->replaceJournal($rows);
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return back()->withInput()->with('error', 'Không thể ghi Google Sheets: '.$exception->getMessage());
+        }
+
+        return back()->with(
+            'success',
+            "Đã ghi toàn bộ {$result['rows']} dòng vào trang tính “{$result['sheet_name']}”."
+        );
     }
 
     public function financialReports(Request $request)

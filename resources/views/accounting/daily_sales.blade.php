@@ -194,7 +194,22 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                 <div class="fw-bold">Nhật ký đơn đã hoàn tất giao hàng</div>
                 <div class="small text-muted">Dữ liệu được lập trực tiếp từ đơn đã giao/hoàn tất, chưa yêu cầu xác nhận đối soát.</div>
             </div>
-            <div class="small text-muted">Tổng <strong>{{ number_format($journalRows->total()) }}</strong> dòng</div>
+            <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
+                <div class="small text-muted">Tổng <strong>{{ number_format($journalRows->total()) }}</strong> dòng</div>
+                <form method="POST" action="{{ route('accounting.daily-sales.google-sheets') }}">
+                    @csrf
+                    <input type="hidden" name="from_date" value="{{ $fromDate }}">
+                    <input type="hidden" name="to_date" value="{{ $toDate }}">
+                    <input type="hidden" name="sale_id" value="{{ $saleId }}">
+                    <input type="hidden" name="customer_id" value="{{ $customerId }}">
+                    <input type="hidden" name="sort" value="{{ $sort }}">
+                    <button class="btn btn-sm btn-success" type="submit" @disabled(! $googleSheetsConfigured)
+                            title="{{ $googleSheetsConfigured ? 'Ghi đè toàn bộ dữ liệu theo bộ lọc hiện tại' : 'Chưa cài khóa JSON của service account trên máy chủ' }}"
+                            onclick="return confirm('Ghi đè toàn bộ trang tính Nhật ký bán hàng bằng dữ liệu theo bộ lọc hiện tại?')">
+                        <i class="bi bi-file-earmark-spreadsheet me-1"></i>Ghi vào Google Sheets
+                    </button>
+                </form>
+            </div>
         </div>
 
         <div class="table-responsive">

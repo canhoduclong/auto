@@ -105,7 +105,8 @@ class AccountingSalesJournalTest extends TestCase
             ->assertSee('vat')
             ->assertSee('330.480')
             ->assertSee('thùng xốp')
-            ->assertSee('80.000');
+            ->assertSee('80.000')
+            ->assertSee('Ghi vào Google Sheets');
 
         $journal = app(CompletedSalesJournalService::class)->paginate(
             '2026-08-10',
@@ -124,5 +125,24 @@ class AccountingSalesJournalTest extends TestCase
             'Khách chưa giao không được ghi sổ',
             $journal['rows']->getCollection()->pluck('customer_name')->all()
         );
+
+        $this->mock(\App\Services\GoogleSheetsJournalService::class)
+            ->shouldReceive('replaceJournal')
+            ->once()
+            ->with(\Mockery::on(fn ($rows) => $rows->count() === 3))
+            ->andReturn([
+                'rows' => 3,
+                'spreadsheet_url' => 'https://docs.google.com/spreadsheets/d/test/edit',
+                'sheet_name' => 'Nhật ký bán hàng',
+            ]);
+
+        $this->actingAs($admin)->post(route('accounting.daily-sales.google-sheets'), [
+            'from_date' => '2026-08-10',
+            'to_date' => '2026-08-10',
+            'sale_id' => 0,
+            'customer_id' => 0,
+            'sort' => 'date_asc',
+        ])->assertRedirect()
+            ->assertSessionHas('success', 'Đã ghi toàn bộ 3 dòng vào trang tính “Nhật ký bán hàng”.');
     }
 }
