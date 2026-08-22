@@ -132,7 +132,7 @@ class ShipperDashboardController extends Controller
         $orders = Order::query()
             ->where('shipper_id', $shipperId)
             ->where(fn ($query) => $this->constrainAssignmentStatuses($query))
-            ->whereDate('created_at', $dateString)
+            ->forWorkflowDate($dateString)
             ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
             ->orderBy('daily_sequence', 'asc')
             ->orderByRaw("CASE WHEN delivery_time IS NULL OR delivery_time = '' THEN 1 ELSE 0 END")
@@ -160,7 +160,7 @@ class ShipperDashboardController extends Controller
             $orders = Order::query()
                 ->where('shipper_id', $order->shipper_id)
                 ->where(fn ($query) => $this->constrainAssignmentStatuses($query))
-                ->whereDate('created_at', $dateString)
+                ->forWorkflowDate($dateString)
                 ->orderBy('daily_sequence', 'asc')
                 ->orderBy('created_at', 'asc')
                 ->orderBy('id', 'asc')
@@ -326,7 +326,7 @@ class ShipperDashboardController extends Controller
                     $this->constrainNoActiveWarehouseTransfer($acceptedQuery);
                 });
             })
-            ->whereDate('created_at', $selectedDate)
+            ->forWorkflowDate($selectedDate)
             ->orderBy('created_at', 'asc')
             ->get();
 
@@ -370,6 +370,7 @@ class ShipperDashboardController extends Controller
 
                     $query->whereDate('updated_at', $today)
                         ->orWhereDate('created_at', $today)
+                        ->orWhere('skip_auto_cancel', true)
                         ->orWhereNotNull('accounting_sales_import_batch_id');
                 })
                 ->lockForUpdate()
@@ -1543,7 +1544,7 @@ class ShipperDashboardController extends Controller
                     ->orderByDesc('id'),
             ])
             ->where(fn ($query) => $this->constrainAssignmentStatuses($query))
-            ->whereDate('created_at', $selectedDate)
+            ->forWorkflowDate($selectedDate)
             ->orderByRaw("CASE WHEN delivery_time IS NULL OR delivery_time = '' THEN 1 ELSE 0 END")
             ->orderBy('delivery_time', 'asc')
             ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
@@ -1694,7 +1695,7 @@ class ShipperDashboardController extends Controller
         $orders = Order::with(['customer.defaultShipper'])
             ->whereNull('shipper_id')
             ->where(fn ($query) => $this->constrainAssignmentStatuses($query))
-            ->whereDate('created_at', $selectedDate)
+            ->forWorkflowDate($selectedDate)
             ->whereHas('customer', fn ($query) => $query->whereNotNull('default_shipper_id'))
             ->whereDoesntHave('histories', fn ($query) => $query->where('action', 'shipper_unassigned'))
             ->get();
@@ -1765,7 +1766,12 @@ class ShipperDashboardController extends Controller
         return OrderHistory::query()
             ->join('orders', 'orders.id', '=', 'order_histories.order_id')
             ->where('orders.shipper_id', $shipperId)
-            ->whereDate('orders.created_at', $selectedDate)
+            ->where(function ($dateQuery) use ($selectedDate): void {
+                $dateQuery->whereDate('orders.created_at', $selectedDate);
+                if (Carbon::parse($selectedDate)->isToday()) {
+                    $dateQuery->orWhere('orders.skip_auto_cancel', true);
+                }
+            })
             ->whereIn('order_histories.action', ['schedule_created', 'schedule_confirmed', 'schedule_rejected'])
             ->orderByDesc('order_histories.created_at')
             ->orderByDesc('order_histories.id')
@@ -1778,7 +1784,7 @@ class ShipperDashboardController extends Controller
         return Order::with(['customer', 'items.variant'])
             ->where('shipper_id', $shipperId)
             ->where(fn ($query) => $this->constrainAssignmentStatuses($query))
-            ->whereDate('created_at', $selectedDate)
+            ->forWorkflowDate($selectedDate)
             ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
             ->orderBy('daily_sequence', 'asc')
             ->orderBy('delivery_time', 'asc')
@@ -1941,7 +1947,7 @@ class ShipperDashboardController extends Controller
         $ordersQuery = Order::query()
             ->where('shipper_id', $fromShipper->id)
             ->where(fn ($query) => $this->constrainAssignmentStatuses($query))
-            ->whereDate('created_at', $date);
+            ->forWorkflowDate($date);
 
         $orders = DB::transaction(function () use ($ordersQuery, $fromShipper, $toShipper, $validated) {
             $orders = $ordersQuery->lockForUpdate()->get();
@@ -2058,7 +2064,7 @@ class ShipperDashboardController extends Controller
         $shipperIds = Order::query()
             ->whereNotNull('shipper_id')
             ->where(fn ($query) => $this->constrainAssignmentStatuses($query))
-            ->whereDate('created_at', $date)
+            ->forWorkflowDate($date)
             ->distinct('shipper_id')
             ->pluck('shipper_id')
             ->toArray();
@@ -2156,7 +2162,7 @@ class ShipperDashboardController extends Controller
         $orders = Order::with(['items', 'accountingReconciliation'])
             ->whereIn('id', $plannedOrders->keys()->all())
             ->where(fn ($query) => $this->constrainAssignmentStatuses($query))
-            ->whereDate('created_at', $date)
+            ->forWorkflowDate($date)
             ->get()
             ->keyBy('id');
 
@@ -2410,7 +2416,7 @@ class ShipperDashboardController extends Controller
             $orders = Order::query()
                 ->whereIn('id', $validated['order_ids'])
                 ->where('shipper_id', $userId)
-                ->whereDate('created_at', $selectedDate)
+                ->forWorkflowDate($selectedDate)
                 ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
                 ->orderBy('daily_sequence', 'asc')
                 ->orderBy('delivery_time', 'asc')
@@ -2452,7 +2458,7 @@ class ShipperDashboardController extends Controller
         $orders = Order::query()
             ->where('shipper_id', $userId)
             ->where(fn ($query) => $this->constrainAssignmentStatuses($query))
-            ->whereDate('created_at', $selectedDate)
+            ->forWorkflowDate($selectedDate)
             ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
             ->orderBy('daily_sequence', 'asc')
             ->orderBy('delivery_time', 'asc')

@@ -872,15 +872,11 @@ class WarehouseDashboardController extends Controller
 
         $todayOrdersQuery = Order::with(['items.product', 'items.variant.product'])
             ->whereIn('status', $queueStatuses)
-            ->where(function ($dateQuery) use ($selectedDate): void {
-                $dateQuery->where(function ($normalQuery) use ($selectedDate): void {
-                    $normalQuery->whereNull('accounting_sales_import_batch_id')
-                        ->whereDate('created_at', $selectedDate);
-                })->orWhere(function ($importQuery) use ($selectedDate): void {
-                    $importQuery->whereNotNull('accounting_sales_import_batch_id')
-                        ->whereDate('delivery_date', $selectedDate);
-                });
-            });
+            ->where(fn ($dateQuery) => $this->constrainWarehouseWorkflowDate(
+                $dateQuery,
+                $selectedDate,
+                $queueStatuses
+            ));
 
         if ($managedWarehouseId && Auth::user()?->hasRole('warehouse')) {
             $todayOrdersQuery->where(function ($warehouseScope) use ($managedWarehouseId, $queueStatuses) {
@@ -1013,15 +1009,15 @@ class WarehouseDashboardController extends Controller
                 $query->whereNull('is_return_order')
                     ->orWhere('is_return_order', false);
             })
-            ->where(function ($dateQuery) use ($selectedDate): void {
-                $dateQuery->where(function ($normalQuery) use ($selectedDate): void {
-                    $normalQuery->whereNull('accounting_sales_import_batch_id')
-                        ->whereDate('created_at', $selectedDate);
-                })->orWhere(function ($importQuery) use ($selectedDate): void {
-                    $importQuery->whereNotNull('accounting_sales_import_batch_id')
-                        ->whereDate('delivery_date', $selectedDate);
-                });
-            });
+            ->where(fn ($dateQuery) => $this->constrainWarehouseWorkflowDate(
+                $dateQuery,
+                $selectedDate,
+                array_merge(self::READY_TO_PACK_STATUSES, [
+                    Order::STATUS_PACKING,
+                    Order::STATUS_PACKED,
+                    Order::STATUS_READY_TO_SHIP,
+                ])
+            ));
 
         if ($managedWarehouseId && ($currentUser?->hasRole('warehouse') || $currentUser?->hasRole('package'))) {
             $ordersQuery->where(function ($warehouseScope) use ($managedWarehouseId, $sharedQueueStatuses) {
@@ -1729,7 +1725,7 @@ class WarehouseDashboardController extends Controller
                     ->orWhere('is_return_order', false);
             })
             ->whereIn('status', $queueStatuses)
-            ->whereDate('created_at', $forDate)
+            ->forWorkflowDate($forDate)
             ->when($warehouseId, fn ($query) => $query->where(function ($scope) use ($warehouseId) {
                 $scope->where('warehouse_id', $warehouseId)->orWhereNull('warehouse_id');
             }))
@@ -1814,7 +1810,7 @@ class WarehouseDashboardController extends Controller
         // Cross-date FIFO is wrong: old orders from other dates should have been auto-cancelled.
         $allQueueOrders = Order::with(['items.product', 'items.variant.product'])
             ->whereIn('status', $queueStatuses)
-            ->whereDate('created_at', $forDate)
+            ->forWorkflowDate($forDate)
             ->orderBy('created_at', 'asc')
             ->orderBy('id', 'asc')
             ->get();
@@ -2699,7 +2695,33 @@ class WarehouseDashboardController extends Controller
             return back()->with('error', $message);
         }
 
-        $order->update(['status' => Order::STATUS_READY_TO_SHIP]);
+        $packingWarehouseId = (int) ($order->warehouse_id ?: Auth::user()?->warehouse_id ?: 0);
+        if ($packingWarehouseId <= 0) {
+            $reservationWarehouseIds = InventoryReservation::query()
+                ->join('inventories', 'inventories.id', '=', 'inventory_reservations.inventory_id')
+                ->whereIn('inventory_reservations.order_item_id', $order->items()->pluck('id'))
+                ->distinct()
+                ->pluck('inventories.warehouse_id');
+
+            if ($reservationWarehouseIds->count() === 1) {
+                $packingWarehouseId = (int) $reservationWarehouseIds->first();
+            }
+        }
+
+        if ($packingWarehouseId <= 0) {
+            $message = 'Không xác định được kho đóng hàng. Vui lòng gán kho cho đơn trước khi hoàn tất đóng gói.';
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $message], 422);
+            }
+
+            return back()->with('error', $message);
+        }
+
+        $order->update([
+            'status' => Order::STATUS_READY_TO_SHIP,
+            'warehouse_id' => $packingWarehouseId,
+        ]);
 
         OrderHistory::create([
             'order_id' => $order->id,
@@ -5016,6 +5038,24 @@ class WarehouseDashboardController extends Controller
         return $order->accounting_sales_import_batch_id !== null
             || (bool) $order->skip_auto_cancel
             || ($order->created_at && $order->created_at->isToday());
+    }
+
+    private function constrainWarehouseWorkflowDate($dateQuery, string $date, array $restoredStatuses): void
+    {
+        $dateQuery->where(function ($normalQuery) use ($date): void {
+            $normalQuery->whereNull('accounting_sales_import_batch_id')
+                ->whereDate('created_at', $date);
+        })->orWhere(function ($importQuery) use ($date): void {
+            $importQuery->whereNotNull('accounting_sales_import_batch_id')
+                ->whereDate('delivery_date', $date);
+        });
+
+        if (Carbon::parse($date)->isToday()) {
+            $dateQuery->orWhere(function ($restoredQuery) use ($restoredStatuses): void {
+                $restoredQuery->where('skip_auto_cancel', true)
+                    ->whereIn('status', $restoredStatuses);
+            });
+        }
     }
 
     private function packingActorRole(): string

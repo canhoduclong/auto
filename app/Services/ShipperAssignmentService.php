@@ -30,7 +30,7 @@ class ShipperAssignmentService
         $orders = Order::query()
             ->where('shipper_id', $shipperId)
             ->whereIn('status', $this->assignmentStatuses())
-            ->whereDate('created_at', $dateString)
+            ->forWorkflowDate($dateString)
             ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
             ->orderBy('daily_sequence')
             ->orderBy('delivery_time')
@@ -54,7 +54,12 @@ class ShipperAssignmentService
         $latestHistory = OrderHistory::query()
             ->join('orders', 'orders.id', '=', 'order_histories.order_id')
             ->where('orders.shipper_id', $shipperId)
-            ->whereDate('orders.created_at', $dateString)
+            ->where(function ($dateQuery) use ($dateString): void {
+                $dateQuery->whereDate('orders.created_at', $dateString);
+                if (Carbon::parse($dateString)->isToday()) {
+                    $dateQuery->orWhere('orders.skip_auto_cancel', true);
+                }
+            })
             ->whereIn('order_histories.action', ['schedule_created', 'schedule_confirmed', 'schedule_rejected'])
             ->orderByDesc('order_histories.created_at')
             ->orderByDesc('order_histories.id')
@@ -79,7 +84,7 @@ class ShipperAssignmentService
         $orders = Order::query()
             ->where('shipper_id', $shipperId)
             ->whereIn('status', $this->assignmentStatuses())
-            ->whereDate('created_at', $dateString)
+            ->forWorkflowDate($dateString)
             ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
             ->orderBy('daily_sequence')
             ->orderBy('delivery_time')
@@ -112,7 +117,12 @@ class ShipperAssignmentService
         $latestHistory = OrderHistory::query()
             ->join('orders', 'orders.id', '=', 'order_histories.order_id')
             ->where('orders.shipper_id', $shipperId)
-            ->whereDate('orders.created_at', $dateString)
+            ->where(function ($dateQuery) use ($dateString): void {
+                $dateQuery->whereDate('orders.created_at', $dateString);
+                if (Carbon::parse($dateString)->isToday()) {
+                    $dateQuery->orWhere('orders.skip_auto_cancel', true);
+                }
+            })
             ->whereIn('order_histories.action', ['schedule_created', 'schedule_confirmed', 'schedule_rejected'])
             ->orderByDesc('order_histories.created_at')
             ->orderByDesc('order_histories.id')

@@ -111,6 +111,87 @@ class AdminRestoreCancelledOrderTest extends TestCase
             ->sum('quantity'));
     }
 
+    public function test_restored_exception_order_can_be_packed_delivered_and_recognized_as_revenue(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-22 10:00:00', 'Asia/Bangkok'));
+        [$admin, $order] = $this->createCancelledOrder(10, 10);
+        $order->forceFill([
+            'code' => 'RESTORED-EXCEPTION-FLOW',
+            'created_at' => now()->subDay(),
+        ])->saveQuietly();
+
+        $this->actingAs($admin)
+            ->post(route('site.orders.restore-cancelled', $order))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $order->refresh();
+        $this->assertTrue($order->skip_auto_cancel);
+        $this->assertSame(Order::STATUS_PACKING, $order->status);
+
+        $this->actingAs($admin)
+            ->get(route('warehouse.orders', ['date' => now()->toDateString()]))
+            ->assertOk()
+            ->assertSee('order-card-'.$order->id, false)
+            ->assertSee(route('warehouse.orders.complete-packing', $order), false);
+
+        $order->update(['actual_weight' => 25]);
+        $this->actingAs($admin)
+            ->post(route('warehouse.orders.complete-packing', $order))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+        $this->assertSame(Order::STATUS_READY_TO_SHIP, $order->fresh()->status);
+
+        $shipper = User::factory()->create(['name' => 'Shipper đơn ngoại lệ']);
+        $shipper->roles()->attach(Role::query()->create(['name' => 'shipper']));
+        $order->update(['shipper_id' => $shipper->id]);
+        OrderHistory::query()->create([
+            'order_id' => $order->id,
+            'action' => 'schedule_confirmed',
+            'user_id' => $shipper->id,
+            'role' => 'shipper',
+            'status_before' => Order::STATUS_READY_TO_SHIP,
+            'status_after' => Order::STATUS_READY_TO_SHIP,
+            'note' => 'Xác nhận lịch giao cho đơn ngoại lệ',
+        ]);
+
+        $this->actingAs($shipper)
+            ->get(route('shipper.available', ['date' => now()->toDateString()]))
+            ->assertOk()
+            ->assertSee($order->code)
+            ->assertSee('Nhận đơn này');
+
+        $this->actingAs($shipper)
+            ->post(route('shipper.accept', $order))
+            ->assertRedirect(route('shipper.my-orders'));
+        $this->assertSame(Order::STATUS_DELIVERING, $order->fresh()->status);
+
+        $this->actingAs($shipper)
+            ->post(route('shipper.mark-delivered', $order), [
+                'collected_amount' => 500000,
+                'has_partial_return' => 0,
+            ])
+            ->assertRedirect(route('shipper.my-orders'))
+            ->assertSessionHas('success');
+        $this->assertSame(Order::STATUS_DELIVERED, $order->fresh()->status);
+
+        $this->actingAs($admin)
+            ->postJson(route('accounting.reconciliation.confirm', $order), [
+                'note' => 'Xác nhận doanh thu đơn khôi phục ngoại lệ',
+            ])
+            ->assertOk()
+            ->assertJsonPath('reconciliation.status', 'confirmed');
+
+        $this->assertSame(Order::STATUS_COMPLETED, $order->fresh()->status);
+        $this->assertDatabaseHas('accounting_reconciliations', [
+            'order_id' => $order->id,
+            'status' => 'confirmed',
+        ]);
+        $this->assertDatabaseHas('accounting_sales_entries', [
+            'order_id' => $order->id,
+        ]);
+    }
+
     /**
      * @return array{User, Order, Inventory}
      */

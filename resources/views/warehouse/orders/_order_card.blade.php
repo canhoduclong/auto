@@ -1,7 +1,11 @@
             @php
                 $orderCardReadonly = (bool) ($orderCardReadonly ?? false);
                 $isTodaySelected = \Illuminate\Support\Carbon::parse($selectedDate ?? now()->toDateString())->isToday();
-                $canProcessThisOrder = !$orderCardReadonly && $isTodaySelected && $order->created_at->isToday();
+                $canProcessThisOrder = !$orderCardReadonly && (
+                    $order->accounting_sales_import_batch_id !== null
+                    || (bool) $order->skip_auto_cancel
+                    || ($isTodaySelected && $order->created_at->isToday())
+                );
                 $meta = $statusMeta[$order->status] ?? ['label' => $order->status, 'class' => 'bg-secondary'];
                 $isReadyToPack = in_array($order->status, ['approved', 'ready_to_pack'], true);
                 $isPacking = $order->status === 'packing';

@@ -6,6 +6,7 @@ use App\Enums\OrderStatus;
 use App\Enums\PaymentStatus;
 use App\Models\ApprovalOrder;
 use App\Models\OrderHistory;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Schema;
@@ -140,6 +141,24 @@ class Order extends Model
     public function scopeForDeliveryDate($query, string $date)
     {
         return $query->whereDate('delivery_date', $date);
+    }
+
+    /**
+     * Keep explicitly restored orders in today's operational queue even when
+     * their original creation date is older.
+     */
+    public function scopeForWorkflowDate($query, string $date)
+    {
+        $createdAt = $this->qualifyColumn('created_at');
+        $skipAutoCancel = $this->qualifyColumn('skip_auto_cancel');
+
+        return $query->where(function ($dateQuery) use ($date, $createdAt, $skipAutoCancel): void {
+            $dateQuery->whereDate($createdAt, $date);
+
+            if (Carbon::parse($date)->isToday()) {
+                $dateQuery->orWhere($skipAutoCancel, true);
+            }
+        });
     }
     
     public function approvals()

@@ -565,7 +565,10 @@
                     @foreach($group['orders'] as $order)
                         @php
                             $isAccepted = (string) $order->status === $acceptedStatus;
-                            $canAcceptToday = !$isAccepted && \Illuminate\Support\Carbon::parse($selectedDate)->isToday();
+                            $canAcceptToday = !$isAccepted && (
+                                \Illuminate\Support\Carbon::parse($selectedDate)->isToday()
+                                || (bool) $order->skip_auto_cancel
+                            );
                             $recipientName = $order->recipient_name ?: ($order->customer?->name ?? '—');
                             $deliveryAddress = $order->recipient_address ?: ($order->customer?->address ?? null);
                             $customerDeliveryTime = $order->delivery_time ?: $order->customer?->delivery_time;
@@ -633,7 +636,7 @@
                                                         <i class="bi {{ $isReturnOrder ? 'bi-arrow-return-left' : 'bi-truck' }}"></i> {{ $isReturnOrder ? 'Nhập kho trả' : 'Giao hàng' }}
                                                     </a>
                                                 </div>
-                                            @elseif($canAcceptToday && ($order->updated_at->isToday() || $order->created_at->isToday()))
+                                            @elseif($canAcceptToday && ($order->updated_at->isToday() || $order->created_at->isToday() || (bool) $order->skip_auto_cancel))
                                                 <form action="{{ route('shipper.accept', $order) }}" method="POST" class="js-shipper-accept-form">
                                                     @csrf
                                                     <button class="btn btn-teal shadow-sm d-inline-flex align-items-center gap-1" type="submit">
