@@ -539,7 +539,15 @@
                                                 } elseif ($variant?->product?->avatar?->media) {
                                                     $imageUrl = asset('storage/' . $variant->product->avatar->media->file_path);
                                                 }
-                                                $unitPrice = (float) ($item->price ?? 0);
+                                                // The price controls submit an adjustment from the current price list.
+                                                // Rebuild that adjustment from the persisted selling price so the
+                                                // browser and myOrderUpdate() always use the same base price.
+                                                $basePrice = (float) ($variant?->latestPriceRule?->price
+                                                    ?? $variant?->final_price
+                                                    ?? $item->base_price
+                                                    ?? $item->price
+                                                    ?? 0);
+                                                $savedSellingPrice = (float) ($item->price ?? $basePrice);
                                                 $qty = (int) ($item->quantity ?? 1);
                                                 $unitLabel = $variant?->product?->unit_label ?? 'Cái';
                                                 $unitWeight = (float) old('item_weight.' . ($variant?->id), $item->unit_weight ?? 0);
@@ -552,8 +560,10 @@
                                                     }
                                                     $unitWeight = round(max(0, $unitWeight), 3);
                                                 }
-                                                $unitDiscount = (float) old('item_discount.' . ($variant?->id), $item->unit_discount ?? 0);
-                                                $unitDiscountType = old('item_discount_type.' . ($variant?->id), $item->discount_type ?? 'decrease');
+                                                $savedDiscountType = $savedSellingPrice > $basePrice ? 'increase' : 'decrease';
+                                                $savedDiscount = abs($savedSellingPrice - $basePrice);
+                                                $unitDiscount = (float) old('item_discount.' . ($variant?->id), $savedDiscount);
+                                                $unitDiscountType = old('item_discount_type.' . ($variant?->id), $savedDiscountType);
                                                 $unitDiscountType = $unitDiscountType === 'increase' ? 'increase' : 'decrease';
                                                 $isPricedByKg = old('item_is_priced_by_kg.' . ($variant?->id), $item->is_priced_by_kg ?? ($variant?->is_priced_by_kg ?? $variant?->product?->is_priced_by_kg ?? true));
                                                 $isPricedByKg = filter_var($isPricedByKg, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
@@ -561,10 +571,10 @@
                                                 $minPrice = (float) ($variant?->latestPriceRule?->min_price ?? 0);
                                                 $unitDiscount = max(0, $unitDiscount);
                                                 $lineUnitPrice = $unitDiscountType === 'increase'
-                                                    ? ($unitPrice + $unitDiscount)
-                                                    : ($unitPrice - $unitDiscount);
+                                                    ? ($basePrice + $unitDiscount)
+                                                    : ($basePrice - $unitDiscount);
                                                 $pricingFactor = $isPricedByKg ? max($unitWeight, 0) : 1;
-                                                $lineTotal = (float) ($item->total ?? ($lineUnitPrice * $qty * $pricingFactor));
+                                                $lineTotal = $lineUnitPrice * $qty * $pricingFactor;
                                             @endphp
                                             <tr class="cart-item-row" data-variant-id="{{ $variant?->id }}" data-is-priced-by-kg="{{ $isPricedByKg ? '1' : '0' }}">
                                                 <td>
@@ -578,7 +588,7 @@
                                                     <input type="hidden" name="items[{{ $index }}][variant_id]" value="{{ $variant?->id }}">
                                                 </td>
                                                 <td>{{ $variant?->size ?? '--' }}</td>
-                                                <td class="price text-center" data-price="{{ $unitPrice }}" data-min-price="{{ $minPrice }}">
+                                                <td class="price text-center" data-price="{{ $basePrice }}" data-min-price="{{ $minPrice }}">
                                                     <div class="selling-price-stepper">
                                                         <button type="button" class="btn btn-sm selling-price-decrease" aria-label="Giảm đơn giá 1.000 đồng" title="Giảm 1.000đ">−</button>
                                                         <span class="selling-price-value">{{ number_format($lineUnitPrice, 0, ',', '.') }}đ</span>
