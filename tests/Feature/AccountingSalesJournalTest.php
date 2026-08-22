@@ -179,7 +179,7 @@ class AccountingSalesJournalTest extends TestCase
             ->assertSessionHas('google_sheets_url', 'https://docs.google.com/spreadsheets/d/test/edit');
     }
 
-    public function test_confirming_partial_return_completes_sale_and_journals_only_delivered_quantity(): void
+    public function test_partial_delivery_is_journaled_before_and_after_warehouse_confirmation(): void
     {
         $warehouse = Warehouse::query()->create([
             'name' => 'Kho nhận hàng giao một phần',
@@ -247,7 +247,10 @@ class AccountingSalesJournalTest extends TestCase
 
         $journal = app(CompletedSalesJournalService::class);
         $date = $order->created_at->toDateString();
-        $this->assertCount(0, $journal->all($date, $date));
+        $rowsBeforeWarehouseConfirmation = $journal->all($date, $date);
+        $this->assertCount(1, $rowsBeforeWarehouseConfirmation);
+        $this->assertSame(6.0, (float) $rowsBeforeWarehouseConfirmation->first()->quantity);
+        $this->assertSame(600000.0, (float) $rowsBeforeWarehouseConfirmation->first()->total_amount);
 
         $this->actingAs($warehouseUser)
             ->post(route('warehouse.returns.confirm', $order))

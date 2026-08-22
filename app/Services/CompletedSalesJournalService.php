@@ -74,13 +74,10 @@ class CompletedSalesJournalService
                     ->latest('id')
                     ->with('items'),
             ])
+            // A partial return does not defer recognition of the quantity
+            // already delivered to the customer. Warehouse receipt only
+            // completes the returned-stock workflow.
             ->whereIn('status', [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED])
-            ->whereDoesntHave('returnRecords', fn ($returns) => $returns
-                ->where('return_scope', 'partial')
-                ->where(function ($statuses): void {
-                    $statuses->whereNull('status')
-                        ->orWhere('status', '!=', 'warehouse_received');
-                }))
             ->whereRaw("{$dateExpression} BETWEEN ? AND ?", [$fromDate, $toDate])
             ->when($saleId > 0, fn ($orders) => $orders->where('user_id', $saleId))
             ->when($customerId > 0, fn ($orders) => $orders->where('customer_id', $customerId))
