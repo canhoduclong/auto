@@ -52,10 +52,26 @@
 
 @section('accounting_content')
 
+<ul class="nav nav-tabs mb-3">
+    <li class="nav-item">
+        <a class="nav-link {{ $tab === 'overview' ? 'active' : '' }}"
+           href="{{ request()->fullUrlWithQuery(['tab' => 'overview', 'page' => 1]) }}">
+            <i class="bi bi-bar-chart me-1"></i>Thống kê bán hàng
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {{ $tab === 'journal' ? 'active' : '' }}"
+           href="{{ request()->fullUrlWithQuery(['tab' => 'journal', 'page' => 1]) }}">
+            <i class="bi bi-journal-text me-1"></i>Nhật ký bán hàng
+        </a>
+    </li>
+</ul>
+
 {{-- ── Filter ─────────────────────────────────────────────────────── --}}
 <div class="acc-card mb-3">
     <div class="card-body">
         <form method="GET" id="filterForm">
+            <input type="hidden" name="tab" value="{{ $tab }}">
             <div class="ds-filter">
                 <div>
                     <label class="form-label small fw-semibold">Từ ngày</label>
@@ -147,6 +163,104 @@
 $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',', '.'), '0'), ',');
 @endphp
 
+@if($tab === 'journal')
+<div class="ds-kpi">
+    <div class="ds-kpi-item">
+        <div class="lbl">Tổng tiền có thể thu</div>
+        <div class="val text-success">{{ number_format((float) $journalSummary['amount'], 0, ',', '.') }}đ</div>
+        <div class="sub">Đơn đã giao hoặc hoàn tất</div>
+    </div>
+    <div class="ds-kpi-item">
+        <div class="lbl">Tổng SL/KL quy đổi</div>
+        <div class="val text-primary">{{ $fmtN((float) $journalSummary['quantity']) }}</div>
+        <div class="sub">Bao gồm dòng VAT và thùng xốp</div>
+    </div>
+    <div class="ds-kpi-item">
+        <div class="lbl">Số đơn</div>
+        <div class="val">{{ number_format((int) $journalSummary['orders']) }}</div>
+        <div class="sub">Đủ điều kiện ghi nhật ký</div>
+    </div>
+    <div class="ds-kpi-item">
+        <div class="lbl">Số dòng</div>
+        <div class="val">{{ number_format((int) $journalSummary['rows']) }}</div>
+        <div class="sub">Sản phẩm và phụ phí</div>
+    </div>
+</div>
+
+<div class="acc-card">
+    <div class="card-body">
+        <div class="ds-toolbar">
+            <div>
+                <div class="fw-bold">Nhật ký đơn đã hoàn tất giao hàng</div>
+                <div class="small text-muted">Dữ liệu được lập trực tiếp từ đơn đã giao/hoàn tất, chưa yêu cầu xác nhận đối soát.</div>
+            </div>
+            <div class="small text-muted">Tổng <strong>{{ number_format($journalRows->total()) }}</strong> dòng</div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-hover align-middle ds-table">
+                <thead class="table-light">
+                    <tr>
+                        <th>Ngày tháng</th>
+                        <th class="text-center">Tháng</th>
+                        <th>Mã KH</th>
+                        <th>Khách hàng</th>
+                        <th>NVKD</th>
+                        <th>Sản phẩm</th>
+                        <th class="text-end">SL</th>
+                        <th class="text-end">Kg/con</th>
+                        <th class="text-end">Tổng</th>
+                        <th class="text-end">Đơn giá</th>
+                        <th class="text-end">Tổng tiền</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($journalRows as $row)
+                        <tr>
+                            <td>
+                                <a href="{{ route('accounting.orders.detail', $row->order_id) }}" class="text-decoration-none" title="Đơn {{ $row->order_code }}">
+                                    {{ \Carbon\Carbon::parse($row->entry_date)->format('d/m/Y') }}
+                                </a>
+                            </td>
+                            <td class="text-center">{{ $row->entry_month }}</td>
+                            <td class="fw-semibold">{{ $row->customer_code !== '' ? $row->customer_code : '—' }}</td>
+                            <td>{{ $row->customer_name }}</td>
+                            <td>{{ $row->sale_name !== '' ? $row->sale_name : '—' }}</td>
+                            <td class="fw-semibold">{{ $row->unit }}</td>
+                            <td class="text-end">{{ $fmtN((float) $row->quantity, 1) }}</td>
+                            <td class="text-end">{{ $fmtN((float) $row->unit_weight, 2) }}</td>
+                            <td class="text-end">{{ $fmtN((float) $row->total_quantity, 1) }}</td>
+                            <td class="text-end">{{ $row->unit_price === null ? '—' : number_format((float) $row->unit_price, 0, ',', '.') }}</td>
+                            <td class="text-end fw-bold {{ (float) $row->total_amount < 0 ? 'text-danger' : 'text-success' }}">
+                                {{ (float) $row->total_amount == 0.0 ? '—' : number_format((float) $row->total_amount, 0, ',', '.') }}
+                            </td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="11" class="text-center text-muted py-4">Không có đơn đã giao hoặc hoàn tất trong khoảng ngày này.</td></tr>
+                    @endforelse
+                </tbody>
+                @if($journalRows->isNotEmpty())
+                    <tfoot class="table-light fw-semibold">
+                        <tr>
+                            <td colspan="8" class="text-end">Tổng trang:</td>
+                            <td class="text-end">{{ $fmtN((float) $journalRows->sum('total_quantity'), 1) }}</td>
+                            <td></td>
+                            <td class="text-end text-success">{{ number_format((float) $journalRows->sum('total_amount'), 0, ',', '.') }}đ</td>
+                        </tr>
+                    </tfoot>
+                @endif
+            </table>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
+            <div class="text-muted small">
+                Hiển thị {{ $journalRows->firstItem() ?? 0 }}–{{ $journalRows->lastItem() ?? 0 }} / {{ number_format($journalRows->total()) }} dòng
+            </div>
+            {{ $journalRows->links() }}
+        </div>
+    </div>
+</div>
+@else
 {{-- ── KPI ──────────────────────────────────────────────────────────── --}}
 <div class="ds-kpi">
     <div class="ds-kpi-item">
@@ -390,6 +504,7 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
     </div>
 </div>
 
+@endif
 @endsection
 
 @push('scripts')

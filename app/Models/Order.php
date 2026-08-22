@@ -217,6 +217,22 @@ class Order extends Model
         self::STATUS_ORDER_PLACED,
     ];
 
+    /**
+     * Kho đóng hàng chỉ được đổi trước khi nhân viên kho bắt đầu xử lý đơn.
+     */
+    public const WAREHOUSE_ASSIGNABLE_STATUSES = [
+        'draft',
+        'pending',
+        self::STATUS_PENDING_LEADER_APPROVAL,
+        self::STATUS_PENDING_MANAGER_APPROVAL,
+        'pending_warehouse_approval',
+        self::STATUS_ORDER_PLACED,
+        self::STATUS_ORDER_CONFIRMED,
+        'confirmed',
+        self::STATUS_APPROVED,
+        self::STATUS_READY_TO_PACK,
+    ];
+
     public function canBeCancelled(): bool
     {
         return in_array((string) $this->status, self::CANCELLABLE_STATUSES, true);

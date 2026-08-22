@@ -18,6 +18,7 @@ use App\Models\Warehouse;
 use App\Notifications\AccountingOrderRevenueConfirmed;
 use App\Services\SupplierDebtService;
 use App\Services\ApprovalService;
+use App\Services\CompletedSalesJournalService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -1666,6 +1667,11 @@ class AccountingDashboardController extends Controller
 
     public function dailySales(Request $request)
     {
+        $tab = (string) $request->input('tab', 'overview');
+        if (! in_array($tab, ['overview', 'journal'], true)) {
+            $tab = 'overview';
+        }
+
         $fromDate = (string) $request->input('from_date', now()->toDateString());
         $toDate = (string) $request->input('to_date', now()->toDateString());
         $from = Carbon::parse($fromDate)->startOfDay();
@@ -1683,6 +1689,37 @@ class AccountingDashboardController extends Controller
         $perPage = (int) $request->input('per_page', 20);
         if (! in_array($perPage, $allowedPerPage, true)) {
             $perPage = 20;
+        }
+
+        $sales = User::query()->orderBy('name')->select('id', 'name')->get();
+        $customers = Customer::query()->orderBy('name')->select('id', 'name', 'customer_code')->get();
+
+        if ($tab === 'journal') {
+            $journal = app(CompletedSalesJournalService::class)->paginate(
+                $fromDate,
+                $toDate,
+                $saleId,
+                $customerId,
+                $sort,
+                $perPage,
+                (int) $request->input('page', 1),
+                $request->url(),
+                $request->query()
+            );
+
+            return view('accounting.daily_sales', [
+                'tab' => $tab,
+                'journalRows' => $journal['rows'],
+                'journalSummary' => $journal['summary'],
+                'fromDate' => $fromDate,
+                'toDate' => $toDate,
+                'saleId' => $saleId,
+                'customerId' => $customerId,
+                'sort' => $sort,
+                'perPage' => $perPage,
+                'sales' => $sales,
+                'customers' => $customers,
+            ]);
         }
 
         // Sub-query: one approved adjustment item per order_item (latest id wins)
@@ -1794,13 +1831,10 @@ class AccountingDashboardController extends Controller
             ->orderByDesc('total_amount')
             ->get();
 
-        $sales = User::query()->orderBy('name')->select('id', 'name')->get();
-        $customers = Customer::query()->orderBy('name')->select('id', 'name', 'customer_code')->get();
-
         return view('accounting.daily_sales', compact(
             'items', 'productStats', 'summary',
             'fromDate', 'toDate', 'saleId', 'customerId',
-            'sort', 'perPage', 'sales', 'customers',
+            'sort', 'perPage', 'sales', 'customers', 'tab',
         ));
     }
 

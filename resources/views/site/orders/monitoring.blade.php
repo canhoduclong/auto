@@ -829,6 +829,7 @@
     if ($activeMonitorRole === '' && $monitorUser?->hasRole('sale')) {
         $isSaleViewingRole = !$monitorUser->hasRole(['admin', 'leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale']);
     }
+    $canAssignPackingWarehouse = $monitorUser?->hasRole(['manager', 'manager_sale', 'director', 'admin']) ?? false;
     $visibleDailyOrderNotes = $dailyOrderNotes
         ->filter(fn ($noteOrder) => !$isSaleViewingRole || (int) $noteOrder->user_id === (int) $monitorUser?->id)
         ->values();
@@ -1399,6 +1400,7 @@
                                     <th class="text-end">Giá bán</th>
                                     <th class="text-end">Tiền bán</th>
                                     <th>Nhà cung cấp</th>
+                                    <th>Kho đóng hàng</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -1456,11 +1458,30 @@
                                                         <span class="text-muted">{{ $order->supplier?->name ?? 'Chưa gắn' }}</span>
                                                     @endif
                                                 </td>
+                                                <td rowspan="{{ $listRowspan }}" class="monitor-list-warehouse">
+                                                    @if($canAssignPackingWarehouse && in_array((string) $order->status, \App\Models\Order::WAREHOUSE_ASSIGNABLE_STATUSES, true))
+                                                        <form method="POST" action="{{ route('pages.my_orders.monitoring.warehouse', $order) }}">
+                                                            @csrf
+                                                            @method('PUT')
+                                                            <select class="form-select form-select-sm" name="warehouse_id" required onchange="this.form.submit()" aria-label="Chọn kho đóng hàng cho đơn {{ $order->code ?: $order->id }}">
+                                                                <option value="">-- Chọn kho --</option>
+                                                                @foreach($monitoringWarehouses as $warehouse)
+                                                                    <option value="{{ $warehouse->id }}" @selected((int) $order->warehouse_id === (int) $warehouse->id)>{{ $warehouse->name }}</option>
+                                                                @endforeach
+                                                            </select>
+                                                        </form>
+                                                    @else
+                                                        <span class="text-muted">{{ $order->warehouse?->name ?? 'Chưa chọn' }}</span>
+                                                        @if($canAssignPackingWarehouse && $order->warehouse_id)
+                                                            <small class="d-block text-muted">Đơn đã bắt đầu xử lý</small>
+                                                        @endif
+                                                    @endif
+                                                </td>
                                             @endif
                                         </tr>
                                     @endforeach
                                 @empty
-                                    <tr><td colspan="9" class="py-4 text-center text-muted">Không có đơn hàng phù hợp.</td></tr>
+                                    <tr><td colspan="10" class="py-4 text-center text-muted">Không có đơn hàng phù hợp.</td></tr>
                                 @endforelse
                             </tbody>
                         </table>

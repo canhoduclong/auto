@@ -106,7 +106,7 @@ class AccountingSalesLedgerService
         return compact('orders', 'entries');
     }
 
-    private function ledgerUnit(?string $productName, ?string $unitLabel): string
+    public function ledgerUnit(?string $productName, ?string $unitLabel): string
     {
         $name = trim((string) $productName);
         if ($name !== '' && !Str::contains(Str::lower($name), ['vịt nguyên con', 'nguyên con'])) {

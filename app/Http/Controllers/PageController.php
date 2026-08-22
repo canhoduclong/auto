@@ -980,6 +980,7 @@ class PageController extends Controller
                 'user.roles',
                 'shipper',
                 'supplier',
+                'warehouse:id,name',
                 'accountingReconciliation',
                 'approvals.step',
                 'items.product',

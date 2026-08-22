@@ -1577,6 +1577,68 @@ class OrderController extends Controller
         return back()->with('success', "Đã phục hồi đơn về trạng thái {$restoredStatus}.{$stockMessage}");
     }
 
+    public function updateWarehouseFromMonitoring(Request $request, Order $order)
+    {
+        $manager = $request->user();
+        if (!$manager || !$this->hasAnyRole($manager, ['manager', 'manager_sale', 'director', 'admin'])) {
+            abort(403, 'Chỉ manager mới có thể chọn kho đóng hàng.');
+        }
+
+        $validated = $request->validate([
+            'warehouse_id' => ['required', 'integer', 'exists:warehouses,id'],
+        ]);
+        $warehouse = Warehouse::query()
+            ->whereKey((int) $validated['warehouse_id'])
+            ->where('status', true)
+            ->first();
+
+        if (!$warehouse) {
+            return back()->withErrors(['warehouse_id' => 'Kho đã ngừng hoạt động hoặc không tồn tại.']);
+        }
+
+        try {
+            [$orderDate, $oldWarehouseName] = DB::transaction(function () use ($order, $warehouse, $manager): array {
+                $lockedOrder = Order::query()
+                    ->with(['items.variant', 'warehouse:id,name'])
+                    ->lockForUpdate()
+                    ->findOrFail($order->id);
+
+                if (!in_array((string) $lockedOrder->status, Order::WAREHOUSE_ASSIGNABLE_STATUSES, true)) {
+                    throw new \RuntimeException('Không thể đổi kho vì đơn đã bắt đầu đóng hàng hoặc đã chuyển sang bước tiếp theo.');
+                }
+
+                $status = (string) $lockedOrder->status;
+                $oldWarehouseName = $lockedOrder->warehouse?->name ?: 'Chưa chọn kho';
+
+                $this->releaseReservedStockForOrder($lockedOrder);
+                $this->reserveStockForOrder($lockedOrder, (int) $warehouse->id, true);
+                $lockedOrder->forceFill(['warehouse_id' => $warehouse->id])->save();
+
+                $this->logOrderHistory(
+                    $lockedOrder,
+                    'manager_assign_packing_warehouse',
+                    $status,
+                    $status,
+                    "Manager đổi kho đóng hàng từ {$oldWarehouseName} sang {$warehouse->name}; giữ phần tồn hiện có và cho phép bổ sung kho sau",
+                    $manager
+                );
+
+                return [$lockedOrder->created_at ?: now(), $oldWarehouseName];
+            });
+        } catch (\RuntimeException $exception) {
+            return back()->with('error', $exception->getMessage());
+        }
+
+        $this->syncDailySequenceAndStockSufficiency($orderDate);
+        $order->refresh();
+
+        $stockMessage = $order->stock_sufficient === false
+            ? ' Đơn đang thiếu tồn và có thể tiếp tục sau khi bổ sung kho.'
+            : '';
+
+        return back()->with('success', "Đã chuyển kho đóng hàng từ {$oldWarehouseName} sang {$warehouse->name}.{$stockMessage}");
+    }
+
     public function toggleStatus(Request $request, Order $order)
     {
         $request->validate([
