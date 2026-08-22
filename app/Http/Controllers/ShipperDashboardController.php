@@ -91,7 +91,16 @@ class ShipperDashboardController extends Controller
                     });
             });
 
-        $this->constrainConfirmedDeliverySchedule($query);
+        // Restored exception orders were explicitly reopened by an admin and
+        // must be able to resume from packing through delivery. Their previous
+        // schedule confirmation may have been invalidated by the cancellation,
+        // so the assigned shipper must not be blocked from receiving them.
+        $query->where(function ($scheduleQuery): void {
+            $scheduleQuery->where('skip_auto_cancel', true)
+                ->orWhere(function ($confirmedQuery): void {
+                    $this->constrainConfirmedDeliverySchedule($confirmedQuery);
+                });
+        });
 
         $this->constrainNoActiveWarehouseTransfer($query);
     }

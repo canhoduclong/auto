@@ -150,14 +150,42 @@ class Order extends Model
     public function scopeForWorkflowDate($query, string $date)
     {
         $createdAt = $this->qualifyColumn('created_at');
+        $deliveryDate = $this->qualifyColumn('delivery_date');
         $skipAutoCancel = $this->qualifyColumn('skip_auto_cancel');
+        $orderId = $this->qualifyColumn($this->getKeyName());
 
-        return $query->where(function ($dateQuery) use ($date, $createdAt, $skipAutoCancel): void {
+        return $query->where(function ($dateQuery) use ($date, $createdAt, $deliveryDate, $skipAutoCancel, $orderId): void {
             $dateQuery->whereDate($createdAt, $date);
 
             if (Carbon::parse($date)->isToday()) {
                 $dateQuery->orWhere($skipAutoCancel, true);
+
+                return;
             }
+
+            // An explicitly restored order can originate from an older date.
+            // Keep it attached to its operational date so warehouse/dispatch
+            // screens can still publish and display its historical route.
+            $dateQuery->orWhere(function ($exceptionQuery) use ($date, $deliveryDate, $skipAutoCancel, $orderId): void {
+                $exceptionQuery->where($skipAutoCancel, true)
+                    ->where(function ($operationalDateQuery) use ($date, $deliveryDate, $orderId): void {
+                        $operationalDateQuery->whereDate($deliveryDate, $date)
+                            ->orWhereExists(function ($historyQuery) use ($date, $orderId): void {
+                                $historyQuery->selectRaw('1')
+                                    ->from('order_histories as restored_history')
+                                    ->whereColumn('restored_history.order_id', $orderId)
+                                    ->where('restored_history.action', 'restore_cancelled_order')
+                                    ->whereDate('restored_history.created_at', $date);
+                            })
+                            ->orWhereExists(function ($batchQuery) use ($date, $orderId): void {
+                                $batchQuery->selectRaw('1')
+                                    ->from('accounting_sales_import_batches as workflow_batch')
+                                    ->join('orders as imported_order', 'imported_order.accounting_sales_import_batch_id', '=', 'workflow_batch.id')
+                                    ->whereColumn('imported_order.id', $orderId)
+                                    ->whereDate('workflow_batch.business_date', $date);
+                            });
+                    });
+            });
         });
     }
     

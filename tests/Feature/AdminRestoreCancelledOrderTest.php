@@ -150,18 +150,21 @@ class AdminRestoreCancelledOrderTest extends TestCase
         $shipper = User::factory()->create(['name' => 'Shipper đơn ngoại lệ']);
         $shipper->roles()->attach(Role::query()->create(['name' => 'shipper']));
         $order->update(['shipper_id' => $shipper->id]);
+        // The manager has sent the restored exception route, but the shipper
+        // has not confirmed it again. Explicit exception orders must still be
+        // receivable so their operational workflow can continue.
         OrderHistory::query()->create([
             'order_id' => $order->id,
-            'action' => 'schedule_confirmed',
-            'user_id' => $shipper->id,
-            'role' => 'shipper',
+            'action' => 'schedule_created',
+            'user_id' => $admin->id,
+            'role' => 'manager_shipper',
             'status_before' => Order::STATUS_READY_TO_SHIP,
             'status_after' => Order::STATUS_READY_TO_SHIP,
-            'note' => 'Xác nhận lịch giao cho đơn ngoại lệ',
+            'note' => 'Gửi lịch giao cho đơn ngoại lệ',
         ]);
 
         $this->actingAs($shipper)
-            ->get(route('shipper.available', ['date' => now()->toDateString()]))
+            ->get(route('shipper.available', ['date' => $order->created_at->toDateString()]))
             ->assertOk()
             ->assertSee($order->code)
             ->assertSee('Nhận đơn này');
