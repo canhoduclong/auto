@@ -54,7 +54,7 @@ class OrderReturnController extends Controller
 
         $user = Auth::user();
         if ($user && $user->hasRole('warehouse')) {
-            if (!$user->warehouse_id) {
+            if (! $user->warehouse_id) {
                 $query->whereRaw('1=0');
             } else {
                 $query->where('warehouse_id', $user->warehouse_id);
@@ -74,7 +74,7 @@ class OrderReturnController extends Controller
             ->get();
 
         $mismatchCount = $returns->getCollection()
-            ->filter(fn (OrderReturn $return) => $return->status === 'warehouse_received' && !isset($receiptMap[$return->id]))
+            ->filter(fn (OrderReturn $return) => $return->status === 'warehouse_received' && ! isset($receiptMap[$return->id]))
             ->count();
 
         return view('order-returns.index', compact('returns', 'receiptMap', 'syncHistory', 'mismatchCount'));
@@ -90,7 +90,7 @@ class OrderReturnController extends Controller
             ->orderByDesc('warehouse_confirmed_at');
 
         if ($user->hasRole('warehouse')) {
-            if (!$user->warehouse_id) {
+            if (! $user->warehouse_id) {
                 return back()->with('error', 'Tai khoan kho chua duoc gan kho de dong bo.');
             }
 
@@ -127,7 +127,7 @@ class OrderReturnController extends Controller
                     $summary['receipts'][] = [
                         'order_return_id' => (int) $return->id,
                         'document_id' => (int) $document->id,
-                        'document_number' => (string) ($document->document_number ?? ('#' . $document->id)),
+                        'document_number' => (string) ($document->document_number ?? ('#'.$document->id)),
                         'action' => $result,
                         'items_adjusted' => (int) $adjustedItems,
                     ];
@@ -142,7 +142,7 @@ class OrderReturnController extends Controller
             'subject_type' => OrderReturn::class,
             'subject_id' => null,
             'title' => 'Dong bo don tra hang voi phieu nhap kho',
-            'message' => 'Da kiem tra ' . $summary['checked'] . ' don tra. Tao moi ' . $summary['created_count'] . ', cap nhat ' . $summary['updated_count'] . '.',
+            'message' => 'Da kiem tra '.$summary['checked'].' don tra. Tao moi '.$summary['created_count'].', cap nhat '.$summary['updated_count'].'.',
             'metadata' => $summary,
             'url' => route('order-returns.index'),
         ]);
@@ -175,11 +175,11 @@ class OrderReturnController extends Controller
                 'items' => $order->items->map(function ($item) {
                     $variant = $item->variant;
                     $productName = optional(optional($variant)->product)->name ?: 'San pham';
-                    $variantName = optional($variant)->name ?: ('Variant #' . $item->product_variant_id);
+                    $variantName = optional($variant)->name ?: ('Variant #'.$item->product_variant_id);
 
                     return [
                         'variant_id' => $item->product_variant_id,
-                        'name' => $productName . ' - ' . $variantName,
+                        'name' => $productName.' - '.$variantName,
                         'max_qty' => (int) $item->quantity,
                     ];
                 })->values(),
@@ -210,11 +210,11 @@ class OrderReturnController extends Controller
                 'items' => $orderItem->items->map(function ($item) {
                     $variant = $item->variant;
                     $productName = optional(optional($variant)->product)->name ?: 'San pham';
-                    $variantName = optional($variant)->name ?: ('Variant #' . $item->product_variant_id);
+                    $variantName = optional($variant)->name ?: ('Variant #'.$item->product_variant_id);
 
                     return [
                         'variant_id' => $item->product_variant_id,
-                        'name' => $productName . ' - ' . $variantName,
+                        'name' => $productName.' - '.$variantName,
                         'max_qty' => (int) $item->quantity,
                     ];
                 })->values(),
@@ -252,7 +252,7 @@ class OrderReturnController extends Controller
         $order = Order::with(['customer', 'items'])->findOrFail($data['order_id']);
         $this->authorizeReturnCreation($order);
 
-        if (!$order->customer_id) {
+        if (! $order->customer_id) {
             return back()->with('error', __('order_returns.messages.no_customer'))->withInput();
         }
 
@@ -315,7 +315,7 @@ class OrderReturnController extends Controller
 
         if ($createdReturn && $order->exists) {
             $status = (string) $order->status;
-            $this->logOrderHistory($order, 'create_return_request', $status, $status, 'Tao yeu cau tra hang #' . $createdReturn->id);
+            $this->logOrderHistory($order, 'create_return_request', $status, $status, 'Tao yeu cau tra hang #'.$createdReturn->id);
         }
 
         return redirect()->route('order-returns.index')->with('success', __('order_returns.messages.created'));
@@ -381,7 +381,7 @@ class OrderReturnController extends Controller
         $order = $orderReturn->order;
         $statusBefore = $order ? (string) $order->status : null;
 
-        if (!in_array($orderReturn->status, ['requested'], true)) {
+        if (! in_array($orderReturn->status, ['requested'], true)) {
             return back()->with('error', __('order_returns.messages.invalid_status_ship_confirm'));
         }
 
@@ -392,7 +392,7 @@ class OrderReturnController extends Controller
         ]);
 
         if ($order && $statusBefore !== null) {
-            $this->logOrderHistory($order, 'return_ship_confirmed', $statusBefore, (string) $order->status, 'Ship xac nhan don tra hang #' . $orderReturn->id);
+            $this->logOrderHistory($order, 'return_ship_confirmed', $statusBefore, (string) $order->status, 'Ship xac nhan don tra hang #'.$orderReturn->id);
         }
 
         return back()->with('success', __('order_returns.messages.ship_confirmed'));
@@ -403,11 +403,11 @@ class OrderReturnController extends Controller
         $user = Auth::user();
         abort_unless($user && ($user->hasRole('warehouse') || $user->hasRole('admin')), 403);
 
-        if ($user->hasRole('warehouse') && (!$user->warehouse_id || (int) $user->warehouse_id !== (int) $orderReturn->warehouse_id)) {
+        if ($user->hasRole('warehouse') && (! $user->warehouse_id || (int) $user->warehouse_id !== (int) $orderReturn->warehouse_id)) {
             return back()->with('error', __('order_returns.messages.not_allowed_warehouse_confirm'));
         }
 
-        if (!in_array($orderReturn->status, ['ship_confirmed'], true)) {
+        if (! in_array($orderReturn->status, ['ship_confirmed'], true)) {
             return back()->with('error', __('order_returns.messages.invalid_status_warehouse_confirm'));
         }
 
@@ -473,7 +473,7 @@ class OrderReturnController extends Controller
                 'amount' => $refundAmount,
                 'type' => 'refund',
                 'method' => 'return_refund',
-                'note' => 'Refund tu don tra hang #' . $orderReturn->id,
+                'note' => 'Refund tu don tra hang #'.$orderReturn->id,
             ]);
 
             $totalOrderedQty = (int) $orderReturn->order->items->sum('quantity');
@@ -501,9 +501,9 @@ class OrderReturnController extends Controller
                     - (float) $order->transactions()->where('type', 'refund')->sum('amount');
                 $order->amount_paid = $netPaid;
                 $order->payment_status = $netPaid >= (float) $order->total ? 'paid' : ($netPaid > 0 ? 'partially_paid' : 'unpaid');
-                if ($isFullReturn) {
-                    $order->status = Order::STATUS_RETURNED;
-                }
+                $order->status = $isFullReturn
+                    ? Order::STATUS_RETURNED
+                    : Order::STATUS_COMPLETED;
                 $order->save();
 
                 $this->logOrderHistory(
@@ -511,7 +511,7 @@ class OrderReturnController extends Controller
                     'return_warehouse_confirmed',
                     $statusBefore,
                     (string) $order->status,
-                    'Kho xac nhan tra hang #' . $orderReturn->id . ', refund ' . number_format($refundAmount, 2, '.', '')
+                    'Kho xac nhan tra hang #'.$orderReturn->id.', refund '.number_format($refundAmount, 2, '.', '')
                 );
             }
         });
@@ -522,7 +522,7 @@ class OrderReturnController extends Controller
     private function authorizeReturnCreation(?Order $order = null): void
     {
         $user = Auth::user();
-        if (!$user) {
+        if (! $user) {
             abort(403);
         }
 
@@ -565,19 +565,19 @@ class OrderReturnController extends Controller
             ->with('items')
             ->where('type', 'import')
             ->where('warehouse_id', $orderReturn->warehouse_id)
-            ->where('notes', 'like', '%' . $marker . '%')
+            ->where('notes', 'like', '%'.$marker.'%')
             ->latest('id')
             ->first();
 
         $result = 'unchanged';
         $adjustedItems = 0;
 
-        if (!$document) {
+        if (! $document) {
             $document = InventoryDocument::create([
                 'type' => 'import',
                 'warehouse_id' => $orderReturn->warehouse_id,
                 'document_date' => optional($orderReturn->warehouse_confirmed_at)->toDateString() ?: now()->toDateString(),
-                'notes' => 'Dong bo tu don tra hang #' . $orderReturn->id . ' ' . $marker,
+                'notes' => 'Dong bo tu don tra hang #'.$orderReturn->id.' '.$marker,
                 'shipping_fee' => 0,
                 'user_id' => $actorId,
             ]);
@@ -593,7 +593,7 @@ class OrderReturnController extends Controller
             $expectedUnitCost = (float) ($unitCostByVariant[$variantId] ?? 0);
 
             $item = $currentItems->get($variantId);
-            if (!$item) {
+            if (! $item) {
                 InventoryDocumentItem::create([
                     'inventory_document_id' => $document->id,
                     'product_variant_id' => $variantId,
@@ -604,6 +604,7 @@ class OrderReturnController extends Controller
                 if ($result === 'unchanged') {
                     $result = 'updated';
                 }
+
                 continue;
             }
 
@@ -622,7 +623,7 @@ class OrderReturnController extends Controller
         }
 
         $expectedVariantIds = $expectedItems->keys()->map(fn ($id) => (int) $id)->all();
-        $extraItems = $document->items->filter(fn ($item) => !in_array((int) $item->product_variant_id, $expectedVariantIds, true));
+        $extraItems = $document->items->filter(fn ($item) => ! in_array((int) $item->product_variant_id, $expectedVariantIds, true));
         if ($extraItems->isNotEmpty()) {
             $adjustedItems += $extraItems->count();
             InventoryDocumentItem::whereIn('id', $extraItems->pluck('id')->all())->delete();
@@ -633,7 +634,7 @@ class OrderReturnController extends Controller
 
         $desiredNotes = trim((string) $document->notes);
         if (strpos($desiredNotes, $marker) === false) {
-            $desiredNotes = trim($desiredNotes . ' ' . $marker);
+            $desiredNotes = trim($desiredNotes.' '.$marker);
         }
 
         $targetDate = optional($orderReturn->warehouse_confirmed_at)->toDateString() ?: optional($document->document_date)->toDateString() ?: now()->toDateString();
@@ -645,7 +646,7 @@ class OrderReturnController extends Controller
             $docUpdates['notes'] = $desiredNotes;
         }
 
-        if (!empty($docUpdates)) {
+        if (! empty($docUpdates)) {
             $document->update($docUpdates);
             if ($result === 'unchanged') {
                 $result = 'updated';
@@ -668,7 +669,7 @@ class OrderReturnController extends Controller
             ->where('type', 'import')
             ->where(function ($query) use ($returnIds) {
                 foreach ($returnIds as $returnId) {
-                    $query->orWhere('notes', 'like', '%' . $this->returnReceiptMarker($returnId) . '%');
+                    $query->orWhere('notes', 'like', '%'.$this->returnReceiptMarker($returnId).'%');
                 }
             })
             ->latest('id')
@@ -676,7 +677,7 @@ class OrderReturnController extends Controller
 
         $mapped = [];
         foreach ($documents as $document) {
-            if (!preg_match('/\[order_return:#(\d+)\]/', (string) $document->notes, $matches)) {
+            if (! preg_match('/\[order_return:#(\d+)\]/', (string) $document->notes, $matches)) {
                 continue;
             }
 
@@ -693,6 +694,6 @@ class OrderReturnController extends Controller
 
     private function returnReceiptMarker(int $returnId): string
     {
-        return self::RETURN_RECEIPT_NOTE_PREFIX . $returnId . ']';
+        return self::RETURN_RECEIPT_NOTE_PREFIX.$returnId.']';
     }
 }

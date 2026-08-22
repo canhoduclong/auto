@@ -68,12 +68,19 @@ class CompletedSalesJournalService
                 'user:id,name',
                 'items.product',
                 'items.variant.product',
+                'returnRecords:id,order_id,return_scope,status',
                 'adjustments' => fn ($adjustments) => $adjustments
                     ->where('status', OrderAdjustment::STATUS_APPROVED)
                     ->latest('id')
                     ->with('items'),
             ])
             ->whereIn('status', [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED])
+            ->whereDoesntHave('returnRecords', fn ($returns) => $returns
+                ->where('return_scope', 'partial')
+                ->where(function ($statuses): void {
+                    $statuses->whereNull('status')
+                        ->orWhere('status', '!=', 'warehouse_received');
+                }))
             ->whereRaw("{$dateExpression} BETWEEN ? AND ?", [$fromDate, $toDate])
             ->when($saleId > 0, fn ($orders) => $orders->where('user_id', $saleId))
             ->when($customerId > 0, fn ($orders) => $orders->where('customer_id', $customerId))
@@ -94,6 +101,8 @@ class CompletedSalesJournalService
             ->filter(fn ($item) => $item->order_item_id)
             ->groupBy('order_item_id')
             ->map->first();
+        $hasPartialDelivery = $order->returnRecords
+            ->contains(fn ($return) => (string) $return->return_scope === 'partial');
         $base = [
             'entry_date' => $entryDate,
             'entry_month' => (int) substr($entryDate, 5, 2),
@@ -122,7 +131,7 @@ class CompletedSalesJournalService
                 : 1.0;
             $unitPrice = (float) ($adjustment?->adjusted_price ?? $item->price ?? 0);
             $calculatedAmount = ($pricedByKg ? $totalQuantity : $quantity) * $unitPrice;
-            $totalAmount = $adjustment
+            $totalAmount = $adjustment || $hasPartialDelivery
                 ? $calculatedAmount
                 : (float) ($item->total ?? $calculatedAmount);
             $product = $item->product ?: $item->variant?->product;

@@ -40,12 +40,14 @@ class ReceivingController extends Controller
         }
         $transfer->loadMissing('order.items');
         $order = $transfer->order;
-        if (!$order) return back()->with('error', 'Không tìm thấy đơn hàng.');
+        if (! $order) {
+            return back()->with('error', 'Không tìm thấy đơn hàng.');
+        }
 
         DB::transaction(function () use ($transfer, $order) {
             $document = $this->createImportDocument(
                 (int) $transfer->target_warehouse_id,
-                'Package tiếp nhận đơn điều chuyển #' . $order->code
+                'Package tiếp nhận đơn điều chuyển #'.$order->code
             );
             foreach ($order->items as $item) {
                 $this->importVariant($document, (int) $item->product_variant_id, (int) $item->quantity, (float) $item->price, $transfer);
@@ -90,7 +92,7 @@ class ReceivingController extends Controller
         DB::transaction(function () use ($transfer) {
             $document = $this->createImportDocument(
                 (int) $transfer->target_warehouse_id,
-                'Package tiếp nhận điều chuyển kho #' . ($transfer->transfer_code ?: $transfer->id)
+                'Package tiếp nhận điều chuyển kho #'.($transfer->transfer_code ?: $transfer->id)
             );
             foreach ($transfer->items as $item) {
                 $this->importVariant($document, (int) $item->product_variant_id, (int) $item->quantity, (float) $item->unit_cost, $transfer);
@@ -151,10 +153,12 @@ class ReceivingController extends Controller
         $items = $orderReturn->returnItems->keyBy('id');
 
         DB::transaction(function () use ($orderReturn, $validated, $items) {
-            $document = $this->createImportDocument((int) $orderReturn->warehouse_id, 'Package tiếp nhận đơn trả #' . $orderReturn->order?->code);
+            $document = $this->createImportDocument((int) $orderReturn->warehouse_id, 'Package tiếp nhận đơn trả #'.$orderReturn->order?->code);
             foreach ($validated['item_weights'] as $weight) {
                 $item = $items->get((int) $weight['item_id']);
-                if (!$item) continue;
+                if (! $item) {
+                    continue;
+                }
                 $item->received_weight = (float) $weight['received_weight'];
                 $item->weight_confirmed_at = now();
                 $item->calculateWeightLoss();
@@ -167,7 +171,7 @@ class ReceivingController extends Controller
                 'warehouse_confirmed_at' => now(),
             ]);
             if ($orderReturn->order) {
-                $orderReturn->order->update(['status' => Order::STATUS_RETURNED_COMPLETED]);
+                $orderReturn->order->update(['status' => $orderReturn->completedOrderStatus()]);
                 $this->history($orderReturn->order, 'package_received_return', 'Package đã tiếp nhận đơn trả và nhập kho.');
             }
         });
@@ -179,6 +183,7 @@ class ReceivingController extends Controller
     {
         $warehouseId = (int) (Auth::user()?->warehouse_id ?? 0);
         abort_if($warehouseId <= 0, 403, 'Tài khoản package chưa được gán kho.');
+
         return $warehouseId;
     }
 
@@ -197,7 +202,9 @@ class ReceivingController extends Controller
 
     private function importVariant(InventoryDocument $document, int $variantId, int $quantity, float $unitCost, object $reference): void
     {
-        if ($variantId <= 0 || $quantity <= 0) return;
+        if ($variantId <= 0 || $quantity <= 0) {
+            return;
+        }
         $document->items()->create(['product_variant_id' => $variantId, 'quantity' => $quantity, 'unit_cost' => $unitCost]);
         $inventory = Inventory::firstOrCreate(
             ['warehouse_id' => $document->warehouse_id, 'product_variant_id' => $variantId],

@@ -79,4 +79,16 @@ class OrderReturn extends Model
     {
         return $this->hasOne(Transaction::class, 'order_return_id');
     }
+
+    public function isPartialDeliveryReturn(): bool
+    {
+        return (string) $this->return_scope === 'partial';
+    }
+
+    public function completedOrderStatus(): string
+    {
+        return $this->isPartialDeliveryReturn()
+            ? Order::STATUS_COMPLETED
+            : Order::STATUS_RETURNED_COMPLETED;
+    }
 }

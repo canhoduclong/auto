@@ -13,11 +13,11 @@ use App\Models\InventoryStocktake;
 use App\Models\Order;
 use App\Models\OrderHistory;
 use App\Models\OrderReturn;
+use App\Models\ProcurementPurchase;
+use App\Models\ProcurementPurchaseItem;
 use App\Models\Product;
 use App\Models\ProductCuttingBatch;
 use App\Models\ProductVariant;
-use App\Models\ProcurementPurchase;
-use App\Models\ProcurementPurchaseItem;
 use App\Models\ReturnItem;
 use App\Models\Setting;
 use App\Models\User;
@@ -354,6 +354,7 @@ class WarehouseDashboardController extends Controller
             ->whereDate('request_date', Carbon::today()->toDateString())
             ->orderByDesc('id')
             ->get();
+
         return view('warehouse.dashboard', compact(
             'stats',
             'recentPacked',
@@ -405,7 +406,7 @@ class WarehouseDashboardController extends Controller
             ->whereIn('procurement_purchase_id', $purchaseIds)
             ->where('stage', 'received')
             ->get()
-            ->groupBy(fn (ProcurementPurchaseItem $item) => $item->item_type . '|' . ($item->size ?? ''))
+            ->groupBy(fn (ProcurementPurchaseItem $item) => $item->item_type.'|'.($item->size ?? ''))
             ->map(function (Collection $items) use ($classificationLabels) {
                 $first = $items->first();
 
@@ -3019,7 +3020,8 @@ class WarehouseDashboardController extends Controller
     }
 
     /**
-     * Confirm return receipt: returning → returned_completed + restore inventory
+     * Confirm returned stock. A partial delivery completes the sale; a full
+     * return completes the return workflow without recognizing a sale.
      */
     public function confirmReturn(Order $order)
     {
@@ -3042,10 +3044,13 @@ class WarehouseDashboardController extends Controller
             return back()->with('error', 'Đơn trả này chưa xác định kho nhận. Vui lòng yêu cầu shipper chọn kho trả về.');
         }
 
-        DB::transaction(function () use ($order, $returnWarehouseId, $activeOrderReturn) {
-            $order->update(['status' => Order::STATUS_RETURNED_COMPLETED]);
+        DB::transaction(function () use ($order, $returnWarehouseId, $activeOrderReturn, $resolvedReturnWarehouse) {
+            $statusBefore = (string) $order->status;
+            $statusAfter = $activeOrderReturn?->completedOrderStatus() ?? Order::STATUS_RETURNED_COMPLETED;
+            $order->update(['status' => $statusAfter]);
 
             if ($activeOrderReturn) {
+                $activeOrderReturn->loadMissing('returnItems');
                 $activeOrderReturn->update([
                     'status' => 'warehouse_received',
                     'warehouse_confirmed_by' => Auth::id(),
@@ -3053,11 +3058,23 @@ class WarehouseDashboardController extends Controller
                 ]);
             }
 
-            // Restore inventory for each item
-            foreach ($order->items as $item) {
-                Inventory::where('product_variant_id', $item->product_variant_id)
-                    ->where('warehouse_id', $returnWarehouseId)
-                    ->increment('quantity', $item->quantity);
+            // For a partial delivery, only ReturnItem quantities belong back
+            // in stock; order_items now represent what the customer received.
+            $inventoryItems = $activeOrderReturn?->returnItems?->isNotEmpty()
+                ? $activeOrderReturn->returnItems
+                : $order->items;
+            foreach ($inventoryItems as $item) {
+                Inventory::query()->firstOrCreate(
+                    [
+                        'product_variant_id' => $item->product_variant_id,
+                        'warehouse_id' => $returnWarehouseId,
+                    ],
+                    ['quantity' => 0, 'reserved_quantity' => 0]
+                )->increment('quantity', (int) $item->quantity);
+            }
+
+            if ($activeOrderReturn) {
+                $this->syncReturnImportDocument($activeOrderReturn, (int) Auth::id());
             }
 
             OrderHistory::create([
@@ -3065,8 +3082,8 @@ class WarehouseDashboardController extends Controller
                 'action' => 'confirm_return',
                 'user_id' => Auth::id(),
                 'role' => 'warehouse',
-                'status_before' => Order::STATUS_RETURNING,
-                'status_after' => Order::STATUS_RETURNED_COMPLETED,
+                'status_before' => $statusBefore,
+                'status_after' => $statusAfter,
                 'note' => 'Kho xác nhận đã nhận hàng trả vào kho '.($resolvedReturnWarehouse?->name ?? ('ID '.$returnWarehouseId)).' – Tồn kho đã cập nhật',
             ]);
         });
@@ -3233,8 +3250,11 @@ class WarehouseDashboardController extends Controller
                 'warehouse_confirmed_at' => now(),
             ]);
 
-            // Mark order as returned completed and restore inventory
-            $order->update(['status' => Order::STATUS_RETURNED_COMPLETED]);
+            // Partial delivery is a completed sale after returned stock is
+            // received. Full return remains a completed return.
+            $statusBefore = (string) $order->status;
+            $statusAfter = $orderReturn->completedOrderStatus();
+            $order->update(['status' => $statusAfter]);
 
             // Restore inventory for each item
             if ($orderReturn && $orderReturn->relationLoaded('returnItems')) {
@@ -3263,8 +3283,8 @@ class WarehouseDashboardController extends Controller
                 'action' => 'confirm_return',
                 'user_id' => Auth::id(),
                 'role' => 'warehouse',
-                'status_before' => Order::STATUS_RETURNING,
-                'status_after' => Order::STATUS_RETURNED_COMPLETED,
+                'status_before' => $statusBefore,
+                'status_after' => $statusAfter,
                 'note' => sprintf(
                     'Kho xác nhận đã nhận hàng trả vào kho %s – Tồn kho đã cập nhật – Hao hụt KL: %.3f kg',
                     $resolvedReturnWarehouse?->name ?? ('ID '.$returnWarehouseId),

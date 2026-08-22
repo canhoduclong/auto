@@ -1,29 +1,30 @@
 <?php
+
 namespace App\Http\Controllers;
+
+use App\Models\Customer;
+use App\Models\CustomerShippingFeeHistory;
 use App\Models\Inventory;
 use App\Models\InventoryDocument;
 use App\Models\InventoryMovement;
 use App\Models\InventoryReservation;
-use App\Models\CustomerShippingFeeHistory;
-use App\Models\Customer;
 use App\Models\Order;
 use App\Models\OrderHistory;
 use App\Models\OrderReturn;
 use App\Models\ProductVariant;
 use App\Models\ReturnItem;
 use App\Models\ShipperDispatchHistory;
+use App\Models\Transaction;
+use App\Models\TransactionCategory;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Models\WarehouseTransfer;
-use App\Models\Transaction;
-use App\Models\TransactionCategory;
 use App\Services\ShipperAssignmentService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 class ShipperDashboardController extends Controller
@@ -32,6 +33,7 @@ class ShipperDashboardController extends Controller
     {
         $this->middleware(['auth', 'role:shipper,manager_shipper,account,accountant,accounting,admin']);
     }
+
     /**
      * Chuyển đơn sang kho khác (cập nhật warehouse_id)
      */
@@ -53,17 +55,18 @@ class ShipperDashboardController extends Controller
 
         // Ghi lịch sử
         OrderHistory::create([
-            'order_id'      => $order->id,
-            'action'        => 'transfer_to_warehouse',
-            'user_id'       => Auth::id(),
-            'role'          => 'manager_shipper',
+            'order_id' => $order->id,
+            'action' => 'transfer_to_warehouse',
+            'user_id' => Auth::id(),
+            'role' => 'manager_shipper',
             'status_before' => $order->status,
-            'status_after'  => $order->status,
-            'note'          => 'Chuyển tới kho: ' . $warehouse->name,
+            'status_after' => $order->status,
+            'note' => 'Chuyển tới kho: '.$warehouse->name,
         ]);
 
-        return back()->with('success', 'Đã chuyển đơn #' . $order->code . ' tới kho ' . $warehouse->name . ' thành công!');
+        return back()->with('success', 'Đã chuyển đơn #'.$order->code.' tới kho '.$warehouse->name.' thành công!');
     }
+
     private function assignmentOrderingDate(Request $request): string
     {
         return $request->filled('date')
@@ -160,7 +163,7 @@ class ShipperDashboardController extends Controller
 
     private function moveOrderWithinShipper(Order $order, int $direction, string $dateString): void
     {
-        abort_if(!$order->shipper_id, 422, 'Đơn chưa được gán cho shipper nào.');
+        abort_if(! $order->shipper_id, 422, 'Đơn chưa được gán cho shipper nào.');
         abort_if(! $this->isAssignmentEligible($order), 422, 'Đơn chưa ở trạng thái có thể sắp xếp.');
 
         DB::transaction(function () use ($order, $direction, $dateString): void {
@@ -183,7 +186,7 @@ class ShipperDashboardController extends Controller
             }
 
             $targetIndex = $direction < 0 ? $currentIndex - 1 : $currentIndex + 1;
-            if (!isset($orders[$targetIndex])) {
+            if (! isset($orders[$targetIndex])) {
                 return;
             }
 
@@ -204,7 +207,8 @@ class ShipperDashboardController extends Controller
 
         $dateString = $this->assignmentOrderingDate($request);
         $this->moveOrderWithinShipper($order, -1, $dateString);
-        return $this->assignmentMutationResponse($request, 'Đã đưa đơn #' . ($order->code ?: $order->id) . ' lên trên.');
+
+        return $this->assignmentMutationResponse($request, 'Đã đưa đơn #'.($order->code ?: $order->id).' lên trên.');
     }
 
     // Di chuyển đơn xuống dưới trong danh sách shipper
@@ -214,7 +218,8 @@ class ShipperDashboardController extends Controller
 
         $dateString = $this->assignmentOrderingDate($request);
         $this->moveOrderWithinShipper($order, 1, $dateString);
-        return $this->assignmentMutationResponse($request, 'Đã đưa đơn #' . ($order->code ?: $order->id) . ' xuống dưới.');
+
+        return $this->assignmentMutationResponse($request, 'Đã đưa đơn #'.($order->code ?: $order->id).' xuống dưới.');
     }
 
     public function moveOwnScheduleUp(Request $request, Order $order)
@@ -222,14 +227,14 @@ class ShipperDashboardController extends Controller
         $currentUser = Auth::user();
         $canManageAny = $currentUser && ($currentUser->hasRole('manager_shipper') || $currentUser->hasRole('admin'));
 
-        if (!$canManageAny && (int) ($order->shipper_id ?? 0) !== (int) Auth::id()) {
+        if (! $canManageAny && (int) ($order->shipper_id ?? 0) !== (int) Auth::id()) {
             abort(403, 'Đơn này không thuộc lịch trình của bạn.');
         }
 
         $dateString = $this->assignmentOrderingDate($request);
         $this->moveOrderWithinShipper($order, -1, $dateString);
 
-        return back()->with('success', 'Đã đưa đơn #' . ($order->code ?: $order->id) . ' lên trên lịch trình.');
+        return back()->with('success', 'Đã đưa đơn #'.($order->code ?: $order->id).' lên trên lịch trình.');
     }
 
     public function moveOwnScheduleDown(Request $request, Order $order)
@@ -237,20 +242,20 @@ class ShipperDashboardController extends Controller
         $currentUser = Auth::user();
         $canManageAny = $currentUser && ($currentUser->hasRole('manager_shipper') || $currentUser->hasRole('admin'));
 
-        if (!$canManageAny && (int) ($order->shipper_id ?? 0) !== (int) Auth::id()) {
+        if (! $canManageAny && (int) ($order->shipper_id ?? 0) !== (int) Auth::id()) {
             abort(403, 'Đơn này không thuộc lịch trình của bạn.');
         }
 
         $dateString = $this->assignmentOrderingDate($request);
         $this->moveOrderWithinShipper($order, 1, $dateString);
 
-        return back()->with('success', 'Đã đưa đơn #' . ($order->code ?: $order->id) . ' xuống dưới lịch trình.');
+        return back()->with('success', 'Đã đưa đơn #'.($order->code ?: $order->id).' xuống dưới lịch trình.');
     }
 
     public function index()
     {
         $userId = Auth::id();
-        $today  = Carbon::today();
+        $today = Carbon::today();
         $selectedDate = $today->toDateString();
         $deliveryScheduleOrders = $this->deliveryScheduleOrdersForShipper($userId, $selectedDate)->get();
         $deliveryScheduleSnapshot = $this->buildDeliveryScheduleSnapshot($deliveryScheduleOrders);
@@ -259,20 +264,20 @@ class ShipperDashboardController extends Controller
         $deliveryScheduleStatus = $this->deliveryScheduleStatus($latestScheduleHistory, $deliveryScheduleHash);
 
         $stats = [
-            'today_total'    => Order::where('shipper_id', $userId)->whereDate('created_at', $today)->count(),
-            'delivering'     => Order::where('shipper_id', $userId)->where('status', Order::STATUS_DELIVERING)->count(),
-            'delivered_today'=> Order::where('shipper_id', $userId)
-                                    ->where('status', 'delivered')
-                                    ->whereDate('delivered_at', $today)->count(),
-            'returning'      => Order::where('shipper_id', $userId)->where('status', Order::STATUS_RETURNING)->count(),
-            'cod_today'      => Order::where('shipper_id', $userId)
-                                    ->where('status', 'delivered')
-                                    ->whereDate('delivered_at', $today)
-                                    ->sum('collected_amount'),
-            'available'      => Order::where(function ($query) {
-                                        $this->constrainAvailableReadyOrder($query);
-                                    })
-                                    ->count(),
+            'today_total' => Order::where('shipper_id', $userId)->whereDate('created_at', $today)->count(),
+            'delivering' => Order::where('shipper_id', $userId)->where('status', Order::STATUS_DELIVERING)->count(),
+            'delivered_today' => Order::where('shipper_id', $userId)
+                ->where('status', 'delivered')
+                ->whereDate('delivered_at', $today)->count(),
+            'returning' => Order::where('shipper_id', $userId)->where('status', Order::STATUS_RETURNING)->count(),
+            'cod_today' => Order::where('shipper_id', $userId)
+                ->where('status', 'delivered')
+                ->whereDate('delivered_at', $today)
+                ->sum('collected_amount'),
+            'available' => Order::where(function ($query) {
+                $this->constrainAvailableReadyOrder($query);
+            })
+                ->count(),
         ];
 
         return view('shipper.dashboard', compact(
@@ -359,7 +364,7 @@ class ShipperDashboardController extends Controller
 
         $orders->each(function (Order $order) use ($receivedTransfersByOrder): void {
             $receivedTransfer = $receivedTransfersByOrder->get($order->id);
-            if (!$receivedTransfer) {
+            if (! $receivedTransfer) {
                 return;
             }
 
@@ -394,15 +399,15 @@ class ShipperDashboardController extends Controller
                 ->lockForUpdate()
                 ->first();
 
-            if (!$fresh) {
+            if (! $fresh) {
                 return false;
             }
 
             $packingHistory = $fresh->histories()
-                                    ->with('user')
-                                    ->whereIn('action', ['complete_packing', 'warehouse_complete_packing'])
-                                    ->latest('id')
-                                    ->first();
+                ->with('user')
+                ->whereIn('action', ['complete_packing', 'warehouse_complete_packing'])
+                ->latest('id')
+                ->first();
 
             $latestReceivedTransfer = WarehouseTransfer::query()
                 ->where('order_id', $fresh->id)
@@ -419,23 +424,23 @@ class ShipperDashboardController extends Controller
                 || (string) ($fresh->order_type ?? '') === 'order_return'
                 || (string) ($fresh->workflow_code ?? '') === 'order_return';
 
-            if (!$isReturnOrder && $warehouseId > 0 && (int) ($fresh->warehouse_id ?? 0) !== $warehouseId) {
+            if (! $isReturnOrder && $warehouseId > 0 && (int) ($fresh->warehouse_id ?? 0) !== $warehouseId) {
                 $fresh->update(['warehouse_id' => $warehouseId]);
             }
 
             $fresh->update([
                 'shipper_id' => Auth::id(),
-                'status'     => Order::STATUS_DELIVERING,
+                'status' => Order::STATUS_DELIVERING,
             ]);
 
             OrderHistory::create([
-                'order_id'      => $fresh->id,
-                'action'        => 'shipper_accepted',
-                'user_id'       => Auth::id(),
-                'role'          => 'shipper',
+                'order_id' => $fresh->id,
+                'action' => 'shipper_accepted',
+                'user_id' => Auth::id(),
+                'role' => 'shipper',
                 'status_before' => $isReturnOrder ? Order::STATUS_APPROVED : (string) $fresh->getOriginal('status'),
-                'status_after'  => Order::STATUS_DELIVERING,
-                'note'          => $isReturnOrder ? 'Shipper nhận đơn hoàn trả' : 'Shipper nhận đơn để giao',
+                'status_after' => Order::STATUS_DELIVERING,
+                'note' => $isReturnOrder ? 'Shipper nhận đơn hoàn trả' : 'Shipper nhận đơn để giao',
             ]);
 
             if ($isReturnOrder) {
@@ -447,12 +452,12 @@ class ShipperDashboardController extends Controller
             }
 
             $document = InventoryDocument::create([
-                'type'          => 'export',
+                'type' => 'export',
                 'document_date' => now()->toDateString(),
-                'warehouse_id'  => $warehouseId,
-                'notes'         => 'Xuất kho cho đơn #' . $fresh->code,
-                'shipping_fee'  => (float) ($fresh->shipping_fee ?? 0),
-                'user_id'       => Auth::id(),
+                'warehouse_id' => $warehouseId,
+                'notes' => 'Xuất kho cho đơn #'.$fresh->code,
+                'shipping_fee' => (float) ($fresh->shipping_fee ?? 0),
+                'user_id' => Auth::id(),
             ]);
 
             $fresh->loadMissing('items');
@@ -460,8 +465,8 @@ class ShipperDashboardController extends Controller
             foreach ($fresh->items as $item) {
                 $document->items()->create([
                     'product_variant_id' => $item->product_variant_id,
-                    'quantity'           => $item->quantity,
-                    'unit_cost'          => $item->price ?? 0,
+                    'quantity' => $item->quantity,
+                    'unit_cost' => $item->price ?? 0,
                 ]);
 
                 $this->deductStockForAcceptedOrderItem($fresh, $document, $item, $warehouseId);
@@ -470,8 +475,8 @@ class ShipperDashboardController extends Controller
             return true;
 
         });
-        
-        if (!$accepted) {
+
+        if (! $accepted) {
             if (request()->expectsJson()) {
                 return response()->json([
                     'message' => 'Đơn hàng này không còn khả dụng hoặc không thuộc ngày lên đón hôm nay.',
@@ -483,7 +488,7 @@ class ShipperDashboardController extends Controller
 
         if (request()->expectsJson()) {
             return response()->json([
-                'message' => 'Đã nhận đơn #' . $order->code . ' thành công!',
+                'message' => 'Đã nhận đơn #'.$order->code.' thành công!',
                 'order' => [
                     'id' => $order->id,
                     'code' => $order->code,
@@ -494,7 +499,7 @@ class ShipperDashboardController extends Controller
         }
 
         return redirect()->route('shipper.my-orders')
-            ->with('success', 'Đã nhận đơn #' . $order->code . ' thành công!');
+            ->with('success', 'Đã nhận đơn #'.$order->code.' thành công!');
     }
 
     /**
@@ -503,12 +508,12 @@ class ShipperDashboardController extends Controller
     public function myOrders()
     {
         $orders = Order::with([
-                'customer.addresses',
-                'items.variant.product',
-                'warehouse',
-                'histories.user.warehouse',
-                'returnRecords' => fn ($query) => $query->where('return_scope', 'partial'),
-            ])
+            'customer.addresses',
+            'items.variant.product',
+            'warehouse',
+            'histories.user.warehouse',
+            'returnRecords' => fn ($query) => $query->where('return_scope', 'partial'),
+        ])
             ->where('shipper_id', Auth::id())
             ->whereIn('status', [Order::STATUS_DELIVERING, Order::STATUS_COMPLETED])
             ->orderBy('created_at', 'asc')
@@ -531,7 +536,7 @@ class ShipperDashboardController extends Controller
                 'targetWarehouse',
                 'shipper',
             ])
-            ->when(!$user->hasRole('admin') && !$user->hasRole('manager_shipper'), function ($query) {
+            ->when(! $user->hasRole('admin') && ! $user->hasRole('manager_shipper'), function ($query) {
                 $query->where('shipper_id', Auth::id());
             })
             ->whereIn('status', [
@@ -589,7 +594,7 @@ class ShipperDashboardController extends Controller
 
         $transfer->loadMissing(['order.items']);
         $order = $transfer->order;
-        if (!$order) {
+        if (! $order) {
             return back()->with('error', 'Không tìm thấy đơn hàng của phiếu điều chuyển.');
         }
 
@@ -599,7 +604,7 @@ class ShipperDashboardController extends Controller
                     'type' => 'export',
                     'document_date' => now()->toDateString(),
                     'warehouse_id' => $transfer->source_warehouse_id,
-                    'notes' => 'Xuat kho dieu chuyen don #' . $order->code . ' [WHT#' . $transfer->id . ']',
+                    'notes' => 'Xuat kho dieu chuyen don #'.$order->code.' [WHT#'.$transfer->id.']',
                     'shipping_fee' => 0,
                     'user_id' => Auth::id(),
                 ]);
@@ -629,7 +634,7 @@ class ShipperDashboardController extends Controller
                     'role' => 'shipper',
                     'status_before' => $order->status,
                     'status_after' => $order->status,
-                    'note' => 'Shipper da nhan hang dieu chuyen #' . $transfer->id,
+                    'note' => 'Shipper da nhan hang dieu chuyen #'.$transfer->id,
                 ]);
             });
         } catch (\RuntimeException $exception) {
@@ -661,7 +666,7 @@ class ShipperDashboardController extends Controller
             'Shipper hoàn lại trước khi kho nhận xác nhận.',
         ];
         if ($reason !== '') {
-            $noteParts[] = 'Lý do: ' . $reason;
+            $noteParts[] = 'Lý do: '.$reason;
         }
         $transfer->update([
             'status' => \App\Models\WarehouseTransfer::STATUS_CANCELLED,
@@ -675,12 +680,13 @@ class ShipperDashboardController extends Controller
                 'role' => 'shipper',
                 'status_before' => $order->status,
                 'status_after' => $order->status,
-                'note' => 'Shipper hoàn lại phiếu điều chuyển #' . $transfer->id
-                    . ' trước khi kho nhận xác nhận. Kho gửi: ' . ($transfer->sourceWarehouse?->name ?? 'N/A')
-                    . '; Kho nhận: ' . ($transfer->targetWarehouse?->name ?? 'N/A')
-                    . ($reason !== '' ? '; Lý do: ' . $reason : ''),
+                'note' => 'Shipper hoàn lại phiếu điều chuyển #'.$transfer->id
+                    .' trước khi kho nhận xác nhận. Kho gửi: '.($transfer->sourceWarehouse?->name ?? 'N/A')
+                    .'; Kho nhận: '.($transfer->targetWarehouse?->name ?? 'N/A')
+                    .($reason !== '' ? '; Lý do: '.$reason : ''),
             ]);
         }
+
         return back()->with('success', 'Đã hoàn lại phiếu điều chuyển trước khi kho nhận xác nhận.');
     }
 
@@ -720,7 +726,7 @@ class ShipperDashboardController extends Controller
                 'role' => 'shipper',
                 'status_before' => $transfer->order->status,
                 'status_after' => $transfer->order->status,
-                'note' => 'Shipper da giao hang dieu chuyen #' . $transfer->id . ' cho kho nhan.',
+                'note' => 'Shipper da giao hang dieu chuyen #'.$transfer->id.' cho kho nhan.',
             ]);
         }
 
@@ -754,15 +760,15 @@ class ShipperDashboardController extends Controller
             try {
                 DB::transaction(function () use ($transfer, $validated): void {
                     $order = $transfer->order;
-                    if (!$order) {
-                        throw new \RuntimeException('Không tìm thấy đơn hàng của phiếu #' . $transfer->id);
+                    if (! $order) {
+                        throw new \RuntimeException('Không tìm thấy đơn hàng của phiếu #'.$transfer->id);
                     }
 
                     $document = InventoryDocument::create([
                         'type' => 'export',
                         'document_date' => now()->toDateString(),
                         'warehouse_id' => $transfer->source_warehouse_id,
-                        'notes' => 'Xuat kho dieu chuyen don #' . $order->code . ' [WHT#' . $transfer->id . ']',
+                        'notes' => 'Xuat kho dieu chuyen don #'.$order->code.' [WHT#'.$transfer->id.']',
                         'shipping_fee' => 0,
                         'user_id' => Auth::id(),
                     ]);
@@ -791,19 +797,20 @@ class ShipperDashboardController extends Controller
                         'role' => 'manager_shipper',
                         'status_before' => $order->status,
                         'status_after' => $order->status,
-                        'note' => 'Shipper nhận hàng điều chuyển (bulk) #' . $transfer->id,
+                        'note' => 'Shipper nhận hàng điều chuyển (bulk) #'.$transfer->id,
                     ]);
                 });
                 $processed++;
             } catch (\Throwable $e) {
-                $errors[] = 'Phiếu #' . $transfer->id . ': ' . $e->getMessage();
+                $errors[] = 'Phiếu #'.$transfer->id.': '.$e->getMessage();
             }
         }
 
         $message = "Đã nhận hàng {$processed}/{$transfers->count()} phiếu điều chuyển.";
-        if (!empty($errors)) {
-            return back()->with('warning', $message . ' Lỗi: ' . implode('; ', $errors));
+        if (! empty($errors)) {
+            return back()->with('warning', $message.' Lỗi: '.implode('; ', $errors));
         }
+
         return back()->with('success', $message);
     }
 
@@ -847,19 +854,20 @@ class ShipperDashboardController extends Controller
                         'role' => 'manager_shipper',
                         'status_before' => $transfer->order->status,
                         'status_after' => $transfer->order->status,
-                        'note' => 'Shipper giao hàng điều chuyển (bulk) #' . $transfer->id . ' cho kho nhận.',
+                        'note' => 'Shipper giao hàng điều chuyển (bulk) #'.$transfer->id.' cho kho nhận.',
                     ]);
                 }
                 $processed++;
             } catch (\Throwable $e) {
-                $errors[] = 'Phiếu #' . $transfer->id . ': ' . $e->getMessage();
+                $errors[] = 'Phiếu #'.$transfer->id.': '.$e->getMessage();
             }
         }
 
         $message = "Đã giao hàng {$processed}/{$transfers->count()} phiếu điều chuyển cho kho nhận.";
-        if (!empty($errors)) {
-            return back()->with('warning', $message . ' Lỗi: ' . implode('; ', $errors));
+        if (! empty($errors)) {
+            return back()->with('warning', $message.' Lỗi: '.implode('; ', $errors));
         }
+
         return back()->with('success', $message);
     }
 
@@ -906,20 +914,20 @@ class ShipperDashboardController extends Controller
 
         $order->loadMissing('customer.truckStation');
         $isTruckStationDelivery = (bool) ($order->customer?->use_truck_station ?? false)
-            && !empty($order->customer?->truck_station_id);
+            && ! empty($order->customer?->truck_station_id);
 
         $validationRules = [
-            'collected_amount'      => 'nullable|numeric|min:0',
-            'proof_image'           => 'nullable|image|max:5120',
+            'collected_amount' => 'nullable|numeric|min:0',
+            'proof_image' => 'nullable|image|max:5120',
             'truck_station_receipt_image' => 'nullable|image|max:5120',
-            'weight_image'          => 'nullable|image|max:5120',
-            'actual_weight'         => 'nullable|array',
-            'actual_weight.*'       => 'nullable|numeric|min:0',
-            'delivered_qty'         => 'nullable|array',
-            'delivered_qty.*'       => 'nullable|integer|min:0',
-            'partial_weight'        => 'nullable|array',
-            'partial_weight.*'      => 'nullable|numeric|min:0',
-            'return_warehouse_id'   => 'required_if:has_partial_return,1|nullable|exists:warehouses,id',
+            'weight_image' => 'nullable|image|max:5120',
+            'actual_weight' => 'nullable|array',
+            'actual_weight.*' => 'nullable|numeric|min:0',
+            'delivered_qty' => 'nullable|array',
+            'delivered_qty.*' => 'nullable|integer|min:0',
+            'partial_weight' => 'nullable|array',
+            'partial_weight.*' => 'nullable|numeric|min:0',
+            'return_warehouse_id' => 'required_if:has_partial_return,1|nullable|exists:warehouses,id',
             'partial_return_reason' => 'required_if:has_partial_return,1|nullable|string',
         ];
 
@@ -936,9 +944,13 @@ class ShipperDashboardController extends Controller
             $actualWeightInput = $request->input('actual_weight', []);
             $weightErrors = [];
             foreach ($order->items as $item) {
-                if (!array_key_exists($item->id, $partialWeightInput)) continue;
-                $entered  = $partialWeightInput[$item->id];
-                if ($entered === null || $entered === '') continue;
+                if (! array_key_exists($item->id, $partialWeightInput)) {
+                    continue;
+                }
+                $entered = $partialWeightInput[$item->id];
+                if ($entered === null || $entered === '') {
+                    continue;
+                }
 
                 $baseWeight = $item->packed_weight !== null
                     ? (float) $item->packed_weight
@@ -955,16 +967,18 @@ class ShipperDashboardController extends Controller
 
                 $maxWeight = max(0, $baseWeight);
                 if ((float) $entered > $maxWeight) {
-                    $weightErrors["partial_weight.{$item->id}"] = "Khối lượng giao của '{$item->variant?->name}' tối đa {$maxWeight} kg (đã nhập " . (float)$entered . ' kg)';
+                    $weightErrors["partial_weight.{$item->id}"] = "Khối lượng giao của '{$item->variant?->name}' tối đa {$maxWeight} kg (đã nhập ".(float) $entered.' kg)';
                 }
             }
-            if (!empty($weightErrors)) {
+            if (! empty($weightErrors)) {
                 throw \Illuminate\Validation\ValidationException::withMessages($weightErrors);
             }
         }
 
-        $proofImages = []; if ($request->hasFile('proof_image')) { $proofImages[] = $request->file('proof_image')->store('order-proofs', 'public'); }
-        
+        $proofImages = [];
+        if ($request->hasFile('proof_image')) {
+            $proofImages[] = $request->file('proof_image')->store('order-proofs', 'public');
+        }
 
         if ($isTruckStationDelivery && $request->hasFile('truck_station_receipt_image')) {
             $proofImages[] = $request->file('truck_station_receipt_image')->store('order-proofs/truck-station', 'public');
@@ -984,7 +998,7 @@ class ShipperDashboardController extends Controller
         $partialReturnReason = $hasPartialReturn ? (string) $request->input('partial_return_reason', 'other') : null;
 
         $partialReturnNotes = [];
-        $returnedItems = []; // [order_item_id => ['variant_id' => int, 'returned_qty' => int]]
+        $returnedItems = []; // [order_item_id => variant, quantity and returned weight]
 
         DB::transaction(function () use ($order, $actualWeights, $deliveredQtys, $partialWeights, $hasPartialReturn, $returnWarehouseId, $partialReturnReason, &$partialReturnNotes, &$returnedItems) {
             foreach ($order->items as $item) {
@@ -997,64 +1011,79 @@ class ShipperDashboardController extends Controller
 
                 // Xử lý giao 1 phần
                 if ($hasPartialReturn && array_key_exists($item->id, $deliveredQtys)) {
-                    $originalQty  = (int) $item->quantity;
+                    $originalQty = (int) $item->quantity;
                     $deliveredQty = max(0, min((int) $deliveredQtys[$item->id], $originalQty));
-                    $returnedQty  = $originalQty - $deliveredQty;
+                    $returnedQty = $originalQty - $deliveredQty;
 
                     if ($returnedQty > 0) {
                         $updates['quantity'] = $deliveredQty;
 
+                        $baseWeight = $item->packed_weight !== null
+                            ? (float) $item->packed_weight
+                            : (($item->actual_weight !== null && (float) $item->actual_weight > 0)
+                                ? (float) $item->actual_weight
+                                : (float) $item->effective_unit_weight * $originalQty);
+                        $deliveredWeight = 0.0;
+                        $returnedWeight = 0.0;
+
                         // Lưu cân thực tế phần thực giao (ghi đè nếu shipper nhập partial_weight)
-                        if (array_key_exists($item->id, $partialWeights) && $partialWeights[$item->id] !== null && $partialWeights[$item->id] !== '') {
-                            $updates['actual_weight'] = max(0, (float) $partialWeights[$item->id]);
+                        if ((bool) $item->effective_priced_by_kg) {
+                            $deliveredWeight = array_key_exists($item->id, $partialWeights)
+                                && $partialWeights[$item->id] !== null
+                                && $partialWeights[$item->id] !== ''
+                                    ? max(0, (float) $partialWeights[$item->id])
+                                    : ($originalQty > 0 ? round($baseWeight * $deliveredQty / $originalQty, 3) : 0.0);
+                            $returnedWeight = max(0, round($baseWeight - $deliveredWeight, 3));
+                            $updates['actual_weight'] = $deliveredWeight;
                         }
 
-                        $noteSegment = ($item->variant?->name ?? 'SP') . ': giao ' . $deliveredQty . '/' . $originalQty . ' (trả ' . $returnedQty . ')';
+                        $noteSegment = ($item->variant?->name ?? 'SP').': giao '.$deliveredQty.'/'.$originalQty.' (trả '.$returnedQty.')';
                         if ((bool) $item->effective_priced_by_kg) {
-                            $baseWeight = $item->packed_weight !== null
-                                ? (float) $item->packed_weight
-                                : (($item->actual_weight !== null && (float) $item->actual_weight > 0)
-                                    ? (float) $item->actual_weight
-                                    : (float) $item->effective_unit_weight * $originalQty);
-                            $deliveredWeight = array_key_exists($item->id, $partialWeights)
-                                ? max(0, (float) ($partialWeights[$item->id] ?? 0))
-                                : 0;
-                            $returnedWeight = max(0, round($baseWeight - $deliveredWeight, 3));
-                            $noteSegment .= ' ~ ' . $returnedWeight . ' kg';
+                            $noteSegment .= ' ~ '.$returnedWeight.' kg';
                         }
 
                         $partialReturnNotes[] = $noteSegment;
                         $returnedItems[$item->id] = [
-                            'variant_id'   => (int) $item->product_variant_id,
+                            'variant_id' => (int) $item->product_variant_id,
                             'returned_qty' => $returnedQty,
+                            'returned_weight' => $returnedWeight,
                         ];
                     }
                 }
 
-                if (!empty($updates)) {
+                if (! empty($updates)) {
+                    $effectiveQuantity = (int) ($updates['quantity'] ?? $item->quantity);
+                    $effectiveWeight = (float) ($updates['actual_weight']
+                        ?? $item->actual_weight
+                        ?? $item->packed_weight
+                        ?? ((float) $item->effective_unit_weight * $effectiveQuantity));
+                    $updates['total'] = (bool) $item->effective_priced_by_kg
+                        ? round($effectiveWeight * (float) ($item->price ?? 0), 2)
+                        : round($effectiveQuantity * (float) ($item->price ?? 0), 2);
                     $item->update($updates);
                 }
             }
 
             // Tạo phiếu OrderReturn cho hàng chưa giao – kho sẽ xác nhận nhập sau
-            if (!empty($returnedItems) && $returnWarehouseId) {
+            if (! empty($returnedItems) && $returnWarehouseId) {
                 $orderReturn = OrderReturn::create([
-                    'order_id'     => $order->id,
-                    'customer_id'  => $order->customer_id,
+                    'order_id' => $order->id,
+                    'customer_id' => $order->customer_id,
                     'warehouse_id' => $returnWarehouseId,
-                    'created_by'   => Auth::id(),
-                    'status'       => 'pending_warehouse',
-                    'reason'       => $partialReturnReason,
+                    'created_by' => Auth::id(),
+                    'status' => 'pending_warehouse',
+                    'reason' => $partialReturnReason,
                     'return_scope' => 'partial',
-                    'note'         => 'Giao 1 phần: ' . implode('; ', $partialReturnNotes),
+                    'note' => 'Giao 1 phần: '.implode('; ', $partialReturnNotes),
                 ]);
 
                 foreach ($returnedItems as $info) {
                     ReturnItem::create([
-                        'order_return_id'    => $orderReturn->id,
+                        'order_return_id' => $orderReturn->id,
                         'product_variant_id' => $info['variant_id'],
-                        'quantity'           => $info['returned_qty'],
-                        'condition'          => 'good',
+                        'quantity' => $info['returned_qty'],
+                        'original_weight' => $info['returned_weight'],
+                        'condition' => 'good',
                     ]);
                 }
             }
@@ -1062,18 +1091,18 @@ class ShipperDashboardController extends Controller
 
         $noteText = 'Giao hàng thành công.';
         if ($collectedAmount !== null && $collectedAmount > 0) {
-            $noteText .= ' Đã thu: ' . number_format($collectedAmount) . 'đ.';
+            $noteText .= ' Đã thu: '.number_format($collectedAmount).'đ.';
         } else {
             $noteText .= ' Chưa thu tiền / thanh toán sau.';
         }
 
         if ($isTruckStationDelivery) {
             $stationName = $order->customer?->truckStation?->name ?: 'trạm xe';
-            $noteText .= ' | Đã bàn giao hàng tại nhà xe: ' . $stationName;
+            $noteText .= ' | Đã bàn giao hàng tại nhà xe: '.$stationName;
         }
 
-        if (!empty($partialReturnNotes)) {
-            $noteText .= ' | Giao 1 phần: ' . implode('; ', $partialReturnNotes) . ' – Phiếu hoàn trả đã tạo';
+        if (! empty($partialReturnNotes)) {
+            $noteText .= ' | Giao 1 phần: '.implode('; ', $partialReturnNotes).' – Phiếu hoàn trả đã tạo';
         }
 
         // Tính lại bill từ items sau khi đã cập nhật cân/SL
@@ -1081,37 +1110,39 @@ class ShipperDashboardController extends Controller
         $newSubtotal = (float) $order->items->sum(function ($item) {
             if ((bool) $item->effective_priced_by_kg) {
                 $weight = (float) ($item->actual_weight ?? ($item->effective_unit_weight * (int) $item->quantity));
+
                 return $weight * (float) ($item->price ?? 0);
             }
+
             return (int) $item->quantity * (float) ($item->price ?? 0);
         });
         $shippingFee = (float) ($order->shipping_fee ?? 0);
-        $foamBoxFee  = (float) (($order->charge_foam_box_fee ?? false) ? ($order->foam_box_price ?? 0) : 0);
+        $foamBoxFee = (float) (($order->charge_foam_box_fee ?? false) ? ($order->foam_box_price ?? 0) : 0);
         [$newTotal, $vatAmount] = $this->customerOrderTotal($order, $newSubtotal, $shippingFee, $foamBoxFee);
 
         $order->update([
-            'status'           => 'delivered',
+            'status' => 'delivered',
             'collected_amount' => $collectedAmount,
-            'delivered_at'     => now(),
-            'proof_images'     => $proofImages,
-            'subtotal_amount'  => $newSubtotal,
-            'vat_amount'       => $vatAmount,
-            'total'            => $newTotal,
+            'delivered_at' => now(),
+            'proof_images' => $proofImages,
+            'subtotal_amount' => $newSubtotal,
+            'vat_amount' => $vatAmount,
+            'total' => $newTotal,
         ]);
 
         OrderHistory::create([
-            'order_id'      => $order->id,
-            'action'        => 'delivered',
-            'user_id'       => Auth::id(),
-            'role'          => 'shipper',
+            'order_id' => $order->id,
+            'action' => 'delivered',
+            'user_id' => Auth::id(),
+            'role' => 'shipper',
             'status_before' => Order::STATUS_DELIVERING,
-            'status_after'  => 'delivered',
-            'note'          => $noteText,
+            'status_after' => 'delivered',
+            'note' => $noteText,
         ]);
 
         $successMsg = 'Xác nhận giao hàng thành công!';
-        if (!empty($partialReturnNotes)) {
-            $successMsg .= ' Đã tạo phiếu hoàn trả ' . count($returnedItems) . ' sản phẩm – chờ kho xác nhận nhập.';
+        if (! empty($partialReturnNotes)) {
+            $successMsg .= ' Đã tạo phiếu hoàn trả '.count($returnedItems).' sản phẩm – chờ kho xác nhận nhập.';
         }
 
         return redirect()->route('shipper.my-orders')->with('success', $successMsg);
@@ -1142,8 +1173,8 @@ class ShipperDashboardController extends Controller
 
         $request->validate([
             'return_reason' => 'required|string',
-            'return_note'   => 'nullable|string|max:500',
-            'return_image'  => 'required|image|max:5120',
+            'return_note' => 'nullable|string|max:500',
+            'return_image' => 'required|image|max:5120',
             'return_warehouse_id' => 'required|exists:warehouses,id',
         ]);
 
@@ -1151,14 +1182,14 @@ class ShipperDashboardController extends Controller
         $returnWarehouse = Warehouse::query()->findOrFail((int) $request->input('return_warehouse_id'));
 
         $shipperNote = trim((string) $request->input('return_note', ''));
-        $warehouseNote = 'Kho trả về: ' . $returnWarehouse->name;
-        $shipperNote = $shipperNote !== '' ? $shipperNote . ' | ' . $warehouseNote : $warehouseNote;
+        $warehouseNote = 'Kho trả về: '.$returnWarehouse->name;
+        $shipperNote = $shipperNote !== '' ? $shipperNote.' | '.$warehouseNote : $warehouseNote;
 
         $updateData = [
-            'status'        => Order::STATUS_RETURNING,
+            'status' => Order::STATUS_RETURNING,
             'return_reason' => $request->return_reason,
-            'shipper_note'  => $shipperNote,
-            'proof_images'  => [$imagePath],
+            'shipper_note' => $shipperNote,
+            'proof_images' => [$imagePath],
         ];
 
         if (Schema::hasColumn('orders', 'return_warehouse_id')) {
@@ -1190,7 +1221,7 @@ class ShipperDashboardController extends Controller
                     'reason' => $request->return_reason,
                     'return_scope' => 'full',
                     'refund_amount' => (float) ($order->total ?? 0),
-                    'note' => trim($shipperNote . ' | Đơn hoàn trả từ sale'),
+                    'note' => trim($shipperNote.' | Đơn hoàn trả từ sale'),
                 ]
             );
 
@@ -1213,13 +1244,13 @@ class ShipperDashboardController extends Controller
         }
 
         OrderHistory::create([
-            'order_id'      => $order->id,
-            'action'        => 'return_request',
-            'user_id'       => Auth::id(),
-            'role'          => 'shipper',
+            'order_id' => $order->id,
+            'action' => 'return_request',
+            'user_id' => Auth::id(),
+            'role' => 'shipper',
             'status_before' => Order::STATUS_DELIVERING,
-            'status_after'  => Order::STATUS_RETURNING,
-            'note'          => 'Shipper gửi trả hàng: ' . $request->return_reason . ' | ' . $warehouseNote,
+            'status_after' => Order::STATUS_RETURNING,
+            'note' => 'Shipper gửi trả hàng: '.$request->return_reason.' | '.$warehouseNote,
         ]);
 
         return redirect()->route('shipper.my-orders')->with('success', 'Đã gửi yêu cầu trả hàng về kho.');
@@ -1240,7 +1271,7 @@ class ShipperDashboardController extends Controller
             $period = 'today';
         }
 
-        if (empty($date) && !empty($period)) {
+        if (empty($date) && ! empty($period)) {
             $today = Carbon::today();
 
             if ($period === 'today') {
@@ -1254,14 +1285,14 @@ class ShipperDashboardController extends Controller
         $query = Order::with('customer')
             ->where('shipper_id', Auth::id())
             ->whereIn('status', ['delivered', Order::STATUS_RETURNING, Order::STATUS_RETURNED_COMPLETED, 'completed'])
-            ->when(!empty($date), function ($q) use ($date) {
+            ->when(! empty($date), function ($q) use ($date) {
                 $q->whereDate('updated_at', $date);
             }, function ($q) use ($fromDate, $toDate) {
-                if (!empty($fromDate)) {
+                if (! empty($fromDate)) {
                     $q->whereDate('updated_at', '>=', $fromDate);
                 }
 
-                if (!empty($toDate)) {
+                if (! empty($toDate)) {
                     $q->whereDate('updated_at', '<=', $toDate);
                 }
             });
@@ -1336,7 +1367,7 @@ class ShipperDashboardController extends Controller
 
     protected function authorizeShipper(Order $order): void
     {
-        if ($order->shipper_id !== Auth::id() && !Auth::user()->hasRole('admin')) {
+        if ($order->shipper_id !== Auth::id() && ! Auth::user()->hasRole('admin')) {
             abort(403, 'Bạn không có quyền thực hiện hành động này.');
         }
     }
@@ -1370,7 +1401,7 @@ class ShipperDashboardController extends Controller
             }
 
             $inventory = Inventory::query()->lockForUpdate()->find($reservation->inventory_id);
-            if (!$inventory) {
+            if (! $inventory) {
                 continue;
             }
 
@@ -1388,12 +1419,12 @@ class ShipperDashboardController extends Controller
             $inventory->save();
 
             InventoryMovement::create([
-                'inventory_id'   => $inventory->id,
-                'quantity'       => -$deductQty,
-                'type'           => 'export',
-                'reference_id'   => $document->id,
+                'inventory_id' => $inventory->id,
+                'quantity' => -$deductQty,
+                'type' => 'export',
+                'reference_id' => $document->id,
                 'reference_type' => InventoryDocument::class,
-                'user_id'        => Auth::id(),
+                'user_id' => Auth::id(),
             ]);
 
             $remaining -= $deductQty;
@@ -1430,12 +1461,12 @@ class ShipperDashboardController extends Controller
                 $inventory->save();
 
                 InventoryMovement::create([
-                    'inventory_id'   => $inventory->id,
-                    'quantity'       => -$deductQty,
-                    'type'           => 'export',
-                    'reference_id'   => $document->id,
+                    'inventory_id' => $inventory->id,
+                    'quantity' => -$deductQty,
+                    'type' => 'export',
+                    'reference_id' => $document->id,
                     'reference_type' => InventoryDocument::class,
-                    'user_id'        => Auth::id(),
+                    'user_id' => Auth::id(),
                 ]);
 
                 $remaining -= $deductQty;
@@ -1443,7 +1474,7 @@ class ShipperDashboardController extends Controller
         }
 
         if ($remaining > 0) {
-            throw new \RuntimeException('Không đủ tồn kho khả dụng để xuất cho đơn #' . ($order->code ?: $order->id));
+            throw new \RuntimeException('Không đủ tồn kho khả dụng để xuất cho đơn #'.($order->code ?: $order->id));
         }
 
         $this->syncVariantStockFromInventories((int) $item->product_variant_id);
@@ -1498,7 +1529,7 @@ class ShipperDashboardController extends Controller
     private function authorizeWarehouseTransferShipper(WarehouseTransfer $transfer): void
     {
         $user = Auth::user();
-        if (!$user) {
+        if (! $user) {
             abort(403);
         }
 
@@ -1537,30 +1568,30 @@ class ShipperDashboardController extends Controller
         $this->applyDefaultShipperAssignmentsForDate($selectedDate);
 
         $ordersQuery = Order::with([
-                'customer.defaultShipper',
-                'customer.truckStation',
-                'customer.truckRoute.stops.station',
-                'items.product',
-                'items.variant.product',
-                'shipper',
-                'user',
-                'warehouse',
-                'warehouseTransfers' => fn ($query) => $query
-                    ->where('status', WarehouseTransfer::STATUS_RECEIVED_COMPLETED)
-                    ->with('targetWarehouse:id,name')
-                    ->orderByDesc('received_at')
-                    ->orderByDesc('id'),
-                'histories' => fn ($query) => $query
-                    ->whereIn('action', [
-                        'start_packing',
-                        'complete_packing',
-                        'warehouse_transfer_received',
-                        'undo_start_packing',
-                    ])
-                    ->with('user.warehouse:id,name')
-                    ->orderByDesc('created_at')
-                    ->orderByDesc('id'),
-            ])
+            'customer.defaultShipper',
+            'customer.truckStation',
+            'customer.truckRoute.stops.station',
+            'items.product',
+            'items.variant.product',
+            'shipper',
+            'user',
+            'warehouse',
+            'warehouseTransfers' => fn ($query) => $query
+                ->where('status', WarehouseTransfer::STATUS_RECEIVED_COMPLETED)
+                ->with('targetWarehouse:id,name')
+                ->orderByDesc('received_at')
+                ->orderByDesc('id'),
+            'histories' => fn ($query) => $query
+                ->whereIn('action', [
+                    'start_packing',
+                    'complete_packing',
+                    'warehouse_transfer_received',
+                    'undo_start_packing',
+                ])
+                ->with('user.warehouse:id,name')
+                ->orderByDesc('created_at')
+                ->orderByDesc('id'),
+        ])
             ->where(fn ($query) => $this->constrainAssignmentStatuses($query))
             ->forWorkflowDate($selectedDate)
             ->orderByRaw("CASE WHEN delivery_time IS NULL OR delivery_time = '' THEN 1 ELSE 0 END")
@@ -1725,21 +1756,21 @@ class ShipperDashboardController extends Controller
         DB::transaction(function () use ($orders): void {
             foreach ($orders as $order) {
                 $defaultShipperId = $order->customer?->default_shipper_id;
-                if (!$defaultShipperId) {
+                if (! $defaultShipperId) {
                     continue;
                 }
 
                 $order->update(['shipper_id' => $defaultShipperId]);
 
                 OrderHistory::create([
-                    'order_id'      => $order->id,
-                    'action'        => 'shipper_auto_assigned',
-                    'user_id'       => Auth::id(),
-                    'role'          => 'manager_shipper',
+                    'order_id' => $order->id,
+                    'action' => 'shipper_auto_assigned',
+                    'user_id' => Auth::id(),
+                    'role' => 'manager_shipper',
                     'status_before' => $order->status,
-                    'status_after'  => $order->status,
-                    'note'          => 'Tự động gán shipper cố định của khách hàng'
-                        . ($order->customer?->defaultShipper?->name ? ': ' . $order->customer->defaultShipper->name : ''),
+                    'status_after' => $order->status,
+                    'note' => 'Tự động gán shipper cố định của khách hàng'
+                        .($order->customer?->defaultShipper?->name ? ': '.$order->customer->defaultShipper->name : ''),
                 ]);
             }
         });
@@ -1828,7 +1859,7 @@ class ShipperDashboardController extends Controller
             ->orderByDesc('id')
             ->first(['route_plan']);
 
-        if (!$dispatch) {
+        if (! $dispatch) {
             return [];
         }
 
@@ -1847,7 +1878,7 @@ class ShipperDashboardController extends Controller
 
     private function deliveryScheduleStatus(?OrderHistory $latestHistory, string $currentSnapshotHash): string
     {
-        if (!$latestHistory) {
+        if (! $latestHistory) {
             return 'none';
         }
 
@@ -1889,7 +1920,7 @@ class ShipperDashboardController extends Controller
         ]);
 
         abort_if(! $this->isAssignmentEligible($order), 422, 'Đơn chưa ở trạng thái có thể gán shipper.');
-        abort_if(!($shipper->hasRole('shipper') || $shipper->hasRole('manager_shipper')), 422, 'Người dùng không phải shipper.');
+        abort_if(! ($shipper->hasRole('shipper') || $shipper->hasRole('manager_shipper')), 422, 'Người dùng không phải shipper.');
 
         $previousShipper = $order->shipper;
 
@@ -1899,24 +1930,24 @@ class ShipperDashboardController extends Controller
             ]);
 
             $customer = $order->customer;
-            if ($customer && (!$customer->default_shipper_id || $request->boolean('set_default_shipper'))) {
+            if ($customer && (! $customer->default_shipper_id || $request->boolean('set_default_shipper'))) {
                 $customer->update(['default_shipper_id' => $shipper->id]);
             }
 
             OrderHistory::create([
-                'order_id'      => $order->id,
-                'action'        => $previousShipper ? 'shipper_reassigned' : 'shipper_assigned',
-                'user_id'       => Auth::id(),
-                'role'          => 'manager_shipper',
+                'order_id' => $order->id,
+                'action' => $previousShipper ? 'shipper_reassigned' : 'shipper_assigned',
+                'user_id' => Auth::id(),
+                'role' => 'manager_shipper',
                 'status_before' => $order->status,
-                'status_after'  => $order->status,
-                'note'          => 'Quản lý ' . ($previousShipper ? 'chuyển' : 'gán trước') . ' đơn cho ' . $shipper->name
-                    . ($customer && (int) $customer->default_shipper_id === (int) $shipper->id ? ' và đặt làm shipper cố định của khách' : '')
-                    . ($request->filled('notes') ? ' - ' . $request->notes : ''),
+                'status_after' => $order->status,
+                'note' => 'Quản lý '.($previousShipper ? 'chuyển' : 'gán trước').' đơn cho '.$shipper->name
+                    .($customer && (int) $customer->default_shipper_id === (int) $shipper->id ? ' và đặt làm shipper cố định của khách' : '')
+                    .($request->filled('notes') ? ' - '.$request->notes : ''),
             ]);
         });
 
-        return $this->assignmentMutationResponse($request, 'Đã gán đơn #' . $order->code . ' cho ' . $shipper->name . ' thành công!');
+        return $this->assignmentMutationResponse($request, 'Đã gán đơn #'.$order->code.' cho '.$shipper->name.' thành công!');
     }
 
     /**
@@ -1933,7 +1964,7 @@ class ShipperDashboardController extends Controller
         ]);
 
         $shipper = User::query()->findOrFail((int) $validated['shipper_id']);
-        abort_if(!($shipper->hasRole('shipper') || $shipper->hasRole('manager_shipper')), 422, 'Người dùng không phải shipper.');
+        abort_if(! ($shipper->hasRole('shipper') || $shipper->hasRole('manager_shipper')), 422, 'Người dùng không phải shipper.');
 
         $previousShipperId = $customer->default_shipper_id ? (int) $customer->default_shipper_id : null;
         $transferredOrders = collect();
@@ -1941,7 +1972,7 @@ class ShipperDashboardController extends Controller
         DB::transaction(function () use ($request, $customer, $shipper, $previousShipperId, &$transferredOrders): void {
             $customer->update(['default_shipper_id' => $shipper->id]);
 
-            if (!$request->boolean('transfer_pending_orders') || !$previousShipperId || $previousShipperId === (int) $shipper->id) {
+            if (! $request->boolean('transfer_pending_orders') || ! $previousShipperId || $previousShipperId === (int) $shipper->id) {
                 return;
             }
 
@@ -1962,14 +1993,14 @@ class ShipperDashboardController extends Controller
                     'role' => 'manager_shipper',
                     'status_before' => $order->status,
                     'status_after' => $order->status,
-                    'note' => 'Chuyển đơn theo thay đổi shipper cố định của khách sang ' . $shipper->name,
+                    'note' => 'Chuyển đơn theo thay đổi shipper cố định của khách sang '.$shipper->name,
                 ]);
             }
         });
 
-        $message = 'Đã đổi shipper cố định của khách ' . $customer->name . ' sang ' . $shipper->name . '.';
+        $message = 'Đã đổi shipper cố định của khách '.$customer->name.' sang '.$shipper->name.'.';
         if ($transferredOrders->isNotEmpty()) {
-            $message .= ' Đã chuyển ' . $transferredOrders->count() . ' đơn đang chờ sang shipper mới.';
+            $message .= ' Đã chuyển '.$transferredOrders->count().' đơn đang chờ sang shipper mới.';
         }
 
         return $this->assignmentMutationResponse($request, $message);
@@ -1992,8 +2023,8 @@ class ShipperDashboardController extends Controller
         $fromShipper = User::query()->findOrFail((int) $validated['from_shipper_id']);
         $toShipper = User::query()->findOrFail((int) $validated['to_shipper_id']);
 
-        abort_if(!($fromShipper->hasRole('shipper') || $fromShipper->hasRole('manager_shipper')), 422, 'Người chuyển không phải shipper.');
-        abort_if(!($toShipper->hasRole('shipper') || $toShipper->hasRole('manager_shipper')), 422, 'Người nhận không phải shipper.');
+        abort_if(! ($fromShipper->hasRole('shipper') || $fromShipper->hasRole('manager_shipper')), 422, 'Người chuyển không phải shipper.');
+        abort_if(! ($toShipper->hasRole('shipper') || $toShipper->hasRole('manager_shipper')), 422, 'Người nhận không phải shipper.');
 
         $date = $this->assignmentOrderingDate($request);
 
@@ -2011,13 +2042,13 @@ class ShipperDashboardController extends Controller
                 ]);
 
                 OrderHistory::create([
-                    'order_id'      => $order->id,
-                    'action'        => 'shipper_reassigned',
-                    'user_id'       => Auth::id(),
-                    'role'          => 'manager_shipper',
+                    'order_id' => $order->id,
+                    'action' => 'shipper_reassigned',
+                    'user_id' => Auth::id(),
+                    'role' => 'manager_shipper',
                     'status_before' => $order->status,
-                    'status_after'  => $order->status,
-                    'note'          => 'Chuyển đơn từ ' . $fromShipper->name . ' sang ' . $toShipper->name . (!empty($validated['notes']) ? ' - ' . $validated['notes'] : ''),
+                    'status_after' => $order->status,
+                    'note' => 'Chuyển đơn từ '.$fromShipper->name.' sang '.$toShipper->name.(! empty($validated['notes']) ? ' - '.$validated['notes'] : ''),
                 ]);
             }
 
@@ -2028,7 +2059,7 @@ class ShipperDashboardController extends Controller
             return $this->assignmentMutationResponse($request, 'Không có đơn nào phù hợp để chuyển.');
         }
 
-        return $this->assignmentMutationResponse($request, 'Đã chuyển ' . $orders->count() . ' đơn từ ' . $fromShipper->name . ' sang ' . $toShipper->name . '.');
+        return $this->assignmentMutationResponse($request, 'Đã chuyển '.$orders->count().' đơn từ '.$fromShipper->name.' sang '.$toShipper->name.'.');
     }
 
     /**
@@ -2039,7 +2070,7 @@ class ShipperDashboardController extends Controller
         $this->authorizeManagerShipper();
 
         abort_if(! $this->isAssignmentEligible($order), 422, 'Đơn chưa ở trạng thái có thể gỡ ra.');
-        abort_if(!$order->shipper_id, 422, 'Đơn chưa được gán cho shipper nào.');
+        abort_if(! $order->shipper_id, 422, 'Đơn chưa được gán cho shipper nào.');
 
         $previousShipper = $order->shipper;
         $order->update([
@@ -2047,16 +2078,16 @@ class ShipperDashboardController extends Controller
         ]);
 
         OrderHistory::create([
-            'order_id'      => $order->id,
-            'action'        => 'shipper_unassigned',
-            'user_id'       => Auth::id(),
-            'role'          => 'manager_shipper',
+            'order_id' => $order->id,
+            'action' => 'shipper_unassigned',
+            'user_id' => Auth::id(),
+            'role' => 'manager_shipper',
             'status_before' => $order->status,
-            'status_after'  => $order->status,
-            'note'          => 'Quản lý gỡ ra đơn từ shipper ' . ($previousShipper?->name ?? 'N/A'),
+            'status_after' => $order->status,
+            'note' => 'Quản lý gỡ ra đơn từ shipper '.($previousShipper?->name ?? 'N/A'),
         ]);
 
-        return $this->assignmentMutationResponse($request, 'Đã gỡ ra đơn #' . $order->code . ' khỏi danh sách ' . ($previousShipper?->name ?? '') . ' thành công!');
+        return $this->assignmentMutationResponse($request, 'Đã gỡ ra đơn #'.$order->code.' khỏi danh sách '.($previousShipper?->name ?? '').' thành công!');
     }
 
     /**
@@ -2148,18 +2179,19 @@ class ShipperDashboardController extends Controller
                 $routePlan,
             )) {
                 $totalOrdersCount += $ordersCount;
-                $processedShippers[] = $shipper->name . ' (' . $ordersCount . ' đơn)';
+                $processedShippers[] = $shipper->name.' ('.$ordersCount.' đơn)';
             }
         }
 
         if (empty($processedShippers)) {
             $message = 'Lộ trình hiện tại đã được gửi, không có thay đổi mới.';
+
             return $request->expectsJson() ? response()->json(['message' => $message]) : back()->with('info', $message);
         }
 
         $shipperList = implode(', ', $processedShippers);
         $this->archiveDeliverySchedule($date, $routePlan, $validated['notes'] ?? null);
-        $message = 'Đã gửi lịch trình giao hàng cho ' . count($processedShippers) . ' shipper (' . $totalOrdersCount . ' đơn): ' . $shipperList . '. Các shipper sẽ nhận được thông báo xác nhận.';
+        $message = 'Đã gửi lịch trình giao hàng cho '.count($processedShippers).' shipper ('.$totalOrdersCount.' đơn): '.$shipperList.'. Các shipper sẽ nhận được thông báo xác nhận.';
 
         return $this->assignmentMutationResponse($request, $message);
     }
@@ -2182,7 +2214,7 @@ class ShipperDashboardController extends Controller
                 'version' => ((int) ($latest?->version ?? 0)) + 1,
                 'route_plan' => $routePlan,
                 'notes' => filled($notes) ? trim($notes) : null,
-                'shippers_count' => $plans->filter(fn ($plan) => !empty($plan['routes']))->count(),
+                'shippers_count' => $plans->filter(fn ($plan) => ! empty($plan['routes']))->count(),
                 'trips_count' => $routes->count(),
                 'orders_count' => $orders->count(),
                 'total_fee' => $orders->sum(fn ($order) => (float) ($order['final_fee'] ?? 0)),
@@ -2194,12 +2226,12 @@ class ShipperDashboardController extends Controller
 
     private function decodeRoutePlan(?string $routePlanJson): array
     {
-        if (!filled($routePlanJson)) {
+        if (! filled($routePlanJson)) {
             return [];
         }
 
         $decoded = json_decode($routePlanJson, true);
-        abort_if(json_last_error() !== JSON_ERROR_NONE || !is_array($decoded), 422, 'Dữ liệu lộ trình không hợp lệ.');
+        abort_if(json_last_error() !== JSON_ERROR_NONE || ! is_array($decoded), 422, 'Dữ liệu lộ trình không hợp lệ.');
 
         return $decoded;
     }
@@ -2213,7 +2245,7 @@ class ShipperDashboardController extends Controller
         $plannedOrders = collect($routePlan)
             ->flatMap(fn ($shipperPlan) => $shipperPlan['routes'] ?? [])
             ->flatMap(fn ($route) => $route['orders'] ?? [])
-            ->filter(fn ($order) => !empty($order['order_id']))
+            ->filter(fn ($order) => ! empty($order['order_id']))
             ->keyBy(fn ($order) => (int) $order['order_id']);
 
         if ($plannedOrders->isEmpty()) {
@@ -2248,7 +2280,7 @@ class ShipperDashboardController extends Controller
         DB::transaction(function () use ($plannedOrders, $orders): void {
             foreach ($plannedOrders as $orderId => $plannedOrder) {
                 $order = $orders->get((int) $orderId);
-                if (!$order) {
+                if (! $order) {
                     continue;
                 }
 
@@ -2282,8 +2314,8 @@ class ShipperDashboardController extends Controller
                     'status_before' => $order->status,
                     'status_after' => $order->status,
                     'note' => 'Cập nhật phí ship theo lộ trình ghép chuyến từ '
-                        . number_format($oldFee, 0, ',', '.') . ' đ thành '
-                        . number_format($newFee, 0, ',', '.') . ' đ',
+                        .number_format($oldFee, 0, ',', '.').' đ thành '
+                        .number_format($newFee, 0, ',', '.').' đ',
                 ]);
 
                 $this->syncCustomerShippingFeeHistory($order, $oldFee, $newFee, $plannedOrder['note'] ?? null);
@@ -2338,9 +2370,9 @@ class ShipperDashboardController extends Controller
                 ->with('defaultShipper:id,name')
                 ->when($keyword !== '', function ($query) use ($keyword) {
                     $query->where(function ($subQuery) use ($keyword) {
-                        $subQuery->where('name', 'like', '%' . $keyword . '%')
-                            ->orWhere('phone', 'like', '%' . $keyword . '%')
-                            ->orWhere('address', 'like', '%' . $keyword . '%');
+                        $subQuery->where('name', 'like', '%'.$keyword.'%')
+                            ->orWhere('phone', 'like', '%'.$keyword.'%')
+                            ->orWhere('address', 'like', '%'.$keyword.'%');
                     });
                 })
                 ->when($assignmentStatus === 'fixed', fn ($query) => $query->whereNotNull('default_shipper_id'))
@@ -2503,15 +2535,15 @@ class ShipperDashboardController extends Controller
             DB::transaction(function () use ($orders, $userId, $historyAction, $snapshotHash, $snapshot): void {
                 foreach ($orders as $order) {
                     OrderHistory::create([
-                        'order_id'      => $order->id,
-                        'action'        => $historyAction,
-                        'user_id'       => $userId,
-                        'role'          => 'shipper',
+                        'order_id' => $order->id,
+                        'action' => $historyAction,
+                        'user_id' => $userId,
+                        'role' => 'shipper',
                         'status_before' => $order->status,
-                        'status_after'  => $order->status,
-                        'note'          => 'Shipper ' . Auth::user()->name . ' đã cập nhật trạng thái lịch trình giao hàng.',
+                        'status_after' => $order->status,
+                        'note' => 'Shipper '.Auth::user()->name.' đã cập nhật trạng thái lịch trình giao hàng.',
                         'schedule_snapshot_hash' => $snapshotHash,
-                        'schedule_snapshot'      => json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                        'schedule_snapshot' => json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
                     ]);
                 }
             });
@@ -2541,15 +2573,15 @@ class ShipperDashboardController extends Controller
         }
 
         OrderHistory::create([
-            'order_id'      => $order->id,
-            'action'        => $historyAction,
-            'user_id'       => $userId,
-            'role'          => 'shipper',
+            'order_id' => $order->id,
+            'action' => $historyAction,
+            'user_id' => $userId,
+            'role' => 'shipper',
             'status_before' => $order->status,
-            'status_after'  => $order->status,
-            'note'          => 'Shipper ' . Auth::user()->name . ' đã cập nhật trạng thái lịch trình giao hàng.',
+            'status_after' => $order->status,
+            'note' => 'Shipper '.Auth::user()->name.' đã cập nhật trạng thái lịch trình giao hàng.',
             'schedule_snapshot_hash' => $snapshotHash,
-            'schedule_snapshot'      => json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'schedule_snapshot' => json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         ]);
 
         return back()->with('success', $successMessage);
@@ -2668,18 +2700,18 @@ class ShipperDashboardController extends Controller
         }
 
         OrderHistory::create([
-            'order_id'      => $order->id,
-            'action'        => 'shipping_fee_updated',
-            'user_id'       => Auth::id(),
-            'role'          => 'manager_shipper',
-            'note'          => 'Cập nhật phí ship từ ' . number_format($oldFee, 0, ',', '.') . ' đ thành ' . 
-                              number_format($newFee, 0, ',', '.') . ' đ' . 
-                              ($request->filled('notes') ? ' - ' . $request->notes : ''),
+            'order_id' => $order->id,
+            'action' => 'shipping_fee_updated',
+            'user_id' => Auth::id(),
+            'role' => 'manager_shipper',
+            'note' => 'Cập nhật phí ship từ '.number_format($oldFee, 0, ',', '.').' đ thành '.
+                              number_format($newFee, 0, ',', '.').' đ'.
+                              ($request->filled('notes') ? ' - '.$request->notes : ''),
         ]);
 
         $this->syncCustomerShippingFeeHistory($order, $oldFee, $newFee, $request->input('notes'));
 
-        $message = 'Cập nhật phí ship cho đơn #' . ($order->code ?: $order->id) . ' thành công!';
+        $message = 'Cập nhật phí ship cho đơn #'.($order->code ?: $order->id).' thành công!';
 
         if ($request->expectsJson()) {
             return response()->json([
@@ -2719,7 +2751,7 @@ class ShipperDashboardController extends Controller
         DB::transaction(function () use ($orders, $adjustmentType, $adjustmentValue, $notes) {
             foreach ($orders as $order) {
                 $oldFee = (float) ($order->shipping_fee ?? 0);
-                $newFee = $adjustmentType === 'fixed' 
+                $newFee = $adjustmentType === 'fixed'
                     ? max(0, $oldFee + $adjustmentValue)
                     : max(0, $oldFee * (1 + $adjustmentValue / 100));
 
@@ -2739,20 +2771,20 @@ class ShipperDashboardController extends Controller
                 }
 
                 OrderHistory::create([
-                    'order_id'      => $order->id,
-                    'action'        => 'shipping_fee_updated',
-                    'user_id'       => Auth::id(),
-                    'role'          => 'manager_shipper',
-                    'note'          => 'Cập nhật hàng loạt phí ship từ ' . number_format($oldFee, 0, ',', '.') . ' đ thành ' . 
-                                      number_format($newFee, 0, ',', '.') . ' đ' . 
-                                      (!empty($notes) ? ' - ' . $notes : ''),
+                    'order_id' => $order->id,
+                    'action' => 'shipping_fee_updated',
+                    'user_id' => Auth::id(),
+                    'role' => 'manager_shipper',
+                    'note' => 'Cập nhật hàng loạt phí ship từ '.number_format($oldFee, 0, ',', '.').' đ thành '.
+                                      number_format($newFee, 0, ',', '.').' đ'.
+                                      (! empty($notes) ? ' - '.$notes : ''),
                 ]);
 
                 $this->syncCustomerShippingFeeHistory($order, $oldFee, $newFee, $notes);
             }
         });
 
-        return back()->with('success', 'Cập nhật phí ship cho ' . count($orders) . ' đơn hàng thành công!');
+        return back()->with('success', 'Cập nhật phí ship cho '.count($orders).' đơn hàng thành công!');
     }
 
     public function updateReturnFee(Request $request, OrderReturn $orderReturn)
@@ -2769,7 +2801,7 @@ class ShipperDashboardController extends Controller
 
         $orderReturn->update([
             'return_shipping_fee' => $newFee,
-            'note' => trim((string) ($orderReturn->note ?? '') . (!empty($validated['notes']) ? ' | ' . $validated['notes'] : ''), ' |'),
+            'note' => trim((string) ($orderReturn->note ?? '').(! empty($validated['notes']) ? ' | '.$validated['notes'] : ''), ' |'),
         ]);
 
         if ($orderReturn->order_id) {
@@ -2778,9 +2810,9 @@ class ShipperDashboardController extends Controller
                 'action' => 'return_shipping_fee_updated',
                 'user_id' => Auth::id(),
                 'role' => Auth::user()?->hasRole(['account', 'accountant', 'accounting']) ? 'accounting' : 'manager_shipper',
-                'note' => 'Cập nhật phí ship trả về từ ' . number_format($oldFee, 0, ',', '.') . ' đ thành '
-                    . number_format($newFee, 0, ',', '.') . ' đ'
-                    . (!empty($validated['notes']) ? ' - ' . $validated['notes'] : ''),
+                'note' => 'Cập nhật phí ship trả về từ '.number_format($oldFee, 0, ',', '.').' đ thành '
+                    .number_format($newFee, 0, ',', '.').' đ'
+                    .(! empty($validated['notes']) ? ' - '.$validated['notes'] : ''),
             ]);
         }
 
@@ -2840,9 +2872,10 @@ class ShipperDashboardController extends Controller
 
             $items = $orders->values()->map(function (Order $order, int $index): array {
                 $fee = round((float) $order->shipping_fee, 2);
+
                 return [
                     'stt' => $index + 1,
-                    'content' => 'Đơn #' . $order->code . ' · ' . ($order->customer?->name ?? 'Khách hàng') . ' · Shipper: ' . ($order->shipper?->name ?? 'Chưa gán'),
+                    'content' => 'Đơn #'.$order->code.' · '.($order->customer?->name ?? 'Khách hàng').' · Shipper: '.($order->shipper?->name ?? 'Chưa gán'),
                     'unit' => 'đơn',
                     'quantity' => 1,
                     'unit_price' => $fee,
@@ -2856,13 +2889,13 @@ class ShipperDashboardController extends Controller
                 'type' => 'extra_expense',
                 'transaction_category_id' => $category->id,
                 'account_id' => null,
-                'note' => $validated['note'] ?? ('Tổng hợp ' . $orders->count() . ' đơn giao ngày ' . Carbon::parse($selectedDate)->format('d/m/Y')),
+                'note' => $validated['note'] ?? ('Tổng hợp '.$orders->count().' đơn giao ngày '.Carbon::parse($selectedDate)->format('d/m/Y')),
                 'status' => Transaction::STATUS_PENDING_APPROVAL,
                 'submitted_by' => Auth::id(),
                 'request_source' => 'shipper',
                 'request_department' => 'Điều phối ship',
                 'request_form_type' => Transaction::REQUEST_FORM_PAYMENT,
-                'request_title' => 'Chi phí ship ngày ' . Carbon::parse($selectedDate)->format('d/m/Y'),
+                'request_title' => 'Chi phí ship ngày '.Carbon::parse($selectedDate)->format('d/m/Y'),
                 'request_items' => $items->all(),
                 'request_subtotal' => $total,
                 'request_vat' => 0,
@@ -2877,7 +2910,7 @@ class ShipperDashboardController extends Controller
         });
 
         return redirect()->route('shipper.finance-requests.index')
-            ->with('success', 'Đã tạo phiếu yêu cầu chi phí ship #' . $transaction->id . ' từ ' . $requestedIds->count() . ' đơn.');
+            ->with('success', 'Đã tạo phiếu yêu cầu chi phí ship #'.$transaction->id.' từ '.$requestedIds->count().' đơn.');
     }
 
     /**
@@ -3127,7 +3160,7 @@ class ShipperDashboardController extends Controller
     private function syncCustomerShippingFeeHistory(Order $order, float $oldFee, float $newFee, ?string $note = null): void
     {
         $customer = $order->customer;
-        if (!$customer || abs($oldFee - $newFee) < 0.00001) {
+        if (! $customer || abs($oldFee - $newFee) < 0.00001) {
             return;
         }
 
@@ -3194,12 +3227,12 @@ class ShipperDashboardController extends Controller
             'changed_at' => now(),
         ]);
 
-        return back()->with('success', 'Đã cập nhật phí ship mặc định cho khách hàng ' . $customer->name . '.');
+        return back()->with('success', 'Đã cập nhật phí ship mặc định cho khách hàng '.$customer->name.'.');
     }
 
     protected function authorizeManagerShipper(): void
     {
-        if (!Auth::user()->hasRole(['manager_shipper', 'account', 'accountant', 'accounting', 'admin'])) {
+        if (! Auth::user()->hasRole(['manager_shipper', 'account', 'accountant', 'accounting', 'admin'])) {
             abort(403, 'Bạn không có quyền truy cập tính năng này.');
         }
     }

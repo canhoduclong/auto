@@ -3,11 +3,15 @@
 namespace Tests\Feature;
 
 use App\Models\Customer;
+use App\Models\Inventory;
 use App\Models\Order;
+use App\Models\OrderReturn;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Models\ReturnItem;
 use App\Models\Role;
 use App\Models\User;
+use App\Models\Warehouse;
 use App\Services\CompletedSalesJournalService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -173,5 +177,92 @@ class AccountingSalesJournalTest extends TestCase
         ])->assertRedirect()
             ->assertSessionHas('success', 'Đã đồng bộ 3 dòng của 1 ngày vào trang tính “Nhật ký bán hàng”.')
             ->assertSessionHas('google_sheets_url', 'https://docs.google.com/spreadsheets/d/test/edit');
+    }
+
+    public function test_confirming_partial_return_completes_sale_and_journals_only_delivered_quantity(): void
+    {
+        $warehouse = Warehouse::query()->create([
+            'name' => 'Kho nhận hàng giao một phần',
+            'status' => true,
+        ]);
+        $warehouseUser = User::factory()->create(['warehouse_id' => $warehouse->id]);
+        $warehouseUser->roles()->attach(Role::query()->create(['name' => 'warehouse']));
+        $sale = User::factory()->create();
+        $customer = Customer::query()->create([
+            'name' => 'Khách nhận một phần',
+            'status' => 'active',
+        ]);
+        $product = Product::query()->create([
+            'user_id' => $sale->id,
+            'name' => 'Sản phẩm giao một phần',
+            'unit' => 'cái',
+            'status' => true,
+            'is_priced_by_kg' => false,
+        ]);
+        $variant = ProductVariant::query()->create([
+            'product_id' => $product->id,
+            'name' => 'Tiêu chuẩn',
+            'sku' => 'PARTIAL-DELIVERY',
+            'kg' => 1,
+            'is_priced_by_kg' => false,
+        ]);
+        $order = Order::query()->create([
+            'customer_id' => $customer->id,
+            'user_id' => $sale->id,
+            'warehouse_id' => $warehouse->id,
+            'code' => 'PARTIAL-DELIVERY-ORDER',
+            'status' => Order::STATUS_DELIVERED,
+            'delivered_at' => now(),
+            'total' => 600000,
+        ]);
+        $order->items()->create([
+            'product_id' => $product->id,
+            'product_variant_id' => $variant->id,
+            'quantity' => 6,
+            'price' => 100000,
+            'total' => 1000000,
+            'is_priced_by_kg' => false,
+        ]);
+        $orderReturn = OrderReturn::query()->create([
+            'order_id' => $order->id,
+            'customer_id' => $customer->id,
+            'warehouse_id' => $warehouse->id,
+            'created_by' => $warehouseUser->id,
+            'status' => 'pending_warehouse',
+            'return_scope' => 'partial',
+            'note' => 'Giao 1 phần: giao 6/10 (trả 4)',
+        ]);
+        ReturnItem::query()->create([
+            'order_return_id' => $orderReturn->id,
+            'product_variant_id' => $variant->id,
+            'quantity' => 4,
+            'condition' => 'good',
+        ]);
+        Inventory::query()->create([
+            'warehouse_id' => $warehouse->id,
+            'product_variant_id' => $variant->id,
+            'quantity' => 0,
+            'reserved_quantity' => 0,
+        ]);
+
+        $journal = app(CompletedSalesJournalService::class);
+        $date = $order->created_at->toDateString();
+        $this->assertCount(0, $journal->all($date, $date));
+
+        $this->actingAs($warehouseUser)
+            ->post(route('warehouse.returns.confirm', $order))
+            ->assertSessionHas('success');
+
+        $this->assertSame(Order::STATUS_COMPLETED, $order->fresh()->status);
+        $this->assertSame('warehouse_received', $orderReturn->fresh()->status);
+        $this->assertSame(4.0, (float) Inventory::query()
+            ->where('warehouse_id', $warehouse->id)
+            ->where('product_variant_id', $variant->id)
+            ->value('quantity'));
+
+        $rows = $journal->all($date, $date);
+        $this->assertCount(1, $rows);
+        $this->assertSame(6.0, (float) $rows->first()->quantity);
+        $this->assertSame(600000.0, (float) $rows->first()->total_amount);
     }
 }

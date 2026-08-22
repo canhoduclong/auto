@@ -12,11 +12,11 @@ use App\Models\OrderReturn;
 use App\Models\ProductCuttingBatch;
 use App\Models\ProductVariant;
 use App\Models\TaskAssignment;
+use App\Models\Warehouse;
 use App\Models\WarehouseInventoryTransfer;
 use App\Models\WarehouseTransfer;
-use App\Models\Warehouse;
-use App\Services\WarehouseInventorySummaryService;
 use App\Services\ProductCuttingService;
+use App\Services\WarehouseInventorySummaryService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -186,7 +186,7 @@ class WarehouseApiController extends BaseApiController
             ->map(fn (Order $order, int $index) => [
                 'sequence' => $index + 1,
                 'id' => (int) $order->id,
-                'code' => (string) ($order->code ?? ('#' . $order->id)),
+                'code' => (string) ($order->code ?? ('#'.$order->id)),
                 'customer_name' => (string) ($order->customer?->name ?? '—'),
                 'total' => (float) ($order->total ?? 0),
                 'updated_time' => optional($order->updated_at)->format('H:i'),
@@ -210,7 +210,7 @@ class WarehouseApiController extends BaseApiController
             'receiving_alert' => [
                 'show' => ($stats['receiving'] ?? 0) > 0,
                 'count' => $stats['receiving'] ?? 0,
-                'message' => 'Cần tiếp nhận hàng: Hiện có ' . ($stats['receiving'] ?? 0) . ' phiếu điều chuyển chờ tiếp nhận!',
+                'message' => 'Cần tiếp nhận hàng: Hiện có '.($stats['receiving'] ?? 0).' phiếu điều chuyển chờ tiếp nhận!',
                 'route_key' => 'incoming_inventory_transfers',
             ],
             'legend' => [
@@ -256,8 +256,8 @@ class WarehouseApiController extends BaseApiController
                 'customer:id,name,phone,address,delivery_time',
                 'warehouse:id,name',
                 'histories:id,order_id,action,user_id',
-            'items.product:id,name,unit,product_type',
-            'items.variant' => fn ($q) => $q->withAvailableStock()->with('product:id,name,unit,product_type'),
+                'items.product:id,name,unit,product_type',
+                'items.variant' => fn ($q) => $q->withAvailableStock()->with('product:id,name,unit,product_type'),
             ])
             ->where(function ($q) {
                 $q->whereNull('is_return_order')->orWhere('is_return_order', false);
@@ -383,7 +383,7 @@ class WarehouseApiController extends BaseApiController
         $this->ensureWarehouseRole($request);
         $user = $request->user();
         $warehouseId = $user->warehouse_id ? (int) $user->warehouse_id : null;
-        if (!$warehouseId) {
+        if (! $warehouseId) {
             return $this->fail('Tài khoản chưa được gán kho thực hiện.', 422);
         }
 
@@ -430,7 +430,7 @@ class WarehouseApiController extends BaseApiController
         }
 
         $item = $order->items->first(fn ($row) => (int) $row->product_variant_id === (int) $variant->id);
-        if (!$item) {
+        if (! $item) {
             return $this->fail('Đơn không có sản phẩm pha lóc này.', 404);
         }
 
@@ -449,7 +449,7 @@ class WarehouseApiController extends BaseApiController
             'order' => $this->warehouseOrderPayload($order),
             'target_item' => [
                 'variant_id' => (int) $variant->id,
-                'name' => trim(($variant->product?->name ?? '') . ' ' . ($variant->name ?? '')),
+                'name' => trim(($variant->product?->name ?? '').' '.($variant->name ?? '')),
                 'needed' => $needed,
                 'available' => $available,
                 'shortage' => $shortage,
@@ -463,7 +463,7 @@ class WarehouseApiController extends BaseApiController
         $this->ensureWarehouseRole($request);
         $user = $request->user();
         $warehouseId = $user->warehouse_id ? (int) $user->warehouse_id : null;
-        if (!$warehouseId) {
+        if (! $warehouseId) {
             return $this->fail('Tài khoản chưa được gán kho thực hiện.', 422);
         }
         if ($warehouseId && (int) ($order->warehouse_id ?? 0) > 0 && (int) $order->warehouse_id !== $warehouseId) {
@@ -599,7 +599,7 @@ class WarehouseApiController extends BaseApiController
             return $this->fail('Phieu tra khong thuoc kho ban quan ly.', 403);
         }
         $orderReturn->loadMissing(['order.items', 'returnItems']);
-        if (!$orderReturn->order || $orderReturn->returnItems->isEmpty() || $warehouseId <= 0) {
+        if (! $orderReturn->order || $orderReturn->returnItems->isEmpty() || $warehouseId <= 0) {
             return $this->fail('Phieu tra thieu thong tin don hang, san pham hoac kho nhan.', 422);
         }
 
@@ -614,14 +614,16 @@ class WarehouseApiController extends BaseApiController
                 'warehouse_confirmed_by' => $user->id,
                 'warehouse_confirmed_at' => now(),
             ]);
-            $orderReturn->order->update(['status' => Order::STATUS_RETURNED_COMPLETED]);
+            $statusBefore = (string) $orderReturn->order->status;
+            $statusAfter = $orderReturn->completedOrderStatus();
+            $orderReturn->order->update(['status' => $statusAfter]);
 
-            $marker = '[return_receipt:' . $orderReturn->id . ']';
+            $marker = '[return_receipt:'.$orderReturn->id.']';
             $document = InventoryDocument::query()->firstOrCreate(
                 [
                     'type' => 'import',
                     'warehouse_id' => $warehouseId,
-                    'notes' => 'Đơn nhập hàng từ trả hàng #' . $orderReturn->id . ' ' . $marker,
+                    'notes' => 'Đơn nhập hàng từ trả hàng #'.$orderReturn->id.' '.$marker,
                 ],
                 [
                     'document_date' => now()->toDateString(),
@@ -655,9 +657,9 @@ class WarehouseApiController extends BaseApiController
                 'action' => 'confirm_return',
                 'user_id' => $user->id,
                 'role' => 'warehouse',
-                'status_before' => Order::STATUS_RETURNING,
-                'status_after' => Order::STATUS_RETURNED_COMPLETED,
-                'note' => 'Kho nhận hàng trả qua mobile, cập nhật tồn kho và tạo phiếu nhập #' . $document->id,
+                'status_before' => $statusBefore,
+                'status_after' => $statusAfter,
+                'note' => 'Kho nhận hàng trả qua mobile, cập nhật tồn kho và tạo phiếu nhập #'.$document->id,
             ]);
 
             return $document;
@@ -694,8 +696,8 @@ class WarehouseApiController extends BaseApiController
         if ($request->filled('keyword')) {
             $keyword = (string) $request->query('keyword');
             $query->where(function ($q) use ($keyword) {
-                $q->where('name', 'like', '%' . $keyword . '%')
-                    ->orWhere('sku', 'like', '%' . $keyword . '%');
+                $q->where('name', 'like', '%'.$keyword.'%')
+                    ->orWhere('sku', 'like', '%'.$keyword.'%');
             });
         }
 
@@ -714,10 +716,10 @@ class WarehouseApiController extends BaseApiController
         $variant = ProductVariant::query()
             ->with('product:id,name')
             ->where('sku', $code)
-            ->orWhere('name', 'like', '%' . $code . '%')
+            ->orWhere('name', 'like', '%'.$code.'%')
             ->first();
 
-        if (!$variant) {
+        if (! $variant) {
             return $this->fail('Khong tim thay san pham theo ma scan', 404);
         }
 
@@ -756,7 +758,7 @@ class WarehouseApiController extends BaseApiController
     private function ensureWarehouseRole(Request $request): void
     {
         $user = $request->user();
-        if (!$user || !($user->hasRole('warehouse') || $user->hasRole('admin'))) {
+        if (! $user || ! ($user->hasRole('warehouse') || $user->hasRole('admin'))) {
             abort(403, 'Role khong duoc phep truy cap API warehouse');
         }
     }
@@ -764,7 +766,7 @@ class WarehouseApiController extends BaseApiController
     private function ensurePackingRole(Request $request): void
     {
         $user = $request->user();
-        if (!$user || !($user->hasRole('warehouse') || $user->hasRole('package') || $user->hasRole('admin'))) {
+        if (! $user || ! ($user->hasRole('warehouse') || $user->hasRole('package') || $user->hasRole('admin'))) {
             abort(403, 'Role khong duoc phep truy cap API dong hang');
         }
     }
@@ -797,7 +799,7 @@ class WarehouseApiController extends BaseApiController
 
         return [
             'id' => (int) $order->id,
-            'code' => (string) ($order->code ?: '#' . $order->id),
+            'code' => (string) ($order->code ?: '#'.$order->id),
             'daily_sequence' => $order->daily_sequence ? (int) $order->daily_sequence : null,
             'status' => (string) $order->status,
             'status_label' => $statusMeta['label'],
@@ -861,7 +863,7 @@ class WarehouseApiController extends BaseApiController
 
                 return [
                     'id' => (int) $batch->id,
-                    'target_name' => trim(($batch->targetVariant?->product?->name ?? 'Sản phẩm') . ' ' . ($batch->targetVariant?->name ?: '')),
+                    'target_name' => trim(($batch->targetVariant?->product?->name ?? 'Sản phẩm').' '.($batch->targetVariant?->name ?: '')),
                     'input_weight' => (float) ($batch->input_weight ?? 0),
                     'planned_finished_weight' => (float) ($batch->planned_finished_weight ?? 0),
                     'planned_components' => collect($batch->planned_components ?? [])->map(fn ($component) => [
@@ -876,10 +878,10 @@ class WarehouseApiController extends BaseApiController
 
                         return [
                             'variant_id' => $variantId,
-                            'name' => trim(($variant?->product?->name ?? 'Sản phẩm') . ' ' . ($variant?->name ?: '')),
+                            'name' => trim(($variant?->product?->name ?? 'Sản phẩm').' '.($variant?->name ?: '')),
                             'sku' => (string) ($variant?->sku ?? ''),
                             'quantity' => (float) ($item->quantity ?? 0),
-                            'picked' => !empty($verification),
+                            'picked' => ! empty($verification),
                             'verified_by_name' => (string) ($verification['verified_by_name'] ?? ''),
                         ];
                     })->values()->all(),
@@ -958,7 +960,7 @@ class WarehouseApiController extends BaseApiController
 
     private function attachCustomerFeedbackContext($orders): void
     {
-        if ($orders->isEmpty() || !Schema::hasColumn('orders', 'customer_feedback_status')) {
+        if ($orders->isEmpty() || ! Schema::hasColumn('orders', 'customer_feedback_status')) {
             $orders->each(fn (Order $order) => $order->setAttribute('customer_feedback_context', [
                 'has_feedback' => false,
                 'highest_status' => null,
@@ -993,14 +995,14 @@ class WarehouseApiController extends BaseApiController
                 'highest_meta' => Order::customerFeedbackMeta($highestStatus),
                 'recent' => $rows->map(fn (Order $feedbackOrder) => [
                     'order_id' => (int) $feedbackOrder->id,
-                    'code' => (string) ($feedbackOrder->code ?: '#' . $feedbackOrder->id),
+                    'code' => (string) ($feedbackOrder->code ?: '#'.$feedbackOrder->id),
                     'status' => (string) $feedbackOrder->customer_feedback_status,
                     'meta' => Order::customerFeedbackMeta((string) $feedbackOrder->customer_feedback_status),
                     'note' => (string) $feedbackOrder->customer_feedback_note,
                     'sale_review' => (string) ($feedbackOrder->customer_feedback_sale_review ?? ''),
                     'images' => collect($feedbackOrder->customer_feedback_images ?? [])->map(fn ($path) => [
                         'path' => (string) $path,
-                        'url' => asset('storage/' . ltrim((string) $path, '/')),
+                        'url' => asset('storage/'.ltrim((string) $path, '/')),
                     ])->values()->all(),
                     'user' => (string) ($feedbackOrder->customerFeedbackUser?->name ?? ''),
                     'at' => optional($feedbackOrder->customer_feedback_at ?? $feedbackOrder->updated_at)->toIso8601String(),
@@ -1075,7 +1077,8 @@ class WarehouseApiController extends BaseApiController
     private function formatWeight(float $value, string $unit): string
     {
         $formatted = rtrim(rtrim(number_format($value, 3, ',', '.'), '0'), ',');
-        return $formatted . ' ' . $unit;
+
+        return $formatted.' '.$unit;
     }
 
     private function callWebWarehouseAction(Request $request, callable $callback): JsonResponse
@@ -1111,7 +1114,7 @@ class WarehouseApiController extends BaseApiController
         $batch->loadMissing('exportDocument.items');
         $sourceItem = $batch->exportDocument?->items
             ?->first(fn ($item) => (int) $item->product_variant_id === (int) $variant->id);
-        if (!$sourceItem) {
+        if (! $sourceItem) {
             return $this->fail('Mặt hàng này không nằm trong danh sách kho đã lấy cho mẻ pha lóc.', 422);
         }
 
