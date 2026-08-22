@@ -16,10 +16,10 @@ use App\Models\TransactionCategory;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Notifications\AccountingOrderRevenueConfirmed;
-use App\Services\SupplierDebtService;
 use App\Services\ApprovalService;
 use App\Services\CompletedSalesJournalService;
 use App\Services\GoogleSheetsJournalService;
+use App\Services\SupplierDebtService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -1874,10 +1874,9 @@ class AccountingDashboardController extends Controller
             return back()->withInput()->with('error', 'Không thể ghi Google Sheets: '.$exception->getMessage());
         }
 
-        return back()->with(
-            'success',
-            "Đã ghi toàn bộ {$result['rows']} dòng vào trang tính “{$result['sheet_name']}”."
-        );
+        return back()
+            ->with('success', "Đã ghi toàn bộ {$result['rows']} dòng vào trang tính “{$result['sheet_name']}”.")
+            ->with('google_sheets_url', $result['spreadsheet_url']);
     }
 
     public function financialReports(Request $request)

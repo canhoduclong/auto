@@ -540,7 +540,14 @@
 
         <section class="acc-content">
             @if(session('success'))
-                <div class="alert alert-success">{{ session('success') }}</div>
+                <div class="alert alert-success d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <span>{{ session('success') }}</span>
+                    @if(session('google_sheets_url'))
+                        <a class="btn btn-sm btn-success" href="{{ session('google_sheets_url') }}" target="_blank" rel="noopener">
+                            <i class="bi bi-box-arrow-up-right me-1"></i>Mở Google Sheets
+                        </a>
+                    @endif
+                </div>
             @endif
             @if(session('error'))
                 <div class="alert alert-danger">{{ session('error') }}</div>

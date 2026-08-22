@@ -168,6 +168,7 @@ class AccountingSalesJournalTest extends TestCase
             'customer_id' => 0,
             'sort' => 'date_asc',
         ])->assertRedirect()
-            ->assertSessionHas('success', 'Đã ghi toàn bộ 4 dòng vào trang tính “Nhật ký bán hàng”.');
+            ->assertSessionHas('success', 'Đã ghi toàn bộ 4 dòng vào trang tính “Nhật ký bán hàng”.')
+            ->assertSessionHas('google_sheets_url', 'https://docs.google.com/spreadsheets/d/test/edit');
     }
 }

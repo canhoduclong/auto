@@ -168,7 +168,7 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
     <div class="ds-kpi-item">
         <div class="lbl">Tổng tiền có thể thu</div>
         <div class="val text-success">{{ number_format((float) $journalSummary['amount'], 0, ',', '.') }}đ</div>
-        <div class="sub">Đơn đã giao hoặc hoàn tất</div>
+        <div class="sub">Đơn hợp lệ theo ngày lên đơn</div>
     </div>
     <div class="ds-kpi-item">
         <div class="lbl">Tổng SL/KL quy đổi</div>
@@ -191,8 +191,8 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
     <div class="card-body">
         <div class="ds-toolbar">
             <div>
-                <div class="fw-bold">Nhật ký đơn đã hoàn tất giao hàng</div>
-                <div class="small text-muted">Dữ liệu được lập trực tiếp từ đơn đã giao/hoàn tất, chưa yêu cầu xác nhận đối soát.</div>
+                <div class="fw-bold">Nhật ký bán hàng</div>
+                <div class="small text-muted">Dữ liệu được lập từ toàn bộ đơn hợp lệ theo ngày lên đơn và bộ lọc hiện tại.</div>
             </div>
             <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
                 <div class="small text-muted">Tổng <strong>{{ number_format($journalRows->total()) }}</strong> dòng</div>
@@ -211,6 +211,15 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                 </form>
             </div>
         </div>
+
+        @if(! $googleSheetsConfigured)
+            <div class="alert alert-warning py-2 mb-3">
+                Chưa có khóa JSON của service account
+                <strong>hlsheet@hoanglongtnt.iam.gserviceaccount.com</strong>
+                trên máy chủ. Hãy đặt khóa tại
+                <code>storage/app/google/service-account.json</code> để bật chức năng ghi dữ liệu.
+            </div>
+        @endif
 
         <div class="table-responsive">
             <table class="table table-hover align-middle ds-table">

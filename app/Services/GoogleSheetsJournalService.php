@@ -45,12 +45,6 @@ class GoogleSheetsJournalService
         $sheetId = $this->ensureSheetExists($service, $spreadsheetId, $sheetName);
         $rangePrefix = "'".str_replace("'", "''", $sheetName)."'";
 
-        $service->spreadsheets_values->clear(
-            $spreadsheetId,
-            $rangePrefix.'!A:K',
-            new ClearValuesRequest
-        );
-
         $values = collect([self::HEADERS])
             ->concat($rows->map(fn ($row) => [
                 Carbon::parse($row->entry_date)->format('d/m/Y'),
@@ -76,6 +70,15 @@ class GoogleSheetsJournalService
                 'values' => $values,
             ]),
             ['valueInputOption' => 'RAW']
+        );
+
+        // Only remove rows left over from a previous, larger export. Writing
+        // first means a temporary Google API failure never leaves the sheet
+        // completely blank.
+        $service->spreadsheets_values->clear(
+            $spreadsheetId,
+            $rangePrefix.'!A'.(count($values) + 1).':K',
+            new ClearValuesRequest
         );
 
         $this->formatSheet($service, $spreadsheetId, $sheetId, count($values));
@@ -119,6 +122,14 @@ class GoogleSheetsJournalService
             : base_path($configuredPath);
         if (! is_file($path) || ! is_readable($path)) {
             throw new RuntimeException("Không đọc được khóa service account tại {$path}.");
+        }
+
+        $credentials = json_decode((string) file_get_contents($path), true);
+        if (! is_array($credentials)
+            || ($credentials['type'] ?? null) !== 'service_account'
+            || empty($credentials['client_email'])
+            || empty($credentials['private_key'])) {
+            throw new RuntimeException('Tệp khóa Google không phải JSON service account hợp lệ.');
         }
 
         return $path;
@@ -188,6 +199,9 @@ class GoogleSheetsJournalService
                             ],
                             'fields' => 'userEnteredFormat(backgroundColor,textFormat)',
                         ],
+                    ]),
+                    new SheetsRequest([
+                        'clearBasicFilter' => ['sheetId' => $sheetId],
                     ]),
                     new SheetsRequest([
                         'setBasicFilter' => [
