@@ -110,7 +110,9 @@ class ShipperDispatchHistoryTest extends TestCase
             'code' => 'RESTORED-ROUTE-21',
             'total' => 50000,
             'shipping_fee' => 50000,
-            'delivery_date' => '2026-08-21',
+            // The order was entered late and its stored dates do not match the
+            // route date selected by the manager.
+            'delivery_date' => '2026-08-20',
             'status' => Order::STATUS_READY_TO_SHIP,
             'skip_auto_cancel' => true,
         ]);
@@ -135,7 +137,8 @@ class ShipperDispatchHistoryTest extends TestCase
                 'date' => '2026-08-21',
                 'route_plan' => json_encode($routePlan, JSON_UNESCAPED_UNICODE),
             ])
-            ->assertOk();
+            ->assertOk()
+            ->assertJsonPath('message', 'Đã gửi lịch trình giao hàng cho 1 shipper (1 đơn): Shipper đơn ngoại lệ (1 đơn). Các shipper sẽ nhận được thông báo xác nhận.');
 
         $this->assertDatabaseHas('order_histories', [
             'order_id' => $order->id,

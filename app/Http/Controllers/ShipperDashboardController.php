@@ -294,6 +294,7 @@ class ShipperDashboardController extends Controller
 
         $today = Carbon::today();
         $startDate = $today->copy()->subDays(6)->toDateString();
+        $plannedExceptionOrderIds = $this->archivedPlannedOrderIdsForShipperOnDate((int) Auth::id(), $selectedDate);
 
         $dailyCounts = Order::query()
             ->selectRaw('DATE(created_at) as day_key, COUNT(*) as total')
@@ -335,7 +336,15 @@ class ShipperDashboardController extends Controller
                     $this->constrainNoActiveWarehouseTransfer($acceptedQuery);
                 });
             })
-            ->forWorkflowDate($selectedDate)
+            ->where(function ($dateQuery) use ($selectedDate, $plannedExceptionOrderIds): void {
+                $dateQuery->forWorkflowDate($selectedDate);
+                if ($plannedExceptionOrderIds !== []) {
+                    $dateQuery->orWhere(function ($exceptionQuery) use ($plannedExceptionOrderIds): void {
+                        $exceptionQuery->where('skip_auto_cancel', true)
+                            ->whereIn('id', $plannedExceptionOrderIds);
+                    });
+                }
+            })
             ->orderBy('created_at', 'asc')
             ->get();
 
@@ -1790,15 +1799,50 @@ class ShipperDashboardController extends Controller
 
     private function deliveryScheduleOrdersForShipper(int $shipperId, string $selectedDate)
     {
+        $plannedExceptionOrderIds = $this->archivedPlannedOrderIdsForShipperOnDate($shipperId, $selectedDate);
+
         return Order::with(['customer', 'items.variant'])
             ->where('shipper_id', $shipperId)
             ->where(fn ($query) => $this->constrainAssignmentStatuses($query))
-            ->forWorkflowDate($selectedDate)
+            ->where(function ($dateQuery) use ($selectedDate, $plannedExceptionOrderIds): void {
+                $dateQuery->forWorkflowDate($selectedDate);
+                if ($plannedExceptionOrderIds !== []) {
+                    $dateQuery->orWhere(function ($exceptionQuery) use ($plannedExceptionOrderIds): void {
+                        $exceptionQuery->where('skip_auto_cancel', true)
+                            ->whereIn('id', $plannedExceptionOrderIds);
+                    });
+                }
+            })
             ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
             ->orderBy('daily_sequence', 'asc')
             ->orderBy('delivery_time', 'asc')
             ->orderBy('created_at', 'asc')
             ->orderBy('id', 'asc');
+    }
+
+    private function archivedPlannedOrderIdsForShipperOnDate(int $shipperId, string $selectedDate): array
+    {
+        $dispatch = ShipperDispatchHistory::query()
+            ->whereDate('schedule_date', $selectedDate)
+            ->orderByDesc('version')
+            ->orderByDesc('id')
+            ->first(['route_plan']);
+
+        if (!$dispatch) {
+            return [];
+        }
+
+        $shipperPlan = collect($dispatch->route_plan ?? [])
+            ->first(fn ($plan) => (int) ($plan['shipper_id'] ?? 0) === $shipperId);
+
+        return collect($shipperPlan['routes'] ?? [])
+            ->flatMap(fn ($route) => $route['orders'] ?? [])
+            ->pluck('order_id')
+            ->filter(fn ($orderId) => (int) $orderId > 0)
+            ->map(fn ($orderId) => (int) $orderId)
+            ->unique()
+            ->values()
+            ->all();
     }
 
     private function deliveryScheduleStatus(?OrderHistory $latestHistory, string $currentSnapshotHash): string
@@ -2069,13 +2113,17 @@ class ShipperDashboardController extends Controller
                 ->with('error', $message);
         }
 
-        // Lấy danh sách tất cả shippers có đơn đã gán trong ngày
-        $shipperIds = Order::query()
-            ->whereNotNull('shipper_id')
-            ->where(fn ($query) => $this->constrainAssignmentStatuses($query))
-            ->forWorkflowDate($date)
-            ->distinct('shipper_id')
+        // The reviewed route plan is the source of truth. Re-querying every
+        // order by created_at here used to silently drop restored late orders.
+        $shipperIds = collect($routePlan)
+            ->filter(fn ($shipperPlan) => collect($shipperPlan['routes'] ?? [])
+                ->flatMap(fn ($route) => $route['orders'] ?? [])
+                ->isNotEmpty())
             ->pluck('shipper_id')
+            ->filter(fn ($shipperId) => (int) $shipperId > 0)
+            ->map(fn ($shipperId) => (int) $shipperId)
+            ->unique()
+            ->values()
             ->toArray();
 
         if (empty($shipperIds)) {
@@ -2086,7 +2134,11 @@ class ShipperDashboardController extends Controller
         $processedShippers = [];
         foreach ($shipperIds as $shipperId) {
             $shipper = User::query()->findOrFail($shipperId);
-            $ordersCount = $this->deliveryScheduleOrdersForShipper((int) $shipperId, $date)->count();
+            $ordersCount = collect($routePlan)
+                ->first(fn ($shipperPlan) => (int) ($shipperPlan['shipper_id'] ?? 0) === (int) $shipperId);
+            $ordersCount = collect($ordersCount['routes'] ?? [])->sum(
+                fn ($route) => count($route['orders'] ?? [])
+            );
             if (app(ShipperAssignmentService::class)->publishDailySchedule(
                 (int) $shipperId,
                 $date,
@@ -2171,7 +2223,13 @@ class ShipperDashboardController extends Controller
         $orders = Order::with(['items', 'accountingReconciliation'])
             ->whereIn('id', $plannedOrders->keys()->all())
             ->where(fn ($query) => $this->constrainAssignmentStatuses($query))
-            ->forWorkflowDate($date)
+            ->where(function ($dateQuery) use ($date, $plannedOrders): void {
+                $dateQuery->forWorkflowDate($date)
+                    ->orWhere(function ($exceptionQuery) use ($plannedOrders): void {
+                        $exceptionQuery->where('skip_auto_cancel', true)
+                            ->whereIn('id', $plannedOrders->keys()->all());
+                    });
+            })
             ->get()
             ->keyBy('id');
 

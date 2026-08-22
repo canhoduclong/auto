@@ -21,6 +21,21 @@ class ShipperAssignmentService
         ];
     }
 
+    private function plannedOrderIdsForShipper(array $routePlan, int $shipperId): array
+    {
+        $shipperPlan = collect($routePlan)
+            ->first(fn ($plan) => (int) ($plan['shipper_id'] ?? 0) === $shipperId);
+
+        return collect($shipperPlan['routes'] ?? [])
+            ->flatMap(fn ($route) => $route['orders'] ?? [])
+            ->pluck('order_id')
+            ->filter(fn ($orderId) => (int) $orderId > 0)
+            ->map(fn ($orderId) => (int) $orderId)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
     public function hasUnpublishedDailySchedule(int $shipperId, Carbon|string|null $date = null): bool
     {
         $dateString = $date instanceof Carbon
@@ -81,10 +96,23 @@ class ShipperAssignmentService
             ? $date->toDateString()
             : Carbon::parse($date ?: now())->toDateString();
 
+        $plannedOrderIds = $this->plannedOrderIdsForShipper($routePlan, $shipperId);
+
         $orders = Order::query()
             ->where('shipper_id', $shipperId)
             ->whereIn('status', $this->assignmentStatuses())
-            ->forWorkflowDate($dateString)
+            ->when(
+                $plannedOrderIds !== [],
+                fn ($query) => $query->whereIn('id', $plannedOrderIds)
+                    ->where(function ($dateQuery) use ($dateString, $plannedOrderIds): void {
+                        $dateQuery->forWorkflowDate($dateString)
+                            ->orWhere(function ($exceptionQuery) use ($plannedOrderIds): void {
+                                $exceptionQuery->where('skip_auto_cancel', true)
+                                    ->whereIn('id', $plannedOrderIds);
+                            });
+                    }),
+                fn ($query) => $query->forWorkflowDate($dateString)
+            )
             ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
             ->orderBy('daily_sequence')
             ->orderBy('delivery_time')
@@ -93,6 +121,10 @@ class ShipperAssignmentService
             ->get();
 
         if ($orders->isEmpty()) {
+            return false;
+        }
+
+        if ($plannedOrderIds !== [] && $orders->count() !== count($plannedOrderIds)) {
             return false;
         }
 
