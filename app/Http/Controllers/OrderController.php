@@ -1266,6 +1266,14 @@ class OrderController extends Controller
 
         $this->assertValidTransition($order, ['packing'], 'packed');
         $statusBefore = (string) $order->status;
+        try {
+            $this->rebuildRestoredOrderStockReservation(
+                $order,
+                $order->warehouse_id ? (int) $order->warehouse_id : null
+            );
+        } catch (\RuntimeException) {
+            return back()->with('error', 'Tồn kho vẫn chưa đủ để hoàn tất đóng gói đơn phục hồi. Vui lòng bổ sung kho trước.');
+        }
         $packedImagePath = $request->file('packed_image')->store('orders/packed', 'public');
 
         $order->update([
@@ -1294,6 +1302,10 @@ class OrderController extends Controller
         $statusBefore = (string) $order->status;
 
         DB::transaction(function () use ($order) {
+            $this->rebuildRestoredOrderStockReservation(
+                $order,
+                $order->warehouse_id ? (int) $order->warehouse_id : null
+            );
             $this->deductReservedStockForOrder($order);
             $order->update([
                 'status' => 'shipping',
@@ -1527,7 +1539,8 @@ class OrderController extends Controller
                 $this->releaseReservedStockForOrder($lockedOrder);
                 $this->reserveStockForOrder(
                     $lockedOrder,
-                    $lockedOrder->warehouse_id ? (int) $lockedOrder->warehouse_id : null
+                    $lockedOrder->warehouse_id ? (int) $lockedOrder->warehouse_id : null,
+                    true
                 );
 
                 $lockedOrder->forceFill([
@@ -1544,7 +1557,7 @@ class OrderController extends Controller
                     'restore_cancelled_order',
                     Order::STATUS_CANCELLED,
                     $restoredStatus,
-                    'Admin phục hồi đơn đã hủy và khôi phục booking tồn kho',
+                    'Admin phục hồi đơn đã hủy; booking phần tồn khả dụng và cho phép bổ sung kho sau',
                     $admin
                 );
 
@@ -1554,7 +1567,14 @@ class OrderController extends Controller
             return back()->with('error', $exception->getMessage());
         }
 
-        return back()->with('success', "Đã phục hồi đơn về trạng thái {$restoredStatus} và đặt lại booking tồn kho.");
+        $this->syncDailySequenceAndStockSufficiency($order->created_at ?: now());
+        $order->refresh();
+
+        $stockMessage = $order->stock_sufficient === false
+            ? ' Đơn đang thiếu tồn khả dụng và đã được đánh dấu chờ bổ sung kho.'
+            : ' Booking tồn kho đã được khôi phục.';
+
+        return back()->with('success', "Đã phục hồi đơn về trạng thái {$restoredStatus}.{$stockMessage}");
     }
 
     public function toggleStatus(Request $request, Order $order)
@@ -2191,6 +2211,23 @@ class OrderController extends Controller
                 }
             }
         }
+    }
+
+    /**
+     * A restored order may initially reserve only the available part of its stock.
+     * Before completing warehouse work, rebuild a full reservation after stock-in.
+     */
+    public function rebuildRestoredOrderStockReservation(Order $order, ?int $warehouseId): void
+    {
+        if (! $order->skip_auto_cancel) {
+            return;
+        }
+
+        DB::transaction(function () use ($order, $warehouseId): void {
+            $lockedOrder = Order::query()->lockForUpdate()->findOrFail($order->id);
+            $this->releaseReservedStockForOrder($lockedOrder);
+            $this->reserveStockForOrder($lockedOrder, $warehouseId);
+        });
     }
 
     private function deductReservedStockForOrder(Order $order): void

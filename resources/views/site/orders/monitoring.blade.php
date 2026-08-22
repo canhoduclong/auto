@@ -1735,7 +1735,7 @@
                                     @endif
                                     @if($canAdminRestoreOrder)
                                         <form method="POST" class="monitor-cancel-form" action="{{ route('site.orders.restore-cancelled', $order) }}"
-                                              onsubmit="return confirm('Phục hồi đơn {{ addslashes($order->code ?: ('#' . $order->id)) }} về trạng thái trước khi hủy và đặt lại booking tồn kho?');">
+                                              onsubmit="return confirm('Phục hồi đơn {{ addslashes($order->code ?: ('#' . $order->id)) }} về trạng thái trước khi hủy? Nếu thiếu tồn kho, đơn vẫn được phục hồi để chờ bổ sung hàng.');">
                                             @csrf
                                             <button type="submit" class="btn btn-sm btn-outline-success">
                                                 <i class="bi bi-arrow-counterclockwise me-1"></i>Phục hồi đơn

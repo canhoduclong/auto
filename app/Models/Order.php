@@ -66,6 +66,7 @@ class Order extends Model
         'is_return_order' => 'boolean',
         'foam_box_price' => 'decimal:2',
         'stock_shortage_detail' => 'array',
+        'stock_sufficient' => 'boolean',
         'stock_alert_status' => 'string',
         'warehouse_adjustment_changes' => 'array',
         'warehouse_adjustment_requested_at' => 'datetime',

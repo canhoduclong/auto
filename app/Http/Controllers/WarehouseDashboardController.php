@@ -2682,6 +2682,23 @@ class WarehouseDashboardController extends Controller
             return back()->with('error', 'Vui lòng cập nhật Kg thực tế trước khi hoàn thành đóng gói.');
         }
 
+        try {
+            app(OrderController::class)->rebuildRestoredOrderStockReservation(
+                $order,
+                Auth::user()?->warehouse_id
+                    ? (int) Auth::user()->warehouse_id
+                    : ($order->warehouse_id ? (int) $order->warehouse_id : null)
+            );
+        } catch (\RuntimeException $exception) {
+            $message = 'Tồn kho vẫn chưa đủ để hoàn tất đóng gói đơn phục hồi. Vui lòng bổ sung kho trước.';
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $message], 422);
+            }
+
+            return back()->with('error', $message);
+        }
+
         $order->update(['status' => Order::STATUS_READY_TO_SHIP]);
 
         OrderHistory::create([
@@ -4997,6 +5014,7 @@ class WarehouseDashboardController extends Controller
     private function canProcessOrderOnCurrentRun(Order $order): bool
     {
         return $order->accounting_sales_import_batch_id !== null
+            || (bool) $order->skip_auto_cancel
             || ($order->created_at && $order->created_at->isToday());
     }
 

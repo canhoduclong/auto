@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Customer;
 use App\Models\Inventory;
+use App\Models\InventoryReservation;
 use App\Models\Order;
 use App\Models\OrderHistory;
 use App\Models\Product;
@@ -11,6 +12,7 @@ use App\Models\ProductVariant;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\Warehouse;
+use App\Http\Controllers\OrderController;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -75,25 +77,38 @@ class AdminRestoreCancelledOrderTest extends TestCase
         $this->assertSame(Order::STATUS_CANCELLED, $order->fresh()->status);
     }
 
-    public function test_restore_is_rolled_back_when_stock_is_no_longer_available(): void
+    public function test_admin_can_restore_when_available_stock_is_insufficient(): void
     {
         [$admin, $order, $inventory] = $this->createCancelledOrder(5, 10);
 
         $this->actingAs($admin)
             ->post(route('site.orders.restore-cancelled', $order))
             ->assertRedirect()
-            ->assertSessionHas('error');
+            ->assertSessionHas('success');
 
-        $this->assertSame(Order::STATUS_CANCELLED, $order->fresh()->status);
-        $this->assertFalse($order->fresh()->skip_auto_cancel);
-        $this->assertSame(0, (int) $inventory->fresh()->reserved_quantity);
-        $this->assertDatabaseMissing('inventory_reservations', [
+        $order->refresh();
+        $this->assertSame('packing', $order->status);
+        $this->assertTrue($order->skip_auto_cancel);
+        $this->assertFalse($order->stock_sufficient);
+        $this->assertSame('waiting_stock', $order->stock_alert_status);
+        $this->assertSame(5, (int) $inventory->fresh()->reserved_quantity);
+        $this->assertDatabaseHas('inventory_reservations', [
             'order_item_id' => $order->items()->value('id'),
+            'inventory_id' => $inventory->id,
+            'quantity' => 5,
         ]);
-        $this->assertDatabaseMissing('order_histories', [
+        $this->assertDatabaseHas('order_histories', [
             'order_id' => $order->id,
             'action' => 'restore_cancelled_order',
         ]);
+
+        // After stock-in, the missing reservation is rebuilt before packing/shipping completes.
+        $inventory->update(['quantity' => 10]);
+        app(OrderController::class)->rebuildRestoredOrderStockReservation($order, null);
+        $this->assertSame(10, (int) $inventory->fresh()->reserved_quantity);
+        $this->assertSame(10, (int) InventoryReservation::query()
+            ->where('order_item_id', $order->items()->value('id'))
+            ->sum('quantity'));
     }
 
     /**
