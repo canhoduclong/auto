@@ -168,7 +168,7 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
     <div class="ds-kpi-item">
         <div class="lbl">Tổng tiền có thể thu</div>
         <div class="val text-success">{{ number_format((float) $journalSummary['amount'], 0, ',', '.') }}đ</div>
-        <div class="sub">Đơn hợp lệ theo ngày lên đơn</div>
+        <div class="sub">Chỉ gồm đơn đã hoàn thành giao hàng</div>
     </div>
     <div class="ds-kpi-item">
         <div class="lbl">Tổng SL/KL quy đổi</div>
@@ -192,7 +192,7 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
         <div class="ds-toolbar">
             <div>
                 <div class="fw-bold">Nhật ký bán hàng</div>
-                <div class="small text-muted">Dữ liệu được lập từ toàn bộ đơn hợp lệ theo ngày lên đơn và bộ lọc hiện tại.</div>
+                <div class="small text-muted">Dữ liệu được lập theo ngày lên đơn và chỉ xuất hiện sau khi đơn đã giao hàng.</div>
             </div>
             <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
                 <div class="small text-muted">Tổng <strong>{{ number_format($journalRows->total()) }}</strong> dòng</div>

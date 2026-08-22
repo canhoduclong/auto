@@ -9,9 +9,7 @@ use Illuminate\Support\Collection;
 
 class CompletedSalesJournalService
 {
-    public function __construct(private readonly AccountingSalesLedgerService $ledgerService)
-    {
-    }
+    public function __construct(private readonly AccountingSalesLedgerService $ledgerService) {}
 
     /**
      * Build ledger-shaped rows directly from valid sales orders.
@@ -60,9 +58,8 @@ class CompletedSalesJournalService
         int $customerId = 0,
         string $sort = 'date_desc'
     ): Collection {
-        // Keep the journal aligned with the overview tab: a sale belongs to
-        // the day the order was entered, regardless of when packing/delivery
-        // finishes. This is especially important for late exception orders.
+        // The journal is grouped by the day the order was entered, but an
+        // order only becomes journal-eligible after delivery is completed.
         $dateExpression = 'DATE(orders.created_at)';
 
         $orders = Order::query()
@@ -76,7 +73,7 @@ class CompletedSalesJournalService
                     ->latest('id')
                     ->with('items'),
             ])
-            ->whereNotIn('status', [Order::STATUS_REJECTED, Order::STATUS_CANCELLED])
+            ->whereIn('status', [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED])
             ->whereRaw("{$dateExpression} BETWEEN ? AND ?", [$fromDate, $toDate])
             ->when($saleId > 0, fn ($orders) => $orders->where('user_id', $saleId))
             ->when($customerId > 0, fn ($orders) => $orders->where('customer_id', $customerId))

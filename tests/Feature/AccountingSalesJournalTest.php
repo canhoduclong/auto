@@ -16,7 +16,7 @@ class AccountingSalesJournalTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_journal_tab_lists_all_valid_orders_by_order_date(): void
+    public function test_journal_tab_lists_only_delivered_orders_by_order_date(): void
     {
         $admin = User::factory()->create();
         $admin->roles()->attach(Role::query()->create(['name' => 'admin']));
@@ -126,7 +126,6 @@ class AccountingSalesJournalTest extends TestCase
             ->assertSee('330.480')
             ->assertSee('thùng xốp')
             ->assertSee('80.000')
-            ->assertSee('Khách đơn ngoại lệ chưa giao')
             ->assertSee('Đồng bộ Google Sheets');
 
         $journal = app(CompletedSalesJournalService::class)->paginate(
@@ -140,9 +139,9 @@ class AccountingSalesJournalTest extends TestCase
             route('accounting.daily-sales'),
         );
 
-        $this->assertSame(4, $journal['summary']['rows']);
-        $this->assertSame(2, $journal['summary']['orders']);
-        $this->assertContains(
+        $this->assertSame(3, $journal['summary']['rows']);
+        $this->assertSame(1, $journal['summary']['orders']);
+        $this->assertNotContains(
             'Khách đơn ngoại lệ chưa giao',
             $journal['rows']->getCollection()->pluck('customer_name')->all()
         );
@@ -155,11 +154,11 @@ class AccountingSalesJournalTest extends TestCase
             ->shouldReceive('syncJournalDates')
             ->once()
             ->with(
-                \Mockery::on(fn ($rows) => $rows->count() === 4),
+                \Mockery::on(fn ($rows) => $rows->count() === 3),
                 ['2026-08-10']
             )
             ->andReturn([
-                'rows' => 4,
+                'rows' => 3,
                 'dates' => 1,
                 'spreadsheet_url' => 'https://docs.google.com/spreadsheets/d/test/edit',
                 'sheet_name' => 'Nhật ký bán hàng',
@@ -172,7 +171,7 @@ class AccountingSalesJournalTest extends TestCase
             'customer_id' => 0,
             'sort' => 'date_asc',
         ])->assertRedirect()
-            ->assertSessionHas('success', 'Đã đồng bộ 4 dòng của 1 ngày vào trang tính “Nhật ký bán hàng”.')
+            ->assertSessionHas('success', 'Đã đồng bộ 3 dòng của 1 ngày vào trang tính “Nhật ký bán hàng”.')
             ->assertSessionHas('google_sheets_url', 'https://docs.google.com/spreadsheets/d/test/edit');
     }
 }
