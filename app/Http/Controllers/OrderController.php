@@ -1495,6 +1495,68 @@ class OrderController extends Controller
         return back()->with('success', __('orders.messages.cancelled_and_released'));
     }
 
+    public function restoreCancelled(Request $request, Order $order)
+    {
+        $admin = $request->user();
+        abort_unless($admin?->isAdmin(), 403);
+
+        try {
+            $restoredStatus = DB::transaction(function () use ($order, $admin): string {
+                $lockedOrder = Order::query()->lockForUpdate()->findOrFail($order->id);
+
+                if ($lockedOrder->status !== Order::STATUS_CANCELLED) {
+                    throw new \RuntimeException('Chỉ có thể phục hồi đơn đang ở trạng thái đã hủy.');
+                }
+
+                if ($lockedOrder->trash_at !== null) {
+                    throw new \RuntimeException('Đơn đã nằm trong thùng rác và không thể phục hồi tại đây.');
+                }
+
+                $cancellationHistory = $lockedOrder->histories()
+                    ->where('status_after', Order::STATUS_CANCELLED)
+                    ->whereNotNull('status_before')
+                    ->latest('id')
+                    ->first();
+                $restoredStatus = trim((string) $cancellationHistory?->status_before);
+
+                if (!in_array($restoredStatus, Order::RESTORABLE_AFTER_CANCEL_STATUSES, true)) {
+                    throw new \RuntimeException('Không xác định được trạng thái hợp lệ của đơn trước khi bị hủy.');
+                }
+
+                // Clean up any inconsistent leftovers before rebuilding the booking.
+                $this->releaseReservedStockForOrder($lockedOrder);
+                $this->reserveStockForOrder(
+                    $lockedOrder,
+                    $lockedOrder->warehouse_id ? (int) $lockedOrder->warehouse_id : null
+                );
+
+                $lockedOrder->forceFill([
+                    'status' => $restoredStatus,
+                    'cancelled_by' => null,
+                    'cancelled_at' => null,
+                    'cancel_reason' => null,
+                    'cancel_images' => null,
+                    'skip_auto_cancel' => true,
+                ])->save();
+
+                $this->logOrderHistory(
+                    $lockedOrder,
+                    'restore_cancelled_order',
+                    Order::STATUS_CANCELLED,
+                    $restoredStatus,
+                    'Admin phục hồi đơn đã hủy và khôi phục booking tồn kho',
+                    $admin
+                );
+
+                return $restoredStatus;
+            });
+        } catch (\RuntimeException $exception) {
+            return back()->with('error', $exception->getMessage());
+        }
+
+        return back()->with('success', "Đã phục hồi đơn về trạng thái {$restoredStatus} và đặt lại booking tồn kho.");
+    }
+
     public function toggleStatus(Request $request, Order $order)
     {
         $request->validate([

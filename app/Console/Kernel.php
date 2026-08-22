@@ -29,7 +29,7 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
-        // Auto-cancel overdue orders every day at 00:05
+        // Auto-cancel only after the delivery time plus the six-hour grace period.
         $schedule->command('orders:auto-cancel-overdue')->dailyAt('00:05');
         // Reconcile reserved_quantity drift every day at 00:10 (after auto-cancel)
         $schedule->command('inventory:reconcile-reservations')->dailyAt('00:10');

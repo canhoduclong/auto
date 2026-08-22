@@ -1490,6 +1490,9 @@
                                 && empty($order->trash_at)
                                 && $canManageOrder;
                             $canAdminDeleteOrder = $isAdminUser;
+                            $canAdminRestoreOrder = $isAdminUser
+                                && $isCancelled
+                                && empty($order->trash_at);
                             $isEditable = $canManageOrder && $order->canBeDirectlyEditedByOwner();
                             $canCancel = $canManageOrder
                                 && $order->created_at?->isToday()
@@ -1727,6 +1730,15 @@
                                             @csrf
                                             <button type="submit" class="btn btn-sm btn-danger">
                                                 <i class="bi bi-trash me-1"></i>Xóa đơn
+                                            </button>
+                                        </form>
+                                    @endif
+                                    @if($canAdminRestoreOrder)
+                                        <form method="POST" class="monitor-cancel-form" action="{{ route('site.orders.restore-cancelled', $order) }}"
+                                              onsubmit="return confirm('Phục hồi đơn {{ addslashes($order->code ?: ('#' . $order->id)) }} về trạng thái trước khi hủy và đặt lại booking tồn kho?');">
+                                            @csrf
+                                            <button type="submit" class="btn btn-sm btn-outline-success">
+                                                <i class="bi bi-arrow-counterclockwise me-1"></i>Phục hồi đơn
                                             </button>
                                         </form>
                                     @endif

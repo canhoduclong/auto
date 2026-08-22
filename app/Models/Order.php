@@ -36,7 +36,7 @@ class Order extends Model
         'warehouse_adjustment_requested_by', 'warehouse_adjustment_requested_at',
         'warehouse_adjustment_confirmed_by', 'warehouse_adjustment_confirmed_at',
         'warehouse_adjustment_rejected_by', 'warehouse_adjustment_rejected_at', 'warehouse_adjustment_rejected_reason',
-        'cancelled_by', 'cancelled_at', 'cancel_reason', 'cancel_images', 'trash_at',
+        'cancelled_by', 'cancelled_at', 'cancel_reason', 'cancel_images', 'trash_at', 'skip_auto_cancel',
         'accounting_sales_import_batch_id', 'imported_sales_group_key', 'needs_operational_completion',
         'operational_completion_note', 'operational_completed_by', 'operational_completed_at',
     ];
@@ -51,6 +51,7 @@ class Order extends Model
         'use_truck_station' => 'boolean',
         'cancelled_at' => 'datetime',
         'trash_at' => 'datetime',
+        'skip_auto_cancel' => 'boolean',
         'total_weight' => 'decimal:3',
         'actual_weight' => 'decimal:3',
         'charge_shipping_fee' => 'boolean',
@@ -200,6 +201,21 @@ class Order extends Model
         self::STATUS_ORDER_PLACED,
     ];
 
+    public const RESTORABLE_AFTER_CANCEL_STATUSES = [
+        'pending',
+        self::STATUS_PENDING_LEADER_APPROVAL,
+        self::STATUS_PENDING_MANAGER_APPROVAL,
+        'pending_warehouse_approval',
+        self::STATUS_APPROVED,
+        self::STATUS_READY_TO_PACK,
+        self::STATUS_PACKING,
+        self::STATUS_PACKED,
+        self::STATUS_READY_TO_SHIP,
+        'confirmed',
+        'picking',
+        self::STATUS_ORDER_PLACED,
+    ];
+
     public function canBeCancelled(): bool
     {
         return in_array((string) $this->status, self::CANCELLABLE_STATUSES, true);
@@ -315,6 +331,7 @@ class Order extends Model
             'cancel_reason' => null,
             'cancel_images' => null,
             'trash_at' => null,
+            'skip_auto_cancel' => false,
         ]);
 
         return $this->clearWarehouseAdjustmentState();

@@ -6,16 +6,20 @@ use App\Models\Inventory;
 use App\Models\InventoryReservation;
 use App\Models\Order;
 use App\Models\OrderHistory;
+use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
 class AutoCancelOverdueOrders extends Command
 {
     protected $signature   = 'orders:auto-cancel-overdue';
-    protected $description = 'Hủy các đơn quá hạn giao dịch và trả lại tồn kho';
+    protected $description = 'Hủy các đơn đã quá giờ giao 6 tiếng và trả lại tồn kho';
+
+    private const BUSINESS_TIMEZONE = 'Asia/Bangkok';
+    private const CANCELLATION_GRACE_HOURS = 6;
 
     /**
-     * Statuses eligible for auto-cancellation when the order date has passed.
+     * Statuses eligible for auto-cancellation when the delivery deadline has passed.
      *
      * Group 1 – pre-packing (never reached the warehouse packing stage):
      *   pending, pending_leader_approval, pending_manager_approval,
@@ -38,15 +42,23 @@ class AutoCancelOverdueOrders extends Command
 
     public function handle(): int
     {
-        $today     = now()->startOfDay();
+        $now       = now(self::BUSINESS_TIMEZONE);
         $cancelled = 0;
 
-        $orders = Order::with('items')
+        $orders = Order::with(['items', 'customer:id,delivery_time'])
             ->whereIn('status', self::CANCELLABLE_STATUSES)
-            ->whereDate('created_at', '<', $today)
+            ->where('skip_auto_cancel', false)
+            ->where(function ($query) use ($now): void {
+                $query->whereDate('delivery_date', '<=', $now->toDateString())
+                    ->orWhereNull('delivery_date');
+            })
             ->get();
 
         foreach ($orders as $order) {
+            if (!$this->isPastCancellationDeadline($order, $now)) {
+                continue;
+            }
+
             try {
                 DB::transaction(function () use ($order) {
                     $statusBefore = (string) $order->status;
@@ -78,6 +90,65 @@ class AutoCancelOverdueOrders extends Command
         $this->info("Hoàn tất: đã hủy {$cancelled} đơn quá hạn.");
 
         return self::SUCCESS;
+    }
+
+    private function isPastCancellationDeadline(Order $order, Carbon $now): bool
+    {
+        $deliveryDate = $order->delivery_date?->toDateString()
+            ?: $order->created_at->copy()->addDay()->toDateString();
+        $deliveryTime = trim((string) ($order->delivery_time ?: $order->customer?->delivery_time));
+        $time = $this->extractDeliveryTime($deliveryTime);
+
+        $deliveryAt = Carbon::parse($deliveryDate, self::BUSINESS_TIMEZONE);
+        if ($time === null) {
+            // Free-form or missing delivery times must never make an order cancel early.
+            $deliveryAt->endOfDay();
+        } else {
+            $deliveryAt->setTime($time['hour'], $time['minute']);
+        }
+
+        return $now->gt($deliveryAt->addHours(self::CANCELLATION_GRACE_HOURS));
+    }
+
+    /**
+     * Read the last time from a free-form delivery window (for example 8h-10h).
+     * The last time is the safe end of the delivery window.
+     *
+     * @return array{hour: int, minute: int}|null
+     */
+    private function extractDeliveryTime(string $value): ?array
+    {
+        if ($value === '') {
+            return null;
+        }
+
+        $normalizedValue = mb_strtolower($value);
+
+        preg_match_all(
+            '/(?<!\d)([01]?\d|2[0-3])\s*(?::|h|g(?:iờ)?)(?:\s*([0-5]\d))?/iu',
+            $normalizedValue,
+            $matches,
+            PREG_SET_ORDER | PREG_OFFSET_CAPTURE
+        );
+
+        if ($matches === []) {
+            return null;
+        }
+
+        $match = $matches[array_key_last($matches)];
+        $hour = (int) $match[1][0];
+        $minute = isset($match[2][0]) && $match[2][0] !== '' ? (int) $match[2][0] : 0;
+        $contextStart = max(0, (int) $match[0][1] - 12);
+        // PREG_OFFSET_CAPTURE returns a byte offset, so use substr here as well.
+        $context = substr($normalizedValue, $contextStart, 48);
+
+        if ($hour < 12 && preg_match('/\b(chiều|toi|tối|pm)\b/u', $context)) {
+            $hour += 12;
+        } elseif ($hour === 12 && preg_match('/\b(đêm|khuya|am)\b/u', $context)) {
+            $hour = 0;
+        }
+
+        return ['hour' => $hour, 'minute' => $minute];
     }
 
     private function releaseReservedStock(Order $order): void
