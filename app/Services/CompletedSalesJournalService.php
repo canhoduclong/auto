@@ -14,7 +14,7 @@ class CompletedSalesJournalService
     }
 
     /**
-     * Build ledger-shaped rows directly from delivered/completed orders.
+     * Build ledger-shaped rows directly from valid sales orders.
      * These rows are a report only and do not create accounting_sales_entries.
      *
      * @return array{rows: LengthAwarePaginator, summary: array{rows:int, orders:int, quantity:float, amount:float}}
@@ -60,7 +60,10 @@ class CompletedSalesJournalService
         int $customerId = 0,
         string $sort = 'date_desc'
     ): Collection {
-        $dateExpression = 'COALESCE(orders.delivery_date, DATE(orders.delivered_at), DATE(orders.updated_at))';
+        // Keep the journal aligned with the overview tab: a sale belongs to
+        // the day the order was entered, regardless of when packing/delivery
+        // finishes. This is especially important for late exception orders.
+        $dateExpression = 'DATE(orders.created_at)';
 
         $orders = Order::query()
             ->with([
@@ -73,7 +76,7 @@ class CompletedSalesJournalService
                     ->latest('id')
                     ->with('items'),
             ])
-            ->whereIn('status', [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED])
+            ->whereNotIn('status', [Order::STATUS_REJECTED, Order::STATUS_CANCELLED])
             ->whereRaw("{$dateExpression} BETWEEN ? AND ?", [$fromDate, $toDate])
             ->when($saleId > 0, fn ($orders) => $orders->where('user_id', $saleId))
             ->when($customerId > 0, fn ($orders) => $orders->where('customer_id', $customerId))
@@ -88,9 +91,7 @@ class CompletedSalesJournalService
 
     private function rowsForOrder(Order $order): Collection
     {
-        $entryDate = $order->delivery_date?->toDateString()
-            ?: $order->delivered_at?->toDateString()
-            ?: $order->updated_at->toDateString();
+        $entryDate = $order->created_at->toDateString();
         $adjustments = $order->adjustments
             ->flatMap->items
             ->filter(fn ($item) => $item->order_item_id)

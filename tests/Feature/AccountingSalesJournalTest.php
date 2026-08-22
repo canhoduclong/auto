@@ -16,7 +16,7 @@ class AccountingSalesJournalTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_journal_tab_lists_delivered_order_items_vat_and_foam_box_only(): void
+    public function test_journal_tab_lists_all_valid_orders_by_order_date(): void
     {
         $admin = User::factory()->create();
         $admin->roles()->attach(Role::query()->create(['name' => 'admin']));
@@ -45,14 +45,15 @@ class AccountingSalesJournalTest extends TestCase
             'user_id' => $sale->id,
             'code' => 'JOURNAL-DELIVERED',
             'status' => Order::STATUS_DELIVERED,
-            'delivery_date' => '2026-08-10',
-            'delivered_at' => '2026-08-10 10:00:00',
+            'delivery_date' => '2026-08-12',
+            'delivered_at' => '2026-08-12 10:00:00',
             'charge_vat' => true,
             'vat_percent' => 5,
             'vat_amount' => 330480,
             'charge_foam_box_fee' => true,
             'foam_box_price' => 80000,
         ]);
+        $order->forceFill(['created_at' => '2026-08-10 08:00:00'])->saveQuietly();
         $order->items()->create([
             'product_id' => $product->id,
             'product_variant_id' => $variant->id,
@@ -66,15 +67,16 @@ class AccountingSalesJournalTest extends TestCase
         ]);
 
         $pendingCustomer = Customer::query()->create([
-            'name' => 'Khách chưa giao không được ghi sổ',
+            'name' => 'Khách đơn ngoại lệ chưa giao',
             'status' => 'active',
         ]);
         $pendingOrder = Order::query()->create([
             'customer_id' => $pendingCustomer->id,
             'user_id' => $sale->id,
             'status' => Order::STATUS_PACKING,
-            'delivery_date' => '2026-08-10',
+            'delivery_date' => '2026-08-11',
         ]);
+        $pendingOrder->forceFill(['created_at' => '2026-08-10 09:00:00'])->saveQuietly();
         $pendingOrder->items()->create([
             'product_id' => $product->id,
             'product_variant_id' => $variant->id,
@@ -83,6 +85,24 @@ class AccountingSalesJournalTest extends TestCase
             'total_weight' => 3.17,
             'price' => 72000,
             'total' => 228240,
+        ]);
+
+        $cancelledCustomer = Customer::query()->create([
+            'name' => 'Khách có đơn đã hủy',
+            'status' => 'active',
+        ]);
+        $cancelledOrder = Order::query()->create([
+            'customer_id' => $cancelledCustomer->id,
+            'user_id' => $sale->id,
+            'status' => Order::STATUS_CANCELLED,
+        ]);
+        $cancelledOrder->forceFill(['created_at' => '2026-08-10 10:00:00'])->saveQuietly();
+        $cancelledOrder->items()->create([
+            'product_id' => $product->id,
+            'product_variant_id' => $variant->id,
+            'quantity' => 1,
+            'price' => 72000,
+            'total' => 72000,
         ]);
 
         $response = $this->actingAs($admin)->get(route('accounting.daily-sales', [
@@ -106,6 +126,7 @@ class AccountingSalesJournalTest extends TestCase
             ->assertSee('330.480')
             ->assertSee('thùng xốp')
             ->assertSee('80.000')
+            ->assertSee('Khách đơn ngoại lệ chưa giao')
             ->assertSee('Ghi vào Google Sheets');
 
         $journal = app(CompletedSalesJournalService::class)->paginate(
@@ -119,19 +140,23 @@ class AccountingSalesJournalTest extends TestCase
             route('accounting.daily-sales'),
         );
 
-        $this->assertSame(3, $journal['summary']['rows']);
-        $this->assertSame(1, $journal['summary']['orders']);
+        $this->assertSame(4, $journal['summary']['rows']);
+        $this->assertSame(2, $journal['summary']['orders']);
+        $this->assertContains(
+            'Khách đơn ngoại lệ chưa giao',
+            $journal['rows']->getCollection()->pluck('customer_name')->all()
+        );
         $this->assertNotContains(
-            'Khách chưa giao không được ghi sổ',
+            'Khách có đơn đã hủy',
             $journal['rows']->getCollection()->pluck('customer_name')->all()
         );
 
         $this->mock(\App\Services\GoogleSheetsJournalService::class)
             ->shouldReceive('replaceJournal')
             ->once()
-            ->with(\Mockery::on(fn ($rows) => $rows->count() === 3))
+            ->with(\Mockery::on(fn ($rows) => $rows->count() === 4))
             ->andReturn([
-                'rows' => 3,
+                'rows' => 4,
                 'spreadsheet_url' => 'https://docs.google.com/spreadsheets/d/test/edit',
                 'sheet_name' => 'Nhật ký bán hàng',
             ]);
@@ -143,6 +168,6 @@ class AccountingSalesJournalTest extends TestCase
             'customer_id' => 0,
             'sort' => 'date_asc',
         ])->assertRedirect()
-            ->assertSessionHas('success', 'Đã ghi toàn bộ 3 dòng vào trang tính “Nhật ký bán hàng”.');
+            ->assertSessionHas('success', 'Đã ghi toàn bộ 4 dòng vào trang tính “Nhật ký bán hàng”.');
     }
 }
