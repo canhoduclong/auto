@@ -515,6 +515,52 @@
     .monitor-day-note-content div + div { margin-top: 3px; }
     .monitor-day-note-label { color: #64748b; font-weight: 700; }
     .monitor-day-notes-empty { padding: 16px 14px; color: #64748b; font-size: .78rem; text-align: center; }
+    .monitor-priority-legend {
+        padding: 13px 14px 15px;
+        border-top: 1px solid #dce6f1;
+        background: #fbfdff;
+    }
+    .monitor-priority-legend-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 6px 14px;
+        margin-bottom: 10px;
+    }
+    .monitor-priority-legend-title {
+        margin: 0;
+        color: #0f172a;
+        font-size: .78rem;
+        font-weight: 900;
+        text-transform: uppercase;
+    }
+    .monitor-priority-legend-help { color: #64748b; font-size: .7rem; }
+    .monitor-priority-legend-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 8px;
+    }
+    .monitor-priority-legend-item {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 9px;
+        padding: 8px 10px;
+        border: 1px solid #e5edf5;
+        border-radius: 8px;
+        background: #fff;
+    }
+    .monitor-priority-legend-number {
+        width: 30px;
+        height: 30px;
+        flex: 0 0 30px;
+        font-size: .72rem;
+        pointer-events: none;
+    }
+    .monitor-priority-legend-copy { min-width: 0; line-height: 1.3; }
+    .monitor-priority-legend-copy strong { display: block; color: #1e293b; font-size: .73rem; }
+    .monitor-priority-legend-copy span { display: block; color: #64748b; font-size: .67rem; }
     .monitor-bulk-actions {
         display: flex;
         flex-wrap: wrap;
@@ -803,6 +849,7 @@
         .monitor-adjustment-fee-row .input-group { grid-column: 2; }
         .monitor-product-choice-label { font-size: 0; }
         .monitor-product-choice-label i { font-size: .8rem; }
+        .monitor-priority-legend-grid { grid-template-columns: 1fr; }
     }
     @media (max-width: 575.98px) {
         .monitor-actions { grid-template-columns: 1fr; }
@@ -862,6 +909,15 @@
         'delivered' => 'Đã giao hàng',
         'accounted' => 'Kế toán đã xác nhận và tính doanh số',
         'cancelled' => 'Đã hủy',
+    ];
+    $monitorStateLegendDescriptions = [
+        'pending' => 'Đơn mới tạo, đang chờ bước duyệt.',
+        'approved' => 'Đơn đã duyệt, đang chờ kho hoặc đóng gói.',
+        'packed' => 'Đã đóng gói, chờ bàn giao vận chuyển.',
+        'transit' => 'Đang vận chuyển hoặc đang xử lý trả hàng.',
+        'delivered' => 'Đã giao hàng hoặc đã hoàn tất đơn.',
+        'accounted' => 'Kế toán đã xác nhận và ghi nhận doanh số.',
+        'cancelled' => 'Đơn đã hủy, không tiếp tục xử lý.',
     ];
     $monitorStateForOrder = static function ($order): string {
         if ($order->status === \App\Models\Order::STATUS_CANCELLED) {
@@ -1922,6 +1978,25 @@
                             <div class="monitor-day-notes-empty"><i class="bi bi-check-circle me-1"></i>Chưa có ghi chú cho các đơn trong ngày.</div>
                         @endforelse
                     </div>
+                    <section class="monitor-priority-legend" aria-labelledby="monitorPriorityLegendTitle">
+                        <div class="monitor-priority-legend-head">
+                            <h3 class="monitor-priority-legend-title" id="monitorPriorityLegendTitle">
+                                <i class="bi bi-palette me-1"></i>Bảng màu số thứ tự ưu tiên
+                            </h3>
+                            <div class="monitor-priority-legend-help">Số trong vòng tròn là thứ tự xử lý trong ngày; màu nền thể hiện trạng thái hiện tại.</div>
+                        </div>
+                        <div class="monitor-priority-legend-grid">
+                            @foreach($monitorStateLabels as $state => $label)
+                                <div class="monitor-priority-legend-item">
+                                    <span class="monitor-sequence monitor-priority-legend-number status-{{ $state }}" aria-hidden="true">#</span>
+                                    <div class="monitor-priority-legend-copy">
+                                        <strong>{{ $label }}</strong>
+                                        <span>{{ $monitorStateLegendDescriptions[$state] }}</span>
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    </section>
                 </footer>
         @else
             <div class="monitor-tab-content monitor-tab-{{ $activeTab }}">

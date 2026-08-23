@@ -65,4 +65,18 @@ class MyOrdersMonitoringAdjustmentActionTest extends TestCase
         $this->assertStringContainsString('!$hasSampleDraft', $view);
         $this->assertStringContainsString('pages.my_order_drafts.add_from_order', $view);
     }
+
+    public function test_today_notes_footer_contains_priority_color_legend(): void
+    {
+        $view = file_get_contents(
+            dirname(__DIR__, 2).'/resources/views/site/orders/monitoring.blade.php'
+        );
+
+        $this->assertStringContainsString('Bảng màu số thứ tự ưu tiên', $view);
+        $this->assertStringContainsString('Số trong vòng tròn là thứ tự xử lý trong ngày', $view);
+        foreach (['pending', 'approved', 'packed', 'transit', 'delivered', 'accounted', 'cancelled'] as $state) {
+            $this->assertStringContainsString("'{$state}' =>", $view);
+            $this->assertStringContainsString(".monitor-sequence.status-{$state}", $view);
+        }
+    }
 }
