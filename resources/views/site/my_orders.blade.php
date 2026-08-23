@@ -1005,6 +1005,68 @@
 
         <script>
             (function () {
+                const escapeHtml = (value) => {
+                    const element = document.createElement('div');
+                    element.textContent = String(value || '');
+                    return element.innerHTML;
+                };
+
+                document.addEventListener('click', async function (event) {
+                    const button = event.target.closest('.customer-quick-create-submit');
+                    if (!button) return;
+
+                    const panel = button.closest('[data-customer-quick-create]');
+                    const nameInput = panel?.querySelector('.customer-quick-create-name');
+                    const phoneInput = panel?.querySelector('.customer-quick-create-phone');
+                    const errorBox = panel?.querySelector('.customer-quick-create-error');
+                    const name = nameInput?.value.trim() || '';
+                    const phone = phoneInput?.value.trim() || '';
+
+                    if (!name) {
+                        errorBox.textContent = 'Vui lòng nhập tên khách hàng.';
+                        errorBox.hidden = false;
+                        nameInput?.focus();
+                        return;
+                    }
+
+                    const original = button.innerHTML;
+                    button.disabled = true;
+                    button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Đang tạo...';
+                    errorBox.hidden = true;
+
+                    try {
+                        const body = new FormData();
+                        body.set('name', name);
+                        body.set('phone', phone);
+                        const response = await fetch(panel.dataset.storeUrl, {
+                            method: 'POST',
+                            body,
+                            headers: {
+                                'X-Requested-With': 'XMLHttpRequest',
+                                'Accept': 'application/json',
+                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
+                            }
+                        });
+                        const data = await response.json();
+                        if (!response.ok || !data.success) {
+                            throw new Error(data.errors ? Object.values(data.errors).flat().join(' ') : (data.message || 'Không thể tạo khách hàng.'));
+                        }
+
+                        panel.innerHTML = `<div class="alert alert-success mb-0"><i class="bi bi-check-circle me-1"></i>Đã thêm khách hàng <strong>${escapeHtml(data.customer?.name || name)}</strong> · ${escapeHtml(data.customer?.phone || phone)}</div>`;
+                        document.dispatchEvent(new CustomEvent('customer:quick-created', { detail: data.customer || {} }));
+                        if (typeof window.showToast === 'function') window.showToast(data.message || 'Đã thêm khách hàng mới.', 'success');
+                    } catch (error) {
+                        errorBox.textContent = error.message || 'Không thể kết nối máy chủ.';
+                        errorBox.hidden = false;
+                        button.disabled = false;
+                        button.innerHTML = original;
+                    }
+                });
+            })();
+        </script>
+
+        <script>
+            (function () {
                 const endpoint = @json(route('site.orders.customers.ajax'));
                 const searchInput = document.getElementById('customerSearchInput');
                 const selectedInputsContainer = document.getElementById('selectedCustomerInputs');

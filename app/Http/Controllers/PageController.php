@@ -602,6 +602,13 @@ class PageController extends Controller
             return redirect()->route('login')->with('error', 'Bạn cần đăng nhập để xem đơn hàng của mình.');
         }
 
+        if (! $request->ajax() && ! $request->boolean('ajax') && $request->input('tab') !== 'my_orders') {
+            return redirect()->route('pages.my_orders.monitoring', array_merge(
+                $request->query(),
+                ['tab' => 'my_orders']
+            ));
+        }
+
         $user = auth()->user();
 
         $query = Order::with([
@@ -2114,6 +2121,9 @@ class PageController extends Controller
 
         $user = auth()->user();
         $search = trim((string) $request->input('q', ''));
+        $searchPhoneDigits = preg_match('/^\+?[0-9][0-9 .-]{7,19}$/', $search)
+            ? preg_replace('/\D+/', '', $search)
+            : '';
         $mode = $request->input('mode', 'multi'); // 'single' or 'multi'
         $perPage = min((int) $request->input('per_page', 15), 50);
         $perPage = max($perPage, 5);
@@ -2143,11 +2153,14 @@ class PageController extends Controller
 
         $customers = $baseQuery
             ->with(['truckStation', 'currentOwner:id,name', 'assignedTo:id,name', 'user:id,name'])
-            ->when($search !== '', function ($q) use ($search) {
-                $q->where(function ($sub) use ($search) {
+            ->when($search !== '', function ($q) use ($search, $searchPhoneDigits) {
+                $q->where(function ($sub) use ($search, $searchPhoneDigits) {
                     $sub->where('name', 'like', "%{$search}%")
                         ->orWhere('phone', 'like', "%{$search}%")
                         ->orWhere('email', 'like', "%{$search}%");
+                    if ($searchPhoneDigits !== '') {
+                        $sub->orWhereRaw("REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '.', ''), '-', ''), '+', '') LIKE ?", ['%'.$searchPhoneDigits.'%']);
+                    }
                 });
             })
             ->when($sortBy === 'manual', fn ($q) => $this->applyCustomerPinnedSort($q)->orderBy('name'))
@@ -2164,6 +2177,10 @@ class PageController extends Controller
             'sortBy' => $sortBy,
             'sortDir' => $sortDir,
             'perPage' => $perPage,
+            'searchedPhone' => $customers->total() === 0 && $searchPhoneDigits !== ''
+                ? $searchPhoneDigits
+                : null,
+            'customerStoreUrl' => route('customers.popup.store'),
         ])->render();
 
         return response()->json([

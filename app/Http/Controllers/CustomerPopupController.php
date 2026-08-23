@@ -35,9 +35,10 @@ class CustomerPopupController extends Controller
             'priority_level' => 'nullable|in:2,3',
             'takeover' => 'nullable|boolean',
         ]);
+        $phoneDigits = preg_replace('/\D+/', '', (string) ($data['phone'] ?? ''));
 
         $duplicateCustomer = Customer::query()
-            ->where(function ($query) use ($data) {
+            ->where(function ($query) use ($data, $phoneDigits) {
                 $query->where('name_normalized', Customer::normalizeName($data['name']));
 
                 if (!empty($data['email'])) {
@@ -46,6 +47,9 @@ class CustomerPopupController extends Controller
 
                 if (!empty($data['phone'])) {
                     $query->orWhere('phone', $data['phone']);
+                    if ($phoneDigits !== '') {
+                        $query->orWhereRaw("REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '.', ''), '-', ''), '+', '') = ?", [$phoneDigits]);
+                    }
                     $query->orWhere(function ($subQuery) use ($data) {
                         $subQuery->where('name', $data['name'])
                             ->where('phone', $data['phone']);

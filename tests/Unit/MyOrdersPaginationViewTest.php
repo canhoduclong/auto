@@ -36,4 +36,24 @@ class MyOrdersPaginationViewTest extends TestCase
             $template
         );
     }
+
+    public function test_missing_phone_result_offers_ajax_customer_creation(): void
+    {
+        $page = file_get_contents(resource_path('views/site/my_orders.blade.php'));
+        $picker = file_get_contents(resource_path('views/site/orders/partials/customer_picker_single.blade.php'));
+
+        $this->assertStringContainsString('customer-quick-create-submit', $page);
+        $this->assertStringContainsString("body.set('phone', phone);", $page);
+        $this->assertStringContainsString('Thêm khách hàng mới', $picker);
+        $this->assertStringContainsString('value="{{ $searchedPhone }}"', $picker);
+    }
+
+    public function test_standalone_orders_page_is_canonicalized_to_monitoring_layout(): void
+    {
+        $controller = file_get_contents(app_path('Http/Controllers/PageController.php'));
+
+        $this->assertStringContainsString("\$request->input('tab') !== 'my_orders'", $controller);
+        $this->assertStringContainsString("['tab' => 'my_orders']", $controller);
+        $this->assertStringContainsString("redirect()->route('pages.my_orders.monitoring'", $controller);
+    }
 }

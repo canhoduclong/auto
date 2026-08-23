@@ -108,8 +108,30 @@
         </div>
     </div>
 @else
-    <div class="text-center text-muted py-4">
+    <div class="text-center text-muted py-4 {{ !empty($searchedPhone) ? 'pb-2' : '' }}">
         <div class="mb-2" style="font-size:2rem;">🔍</div>
         Không tìm thấy khách hàng phù hợp.
     </div>
+    @if(!empty($searchedPhone))
+        <div class="customer-quick-create border rounded-3 bg-light p-3"
+             data-customer-quick-create
+             data-store-url="{{ $customerStoreUrl }}">
+            <div class="fw-bold text-dark mb-1"><i class="bi bi-person-plus me-1"></i>Thêm khách hàng mới</div>
+            <div class="small text-muted mb-3">Số điện thoại này chưa có trong danh sách khách hàng của bạn.</div>
+            <div class="row g-2">
+                <div class="col-md-7">
+                    <label class="form-label small fw-semibold">Tên khách hàng</label>
+                    <input type="text" class="form-control form-control-sm customer-quick-create-name" placeholder="Nhập tên khách hàng" maxlength="255">
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label small fw-semibold">Số điện thoại</label>
+                    <input type="tel" class="form-control form-control-sm customer-quick-create-phone" value="{{ $searchedPhone }}" maxlength="30" readonly>
+                </div>
+            </div>
+            <div class="customer-quick-create-error small text-danger mt-2" hidden></div>
+            <button type="button" class="btn btn-success btn-sm mt-3 customer-quick-create-submit">
+                <i class="bi bi-plus-circle me-1"></i>Tạo khách hàng
+            </button>
+        </div>
+    @endif
 @endif
