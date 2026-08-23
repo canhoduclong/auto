@@ -2,25 +2,25 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\ApprovalWorkflow;
 use App\Models\Order;
 use App\Models\OrderAdjustment;
 use App\Models\OrderAdjustmentItem;
 use App\Models\OrderReturn;
 use App\Models\ProductVariant;
 use App\Models\ReturnItem;
-use App\Models\Warehouse;
+use App\Models\Setting;
 use App\Models\User;
+use App\Models\Warehouse;
 use App\Services\ApprovalService;
 use App\Services\OrderAutoApprovalService;
 use App\Services\OrderFeeService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\View\View;
-use App\Models\Setting;
 use Illuminate\Support\Facades\Cache;
-
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+use Illuminate\View\View;
 
 class OrderAdjustmentController extends Controller
 {
@@ -57,7 +57,7 @@ class OrderAdjustmentController extends Controller
             ])
             ->whereHas('order', fn ($orderQuery) => $orderQuery->where('status', Order::STATUS_COMPLETED));
 
-        if (!$isAdminOrManager) {
+        if (! $isAdminOrManager) {
             if ($isLeader) {
                 $query->whereHas('order', function ($orderQuery) use ($user): void {
                     $orderQuery->where(function ($scope) use ($user): void {
@@ -117,10 +117,10 @@ class OrderAdjustmentController extends Controller
         ]);
     }
 
-    public function create(Order $order): View
+    public function create(Request $request, Order $order): View|JsonResponse
     {
         $this->authorizeCreate($order);
-        $settings   = $this->settings;
+        $settings = $this->settings;
         $order->load([
             'customer.addresses',
             'items.product.avatar.media',
@@ -133,22 +133,34 @@ class OrderAdjustmentController extends Controller
         $feeTypes = $feeService->availableTypesForOrder($order);
         $feeStates = $feeTypes->mapWithKeys(fn ($type): array => [$type->id => $feeService->currentState($order, $type)]);
 
-        return view('site.orders.adjustments.create', [
+        $viewData = [
             'order' => $order,
             'warehouses' => $warehouses,
             'feeTypes' => $feeTypes,
             'feeStates' => $feeStates,
             'settings' => $settings,
-        ]);
+        ];
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'html' => view('site.orders.adjustments._inline_form', $viewData)->render(),
+            ]);
+        }
+
+        return view('site.orders.adjustments.create', $viewData);
     }
 
-    public function store(Request $request, Order $order): RedirectResponse
+    public function store(Request $request, Order $order): RedirectResponse|JsonResponse
     {
         $this->authorizeCreate($order);
 
         $data = $request->validate([
             'action' => 'required|in:draft,submit',
             'adjustment_note' => 'nullable|string|max:5000',
+            'recipient_name' => 'nullable|string|max:255',
+            'recipient_phone' => 'nullable|string|max:50',
+            'delivery_time' => 'nullable|string|max:255',
             'fees' => 'nullable|array',
             'fees.*.type_id' => 'required_with:fees|integer|exists:order_fee_types,id',
             'fees.*.enabled' => 'nullable|boolean',
@@ -170,15 +182,27 @@ class OrderAdjustmentController extends Controller
         $feeTypes = $feeService->availableTypesForOrder($order);
         $submittedFeeIds = collect(array_keys($data['fees'] ?? []))->map(fn ($id): int => (int) $id);
         if ($submittedFeeIds->diff($feeTypes->pluck('id'))->isNotEmpty()) {
-            return back()->withErrors(['fees' => 'Có loại phí không còn được phép sử dụng.'])->withInput();
+            throw ValidationException::withMessages(['fees' => 'Có loại phí không còn được phép sử dụng.']);
         }
         foreach ($feeTypes as $feeType) {
             $submittedValue = (float) data_get($data, 'fees.'.$feeType->id.'.value', 0);
             if ($feeType->calculation_type === 'percent' && $submittedValue > 100) {
-                return back()->withErrors(['fees.'.$feeType->id.'.value' => 'Phí tính theo phần trăm không được vượt quá 100%.'])->withInput();
+                throw ValidationException::withMessages(['fees.'.$feeType->id.'.value' => 'Phí tính theo phần trăm không được vượt quá 100%.']);
             }
         }
         $feeChanges = $feeService->prepareChanges($order, $feeTypes, $data['fees'] ?? []);
+        $orderChanges = collect(['recipient_name', 'recipient_phone', 'delivery_time'])
+            ->mapWithKeys(function (string $field) use ($data, $order): array {
+                if (! array_key_exists($field, $data)) {
+                    return [];
+                }
+
+                $original = trim((string) ($order->{$field} ?? ''));
+                $adjusted = trim((string) ($data[$field] ?? ''));
+
+                return $original === $adjusted ? [] : [$field => compact('original', 'adjusted')];
+            })
+            ->all();
         $orderItems = $order->items->keyBy('id');
         $newVariantIds = collect($data['items'])
             ->filter(fn (array $itemData): bool => empty($itemData['order_item_id']))
@@ -202,24 +226,24 @@ class OrderAdjustmentController extends Controller
             $orderItemId = (int) ($itemData['order_item_id'] ?? 0);
             $orderItem = $orderItemId > 0 ? $orderItems->get($orderItemId) : null;
 
-            if ($orderItemId > 0 && !$orderItem) {
-                return back()->withErrors(['items' => 'Có sản phẩm không thuộc đơn gốc.'])->withInput();
+            if ($orderItemId > 0 && ! $orderItem) {
+                throw ValidationException::withMessages(['items' => 'Có sản phẩm không thuộc đơn gốc.']);
             }
 
-            if (!$orderItem) {
+            if (! $orderItem) {
                 $variantId = (int) ($itemData['product_variant_id'] ?? 0);
                 $variant = $newVariants->get($variantId);
-                if (!$variant) {
-                    return back()->withErrors(['items' => 'Loại hàng thêm mới không tồn tại hoặc đã ngừng sử dụng.'])->withInput();
+                if (! $variant) {
+                    throw ValidationException::withMessages(['items' => 'Loại hàng thêm mới không tồn tại hoặc đã ngừng sử dụng.']);
                 }
                 if ($order->items->contains(fn ($existingItem): bool => (int) $existingItem->product_variant_id === $variantId)) {
-                    return back()->withErrors(['items' => 'Loại hàng này đã có trong đơn. Hãy điều chỉnh số lượng ở dòng hiện có.'])->withInput();
+                    throw ValidationException::withMessages(['items' => 'Loại hàng này đã có trong đơn. Hãy điều chỉnh số lượng ở dòng hiện có.']);
                 }
                 if (in_array($variantId, $seenNewVariantIds, true)) {
-                    return back()->withErrors(['items' => 'Không thể thêm trùng một loại hàng mới trong cùng yêu cầu.'])->withInput();
+                    throw ValidationException::withMessages(['items' => 'Không thể thêm trùng một loại hàng mới trong cùng yêu cầu.']);
                 }
                 if ((int) $itemData['adjusted_quantity'] <= 0) {
-                    return back()->withErrors(['items' => 'Số lượng hàng thêm mới phải lớn hơn 0.'])->withInput();
+                    throw ValidationException::withMessages(['items' => 'Số lượng hàng thêm mới phải lớn hơn 0.']);
                 }
 
                 $seenNewVariantIds[] = $variantId;
@@ -239,6 +263,7 @@ class OrderAdjustmentController extends Controller
                         : $defaultWeight,
                     'note' => $itemData['note'] ?? 'Bổ sung hàng thiếu trong đơn',
                 ];
+
                 continue;
             }
 
@@ -266,7 +291,7 @@ class OrderAdjustmentController extends Controller
         }
 
         if ($requiresReturn && empty($data['return_warehouse_id'])) {
-            return back()->withErrors(['return_warehouse_id' => 'Bat buoc chon kho tra hang khi giam so luong.'])->withInput();
+            throw ValidationException::withMessages(['return_warehouse_id' => 'Bắt buộc chọn kho trả hàng khi giảm số lượng.']);
         }
 
         $imagePaths = [];
@@ -278,13 +303,14 @@ class OrderAdjustmentController extends Controller
             ? OrderAdjustment::STATUS_PENDING_APPROVAL
             : OrderAdjustment::STATUS_DRAFT;
 
-        $adjustment = DB::transaction(function () use ($order, $data, $preparedItems, $feeChanges, $status, $requiresWarehouse, $imagePaths) {
+        $adjustment = DB::transaction(function () use ($order, $data, $preparedItems, $feeChanges, $orderChanges, $status, $requiresWarehouse, $imagePaths) {
             $adjustment = OrderAdjustment::create([
                 'order_id' => $order->id,
                 'requested_by' => (int) auth()->id(),
                 'workflow_code' => 'order_adjustments',
                 'status' => $status,
                 'adjustment_note' => $data['adjustment_note'] ?? null,
+                'order_changes' => $orderChanges ?: null,
                 'fee_changes' => $feeChanges,
                 'evidence_images' => $imagePaths ?: null,
                 'return_warehouse_id' => $data['return_warehouse_id'] ?? null,
@@ -310,16 +336,27 @@ class OrderAdjustmentController extends Controller
             }
         }
 
+        $message = $adjustment->status === OrderAdjustment::STATUS_DRAFT
+            ? 'Đã lưu bản nháp điều chỉnh đơn hàng.'
+            : 'Đã gửi yêu cầu điều chỉnh đơn hàng cho quy trình duyệt.';
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'adjustment_id' => $adjustment->id,
+                'url' => route('site.order-adjustments.show', $adjustment),
+            ]);
+        }
+
         return redirect()
             ->route('site.order-adjustments.show', $adjustment)
-            ->with('success', $adjustment->status === OrderAdjustment::STATUS_DRAFT
-                ? 'Da luu ban nhap dieu chinh don hang.'
-                : 'Da gui yeu cau dieu chinh don hang cho quy trinh duyet.');
+            ->with('success', $message);
     }
 
     public function show(OrderAdjustment $orderAdjustment): View
     {
-        $settings   = $this->settings;
+        $settings = $this->settings;
         $this->authorizeView($orderAdjustment);
 
         $orderAdjustment->load([
@@ -387,9 +424,9 @@ class OrderAdjustmentController extends Controller
             if ($hasPendingStep) {
                 $allApproved = $approvalService->approveAdjustmentStep($orderAdjustment, $user, $note !== '' ? $note : null);
 
-                if (!$allApproved) {
+                if (! $allApproved) {
                     $autoApproval = app(OrderAutoApprovalService::class)->processAdjustment($orderAdjustment);
-                    if (!$autoApproval['all_approved']) {
+                    if (! $autoApproval['all_approved']) {
                         return;
                     }
                     $approvalActor = $autoApproval['approver'] ?: $user;
@@ -412,6 +449,7 @@ class OrderAdjustmentController extends Controller
         if ($orderAdjustment->status === OrderAdjustment::STATUS_APPROVED
             && $orderAdjustment->warehouse_confirmation_status === 'not_required') {
             $this->completeAdjustment($orderAdjustment, $approvalActor);
+
             return back()->with('success', 'Da duyet va hoan tat dieu chinh don hang.');
         }
 
@@ -525,7 +563,7 @@ class OrderAdjustmentController extends Controller
 
                 foreach ($orderAdjustment->items as $adjItem) {
                     $returnItem = $returnsByVariant->get($adjItem->product_variant_id);
-                    if (!$returnItem) {
+                    if (! $returnItem) {
                         continue;
                     }
 
@@ -571,7 +609,7 @@ class OrderAdjustmentController extends Controller
             return;
         }
 
-        if (!$user->hasRole('sale')) {
+        if (! $user->hasRole('sale')) {
             abort(403);
         }
 
@@ -632,7 +670,7 @@ class OrderAdjustmentController extends Controller
 
     private function canWarehouseConfirm(User $user, OrderAdjustment $adjustment): bool
     {
-        if (!$user->hasRole('admin') && !$user->hasRole('warehouse')) {
+        if (! $user->hasRole('admin') && ! $user->hasRole('warehouse')) {
             return false;
         }
 
@@ -666,13 +704,14 @@ class OrderAdjustmentController extends Controller
                 'warehouse_confirmation_status' => $adjustment->requiresWarehouseConfirmation() ? 'pending' : 'not_required',
                 'order_return_id' => null,
             ]);
+
             return;
         }
 
         $firstEvidence = (array) ($adjustment->evidence_images ?? []);
 
         $orderReturn = $adjustment->orderReturn;
-        if (!$orderReturn) {
+        if (! $orderReturn) {
             $orderReturn = OrderReturn::create([
                 'order_id' => $adjustment->order_id,
                 'order_adjustment_id' => $adjustment->id,
@@ -682,7 +721,7 @@ class OrderAdjustmentController extends Controller
                 'ship_confirmed_by' => $adjustment->requested_by,
                 'ship_confirmed_at' => now(),
                 'status' => 'ship_confirmed',
-                'reason' => 'Don hoan tra tu yeu cau dieu chinh #' . $adjustment->id,
+                'reason' => 'Don hoan tra tu yeu cau dieu chinh #'.$adjustment->id,
                 'evidence_image_path' => $firstEvidence[0] ?? null,
                 'note' => $adjustment->adjustment_note,
             ]);
@@ -695,7 +734,7 @@ class OrderAdjustmentController extends Controller
                 'status' => 'ship_confirmed',
                 'ship_confirmed_by' => $adjustment->requested_by,
                 'ship_confirmed_at' => now(),
-                'reason' => 'Don hoan tra tu yeu cau dieu chinh #' . $adjustment->id,
+                'reason' => 'Don hoan tra tu yeu cau dieu chinh #'.$adjustment->id,
                 'evidence_image_path' => $firstEvidence[0] ?? $orderReturn->evidence_image_path,
                 'note' => $adjustment->adjustment_note,
             ]);
@@ -723,7 +762,7 @@ class OrderAdjustmentController extends Controller
 
         $adjustment->loadMissing(['order.items.variant.product', 'items.variant.product']);
         $order = $adjustment->order;
-        if (!$order) {
+        if (! $order) {
             return;
         }
 
@@ -732,10 +771,10 @@ class OrderAdjustmentController extends Controller
 
             foreach ($adjustment->items as $adjItem) {
                 $orderItem = $orderItems->get((int) $adjItem->order_item_id);
-                if (!$orderItem) {
+                if (! $orderItem) {
                     $variant = $adjItem->variant;
                     $adjustedQty = (int) $adjItem->adjusted_quantity;
-                    if (!$variant || $adjustedQty <= 0) {
+                    if (! $variant || $adjustedQty <= 0) {
                         continue;
                     }
 
@@ -762,6 +801,7 @@ class OrderAdjustmentController extends Controller
                         'total_weight' => $finalWeight,
                         'total' => round($finalPrice * ($isPricedByKg ? $finalWeight : $adjustedQty), 2),
                     ]);
+
                     continue;
                 }
 
@@ -810,6 +850,15 @@ class OrderAdjustmentController extends Controller
             $feeChanges = (array) ($adjustment->fee_changes ?? []);
             $feeService = app(OrderFeeService::class);
             $feeService->applySystemChanges($order, $feeChanges);
+
+            $allowedOrderChanges = ['recipient_name', 'recipient_phone', 'delivery_time'];
+            $approvedOrderChanges = collect((array) ($adjustment->order_changes ?? []))
+                ->only($allowedOrderChanges)
+                ->mapWithKeys(fn ($change, $field): array => [$field => trim((string) data_get($change, 'adjusted', ''))])
+                ->all();
+            if ($approvedOrderChanges !== []) {
+                $order->update($approvedOrderChanges);
+            }
 
             $order->load('items');
             $subtotal = (float) $order->items->sum(fn ($item) => (float) ($item->total ?? 0));
@@ -880,5 +929,4 @@ class OrderAdjustmentController extends Controller
             ]);
         });
     }
-
 }

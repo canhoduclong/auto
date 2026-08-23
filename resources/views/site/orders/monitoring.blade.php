@@ -732,6 +732,26 @@
     .monitor-variant-option .monitor-variant-inventory,
     .monitor-variant-option .monitor-variant-production { color: #64748b; }
     .monitor-create .pagination { margin-bottom: 0; }
+    .monitor-adjustment-host { display: none; grid-column: 1 / -1; }
+    .monitor-adjustment-host.is-open { display: block; }
+    .monitor-adjustment-loading { padding: 28px; border: 1px solid #fde68a; border-radius: 9px; background: #fffbeb; color: #92400e; text-align: center; }
+    .monitor-adjustment-form { padding: 16px; border: 1px solid #f59e0b; border-radius: 9px; background: #fffbeb; box-shadow: 0 5px 18px rgba(146, 64, 14, .08); }
+    .monitor-adjustment-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid #fde68a; color: #7c2d12; }
+    .monitor-adjustment-heading strong { display: block; font-size: 1rem; text-transform: uppercase; }
+    .monitor-adjustment-heading span { display: block; margin-top: 2px; color: #64748b; font-size: .75rem; }
+    .monitor-adjustment-fields, .monitor-adjustment-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 24px; margin-top: 14px; }
+    .monitor-adjustment-form label { display: block; margin-bottom: 4px; color: #334155; font-size: .75rem; font-weight: 800; }
+    .monitor-adjustment-items { min-width: 800px; font-size: .75rem; }
+    .monitor-adjustment-items th { color: #64748b; font-size: .65rem; text-transform: uppercase; }
+    .monitor-adjustment-items td:first-child { min-width: 180px; }
+    .monitor-adjustment-items td:first-child small, .monitor-adjustment-fee-row small { display: block; color: #64748b; }
+    .monitor-adjustment-items input { min-width: 82px; }
+    .monitor-adjustment-return { max-width: 420px; margin-top: 12px; }
+    .monitor-adjustment-add-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+    .monitor-adjustment-picker { margin-top: 10px; padding: 12px; border: 1px solid #fed7aa; border-radius: 8px; background: #fff; }
+    .monitor-adjustment-product-results { max-height: 460px; overflow-y: auto; }
+    .monitor-adjustment-fee-row { display: grid !important; grid-template-columns: 24px minmax(140px, 1fr) minmax(150px, 230px); align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid #eef2f7; }
+    .monitor-adjustment-submit { display: flex; justify-content: flex-end; margin-top: 12px; padding-top: 12px; border-top: 1px solid #fde68a; }
     @media (max-width: 1199.98px) {
         .monitor-shell { max-width: 960px; }
         .monitor-layout { grid-template-columns: 220px minmax(0, 1fr); gap: 14px; }
@@ -778,6 +798,9 @@
         .monitor-auto-bottom { align-items: stretch; flex-direction: column; }
         .monitor-auto-footer .btn { width: 100%; }
         .monitor-variant-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .monitor-adjustment-fields, .monitor-adjustment-details { grid-template-columns: 1fr; }
+        .monitor-adjustment-fee-row { grid-template-columns: 24px 1fr; }
+        .monitor-adjustment-fee-row .input-group { grid-column: 2; }
         .monitor-product-choice-label { font-size: 0; }
         .monitor-product-choice-label i { font-size: .8rem; }
     }
@@ -1797,7 +1820,7 @@
                                     @if($canManageOrder)
                                         <a class="btn btn-sm btn-outline-secondary" href="{{ route('site.orders.copy', $order->id) }}"><i class="bi bi-files"></i><span>Sao chép đơn</span></a>
                                         @if($canRequestAdjustment)
-                                            <a class="btn btn-sm btn-warning" href="{{ route('site.order-adjustments.create', $order) }}"><i class="bi bi-arrow-left-right"></i><span>Gửi yêu cầu điều chỉnh</span></a>
+                                            <button class="btn btn-sm btn-warning monitor-adjustment-open" type="button" data-adjustment-url="{{ route('site.order-adjustments.create', $order) }}" data-adjustment-target="monitorAdjustment{{ $order->id }}"><i class="bi bi-arrow-left-right"></i><span>Gửi yêu cầu điều chỉnh</span></button>
                                         @endif
                                         @if($canCancel)
                                             <form method="POST" class="monitor-cancel-form" action="{{ route('site.orders.cancel', $order) }}" onsubmit="return confirm('Bạn chắc chắn muốn hủy đơn hàng này?');">
@@ -1850,6 +1873,9 @@
                                         @endif
                                     </div>
                                 </div>
+                            @endif
+                            @if($canRequestAdjustment)
+                                <div class="monitor-adjustment-host" id="monitorAdjustment{{ $order->id }}" aria-live="polite"></div>
                             @endif
                         </article>
                     @empty
@@ -2698,5 +2724,182 @@ document.addEventListener('submit', async function (event) {
         showToast(error.message || 'Không thể kết nối máy chủ.', 'error');
     }
 });
+</script>
+<script>
+(() => {
+    const money = value => new Intl.NumberFormat('vi-VN').format(Math.round(Number(value) || 0)) + 'đ';
+    const escapeHtml = value => {
+        const node = document.createElement('div');
+        node.textContent = String(value ?? '');
+        return node.innerHTML;
+    };
+    const notify = (message, type = 'error') => typeof window.showToast === 'function'
+        ? window.showToast(message, type)
+        : window.alert(message);
+
+    function selectedVariantIds(form) {
+        return Array.from(form.querySelectorAll('[data-adjustment-item]')).map(row => row.dataset.variantId).filter(Boolean);
+    }
+
+    function refreshForm(form) {
+        let requiresReturn = false;
+        form.querySelectorAll('[data-adjustment-item]').forEach(row => {
+            const quantity = Math.max(0, Number(row.querySelector('.adjustment-qty')?.value) || 0);
+            const weight = Math.max(0, Number(row.querySelector('.adjustment-weight')?.value) || 0);
+            const price = Math.max(0, Number(row.querySelector('.adjustment-price')?.value) || 0);
+            requiresReturn ||= quantity < (Number(row.dataset.originalQty) || 0);
+            row.querySelector('.adjustment-line-total').textContent = money(price * (row.dataset.pricedByKg === '1' ? weight : quantity));
+        });
+        const returnWrap = form.querySelector('.monitor-adjustment-return');
+        returnWrap.hidden = !requiresReturn;
+        returnWrap.querySelector('select').required = requiresReturn;
+    }
+
+    async function loadProducts(form, url = null) {
+        const results = form.querySelector('.monitor-adjustment-product-results');
+        const target = new URL(url || form.dataset.variantUrl, window.location.origin);
+        target.searchParams.set('view', 'products');
+        target.searchParams.set('search', form.querySelector('.monitor-adjustment-product-search').value.trim());
+        target.searchParams.set('per_page', target.searchParams.get('per_page') || '10');
+        target.searchParams.set('exclude_ids', selectedVariantIds(form).join(','));
+        results.innerHTML = '<div class="text-center text-muted py-3"><span class="spinner-border spinner-border-sm me-1"></span>Đang tải sản phẩm...</div>';
+        try {
+            const response = await fetch(target, { headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' } });
+            const data = await response.json();
+            if (!response.ok || !data.success) throw new Error(data.message || 'Không tải được danh sách sản phẩm.');
+            results.innerHTML = data.html;
+        } catch (error) {
+            results.innerHTML = `<div class="alert alert-danger py-2 mb-0">${escapeHtml(error.message)}</div>`;
+        }
+    }
+
+    function addProduct(form, button) {
+        const variantId = String(button.dataset.variantId || '');
+        if (!variantId || selectedVariantIds(form).includes(variantId)) return notify('Biến thể này đã có trong đơn.');
+        const body = form.querySelector('[data-adjustment-items]');
+        const index = Number(form.dataset.nextItemIndex || body.children.length);
+        form.dataset.nextItemIndex = String(index + 1);
+        const name = button.dataset.variantName || 'Sản phẩm';
+        const sku = button.dataset.variantSku || '';
+        const size = button.dataset.variantSize || '—';
+        const price = Math.max(0, Number(button.dataset.variantPrice) || 0);
+        const weight = Math.max(0, Number(button.dataset.variantWeight) || 0);
+        const pricedByKg = button.dataset.variantIsPricedByKg === '1';
+        body.insertAdjacentHTML('beforeend', `<tr class="table-success" data-adjustment-item data-variant-id="${escapeHtml(variantId)}" data-original-qty="0" data-unit-weight="${weight}" data-priced-by-kg="${pricedByKg ? 1 : 0}">
+            <td><strong>${escapeHtml(name)}</strong><small>${escapeHtml(sku)} · Hàng bổ sung</small><input type="hidden" name="items[${index}][order_item_id]" value=""><input type="hidden" name="items[${index}][product_variant_id]" value="${escapeHtml(variantId)}"><input type="hidden" name="items[${index}][note]" value="Bổ sung hàng thiếu trong đơn"></td>
+            <td><input type="number" min="1" class="form-control form-control-sm adjustment-qty" name="items[${index}][adjusted_quantity]" value="1" required></td><td>${escapeHtml(size)}</td>
+            <td><input type="number" min="0" step="0.001" data-auto-weight="1" class="form-control form-control-sm adjustment-weight" name="items[${index}][adjusted_weight]" value="${weight.toFixed(3)}" required></td>
+            <td><input type="number" min="0" step="0.01" class="form-control form-control-sm adjustment-price" name="items[${index}][adjusted_price]" value="${price}" required></td>
+            <td class="text-end fw-bold adjustment-line-total">${money(price * (pricedByKg ? weight : 1))}</td><td><button type="button" class="btn btn-sm btn-outline-danger monitor-adjustment-remove-item"><i class="bi bi-x"></i></button></td></tr>`);
+        button.closest('.monitor-variant-option')?.remove();
+        refreshForm(form);
+    }
+
+    document.addEventListener('click', async event => {
+        const opener = event.target.closest('.monitor-adjustment-open');
+        if (opener) {
+            const host = document.getElementById(opener.dataset.adjustmentTarget);
+            if (host.classList.contains('is-open')) { host.classList.remove('is-open'); return; }
+            document.querySelectorAll('.monitor-adjustment-host.is-open').forEach(other => { if (other !== host) other.classList.remove('is-open'); });
+            host.classList.add('is-open');
+            host.innerHTML = '<div class="monitor-adjustment-loading"><span class="spinner-border spinner-border-sm me-2"></span>Đang tải yêu cầu chỉnh sửa...</div>';
+            host.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            try {
+                const response = await fetch(opener.dataset.adjustmentUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' } });
+                const data = await response.json();
+                if (!response.ok || !data.success) throw new Error(data.message || 'Không tải được biểu mẫu.');
+                host.innerHTML = data.html;
+                const form = host.querySelector('[data-monitor-adjustment-form]');
+                form.dataset.nextItemIndex = String(form.querySelectorAll('[data-adjustment-item]').length);
+                refreshForm(form);
+            } catch (error) {
+                host.innerHTML = `<div class="alert alert-danger mb-0">${escapeHtml(error.message || 'Không thể kết nối máy chủ.')}</div>`;
+            }
+            return;
+        }
+
+        const form = event.target.closest('[data-monitor-adjustment-form]');
+        if (!form) return;
+        if (event.target.closest('.monitor-adjustment-close')) { form.closest('.monitor-adjustment-host').classList.remove('is-open'); return; }
+        if (event.target.closest('.monitor-adjustment-products-toggle')) {
+            const picker = form.querySelector('.monitor-adjustment-product-picker');
+            picker.hidden = !picker.hidden;
+            if (!picker.hidden && !form.querySelector('.monitor-adjustment-product-results').innerHTML.trim()) loadProducts(form);
+            return;
+        }
+        if (event.target.closest('.monitor-adjustment-fees-toggle')) {
+            const picker = form.querySelector('.monitor-adjustment-fee-picker');
+            picker.hidden = !picker.hidden;
+            return;
+        }
+        if (event.target.closest('.monitor-adjustment-product-search-button')) { loadProducts(form); return; }
+        const productChoice = event.target.closest('.monitor-adjustment-product-results .monitor-product-choice');
+        if (productChoice) {
+            const variants = productChoice.closest('.monitor-product-card').querySelector('.monitor-product-variants');
+            variants.hidden = !variants.hidden;
+            productChoice.setAttribute('aria-expanded', variants.hidden ? 'false' : 'true');
+            return;
+        }
+        const variant = event.target.closest('.monitor-adjustment-product-results .monitor-variant-option');
+        if (variant) { addProduct(form, variant); return; }
+        const pageLink = event.target.closest('.monitor-adjustment-product-results .pagination a');
+        if (pageLink) { event.preventDefault(); loadProducts(form, pageLink.href); return; }
+        const remove = event.target.closest('.monitor-adjustment-remove-item');
+        if (remove) { remove.closest('[data-adjustment-item]').remove(); refreshForm(form); }
+    });
+
+    document.addEventListener('keydown', event => {
+        const form = event.target.closest('[data-monitor-adjustment-form]');
+        if (form && event.key === 'Enter' && event.target.matches('.monitor-adjustment-product-search')) { event.preventDefault(); loadProducts(form); }
+    });
+    document.addEventListener('input', event => {
+        const form = event.target.closest('[data-monitor-adjustment-form]');
+        if (!form || !event.target.matches('.adjustment-qty, .adjustment-weight, .adjustment-price')) return;
+        const row = event.target.closest('[data-adjustment-item]');
+        const weightInput = row?.querySelector('.adjustment-weight');
+        if (event.target.matches('.adjustment-weight') && weightInput) weightInput.dataset.autoWeight = '0';
+        if (event.target.matches('.adjustment-qty') && weightInput?.dataset.autoWeight === '1') {
+            weightInput.value = (Math.max(0, Number(event.target.value) || 0) * Math.max(0, Number(row.dataset.unitWeight) || 0)).toFixed(3);
+        }
+        refreshForm(form);
+    });
+    document.addEventListener('change', event => {
+        const form = event.target.closest('[data-monitor-adjustment-form]');
+        if (!form) return;
+        if (event.target.matches('.monitor-adjustment-product-results #per-page-select')) {
+            const target = new URL(form.dataset.variantUrl, window.location.origin);
+            target.searchParams.set('per_page', event.target.value || '10');
+            loadProducts(form, target.toString());
+        }
+    });
+    document.addEventListener('submit', async event => {
+        const form = event.target.closest('[data-monitor-adjustment-form]');
+        if (!form) return;
+        event.preventDefault();
+        if (!form.reportValidity()) return;
+        const button = event.submitter || form.querySelector('button[type="submit"]');
+        const original = button.innerHTML;
+        const errors = form.querySelector('.monitor-adjustment-errors');
+        button.disabled = true;
+        button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Đang gửi...';
+        errors.hidden = true;
+        try {
+            const body = new FormData(form);
+            body.set('action', button.value || 'submit');
+            const response = await fetch(form.action, { method: 'POST', body, headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' } });
+            const data = await response.json();
+            if (!response.ok || !data.success) throw new Error(data.errors ? Object.values(data.errors).flat().join(' ') : (data.message || 'Không gửi được yêu cầu.'));
+            form.innerHTML = `<div class="alert alert-success mb-0"><strong>${escapeHtml(data.message)}</strong><div class="mt-2"><a class="btn btn-sm btn-outline-success" href="${escapeHtml(data.url)}">Xem yêu cầu #${escapeHtml(data.adjustment_id)}</a></div></div>`;
+            const opener = form.closest('.monitor-order')?.querySelector('.monitor-adjustment-open');
+            if (opener) { opener.disabled = true; opener.innerHTML = '<i class="bi bi-check2"></i><span>Đã gửi yêu cầu</span>'; }
+            notify(data.message, 'success');
+        } catch (error) {
+            errors.textContent = error.message || 'Không thể kết nối máy chủ.';
+            errors.hidden = false;
+            button.disabled = false;
+            button.innerHTML = original;
+        }
+    });
+})();
 </script>
 @endpush

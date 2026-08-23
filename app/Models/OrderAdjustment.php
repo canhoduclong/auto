@@ -10,9 +10,13 @@ class OrderAdjustment extends Model
     use HasFactory;
 
     public const STATUS_DRAFT = 'draft';
+
     public const STATUS_PENDING_APPROVAL = 'pending_approval';
+
     public const STATUS_APPROVED = 'approved';
+
     public const STATUS_REJECTED = 'rejected';
+
     public const STATUS_COMPLETED = 'completed';
 
     protected $fillable = [
@@ -27,6 +31,7 @@ class OrderAdjustment extends Model
         'approval_note',
         'reject_reason',
         'adjustment_note',
+        'order_changes',
         'fee_changes',
         'evidence_images',
         'return_warehouse_id',
@@ -42,6 +47,7 @@ class OrderAdjustment extends Model
 
     protected $casts = [
         'fee_changes' => 'array',
+        'order_changes' => 'array',
         'evidence_images' => 'array',
         'warehouse_confirmed_at' => 'datetime',
         'submitted_at' => 'datetime',
@@ -102,11 +108,11 @@ class OrderAdjustment extends Model
 
     public function requiresWarehouseConfirmation(): bool
     {
-        if (!$this->relationLoaded('items')) {
+        if (! $this->relationLoaded('items')) {
             $this->load('items.orderItem');
         } else {
             $this->items
-                ->filter(fn (OrderAdjustmentItem $item): bool => !$item->relationLoaded('orderItem'))
+                ->filter(fn (OrderAdjustmentItem $item): bool => ! $item->relationLoaded('orderItem'))
                 ->each->load('orderItem');
         }
 
@@ -117,7 +123,7 @@ class OrderAdjustment extends Model
             // thay đổi số lượng, đổi loại hàng, hoặc thêm một loại hàng mới.
             // Thay đổi giá/cân nặng không làm phát sinh bước xác nhận Kho.
             return (int) $item->original_quantity !== (int) $item->adjusted_quantity
-                || (!$orderItem && (int) $item->adjusted_quantity > 0)
+                || (! $orderItem && (int) $item->adjusted_quantity > 0)
                 || ($orderItem && (int) $item->product_id !== (int) $orderItem->product_id)
                 || ($orderItem && (int) $item->product_variant_id !== (int) $orderItem->product_variant_id);
         });
