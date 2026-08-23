@@ -27,6 +27,7 @@ class OrderAdjustment extends Model
         'approval_note',
         'reject_reason',
         'adjustment_note',
+        'fee_changes',
         'evidence_images',
         'return_warehouse_id',
         'warehouse_confirmation_status',
@@ -40,6 +41,7 @@ class OrderAdjustment extends Model
     ];
 
     protected $casts = [
+        'fee_changes' => 'array',
         'evidence_images' => 'array',
         'warehouse_confirmed_at' => 'datetime',
         'submitted_at' => 'datetime',

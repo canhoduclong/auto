@@ -45,6 +45,7 @@
             @if($adjustment->adjustment_note)
                 <div class="alert alert-light border py-2"><strong>Lý do điều chỉnh:</strong> {{ $adjustment->adjustment_note }}</div>
             @endif
+            @include('site.orders.adjustments._fee_changes', ['adjustment' => $adjustment])
 
             <div class="table-responsive">
                 <table class="table table-sm align-middle">

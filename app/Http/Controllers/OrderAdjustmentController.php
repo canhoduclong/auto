@@ -142,6 +142,15 @@ class OrderAdjustmentController extends Controller
         $data = $request->validate([
             'action' => 'required|in:draft,submit',
             'adjustment_note' => 'nullable|string|max:5000',
+            'fees' => 'nullable|array',
+            'fees.vat.enabled' => 'nullable|boolean',
+            'fees.vat.value' => 'nullable|numeric|min:0|max:100',
+            'fees.shipping.enabled' => 'nullable|boolean',
+            'fees.shipping.value' => 'nullable|numeric|min:0|max:999999999999.99',
+            'fees.discount.enabled' => 'nullable|boolean',
+            'fees.discount.value' => 'nullable|numeric|min:0|max:999999999999.99',
+            'fees.foam_box.enabled' => 'nullable|boolean',
+            'fees.foam_box.value' => 'nullable|numeric|min:0|max:999999999999.99',
             'return_warehouse_id' => 'nullable|exists:warehouses,id',
             'items' => 'required|array|min:1',
             'items.*.order_item_id' => 'nullable|required_without:items.*.product_variant_id|exists:order_items,id',
@@ -155,6 +164,7 @@ class OrderAdjustmentController extends Controller
         ]);
 
         $order->load(['items.variant.product']);
+        $feeChanges = $this->prepareFeeChanges($order, $data['fees'] ?? []);
         $orderItems = $order->items->keyBy('id');
         $newVariantIds = collect($data['items'])
             ->filter(fn (array $itemData): bool => empty($itemData['order_item_id']))
@@ -254,13 +264,14 @@ class OrderAdjustmentController extends Controller
             ? OrderAdjustment::STATUS_PENDING_APPROVAL
             : OrderAdjustment::STATUS_DRAFT;
 
-        $adjustment = DB::transaction(function () use ($order, $data, $preparedItems, $status, $requiresWarehouse, $imagePaths) {
+        $adjustment = DB::transaction(function () use ($order, $data, $preparedItems, $feeChanges, $status, $requiresWarehouse, $imagePaths) {
             $adjustment = OrderAdjustment::create([
                 'order_id' => $order->id,
                 'requested_by' => (int) auth()->id(),
                 'workflow_code' => 'order_adjustments',
                 'status' => $status,
                 'adjustment_note' => $data['adjustment_note'] ?? null,
+                'fee_changes' => $feeChanges,
                 'evidence_images' => $imagePaths ?: null,
                 'return_warehouse_id' => $data['return_warehouse_id'] ?? null,
                 'warehouse_confirmation_status' => $requiresWarehouse ? 'pending' : 'not_required',
@@ -308,6 +319,8 @@ class OrderAdjustmentController extends Controller
             'returnWarehouse',
             'warehouseConfirmer',
             'orderReturn',
+            'approvalSteps.step',
+            'approvalSteps.approver',
         ]);
 
         $user = auth()->user();
@@ -779,6 +792,42 @@ class OrderAdjustmentController extends Controller
                 ]);
             }
 
+            $feeChanges = (array) ($adjustment->fee_changes ?? []);
+            $feeUpdates = [];
+            if (isset($feeChanges['vat']['adjusted'])) {
+                $vat = $feeChanges['vat']['adjusted'];
+                $feeUpdates['charge_vat'] = (bool) ($vat['enabled'] ?? false);
+                $feeUpdates['vat_percent'] = (bool) ($vat['enabled'] ?? false)
+                    ? min(max((float) ($vat['value'] ?? 0), 0), 100)
+                    : 0;
+            }
+            if (isset($feeChanges['shipping']['adjusted'])) {
+                $shipping = $feeChanges['shipping']['adjusted'];
+                $feeUpdates['charge_shipping_fee'] = (bool) ($shipping['enabled'] ?? false);
+                $feeUpdates['shipping_fee'] = (bool) ($shipping['enabled'] ?? false)
+                    ? max(0, (float) ($shipping['value'] ?? 0))
+                    : 0;
+            }
+            if (isset($feeChanges['discount']['adjusted'])) {
+                $discount = $feeChanges['discount']['adjusted'];
+                $discountAmount = (bool) ($discount['enabled'] ?? false)
+                    ? max(0, (float) ($discount['value'] ?? 0))
+                    : 0;
+                $feeUpdates['extra_discount_total'] = $discountAmount;
+                $feeUpdates['order_discount'] = $discountAmount;
+                $feeUpdates['order_discount_type'] = 'decrease';
+            }
+            if (isset($feeChanges['foam_box']['adjusted'])) {
+                $foamBox = $feeChanges['foam_box']['adjusted'];
+                $feeUpdates['charge_foam_box_fee'] = (bool) ($foamBox['enabled'] ?? false);
+                $feeUpdates['foam_box_price'] = (bool) ($foamBox['enabled'] ?? false)
+                    ? max(0, (float) ($foamBox['value'] ?? 0))
+                    : 0;
+            }
+            if ($feeUpdates !== []) {
+                $order->forceFill($feeUpdates)->save();
+            }
+
             $order->load('items');
             $subtotal = (float) $order->items->sum(fn ($item) => (float) ($item->total ?? 0));
             $extraDiscount = (float) ($order->extra_discount_total ?? 0);
@@ -814,11 +863,85 @@ class OrderAdjustmentController extends Controller
                     : ($amountPaid > 0 ? 'partially_paid' : 'unpaid'),
             ]);
 
+            $reconciliation = $order->accountingReconciliation()->first();
+            if ($reconciliation?->status === \App\Models\AccountingReconciliation::STATUS_CONFIRMED) {
+                $returnAmount = (float) $order->returnRecords()
+                    ->whereIn('status', ['warehouse_confirmed', 'completed'])
+                    ->sum('refund_amount');
+                $recognizedRevenue = max(0, $newTotal - $returnAmount);
+                $effectivePaid = max($amountPaid, (float) ($order->collected_amount ?? 0));
+
+                $reconciliation->update([
+                    'total_amount' => round($newTotal, 2),
+                    'paid_amount' => round($effectivePaid, 2),
+                    'shipping_fee' => round((float) ($order->shipping_fee ?? 0), 2),
+                    'return_amount' => round($returnAmount, 2),
+                    'recognized_revenue' => round($recognizedRevenue, 2),
+                ]);
+                $order->forceFill([
+                    'amount_due' => round(max($recognizedRevenue - $effectivePaid, 0), 2),
+                    'payment_status' => match (true) {
+                        $effectivePaid >= $recognizedRevenue => 'paid',
+                        $effectivePaid > 0 => 'partially_paid',
+                        default => 'unpaid',
+                    },
+                ])->save();
+                app(\App\Services\AccountingSalesLedgerService::class)->syncOrder($order->fresh());
+            }
+
             $adjustment->update([
                 'status' => OrderAdjustment::STATUS_COMPLETED,
                 'completed_by' => $actor->id,
                 'completed_at' => now(),
             ]);
         });
+    }
+
+    private function prepareFeeChanges(Order $order, array $fees): array
+    {
+        $definitions = [
+            'vat' => [
+                'original_enabled' => (bool) ($order->charge_vat ?? false),
+                'original_value' => (float) ($order->vat_percent ?? 0),
+                'max' => 100,
+            ],
+            'shipping' => [
+                'original_enabled' => (bool) ($order->charge_shipping_fee ?? false),
+                'original_value' => (float) ($order->shipping_fee ?? 0),
+                'max' => 999999999999.99,
+            ],
+            'discount' => [
+                'original_enabled' => (float) ($order->extra_discount_total ?? 0) > 0,
+                'original_value' => max(0, (float) ($order->extra_discount_total ?? 0)),
+                'max' => 999999999999.99,
+            ],
+            'foam_box' => [
+                'original_enabled' => (bool) ($order->charge_foam_box_fee ?? false),
+                'original_value' => (float) ($order->foam_box_price ?? 0),
+                'max' => 999999999999.99,
+            ],
+        ];
+
+        return collect($definitions)->mapWithKeys(function (array $definition, string $key) use ($fees): array {
+            $submitted = (array) ($fees[$key] ?? []);
+            $enabled = array_key_exists('enabled', $submitted)
+                ? filter_var($submitted['enabled'], FILTER_VALIDATE_BOOLEAN)
+                : $definition['original_enabled'];
+            $value = array_key_exists('value', $submitted)
+                ? (float) $submitted['value']
+                : $definition['original_value'];
+            $value = round(min(max($value, 0), $definition['max']), 2);
+
+            return [$key => [
+                'original' => [
+                    'enabled' => $definition['original_enabled'],
+                    'value' => round($definition['original_value'], 2),
+                ],
+                'adjusted' => [
+                    'enabled' => $enabled,
+                    'value' => $enabled ? $value : 0,
+                ],
+            ]];
+        })->all();
     }
 }

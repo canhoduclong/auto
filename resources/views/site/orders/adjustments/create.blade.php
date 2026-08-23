@@ -39,6 +39,12 @@
     .adjustment-table-row { padding: 10px 0; border-bottom: 1px solid #fde68a; }
     .adjustment-table-row:last-child { border-bottom: 0; }
     .adjustment-actions { border-top: 1px solid #fde68a; padding-top: 12px; }
+    .adjustment-fees { margin-bottom: 16px; padding: 14px; border: 1px solid #fed7aa; border-radius: 9px; background: #fff; }
+    .adjustment-fee-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
+    .adjustment-fee-card { padding: 12px; border: 1px solid #e2e8f0; border-radius: 9px; background: #f8fafc; transition: .15s ease; }
+    .adjustment-fee-card.is-enabled { border-color: #f59e0b; background: #fffbeb; }
+    .adjustment-fee-card .input-group { margin-top: 9px; }
+    .adjustment-fee-current { margin-top: 5px; color: #64748b; font-size: .75rem; }
     .missing-item-picker { margin-top: 16px; padding: 14px; border: 1px dashed #f59e0b; border-radius: 8px; background: #fff; }
     .variant-picker-toolbar, .variant-picker-item, .variant-picker-main, .variant-picker-actions, .variant-picker-stats { display: flex; align-items: center; gap: 10px; }
     .variant-picker-toolbar { justify-content: space-between; margin-bottom: 10px; }
@@ -220,6 +226,69 @@
                         </div>
                     </div>
 
+                    <div class="adjustment-fees">
+                        <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+                            <div>
+                                <div class="fw-bold"><i class="bi bi-receipt me-1"></i>Phí và chiết khấu áp dụng cho đơn</div>
+                                <div class="text-muted small">Bật khoản cần thêm hoặc điều chỉnh. Tắt khoản để đề nghị loại bỏ khỏi đơn.</div>
+                            </div>
+                            <span class="badge text-bg-light border">Giá trị sau điều chỉnh</span>
+                        </div>
+                        <div class="adjustment-fee-grid">
+                            <div class="adjustment-fee-card" data-fee-card>
+                                <div class="form-check form-switch">
+                                    <input type="hidden" name="fees[vat][enabled]" value="0">
+                                    <input class="form-check-input adjustment-fee-toggle" type="checkbox" role="switch" id="adjustmentFeeVat" name="fees[vat][enabled]" value="1" @checked((bool) old('fees.vat.enabled', $order->charge_vat))>
+                                    <label class="form-check-label fw-semibold" for="adjustmentFeeVat">Phí VAT</label>
+                                </div>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" min="0" max="100" step="0.01" class="form-control adjustment-fee-value" name="fees[vat][value]" value="{{ old('fees.vat.value', (float) ($order->vat_percent ?: 10)) }}" aria-label="Phần trăm VAT">
+                                    <span class="input-group-text">%</span>
+                                </div>
+                                <div class="adjustment-fee-current">Hiện tại: {{ $order->charge_vat ? rtrim(rtrim(number_format((float) $order->vat_percent, 2, '.', ''), '0'), '.') . '%' : 'Không áp dụng' }}</div>
+                            </div>
+
+                            <div class="adjustment-fee-card" data-fee-card>
+                                <div class="form-check form-switch">
+                                    <input type="hidden" name="fees[shipping][enabled]" value="0">
+                                    <input class="form-check-input adjustment-fee-toggle" type="checkbox" role="switch" id="adjustmentFeeShipping" name="fees[shipping][enabled]" value="1" @checked((bool) old('fees.shipping.enabled', $order->charge_shipping_fee))>
+                                    <label class="form-check-label fw-semibold" for="adjustmentFeeShipping">Phí Ship</label>
+                                </div>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" min="0" step="0.01" class="form-control adjustment-fee-value" name="fees[shipping][value]" value="{{ old('fees.shipping.value', (float) ($order->shipping_fee ?? 0)) }}" aria-label="Phí ship">
+                                    <span class="input-group-text">đ</span>
+                                </div>
+                                <div class="adjustment-fee-current">Hiện tại: {{ $order->charge_shipping_fee ? number_format((float) $order->shipping_fee, 0, ',', '.') . 'đ' : 'Không áp dụng' }}</div>
+                            </div>
+
+                            <div class="adjustment-fee-card" data-fee-card>
+                                <div class="form-check form-switch">
+                                    <input type="hidden" name="fees[discount][enabled]" value="0">
+                                    <input class="form-check-input adjustment-fee-toggle" type="checkbox" role="switch" id="adjustmentFeeDiscount" name="fees[discount][enabled]" value="1" @checked((bool) old('fees.discount.enabled', (float) ($order->extra_discount_total ?? 0) > 0))>
+                                    <label class="form-check-label fw-semibold" for="adjustmentFeeDiscount">Chiết khấu đơn</label>
+                                </div>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" min="0" step="0.01" class="form-control adjustment-fee-value" name="fees[discount][value]" value="{{ old('fees.discount.value', max(0, (float) ($order->extra_discount_total ?? 0))) }}" aria-label="Chiết khấu đơn">
+                                    <span class="input-group-text">đ</span>
+                                </div>
+                                <div class="adjustment-fee-current">Hiện tại: {{ (float) ($order->extra_discount_total ?? 0) > 0 ? number_format((float) $order->extra_discount_total, 0, ',', '.') . 'đ' : 'Không áp dụng' }}</div>
+                            </div>
+
+                            <div class="adjustment-fee-card" data-fee-card>
+                                <div class="form-check form-switch">
+                                    <input type="hidden" name="fees[foam_box][enabled]" value="0">
+                                    <input class="form-check-input adjustment-fee-toggle" type="checkbox" role="switch" id="adjustmentFeeFoamBox" name="fees[foam_box][enabled]" value="1" @checked((bool) old('fees.foam_box.enabled', $order->charge_foam_box_fee))>
+                                    <label class="form-check-label fw-semibold" for="adjustmentFeeFoamBox">Phí thùng xốp</label>
+                                </div>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" min="0" step="0.01" class="form-control adjustment-fee-value" name="fees[foam_box][value]" value="{{ old('fees.foam_box.value', (float) ($order->foam_box_price ?? 0)) }}" aria-label="Phí thùng xốp">
+                                    <span class="input-group-text">đ</span>
+                                </div>
+                                <div class="adjustment-fee-current">Hiện tại: {{ $order->charge_foam_box_fee ? number_format((float) $order->foam_box_price, 0, ',', '.') . 'đ' : 'Không áp dụng' }}</div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="wh-item-table-wrap">
                         <div class="adjustment-table-head">
                             <div>Ảnh</div><div>Sản phẩm</div><div class="text-center">SL</div><div class="text-center">Size</div><div class="text-center">Khối lượng mới (kg)</div><div class="text-center">Đơn giá</div><div class="text-end">Thành tiền</div>
@@ -310,12 +379,20 @@
     const searchButton = document.getElementById('missing-item-search-button');
     const showAllButton = document.getElementById('missing-item-show-all');
     const searchResults = document.getElementById('missing-item-search-results');
+    const feeToggles = Array.from(document.querySelectorAll('.adjustment-fee-toggle'));
     const searchUrl = @json(route('site.orders.variants.ajax'));
     let nextItemIndex = {{ $items->count() }};
 
     const refresh = () => {
         const requiresReturn = qtyInputs().some((input) => Number(input.value || 0) < Number(input.dataset.originalQty || 0));
         if (wrap) wrap.style.display = requiresReturn ? 'block' : 'none';
+    };
+
+    const refreshFeeCard = (toggle) => {
+        const card = toggle.closest('[data-fee-card]');
+        card?.classList.toggle('is-enabled', toggle.checked);
+        const valueInput = card?.querySelector('.adjustment-fee-value');
+        if (valueInput) valueInput.setAttribute('aria-disabled', toggle.checked ? 'false' : 'true');
     };
 
     const escapeHtml = (value) => {
@@ -459,6 +536,10 @@
             event.preventDefault();
             loadVariants();
         }
+    });
+    feeToggles.forEach((toggle) => {
+        toggle.addEventListener('change', () => refreshFeeCard(toggle));
+        refreshFeeCard(toggle);
     });
 
     refresh();
