@@ -56,6 +56,10 @@ class OrderAdjustmentFeeChangesTest extends TestCase
         $this->assertStringContainsString('fees[{{ $feeType->id }}][type_id]', $view);
         $this->assertStringContainsString('fees[{{ $feeType->id }}][enabled]', $view);
         $this->assertStringContainsString("\$feeType->direction === 'discount'", $view);
+        $this->assertStringContainsString('id="order-fee-picker"', $view);
+        $this->assertStringContainsString('class="adjustment-fee-enabled"', $view);
+        $this->assertStringContainsString('remove-order-fee', $view);
+        $this->assertStringNotContainsString('adjustment-fee-toggle', $view);
     }
 
     public function test_custom_percentage_discount_keeps_snapshot_metadata(): void

@@ -40,6 +40,7 @@
     .adjustment-table-row:last-child { border-bottom: 0; }
     .adjustment-actions { border-top: 1px solid #fde68a; padding-top: 12px; }
     .adjustment-fees { margin-bottom: 16px; padding: 14px; border: 1px solid #fed7aa; border-radius: 9px; background: #fff; }
+    .adjustment-fee-picker { display: flex; gap: 8px; max-width: 620px; margin-bottom: 12px; }
     .adjustment-fee-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
     .adjustment-fee-card { padding: 12px; border: 1px solid #e2e8f0; border-radius: 9px; background: #f8fafc; transition: .15s ease; }
     .adjustment-fee-card.is-enabled { border-color: #f59e0b; background: #fffbeb; }
@@ -230,11 +231,24 @@
                         <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
                             <div>
                                 <div class="fw-bold"><i class="bi bi-receipt me-1"></i>Phí và chiết khấu áp dụng cho đơn</div>
-                                <div class="text-muted small">Bật khoản cần thêm hoặc điều chỉnh. Tắt khoản để đề nghị loại bỏ khỏi đơn.</div>
+                                <div class="text-muted small">Chọn phí từ danh mục do admin cấu hình để gắn vào đơn.</div>
                             </div>
                             <span class="badge text-bg-light border">Giá trị sau điều chỉnh</span>
                         </div>
-                        <div class="adjustment-fee-grid">
+                        <div class="adjustment-fee-picker">
+                            <select id="order-fee-picker" class="form-select form-select-sm" @disabled($feeTypes->where('is_active', true)->isEmpty())>
+                                <option value="">-- Chọn phí cần thêm --</option>
+                                @foreach($feeTypes->where('is_active', true) as $feeType)
+                                    @php
+                                        $pickerState = $feeStates[$feeType->id] ?? ['enabled' => false];
+                                        $pickerEnabled = (bool) old('fees.'.$feeType->id.'.enabled', $pickerState['enabled']);
+                                    @endphp
+                                    <option value="{{ $feeType->id }}" @disabled($pickerEnabled)>{{ $feeType->name }} · {{ $feeType->direction === 'discount' ? 'Giảm trừ' : 'Cộng thêm' }}</option>
+                                @endforeach
+                            </select>
+                            <button type="button" class="btn btn-outline-primary btn-sm text-nowrap" id="add-order-fee" @disabled($feeTypes->where('is_active', true)->isEmpty())><i class="bi bi-plus-circle me-1"></i>Thêm phí</button>
+                        </div>
+                        <div class="adjustment-fee-grid" id="selected-order-fees">
                             @forelse($feeTypes as $feeType)
                                 @php
                                     $feeState = $feeStates[$feeType->id] ?? ['enabled' => false, 'value' => (float) $feeType->default_value];
@@ -245,15 +259,17 @@
                                         ? ($isPercent ? rtrim(rtrim(number_format((float) $feeState['value'], 2, '.', ''), '0'), '.').'%' : number_format((float) $feeState['value'], 0, ',', '.').'đ')
                                         : 'Không áp dụng';
                                 @endphp
-                                <div class="adjustment-fee-card" data-fee-card>
+                                <div class="adjustment-fee-card {{ $feeEnabled ? 'is-enabled' : '' }}" data-fee-card data-fee-id="{{ $feeType->id }}" @if(!$feeEnabled) hidden @endif>
                                     <div class="d-flex justify-content-between gap-2">
-                                        <div class="form-check form-switch">
+                                        <div>
                                             <input type="hidden" name="fees[{{ $feeType->id }}][type_id]" value="{{ $feeType->id }}">
-                                            <input type="hidden" name="fees[{{ $feeType->id }}][enabled]" value="0">
-                                            <input class="form-check-input adjustment-fee-toggle" type="checkbox" role="switch" id="adjustmentFee{{ $feeType->id }}" name="fees[{{ $feeType->id }}][enabled]" value="1" @checked($feeEnabled)>
-                                            <label class="form-check-label fw-semibold" for="adjustmentFee{{ $feeType->id }}">{{ $feeType->name }}</label>
+                                            <input type="hidden" class="adjustment-fee-enabled" name="fees[{{ $feeType->id }}][enabled]" value="{{ $feeEnabled ? 1 : 0 }}">
+                                            <div class="fw-semibold">{{ $feeType->name }}</div>
                                         </div>
-                                        <span class="badge {{ $feeType->direction === 'discount' ? 'text-bg-danger' : 'text-bg-success' }}">{{ $feeType->direction === 'discount' ? 'Giảm trừ' : 'Cộng thêm' }}</span>
+                                        <div class="d-flex align-items-center gap-1">
+                                            <span class="badge {{ $feeType->direction === 'discount' ? 'text-bg-danger' : 'text-bg-success' }}">{{ $feeType->direction === 'discount' ? 'Giảm trừ' : 'Cộng thêm' }}</span>
+                                            <button type="button" class="btn btn-sm btn-outline-danger remove-order-fee" title="Loại phí khỏi đơn"><i class="bi bi-x-lg"></i></button>
+                                        </div>
                                     </div>
                                     <div class="input-group input-group-sm">
                                         <input type="number" min="0" @if($isPercent) max="100" @endif step="0.01" class="form-control adjustment-fee-value" name="fees[{{ $feeType->id }}][value]" value="{{ $feeValue }}" aria-label="Giá trị {{ $feeType->name }}">
@@ -266,6 +282,7 @@
                                 <div class="text-muted small">Admin chưa cấu hình loại phí nào đang hoạt động.</div>
                             @endforelse
                         </div>
+                        <div id="selected-order-fees-empty" class="text-muted small py-2" @if($feeTypes->contains(fn ($type) => (bool) old('fees.'.$type->id.'.enabled', ($feeStates[$type->id]['enabled'] ?? false)))) hidden @endif>Chưa có phí nào được gắn vào đơn.</div>
                     </div>
 
                     <div class="wh-item-table-wrap">
@@ -358,7 +375,10 @@
     const searchButton = document.getElementById('missing-item-search-button');
     const showAllButton = document.getElementById('missing-item-show-all');
     const searchResults = document.getElementById('missing-item-search-results');
-    const feeToggles = Array.from(document.querySelectorAll('.adjustment-fee-toggle'));
+    const feePicker = document.getElementById('order-fee-picker');
+    const addFeeButton = document.getElementById('add-order-fee');
+    const selectedFees = document.getElementById('selected-order-fees');
+    const selectedFeesEmpty = document.getElementById('selected-order-fees-empty');
     const searchUrl = @json(route('site.orders.variants.ajax'));
     let nextItemIndex = {{ $items->count() }};
 
@@ -367,11 +387,23 @@
         if (wrap) wrap.style.display = requiresReturn ? 'block' : 'none';
     };
 
-    const refreshFeeCard = (toggle) => {
-        const card = toggle.closest('[data-fee-card]');
-        card?.classList.toggle('is-enabled', toggle.checked);
-        const valueInput = card?.querySelector('.adjustment-fee-value');
-        if (valueInput) valueInput.setAttribute('aria-disabled', toggle.checked ? 'false' : 'true');
+    const refreshFeePicker = () => {
+        const visibleIds = new Set(Array.from(document.querySelectorAll('[data-fee-card]:not([hidden])')).map((card) => card.dataset.feeId));
+        Array.from(feePicker?.options || []).forEach((option) => {
+            if (!option.value) return;
+            option.disabled = visibleIds.has(option.value);
+        });
+        if (feePicker?.selectedOptions[0]?.disabled) feePicker.value = '';
+        if (selectedFeesEmpty) selectedFeesEmpty.hidden = visibleIds.size > 0;
+    };
+
+    const setFeeEnabled = (card, enabled) => {
+        if (!card) return;
+        card.hidden = !enabled;
+        card.classList.toggle('is-enabled', enabled);
+        const enabledInput = card.querySelector('.adjustment-fee-enabled');
+        if (enabledInput) enabledInput.value = enabled ? '1' : '0';
+        refreshFeePicker();
     };
 
     const escapeHtml = (value) => {
@@ -516,10 +548,19 @@
             loadVariants();
         }
     });
-    feeToggles.forEach((toggle) => {
-        toggle.addEventListener('change', () => refreshFeeCard(toggle));
-        refreshFeeCard(toggle);
+    addFeeButton?.addEventListener('click', () => {
+        if (!feePicker?.value) return;
+        setFeeEnabled(document.querySelector(`[data-fee-card][data-fee-id="${feePicker.value}"]`), true);
+        feePicker.value = '';
     });
+    feePicker?.addEventListener('change', () => {
+        if (feePicker.value) addFeeButton?.focus();
+    });
+    selectedFees?.addEventListener('click', (event) => {
+        const removeButton = event.target.closest('.remove-order-fee');
+        if (removeButton) setFeeEnabled(removeButton.closest('[data-fee-card]'), false);
+    });
+    refreshFeePicker();
 
     refresh();
 })();
