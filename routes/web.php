@@ -279,6 +279,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/payment-matching/customers', [AccountingDashboardController::class, 'paymentMatchingCustomers'])->name('payment-matching.customers');
         Route::get('/payment-matching/orders', [AccountingDashboardController::class, 'paymentMatchingOrders'])->name('payment-matching.orders');
         Route::get('/reconciliation', [AccountingDashboardController::class, 'reconciliation'])->name('reconciliation');
+        Route::post('/reconciliation/bulk-confirm', [AccountingDashboardController::class, 'bulkConfirmReconciliation'])->name('reconciliation.bulk-confirm');
         Route::get('/reconciliation/{order}/detail', [AccountingDashboardController::class, 'reconciliationDetail'])->name('reconciliation.detail');
         Route::post('/reconciliation/{order}/confirm', [AccountingDashboardController::class, 'confirmReconciliation'])->name('reconciliation.confirm');
         Route::get('/inventory', [AccountingDashboardController::class, 'inventory'])->name('inventory');

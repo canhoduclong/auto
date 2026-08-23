@@ -925,6 +925,10 @@ class AccountingDashboardController extends Controller
         $orders->getCollection()->transform(function (Order $order) {
             $order->setAttribute('reconciliation_paid_amount', $this->effectivePaidForOrder($order));
             $order->setAttribute('reconciliation_due_amount', $this->effectiveDueForOrder($order));
+            [$canConfirm, $blockReason] = $this->canAccountingConfirmOrder($order);
+            $isConfirmed = $order->accountingReconciliation?->status === AccountingReconciliation::STATUS_CONFIRMED;
+            $order->setAttribute('reconciliation_can_confirm', $canConfirm && ! $isConfirmed);
+            $order->setAttribute('reconciliation_block_reason', $isConfirmed ? 'Đơn đã được kế toán xác nhận.' : $blockReason);
 
             return $order;
         });
@@ -2439,50 +2443,11 @@ class AccountingDashboardController extends Controller
             return response()->json(['message' => 'Don hang da duoc ke toan xac nhan.'], 422);
         }
 
-        $reconciliation = null;
-        DB::transaction(function () use ($order, $request, $validated, &$reconciliation): void {
-            $returnAmount = $this->returnAmountForOrder($order);
-            $recognizedRevenue = $this->recognizedRevenueForOrder($order);
-            $effectivePaid = $this->effectivePaidForOrder($order);
-
-            $reconciliation = AccountingReconciliation::query()->updateOrCreate(
-                ['order_id' => $order->id],
-                [
-                    'sale_id' => $order->user_id,
-                    'shipper_id' => $order->shipper_id,
-                    'total_amount' => (float) ($order->total ?? 0),
-                    'paid_amount' => $effectivePaid,
-                    'shipping_fee' => (float) ($order->shipping_fee ?? 0),
-                    'return_amount' => $returnAmount,
-                    'recognized_revenue' => $recognizedRevenue,
-                    'status' => AccountingReconciliation::STATUS_CONFIRMED,
-                    'confirmed_by' => $request->user()->id,
-                    'confirmed_at' => now(),
-                    'note' => $validated['note'] ?? null,
-                ]
-            );
-
-            $amountDue = max(0, $recognizedRevenue - $effectivePaid);
-            $order->forceFill([
-                'status' => Order::STATUS_COMPLETED,
-                'amount_due' => $amountDue,
-                'needs_operational_completion' => false,
-                'operational_completion_note' => $order->accounting_sales_import_batch_id
-                    ? 'Đã giao hàng và được kế toán xác nhận doanh thu.'
-                    : $order->operational_completion_note,
-                'operational_completed_by' => $order->accounting_sales_import_batch_id ? $request->user()->id : $order->operational_completed_by,
-                'operational_completed_at' => $order->accounting_sales_import_batch_id ? now() : $order->operational_completed_at,
-                'payment_status' => match (true) {
-                    $amountDue <= 0.0001 => 'paid',
-                    $effectivePaid > 0 => 'partially_paid',
-                    default => 'unpaid',
-                },
-            ])->save();
-
-            $this->createCommissionForCompletedOrder($order, $recognizedRevenue, (int) $request->user()->id);
-            $order->unsetRelation('accountingReconciliation');
-            app(\App\Services\AccountingSalesLedgerService::class)->syncOrder($order->fresh());
-        });
+        $reconciliation = $this->confirmReconciliationOrder(
+            $order,
+            (int) $request->user()->id,
+            $validated['note'] ?? null
+        );
 
         $reconciliation?->load(['order', 'sale']);
         if ($reconciliation?->sale) {
@@ -2498,6 +2463,122 @@ class AccountingDashboardController extends Controller
                 'recognized_revenue' => (float) ($reconciliation?->recognized_revenue ?? 0),
             ],
         ]);
+    }
+
+    public function bulkConfirmReconciliation(Request $request)
+    {
+        if (! Schema::hasTable('accounting_reconciliations')) {
+            return response()->json(['message' => 'Bảng đối soát kế toán chưa được tạo. Vui lòng chạy migrate.'], 500);
+        }
+
+        $validated = $request->validate([
+            'order_ids' => ['required', 'array', 'min:1', 'max:100'],
+            'order_ids.*' => ['required', 'integer', 'distinct', 'exists:orders,id'],
+            'note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $orders = Order::query()
+            ->with(['returnRecords.returnItems', 'accountingReconciliation', 'user'])
+            ->whereKey($validated['order_ids'])
+            ->get()
+            ->keyBy('id');
+        $confirmed = [];
+        $skipped = [];
+
+        foreach ($validated['order_ids'] as $orderId) {
+            $order = $orders->get((int) $orderId);
+            if (! $order) {
+                continue;
+            }
+
+            if ($order->accountingReconciliation?->status === AccountingReconciliation::STATUS_CONFIRMED) {
+                $skipped[] = ['order_id' => $order->id, 'message' => 'Đơn đã được kế toán xác nhận.'];
+                continue;
+            }
+
+            [$canConfirm, $blockReason] = $this->canAccountingConfirmOrder($order);
+            if (! $canConfirm) {
+                $skipped[] = ['order_id' => $order->id, 'message' => $blockReason];
+                continue;
+            }
+
+            try {
+                $reconciliation = $this->confirmReconciliationOrder(
+                    $order,
+                    (int) $request->user()->id,
+                    $validated['note'] ?? null
+                );
+                $confirmed[] = $order->id;
+            } catch (\Throwable $exception) {
+                report($exception);
+                $skipped[] = ['order_id' => $order->id, 'message' => 'Không thể xác nhận đơn này.'];
+                continue;
+            }
+
+            try {
+                $reconciliation->load(['order', 'sale']);
+                if ($reconciliation->sale) {
+                    $reconciliation->sale->notify(new AccountingOrderRevenueConfirmed($reconciliation));
+                }
+            } catch (\Throwable $exception) {
+                report($exception);
+            }
+        }
+
+        return response()->json([
+            'message' => sprintf('Đã xác nhận %d đơn, bỏ qua %d đơn.', count($confirmed), count($skipped)),
+            'confirmed_order_ids' => $confirmed,
+            'skipped' => $skipped,
+        ]);
+    }
+
+    private function confirmReconciliationOrder(Order $order, int $confirmedBy, ?string $note = null): AccountingReconciliation
+    {
+        return DB::transaction(function () use ($order, $confirmedBy, $note): AccountingReconciliation {
+            $returnAmount = $this->returnAmountForOrder($order);
+            $recognizedRevenue = $this->recognizedRevenueForOrder($order);
+            $effectivePaid = $this->effectivePaidForOrder($order);
+
+            $reconciliation = AccountingReconciliation::query()->updateOrCreate(
+                ['order_id' => $order->id],
+                [
+                    'sale_id' => $order->user_id,
+                    'shipper_id' => $order->shipper_id,
+                    'total_amount' => (float) ($order->total ?? 0),
+                    'paid_amount' => $effectivePaid,
+                    'shipping_fee' => (float) ($order->shipping_fee ?? 0),
+                    'return_amount' => $returnAmount,
+                    'recognized_revenue' => $recognizedRevenue,
+                    'status' => AccountingReconciliation::STATUS_CONFIRMED,
+                    'confirmed_by' => $confirmedBy,
+                    'confirmed_at' => now(),
+                    'note' => $note,
+                ]
+            );
+
+            $amountDue = max(0, $recognizedRevenue - $effectivePaid);
+            $order->forceFill([
+                'status' => Order::STATUS_COMPLETED,
+                'amount_due' => $amountDue,
+                'needs_operational_completion' => false,
+                'operational_completion_note' => $order->accounting_sales_import_batch_id
+                    ? 'Đã giao hàng và được kế toán xác nhận doanh thu.'
+                    : $order->operational_completion_note,
+                'operational_completed_by' => $order->accounting_sales_import_batch_id ? $confirmedBy : $order->operational_completed_by,
+                'operational_completed_at' => $order->accounting_sales_import_batch_id ? now() : $order->operational_completed_at,
+                'payment_status' => match (true) {
+                    $amountDue <= 0.0001 => 'paid',
+                    $effectivePaid > 0 => 'partially_paid',
+                    default => 'unpaid',
+                },
+            ])->save();
+
+            $this->createCommissionForCompletedOrder($order, $recognizedRevenue, $confirmedBy);
+            $order->unsetRelation('accountingReconciliation');
+            app(\App\Services\AccountingSalesLedgerService::class)->syncOrder($order->fresh());
+
+            return $reconciliation;
+        });
     }
 
     public function apiOrdersList(Request $request)

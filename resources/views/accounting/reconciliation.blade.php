@@ -67,6 +67,28 @@
     .recon-detail {
         min-height: 260px;
     }
+    .recon-inline-detail-row > td {
+        padding: 0 0 12px !important;
+        border-top: 0;
+        background: #f8fafc !important;
+    }
+    .recon-inline-detail-row:hover > td {
+        background: #f8fafc !important;
+    }
+    .recon-inline-detail-row .recon-detail {
+        padding: 10px;
+    }
+    .recon-bulk-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 12px;
+        margin-bottom: 12px;
+        border: 1px solid #dbeafe;
+        border-radius: 10px;
+        background: #eff6ff;
+    }
     .recon-detail-section {
         border-top: 1px solid #e2e8f0;
         padding-top: 12px;
@@ -200,10 +222,23 @@
             <span class="badge text-bg-light border">{{ $orders->total() }} đơn</span>
         </div>
         <div class="panel-body">
+            <div class="recon-bulk-toolbar">
+                <div>
+                    <div class="fw-bold">Quản trị đối soát</div>
+                    <div class="small text-muted" id="reconSelectionText">Chưa chọn đơn nào</div>
+                </div>
+                <button class="btn btn-success" type="button" id="bulkConfirmButton" disabled>
+                    Xác nhận đã chọn
+                </button>
+            </div>
+            <div class="alert d-none" id="reconBulkResult" role="alert"></div>
             <div class="table-responsive">
                 <table class="table table-hover align-middle">
                     <thead>
                         <tr>
+                            <th style="width: 38px">
+                                <input class="form-check-input" type="checkbox" id="selectAllReconciliation" aria-label="Chọn tất cả đơn có thể xác nhận">
+                            </th>
                             <th>Mã đơn</th>
                             <th>Khách hàng</th>
                             <th>Giao hàng</th>
@@ -222,10 +257,21 @@
                         @php
                             $recon = $order->accountingReconciliation;
                             $isConfirmed = $recon?->status === \App\Models\AccountingReconciliation::STATUS_CONFIRMED;
+                            $canConfirm = (bool) $order->reconciliation_can_confirm;
                             $paidAmount = (float) ($order->reconciliation_paid_amount ?? $order->amount_paid ?? 0);
                             $dueAmount = (float) ($order->reconciliation_due_amount ?? $order->amount_due ?? 0);
                         @endphp
                         <tr class="recon-order-row" data-order-id="{{ $order->id }}" data-detail-url="{{ route('accounting.reconciliation.detail', $order) }}">
+                            <td>
+                                <input
+                                    class="form-check-input js-recon-select"
+                                    type="checkbox"
+                                    value="{{ $order->id }}"
+                                    aria-label="Chọn đơn {{ $order->code }}"
+                                    title="{{ $canConfirm ? 'Chọn đơn để xác nhận' : ($order->reconciliation_block_reason ?: 'Không thể xác nhận đơn này') }}"
+                                    {{ $canConfirm ? '' : 'disabled' }}
+                                >
+                            </td>
                             <td class="fw-bold">{{ $order->code }}</td>
                             <td>{{ $order->customer?->name ?? '-' }}</td>
                             <td><span class="badge text-bg-light border">{{ $order->status }}</span></td>
@@ -234,30 +280,39 @@
                             <td>{{ $order->user?->name ?? '-' }}</td>
                             <td>{{ $order->shipper?->name ?? '-' }}</td>
                             <td>{{ $money($order->shipping_fee) }}</td>
-                            <td>
+                            <td class="js-accounting-status">
                                 <span class="badge {{ $isConfirmed ? 'text-bg-success' : 'text-bg-warning' }}">
                                     {{ $isConfirmed ? 'Đã xác nhận' : 'Chưa xác nhận' }}
                                 </span>
                             </td>
                             <td>{{ optional($order->delivered_at)->format('d/m/Y H:i') ?: '-' }}</td>
                             <td>
-                                <button class="btn btn-sm btn-outline-primary js-recon-toggle" type="button">
-                                    Xem chi tiết
-                                </button>
+                                <div class="d-flex gap-1">
+                                    <button class="btn btn-sm btn-outline-primary js-recon-toggle" type="button">Xem chi tiết</button>
+                                    <button
+                                        class="btn btn-sm btn-outline-success js-recon-confirm"
+                                        type="button"
+                                        title="{{ $canConfirm ? 'Xác nhận riêng đơn này' : ($order->reconciliation_block_reason ?: 'Không thể xác nhận đơn này') }}"
+                                        {{ $canConfirm ? '' : 'disabled' }}
+                                    >Xác nhận</button>
+                                </div>
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="11" class="text-center text-muted py-4">Không có đơn giao hàng cần đối soát.</td></tr>
+                        <tr><td colspan="12" class="text-center text-muted py-4">Không có đơn giao hàng cần đối soát.</td></tr>
                     @endforelse
+                    @if($orders->isNotEmpty())
+                        <tr class="recon-inline-detail-row d-none" id="reconciliationDetailRow">
+                            <td colspan="12">
+                                <div class="recon-detail" id="reconciliationDetail"></div>
+                            </td>
+                        </tr>
+                    @endif
                     </tbody>
                 </table>
             </div>
 
             {{ $orders->links() }}
-
-            <div class="recon-detail mt-3" id="reconciliationDetail">
-                <div class="alert alert-info mb-0">Chọn một đơn hàng để xem chi tiết và xác nhận kế toán.</div>
-            </div>
         </div>
     </div>
 </div>
@@ -266,10 +321,17 @@
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const detailBox = document.getElementById('reconciliationDetail');
+    const detailRow = document.getElementById('reconciliationDetailRow');
+    const selectAllCheckbox = document.getElementById('selectAllReconciliation');
+    const bulkConfirmButton = document.getElementById('bulkConfirmButton');
+    const selectionText = document.getElementById('reconSelectionText');
+    const bulkResult = document.getElementById('reconBulkResult');
+    const bulkConfirmUrl = @json(route('accounting.reconciliation.bulk-confirm'));
     const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     const money = (value) => new Intl.NumberFormat('vi-VN').format(Number(value || 0)) + 'đ';
     const esc = (value) => String(value ?? '-').replace(/[&<>"']/g, (ch) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));
     let activeOrderId = null;
+    let detailRequestId = 0;
 
     function section(title, rows) {
         return `<div class="recon-detail-section"><div class="recon-detail-title">${esc(title)}</div><div class="recon-kv">${rows.map(([k, v]) => `<div class="k">${esc(k)}</div><div class="v">${v}</div>`).join('')}</div></div>`;
@@ -280,6 +342,50 @@ document.addEventListener('DOMContentLoaded', function () {
             <div class="title">${esc(title)}</div>
             ${rows.map(([k, v]) => `<div class="recon-mini-row"><span>${esc(k)}</span><span>${v}</span></div>`).join('')}
         </div>`;
+    }
+
+    function selectedOrderIds() {
+        return Array.from(document.querySelectorAll('.js-recon-select:checked')).map(input => input.value);
+    }
+
+    function updateSelectionState() {
+        const available = Array.from(document.querySelectorAll('.js-recon-select:not(:disabled)'));
+        const selected = selectedOrderIds();
+        if (selectionText) selectionText.textContent = selected.length ? `Đã chọn ${selected.length} đơn` : 'Chưa chọn đơn nào';
+        if (bulkConfirmButton) {
+            bulkConfirmButton.disabled = selected.length === 0;
+            bulkConfirmButton.textContent = selected.length ? `Xác nhận ${selected.length} đơn đã chọn` : 'Xác nhận đã chọn';
+        }
+        if (selectAllCheckbox) {
+            selectAllCheckbox.disabled = available.length === 0;
+            selectAllCheckbox.checked = available.length > 0 && selected.length === available.length;
+            selectAllCheckbox.indeterminate = selected.length > 0 && selected.length < available.length;
+        }
+    }
+
+    function markRowConfirmed(orderId) {
+        const row = document.querySelector(`.recon-order-row[data-order-id="${CSS.escape(String(orderId))}"]`);
+        if (!row) return;
+        const statusCell = row.querySelector('.js-accounting-status');
+        if (statusCell) statusCell.innerHTML = '<span class="badge text-bg-success">Đã xác nhận</span>';
+        const checkbox = row.querySelector('.js-recon-select');
+        if (checkbox) {
+            checkbox.checked = false;
+            checkbox.disabled = true;
+            checkbox.title = 'Đơn đã được kế toán xác nhận.';
+        }
+        const confirmButton = row.querySelector('.js-recon-confirm');
+        if (confirmButton) {
+            confirmButton.disabled = true;
+            confirmButton.title = 'Đơn đã được kế toán xác nhận.';
+        }
+        updateSelectionState();
+    }
+
+    function showBulkResult(message, isSuccess = true) {
+        if (!bulkResult) return;
+        bulkResult.textContent = message;
+        bulkResult.className = `alert ${isSuccess ? 'alert-success' : 'alert-danger'}`;
     }
 
     function renderDetail(data, row) {
@@ -413,7 +519,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 });
                 const payload = await response.json().catch(() => ({}));
                 if (!response.ok) throw new Error(payload.message || 'Xác nhận thất bại.');
-                row.querySelector('td:nth-child(9)').innerHTML = '<span class="badge text-bg-success">Đã xác nhận</span>';
+                markRowConfirmed(row.dataset.orderId);
                 await loadDetail(row);
             } catch (error) {
                 alert(error.message || 'Xác nhận thất bại.');
@@ -434,7 +540,9 @@ document.addEventListener('DOMContentLoaded', function () {
         document.querySelectorAll('.recon-order-row').forEach(item => item.classList.remove('active'));
         resetToggleButtons();
         activeOrderId = null;
-        detailBox.innerHTML = '<div class="alert alert-info mb-0">Chọn một đơn hàng để xem chi tiết và xác nhận kế toán.</div>';
+        detailRequestId++;
+        detailRow?.classList.add('d-none');
+        if (detailBox) detailBox.innerHTML = '';
     }
 
     function markOpen(row) {
@@ -442,6 +550,8 @@ document.addEventListener('DOMContentLoaded', function () {
         resetToggleButtons();
         row.classList.add('active');
         activeOrderId = row.dataset.orderId;
+        row.insertAdjacentElement('afterend', detailRow);
+        detailRow.classList.remove('d-none');
 
         const button = row.querySelector('.js-recon-toggle');
         if (button) {
@@ -461,14 +571,18 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     async function loadDetail(row) {
+        if (!detailBox || !detailRow) return;
+        const requestId = ++detailRequestId;
         markOpen(row);
         detailBox.innerHTML = '<div class="text-center text-muted py-4">Đang tải chi tiết...</div>';
         try {
             const response = await fetch(row.dataset.detailUrl, {headers: {'Accept': 'application/json'}});
             const data = await response.json();
+            if (requestId !== detailRequestId || activeOrderId !== row.dataset.orderId) return;
             if (!response.ok) throw new Error(data.message || 'Không tải được chi tiết đơn.');
             renderDetail(data, row);
         } catch (error) {
+            if (requestId !== detailRequestId || activeOrderId !== row.dataset.orderId) return;
             detailBox.innerHTML = `<div class="alert alert-danger mb-0">${esc(error.message || 'Không tải được chi tiết đơn.')}</div>`;
         }
     }
@@ -476,7 +590,7 @@ document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('.recon-order-row').forEach(row => {
         row.dataset.confirmUrl = row.dataset.detailUrl.replace('/detail', '/confirm');
         row.addEventListener('click', (event) => {
-            if (event.target.closest('.js-recon-toggle')) {
+            if (event.target.closest('button, input, a, label')) {
                 return;
             }
 
@@ -486,7 +600,69 @@ document.addEventListener('DOMContentLoaded', function () {
             event.stopPropagation();
             toggleDetail(row);
         });
+        row.querySelector('.js-recon-select')?.addEventListener('change', updateSelectionState);
+        row.querySelector('.js-recon-confirm')?.addEventListener('click', async (event) => {
+            event.stopPropagation();
+            if (!confirm(`Xác nhận kế toán cho đơn ${row.querySelector('.fw-bold')?.textContent?.trim() || ''}?`)) return;
+            const button = event.currentTarget;
+            button.disabled = true;
+            try {
+                const response = await fetch(row.dataset.confirmUrl, {
+                    method: 'POST',
+                    headers: {'X-CSRF-TOKEN': csrf, 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+                });
+                const payload = await response.json().catch(() => ({}));
+                if (!response.ok) throw new Error(payload.message || 'Xác nhận thất bại.');
+                markRowConfirmed(row.dataset.orderId);
+                showBulkResult(payload.message || 'Đã xác nhận đơn hàng.');
+                if (activeOrderId === row.dataset.orderId) await loadDetail(row);
+            } catch (error) {
+                showBulkResult(error.message || 'Xác nhận thất bại.', false);
+                button.disabled = false;
+            }
+        });
     });
+
+    selectAllCheckbox?.addEventListener('change', function () {
+        document.querySelectorAll('.js-recon-select:not(:disabled)').forEach(input => {
+            input.checked = selectAllCheckbox.checked;
+        });
+        updateSelectionState();
+    });
+
+    bulkConfirmButton?.addEventListener('click', async function () {
+        const orderIds = selectedOrderIds();
+        if (!orderIds.length || !confirm(`Xác nhận kế toán hàng loạt cho ${orderIds.length} đơn đã chọn?`)) return;
+
+        bulkConfirmButton.disabled = true;
+        bulkConfirmButton.textContent = 'Đang xác nhận...';
+        try {
+            const response = await fetch(bulkConfirmUrl, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': csrf,
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({order_ids: orderIds}),
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(payload.message || 'Xác nhận hàng loạt thất bại.');
+            (payload.confirmed_order_ids || []).forEach(markRowConfirmed);
+            showBulkResult(payload.message || 'Đã xác nhận các đơn được chọn.', (payload.confirmed_order_ids || []).length > 0);
+            if ((payload.confirmed_order_ids || []).map(String).includes(String(activeOrderId))) {
+                const activeRow = document.querySelector(`.recon-order-row[data-order-id="${CSS.escape(String(activeOrderId))}"]`);
+                if (activeRow) await loadDetail(activeRow);
+            }
+        } catch (error) {
+            showBulkResult(error.message || 'Xác nhận hàng loạt thất bại.', false);
+        } finally {
+            updateSelectionState();
+        }
+    });
+
+    updateSelectionState();
 
     const requestedOrderId = new URLSearchParams(window.location.search).get('order_id');
     if (requestedOrderId) {
