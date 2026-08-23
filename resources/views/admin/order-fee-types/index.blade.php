@@ -1,6 +1,6 @@
 @extends('layouts.admin')
 
-@section('title', 'Quản trị phí bổ sung cho đơn')
+@section('title', 'Quản trị phí đơn hàng')
 
 @push('styles')
 <style>
@@ -23,8 +23,8 @@
     <div class="fee-admin-hero mb-3 d-flex flex-wrap justify-content-between align-items-center gap-3">
         <div>
             <div class="text-uppercase small opacity-75 fw-semibold mb-1">Cấu hình đơn hàng</div>
-            <h2 class="mb-1 text-white">Quản trị phí bổ sung</h2>
-            <div class="opacity-75">Tạo các khoản cộng thêm hoặc giảm trừ để sử dụng trong yêu cầu điều chỉnh đơn.</div>
+            <h2 class="mb-1 text-white">Quản trị phí đơn hàng</h2>
+            <div class="opacity-75">Quản lý danh mục các khoản phí hoặc giảm trừ mà người dùng có thể gắn vào đơn.</div>
         </div>
         <div class="text-end"><div class="fs-2 fw-bold">{{ $feeTypes->count() }}</div><div class="small opacity-75">loại phí</div></div>
     </div>

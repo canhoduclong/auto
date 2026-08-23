@@ -456,7 +456,7 @@
 						<li class="nav-item">
 							<a href="{{ route('admin.order-fee-types.index') }}" class="nav-link{{ request()->routeIs('admin.order-fee-types.*') ? ' active' : '' }}">
 								<i class="ph-receipt"></i>
-								<span>Phí bổ sung cho đơn</span>
+								<span>Quản trị phí đơn hàng</span>
 							</a>
 						</li>
 						@endif
