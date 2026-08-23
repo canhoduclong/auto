@@ -36,6 +36,22 @@
     .draft-template-thumb { width: 34px; height: 34px; border-radius: 5px; border: 1px solid #e2e8f0; object-fit: cover; }
     .draft-template-product-name { color: #0f172a; font-weight: 800; }
     .draft-template-total { display: grid; grid-template-columns: 95px 105px; justify-content: end; gap: 8px; margin-top: 5px; padding-top: 7px; border-top: 1px solid #dce6f1; font-size: .8rem; font-weight: 900; text-align: right; }
+    .draft-template-pagination {
+        position: sticky;
+        z-index: 24;
+        bottom: 0;
+        display: flex;
+        justify-content: center;
+        margin-top: 2px;
+        padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+        border: 1px solid #dce6f1;
+        border-radius: 9px 9px 0 0;
+        background: rgba(255, 255, 255, .96);
+        box-shadow: 0 -5px 18px rgba(15, 23, 42, .1);
+        backdrop-filter: blur(8px);
+    }
+    .draft-template-pagination nav { width: 100%; }
+    .draft-template-pagination .pagination { justify-content: center; margin: 0; }
     .draft-template-actions { display: grid; gap: 8px; }
     .draft-template-actions .btn { min-height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; border-radius: 6px; font-size: .72rem; font-weight: 800; }
     .draft-template-editor { padding-top: 10px; }
@@ -176,7 +192,7 @@
                 @endif
             </div>
             @if(filled($customerSearch ?? ''))
-                <span class="draft-customer-filter-result">Tìm thấy <strong>{{ $drafts->count() }}</strong> đơn mẫu phù hợp.</span>
+                <span class="draft-customer-filter-result">Tìm thấy <strong>{{ $drafts->total() }}</strong> đơn mẫu phù hợp.</span>
             @endif
         </form>
 
@@ -493,6 +509,11 @@
                 <div class="draft-template-empty"><i class="bi bi-inbox fs-2 d-block mb-2"></i>Chưa có đơn hàng mẫu.</div>
             @endforelse
         </div>
+        @if($drafts->hasPages())
+            <footer class="draft-template-pagination" aria-label="Phân trang danh sách đơn mẫu">
+                {{ $drafts->appends(request()->query())->links('pagination::bootstrap-5') }}
+            </footer>
+        @endif
     </div>
 </section>
 

@@ -174,7 +174,9 @@ class TextOrderImportController extends Controller
         $customerSearchPhone = preg_match('/^\+?[0-9][0-9 .-]{7,19}$/', $customerSearch)
             ? preg_replace('/\D+/', '', $customerSearch)
             : '';
-        $drafts = TextOrderDraft::query()
+        $perPage = (int) $request?->input('per_page', 10);
+        $perPage = in_array($perPage, [10, 20, 50], true) ? $perPage : 10;
+        $draftQuery = TextOrderDraft::query()
             ->with(['sale:id,name,zalo_name', 'customer:id,name,phone', 'truckBrand:id,name', 'truckStation:id,name,address,phone,brand_id', 'truckStation.brand:id,name', 'variant.product.avatar.media', 'order:id,code'])
             ->where('draft_scope', $saleId ? TextOrderDraft::SCOPE_SALE_PRIVATE : TextOrderDraft::SCOPE_ADMIN_IMPORT)
             ->when($saleId, fn ($query) => $query->where('sale_id', $saleId))
@@ -198,8 +200,10 @@ class TextOrderImportController extends Controller
                 });
             })
             ->orderBy($sortBy, $sortDir)
-            ->limit(100)
-            ->get();
+            ->orderBy('id', $sortDir);
+        $drafts = $saleId
+            ? $draftQuery->paginate($perPage)->appends($request?->query() ?? [])
+            : $draftQuery->limit(100)->get();
         $sales = User::query()->whereHas('roles', fn ($query) => $query->where('name', 'sale'))->orderBy('name')->get(['id', 'name', 'zalo_name']);
         $variants = ProductVariant::query()
             ->with(['product.avatar.media', 'latestPriceRule'])
@@ -218,7 +222,7 @@ class TextOrderImportController extends Controller
         $viewName = $saleMode ? 'site.my-draft-orders' : 'admin.text-order-import.index';
 
         return view($viewName, compact(
-            'drafts', 'sales', 'variants', 'truckStations', 'saleMode', 'pageTitle', 'actionBaseUrl', 'parseRoute', 'settings', 'sortBy', 'sortDir', 'customerSearch'
+            'drafts', 'sales', 'variants', 'truckStations', 'saleMode', 'pageTitle', 'actionBaseUrl', 'parseRoute', 'settings', 'sortBy', 'sortDir', 'customerSearch', 'perPage'
         ));
     }
 
