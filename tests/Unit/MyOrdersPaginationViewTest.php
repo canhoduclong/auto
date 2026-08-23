@@ -27,7 +27,9 @@ class MyOrdersPaginationViewTest extends TestCase
         $template = file_get_contents(resource_path('views/site/my_orders.blade.php'));
 
         $this->assertStringContainsString('id="openOrdersCustomerPicker"', $template);
+        $this->assertStringContainsString('id="ordersCustomerQuickSearch"', $template);
         $this->assertStringContainsString('id="ordersCustomerPickerModal"', $template);
+        $this->assertStringContainsString('openCustomerPicker();', $template);
         $this->assertStringContainsString("scope: 'orders'", $template);
         $this->assertStringContainsString('window.refreshOrdersList?.(1);', $template);
         $this->assertStringContainsString('const getModal = () => window.bootstrap?.Modal', $template);
@@ -39,9 +41,12 @@ class MyOrdersPaginationViewTest extends TestCase
 
     public function test_missing_phone_result_offers_ajax_customer_creation(): void
     {
+        $controller = file_get_contents(app_path('Http/Controllers/PageController.php'));
         $page = file_get_contents(resource_path('views/site/my_orders.blade.php'));
         $picker = file_get_contents(resource_path('views/site/orders/partials/customer_picker_single.blade.php'));
 
+        $this->assertStringContainsString('!$phoneAlreadyExists', $controller);
+        $this->assertStringContainsString('? $search', $controller);
         $this->assertStringContainsString('customer-quick-create-submit', $page);
         $this->assertStringContainsString("body.set('phone', phone);", $page);
         $this->assertStringContainsString('Thêm khách hàng mới', $picker);

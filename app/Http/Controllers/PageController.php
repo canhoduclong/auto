@@ -2171,14 +2171,18 @@ class PageController extends Controller
             ? 'site.orders.partials.customer_picker_single'
             : 'site.orders.partials.customer_listing';
 
+        $phoneAlreadyExists = $searchPhoneDigits !== '' && Customer::query()
+            ->whereRaw("REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '.', ''), '-', ''), '+', '') = ?", [$searchPhoneDigits])
+            ->exists();
+
         $html = view($partial, [
             'customers' => $customers,
             'selectedCustomerIds' => $selectedCustomerIds,
             'sortBy' => $sortBy,
             'sortDir' => $sortDir,
             'perPage' => $perPage,
-            'searchedPhone' => $customers->total() === 0 && $searchPhoneDigits !== ''
-                ? $searchPhoneDigits
+            'searchedPhone' => $customers->total() === 0 && $searchPhoneDigits !== '' && !$phoneAlreadyExists
+                ? $search
                 : null,
             'customerStoreUrl' => route('customers.popup.store'),
         ])->render();

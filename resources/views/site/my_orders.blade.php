@@ -89,6 +89,12 @@
         align-items: center;
         gap: 10px;
     }
+    .orders-customer-search {
+        width: min(100%, 520px);
+    }
+    .orders-customer-search .form-control {
+        min-width: 0;
+    }
     .orders-customer-filter .btn {
         min-width: 258px;
         color: #087b72;
@@ -919,9 +925,18 @@
                             </div>
                             @if($monitoringEmbedded ?? false)
                             <div class="orders-customer-filter">
-                                <button type="button" class="btn btn-outline-primary" id="openOrdersCustomerPicker">
-                                    <i class="bi bi-calendar2-check me-2"></i>Chọn khách hàng
-                                </button>
+                                <div class="input-group orders-customer-search">
+                                    <input type="search"
+                                           class="form-control"
+                                           id="ordersCustomerQuickSearch"
+                                           inputmode="tel"
+                                           autocomplete="off"
+                                           placeholder="Nhập tên hoặc số điện thoại khách hàng..."
+                                           aria-label="Tìm khách hàng theo tên hoặc số điện thoại">
+                                    <button type="button" class="btn btn-outline-primary" id="openOrdersCustomerPicker">
+                                        <i class="fa fa-search me-1"></i>Tìm khách hàng
+                                    </button>
+                                </div>
                                 <span class="orders-selected-customer" id="ordersSelectedCustomerLabel">
                                     @if(($selectedCustomers ?? collect())->isNotEmpty())
                                         Đang lọc: <strong>{{ $selectedCustomers->pluck('name')->implode(', ') }}</strong>
@@ -1193,6 +1208,7 @@
                 const endpoint = @json(route('site.orders.customers.ajax'));
                 const modalElement = document.getElementById('ordersCustomerPickerModal');
                 const openButton = document.getElementById('openOrdersCustomerPicker');
+                const quickSearchInput = document.getElementById('ordersCustomerQuickSearch');
                 const clearButton = document.getElementById('clearOrdersCustomerFilter');
                 const searchInput = document.getElementById('ordersCustomerSearch');
                 const sortSelect = document.getElementById('ordersCustomerSort');
@@ -1272,15 +1288,27 @@
                         });
                 };
 
-                openButton.addEventListener('click', function () {
+                const openCustomerPicker = () => {
                     const modal = getModal();
                     if (!modal) {
                         results.innerHTML = '<div class="alert alert-danger mb-0">Không thể mở danh sách khách hàng. Vui lòng tải lại trang.</div>';
                         return;
                     }
 
+                    searchInput.value = quickSearchInput?.value.trim() || '';
                     modal.show();
                     loadCustomers(1);
+                };
+
+                openButton.addEventListener('click', openCustomerPicker);
+
+                quickSearchInput?.addEventListener('keydown', function (event) {
+                    if (event.key !== 'Enter') {
+                        return;
+                    }
+
+                    event.preventDefault();
+                    openCustomerPicker();
                 });
 
                 modalElement.addEventListener('shown.bs.modal', function () {

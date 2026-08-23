@@ -54,10 +54,41 @@ class MonitoringMyOrdersCustomerFilterTest extends TestCase
 
         $response->assertOk()
             ->assertSee('id="openOrdersCustomerPicker"', false)
+            ->assertSee('id="ordersCustomerQuickSearch"', false)
             ->assertSee('id="ordersCustomerPickerModal"', false)
             ->assertSee('Đang lọc:')
             ->assertSee('Khách được chọn')
             ->assertSee('FILTER-SELECTED')
             ->assertDontSee('FILTER-OTHER');
+
+        $missingPhone = '0901999999';
+        $missingResponse = $this->actingAs($sale)
+            ->withSession(['active_role' => 'sale'])
+            ->getJson(route('site.orders.customers.ajax', [
+                'q' => $missingPhone,
+                'mode' => 'single',
+                'scope' => 'orders',
+            ]), ['X-Requested-With' => 'XMLHttpRequest']);
+
+        $missingResponse->assertOk()->assertJsonPath('total', 0);
+        $this->assertStringContainsString('Thêm khách hàng mới', $missingResponse->json('html'));
+        $this->assertStringContainsString('value="'.$missingPhone.'"', $missingResponse->json('html'));
+
+        Customer::query()->create([
+            'user_id' => $sale->id,
+            'name' => 'Khách đã có nhưng chưa có đơn',
+            'phone' => $missingPhone,
+        ]);
+
+        $existingResponse = $this->actingAs($sale)
+            ->withSession(['active_role' => 'sale'])
+            ->getJson(route('site.orders.customers.ajax', [
+                'q' => $missingPhone,
+                'mode' => 'single',
+                'scope' => 'orders',
+            ]), ['X-Requested-With' => 'XMLHttpRequest']);
+
+        $existingResponse->assertOk()->assertJsonPath('total', 0);
+        $this->assertStringNotContainsString('Thêm khách hàng mới', $existingResponse->json('html'));
     }
 }
