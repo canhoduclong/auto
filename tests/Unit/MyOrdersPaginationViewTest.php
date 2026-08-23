@@ -22,6 +22,16 @@ class MyOrdersPaginationViewTest extends TestCase
         );
     }
 
+    public function test_monitoring_pagination_is_pinned_to_the_viewport_footer(): void
+    {
+        $template = file_get_contents(resource_path('views/site/orders/partials/orders_listing_monitoring.blade.php'));
+
+        $this->assertStringContainsString('class="monitor-my-orders-pagination"', $template);
+        $this->assertStringContainsString('position: sticky;', $template);
+        $this->assertStringContainsString('bottom: 0;', $template);
+        $this->assertStringContainsString('$orders->hasPages()', $template);
+    }
+
     public function test_monitoring_view_contains_ajax_customer_picker_controls(): void
     {
         $template = file_get_contents(resource_path('views/site/my_orders.blade.php'));

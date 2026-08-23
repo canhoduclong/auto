@@ -56,6 +56,22 @@
     .monitor-my-order-actions form .btn { width: 100%; }
     .monitor-my-order-cancel { margin-top: 8px !important; padding-top: 8px; border-top: 1px solid #e2e8f0; }
     .monitor-my-orders-empty { padding: 44px 20px; border: 1px solid #dce6f1; border-radius: 8px; background: #fff; color: #64748b; text-align: center; }
+    .monitor-my-orders-pagination {
+        position: sticky;
+        z-index: 24;
+        bottom: 0;
+        display: flex;
+        justify-content: center;
+        margin-top: 2px;
+        padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+        border: 1px solid #dce6f1;
+        border-radius: 9px 9px 0 0;
+        background: rgba(255, 255, 255, .96);
+        box-shadow: 0 -5px 18px rgba(15, 23, 42, .1);
+        backdrop-filter: blur(8px);
+    }
+    .monitor-my-orders-pagination nav { width: 100%; }
+    .monitor-my-orders-pagination .pagination { justify-content: center; margin: 0; }
     @media (max-width: 767.98px) {
         .monitor-my-order { grid-template-columns: 1fr; }
         .monitor-my-order-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -189,7 +205,11 @@
             </article>
         @endforeach
 
-        <div>{{ $orders->appends(request()->input())->links('pagination::bootstrap-5') }}</div>
+        @if($orders->hasPages())
+            <footer class="monitor-my-orders-pagination" aria-label="Phân trang danh sách đơn hàng">
+                {{ $orders->appends(request()->input())->links('pagination::bootstrap-5') }}
+            </footer>
+        @endif
     @else
         <div class="monitor-my-orders-empty"><i class="bi bi-inbox fs-2 d-block mb-2"></i>Chưa có đơn hàng phù hợp.</div>
     @endif
