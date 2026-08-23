@@ -1076,6 +1076,9 @@ Route::middleware(['auth', 'role:sale,leader,leader_sale,sale_manager,manager,ma
         ->name('site.orders.admin-delete')
         ->middleware('role:admin');
     Route::post('/my-orders/{order}/customer-feedback', [PageController::class, 'storeOrderCustomerFeedback'])->name('site.orders.customer-feedback');
+    Route::post('/my-orders/{order}/add-to-samples', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'saleAddFromOrder'])
+        ->name('pages.my_order_drafts.add_from_order')
+        ->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
     Route::get('/my-orders/{order}/edit', [PageController::class, 'myOrderEdit'])->name('site.orders.edit');
     Route::put('/my-orders/{order}', [PageController::class, 'myOrderUpdate'])->name('site.orders.update');
     Route::get('/my-orders/{order}/adjustments/create', [\App\Http\Controllers\OrderAdjustmentController::class, 'create'])->name('site.order-adjustments.create');

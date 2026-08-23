@@ -38,4 +38,17 @@ class MyOrdersMonitoringAdjustmentActionTest extends TestCase
         $this->assertStringContainsString('name="delivery_time"', $inlineForm);
         $this->assertStringContainsString('evidence_images[]', $inlineForm);
     }
+
+    public function test_today_cards_can_add_an_order_to_customer_samples_with_ajax(): void
+    {
+        $view = file_get_contents(
+            dirname(__DIR__, 2).'/resources/views/site/orders/monitoring.blade.php'
+        );
+        $routes = file_get_contents(dirname(__DIR__, 2).'/routes/web.php');
+
+        $this->assertStringContainsString('monitor-add-to-sample', $view);
+        $this->assertStringContainsString('Cho vào đơn mẫu', $view);
+        $this->assertStringContainsString('Đã có đơn mẫu của khách hàng này rồi.', $view);
+        $this->assertStringContainsString('pages.my_order_drafts.add_from_order', $routes);
+    }
 }

@@ -8,6 +8,7 @@ use App\Enums\PaymentStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\OrderController;
 use App\Models\Customer;
+use App\Models\Order;
 use App\Models\ProductVariant;
 use App\Models\TextOrderDraft;
 use App\Models\TruckBrand;
@@ -61,6 +62,104 @@ class TextOrderImportController extends Controller
             'tab' => 'drafts',
             'edit' => $draft->id,
         ])->with('success', 'Đã tạo đơn hàng mẫu mới.');
+    }
+
+    public function saleAddFromOrder(Request $request, Order $order): JsonResponse
+    {
+        $saleId = (int) $request->user()->id;
+        abort_unless((int) $order->user_id === $saleId, 403, 'Bạn chỉ có thể tạo đơn mẫu từ đơn hàng của mình.');
+        abort_if(! $order->customer_id, 422, 'Đơn hàng chưa có khách hàng nên không thể tạo đơn mẫu.');
+
+        $order->loadMissing([
+            'customer:id,name,phone,address',
+            'items.product:id,name',
+            'items.variant:id,product_id,name,sku,size,kg',
+            'truckStation.brand:id,name',
+        ]);
+
+        $result = DB::transaction(function () use ($order, $saleId): array {
+            $existing = TextOrderDraft::query()
+                ->where('draft_scope', TextOrderDraft::SCOPE_SALE_PRIVATE)
+                ->where('sale_id', $saleId)
+                ->where('customer_id', $order->customer_id)
+                ->lockForUpdate()
+                ->first();
+
+            if ($existing) {
+                return ['draft' => $existing, 'created' => false];
+            }
+
+            $items = $order->items
+                ->filter(fn ($item) => $item->product_variant_id && (int) $item->quantity > 0)
+                ->map(fn ($item): array => [
+                    'product_variant_id' => (int) $item->product_variant_id,
+                    'quantity' => (int) $item->quantity,
+                    'size_kg' => (float) ($item->effective_unit_weight ?? $item->variant?->effective_kg ?? 0),
+                    'unit_price' => (float) ($item->price ?? 0),
+                    'product_text' => $item->product?->name ?? $item->variant?->product?->name ?? $item->variant?->name,
+                ])
+                ->values();
+
+            if ($items->isEmpty()) {
+                throw ValidationException::withMessages([
+                    'items' => 'Đơn hàng chưa có sản phẩm hợp lệ để tạo đơn mẫu.',
+                ]);
+            }
+
+            $firstItem = $items->first();
+            $customer = $order->customer;
+            $draft = TextOrderDraft::query()->create([
+                'created_by' => $saleId,
+                'draft_scope' => TextOrderDraft::SCOPE_SALE_PRIVATE,
+                'sale_id' => $saleId,
+                'customer_id' => $order->customer_id,
+                'product_variant_id' => $firstItem['product_variant_id'],
+                'zalo_name' => null,
+                'customer_name' => $order->recipient_name ?: $customer?->name,
+                'phone' => $order->recipient_phone ?: $customer?->phone,
+                'address' => $order->recipient_address ?: $customer?->address,
+                'use_truck_station' => (bool) $order->use_truck_station,
+                'truck_brand_id' => $order->truckStation?->brand_id,
+                'truck_station_id' => $order->truck_station_id,
+                'truck_brand_name' => $order->truckStation?->brand?->name,
+                'truck_station_name' => $order->truck_station_name ?: $order->truckStation?->name,
+                'truck_station_address' => $order->truck_station_address ?: $order->truckStation?->address,
+                'truck_station_phone' => $order->truck_station_phone ?: $order->truckStation?->phone,
+                'truck_receive_time' => $order->truck_receive_time,
+                'product_text' => $firstItem['product_text'],
+                'parsed_items' => $items->all(),
+                'quantity' => $firstItem['quantity'],
+                'size_kg' => $firstItem['size_kg'],
+                'unit_price' => $firstItem['unit_price'],
+                'delivery_date' => $this->today(),
+                'delivery_time' => $order->delivery_time,
+                'note' => $order->note,
+                'raw_text' => 'Tạo từ đơn '.$order->code,
+                'status' => 'draft',
+            ]);
+
+            return ['draft' => $draft, 'created' => true];
+        });
+
+        $draftUrl = route('pages.my_orders.monitoring', [
+            'tab' => 'drafts',
+            'edit' => $result['draft']->id,
+        ]);
+
+        if (! $result['created']) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Đã có đơn mẫu của khách hàng này rồi.',
+                'draft_url' => $draftUrl,
+            ], 409);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã cho đơn hàng vào đơn mẫu.',
+            'draft_id' => $result['draft']->id,
+            'draft_url' => $draftUrl,
+        ], 201);
     }
 
     private function draftIndex(?int $saleId = null, ?Request $request = null)

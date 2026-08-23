@@ -1819,6 +1819,9 @@
                                     @endif
                                     @if($canManageOrder)
                                         <a class="btn btn-sm btn-outline-secondary" href="{{ route('site.orders.copy', $order->id) }}"><i class="bi bi-files"></i><span>Sao chép đơn</span></a>
+                                        @if($order->customer_id)
+                                            <button class="btn btn-sm btn-outline-primary monitor-add-to-sample" type="button" data-sample-url="{{ route('pages.my_order_drafts.add_from_order', $order) }}"><i class="bi bi-bookmark-plus"></i><span>Cho vào đơn mẫu</span></button>
+                                        @endif
                                         @if($canRequestAdjustment)
                                             <button class="btn btn-sm btn-warning monitor-adjustment-open" type="button" data-adjustment-url="{{ route('site.order-adjustments.create', $order) }}" data-adjustment-target="monitorAdjustment{{ $order->id }}"><i class="bi bi-arrow-left-right"></i><span>Gửi yêu cầu điều chỉnh</span></button>
                                         @endif
@@ -2796,6 +2799,41 @@ document.addEventListener('submit', async function (event) {
     }
 
     document.addEventListener('click', async event => {
+        const sampleButton = event.target.closest('.monitor-add-to-sample');
+        if (sampleButton) {
+            const original = sampleButton.innerHTML;
+            sampleButton.disabled = true;
+            sampleButton.innerHTML = '<span class="spinner-border spinner-border-sm"></span><span>Đang thêm...</span>';
+            try {
+                const response = await fetch(sampleButton.dataset.sampleUrl, {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
+                    }
+                });
+                const data = await response.json();
+                if (! response.ok || ! data.success) {
+                    if (response.status === 409) {
+                        sampleButton.innerHTML = '<i class="bi bi-bookmark-check"></i><span>Đã có đơn mẫu</span>';
+                        sampleButton.title = data.message || '';
+                        notify(data.message || 'Đã có đơn mẫu của khách hàng này rồi.', 'warning');
+                        return;
+                    }
+                    throw new Error(data.errors ? Object.values(data.errors).flat().join(' ') : (data.message || 'Không thể tạo đơn mẫu.'));
+                }
+                sampleButton.innerHTML = '<i class="bi bi-bookmark-check"></i><span>Đã vào đơn mẫu</span>';
+                sampleButton.title = data.message || '';
+                notify(data.message || 'Đã cho đơn hàng vào đơn mẫu.', 'success');
+            } catch (error) {
+                sampleButton.disabled = false;
+                sampleButton.innerHTML = original;
+                notify(error.message || 'Không thể kết nối máy chủ.');
+            }
+            return;
+        }
+
         const opener = event.target.closest('.monitor-adjustment-open');
         if (opener) {
             const host = document.getElementById(opener.dataset.adjustmentTarget);
