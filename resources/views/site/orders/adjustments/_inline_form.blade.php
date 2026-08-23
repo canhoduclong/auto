@@ -31,7 +31,7 @@
                         $variant = $item->variant;
                         $product = $item->product ?? $variant?->product;
                         $weight = (float) ($item->actual_weight ?? $item->total_weight ?? $item->display_total_value ?? 0);
-                        $lineTotal = (float) ($item->total ?: ((float) $item->quantity * (float) $item->price);
+                        $lineTotal = (float) ($item->total ?: ((float) $item->quantity * (float) $item->price));
                     @endphp
                     <tr data-adjustment-item data-variant-id="{{ $variant?->id }}" data-original-qty="{{ (int) $item->quantity }}" data-priced-by-kg="{{ $item->effective_priced_by_kg ? 1 : 0 }}">
                         <td><strong>{{ $product?->name ?? $variant?->name ?? 'Sản phẩm' }}</strong><small>{{ $variant?->sku }}</small>
