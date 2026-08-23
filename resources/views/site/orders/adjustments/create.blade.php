@@ -233,7 +233,12 @@
                                 <div class="fw-bold"><i class="bi bi-receipt me-1"></i>Phí và chiết khấu áp dụng cho đơn</div>
                                 <div class="text-muted small">Chọn phí từ danh mục do admin cấu hình để gắn vào đơn.</div>
                             </div>
-                            <span class="badge text-bg-light border">Giá trị sau điều chỉnh</span>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge text-bg-light border">Giá trị sau điều chỉnh</span>
+                                @if(auth()->user()?->isAdmin())
+                                    <a href="{{ route('admin.order-fee-types.index') }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-gear me-1"></i>Quản trị danh mục phí</a>
+                                @endif
+                            </div>
                         </div>
                         <div class="adjustment-fee-picker">
                             <select id="order-fee-picker" class="form-select form-select-sm" @disabled($feeTypes->where('is_active', true)->isEmpty())>

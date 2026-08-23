@@ -68,6 +68,7 @@ class CompletedSalesJournalService
                 'user:id,name',
                 'items.product',
                 'items.variant.product',
+                'additionalFees:id,order_id,order_fee_type_id,fee_code,fee_name,calculation_type,direction,rate,base_amount,amount',
                 'returnRecords:id,order_id,return_scope,status',
                 'adjustments' => fn ($adjustments) => $adjustments
                     ->where('status', OrderAdjustment::STATUS_APPROVED)
@@ -141,6 +142,8 @@ class CompletedSalesJournalService
                 'total_quantity' => $totalQuantity,
                 'unit_price' => $unitPrice,
                 'total_amount' => $totalAmount,
+                'entry_type' => 'product',
+                'direction' => null,
             ]));
         }
 
@@ -150,7 +153,7 @@ class CompletedSalesJournalService
             $vatAmount = (float) ($order->vat_amount ?? 0);
             $rows->push((object) array_merge($base, [
                 'row_key' => 'vat',
-                'unit' => 'vat',
+                'unit' => 'Phí VAT',
                 'quantity' => $productTotalQuantity,
                 'unit_weight' => 1.0,
                 'total_quantity' => $productTotalQuantity,
@@ -158,6 +161,38 @@ class CompletedSalesJournalService
                     ? $vatAmount / $productTotalQuantity
                     : null,
                 'total_amount' => $vatAmount,
+                'entry_type' => 'fee',
+                'direction' => 'charge',
+            ]));
+        }
+
+        if ((bool) $order->charge_shipping_fee && (float) ($order->shipping_fee ?? 0) > 0) {
+            $shippingFee = (float) $order->shipping_fee;
+            $rows->push((object) array_merge($base, [
+                'row_key' => 'shipping',
+                'unit' => 'Phí Ship',
+                'quantity' => 1.0,
+                'unit_weight' => 0.0,
+                'total_quantity' => 0.0,
+                'unit_price' => $shippingFee,
+                'total_amount' => $shippingFee,
+                'entry_type' => 'fee',
+                'direction' => 'charge',
+            ]));
+        }
+
+        if ((float) ($order->extra_discount_total ?? 0) > 0) {
+            $discountAmount = -1 * (float) $order->extra_discount_total;
+            $rows->push((object) array_merge($base, [
+                'row_key' => 'discount',
+                'unit' => 'Chiết khấu đơn',
+                'quantity' => 1.0,
+                'unit_weight' => 0.0,
+                'total_quantity' => 0.0,
+                'unit_price' => $discountAmount,
+                'total_amount' => $discountAmount,
+                'entry_type' => 'fee',
+                'direction' => 'discount',
             ]));
         }
 
@@ -165,12 +200,30 @@ class CompletedSalesJournalService
             $foamBoxPrice = (float) ($order->foam_box_price ?? 0);
             $rows->push((object) array_merge($base, [
                 'row_key' => 'foam-box',
-                'unit' => 'thùng xốp',
+                'unit' => 'Phí thùng xốp',
                 'quantity' => 1.0,
                 'unit_weight' => 1.0,
                 'total_quantity' => 1.0,
                 'unit_price' => $foamBoxPrice,
                 'total_amount' => $foamBoxPrice,
+                'entry_type' => 'fee',
+                'direction' => 'charge',
+            ]));
+        }
+
+        foreach ($order->additionalFees->whereNotIn('fee_code', ['vat', 'shipping', 'discount', 'foam_box']) as $fee) {
+            $isDiscount = (string) $fee->direction === 'discount';
+            $amount = ($isDiscount ? -1 : 1) * abs((float) $fee->amount);
+            $rows->push((object) array_merge($base, [
+                'row_key' => 'fee:'.$fee->id,
+                'unit' => (string) ($fee->fee_name ?: $fee->fee_code),
+                'quantity' => 1.0,
+                'unit_weight' => 0.0,
+                'total_quantity' => 0.0,
+                'unit_price' => $amount,
+                'total_amount' => $amount,
+                'entry_type' => 'fee',
+                'direction' => $isDiscount ? 'discount' : 'charge',
             ]));
         }
 

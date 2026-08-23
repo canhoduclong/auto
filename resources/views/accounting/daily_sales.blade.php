@@ -250,7 +250,14 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                             <td class="fw-semibold">{{ $row->customer_code !== '' ? $row->customer_code : '—' }}</td>
                             <td>{{ $row->customer_name }}</td>
                             <td>{{ $row->sale_name !== '' ? $row->sale_name : '—' }}</td>
-                            <td class="fw-semibold">{{ $row->unit }}</td>
+                            <td class="fw-semibold">
+                                {{ $row->unit }}
+                                @if(($row->entry_type ?? 'product') === 'fee')
+                                    <span class="badge {{ ($row->direction ?? 'charge') === 'discount' ? 'text-bg-danger' : 'text-bg-success' }} ms-1">
+                                        {{ ($row->direction ?? 'charge') === 'discount' ? 'Giảm trừ' : 'Cộng thêm' }}
+                                    </span>
+                                @endif
+                            </td>
                             <td class="text-end">{{ $fmtN((float) $row->quantity, 1) }}</td>
                             <td class="text-end">{{ $fmtN((float) $row->unit_weight, 2) }}</td>
                             <td class="text-end">{{ $fmtN((float) $row->total_quantity, 1) }}</td>

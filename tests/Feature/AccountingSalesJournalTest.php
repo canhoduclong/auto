@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\Customer;
 use App\Models\Inventory;
 use App\Models\Order;
+use App\Models\OrderFee;
+use App\Models\OrderFeeType;
 use App\Models\OrderReturn;
 use App\Models\Product;
 use App\Models\ProductVariant;
@@ -56,6 +58,9 @@ class AccountingSalesJournalTest extends TestCase
             'vat_amount' => 330480,
             'charge_foam_box_fee' => true,
             'foam_box_price' => 80000,
+            'charge_shipping_fee' => true,
+            'shipping_fee' => 50000,
+            'extra_discount_total' => 20000,
         ]);
         $order->forceFill(['created_at' => '2026-08-10 08:00:00'])->saveQuietly();
         $order->items()->create([
@@ -68,6 +73,26 @@ class AccountingSalesJournalTest extends TestCase
             'actual_weight' => 91.8,
             'price' => 72000,
             'total' => 6609600,
+        ]);
+        $packingFeeType = OrderFeeType::query()->create([
+            'name' => 'Phí đóng gói đặc biệt',
+            'code' => 'special_packing',
+            'calculation_type' => 'fixed',
+            'direction' => 'charge',
+            'default_value' => 40000,
+            'is_active' => true,
+            'is_system' => false,
+        ]);
+        OrderFee::query()->create([
+            'order_id' => $order->id,
+            'order_fee_type_id' => $packingFeeType->id,
+            'fee_code' => $packingFeeType->code,
+            'fee_name' => $packingFeeType->name,
+            'calculation_type' => 'fixed',
+            'direction' => 'charge',
+            'rate' => 40000,
+            'base_amount' => 6609600,
+            'amount' => 40000,
         ]);
 
         $pendingCustomer = Customer::query()->create([
@@ -126,10 +151,15 @@ class AccountingSalesJournalTest extends TestCase
             ->assertSee('91,8')
             ->assertSee('72.000')
             ->assertSee('6.609.600')
-            ->assertSee('vat')
+            ->assertSee('Phí VAT')
             ->assertSee('330.480')
-            ->assertSee('thùng xốp')
+            ->assertSee('Phí Ship')
+            ->assertSee('Chiết khấu đơn')
+            ->assertSee('Phí thùng xốp')
             ->assertSee('80.000')
+            ->assertSee('Phí đóng gói đặc biệt')
+            ->assertSee('Cộng thêm')
+            ->assertSee('Giảm trừ')
             ->assertSee('Đồng bộ Google Sheets');
 
         $journal = app(CompletedSalesJournalService::class)->paginate(
@@ -143,8 +173,9 @@ class AccountingSalesJournalTest extends TestCase
             route('accounting.daily-sales'),
         );
 
-        $this->assertSame(3, $journal['summary']['rows']);
+        $this->assertSame(6, $journal['summary']['rows']);
         $this->assertSame(1, $journal['summary']['orders']);
+        $this->assertSame(7090080.0, $journal['summary']['amount']);
         $this->assertNotContains(
             'Khách đơn ngoại lệ chưa giao',
             $journal['rows']->getCollection()->pluck('customer_name')->all()
@@ -158,11 +189,11 @@ class AccountingSalesJournalTest extends TestCase
             ->shouldReceive('syncJournalDates')
             ->once()
             ->with(
-                \Mockery::on(fn ($rows) => $rows->count() === 3),
+                \Mockery::on(fn ($rows) => $rows->count() === 6),
                 ['2026-08-10']
             )
             ->andReturn([
-                'rows' => 3,
+                'rows' => 6,
                 'dates' => 1,
                 'spreadsheet_url' => 'https://docs.google.com/spreadsheets/d/test/edit',
                 'sheet_name' => 'Nhật ký bán hàng',
@@ -175,7 +206,7 @@ class AccountingSalesJournalTest extends TestCase
             'customer_id' => 0,
             'sort' => 'date_asc',
         ])->assertRedirect()
-            ->assertSessionHas('success', 'Đã đồng bộ 3 dòng của 1 ngày vào trang tính “Nhật ký bán hàng”.')
+            ->assertSessionHas('success', 'Đã đồng bộ 6 dòng của 1 ngày vào trang tính “Nhật ký bán hàng”.')
             ->assertSessionHas('google_sheets_url', 'https://docs.google.com/spreadsheets/d/test/edit');
     }
 
