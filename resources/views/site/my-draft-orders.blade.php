@@ -12,6 +12,11 @@
     .draft-template-sort { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 18px 4px 12px; }
     .draft-template-sort-actions { display: flex; flex-wrap: wrap; gap: 6px; }
     .draft-template-sort .btn { border-radius: 4px; font-size: .7rem; }
+    .draft-customer-filter { display: flex; align-items: center; gap: 8px; padding: 12px 4px 0; }
+    .draft-customer-filter .input-group { width: min(100%, 520px); }
+    .draft-customer-filter .form-control, .draft-customer-filter .btn { height: 38px; }
+    .draft-customer-filter .btn { white-space: nowrap; }
+    .draft-customer-filter-result { color: #64748b; font-size: .72rem; }
     .draft-template-list { display: grid; gap: 16px; }
     .draft-template-row { display: grid; grid-template-columns: minmax(0, 1fr) 132px; gap: 14px; align-items: start; }
     .draft-template-card { min-width: 0; padding: 14px 16px; border: 1px solid #dce6f1; border-radius: 7px; background: #fff; box-shadow: 0 5px 16px rgba(15, 23, 42, .06); }
@@ -101,6 +106,8 @@
         .draft-template-row { grid-template-columns: 1fr; }
         .draft-template-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .draft-template-sort { align-items: flex-start; flex-direction: column; }
+        .draft-customer-filter { align-items: stretch; flex-direction: column; }
+        .draft-customer-filter .input-group { width: 100%; }
         .draft-template-products { min-width: 650px; }
         .draft-template-editor-grid { grid-template-columns: 1fr; }
         .draft-template-editor-grid .is-wide { grid-column: auto; }
@@ -150,6 +157,28 @@
 
         @if(session('success'))<div class="alert alert-success mt-3">{{ session('success') }}</div>@endif
         @if($errors->any())<div class="alert alert-danger mt-3">{{ $errors->first() }}</div>@endif
+
+        <form class="draft-customer-filter" method="GET" action="{{ ($monitoringEmbedded ?? false) ? route('pages.my_orders.monitoring') : route('pages.my_order_drafts') }}">
+            @if($monitoringEmbedded ?? false)<input type="hidden" name="tab" value="drafts">@endif
+            <input type="hidden" name="sort_by" value="{{ $currentSortBy }}">
+            <input type="hidden" name="sort_dir" value="{{ $currentSortDir }}">
+            <div class="input-group">
+                <input type="search"
+                       class="form-control"
+                       name="customer_search"
+                       value="{{ $customerSearch ?? '' }}"
+                       autocomplete="off"
+                       placeholder="Tìm khách hàng theo tên hoặc số điện thoại..."
+                       aria-label="Tìm khách hàng trong đơn mẫu">
+                <button type="submit" class="btn btn-primary"><i class="bi bi-search me-1"></i>Tìm kiếm</button>
+                @if(filled($customerSearch ?? ''))
+                    <a class="btn btn-outline-secondary" href="{{ ($monitoringEmbedded ?? false) ? route('pages.my_orders.monitoring', ['tab' => 'drafts', 'sort_by' => $currentSortBy, 'sort_dir' => $currentSortDir]) : route('pages.my_order_drafts', ['sort_by' => $currentSortBy, 'sort_dir' => $currentSortDir]) }}" title="Xóa từ khóa tìm kiếm"><i class="bi bi-x-lg"></i></a>
+                @endif
+            </div>
+            @if(filled($customerSearch ?? ''))
+                <span class="draft-customer-filter-result">Tìm thấy <strong>{{ $drafts->count() }}</strong> đơn mẫu phù hợp.</span>
+            @endif
+        </form>
 
         <div class="draft-template-sort">
             <div class="d-flex align-items-center gap-2 small text-muted"><span class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></span><span>Sắp xếp nhanh:</span></div>

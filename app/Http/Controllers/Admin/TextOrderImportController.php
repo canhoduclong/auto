@@ -170,10 +170,33 @@ class TextOrderImportController extends Controller
             : 'created_at';
         $sortDir = strtolower((string) ($request?->input('sort_dir', 'desc')));
         $sortDir = in_array($sortDir, ['asc', 'desc'], true) ? $sortDir : 'desc';
+        $customerSearch = trim((string) $request?->input('customer_search', ''));
+        $customerSearchPhone = preg_match('/^\+?[0-9][0-9 .-]{7,19}$/', $customerSearch)
+            ? preg_replace('/\D+/', '', $customerSearch)
+            : '';
         $drafts = TextOrderDraft::query()
             ->with(['sale:id,name,zalo_name', 'customer:id,name,phone', 'truckBrand:id,name', 'truckStation:id,name,address,phone,brand_id', 'truckStation.brand:id,name', 'variant.product.avatar.media', 'order:id,code'])
             ->where('draft_scope', $saleId ? TextOrderDraft::SCOPE_SALE_PRIVATE : TextOrderDraft::SCOPE_ADMIN_IMPORT)
             ->when($saleId, fn ($query) => $query->where('sale_id', $saleId))
+            ->when($customerSearch !== '', function ($query) use ($customerSearch, $customerSearchPhone) {
+                $query->where(function ($searchQuery) use ($customerSearch, $customerSearchPhone) {
+                    $searchQuery->where('customer_name', 'like', "%{$customerSearch}%")
+                        ->orWhere('phone', 'like', "%{$customerSearch}%")
+                        ->orWhereHas('customer', function ($customerQuery) use ($customerSearch, $customerSearchPhone) {
+                            $customerQuery->where(function ($customerFields) use ($customerSearch, $customerSearchPhone) {
+                                $customerFields->where('name', 'like', "%{$customerSearch}%")
+                                    ->orWhere('phone', 'like', "%{$customerSearch}%");
+                                if ($customerSearchPhone !== '') {
+                                    $customerFields->orWhereRaw("REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '.', ''), '-', ''), '+', '') LIKE ?", ['%'.$customerSearchPhone.'%']);
+                                }
+                            });
+                        });
+
+                    if ($customerSearchPhone !== '') {
+                        $searchQuery->orWhereRaw("REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '.', ''), '-', ''), '+', '') LIKE ?", ['%'.$customerSearchPhone.'%']);
+                    }
+                });
+            })
             ->orderBy($sortBy, $sortDir)
             ->limit(100)
             ->get();
@@ -195,7 +218,7 @@ class TextOrderImportController extends Controller
         $viewName = $saleMode ? 'site.my-draft-orders' : 'admin.text-order-import.index';
 
         return view($viewName, compact(
-            'drafts', 'sales', 'variants', 'truckStations', 'saleMode', 'pageTitle', 'actionBaseUrl', 'parseRoute', 'settings', 'sortBy', 'sortDir'
+            'drafts', 'sales', 'variants', 'truckStations', 'saleMode', 'pageTitle', 'actionBaseUrl', 'parseRoute', 'settings', 'sortBy', 'sortDir', 'customerSearch'
         ));
     }
 

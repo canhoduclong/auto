@@ -15,7 +15,7 @@ class MyOrdersMonitoringAdjustmentActionTest extends TestCase
         $this->assertStringContainsString('Order::STATUS_COMPLETED', $view);
         $this->assertStringContainsString('$order->canRequestAdjustment()', $view);
         $this->assertStringContainsString("route('site.order-adjustments.create', \$order)", $view);
-        $this->assertStringContainsString('Gửi yêu cầu điều chỉnh', $view);
+        $this->assertStringContainsString('Gửi điều chỉnh', $view);
     }
 
     public function test_today_cards_load_and_submit_adjustments_with_ajax(): void
@@ -78,5 +78,15 @@ class MyOrdersMonitoringAdjustmentActionTest extends TestCase
             $this->assertStringContainsString("'{$state}' =>", $view);
             $this->assertStringContainsString(".monitor-sequence.status-{$state}", $view);
         }
+    }
+
+    public function test_today_sidebar_filters_and_notes_have_no_height_limit(): void
+    {
+        $view = file_get_contents(
+            dirname(__DIR__, 2).'/resources/views/site/orders/monitoring.blade.php'
+        );
+
+        $this->assertStringNotContainsString('.monitor-filter-list { max-height:', $view);
+        $this->assertStringNotContainsString('.monitor-day-notes { max-height:', $view);
     }
 }

@@ -175,7 +175,7 @@
                     <a href="{{ route('site.orders.show', $order) }}" class="btn btn-sm btn-outline-info"><i class="bi bi-eye"></i>Chi tiết</a>
                     @if($canRequestAdjustment)
                         <a href="{{ route('site.order-adjustments.create', $order) }}" class="btn btn-sm btn-warning text-dark">
-                            <i class="bi bi-arrow-left-right"></i>Gửi yêu cầu điều chỉnh
+                            <i class="bi bi-arrow-left-right"></i>Gửi điều chỉnh
                         </a>
                     @endif
                     @if(!$isTrashView)<a href="{{ route('site.orders.copy', $order->id) }}" class="btn btn-sm btn-outline-secondary" onclick="return confirm('Sao chép đơn {{ $order->code }}?')"><i class="bi bi-files"></i>Sao chép đơn</a>@endif

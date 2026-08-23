@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Role;
+use App\Models\Customer;
 use App\Models\TextOrderDraft;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -79,5 +80,47 @@ class SaleTextOrderDraftCreateTest extends TestCase
             ->assertSee('draftTruckStationModal', false)
             ->assertSee('Trạm Miền Đông')
             ->assertSee('Đóng thùng kỹ và gọi khách trước khi gửi.');
+    }
+
+    public function test_sale_can_search_drafts_by_customer_name_or_phone(): void
+    {
+        $saleRole = Role::query()->create(['name' => 'sale']);
+        $sale = User::factory()->create();
+        $sale->roles()->attach($saleRole);
+        $matchedCustomer = Customer::query()->create([
+            'user_id' => $sale->id,
+            'name' => 'Khách cần tìm',
+            'phone' => '0901 234 567',
+        ]);
+        $otherCustomer = Customer::query()->create([
+            'user_id' => $sale->id,
+            'name' => 'Khách không khớp',
+            'phone' => '0987654321',
+        ]);
+
+        foreach ([[$matchedCustomer, 'Mẫu cần tìm'], [$otherCustomer, 'Mẫu không khớp']] as [$customer, $rawText]) {
+            TextOrderDraft::query()->create([
+                'created_by' => $sale->id,
+                'draft_scope' => TextOrderDraft::SCOPE_SALE_PRIVATE,
+                'sale_id' => $sale->id,
+                'customer_id' => $customer->id,
+                'raw_text' => $rawText,
+                'status' => 'draft',
+            ]);
+        }
+
+        $response = $this->actingAs($sale)
+            ->withSession(['active_role' => 'sale'])
+            ->get(route('pages.my_orders.monitoring', [
+                'tab' => 'drafts',
+                'customer_search' => '0901234567',
+            ]));
+
+        $response->assertOk()
+            ->assertSee('name="customer_search"', false)
+            ->assertSee('value="0901234567"', false)
+            ->assertSee('Khách cần tìm')
+            ->assertDontSee('Khách không khớp')
+            ->assertSee('Tìm thấy <strong>1</strong> đơn mẫu phù hợp.', false);
     }
 }

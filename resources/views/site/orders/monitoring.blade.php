@@ -173,7 +173,6 @@
         letter-spacing: .06em;
         text-transform: uppercase;
     }
-    .monitor-filter-list { max-height: 280px; overflow-y: auto; }
     .monitor-filter-link {
         display: flex;
         align-items: center;
@@ -492,7 +491,6 @@
         font-size: .7rem;
         font-weight: 800;
     }
-    .monitor-day-notes { max-height: 260px; overflow-y: auto; }
     .monitor-day-note {
         display: grid;
         grid-template-columns: minmax(190px, .7fr) minmax(0, 1.3fr);
