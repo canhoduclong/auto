@@ -196,6 +196,7 @@ class Order extends Model
 
     public function transactions() { return $this->hasMany(Transaction::class); }
     public function histories() { return $this->hasMany(OrderHistory::class); }
+    public function additionalFees() { return $this->hasMany(OrderFee::class); }
 
     const STATUS_PENDING_LEADER_APPROVAL = 'pending_leader_approval';
     const STATUS_PENDING_MANAGER_APPROVAL = 'pending_manager_approval';

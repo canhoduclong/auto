@@ -235,57 +235,36 @@
                             <span class="badge text-bg-light border">Giá trị sau điều chỉnh</span>
                         </div>
                         <div class="adjustment-fee-grid">
-                            <div class="adjustment-fee-card" data-fee-card>
-                                <div class="form-check form-switch">
-                                    <input type="hidden" name="fees[vat][enabled]" value="0">
-                                    <input class="form-check-input adjustment-fee-toggle" type="checkbox" role="switch" id="adjustmentFeeVat" name="fees[vat][enabled]" value="1" @checked((bool) old('fees.vat.enabled', $order->charge_vat))>
-                                    <label class="form-check-label fw-semibold" for="adjustmentFeeVat">Phí VAT</label>
+                            @forelse($feeTypes as $feeType)
+                                @php
+                                    $feeState = $feeStates[$feeType->id] ?? ['enabled' => false, 'value' => (float) $feeType->default_value];
+                                    $feeEnabled = (bool) old('fees.'.$feeType->id.'.enabled', $feeState['enabled']);
+                                    $feeValue = old('fees.'.$feeType->id.'.value', $feeState['value'] ?: $feeType->default_value);
+                                    $isPercent = $feeType->calculation_type === 'percent';
+                                    $currentFeeText = $feeState['enabled']
+                                        ? ($isPercent ? rtrim(rtrim(number_format((float) $feeState['value'], 2, '.', ''), '0'), '.').'%' : number_format((float) $feeState['value'], 0, ',', '.').'đ')
+                                        : 'Không áp dụng';
+                                @endphp
+                                <div class="adjustment-fee-card" data-fee-card>
+                                    <div class="d-flex justify-content-between gap-2">
+                                        <div class="form-check form-switch">
+                                            <input type="hidden" name="fees[{{ $feeType->id }}][type_id]" value="{{ $feeType->id }}">
+                                            <input type="hidden" name="fees[{{ $feeType->id }}][enabled]" value="0">
+                                            <input class="form-check-input adjustment-fee-toggle" type="checkbox" role="switch" id="adjustmentFee{{ $feeType->id }}" name="fees[{{ $feeType->id }}][enabled]" value="1" @checked($feeEnabled)>
+                                            <label class="form-check-label fw-semibold" for="adjustmentFee{{ $feeType->id }}">{{ $feeType->name }}</label>
+                                        </div>
+                                        <span class="badge {{ $feeType->direction === 'discount' ? 'text-bg-danger' : 'text-bg-success' }}">{{ $feeType->direction === 'discount' ? 'Giảm trừ' : 'Cộng thêm' }}</span>
+                                    </div>
+                                    <div class="input-group input-group-sm">
+                                        <input type="number" min="0" @if($isPercent) max="100" @endif step="0.01" class="form-control adjustment-fee-value" name="fees[{{ $feeType->id }}][value]" value="{{ $feeValue }}" aria-label="Giá trị {{ $feeType->name }}">
+                                        <span class="input-group-text">{{ $isPercent ? '%' : 'đ' }}</span>
+                                    </div>
+                                    <div class="adjustment-fee-current">Hiện tại: {{ $currentFeeText }}@if(!$feeType->is_active) · <span class="text-danger">đã ngừng dùng</span>@endif</div>
+                                    @if($feeType->description)<div class="adjustment-fee-current">{{ $feeType->description }}</div>@endif
                                 </div>
-                                <div class="input-group input-group-sm">
-                                    <input type="number" min="0" max="100" step="0.01" class="form-control adjustment-fee-value" name="fees[vat][value]" value="{{ old('fees.vat.value', (float) ($order->vat_percent ?: 10)) }}" aria-label="Phần trăm VAT">
-                                    <span class="input-group-text">%</span>
-                                </div>
-                                <div class="adjustment-fee-current">Hiện tại: {{ $order->charge_vat ? rtrim(rtrim(number_format((float) $order->vat_percent, 2, '.', ''), '0'), '.') . '%' : 'Không áp dụng' }}</div>
-                            </div>
-
-                            <div class="adjustment-fee-card" data-fee-card>
-                                <div class="form-check form-switch">
-                                    <input type="hidden" name="fees[shipping][enabled]" value="0">
-                                    <input class="form-check-input adjustment-fee-toggle" type="checkbox" role="switch" id="adjustmentFeeShipping" name="fees[shipping][enabled]" value="1" @checked((bool) old('fees.shipping.enabled', $order->charge_shipping_fee))>
-                                    <label class="form-check-label fw-semibold" for="adjustmentFeeShipping">Phí Ship</label>
-                                </div>
-                                <div class="input-group input-group-sm">
-                                    <input type="number" min="0" step="0.01" class="form-control adjustment-fee-value" name="fees[shipping][value]" value="{{ old('fees.shipping.value', (float) ($order->shipping_fee ?? 0)) }}" aria-label="Phí ship">
-                                    <span class="input-group-text">đ</span>
-                                </div>
-                                <div class="adjustment-fee-current">Hiện tại: {{ $order->charge_shipping_fee ? number_format((float) $order->shipping_fee, 0, ',', '.') . 'đ' : 'Không áp dụng' }}</div>
-                            </div>
-
-                            <div class="adjustment-fee-card" data-fee-card>
-                                <div class="form-check form-switch">
-                                    <input type="hidden" name="fees[discount][enabled]" value="0">
-                                    <input class="form-check-input adjustment-fee-toggle" type="checkbox" role="switch" id="adjustmentFeeDiscount" name="fees[discount][enabled]" value="1" @checked((bool) old('fees.discount.enabled', (float) ($order->extra_discount_total ?? 0) > 0))>
-                                    <label class="form-check-label fw-semibold" for="adjustmentFeeDiscount">Chiết khấu đơn</label>
-                                </div>
-                                <div class="input-group input-group-sm">
-                                    <input type="number" min="0" step="0.01" class="form-control adjustment-fee-value" name="fees[discount][value]" value="{{ old('fees.discount.value', max(0, (float) ($order->extra_discount_total ?? 0))) }}" aria-label="Chiết khấu đơn">
-                                    <span class="input-group-text">đ</span>
-                                </div>
-                                <div class="adjustment-fee-current">Hiện tại: {{ (float) ($order->extra_discount_total ?? 0) > 0 ? number_format((float) $order->extra_discount_total, 0, ',', '.') . 'đ' : 'Không áp dụng' }}</div>
-                            </div>
-
-                            <div class="adjustment-fee-card" data-fee-card>
-                                <div class="form-check form-switch">
-                                    <input type="hidden" name="fees[foam_box][enabled]" value="0">
-                                    <input class="form-check-input adjustment-fee-toggle" type="checkbox" role="switch" id="adjustmentFeeFoamBox" name="fees[foam_box][enabled]" value="1" @checked((bool) old('fees.foam_box.enabled', $order->charge_foam_box_fee))>
-                                    <label class="form-check-label fw-semibold" for="adjustmentFeeFoamBox">Phí thùng xốp</label>
-                                </div>
-                                <div class="input-group input-group-sm">
-                                    <input type="number" min="0" step="0.01" class="form-control adjustment-fee-value" name="fees[foam_box][value]" value="{{ old('fees.foam_box.value', (float) ($order->foam_box_price ?? 0)) }}" aria-label="Phí thùng xốp">
-                                    <span class="input-group-text">đ</span>
-                                </div>
-                                <div class="adjustment-fee-current">Hiện tại: {{ $order->charge_foam_box_fee ? number_format((float) $order->foam_box_price, 0, ',', '.') . 'đ' : 'Không áp dụng' }}</div>
-                            </div>
+                            @empty
+                                <div class="text-muted small">Admin chưa cấu hình loại phí nào đang hoạt động.</div>
+                            @endforelse
                         </div>
                     </div>
 

@@ -684,6 +684,12 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::post('admin/notifications/{notificationId}/read', [AdminNotificationController::class, 'markAsRead'])->name('admin.notifications.read');
     Route::get('admin/events', [AdminEventController::class, 'index'])->name('admin.events.index');
     Route::get('admin/organization-units', [OrganizationUnitController::class, 'index'])->name('admin.organization-units.index')->middleware('role:admin');
+    Route::patch('admin/order-fee-types/{orderFeeType}/toggle', [\App\Http\Controllers\Admin\OrderFeeTypeController::class, 'toggle'])->name('admin.order-fee-types.toggle')->middleware('role:admin');
+    Route::resource('admin/order-fee-types', \App\Http\Controllers\Admin\OrderFeeTypeController::class)
+        ->parameters(['order-fee-types' => 'orderFeeType'])
+        ->except(['show', 'create', 'edit'])
+        ->names('admin.order-fee-types')
+        ->middleware('role:admin');
     Route::post('admin/organization-units/blocks', [OrganizationUnitController::class, 'storeBlock'])->name('admin.organization-units.blocks.store')->middleware('role:admin');
     Route::put('admin/organization-units/blocks/{block}', [OrganizationUnitController::class, 'updateBlock'])->name('admin.organization-units.blocks.update')->middleware('role:admin');
     Route::delete('admin/organization-units/blocks/{block}', [OrganizationUnitController::class, 'destroyBlock'])->name('admin.organization-units.blocks.destroy')->middleware('role:admin');

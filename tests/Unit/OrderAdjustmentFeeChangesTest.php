@@ -2,10 +2,11 @@
 
 namespace Tests\Unit;
 
-use App\Http\Controllers\OrderAdjustmentController;
 use App\Models\Order;
+use App\Models\OrderFee;
+use App\Models\OrderFeeType;
+use App\Services\OrderFeeService;
 use PHPUnit\Framework\TestCase;
-use ReflectionClass;
 
 class OrderAdjustmentFeeChangesTest extends TestCase
 {
@@ -21,16 +22,20 @@ class OrderAdjustmentFeeChangesTest extends TestCase
             'foam_box_price' => 0,
         ]);
 
-        $reflection = new ReflectionClass(OrderAdjustmentController::class);
-        $controller = $reflection->newInstanceWithoutConstructor();
-        $method = $reflection->getMethod('prepareFeeChanges');
-        $method->setAccessible(true);
+        $types = collect([
+            new OrderFeeType(['name' => 'Phí VAT', 'code' => 'vat', 'calculation_type' => 'percent', 'direction' => 'charge', 'is_system' => true]),
+            new OrderFeeType(['name' => 'Phí Ship', 'code' => 'shipping', 'calculation_type' => 'fixed', 'direction' => 'charge', 'is_system' => true]),
+            new OrderFeeType(['name' => 'Chiết khấu', 'code' => 'discount', 'calculation_type' => 'fixed', 'direction' => 'discount', 'is_system' => true]),
+            new OrderFeeType(['name' => 'Phí thùng xốp', 'code' => 'foam_box', 'calculation_type' => 'fixed', 'direction' => 'charge', 'is_system' => true]),
+        ]);
+        $types->each(fn (OrderFeeType $type, int $index) => $type->setAttribute('id', $index + 1));
+        $order->setRelation('additionalFees', collect());
 
-        $changes = $method->invoke($controller, $order, [
-            'vat' => ['enabled' => '1', 'value' => '10'],
-            'shipping' => ['enabled' => '0', 'value' => '30000'],
-            'discount' => ['enabled' => '1', 'value' => '25000'],
-            'foam_box' => ['enabled' => '1', 'value' => '15000'],
+        $changes = (new OrderFeeService())->prepareChanges($order, $types, [
+            1 => ['enabled' => '1', 'value' => '10'],
+            2 => ['enabled' => '0', 'value' => '30000'],
+            3 => ['enabled' => '1', 'value' => '25000'],
+            4 => ['enabled' => '1', 'value' => '15000'],
         ]);
 
         $this->assertFalse($changes['vat']['original']['enabled']);
@@ -47,9 +52,32 @@ class OrderAdjustmentFeeChangesTest extends TestCase
     {
         $view = file_get_contents(dirname(__DIR__, 2).'/resources/views/site/orders/adjustments/create.blade.php');
 
-        $this->assertStringContainsString('fees[vat][enabled]', $view);
-        $this->assertStringContainsString('fees[shipping][enabled]', $view);
-        $this->assertStringContainsString('fees[discount][enabled]', $view);
-        $this->assertStringContainsString('fees[foam_box][enabled]', $view);
+        $this->assertStringContainsString('@forelse($feeTypes as $feeType)', $view);
+        $this->assertStringContainsString('fees[{{ $feeType->id }}][type_id]', $view);
+        $this->assertStringContainsString('fees[{{ $feeType->id }}][enabled]', $view);
+        $this->assertStringContainsString("\$feeType->direction === 'discount'", $view);
+    }
+
+    public function test_custom_percentage_discount_keeps_snapshot_metadata(): void
+    {
+        $order = new Order();
+        $order->setRelation('additionalFees', collect([
+            new OrderFee(['order_fee_type_id' => 9, 'fee_code' => 'vip_discount', 'rate' => 5, 'amount' => 5000]),
+        ]));
+        $type = new OrderFeeType([
+            'name' => 'Ưu đãi VIP', 'code' => 'vip_discount', 'calculation_type' => 'percent',
+            'direction' => 'discount', 'default_value' => 0, 'is_system' => false,
+        ]);
+        $type->setAttribute('id', 9);
+
+        $changes = (new OrderFeeService())->prepareChanges($order, collect([$type]), [
+            9 => ['enabled' => '1', 'value' => '7.5'],
+        ]);
+
+        $this->assertSame('Ưu đãi VIP', $changes['vip_discount']['name']);
+        $this->assertSame('percent', $changes['vip_discount']['calculation_type']);
+        $this->assertSame('discount', $changes['vip_discount']['direction']);
+        $this->assertSame(5.0, $changes['vip_discount']['original']['value']);
+        $this->assertSame(7.5, $changes['vip_discount']['adjusted']['value']);
     }
 }

@@ -1,5 +1,5 @@
 @php
-    $feeDefinitions = [
+    $legacyFeeDefinitions = [
         'vat' => ['label' => 'Phí VAT', 'unit' => '%'],
         'shipping' => ['label' => 'Phí Ship', 'unit' => 'đ'],
         'discount' => ['label' => 'Chiết khấu đơn', 'unit' => 'đ'],
@@ -37,10 +37,15 @@
                 <tbody>
                     @foreach($changedFees as $key => $change)
                         @php
-                            $definition = $feeDefinitions[$key] ?? ['label' => ucfirst((string) $key), 'unit' => 'đ'];
+                            $legacyDefinition = $legacyFeeDefinitions[$key] ?? ['label' => ucfirst((string) $key), 'unit' => 'đ'];
+                            $definition = [
+                                'label' => $change['name'] ?? $legacyDefinition['label'],
+                                'unit' => ($change['calculation_type'] ?? null) === 'percent' ? '%' : $legacyDefinition['unit'],
+                                'direction' => $change['direction'] ?? ($key === 'discount' ? 'discount' : 'charge'),
+                            ];
                         @endphp
                         <tr>
-                            <td class="fw-semibold">{{ $definition['label'] }}</td>
+                            <td class="fw-semibold">{{ $definition['label'] }} <span class="badge {{ $definition['direction'] === 'discount' ? 'text-bg-danger' : 'text-bg-success' }} ms-1">{{ $definition['direction'] === 'discount' ? 'Giảm trừ' : 'Cộng thêm' }}</span></td>
                             <td class="text-end text-muted">{{ $formatFeeValue((array) ($change['original'] ?? []), $definition['unit']) }}</td>
                             <td class="text-end text-danger fw-bold">{{ $formatFeeValue((array) ($change['adjusted'] ?? []), $definition['unit']) }}</td>
                         </tr>

@@ -37,6 +37,7 @@
     $orderItemDiscount = (float) ($order->item_discount_total ?? $order->items->sum('discount_total'));
     $orderExtraDiscount = (float) ($order->extra_discount_total ?? $order->order_discount ?? 0);
     $orderTotalDiscount = (float) ($order->total_discount ?? ($orderItemDiscount + $orderExtraDiscount));
+    $orderAdditionalFees = $order->additionalFees()->orderBy('id')->get();
     $orderTotalWeight = (float) $order->items->sum(function ($item) {
         if (!($item->effective_priced_by_kg ?? false)) {
             return 0;
@@ -805,6 +806,15 @@
                                 <span class="order-meta-label">Điều chỉnh đơn</span>
                                 <div class="order-meta-value">{{ $formatSignedMoney($orderExtraDiscount) }}</div>
                             </div>
+                            @foreach($orderAdditionalFees as $additionalFee)
+                                <div class="order-meta-item">
+                                    <span class="order-meta-label">{{ $additionalFee->fee_name }}</span>
+                                    <div class="order-meta-value {{ $additionalFee->direction === 'discount' ? 'text-danger' : 'text-success' }}">
+                                        {{ $additionalFee->direction === 'discount' ? '-' : '+' }}{{ number_format((float) $additionalFee->amount, 0, ',', '.') }}đ
+                                        @if($additionalFee->calculation_type === 'percent')<small class="text-muted">({{ rtrim(rtrim(number_format((float) $additionalFee->rate, 2, '.', ''), '0'), '.') }}%)</small>@endif
+                                    </div>
+                                </div>
+                            @endforeach
                             <div class="order-meta-item">
                                 <span class="order-meta-label">Tổng khối lượng</span>
                                 <div class="order-meta-value">{{ $formatKg($orderTotalWeight) }}</div>

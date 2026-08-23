@@ -452,6 +452,14 @@
 								<span>{{ __('menu.settings') }}</span>
 							</a>
 						</li>
+						@if(auth()->user()?->isAdmin())
+						<li class="nav-item">
+							<a href="{{ route('admin.order-fee-types.index') }}" class="nav-link{{ request()->routeIs('admin.order-fee-types.*') ? ' active' : '' }}">
+								<i class="ph-receipt"></i>
+								<span>Phí bổ sung cho đơn</span>
+							</a>
+						</li>
+						@endif
 						<li class="nav-item">
 							<a href="{{ route('admin.settings.reset-data.index') }}" class="nav-link{{ request()->routeIs('admin.settings.reset-data.*') ? ' active' : '' }}">
 								<i class="ph-database"></i>
