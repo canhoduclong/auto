@@ -1819,8 +1819,8 @@
                                     @endif
                                     @if($canManageOrder)
                                         <a class="btn btn-sm btn-outline-secondary" href="{{ route('site.orders.copy', $order->id) }}"><i class="bi bi-files"></i><span>Sao chép đơn</span></a>
-                                        @if($order->customer_id)
-                                            <button class="btn btn-sm btn-outline-primary monitor-add-to-sample" type="button" data-sample-url="{{ route('pages.my_order_drafts.add_from_order', $order) }}"><i class="bi bi-bookmark-plus"></i><span>Cho vào đơn mẫu</span></button>
+                                        @if($order->customer_id && !in_array((int) $order->customer_id, $sampleDraftCustomerIds ?? [], true))
+                                            <button class="btn btn-sm btn-outline-primary monitor-add-to-sample" type="button" data-sample-customer-id="{{ $order->customer_id }}" data-sample-url="{{ route('pages.my_order_drafts.add_from_order', $order) }}"><i class="bi bi-bookmark-plus"></i><span>Cho vào đơn mẫu</span></button>
                                         @endif
                                         @if($canRequestAdjustment)
                                             <button class="btn btn-sm btn-warning monitor-adjustment-open" type="button" data-adjustment-url="{{ route('site.order-adjustments.create', $order) }}" data-adjustment-target="monitorAdjustment{{ $order->id }}"><i class="bi bi-arrow-left-right"></i><span>Gửi yêu cầu điều chỉnh</span></button>
@@ -2802,6 +2802,16 @@ document.addEventListener('submit', async function (event) {
         const sampleButton = event.target.closest('.monitor-add-to-sample');
         if (sampleButton) {
             const original = sampleButton.innerHTML;
+            const sampleCustomerId = sampleButton.dataset.sampleCustomerId || '';
+            const removeCustomerSampleActions = () => {
+                if (!sampleCustomerId) {
+                    sampleButton.remove();
+                    return;
+                }
+                document.querySelectorAll('.monitor-add-to-sample').forEach(button => {
+                    if (button.dataset.sampleCustomerId === sampleCustomerId) button.remove();
+                });
+            };
             sampleButton.disabled = true;
             sampleButton.innerHTML = '<span class="spinner-border spinner-border-sm"></span><span>Đang thêm...</span>';
             try {
@@ -2816,16 +2826,14 @@ document.addEventListener('submit', async function (event) {
                 const data = await response.json();
                 if (! response.ok || ! data.success) {
                     if (response.status === 409) {
-                        sampleButton.innerHTML = '<i class="bi bi-bookmark-check"></i><span>Đã có đơn mẫu</span>';
-                        sampleButton.title = data.message || '';
                         notify(data.message || 'Đã có đơn mẫu của khách hàng này rồi.', 'warning');
+                        removeCustomerSampleActions();
                         return;
                     }
                     throw new Error(data.errors ? Object.values(data.errors).flat().join(' ') : (data.message || 'Không thể tạo đơn mẫu.'));
                 }
-                sampleButton.innerHTML = '<i class="bi bi-bookmark-check"></i><span>Đã vào đơn mẫu</span>';
-                sampleButton.title = data.message || '';
                 notify(data.message || 'Đã cho đơn hàng vào đơn mẫu.', 'success');
+                removeCustomerSampleActions();
             } catch (error) {
                 sampleButton.disabled = false;
                 sampleButton.innerHTML = original;

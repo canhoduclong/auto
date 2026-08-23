@@ -12,6 +12,7 @@
     $currentSortBy = $sortBy ?? request('sort_by', 'created_at');
     $currentSortDir = strtolower($sortDir ?? request('sort_dir', 'desc'));
     $isTrashView = (bool) ($isTrashView ?? false);
+    $sampleDraftCustomerIds = array_map('intval', $sampleDraftCustomerIds ?? []);
     $returnableCount = $orders->getCollection()->filter(
         fn ($order) => in_array($order->status, ['picked_up', 'shipping', 'completed'], true)
     )->count();
@@ -103,6 +104,8 @@
                 $deliveryTime = $order->delivery_time ?: ($order->customer?->delivery_time ?: 'Chưa cập nhật');
                 $itemsTotal = (float) $order->items->sum('total');
                 $orderAdjustment = $itemsTotal - (float) $order->total;
+                $hasSampleDraft = $order->customer_id
+                    && in_array((int) $order->customer_id, $sampleDraftCustomerIds, true);
             @endphp
             <article class="monitor-my-order" id="my-order-card-{{ $order->id }}">
                 <div class="monitor-my-order-card {{ $isCancelled ? 'is-cancelled' : '' }}">
@@ -176,6 +179,11 @@
                         </a>
                     @endif
                     @if(!$isTrashView)<a href="{{ route('site.orders.copy', $order->id) }}" class="btn btn-sm btn-outline-secondary" onclick="return confirm('Sao chép đơn {{ $order->code }}?')"><i class="bi bi-files"></i>Sao chép đơn</a>@endif
+                    @if(!$isTrashView && $order->customer_id && !$hasSampleDraft)
+                        <button class="btn btn-sm btn-outline-primary monitor-add-to-sample" type="button" data-sample-customer-id="{{ $order->customer_id }}" data-sample-url="{{ route('pages.my_order_drafts.add_from_order', $order) }}">
+                            <i class="bi bi-bookmark-plus"></i>Cho vào đơn mẫu
+                        </button>
+                    @endif
                     @if($canCancel)<form class="monitor-my-order-cancel" method="POST" action="{{ route('site.orders.cancel', $order) }}" onsubmit="return confirm('Bạn chắc chắn muốn hủy đơn hàng này?');">@csrf<button class="btn btn-sm btn-outline-danger"><i class="bi bi-x-circle"></i>Hủy đơn hàng</button></form>@endif
                 </div>
             </article>

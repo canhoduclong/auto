@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\Role;
+use App\Models\TextOrderDraft;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -30,12 +31,20 @@ class MonitoringMyOrdersCustomerFilterTest extends TestCase
             'phone' => '0901000002',
         ]);
 
-        Order::query()->create([
+        $selectedOrder = Order::query()->create([
             'customer_id' => $selectedCustomer->id,
             'user_id' => $sale->id,
             'code' => 'FILTER-SELECTED',
             'total' => 100000,
             'status' => 'pending',
+        ]);
+        TextOrderDraft::query()->create([
+            'created_by' => $sale->id,
+            'draft_scope' => TextOrderDraft::SCOPE_SALE_PRIVATE,
+            'sale_id' => $sale->id,
+            'customer_id' => $selectedCustomer->id,
+            'raw_text' => 'Đơn mẫu đã có',
+            'status' => 'draft',
         ]);
         Order::query()->create([
             'customer_id' => $otherCustomer->id,
@@ -59,6 +68,7 @@ class MonitoringMyOrdersCustomerFilterTest extends TestCase
             ->assertSee('Đang lọc:')
             ->assertSee('Khách được chọn')
             ->assertSee('FILTER-SELECTED')
+            ->assertDontSee(route('pages.my_order_drafts.add_from_order', $selectedOrder), false)
             ->assertDontSee('FILTER-OTHER');
 
         $missingPhone = '0901999999';

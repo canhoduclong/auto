@@ -48,7 +48,21 @@ class MyOrdersMonitoringAdjustmentActionTest extends TestCase
 
         $this->assertStringContainsString('monitor-add-to-sample', $view);
         $this->assertStringContainsString('Cho vào đơn mẫu', $view);
+        $this->assertStringContainsString('$sampleDraftCustomerIds', $view);
+        $this->assertStringContainsString('data-sample-customer-id', $view);
+        $this->assertStringContainsString('removeCustomerSampleActions();', $view);
         $this->assertStringContainsString('Đã có đơn mẫu của khách hàng này rồi.', $view);
         $this->assertStringContainsString('pages.my_order_drafts.add_from_order', $routes);
+    }
+
+    public function test_my_orders_hides_sample_action_for_customers_with_a_sample(): void
+    {
+        $view = file_get_contents(
+            dirname(__DIR__, 2).'/resources/views/site/orders/partials/orders_listing_monitoring.blade.php'
+        );
+
+        $this->assertStringContainsString('$hasSampleDraft', $view);
+        $this->assertStringContainsString('!$hasSampleDraft', $view);
+        $this->assertStringContainsString('pages.my_order_drafts.add_from_order', $view);
     }
 }

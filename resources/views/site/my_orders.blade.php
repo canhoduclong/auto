@@ -964,6 +964,7 @@
                         'sortDir' => $currentSortDir,
                         'stockWarnings' => $stockWarnings ?? [],
                         'isTrashView' => $isTrashView ?? false,
+                        'sampleDraftCustomerIds' => $sampleDraftCustomerIds ?? [],
                     ])
                 </div>
             </div>

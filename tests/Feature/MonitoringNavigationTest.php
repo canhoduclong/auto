@@ -6,6 +6,7 @@ use App\Models\AccountingReconciliation;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\Role;
+use App\Models\TextOrderDraft;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -73,6 +74,14 @@ class MonitoringNavigationTest extends TestCase
             'sale_id' => $sale->id,
             'status' => AccountingReconciliation::STATUS_CONFIRMED,
         ]);
+        TextOrderDraft::query()->create([
+            'created_by' => $sale->id,
+            'draft_scope' => TextOrderDraft::SCOPE_SALE_PRIVATE,
+            'sale_id' => $sale->id,
+            'customer_id' => $customer->id,
+            'raw_text' => 'Đơn mẫu đã có',
+            'status' => 'draft',
+        ]);
 
         $response = $this->actingAs($sale)
             ->withSession(['active_role' => 'sale'])
@@ -83,6 +92,7 @@ class MonitoringNavigationTest extends TestCase
             ]));
 
         $response->assertOk();
+        $response->assertDontSee('data-sample-url=', false);
         foreach (array_merge(array_values($statuses), ['accounted']) as $visualState) {
             $response
                 ->assertSee('monitor-sequence status-' . $visualState, false)

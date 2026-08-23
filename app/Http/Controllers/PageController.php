@@ -48,6 +48,7 @@ use App\Models\Province;
 use App\Models\District;
 use App\Models\TruckBrand;
 use App\Models\TruckStation;
+use App\Models\TextOrderDraft;
 use App\Models\Ward;
 use App\Models\Company;
 use App\Models\User;
@@ -129,6 +130,30 @@ class PageController extends Controller
                     ->orWhere('is_employee', 0);
             })
             ->whereNull('deleted_at');
+    }
+
+    private function saleSampleDraftCustomerIds(int $saleId, $orders): array
+    {
+        $customerIds = collect($orders)
+            ->pluck('customer_id')
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($customerIds->isEmpty()) {
+            return [];
+        }
+
+        return TextOrderDraft::query()
+            ->where('draft_scope', TextOrderDraft::SCOPE_SALE_PRIVATE)
+            ->where('sale_id', $saleId)
+            ->whereIn('customer_id', $customerIds->all())
+            ->pluck('customer_id')
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
     }
 
     private function canAccessSalesDailyPages($user): bool
@@ -735,6 +760,10 @@ class PageController extends Controller
         }
 
         $orders = $query->paginate($perPage)->appends($request->query());
+        $sampleDraftCustomerIds = $this->saleSampleDraftCustomerIds(
+            (int) $user->id,
+            $orders->getCollection()
+        );
 
         $stockWarnings = $this->buildStockWarnings($orders->getCollection());
 
@@ -747,6 +776,7 @@ class PageController extends Controller
                 'stockWarnings' => $stockWarnings,
                 'isTrashView' => $isTrashView,
                 'monitoringEmbedded' => (string) $request->input('tab') === 'my_orders',
+                'sampleDraftCustomerIds' => $sampleDraftCustomerIds,
             ])->render();
 
             return response()->json([
@@ -767,6 +797,7 @@ class PageController extends Controller
             'sortDir' => $sortDir,
             'stockWarnings' => $stockWarnings,
             'isTrashView' => $isTrashView,
+            'sampleDraftCustomerIds' => $sampleDraftCustomerIds,
         ]);
     }
 
@@ -1137,6 +1168,10 @@ class PageController extends Controller
         $orders = $dateQuery
             ->paginate($perPage)
             ->appends($request->query());
+        $sampleDraftCustomerIds = $this->saleSampleDraftCustomerIds(
+            (int) $user->id,
+            $orders->getCollection()
+        );
 
         $canApproveByOrder = [];
         foreach ($orders as $order) {
@@ -1327,6 +1362,7 @@ class PageController extends Controller
             'dailyOrderNotes' => $dailyOrderNotes,
             'saleFilters' => $saleFilters,
             'customerFilters' => $customerFilters,
+            'sampleDraftCustomerIds' => $sampleDraftCustomerIds,
             'customerTabSales' => $customerTabSales,
             'canApproveByOrder' => $canApproveByOrder,
             'canApproveManagedSales' => $canApproveManagedSales,

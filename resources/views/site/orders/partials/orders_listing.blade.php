@@ -1,5 +1,13 @@
 @if($monitoringEmbedded ?? false)
-    @include('site.orders.partials.orders_listing_monitoring', compact('orders', 'user', 'sortBy', 'sortDir', 'stockWarnings', 'isTrashView'))
+    @include('site.orders.partials.orders_listing_monitoring', [
+        'orders' => $orders,
+        'user' => $user,
+        'sortBy' => $sortBy,
+        'sortDir' => $sortDir,
+        'stockWarnings' => $stockWarnings,
+        'isTrashView' => $isTrashView,
+        'sampleDraftCustomerIds' => $sampleDraftCustomerIds ?? [],
+    ])
 @else
 @php
     $statusLabels = \App\Models\Order::statusOptions() + [
