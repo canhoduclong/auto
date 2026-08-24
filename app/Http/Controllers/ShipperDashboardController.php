@@ -448,6 +448,20 @@ class ShipperDashboardController extends Controller
                     return true;
                 }
 
+                $inventoryBusinessDate = $this->inventoryBusinessDateForOrder($fresh);
+                $isPackedHistoricalException = (bool) $fresh->skip_auto_cancel
+                    && Carbon::parse($inventoryBusinessDate)->startOfDay()->lt(Carbon::today());
+
+                // The warehouse already validated and packed an explicitly
+                // restored order against its historical business-day stock.
+                // Shipper acceptance only starts delivery; checking/deducting
+                // today's stock again would incorrectly block the old order.
+                if ($isPackedHistoricalException) {
+                    $this->releaseReservationsForAcceptedHistoricalOrder($fresh);
+
+                    return true;
+                }
+
                 if ($warehouseId <= 0) {
                     throw new \RuntimeException('Không xác định được kho xuất cho đơn hàng này.');
                 }
@@ -1405,6 +1419,47 @@ class ShipperDashboardController extends Controller
             ->first();
 
         return $packingHistory?->user?->warehouse;
+    }
+
+    private function inventoryBusinessDateForOrder(Order $order): string
+    {
+        if ($order->accounting_sales_import_batch_id && $order->delivery_date) {
+            return $order->delivery_date->toDateString();
+        }
+
+        return $order->created_at?->toDateString() ?? now()->toDateString();
+    }
+
+    private function releaseReservationsForAcceptedHistoricalOrder(Order $order): void
+    {
+        $orderItemIds = $order->items->pluck('id')->all();
+        if ($orderItemIds === []) {
+            return;
+        }
+
+        $inventoryIds = InventoryReservation::query()
+            ->whereIn('order_item_id', $orderItemIds)
+            ->lockForUpdate()
+            ->pluck('inventory_id')
+            ->unique()
+            ->values();
+
+        InventoryReservation::query()->whereIn('order_item_id', $orderItemIds)->delete();
+
+        foreach ($inventoryIds as $inventoryId) {
+            $inventory = Inventory::query()->lockForUpdate()->find($inventoryId);
+            if (! $inventory) {
+                continue;
+            }
+
+            $inventory->reserved_quantity = max(
+                0,
+                (int) InventoryReservation::query()
+                    ->where('inventory_id', $inventory->id)
+                    ->sum('quantity')
+            );
+            $inventory->save();
+        }
     }
 
     private function deductStockForAcceptedOrderItem(Order $order, InventoryDocument $document, $item, int $warehouseId): void
