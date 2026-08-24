@@ -227,6 +227,50 @@ class AdminRestoreCancelledOrderTest extends TestCase
         ]);
     }
 
+    public function test_admin_can_cancel_any_eligible_order_from_orders_page_for_a_past_date(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-24 10:00:00', 'Asia/Bangkok'));
+        [$admin, $order, $inventory] = $this->createCancelledOrder(10, 4);
+
+        $this->actingAs($admin)
+            ->post(route('orders.restore-cancelled', $order))
+            ->assertSessionHas('success');
+
+        $sale = User::factory()->create();
+        $sale->roles()->attach(Role::query()->create(['name' => 'sale']));
+        $order->forceFill([
+            'user_id' => $sale->id,
+            'created_at' => Carbon::parse('2026-08-23 09:00:00', 'Asia/Bangkok'),
+        ])->saveQuietly();
+
+        $this->actingAs($admin)
+            ->get(route('orders.index', [
+                'from_date' => '2026-08-23',
+                'to_date' => '2026-08-23',
+            ]))
+            ->assertOk()
+            ->assertSee(route('orders.cancel', $order), false)
+            ->assertSee('Hủy đơn hàng');
+
+        $this->actingAs($sale)
+            ->post(route('orders.cancel', $order))
+            ->assertRedirect(route('home'));
+        $this->assertSame('packing', $order->fresh()->status);
+
+        $this->actingAs($admin)
+            ->post(route('orders.cancel', $order))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $order->refresh();
+        $this->assertSame(Order::STATUS_CANCELLED, $order->status);
+        $this->assertSame($admin->id, $order->cancelled_by);
+        $this->assertSame(0, (int) $inventory->fresh()->reserved_quantity);
+        $this->assertDatabaseMissing('inventory_reservations', [
+            'order_item_id' => $order->items()->value('id'),
+        ]);
+    }
+
     public function test_restored_exception_order_can_be_packed_delivered_and_recognized_as_revenue(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-08-22 10:00:00', 'Asia/Bangkok'));

@@ -733,7 +733,9 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::post('/orders/{order}/complete-payment', [OrderController::class, 'completePayment'])->name('orders.complete-payment');
     Route::post('/orders/{order}/refund', [OrderController::class, 'refund'])->name('orders.refund');
     Route::post('/orders/{order}/complete', [OrderController::class, 'complete'])->name('orders.complete');
-    Route::post('/orders/{order}/cancel', [OrderController::class, 'cancel'])->name('orders.cancel');
+    Route::post('/orders/{order}/cancel', [OrderController::class, 'cancel'])
+        ->name('orders.cancel')
+        ->middleware('role:admin');
     Route::post('/orders/{order}/restore', [OrderController::class, 'restoreCancelled'])
         ->name('orders.restore-cancelled')
         ->middleware('role:admin');

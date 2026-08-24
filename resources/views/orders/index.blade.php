@@ -299,6 +299,16 @@
                                             <a href="{{ route('transactions.create', ['order_id' => $order->id]) }}" class="btn btn-sm btn-success">{{ __('orders.buttons.pay') }}</a>
                                         @endif
 
+                                        @if(auth()->user()?->isAdmin() && in_array($order->status, \App\Models\Order::CANCELLABLE_STATUSES, true))
+                                            <form action="{{ route('orders.cancel', $order) }}" method="POST" class="d-inline"
+                                                  onsubmit="return confirm('Bạn chắc chắn muốn hủy đơn {{ addslashes($order->code ?: ('#' . $order->id)) }}? Booking tồn kho của đơn sẽ được giải phóng.');">
+                                                @csrf
+                                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                                    <i class="bi bi-x-circle me-1"></i>Hủy đơn hàng
+                                                </button>
+                                            </form>
+                                        @endif
+
                                         @if(auth()->user()?->isAdmin() && $order->status === \App\Models\Order::STATUS_CANCELLED && empty($order->trash_at))
                                             <form action="{{ route('orders.restore-cancelled', $order) }}" method="POST" class="d-inline"
                                                   onsubmit="return confirm('Phục hồi đơn {{ addslashes($order->code ?: ('#' . $order->id)) }} và đánh dấu là đơn ngoại lệ để tiếp tục thực hiện? Booking tồn kho sẽ được dựng lại.');">

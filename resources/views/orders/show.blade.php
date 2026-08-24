@@ -147,7 +147,7 @@
                 </div>
             @endif
 
-            @if(in_array($order->status, ['pending_leader_approval', 'pending_manager_approval', 'approved', 'packing'], true))
+            @if(auth()->user()?->isAdmin() && in_array($order->status, \App\Models\Order::CANCELLABLE_STATUSES, true))
                 <form action="{{ route('orders.cancel', $order->id) }}" method="POST" class="d-inline ms-2">
                     @csrf
                     <button type="submit" class="btn btn-danger" onclick="return confirm('{{ __('orders.confirms.cancel_order') }}')">{{ __('orders.buttons.cancel_order') }}</button>

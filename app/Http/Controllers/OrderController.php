@@ -1453,7 +1453,9 @@ class OrderController extends Controller
         $request = request();
         $user = auth()->user();
 
-        if ($request->routeIs('site.orders.cancel')) {
+        if ($request->routeIs('orders.cancel')) {
+            abort_unless($user?->isAdmin(), 403);
+        } elseif ($request->routeIs('site.orders.cancel')) {
             if (!$user) {
                 abort(403);
             }
