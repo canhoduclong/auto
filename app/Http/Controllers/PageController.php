@@ -1031,6 +1031,10 @@ class PageController extends Controller
             $dateQuery->whereNull('trash_at');
         }
 
+        $restorableCancelledOrdersCount = $user->isAdmin()
+            ? (clone $dateQuery)->where('status', Order::STATUS_CANCELLED)->count()
+            : 0;
+
         $keyword = trim((string) $request->input('keyword', ''));
         if ($keyword !== '') {
             $dateQuery->where(function ($sub) use ($keyword) {
@@ -1360,6 +1364,7 @@ class PageController extends Controller
             'productRows' => $productRows,
             'monitoringWarehouses' => $monitoringWarehouses,
             'dailyOrderNotes' => $dailyOrderNotes,
+            'restorableCancelledOrdersCount' => $restorableCancelledOrdersCount,
             'saleFilters' => $saleFilters,
             'customerFilters' => $customerFilters,
             'sampleDraftCustomerIds' => $sampleDraftCustomerIds,

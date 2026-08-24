@@ -1046,6 +1046,9 @@ Route::middleware(['auth', 'role:sale,leader,leader_sale,sale_manager,manager,ma
         ->middleware('permission:orders.monitoring');
     Route::post('/my-orders/monitoring/refresh-sequence', [PageController::class, 'myOrdersMonitoringRefreshSequence'])
         ->name('pages.my_orders.monitoring.refresh_sequence');
+    Route::post('/my-orders/monitoring/restore-all', [OrderController::class, 'restoreAllCancelledFromMonitoring'])
+        ->name('pages.my_orders.monitoring.restore_all')
+        ->middleware('role:admin');
     Route::put('/my-orders/monitoring/auto-approval', [PageController::class, 'myOrdersMonitoringAutoApproval'])
         ->name('pages.my_orders.monitoring.auto_approval');
     Route::put('/my-orders/monitoring/customer-classification', [PageController::class, 'updateCustomerClassificationConfig'])

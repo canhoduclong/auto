@@ -1513,56 +1513,7 @@ class OrderController extends Controller
         abort_unless($admin?->isAdmin(), 403);
 
         try {
-            $restoredStatus = DB::transaction(function () use ($order, $admin): string {
-                $lockedOrder = Order::query()->lockForUpdate()->findOrFail($order->id);
-
-                if ($lockedOrder->status !== Order::STATUS_CANCELLED) {
-                    throw new \RuntimeException('Chỉ có thể phục hồi đơn đang ở trạng thái đã hủy.');
-                }
-
-                if ($lockedOrder->trash_at !== null) {
-                    throw new \RuntimeException('Đơn đã nằm trong thùng rác và không thể phục hồi tại đây.');
-                }
-
-                $cancellationHistory = $lockedOrder->histories()
-                    ->where('status_after', Order::STATUS_CANCELLED)
-                    ->whereNotNull('status_before')
-                    ->latest('id')
-                    ->first();
-                $restoredStatus = trim((string) $cancellationHistory?->status_before);
-
-                if (!in_array($restoredStatus, Order::RESTORABLE_AFTER_CANCEL_STATUSES, true)) {
-                    throw new \RuntimeException('Không xác định được trạng thái hợp lệ của đơn trước khi bị hủy.');
-                }
-
-                // Clean up any inconsistent leftovers before rebuilding the booking.
-                $this->releaseReservedStockForOrder($lockedOrder);
-                $this->reserveStockForOrder(
-                    $lockedOrder,
-                    $lockedOrder->warehouse_id ? (int) $lockedOrder->warehouse_id : null,
-                    true
-                );
-
-                $lockedOrder->forceFill([
-                    'status' => $restoredStatus,
-                    'cancelled_by' => null,
-                    'cancelled_at' => null,
-                    'cancel_reason' => null,
-                    'cancel_images' => null,
-                    'skip_auto_cancel' => true,
-                ])->save();
-
-                $this->logOrderHistory(
-                    $lockedOrder,
-                    'restore_cancelled_order',
-                    Order::STATUS_CANCELLED,
-                    $restoredStatus,
-                    'Admin phục hồi đơn đã hủy; booking phần tồn khả dụng và cho phép bổ sung kho sau',
-                    $admin
-                );
-
-                return $restoredStatus;
-            });
+            $restoredStatus = $this->restoreCancelledOrderRecord($order->id, $admin);
         } catch (\RuntimeException $exception) {
             return back()->with('error', $exception->getMessage());
         }
@@ -1575,6 +1526,135 @@ class OrderController extends Controller
             : ' Booking tồn kho đã được khôi phục.';
 
         return back()->with('success', "Đã phục hồi đơn về trạng thái {$restoredStatus}.{$stockMessage}");
+    }
+
+    public function restoreAllCancelledFromMonitoring(Request $request)
+    {
+        $admin = $request->user();
+        abort_unless($admin?->isAdmin(), 403);
+
+        $validated = $request->validate([
+            'date' => ['required', 'date_format:Y-m-d'],
+            'date_field' => ['required', Rule::in(['business_date', 'created_at', 'delivery_date'])],
+        ]);
+
+        $ordersQuery = Order::query()
+            ->where('status', Order::STATUS_CANCELLED)
+            ->whereNull('trash_at');
+        $this->applyMonitoringRestoreDateFilter(
+            $ordersQuery,
+            (string) $validated['date'],
+            (string) $validated['date_field']
+        );
+
+        $ordersToRestore = $ordersQuery->orderBy('id')->get(['id', 'created_at']);
+        $restoredCount = 0;
+        $skippedCount = 0;
+        $affectedDates = [];
+
+        foreach ($ordersToRestore as $orderToRestore) {
+            try {
+                $this->restoreCancelledOrderRecord((int) $orderToRestore->id, $admin);
+                $restoredCount++;
+                if ($orderToRestore->created_at) {
+                    $affectedDates[$orderToRestore->created_at->toDateString()] = true;
+                }
+            } catch (\Throwable) {
+                $skippedCount++;
+            }
+        }
+
+        foreach (array_keys($affectedDates) as $affectedDate) {
+            $this->syncDailySequenceAndStockSufficiency($affectedDate);
+        }
+
+        if ($ordersToRestore->isEmpty()) {
+            return back()->with('error', 'Không có đơn đã hủy nào trong ngày đã chọn để phục hồi.');
+        }
+
+        $message = "Đã phục hồi {$restoredCount}/{$ordersToRestore->count()} đơn đã hủy trong ngày {$validated['date']}.";
+        if ($skippedCount > 0) {
+            $message .= " Bỏ qua {$skippedCount} đơn không còn đủ điều kiện phục hồi.";
+        }
+
+        return back()->with($restoredCount > 0 ? 'success' : 'error', $message);
+    }
+
+    private function restoreCancelledOrderRecord(int $orderId, User $admin): string
+    {
+        return DB::transaction(function () use ($orderId, $admin): string {
+            $lockedOrder = Order::query()->lockForUpdate()->findOrFail($orderId);
+
+            if ($lockedOrder->status !== Order::STATUS_CANCELLED) {
+                throw new \RuntimeException('Chỉ có thể phục hồi đơn đang ở trạng thái đã hủy.');
+            }
+
+            if ($lockedOrder->trash_at !== null) {
+                throw new \RuntimeException('Đơn đã nằm trong thùng rác và không thể phục hồi tại đây.');
+            }
+
+            $cancellationHistory = $lockedOrder->histories()
+                ->where('status_after', Order::STATUS_CANCELLED)
+                ->whereNotNull('status_before')
+                ->latest('id')
+                ->first();
+            $restoredStatus = trim((string) $cancellationHistory?->status_before);
+
+            if (!in_array($restoredStatus, Order::RESTORABLE_AFTER_CANCEL_STATUSES, true)) {
+                throw new \RuntimeException('Không xác định được trạng thái hợp lệ của đơn trước khi bị hủy.');
+            }
+
+            // Clean up any inconsistent leftovers before rebuilding the booking.
+            $this->releaseReservedStockForOrder($lockedOrder);
+            $this->reserveStockForOrder(
+                $lockedOrder,
+                $lockedOrder->warehouse_id ? (int) $lockedOrder->warehouse_id : null,
+                true
+            );
+
+            $lockedOrder->forceFill([
+                'status' => $restoredStatus,
+                'cancelled_by' => null,
+                'cancelled_at' => null,
+                'cancel_reason' => null,
+                'cancel_images' => null,
+                'skip_auto_cancel' => true,
+            ])->save();
+
+            $this->logOrderHistory(
+                $lockedOrder,
+                'restore_cancelled_order',
+                Order::STATUS_CANCELLED,
+                $restoredStatus,
+                'Admin phục hồi đơn đã hủy; booking phần tồn khả dụng và cho phép bổ sung kho sau',
+                $admin
+            );
+
+            return $restoredStatus;
+        });
+    }
+
+    private function applyMonitoringRestoreDateFilter(Builder $query, string $date, string $dateField): void
+    {
+        if ($dateField === 'created_at') {
+            $query->whereDate('created_at', $date);
+            return;
+        }
+
+        if ($dateField === 'delivery_date') {
+            $query->whereDate('delivery_date', $date);
+            return;
+        }
+
+        $query->where(function (Builder $dateQuery) use ($date): void {
+            $dateQuery->where(function (Builder $regularOrders) use ($date): void {
+                $regularOrders->whereNull('accounting_sales_import_batch_id')
+                    ->whereDate('created_at', $date);
+            })->orWhere(function (Builder $importedOrders) use ($date): void {
+                $importedOrders->whereNotNull('accounting_sales_import_batch_id')
+                    ->whereDate('delivery_date', $date);
+            });
+        });
     }
 
     public function updateWarehouseFromMonitoring(Request $request, Order $order)

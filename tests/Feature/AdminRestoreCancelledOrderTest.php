@@ -111,6 +111,47 @@ class AdminRestoreCancelledOrderTest extends TestCase
             ->sum('quantity'));
     }
 
+    public function test_admin_can_restore_all_cancelled_orders_for_selected_monitoring_day(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-22 20:00:00', 'Asia/Bangkok'));
+        [$admin, $firstOrder, $inventory] = $this->createCancelledOrder(20, 4);
+        $secondOrder = $this->duplicateCancelledOrder($firstOrder, '2026-08-22 14:00:00');
+        $otherDayOrder = $this->duplicateCancelledOrder($firstOrder, '2026-08-21 14:00:00');
+
+        $this->actingAs($admin)
+            ->post(route('pages.my_orders.monitoring.restore_all'), [
+                'date' => '2026-08-22',
+                'date_field' => 'created_at',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success', 'Đã phục hồi 2/2 đơn đã hủy trong ngày 2026-08-22.');
+
+        $this->assertSame('packing', $firstOrder->fresh()->status);
+        $this->assertSame('packing', $secondOrder->fresh()->status);
+        $this->assertSame(Order::STATUS_CANCELLED, $otherDayOrder->fresh()->status);
+        $this->assertSame(8, (int) $inventory->fresh()->reserved_quantity);
+        $this->assertSame(2, OrderHistory::query()
+            ->whereIn('order_id', [$firstOrder->id, $secondOrder->id])
+            ->where('action', 'restore_cancelled_order')
+            ->count());
+    }
+
+    public function test_monitoring_places_restore_all_button_immediately_after_filter_for_admin(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-22 20:00:00', 'Asia/Bangkok'));
+        [$admin] = $this->createCancelledOrder(10, 4);
+
+        $this->actingAs($admin)
+            ->get(route('pages.my_orders.monitoring', [
+                'tab' => 'today',
+                'date' => '2026-08-22',
+                'date_field' => 'created_at',
+            ]))
+            ->assertOk()
+            ->assertSeeInOrder(['Lọc', 'Phục hồi tất cả'])
+            ->assertSee(route('pages.my_orders.monitoring.restore_all'), false);
+    }
+
     public function test_restored_exception_order_can_be_packed_delivered_and_recognized_as_revenue(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-08-22 10:00:00', 'Asia/Bangkok'));
@@ -261,5 +302,30 @@ class AdminRestoreCancelledOrderTest extends TestCase
         ]);
 
         return [$admin, $order, $inventory];
+    }
+
+    private function duplicateCancelledOrder(Order $source, string $createdAt): Order
+    {
+        $order = $source->replicate();
+        $order->created_at = Carbon::parse($createdAt, 'Asia/Bangkok');
+        $order->updated_at = Carbon::parse($createdAt, 'Asia/Bangkok');
+        $order->save();
+
+        foreach ($source->items as $item) {
+            $copy = $item->replicate();
+            $copy->order_id = $order->id;
+            $copy->save();
+        }
+
+        OrderHistory::query()->create([
+            'order_id' => $order->id,
+            'action' => 'auto_cancel_overdue',
+            'role' => 'system',
+            'status_before' => 'packing',
+            'status_after' => Order::STATUS_CANCELLED,
+            'note' => 'Hủy tự động',
+        ]);
+
+        return $order;
     }
 }
