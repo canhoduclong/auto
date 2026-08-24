@@ -24,6 +24,9 @@
                 </div>
                 <div class="col-md-6">
                     <p><strong>{{ __('orders.labels.current_status') }}:</strong> {{ $statusLabels[$order->status] ?? $order->status }}</p>
+                    @if($order->skip_auto_cancel)
+                        <p><span class="badge bg-warning-subtle text-warning-emphasis border border-warning"><i class="bi bi-shield-check me-1"></i>Đơn ngoại lệ – không hủy tự động</span></p>
+                    @endif
                     <p><strong>{{ __('orders.labels.payment_status') }}:</strong> {{ __('orders.payment_statuses.' . $order->payment_status) }}</p>
                     <p><strong>{{ __('orders.labels.delivery_status') }}:</strong> {{ __('orders.delivery_statuses.' . $order->delivery_status) }}</p>
                     <p><strong>Giờ giao hàng:</strong> {{ $order->delivery_time ?: ($order->customer->delivery_time ?? '-') }}</p>
@@ -148,6 +151,16 @@
                 <form action="{{ route('orders.cancel', $order->id) }}" method="POST" class="d-inline ms-2">
                     @csrf
                     <button type="submit" class="btn btn-danger" onclick="return confirm('{{ __('orders.confirms.cancel_order') }}')">{{ __('orders.buttons.cancel_order') }}</button>
+                </form>
+            @endif
+
+            @if(auth()->user()?->isAdmin() && $order->status === \App\Models\Order::STATUS_CANCELLED && empty($order->trash_at))
+                <form action="{{ route('orders.restore-cancelled', $order) }}" method="POST" class="d-inline ms-2"
+                      onsubmit="return confirm('Phục hồi đơn {{ addslashes($order->code ?: ('#' . $order->id)) }} và đánh dấu là đơn ngoại lệ để tiếp tục thực hiện? Booking tồn kho sẽ được dựng lại.');">
+                    @csrf
+                    <button type="submit" class="btn btn-outline-success">
+                        <i class="bi bi-arrow-counterclockwise me-1"></i>Phục hồi &amp; đánh dấu ngoại lệ
+                    </button>
                 </form>
             @endif
         </div>

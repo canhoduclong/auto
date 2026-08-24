@@ -248,6 +248,11 @@
                                         <button class="btn btn-sm btn-outline-secondary btn-toggle-status" data-id="{{ $order->id }}" data-status="{{ $order->status }}">
                                             {{ $order->status }}
                                         </button>
+                                        @if($order->skip_auto_cancel)
+                                            <span class="badge bg-warning-subtle text-warning-emphasis border border-warning ms-1" title="Đơn được phục hồi ngoại lệ và không bị hủy tự động do quá hạn">
+                                                <i class="bi bi-shield-check me-1"></i>Đơn ngoại lệ
+                                            </span>
+                                        @endif
                                     </div>
 
                                     @if($order->status === \App\Enums\OrderStatus::Approved->value)
@@ -292,6 +297,16 @@
 
                                         @if($order->status !== \App\Models\Order::STATUS_COMPLETED && !$order->isPaid())
                                             <a href="{{ route('transactions.create', ['order_id' => $order->id]) }}" class="btn btn-sm btn-success">{{ __('orders.buttons.pay') }}</a>
+                                        @endif
+
+                                        @if(auth()->user()?->isAdmin() && $order->status === \App\Models\Order::STATUS_CANCELLED && empty($order->trash_at))
+                                            <form action="{{ route('orders.restore-cancelled', $order) }}" method="POST" class="d-inline"
+                                                  onsubmit="return confirm('Phục hồi đơn {{ addslashes($order->code ?: ('#' . $order->id)) }} và đánh dấu là đơn ngoại lệ để tiếp tục thực hiện? Booking tồn kho sẽ được dựng lại.');">
+                                                @csrf
+                                                <button type="submit" class="btn btn-sm btn-outline-success">
+                                                    <i class="bi bi-arrow-counterclockwise me-1"></i>Phục hồi &amp; đánh dấu ngoại lệ
+                                                </button>
+                                            </form>
                                         @endif
 
                                         <form action="{{ route('orders.destroy', $order->id) }}" method="POST" class="d-inline">

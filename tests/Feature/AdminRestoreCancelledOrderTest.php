@@ -63,6 +63,34 @@ class AdminRestoreCancelledOrderTest extends TestCase
         $this->assertSame('packing', $order->fresh()->status);
     }
 
+    public function test_admin_orders_page_can_restore_and_mark_cancelled_order_as_exception(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-24 10:00:00', 'Asia/Bangkok'));
+        [$admin, $order, $inventory] = $this->createCancelledOrder(10, 4);
+
+        $this->actingAs($admin)
+            ->get(route('orders.index', ['status' => Order::STATUS_CANCELLED]))
+            ->assertOk()
+            ->assertSee(route('orders.restore-cancelled', $order), false)
+            ->assertSee('Phục hồi &amp; đánh dấu ngoại lệ', false);
+
+        $this->actingAs($admin)
+            ->post(route('orders.restore-cancelled', $order))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $order->refresh();
+        $this->assertSame('packing', $order->status);
+        $this->assertTrue($order->skip_auto_cancel);
+        $this->assertNull($order->cancelled_at);
+        $this->assertSame(4, (int) $inventory->fresh()->reserved_quantity);
+
+        $this->actingAs($admin)
+            ->get(route('orders.index'))
+            ->assertOk()
+            ->assertSee('Đơn ngoại lệ');
+    }
+
     public function test_non_admin_cannot_restore_cancelled_order(): void
     {
         [, $order] = $this->createCancelledOrder(10, 10);
