@@ -382,108 +382,120 @@ class ShipperDashboardController extends Controller
      */
     public function accept(Order $order)
     {
-        $accepted = DB::transaction(function () use ($order) {
-            $fresh = Order::with('items')
-                ->where('id', $order->id)
-                ->where(function ($query) {
-                    $this->constrainAvailableReadyOrder($query);
-                })
-                ->where(function ($query) {
-                    $today = Carbon::today()->toDateString();
+        try {
+            $accepted = DB::transaction(function () use ($order) {
+                $fresh = Order::with('items')
+                    ->where('id', $order->id)
+                    ->where(function ($query) {
+                        $this->constrainAvailableReadyOrder($query);
+                    })
+                    ->where(function ($query) {
+                        $today = Carbon::today()->toDateString();
 
-                    $query->whereDate('updated_at', $today)
-                        ->orWhereDate('created_at', $today)
-                        ->orWhere('skip_auto_cancel', true)
-                        ->orWhereNotNull('accounting_sales_import_batch_id');
-                })
-                ->lockForUpdate()
-                ->first();
+                        $query->whereDate('updated_at', $today)
+                            ->orWhereDate('created_at', $today)
+                            ->orWhere('skip_auto_cancel', true)
+                            ->orWhereNotNull('accounting_sales_import_batch_id');
+                    })
+                    ->lockForUpdate()
+                    ->first();
 
-            if (! $fresh) {
-                return false;
-            }
-
-            $packingHistory = $fresh->histories()
-                ->with('user')
-                ->whereIn('action', ['complete_packing', 'warehouse_complete_packing'])
-                ->latest('id')
-                ->first();
-
-            $latestReceivedTransfer = WarehouseTransfer::query()
-                ->where('order_id', $fresh->id)
-                ->where('status', WarehouseTransfer::STATUS_RECEIVED_COMPLETED)
-                ->latest('id')
-                ->first();
-
-            $warehouseId = (int) ($latestReceivedTransfer?->target_warehouse_id
-                ?: $fresh->warehouse_id
-                ?: $packingHistory?->user?->warehouse_id
-                ?: 0);
-
-            $isReturnOrder = (bool) ($fresh->is_return_order ?? false)
-                || (string) ($fresh->order_type ?? '') === 'order_return'
-                || (string) ($fresh->workflow_code ?? '') === 'order_return';
-
-            if (! $isReturnOrder && $warehouseId > 0 && (int) ($fresh->warehouse_id ?? 0) !== $warehouseId) {
-                $fresh->update(['warehouse_id' => $warehouseId]);
-            }
-
-            $fresh->update([
-                'shipper_id' => Auth::id(),
-                'status' => Order::STATUS_DELIVERING,
-            ]);
-
-            OrderHistory::create([
-                'order_id' => $fresh->id,
-                'action' => 'shipper_accepted',
-                'user_id' => Auth::id(),
-                'role' => 'shipper',
-                'status_before' => $isReturnOrder ? Order::STATUS_APPROVED : (string) $fresh->getOriginal('status'),
-                'status_after' => Order::STATUS_DELIVERING,
-                'note' => $isReturnOrder ? 'Shipper nhận đơn hoàn trả' : 'Shipper nhận đơn để giao',
-            ]);
-
-            if ($isReturnOrder) {
-                return true;
-            }
-
-            if ($warehouseId <= 0) {
-                throw new \RuntimeException('Không xác định được kho xuất cho đơn hàng này.');
-            }
-
-            $document = InventoryDocument::create([
-                'type' => 'export',
-                'document_date' => now()->toDateString(),
-                'warehouse_id' => $warehouseId,
-                'notes' => 'Xuất kho cho đơn #'.$fresh->code,
-                'shipping_fee' => (float) ($fresh->shipping_fee ?? 0),
-                'user_id' => Auth::id(),
-            ]);
-
-            $fresh->loadMissing('items');
-
-            foreach ($fresh->items as $item) {
-                // Imported sales orders can contain non-stock lines such as
-                // shipping, foam-box or other service fees. They are kept as
-                // order items for display/accounting, but must not be written
-                // to an inventory document because there is no variant to
-                // export or stock to deduct.
-                if (! $item->product_variant_id) {
-                    continue;
+                if (! $fresh) {
+                    return false;
                 }
 
-                $document->items()->create([
-                    'product_variant_id' => $item->product_variant_id,
-                    'quantity' => $item->quantity,
-                    'unit_cost' => $item->price ?? 0,
+                $packingHistory = $fresh->histories()
+                    ->with('user')
+                    ->whereIn('action', ['complete_packing', 'warehouse_complete_packing'])
+                    ->latest('id')
+                    ->first();
+
+                $latestReceivedTransfer = WarehouseTransfer::query()
+                    ->where('order_id', $fresh->id)
+                    ->where('status', WarehouseTransfer::STATUS_RECEIVED_COMPLETED)
+                    ->latest('id')
+                    ->first();
+
+                $warehouseId = (int) ($latestReceivedTransfer?->target_warehouse_id
+                    ?: $fresh->warehouse_id
+                    ?: $packingHistory?->user?->warehouse_id
+                    ?: 0);
+
+                $isReturnOrder = (bool) ($fresh->is_return_order ?? false)
+                    || (string) ($fresh->order_type ?? '') === 'order_return'
+                    || (string) ($fresh->workflow_code ?? '') === 'order_return';
+
+                if (! $isReturnOrder && $warehouseId > 0 && (int) ($fresh->warehouse_id ?? 0) !== $warehouseId) {
+                    $fresh->update(['warehouse_id' => $warehouseId]);
+                }
+
+                $fresh->update([
+                    'shipper_id' => Auth::id(),
+                    'status' => Order::STATUS_DELIVERING,
                 ]);
 
-                $this->deductStockForAcceptedOrderItem($fresh, $document, $item, $warehouseId);
+                OrderHistory::create([
+                    'order_id' => $fresh->id,
+                    'action' => 'shipper_accepted',
+                    'user_id' => Auth::id(),
+                    'role' => 'shipper',
+                    'status_before' => $isReturnOrder ? Order::STATUS_APPROVED : (string) $fresh->getOriginal('status'),
+                    'status_after' => Order::STATUS_DELIVERING,
+                    'note' => $isReturnOrder ? 'Shipper nhận đơn hoàn trả' : 'Shipper nhận đơn để giao',
+                ]);
+
+                if ($isReturnOrder) {
+                    return true;
+                }
+
+                if ($warehouseId <= 0) {
+                    throw new \RuntimeException('Không xác định được kho xuất cho đơn hàng này.');
+                }
+
+                $document = InventoryDocument::create([
+                    'type' => 'export',
+                    'document_date' => now()->toDateString(),
+                    'warehouse_id' => $warehouseId,
+                    'notes' => 'Xuất kho cho đơn #'.$fresh->code,
+                    'shipping_fee' => (float) ($fresh->shipping_fee ?? 0),
+                    'user_id' => Auth::id(),
+                ]);
+
+                $fresh->loadMissing('items');
+
+                foreach ($fresh->items as $item) {
+                    // Imported sales orders can contain non-stock lines such as
+                    // shipping, foam-box or other service fees. They are kept as
+                    // order items for display/accounting, but must not be written
+                    // to an inventory document because there is no variant to
+                    // export or stock to deduct.
+                    if (! $item->product_variant_id) {
+                        continue;
+                    }
+
+                    $document->items()->create([
+                        'product_variant_id' => $item->product_variant_id,
+                        'quantity' => $item->quantity,
+                        'unit_cost' => $item->price ?? 0,
+                    ]);
+
+                    $this->deductStockForAcceptedOrderItem($fresh, $document, $item, $warehouseId);
+                }
+
+                return true;
+
+            });
+        } catch (\RuntimeException $exception) {
+            report($exception);
+
+            $message = trim($exception->getMessage()) ?: 'Không thể nhận đơn do dữ liệu kho chưa hợp lệ.';
+
+            if (request()->expectsJson()) {
+                return response()->json(['message' => $message], 422);
             }
 
-            return true;
-
-        });
+            return back()->with('error', $message);
+        }
 
         if (! $accepted) {
             if (request()->expectsJson()) {
