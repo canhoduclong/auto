@@ -58,9 +58,14 @@ class CompletedSalesJournalService
         int $customerId = 0,
         string $sort = 'date_desc'
     ): Collection {
-        // The journal is grouped by the day the order was entered, but an
-        // order only becomes journal-eligible after delivery is completed.
-        $dateExpression = 'DATE(orders.created_at)';
+        // Keep the journal on the same business date as order monitoring:
+        // imported workflow orders belong to their delivery/operational day,
+        // while regular orders belong to the day they were entered.
+        $dateExpression = 'DATE(CASE
+            WHEN orders.accounting_sales_import_batch_id IS NOT NULL
+                THEN COALESCE(orders.delivery_date, orders.created_at)
+            ELSE orders.created_at
+        END)';
 
         $orders = Order::query()
             ->with([
@@ -75,9 +80,18 @@ class CompletedSalesJournalService
                     ->with('items'),
             ])
             // A partial return does not defer recognition of the quantity
-            // already delivered to the customer. Warehouse receipt only
-            // completes the returned-stock workflow.
-            ->whereIn('status', [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED])
+            // already delivered to the customer. Include transitional and
+            // legacy statuses only when a partial-return record proves that
+            // part of the order was successfully delivered.
+            ->where(function ($eligibleOrders): void {
+                $eligibleOrders
+                    ->whereIn('status', [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED])
+                    ->orWhere(function ($partialDelivery): void {
+                        $partialDelivery
+                            ->whereIn('status', [Order::STATUS_RETURNING, Order::STATUS_RETURNED_COMPLETED])
+                            ->whereHas('returnRecords', fn ($returns) => $returns->where('return_scope', 'partial'));
+                    });
+            })
             ->whereRaw("{$dateExpression} BETWEEN ? AND ?", [$fromDate, $toDate])
             ->when($saleId > 0, fn ($orders) => $orders->where('user_id', $saleId))
             ->when($customerId > 0, fn ($orders) => $orders->where('customer_id', $customerId))
@@ -92,7 +106,9 @@ class CompletedSalesJournalService
 
     private function rowsForOrder(Order $order): Collection
     {
-        $entryDate = $order->created_at->toDateString();
+        $entryDate = $order->accounting_sales_import_batch_id && $order->delivery_date
+            ? $order->delivery_date->toDateString()
+            : $order->created_at->toDateString();
         $adjustments = $order->adjustments
             ->flatMap->items
             ->filter(fn ($item) => $item->order_item_id)

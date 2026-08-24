@@ -463,6 +463,15 @@ class ShipperDashboardController extends Controller
             $fresh->loadMissing('items');
 
             foreach ($fresh->items as $item) {
+                // Imported sales orders can contain non-stock lines such as
+                // shipping, foam-box or other service fees. They are kept as
+                // order items for display/accounting, but must not be written
+                // to an inventory document because there is no variant to
+                // export or stock to deduct.
+                if (! $item->product_variant_id) {
+                    continue;
+                }
+
                 $document->items()->create([
                     'product_variant_id' => $item->product_variant_id,
                     'quantity' => $item->quantity,

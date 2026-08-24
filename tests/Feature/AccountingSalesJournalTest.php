@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AccountingSalesImportBatch;
 use App\Models\Customer;
 use App\Models\Inventory;
 use App\Models\Order;
@@ -247,7 +248,7 @@ class AccountingSalesJournalTest extends TestCase
             'user_id' => $sale->id,
             'warehouse_id' => $warehouse->id,
             'code' => 'PARTIAL-DELIVERY-ORDER',
-            'status' => Order::STATUS_DELIVERED,
+            'status' => Order::STATUS_RETURNING,
             'delivered_at' => now(),
             'total' => 600000,
         ]);
@@ -303,5 +304,52 @@ class AccountingSalesJournalTest extends TestCase
         $this->assertCount(1, $rows);
         $this->assertSame(6.0, (float) $rows->first()->quantity);
         $this->assertSame(600000.0, (float) $rows->first()->total_amount);
+    }
+
+    public function test_imported_workflow_order_is_grouped_by_its_operational_delivery_date(): void
+    {
+        $sale = User::factory()->create();
+        $customer = Customer::query()->create([
+            'name' => 'Khách ngày nghiệp vụ',
+            'status' => 'active',
+        ]);
+        $product = Product::query()->create([
+            'user_id' => $sale->id,
+            'name' => 'Hàng ngày nghiệp vụ',
+            'unit' => 'cái',
+            'status' => true,
+            'is_priced_by_kg' => false,
+        ]);
+        $batch = AccountingSalesImportBatch::query()->create([
+            'imported_by' => $sale->id,
+            'business_date' => '2026-08-22',
+            'source_hash' => hash('sha256', 'journal-operational-date'),
+            'row_count' => 1,
+            'total_amount' => 250000,
+            'raw_text' => 'test',
+        ]);
+        $order = Order::query()->create([
+            'customer_id' => $customer->id,
+            'user_id' => $sale->id,
+            'accounting_sales_import_batch_id' => $batch->id,
+            'status' => Order::STATUS_COMPLETED,
+            'delivery_date' => '2026-08-23',
+        ]);
+        $order->forceFill(['created_at' => '2026-08-22 09:00:00'])->saveQuietly();
+        $order->items()->create([
+            'product_id' => $product->id,
+            'quantity' => 5,
+            'price' => 50000,
+            'total' => 250000,
+            'is_priced_by_kg' => false,
+        ]);
+
+        $journal = app(CompletedSalesJournalService::class);
+
+        $this->assertCount(0, $journal->all('2026-08-22', '2026-08-22'));
+        $rows = $journal->all('2026-08-23', '2026-08-23');
+        $this->assertCount(1, $rows);
+        $this->assertSame('2026-08-23', $rows->first()->entry_date);
+        $this->assertSame(250000.0, (float) $rows->first()->total_amount);
     }
 }
