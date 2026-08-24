@@ -115,7 +115,9 @@ class AdminRestoreCancelledOrderTest extends TestCase
     {
         Carbon::setTestNow(Carbon::parse('2026-08-22 20:00:00', 'Asia/Bangkok'));
         [$admin, $firstOrder, $inventory] = $this->createCancelledOrder(20, 4);
+        $firstOrder->update(['daily_sequence' => 7]);
         $secondOrder = $this->duplicateCancelledOrder($firstOrder, '2026-08-22 14:00:00');
+        $secondOrder->update(['daily_sequence' => 3]);
         $otherDayOrder = $this->duplicateCancelledOrder($firstOrder, '2026-08-21 14:00:00');
 
         $this->actingAs($admin)
@@ -128,6 +130,8 @@ class AdminRestoreCancelledOrderTest extends TestCase
 
         $this->assertSame('packing', $firstOrder->fresh()->status);
         $this->assertSame('packing', $secondOrder->fresh()->status);
+        $this->assertSame(7, (int) $firstOrder->fresh()->daily_sequence);
+        $this->assertSame(3, (int) $secondOrder->fresh()->daily_sequence);
         $this->assertSame(Order::STATUS_CANCELLED, $otherDayOrder->fresh()->status);
         $this->assertSame(8, (int) $inventory->fresh()->reserved_quantity);
         $this->assertSame(2, OrderHistory::query()
@@ -150,6 +154,49 @@ class AdminRestoreCancelledOrderTest extends TestCase
             ->assertOk()
             ->assertSeeInOrder(['Lọc', 'Phục hồi tất cả'])
             ->assertSee(route('pages.my_orders.monitoring.restore_all'), false);
+    }
+
+    public function test_admin_can_cancel_an_eligible_order_from_a_past_monitoring_day(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-24 10:00:00', 'Asia/Bangkok'));
+        [$admin, $order, $inventory] = $this->createCancelledOrder(10, 4);
+
+        $this->actingAs($admin)
+            ->post(route('site.orders.restore-cancelled', $order))
+            ->assertSessionHas('success');
+
+        $order->forceFill(['created_at' => Carbon::parse('2026-08-23 09:00:00', 'Asia/Bangkok')])->saveQuietly();
+
+        $this->actingAs($admin)
+            ->get(route('pages.my_orders.monitoring', [
+                'tab' => 'today',
+                'view' => 'cards',
+                'date' => '2026-08-23',
+                'date_field' => 'business_date',
+            ]))
+            ->assertOk()
+            ->assertSee(route('site.orders.cancel', $order), false)
+            ->assertSee('Hủy đơn hàng');
+
+        $this->actingAs($admin)
+            ->post(route('site.orders.cancel', $order))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $order->refresh();
+        $this->assertSame(Order::STATUS_CANCELLED, $order->status);
+        $this->assertSame($admin->id, $order->cancelled_by);
+        $this->assertSame(0, (int) $inventory->fresh()->reserved_quantity);
+        $this->assertDatabaseMissing('inventory_reservations', [
+            'order_item_id' => $order->items()->value('id'),
+        ]);
+        $this->assertDatabaseHas('order_histories', [
+            'order_id' => $order->id,
+            'action' => 'cancel_order',
+            'status_before' => 'packing',
+            'status_after' => Order::STATUS_CANCELLED,
+            'user_id' => $admin->id,
+        ]);
     }
 
     public function test_restored_exception_order_can_be_packed_delivered_and_recognized_as_revenue(): void

@@ -1465,7 +1465,7 @@ class OrderController extends Controller
                 abort(403);
             }
 
-            if (!$order->created_at?->isToday()) {
+            if (!$isAdmin && !$order->created_at?->isToday()) {
                 return back()->with('error', 'Chi duoc huy don duoc tao trong ngay.');
             }
         }
@@ -1565,7 +1565,7 @@ class OrderController extends Controller
         }
 
         foreach (array_keys($affectedDates) as $affectedDate) {
-            $this->syncDailySequenceAndStockSufficiency($affectedDate);
+            $this->syncDailySequenceAndStockSufficiency($affectedDate, true);
         }
 
         if ($ordersToRestore->isEmpty()) {
@@ -2039,8 +2039,14 @@ class OrderController extends Controller
      * - orders.daily_sequence
      * - orders.stock_sufficient (1/0)
      * - orders.stock_shortage_detail (nullable json)
+     *
+     * When preserving the sequence, existing priority numbers determine the
+     * stock-allocation order and only the stock fields are recalculated.
      */
-    public function syncDailySequenceAndStockSufficiency(Carbon|string $date): void
+    public function syncDailySequenceAndStockSufficiency(
+        Carbon|string $date,
+        bool $preserveDailySequence = false
+    ): void
     {
         $dateString = $date instanceof Carbon ? $date->toDateString() : Carbon::parse($date)->toDateString();
 
@@ -2058,10 +2064,18 @@ class OrderController extends Controller
             Order::STATUS_READY_TO_SHIP,
         ];
 
-        $orders = Order::query()
+        $ordersQuery = Order::query()
             ->with(['items.variant.product', 'items.product'])
             ->whereDate('created_at', $dateString)
-            ->whereIn('status', $queueStatuses)
+            ->whereIn('status', $queueStatuses);
+
+        if ($preserveDailySequence) {
+            $ordersQuery
+                ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
+                ->orderBy('daily_sequence', 'asc');
+        }
+
+        $orders = $ordersQuery
             ->orderBy('created_at', 'asc')
             ->orderBy('id', 'asc')
             ->get();
@@ -2156,12 +2170,16 @@ class OrderController extends Controller
                 }
             }
 
-            $order->update($this->filterExistingColumns('orders', [
-                'daily_sequence' => $sequence,
+            $orderUpdate = [
                 'stock_sufficient' => $isSufficient ? 1 : 0,
                 'stock_shortage_detail' => $isSufficient ? null : $shortages,
                 'stock_alert_status' => $isSufficient ? 'ready' : 'waiting_stock',
-            ]));
+            ];
+            if (!$preserveDailySequence) {
+                $orderUpdate['daily_sequence'] = $sequence;
+            }
+
+            $order->update($this->filterExistingColumns('orders', $orderUpdate));
         }
     }
 

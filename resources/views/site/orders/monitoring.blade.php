@@ -1669,9 +1669,8 @@
                                 && $isCancelled
                                 && empty($order->trash_at);
                             $isEditable = $canManageOrder && $order->canBeDirectlyEditedByOwner();
-                            $canCancel = $canManageOrder
-                                && $order->created_at?->isToday()
-                                && in_array($order->status, \App\Models\Order::CANCELLABLE_STATUSES, true);
+                            $canCancel = in_array($order->status, \App\Models\Order::CANCELLABLE_STATUSES, true)
+                                && ($isAdminUser || ($canManageOrder && $order->created_at?->isToday()));
                             $canRequestAdjustment = $canManageOrder && $order->canRequestAdjustment();
                         @endphp
                         <article class="monitor-panel monitor-order status-{{ $monitorState }} {{ $canManageOrder ? 'is-mine' : '' }} {{ $isCancelled ? 'is-cancelled' : '' }}" id="monitor-order-{{ $order->id }}" title="{{ $monitorStateLabels[$monitorState] }}">
@@ -1895,12 +1894,13 @@
                                         @if($canRequestAdjustment)
                                             <button class="btn btn-sm btn-warning monitor-adjustment-open" type="button" data-adjustment-url="{{ route('site.order-adjustments.create', $order) }}" data-adjustment-target="monitorAdjustment{{ $order->id }}"><i class="bi bi-arrow-left-right"></i><span>Gửi yêu cầu điều chỉnh</span></button>
                                         @endif
-                                        @if($canCancel)
-                                            <form method="POST" class="monitor-cancel-form" action="{{ route('site.orders.cancel', $order) }}" onsubmit="return confirm('Bạn chắc chắn muốn hủy đơn hàng này?');">
-                                                @csrf
-                                                <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-x-circle me-1"></i>Hủy đơn hàng</button>
-                                            </form>
-                                        @endif
+                                    @endif
+                                    @if($canCancel)
+                                        <form method="POST" class="monitor-cancel-form" action="{{ route('site.orders.cancel', $order) }}"
+                                              onsubmit="return confirm('Bạn chắc chắn muốn hủy đơn {{ addslashes($order->code ?: ('#' . $order->id)) }}? Booking tồn kho của đơn sẽ được giải phóng.');">
+                                            @csrf
+                                            <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-x-circle me-1"></i>Hủy đơn hàng</button>
+                                        </form>
                                     @endif
                                     @if($canDeleteCancelledOrder)
                                         <form method="POST" class="monitor-cancel-form" action="{{ route('site.orders.trash', $order) }}"
