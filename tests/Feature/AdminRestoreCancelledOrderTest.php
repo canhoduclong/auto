@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AccountingReconciliation;
 use App\Models\Customer;
 use App\Models\Inventory;
 use App\Models\InventoryDocument;
@@ -253,6 +254,47 @@ class AdminRestoreCancelledOrderTest extends TestCase
             ->assertOk()
             ->assertSee('8,4 kg')
             ->assertSee('Thực giao / khách cân');
+    }
+
+    public function test_inline_adjustment_form_uses_a_stable_submit_url_and_aligned_fee_layout(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-24 10:00:00', 'Asia/Bangkok'));
+        [$admin, $order] = $this->createCancelledOrder(10, 4);
+        $order->update([
+            'status' => Order::STATUS_COMPLETED,
+            'delivered_at' => now(),
+        ]);
+        AccountingReconciliation::query()->create([
+            'order_id' => $order->id,
+            'sale_id' => $admin->id,
+            'total_amount' => 200000,
+            'recognized_revenue' => 200000,
+            'status' => AccountingReconciliation::STATUS_CONFIRMED,
+            'confirmed_by' => $admin->id,
+            'confirmed_at' => now(),
+        ]);
+
+        $response = $this->actingAs($admin)
+            ->getJson(route('site.order-adjustments.create', $order))
+            ->assertOk()
+            ->assertJsonPath('success', true);
+
+        $html = (string) $response->json('html');
+        $this->assertStringContainsString('action="'.route('site.order-adjustments.store', $order).'"', $html);
+        $this->assertStringContainsString('<input type="hidden" name="action" value="submit">', $html);
+        $this->assertStringContainsString('data-adjustment-action="submit"', $html);
+        $this->assertStringContainsString('monitor-adjustment-fee-list', $html);
+        $this->assertStringNotContainsString('type="submit" class="btn btn-warning fw-bold" name="action"', $html);
+
+        $this->actingAs($admin)
+            ->get(route('pages.my_orders.monitoring', [
+                'date' => '2026-08-24',
+                'view' => 'cards',
+            ]))
+            ->assertOk()
+            ->assertSee("form.getAttribute('action')", false)
+            ->assertSee("body.set('action', button.dataset.adjustmentAction || 'submit')", false)
+            ->assertSee('fetch(submitUrl', false);
     }
 
     public function test_admin_can_cancel_an_eligible_order_from_a_past_monitoring_day(): void

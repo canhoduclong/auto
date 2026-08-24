@@ -794,7 +794,13 @@
     .monitor-adjustment-add-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
     .monitor-adjustment-picker { margin-top: 10px; padding: 12px; border: 1px solid #fed7aa; border-radius: 8px; background: #fff; }
     .monitor-adjustment-product-results { max-height: 460px; overflow-y: auto; }
-    .monitor-adjustment-fee-row { display: grid !important; grid-template-columns: 24px minmax(140px, 1fr) minmax(150px, 230px); align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid #eef2f7; }
+    .monitor-adjustment-fee-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .monitor-adjustment-fee-row { display: grid !important; grid-template-columns: 22px minmax(105px, .7fr) minmax(140px, 1fr); align-items: center; gap: 10px; min-width: 0; margin: 0 !important; padding: 11px 12px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; }
+    .monitor-adjustment-fee-row.is-enabled { border-color: #f59e0b; background: #fffbeb; box-shadow: inset 3px 0 0 #f59e0b; }
+    .monitor-adjustment-fee-row .form-check-input { margin: 0; }
+    .monitor-adjustment-fee-name, .monitor-adjustment-fee-value { min-width: 0; }
+    .monitor-adjustment-fee-name strong { display: block; line-height: 1.2; }
+    .monitor-adjustment-fee-value { width: 100%; }
     .monitor-adjustment-submit { display: flex; justify-content: flex-end; margin-top: 12px; padding-top: 12px; border-top: 1px solid #fde68a; }
     @media (max-width: 1199.98px) {
         .monitor-shell { max-width: 960px; }
@@ -844,8 +850,7 @@
         .monitor-auto-footer .btn { width: 100%; }
         .monitor-variant-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .monitor-adjustment-fields, .monitor-adjustment-details { grid-template-columns: 1fr; }
-        .monitor-adjustment-fee-row { grid-template-columns: 24px 1fr; }
-        .monitor-adjustment-fee-row .input-group { grid-column: 2; }
+        .monitor-adjustment-fee-list { grid-template-columns: 1fr; }
         .monitor-product-choice-label { font-size: 0; }
         .monitor-product-choice-label i { font-size: .8rem; }
         .monitor-priority-legend-grid { grid-template-columns: 1fr; }
@@ -858,6 +863,8 @@
         .monitor-edit-product-results .monitor-product-toolbar > div { justify-content: flex-end; }
         .monitor-edit-product-results .monitor-product-choice-label { min-width: auto; }
         .monitor-day-note { grid-template-columns: 1fr; gap: 5px; }
+        .monitor-adjustment-fee-row { grid-template-columns: 22px minmax(0, 1fr); }
+        .monitor-adjustment-fee-value { grid-column: 2; }
     }
 </style>
 @endpush
@@ -3020,6 +3027,10 @@ document.addEventListener('submit', async function (event) {
     document.addEventListener('change', event => {
         const form = event.target.closest('[data-monitor-adjustment-form]');
         if (!form) return;
+        if (event.target.matches('.monitor-adjustment-fee-enabled')) {
+            event.target.closest('.monitor-adjustment-fee-row')?.classList.toggle('is-enabled', event.target.checked);
+            return;
+        }
         if (event.target.matches('.monitor-adjustment-product-results #per-page-select')) {
             const target = new URL(form.dataset.variantUrl, window.location.origin);
             target.searchParams.set('per_page', event.target.value || '10');
@@ -3039,8 +3050,10 @@ document.addEventListener('submit', async function (event) {
         errors.hidden = true;
         try {
             const body = new FormData(form);
-            body.set('action', button.value || 'submit');
-            const response = await fetch(form.action, { method: 'POST', body, headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' } });
+            body.set('action', button.dataset.adjustmentAction || 'submit');
+            const submitUrl = form.getAttribute('action');
+            if (!submitUrl) throw new Error('Không xác định được địa chỉ gửi yêu cầu điều chỉnh.');
+            const response = await fetch(submitUrl, { method: 'POST', body, headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' } });
             const data = await response.json();
             if (!response.ok || !data.success) throw new Error(data.errors ? Object.values(data.errors).flat().join(' ') : (data.message || 'Không gửi được yêu cầu.'));
             form.innerHTML = `<div class="alert alert-success mb-0"><strong>${escapeHtml(data.message)}</strong><div class="mt-2"><a class="btn btn-sm btn-outline-success" href="${escapeHtml(data.url)}">Xem yêu cầu #${escapeHtml(data.adjustment_id)}</a></div></div>`;

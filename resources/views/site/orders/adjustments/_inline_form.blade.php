@@ -7,6 +7,7 @@
       data-variant-url="{{ route('site.orders.variants.ajax') }}"
       action="{{ route('site.order-adjustments.store', $order) }}" method="POST" enctype="multipart/form-data">
     @csrf
+    <input type="hidden" name="action" value="submit">
     <div class="monitor-adjustment-heading">
         <div>
             <strong><i class="bi bi-arrow-left-right me-1"></i>Yêu cầu chỉnh sửa</strong>
@@ -70,27 +71,30 @@
     </div>
 
     <div class="monitor-adjustment-picker monitor-adjustment-fee-picker" hidden>
-        <div class="small fw-bold mb-2">Chọn phí cần bổ sung vào đơn</div>
-        @forelse($feeTypes as $feeType)
-            @php
-                $state = $feeStates[$feeType->id] ?? ['enabled' => false, 'value' => (float) $feeType->default_value];
-                $enabled = (bool) $state['enabled'];
-                $percent = $feeType->calculation_type === 'percent';
-            @endphp
-            <label class="monitor-adjustment-fee-row">
-                <input type="hidden" name="fees[{{ $feeType->id }}][type_id]" value="{{ $feeType->id }}">
-                <input type="hidden" name="fees[{{ $feeType->id }}][enabled]" value="0">
-                <input type="checkbox" class="form-check-input monitor-adjustment-fee-enabled" name="fees[{{ $feeType->id }}][enabled]" value="1" @checked($enabled)>
-                <span><strong>{{ $feeType->name }}</strong><small>{{ $feeType->direction === 'discount' ? 'Giảm trừ' : 'Cộng thêm' }}</small></span>
-                <div class="input-group input-group-sm"><input type="number" min="0" @if($percent) max="100" @endif step="0.01" name="fees[{{ $feeType->id }}][value]" value="{{ $state['value'] ?: $feeType->default_value }}" class="form-control"><span class="input-group-text">{{ $percent ? '%' : 'đ' }}</span></div>
-            </label>
-        @empty
-            <div class="text-muted small">Chưa có loại phí đang hoạt động.</div>
-        @endforelse
+        <div class="small fw-bold mb-1">Các phí và giảm trừ</div>
+        <div class="text-muted small mb-3">Đánh dấu khoản cần thay đổi, sau đó nhập giá trị mới.</div>
+        <div class="monitor-adjustment-fee-list">
+            @forelse($feeTypes as $feeType)
+                @php
+                    $state = $feeStates[$feeType->id] ?? ['enabled' => false, 'value' => (float) $feeType->default_value];
+                    $enabled = (bool) $state['enabled'];
+                    $percent = $feeType->calculation_type === 'percent';
+                @endphp
+                <label class="monitor-adjustment-fee-row {{ $enabled ? 'is-enabled' : '' }}">
+                    <input type="hidden" name="fees[{{ $feeType->id }}][type_id]" value="{{ $feeType->id }}">
+                    <input type="hidden" name="fees[{{ $feeType->id }}][enabled]" value="0">
+                    <input type="checkbox" class="form-check-input monitor-adjustment-fee-enabled" name="fees[{{ $feeType->id }}][enabled]" value="1" @checked($enabled)>
+                    <span class="monitor-adjustment-fee-name"><strong>{{ $feeType->name }}</strong><small>{{ $feeType->direction === 'discount' ? 'Giảm trừ' : 'Cộng thêm' }}</small></span>
+                    <div class="input-group input-group-sm monitor-adjustment-fee-value"><input type="number" min="0" @if($percent) max="100" @endif step="0.01" name="fees[{{ $feeType->id }}][value]" value="{{ $state['value'] ?: $feeType->default_value }}" class="form-control"><span class="input-group-text">{{ $percent ? '%' : 'đ' }}</span></div>
+                </label>
+            @empty
+                <div class="text-muted small">Chưa có loại phí đang hoạt động.</div>
+            @endforelse
+        </div>
     </div>
 
     <div class="monitor-adjustment-errors alert alert-danger py-2 mt-3 mb-0" hidden></div>
     <div class="monitor-adjustment-submit">
-        <button type="submit" class="btn btn-warning fw-bold" name="action" value="submit"><i class="bi bi-send me-1"></i>Gửi yêu cầu phê duyệt</button>
+        <button type="submit" class="btn btn-warning fw-bold" data-adjustment-action="submit"><i class="bi bi-send me-1"></i>Gửi yêu cầu phê duyệt</button>
     </div>
 </form>
