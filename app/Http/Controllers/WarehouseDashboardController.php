@@ -1576,6 +1576,26 @@ class WarehouseDashboardController extends Controller
     {
         $this->authorizePackingOrderAccess($order);
 
+        $validated = $request->validate([
+            'packing_date' => ['nullable', 'date_format:Y-m-d', 'before_or_equal:today'],
+        ]);
+        $packingDate = (string) ($validated['packing_date'] ?? now()->toDateString());
+
+        $belongsToPackingDate = Order::query()
+            ->whereKey($order->id)
+            ->forWorkflowDate($packingDate)
+            ->exists();
+
+        if (! $belongsToPackingDate) {
+            $message = 'Đơn hàng không thuộc ngày đóng hàng đã chọn.';
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $message], 422);
+            }
+
+            return back()->with('error', $message);
+        }
+
         if ($order->warehouse_adjustment_status === Order::WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION) {
             $message = 'Đơn đang chờ sale xác nhận thay đổi từ kho. Tạm thời chưa thể đóng hàng.';
 
@@ -1645,7 +1665,7 @@ class WarehouseDashboardController extends Controller
             }
         }
 
-        $stockCheck = $this->evaluateSingleOrderStock($order, $managedWarehouseId);
+        $stockCheck = $this->evaluateSingleOrderStock($order, $managedWarehouseId, $packingDate);
 
         if (! ($stockCheck['can_start_packing'] ?? false)) {
             $message = 'Không đủ tồn kho để đóng hàng';
@@ -1685,13 +1705,14 @@ class WarehouseDashboardController extends Controller
             'status_before' => $statusBefore,
             'status_after' => Order::STATUS_PACKING,
             'note' => 'Bắt đầu đóng gói đơn hàng'
+                .' cho ngày '.Carbon::parse($packingDate)->format('d/m/Y')
                 .($assignedWarehouseOnStart ? ' [assigned_warehouse_on_start]' : ''),
         ]);
 
         if ($request->expectsJson()) {
             return response()->json([
                 'ok' => true,
-                'message' => 'Đã bắt đầu đóng gói đơn #'.$order->code,
+                'message' => 'Đã bắt đầu đóng gói đơn #'.$order->code.' cho ngày '.Carbon::parse($packingDate)->format('d/m/Y'),
                 'order' => [
                     'id' => $order->id,
                     'status' => Order::STATUS_PACKING,
@@ -1701,15 +1722,17 @@ class WarehouseDashboardController extends Controller
             ]);
         }
 
-        return back()->with('success', 'Đã bắt đầu đóng gói đơn #'.$order->code);
+        return back()->with('success', 'Đã bắt đầu đóng gói đơn #'.$order->code.' cho ngày '.Carbon::parse($packingDate)->format('d/m/Y'));
     }
 
-    private function evaluateSingleOrderStock(Order $order, ?int $warehouseId): array
+    private function evaluateSingleOrderStock(Order $order, ?int $warehouseId, ?string $packingDate = null): array
     {
-        // Always scope to TODAY: consistent with what the orders-list page shows,
-        // and ensures we check against current physical stock and today's queue only.
         $singleCollection = collect([$order]);
-        $result = $this->buildPackingQueueStockGuards($singleCollection, $warehouseId, now()->toDateString());
+        $result = $this->buildPackingQueueStockGuards(
+            $singleCollection,
+            $warehouseId,
+            $packingDate ?? now()->toDateString()
+        );
 
         return $result['guards'][$order->id] ?? [
             'has_shortage' => false,
@@ -1816,6 +1839,9 @@ class WarehouseDashboardController extends Controller
         $allQueueOrders = Order::with(['items.product', 'items.variant.product'])
             ->whereIn('status', $queueStatuses)
             ->forWorkflowDate($forDate)
+            ->when($warehouseId, fn ($query) => $query->where(function ($scope) use ($warehouseId) {
+                $scope->where('warehouse_id', $warehouseId)->orWhereNull('warehouse_id');
+            }))
             ->orderBy('created_at', 'asc')
             ->orderBy('id', 'asc')
             ->get();
@@ -1853,11 +1879,14 @@ class WarehouseDashboardController extends Controller
         // This keeps the pool consistent with the "Khả dụng" number shown on the
         // inventory page and the warehouse/orders stock panel.
         // ──────────────────────────────────────────────────────────────────────────────
-        $availableByVariant = $this->getAvailableByVariant($variantIds, $warehouseId);
+        $isHistoricalDate = Carbon::parse($forDate)->startOfDay()->lt(Carbon::today());
+        $availableByVariant = $isHistoricalDate
+            ? $this->getStockAtDate($variantIds, $warehouseId, $forDate)
+            : $this->getAvailableByVariant($variantIds, $warehouseId);
 
         // Reservations belonging to today's FIFO orders, grouped by variant.
         $todayResvByVariant = [];
-        if ($fifoOrderItemIds->isNotEmpty()) {
+        if (! $isHistoricalDate && $fifoOrderItemIds->isNotEmpty()) {
             $todayResvByVariant = InventoryReservation::query()
                 ->join('inventories', 'inventories.id', '=', 'inventory_reservations.inventory_id')
                 ->whereIn('inventory_reservations.order_item_id', $fifoOrderItemIds->all())

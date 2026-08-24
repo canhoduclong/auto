@@ -319,11 +319,17 @@
                                             </form>
                                         @endif
 
-                                        <form action="{{ route('orders.destroy', $order->id) }}" method="POST" class="d-inline">
-                                            @csrf
-                                            @method('DELETE')
-                                            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('{{ __('orders.confirms.delete_order') }}')">{{ __('orders.buttons.delete') }}</button>
-                                        </form>
+                                        @if(auth()->user()?->isAdmin())
+                                            <form action="{{ route('orders.admin-delete', $order) }}" method="POST" class="d-inline"
+                                                  onsubmit="const reason = window.prompt('Nhập lý do xóa đơn (ít nhất 5 ký tự):'); if (!reason || reason.trim().length < 5) { window.alert('Vui lòng nhập lý do xóa ít nhất 5 ký tự.'); return false; } this.elements.reason.value = reason.trim(); return window.confirm('Xóa vĩnh viễn đơn này và loại toàn bộ doanh số, hoa hồng liên quan?');">
+                                                @csrf
+                                                @method('DELETE')
+                                                <input type="hidden" name="reason" value="">
+                                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                                    <i class="bi bi-trash me-1"></i>Xóa &amp; loại doanh số
+                                                </button>
+                                            </form>
+                                        @endif
                                     </div>
                                 </td>
                                 <td>

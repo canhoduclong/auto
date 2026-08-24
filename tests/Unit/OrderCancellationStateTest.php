@@ -31,7 +31,6 @@ class OrderCancellationStateTest extends TestCase
     public static function nonCancellableStatuses(): array
     {
         return [
-            [Order::STATUS_READY_TO_PACK],
             [Order::STATUS_READY_TO_SHIP],
             [Order::STATUS_DELIVERING],
             [Order::STATUS_DELIVERED],

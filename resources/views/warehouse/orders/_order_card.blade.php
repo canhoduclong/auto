@@ -759,8 +759,10 @@
                                     @if($canStartPacking && !$isPendingSaleConfirmation)
                                         <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.start-packing', $order) }}" method="POST" class="js-start-packing-form">
                                             @csrf
+                                            <input type="hidden" name="packing_date" value="{{ $selectedDate ?? now()->toDateString() }}">
                                             <button class="btn btn-primary btn-sm js-start-packing-btn" type="submit">
-                                                <i class="bi bi-box2 me-1"></i>Đóng hàng
+                                                <i class="bi bi-box2 me-1"></i>
+                                                {{ $isTodaySelected ? 'Đóng hàng' : 'Đóng hàng ngày ' . \Illuminate\Support\Carbon::parse($selectedDate)->format('d/m') }}
                                             </button>
                                         </form>
                                     @elseif($isPendingSaleConfirmation)

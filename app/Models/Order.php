@@ -244,6 +244,7 @@ class Order extends Model
         self::STATUS_PENDING_MANAGER_APPROVAL,
         'pending_warehouse_approval',
         self::STATUS_APPROVED,
+        self::STATUS_READY_TO_PACK,
         self::STATUS_PACKING,
         'confirmed',
         'picking',

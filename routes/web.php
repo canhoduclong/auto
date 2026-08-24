@@ -739,6 +739,9 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::post('/orders/{order}/restore', [OrderController::class, 'restoreCancelled'])
         ->name('orders.restore-cancelled')
         ->middleware('role:admin');
+    Route::delete('/orders/{order}/admin-delete', [\App\Http\Controllers\AdminOrderDeletionController::class, 'destroy'])
+        ->name('orders.admin-delete')
+        ->middleware('role:admin');
     Route::post('/orders/{order}/approve', [OrderApprovalController::class, 'approve'])->name('orders.approve');
     Route::post('/orders/{order}/reject', [OrderApprovalController::class, 'reject'])->name('orders.reject');
     Route::resource('orders', OrderController::class)->middleware('permission');

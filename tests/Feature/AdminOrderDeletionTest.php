@@ -165,7 +165,7 @@ class AdminOrderDeletionTest extends TestCase
             'unit_cost' => 100000,
         ]);
 
-        $this->actingAs($admin)->delete(route('site.orders.admin-delete', $order), [
+        $this->actingAs($admin)->delete(route('orders.admin-delete', $order), [
             'reason' => 'Đơn được nhập nhầm',
         ])->assertRedirect();
 

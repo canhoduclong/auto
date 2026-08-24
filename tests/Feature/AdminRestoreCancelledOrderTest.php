@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Customer;
 use App\Models\Inventory;
+use App\Models\InventoryMovement;
 use App\Models\InventoryReservation;
 use App\Models\Order;
 use App\Models\OrderHistory;
@@ -306,6 +307,45 @@ class AdminRestoreCancelledOrderTest extends TestCase
         ]);
     }
 
+    public function test_admin_can_cancel_and_see_safe_delete_action_for_ready_to_pack_order(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-24 10:00:00', 'Asia/Bangkok'));
+        [$admin, $order, $inventory] = $this->createCancelledOrder(10, 4);
+
+        $this->actingAs($admin)
+            ->post(route('orders.restore-cancelled', $order))
+            ->assertSessionHas('success');
+
+        $order->update(['status' => Order::STATUS_READY_TO_PACK]);
+
+        $this->actingAs($admin)
+            ->get(route('orders.show', $order))
+            ->assertOk()
+            ->assertSee(route('orders.cancel', $order), false)
+            ->assertSee(route('orders.admin-delete', $order), false)
+            ->assertSee('Xóa &amp; loại doanh số', false);
+
+        $this->actingAs($admin)
+            ->post(route('orders.cancel', $order), [
+                'cancel_reason' => 'Admin hủy đơn chưa đóng hàng',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertSame(Order::STATUS_CANCELLED, $order->fresh()->status);
+        $this->assertSame(0, (int) $inventory->fresh()->reserved_quantity);
+        $this->assertDatabaseMissing('inventory_reservations', [
+            'order_item_id' => $order->items()->value('id'),
+        ]);
+        $this->assertDatabaseHas('order_histories', [
+            'order_id' => $order->id,
+            'action' => 'cancel_order',
+            'status_before' => Order::STATUS_READY_TO_PACK,
+            'status_after' => Order::STATUS_CANCELLED,
+            'user_id' => $admin->id,
+        ]);
+    }
+
     public function test_owner_can_resend_cancelled_order_as_a_new_order_from_monitoring(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-08-24 10:00:00', 'Asia/Bangkok'));
@@ -434,6 +474,55 @@ class AdminRestoreCancelledOrderTest extends TestCase
         ]);
         $this->assertDatabaseHas('accounting_sales_entries', [
             'order_id' => $order->id,
+        ]);
+    }
+
+    public function test_past_day_packing_uses_that_days_inventory_snapshot(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-24 10:00:00', 'Asia/Bangkok'));
+        [$admin, $order, $inventory] = $this->createCancelledOrder(1, 4);
+
+        $order->forceFill([
+            'created_at' => Carbon::parse('2026-08-23 09:00:00', 'Asia/Bangkok'),
+            'delivery_date' => '2026-08-23',
+        ])->saveQuietly();
+
+        InventoryMovement::query()->create([
+            'inventory_id' => $inventory->id,
+            'quantity' => -4,
+            'type' => 'export',
+            'reference_id' => 999999,
+            'reference_type' => Order::class,
+            'user_id' => $admin->id,
+            'created_at' => Carbon::parse('2026-08-24 08:00:00', 'Asia/Bangkok'),
+            'updated_at' => Carbon::parse('2026-08-24 08:00:00', 'Asia/Bangkok'),
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('orders.restore-cancelled', $order))
+            ->assertSessionHas('success');
+        $order->update(['status' => Order::STATUS_READY_TO_PACK]);
+
+        $this->actingAs($admin)
+            ->get(route('warehouse.orders', ['date' => '2026-08-23']))
+            ->assertOk()
+            ->assertSee('Đóng hàng ngày 23/08')
+            ->assertSee('name="packing_date" value="2026-08-23"', false);
+
+        $this->actingAs($admin)
+            ->post(route('warehouse.orders.start-packing', $order), [
+                'packing_date' => '2026-08-23',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertSame(Order::STATUS_PACKING, $order->fresh()->status);
+        $this->assertDatabaseHas('order_histories', [
+            'order_id' => $order->id,
+            'action' => 'start_packing',
+            'status_before' => Order::STATUS_READY_TO_PACK,
+            'status_after' => Order::STATUS_PACKING,
+            'note' => 'Bắt đầu đóng gói đơn hàng cho ngày 23/08/2026',
         ]);
     }
 
