@@ -1550,6 +1550,7 @@
                                     <th>Sản phẩm</th>
                                     <th>Size</th>
                                     <th class="text-end">Số lượng</th>
+                                    <th class="text-end">Số liệu thực tế</th>
                                     <th class="text-end">Giá bán</th>
                                     <th class="text-end">Tiền bán</th>
                                     <th>Nhà cung cấp</th>
@@ -1561,13 +1562,9 @@
                                     @php
                                         $listItems = $order->items->isNotEmpty() ? $order->items->values() : collect([null]);
                                         $listRowspan = $listItems->count();
-                                        $listOrderSaleTotal = (float) $order->items->sum(function ($item) {
-                                            $lineTotal = (float) ($item->total ?? 0);
-
-                                            return $lineTotal > 0
-                                                ? $lineTotal
-                                                : (float) ($item->price ?? 0) * (float) $item->display_total_value;
-                                        });
+                                        $listOrderSaleTotal = (float) $order->items->sum(
+                                            fn ($item) => $item->lineTotalForStage((string) $order->status)
+                                        );
                                         $canAssignSupplier = !$isSaleViewingRole || (int) $order->user_id === (int) $monitorUser?->id;
                                     @endphp
                                     @foreach($listItems as $listItem)
@@ -1583,6 +1580,14 @@
                                             <td class="monitor-list-products">{{ $listItem?->display_name ?? '—' }}</td>
                                             <td>{{ $listItem?->variant?->size ?: '—' }}</td>
                                             <td class="text-end fw-semibold">{{ $listItem ? $formatQuantity($listItem->quantity) : '—' }}</td>
+                                            <td class="text-end">
+                                                @if($listItem)
+                                                    <span class="fw-semibold">{{ $listItem->displayLabelForStage((string) $order->status) }}</span>
+                                                    <small class="d-block text-muted">{{ $listItem->displaySourceForStage((string) $order->status) }}</small>
+                                                @else
+                                                    —
+                                                @endif
+                                            </td>
                                             <td class="text-end text-nowrap">{{ $listItem && (float) $listItem->price > 0 ? number_format((float) $listItem->price, 0, ',', '.') . 'đ' : '—' }}</td>
                                             @if($loop->first)
                                                 <td rowspan="{{ $listRowspan }}" class="text-end fw-bold text-nowrap" title="Tổng tiền bán của đơn">{{ number_format($listOrderSaleTotal, 0, ',', '.') }}đ</td>
@@ -1634,7 +1639,7 @@
                                         </tr>
                                     @endforeach
                                 @empty
-                                    <tr><td colspan="10" class="py-4 text-center text-muted">Không có đơn hàng phù hợp.</td></tr>
+                                    <tr><td colspan="11" class="py-4 text-center text-muted">Không có đơn hàng phù hợp.</td></tr>
                                 @endforelse
                             </tbody>
                         </table>
@@ -1721,7 +1726,7 @@
                                                 <th>Sản phẩm</th>
                                                 <th class="text-end">SL</th>
                                                 <th class="text-end">Size</th>
-                                                <th class="text-end">Tổng</th>
+                                                <th class="text-end">Số liệu thực tế</th>
                                                 <th class="text-end">Đơn giá</th>
                                                 <th class="text-end">Thành tiền</th>
                                             </tr>
@@ -1730,10 +1735,7 @@
                                             @forelse($order->items as $item)
                                                 @php
                                                     $itemName = $item->display_name;
-                                                    $lineTotal = (float) ($item->total ?? 0);
-                                                    if ($lineTotal <= 0) {
-                                                        $lineTotal = (float) ($item->quantity ?? 0) * (float) ($item->price ?? 0);
-                                                    }
+                                                    $lineTotal = $item->lineTotalForStage((string) $order->status);
                                                 @endphp
                                                 <tr>
                                                     <td>
@@ -1742,7 +1744,10 @@
                                                     </td>
                                                     <td class="text-end">{{ $formatQuantity($item->quantity) }}</td>
                                                     <td class="text-end">{{ $item->variant?->size ?? '-' }}</td>
-                                                    <td class="text-end fw-semibold">{{ $item->display_total_label }}</td>
+                                                    <td class="text-end fw-semibold">
+                                                        {{ $item->displayLabelForStage((string) $order->status) }}
+                                                        <small class="d-block text-muted fw-normal">{{ $item->displaySourceForStage((string) $order->status) }}</small>
+                                                    </td>
                                                     <td class="text-end">{{ number_format((float) $item->price, 0, ',', '.') }}đ</td>
                                                     <td class="text-end fw-semibold">{{ number_format($lineTotal, 0, ',', '.') }}đ</td>
                                                 </tr>

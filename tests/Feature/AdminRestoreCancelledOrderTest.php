@@ -220,6 +220,40 @@ class AdminRestoreCancelledOrderTest extends TestCase
             ->assertSee('Nguyễn Văn Tên Đầy Đủ Duy Nhất');
     }
 
+    public function test_monitoring_displays_measurement_from_the_current_order_stage(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-24 10:00:00', 'Asia/Bangkok'));
+        [$admin, $order] = $this->createCancelledOrder(10, 4);
+        $order->forceFill([
+            'status' => Order::STATUS_READY_TO_SHIP,
+            'created_at' => Carbon::parse('2026-08-23 09:00:00', 'Asia/Bangkok'),
+        ])->saveQuietly();
+        $order->items()->firstOrFail()->update([
+            'packed_weight' => 9.75,
+            'actual_weight' => 8.4,
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('pages.my_orders.monitoring', [
+                'date' => '2026-08-23',
+                'view' => 'cards',
+            ]))
+            ->assertOk()
+            ->assertSee('9,75 kg')
+            ->assertSee('Kho cân');
+
+        $order->update(['status' => Order::STATUS_DELIVERED]);
+
+        $this->actingAs($admin)
+            ->get(route('pages.my_orders.monitoring', [
+                'date' => '2026-08-23',
+                'view' => 'list',
+            ]))
+            ->assertOk()
+            ->assertSee('8,4 kg')
+            ->assertSee('Thực giao / khách cân');
+    }
+
     public function test_admin_can_cancel_an_eligible_order_from_a_past_monitoring_day(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-08-24 10:00:00', 'Asia/Bangkok'));

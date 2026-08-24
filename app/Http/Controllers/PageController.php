@@ -1131,6 +1131,9 @@ class PageController extends Controller
         }
 
         $filteredOrders = (clone $dateQuery)->get();
+        $filteredOrders->each(function (Order $order): void {
+            $order->items->each(fn ($item) => $item->setRelation('order', $order));
+        });
         [$supplierProfitByOrder, $supplierProfitSummaries] = $this->monitoringSupplierProfitability(
             $supplierAnalysisOrders,
             $selectedDate
@@ -1246,13 +1249,9 @@ class PageController extends Controller
                         $prices = $variantItems->pluck('price')->map(fn ($price) => (float) $price);
                         $minPrice = (float) ($prices->min() ?? 0);
                         $maxPrice = (float) ($prices->max() ?? 0);
-                        $subtotal = (float) $variantItems->sum(function ($item) {
-                            $lineTotal = (float) ($item->total ?? 0);
-
-                            return $lineTotal > 0
-                                ? $lineTotal
-                                : (float) ($item->quantity ?? 0) * (float) ($item->price ?? 0);
-                        });
+                        $subtotal = (float) $variantItems->sum(
+                            fn ($item) => $item->lineTotalForStage((string) $item->order->status)
+                        );
                         $warehouseStocks = $monitoringWarehouses->mapWithKeys(function ($warehouse) use ($inventoryByVariant, $variantId) {
                             return [$warehouse->id => $inventoryByVariant->get($variantId)?->get($warehouse->id) ?? [
                                 'on_hand' => 0,
@@ -1265,7 +1264,9 @@ class PageController extends Controller
                             'name' => $variant?->size ?: ($variant?->name ?: ($variant?->sku ?: 'Mặc định')),
                             'sku' => (string) ($variant?->sku ?? ''),
                             'quantity' => (float) $variantItems->sum('quantity'),
-                            'total' => (float) $variantItems->sum(fn ($item) => (float) $item->display_total_value),
+                            'total' => (float) $variantItems->sum(
+                                fn ($item) => $item->displayValueForStage((string) $item->order->status)
+                            ),
                             'unit' => $first->display_total_unit,
                             'price_label' => abs($maxPrice - $minPrice) < 0.01
                                 ? number_format($minPrice, 0, ',', '.') . 'đ'
