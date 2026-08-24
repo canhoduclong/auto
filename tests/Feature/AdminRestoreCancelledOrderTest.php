@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Customer;
 use App\Models\Inventory;
+use App\Models\InventoryDocument;
 use App\Models\InventoryMovement;
 use App\Models\InventoryReservation;
 use App\Models\Order;
@@ -514,19 +515,25 @@ class AdminRestoreCancelledOrderTest extends TestCase
     public function test_past_day_packing_uses_that_days_inventory_snapshot(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-08-24 10:00:00', 'Asia/Bangkok'));
-        [$admin, $order, $inventory] = $this->createCancelledOrder(1, 4);
+        [$admin, $order, $inventory] = $this->createCancelledOrder(4, 4);
 
         $order->forceFill([
             'created_at' => Carbon::parse('2026-08-23 09:00:00', 'Asia/Bangkok'),
             'delivery_date' => '2026-08-23',
         ])->saveQuietly();
 
+        $backdatedStockIn = InventoryDocument::query()->create([
+            'type' => 'import',
+            'warehouse_id' => $inventory->warehouse_id,
+            'document_date' => '2026-08-23',
+            'user_id' => $admin->id,
+        ]);
         InventoryMovement::query()->create([
             'inventory_id' => $inventory->id,
-            'quantity' => -4,
-            'type' => 'export',
-            'reference_id' => 999999,
-            'reference_type' => Order::class,
+            'quantity' => 4,
+            'type' => 'import',
+            'reference_id' => $backdatedStockIn->id,
+            'reference_type' => InventoryDocument::class,
             'user_id' => $admin->id,
             'created_at' => Carbon::parse('2026-08-24 08:00:00', 'Asia/Bangkok'),
             'updated_at' => Carbon::parse('2026-08-24 08:00:00', 'Asia/Bangkok'),
@@ -569,9 +576,6 @@ class AdminRestoreCancelledOrderTest extends TestCase
             ->assertRedirect()
             ->assertSessionHas('error', 'Đơn hàng không thuộc ngày đóng hàng đã chọn.');
         $this->assertSame(Order::STATUS_PACKING, $order->fresh()->status);
-
-        // Tồn vật lý hiện tại vẫn phải đủ để dựng lại booking trước khi xuất kho.
-        $inventory->update(['quantity' => 4]);
 
         $this->actingAs($admin)
             ->post(route('warehouse.orders.complete-packing', $order), [

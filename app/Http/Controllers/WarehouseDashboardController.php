@@ -1994,15 +1994,13 @@ class WarehouseDashboardController extends Controller
             return [];
         }
 
-        // Net movements that happened AFTER the selected date — reverse these to get historical qty
-        $movementsAfter = InventoryMovement::query()
-            ->selectRaw('inventory_id, COALESCE(SUM(quantity), 0) as qty_delta')
-            ->whereIn('inventory_id', $inventories->pluck('id')->all())
-            ->whereDate('created_at', '>', $date)
-            ->groupBy('inventory_id')
-            ->pluck('qty_delta', 'inventory_id')
-            ->map(fn ($v) => (int) $v)
-            ->all();
+        // Reverse movements whose BUSINESS date is after the selected date.
+        // A stock document can be entered today for a prior document_date; in that
+        // case it belongs to the prior day's snapshot, not today's creation time.
+        $movementsAfter = $this->movementDeltasAfterEffectiveDate(
+            $inventories->pluck('id'),
+            $date
+        );
 
         $result = [];
         foreach ($inventories as $inv) {
@@ -2015,6 +2013,45 @@ class WarehouseDashboardController extends Controller
         }
 
         return $result;
+    }
+
+    private function movementDeltasAfterEffectiveDate(Collection $inventoryIds, string $date): array
+    {
+        if ($inventoryIds->isEmpty()) {
+            return [];
+        }
+
+        return InventoryMovement::query()
+            ->leftJoin('inventory_documents as movement_documents', function ($join): void {
+                $join->on('movement_documents.id', '=', 'inventory_movements.reference_id')
+                    ->where('inventory_movements.reference_type', InventoryDocument::class);
+            })
+            ->whereIn('inventory_movements.inventory_id', $inventoryIds->all())
+            ->where(function ($query) use ($date): void {
+                $query->where(function ($documentMovement) use ($date): void {
+                    $documentMovement
+                        ->where('inventory_movements.reference_type', InventoryDocument::class)
+                        ->where(function ($effectiveDate) use ($date): void {
+                            $effectiveDate->whereDate('movement_documents.document_date', '>', $date)
+                                ->orWhere(function ($missingDocument) use ($date): void {
+                                    $missingDocument->whereNull('movement_documents.id')
+                                        ->whereDate('inventory_movements.created_at', '>', $date);
+                                });
+                        });
+                })->orWhere(function ($otherMovement) use ($date): void {
+                    $otherMovement
+                        ->where(function ($referenceType): void {
+                            $referenceType->whereNull('inventory_movements.reference_type')
+                                ->orWhere('inventory_movements.reference_type', '!=', InventoryDocument::class);
+                        })
+                        ->whereDate('inventory_movements.created_at', '>', $date);
+                });
+            })
+            ->selectRaw('inventory_movements.inventory_id, COALESCE(SUM(inventory_movements.quantity), 0) as qty_delta')
+            ->groupBy('inventory_movements.inventory_id')
+            ->pluck('qty_delta', 'inventory_movements.inventory_id')
+            ->map(fn ($value) => (int) $value)
+            ->all();
     }
 
     /**
@@ -2203,12 +2240,10 @@ class WarehouseDashboardController extends Controller
             ];
         }
 
-        $movementsAfter = InventoryMovement::query()
-            ->selectRaw('inventory_id, COALESCE(SUM(quantity), 0) as qty_delta')
-            ->whereIn('inventory_id', $inventories->pluck('id')->all())
-            ->whereDate('created_at', '>', $selectedDate)
-            ->groupBy('inventory_id')
-            ->pluck('qty_delta', 'inventory_id');
+        $movementsAfter = $this->movementDeltasAfterEffectiveDate(
+            $inventories->pluck('id'),
+            $selectedDate
+        );
 
         $totalQuantity = 0;
         $lowStock = 0;
