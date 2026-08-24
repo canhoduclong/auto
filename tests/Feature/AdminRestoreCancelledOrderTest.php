@@ -240,7 +240,7 @@ class AdminRestoreCancelledOrderTest extends TestCase
             ]))
             ->assertOk()
             ->assertSee('9,75 kg')
-            ->assertSee('Kho cân');
+            ->assertDontSee('Kho cân');
 
         $order->update(['status' => Order::STATUS_DELIVERED]);
 

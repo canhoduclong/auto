@@ -1583,7 +1583,9 @@
                                             <td class="text-end">
                                                 @if($listItem)
                                                     <span class="fw-semibold">{{ $listItem->displayLabelForStage((string) $order->status) }}</span>
-                                                    <small class="d-block text-muted">{{ $listItem->displaySourceForStage((string) $order->status) }}</small>
+                                                    @if($listItem->displaySourceForStage((string) $order->status) !== 'Kho cân')
+                                                        <small class="d-block text-muted">{{ $listItem->displaySourceForStage((string) $order->status) }}</small>
+                                                    @endif
                                                 @else
                                                     —
                                                 @endif
@@ -1746,7 +1748,9 @@
                                                     <td class="text-end">{{ $item->variant?->size ?? '-' }}</td>
                                                     <td class="text-end fw-semibold">
                                                         {{ $item->displayLabelForStage((string) $order->status) }}
-                                                        <small class="d-block text-muted fw-normal">{{ $item->displaySourceForStage((string) $order->status) }}</small>
+                                                        @if($item->displaySourceForStage((string) $order->status) !== 'Kho cân')
+                                                            <small class="d-block text-muted fw-normal">{{ $item->displaySourceForStage((string) $order->status) }}</small>
+                                                        @endif
                                                     </td>
                                                     <td class="text-end">{{ number_format((float) $item->price, 0, ',', '.') }}đ</td>
                                                     <td class="text-end fw-semibold">{{ number_format($lineTotal, 0, ',', '.') }}đ</td>
