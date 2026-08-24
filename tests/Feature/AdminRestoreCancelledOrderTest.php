@@ -184,6 +184,41 @@ class AdminRestoreCancelledOrderTest extends TestCase
             ->assertSee(route('pages.my_orders.monitoring.restore_all'), false);
     }
 
+    public function test_monitoring_list_uses_sale_short_name_with_full_name_fallback(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-23 10:00:00', 'Asia/Bangkok'));
+        [$admin, $order] = $this->createCancelledOrder(10, 4);
+        $sale = User::factory()->create([
+            'name' => 'Nguyễn Văn Tên Đầy Đủ Duy Nhất',
+            'short_name' => 'Sale Duy',
+        ]);
+        $sale->roles()->attach(Role::query()->create(['name' => 'sale']));
+        $order->update(['user_id' => $sale->id]);
+
+        $this->actingAs($admin)
+            ->get(route('pages.my_orders.monitoring', [
+                'tab' => 'today',
+                'view' => 'list',
+                'date' => '2026-08-23',
+                'date_field' => 'business_date',
+            ]))
+            ->assertOk()
+            ->assertSee('Sale Duy')
+            ->assertDontSee('Nguyễn Văn Tên Đầy Đủ Duy Nhất');
+
+        $sale->update(['short_name' => null]);
+
+        $this->actingAs($admin)
+            ->get(route('pages.my_orders.monitoring', [
+                'tab' => 'today',
+                'view' => 'list',
+                'date' => '2026-08-23',
+                'date_field' => 'business_date',
+            ]))
+            ->assertOk()
+            ->assertSee('Nguyễn Văn Tên Đầy Đủ Duy Nhất');
+    }
+
     public function test_admin_can_cancel_an_eligible_order_from_a_past_monitoring_day(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-08-24 10:00:00', 'Asia/Bangkok'));

@@ -1578,7 +1578,7 @@
                                                     {{ $order->customer?->name ?? 'Khách hàng' }}
                                                     <small class="d-block text-muted text-lowercase">{{ $order->code ?: ('#' . $order->id) }}</small>
                                                 </td>
-                                                <td rowspan="{{ $listRowspan }}">{{ $order->user?->name ?? '—' }}</td>
+                                                <td rowspan="{{ $listRowspan }}">{{ $order->user?->short_name ?: ($order->user?->name ?? '—') }}</td>
                                             @endif
                                             <td class="monitor-list-products">{{ $listItem?->display_name ?? '—' }}</td>
                                             <td>{{ $listItem?->variant?->size ?: '—' }}</td>
@@ -1682,7 +1682,7 @@
                                             <div class="monitor-order-name">{{ $order->customer?->name ?? 'Khách hàng' }}</div>
                                             <div class="monitor-order-code">
                                                 {{ $order->code ?: ('#' . $order->id) }}
-                                                · Sale: {{ $order->user?->name ?? '—' }}
+                                                · Sale: {{ $order->user?->short_name ?: ($order->user?->name ?? '—') }}
                                                 · {{ $order->created_at?->format('H:i d/m/Y') }}
                                             </div>
                                         </div>
@@ -1987,7 +1987,7 @@
                             <div class="monitor-day-note">
                                 <div class="monitor-day-note-order">
                                     <strong>#{{ $noteOrder->daily_sequence ?? '—' }} · {{ $noteOrder->customer?->name ?? 'Khách hàng' }}</strong>
-                                    <span class="monitor-day-note-meta">{{ $noteOrder->code ?: ('Đơn #' . $noteOrder->id) }} · Sale: {{ $noteOrder->user?->name ?? '—' }}</span>
+                                    <span class="monitor-day-note-meta">{{ $noteOrder->code ?: ('Đơn #' . $noteOrder->id) }} · Sale: {{ $noteOrder->user?->short_name ?: ($noteOrder->user?->name ?? '—') }}</span>
                                 </div>
                                 <div class="monitor-day-note-content">
                                     @if(trim((string) $noteOrder->note) !== '')

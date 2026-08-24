@@ -1305,7 +1305,8 @@ class PageController extends Controller
             ->groupBy('user_id')
             ->map(fn ($saleOrders) => [
                 'id' => (int) $saleOrders->first()->user_id,
-                'name' => $saleOrders->first()->user->name,
+                'name' => $saleOrders->first()->user->short_name
+                    ?: $saleOrders->first()->user->name,
                 'count' => $saleOrders->count(),
             ])
             ->sortBy('name')
