@@ -507,6 +507,7 @@ class AdminRestoreCancelledOrderTest extends TestCase
             ->get(route('warehouse.orders', ['date' => '2026-08-23']))
             ->assertOk()
             ->assertSee('Đóng hàng ngày 23/08')
+            ->assertSee('Hoàn thành đóng gói ngày 23/08')
             ->assertSee('name="packing_date" value="2026-08-23"', false);
 
         $this->actingAs($admin)
@@ -523,6 +524,35 @@ class AdminRestoreCancelledOrderTest extends TestCase
             'status_before' => Order::STATUS_READY_TO_PACK,
             'status_after' => Order::STATUS_PACKING,
             'note' => 'Bắt đầu đóng gói đơn hàng cho ngày 23/08/2026',
+        ]);
+
+        $order->update(['actual_weight' => 10]);
+
+        $this->actingAs($admin)
+            ->post(route('warehouse.orders.complete-packing', $order), [
+                'packing_date' => '2026-08-22',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('error', 'Đơn hàng không thuộc ngày đóng hàng đã chọn.');
+        $this->assertSame(Order::STATUS_PACKING, $order->fresh()->status);
+
+        // Tồn vật lý hiện tại vẫn phải đủ để dựng lại booking trước khi xuất kho.
+        $inventory->update(['quantity' => 4]);
+
+        $this->actingAs($admin)
+            ->post(route('warehouse.orders.complete-packing', $order), [
+                'packing_date' => '2026-08-23',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertSame(Order::STATUS_READY_TO_SHIP, $order->fresh()->status);
+        $this->assertDatabaseHas('order_histories', [
+            'order_id' => $order->id,
+            'action' => 'complete_packing',
+            'status_before' => Order::STATUS_PACKING,
+            'status_after' => Order::STATUS_READY_TO_SHIP,
+            'note' => 'Hoàn thành đóng gói ngày 23/08/2026 – Sẵn sàng giao hàng',
         ]);
     }
 

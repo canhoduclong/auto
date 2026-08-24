@@ -1579,9 +1579,10 @@ class WarehouseDashboardController extends Controller
         $validated = $request->validate([
             'packing_date' => ['nullable', 'date_format:Y-m-d', 'before_or_equal:today'],
         ]);
+        $hasPackingDate = $request->filled('packing_date');
         $packingDate = (string) ($validated['packing_date'] ?? now()->toDateString());
 
-        $belongsToPackingDate = Order::query()
+        $belongsToPackingDate = ! $hasPackingDate || Order::query()
             ->whereKey($order->id)
             ->forWorkflowDate($packingDate)
             ->exists();
@@ -2672,6 +2673,27 @@ class WarehouseDashboardController extends Controller
     {
         $this->authorizePackingOrderAccess($order);
 
+        $validated = $request->validate([
+            'packing_date' => ['nullable', 'date_format:Y-m-d', 'before_or_equal:today'],
+        ]);
+        $hasPackingDate = $request->filled('packing_date');
+        $packingDate = (string) ($validated['packing_date'] ?? now()->toDateString());
+
+        $belongsToPackingDate = ! $hasPackingDate || Order::query()
+            ->whereKey($order->id)
+            ->forWorkflowDate($packingDate)
+            ->exists();
+
+        if (! $belongsToPackingDate) {
+            $message = 'Đơn hàng không thuộc ngày đóng hàng đã chọn.';
+
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $message], 422);
+            }
+
+            return back()->with('error', $message);
+        }
+
         if ($order->warehouse_adjustment_status === Order::WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION) {
             if ($request->expectsJson()) {
                 return response()->json(['ok' => false, 'message' => 'Đơn đang chờ sale xác nhận thay đổi từ kho.'], 422);
@@ -2712,12 +2734,29 @@ class WarehouseDashboardController extends Controller
             return back()->with('error', 'Vui lòng cập nhật Kg thực tế trước khi hoàn thành đóng gói.');
         }
 
+        $managedWarehouseId = Auth::user()?->warehouse_id
+            ? (int) Auth::user()->warehouse_id
+            : ($order->warehouse_id ? (int) $order->warehouse_id : null);
+        $stockCheck = $this->evaluateSingleOrderStock($order, $managedWarehouseId, $packingDate);
+
+        if (! ($stockCheck['can_start_packing'] ?? false)) {
+            $message = 'Không đủ tồn kho ngày '.Carbon::parse($packingDate)->format('d/m/Y').' để hoàn thành đóng gói.';
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => $message,
+                    'stock_check' => $stockCheck,
+                ], 422);
+            }
+
+            return back()->with('error', $message);
+        }
+
         try {
             app(OrderController::class)->rebuildRestoredOrderStockReservation(
                 $order,
-                Auth::user()?->warehouse_id
-                    ? (int) Auth::user()->warehouse_id
-                    : ($order->warehouse_id ? (int) $order->warehouse_id : null)
+                $managedWarehouseId
             );
         } catch (\RuntimeException $exception) {
             $message = 'Tồn kho vẫn chưa đủ để hoàn tất đóng gói đơn phục hồi. Vui lòng bổ sung kho trước.';
@@ -2764,13 +2803,13 @@ class WarehouseDashboardController extends Controller
             'role' => $this->packingActorRole(),
             'status_before' => Order::STATUS_PACKING,
             'status_after' => Order::STATUS_READY_TO_SHIP,
-            'note' => 'Hoàn thành đóng gói – Sẵn sàng giao hàng',
+            'note' => 'Hoàn thành đóng gói ngày '.Carbon::parse($packingDate)->format('d/m/Y').' – Sẵn sàng giao hàng',
         ]);
 
         if ($request->expectsJson()) {
             return response()->json([
                 'ok' => true,
-                'message' => 'Đơn #'.$order->code.' đã đóng gói xong, sẵn sàng giao!',
+                'message' => 'Đơn #'.$order->code.' đã đóng gói xong cho ngày '.Carbon::parse($packingDate)->format('d/m/Y').', sẵn sàng giao!',
                 'order' => [
                     'id' => (int) $order->id,
                     'status' => Order::STATUS_READY_TO_SHIP,
@@ -2780,7 +2819,7 @@ class WarehouseDashboardController extends Controller
             ]);
         }
 
-        return back()->with('success', 'Đơn #'.$order->code.' đã đóng gói xong, sẵn sàng giao!');
+        return back()->with('success', 'Đơn #'.$order->code.' đã đóng gói xong cho ngày '.Carbon::parse($packingDate)->format('d/m/Y').', sẵn sàng giao!');
     }
 
     private function recalculateOrderTotalsAfterWarehouseAdjustment(Order $order): void

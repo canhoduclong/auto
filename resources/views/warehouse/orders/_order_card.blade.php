@@ -785,8 +785,10 @@
 
                                 <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.complete-packing', $order) }}" method="POST" class="js-complete-packing-form {{ $isPacking ? '' : 'd-none' }}">
                                     @csrf
+                                    <input type="hidden" name="packing_date" value="{{ $selectedDate ?? now()->toDateString() }}">
                                     <button class="btn btn-sm wh-warning-action-btn" {{ $isPendingSaleConfirmation ? 'disabled' : '' }}>
-                                        <i class="bi bi-check2-all me-1"></i>Hoàn thành đóng gói
+                                        <i class="bi bi-check2-all me-1"></i>
+                                        {{ $isTodaySelected ? 'Hoàn thành đóng gói' : 'Hoàn thành đóng gói ngày ' . \Illuminate\Support\Carbon::parse($selectedDate)->format('d/m') }}
                                     </button>
                                 </form>
                             </div>
