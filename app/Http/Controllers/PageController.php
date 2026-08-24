@@ -5344,15 +5344,21 @@ public function apiTruckRoutes(Request $request)
 
     public function copyOrder($id)
     {
-       $user = auth()->user();
+        $user = auth()->user();
+        $isResend = request()->routeIs('site.orders.resend');
 
         $oldOrder = Order::with(['items', 'customer'])
             ->where('user_id', $user->id) // bảo mật
             ->findOrFail($id);
 
-        $copiedOrderDate = now();
+        if ($isResend && (string) $oldOrder->status !== Order::STATUS_CANCELLED) {
+            return back()->with('error', 'Chỉ có thể gửi lại đơn đang ở trạng thái đã hủy.');
+        }
 
-        DB::transaction(function () use ($oldOrder, $user, &$copiedOrderDate) {
+        $copiedOrderDate = now();
+        $newOrder = null;
+
+        DB::transaction(function () use ($oldOrder, $user, $isResend, &$copiedOrderDate, &$newOrder) {
             $resolvedCustomerId = (int) ($oldOrder->customer_id ?? 0);
 
             if ($resolvedCustomerId <= 0 || !Customer::query()->whereKey($resolvedCustomerId)->exists()) {
@@ -5425,9 +5431,50 @@ public function apiTruckRoutes(Request $request)
             }
 
             $this->refreshCopiedOrderPrices($newOrder);
+
+            if ($isResend) {
+                if ($this->hasOrderColumn('copied_from_order_id')) {
+                    DB::table('orders')->where('id', $newOrder->id)->update([
+                        'copied_from_order_id' => null,
+                    ]);
+                }
+
+                $newOrder->approvals()->delete();
+                app(ApprovalService::class)->initOrderApproval($newOrder->fresh());
+                $newOrder->refresh();
+
+                \App\Models\OrderHistory::create([
+                    'order_id' => $newOrder->id,
+                    'action' => 'resend_cancelled_order',
+                    'user_id' => $user->id,
+                    'role' => $user->roles()->pluck('name')->first(),
+                    'status_before' => Order::STATUS_CANCELLED,
+                    'status_after' => (string) $newOrder->status,
+                    'note' => 'Gửi lại từ đơn đã hủy #'.($oldOrder->code ?: $oldOrder->id),
+                ]);
+
+                \App\Models\OrderHistory::create([
+                    'order_id' => $oldOrder->id,
+                    'action' => 'resend_order_created',
+                    'user_id' => $user->id,
+                    'role' => $user->roles()->pluck('name')->first(),
+                    'status_before' => Order::STATUS_CANCELLED,
+                    'status_after' => Order::STATUS_CANCELLED,
+                    'note' => 'Đã tạo đơn gửi lại #'.($newOrder->code ?: $newOrder->id),
+                ]);
+            }
         });
 
         app(OrderController::class)->syncDailySequenceAndStockSufficiency($copiedOrderDate);
+
+        if ($isResend) {
+            return redirect()->route('pages.my_orders.monitoring', [
+                'tab' => 'today',
+                'date' => $newOrder->created_at?->toDateString() ?: now()->toDateString(),
+                'date_field' => 'business_date',
+                'highlight' => $newOrder->id,
+            ])->with('success', 'Đã gửi lại đơn #'.$oldOrder->code.' thành đơn mới #'.$newOrder->code.' và chuyển vào quy trình duyệt.');
+        }
 
         $successMsg = 'Đã copy đơn #' . $oldOrder->code . '. Vui lòng xem lại và bấm "Xác Nhận" để gửi duyệt.';
 

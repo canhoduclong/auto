@@ -1887,7 +1887,17 @@
                                         </button>
                                     @endif
                                     @if($canManageOrder)
-                                        <a class="btn btn-sm btn-outline-secondary" href="{{ route('site.orders.copy', $order->id) }}"><i class="bi bi-files"></i><span>Sao chép đơn</span></a>
+                                        @if($isCancelled)
+                                            <form method="POST" action="{{ route('site.orders.resend', $order) }}"
+                                                  onsubmit="return confirm('Gửi lại đơn {{ addslashes($order->code ?: ('#' . $order->id)) }}? Hệ thống sẽ tạo đơn mới, cập nhật giá hiện tại và chuyển vào quy trình duyệt. Đơn đã hủy vẫn được giữ nguyên.');">
+                                                @csrf
+                                                <button type="submit" class="btn btn-sm btn-warning text-dark">
+                                                    <i class="bi bi-send me-1"></i>Gửi lại đơn
+                                                </button>
+                                            </form>
+                                        @else
+                                            <a class="btn btn-sm btn-outline-secondary" href="{{ route('site.orders.copy', $order->id) }}"><i class="bi bi-files"></i><span>Sao chép đơn</span></a>
+                                        @endif
                                         @if($order->customer_id && !in_array((int) $order->customer_id, $sampleDraftCustomerIds ?? [], true))
                                             <button class="btn btn-sm btn-outline-primary monitor-add-to-sample" type="button" data-sample-customer-id="{{ $order->customer_id }}" data-sample-url="{{ route('pages.my_order_drafts.add_from_order', $order) }}"><i class="bi bi-bookmark-plus"></i><span>Cho vào đơn mẫu</span></button>
                                         @endif

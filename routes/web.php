@@ -1079,6 +1079,8 @@ Route::middleware(['auth', 'role:sale,leader,leader_sale,sale_manager,manager,ma
     Route::post('/my-orders/{order}/restore', [OrderController::class, 'restoreCancelled'])
         ->name('site.orders.restore-cancelled')
         ->middleware('role:admin');
+    Route::post('/my-orders/{order}/resend', [PageController::class, 'copyOrder'])
+        ->name('site.orders.resend');
     Route::post('/my-orders/{order}/trash', [PageController::class, 'moveOrderToTrash'])->name('site.orders.trash');
     Route::delete('/my-orders/{order}/admin-delete', [\App\Http\Controllers\AdminOrderDeletionController::class, 'destroy'])
         ->name('site.orders.admin-delete')

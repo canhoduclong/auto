@@ -271,6 +271,48 @@ class AdminRestoreCancelledOrderTest extends TestCase
         ]);
     }
 
+    public function test_owner_can_resend_cancelled_order_as_a_new_order_from_monitoring(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-24 10:00:00', 'Asia/Bangkok'));
+        [$admin, $cancelledOrder] = $this->createCancelledOrder(10, 4);
+        $cancelledOrder->update([
+            'user_id' => $admin->id,
+            'code' => 'CANCELLED-TO-RESEND',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('pages.my_orders.monitoring', [
+                'tab' => 'today',
+                'date' => '2026-08-24',
+                'date_field' => 'business_date',
+            ]))
+            ->assertOk()
+            ->assertSee(route('site.orders.resend', $cancelledOrder), false)
+            ->assertSee('Gửi lại đơn');
+
+        $this->actingAs($admin)
+            ->post(route('site.orders.resend', $cancelledOrder))
+            ->assertRedirect();
+
+        $newOrder = Order::query()->where('id', '!=', $cancelledOrder->id)->latest('id')->firstOrFail();
+        $this->assertSame(Order::STATUS_CANCELLED, $cancelledOrder->fresh()->status);
+        $this->assertNotSame(Order::STATUS_CANCELLED, $newOrder->status);
+        $this->assertSame($admin->id, $newOrder->user_id);
+        $this->assertNull($newOrder->copied_from_order_id);
+        $this->assertFalse($newOrder->skip_auto_cancel);
+        $this->assertSame(1, $newOrder->items()->count());
+        $this->assertDatabaseHas('order_histories', [
+            'order_id' => $newOrder->id,
+            'action' => 'resend_cancelled_order',
+            'status_before' => Order::STATUS_CANCELLED,
+        ]);
+        $this->assertDatabaseHas('order_histories', [
+            'order_id' => $cancelledOrder->id,
+            'action' => 'resend_order_created',
+            'status_after' => Order::STATUS_CANCELLED,
+        ]);
+    }
+
     public function test_restored_exception_order_can_be_packed_delivered_and_recognized_as_revenue(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-08-22 10:00:00', 'Asia/Bangkok'));
