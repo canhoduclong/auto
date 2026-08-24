@@ -253,7 +253,7 @@ class AdminRestoreCancelledOrderTest extends TestCase
             ]))
             ->assertOk()
             ->assertSee('8,4 kg')
-            ->assertSee('Thực giao / khách cân');
+            ->assertDontSee('Thực giao / khách cân');
     }
 
     public function test_inline_adjustment_form_uses_a_stable_submit_url_and_aligned_fee_layout(): void

@@ -72,7 +72,9 @@ class AccountingSalesJournalTest extends TestCase
             'total_weight' => 91.8,
             'actual_weight' => 91.8,
             'price' => 72000,
-            'total' => 6609600,
+            // Simulate the stale warehouse/order amount left before the
+            // customer's delivered weight was recorded.
+            'total' => 6832800,
         ]);
         $packingFeeType = OrderFeeType::query()->create([
             'name' => 'Phí đóng gói đặc biệt',
@@ -176,6 +178,9 @@ class AccountingSalesJournalTest extends TestCase
         $this->assertSame(6, $journal['summary']['rows']);
         $this->assertSame(1, $journal['summary']['orders']);
         $this->assertSame(7090080.0, $journal['summary']['amount']);
+        $productRow = $journal['rows']->getCollection()->firstWhere('entry_type', 'product');
+        $this->assertSame(91.8, (float) $productRow->total_quantity);
+        $this->assertSame(6609600.0, (float) $productRow->total_amount);
         $this->assertNotContains(
             'Khách đơn ngoại lệ chưa giao',
             $journal['rows']->getCollection()->pluck('customer_name')->all()

@@ -69,7 +69,6 @@ class CompletedSalesJournalService
                 'items.product',
                 'items.variant.product',
                 'additionalFees:id,order_id,order_fee_type_id,fee_code,fee_name,calculation_type,direction,rate,base_amount,amount',
-                'returnRecords:id,order_id,return_scope,status',
                 'adjustments' => fn ($adjustments) => $adjustments
                     ->where('status', OrderAdjustment::STATUS_APPROVED)
                     ->latest('id')
@@ -99,8 +98,6 @@ class CompletedSalesJournalService
             ->filter(fn ($item) => $item->order_item_id)
             ->groupBy('order_item_id')
             ->map->first();
-        $hasPartialDelivery = $order->returnRecords
-            ->contains(fn ($return) => (string) $return->return_scope === 'partial');
         $base = [
             'entry_date' => $entryDate,
             'entry_month' => (int) substr($entryDate, 5, 2),
@@ -129,9 +126,6 @@ class CompletedSalesJournalService
                 : 1.0;
             $unitPrice = (float) ($adjustment?->adjusted_price ?? $item->price ?? 0);
             $calculatedAmount = ($pricedByKg ? $totalQuantity : $quantity) * $unitPrice;
-            $totalAmount = $adjustment || $hasPartialDelivery
-                ? $calculatedAmount
-                : (float) ($item->total ?? $calculatedAmount);
             $product = $item->product ?: $item->variant?->product;
 
             $rows->push((object) array_merge($base, [
@@ -141,7 +135,10 @@ class CompletedSalesJournalService
                 'unit_weight' => $unitWeight,
                 'total_quantity' => $totalQuantity,
                 'unit_price' => $unitPrice,
-                'total_amount' => $totalAmount,
+                // The journal must use the quantity/weight actually delivered.
+                // order_items.total can still contain the ordered or warehouse
+                // amount when the customer weighs the goods again at delivery.
+                'total_amount' => $calculatedAmount,
                 'entry_type' => 'product',
                 'direction' => null,
             ]));
