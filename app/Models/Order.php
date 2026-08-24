@@ -246,6 +246,8 @@ class Order extends Model
         self::STATUS_APPROVED,
         self::STATUS_READY_TO_PACK,
         self::STATUS_PACKING,
+        self::STATUS_PACKED,
+        self::STATUS_READY_TO_SHIP,
         'confirmed',
         'picking',
         self::STATUS_ORDER_PLACED,

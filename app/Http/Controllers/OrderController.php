@@ -1467,9 +1467,6 @@ class OrderController extends Controller
                 abort(403);
             }
 
-            if (!$isAdmin && !$order->created_at?->isToday()) {
-                return back()->with('error', 'Chi duoc huy don duoc tao trong ngay.');
-            }
         }
 
         $validated = $request->validate([

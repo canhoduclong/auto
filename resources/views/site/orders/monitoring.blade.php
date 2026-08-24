@@ -1677,7 +1677,7 @@
                                 && empty($order->trash_at);
                             $isEditable = $canManageOrder && $order->canBeDirectlyEditedByOwner();
                             $canCancel = in_array($order->status, \App\Models\Order::CANCELLABLE_STATUSES, true)
-                                && ($isAdminUser || ($canManageOrder && $order->created_at?->isToday()));
+                                && ($isAdminUser || $canManageOrder);
                             $canRequestAdjustment = $canManageOrder && $order->canRequestAdjustment();
                         @endphp
                         <article class="monitor-panel monitor-order status-{{ $monitorState }} {{ $canManageOrder ? 'is-mine' : '' }} {{ $isCancelled ? 'is-cancelled' : '' }}" id="monitor-order-{{ $order->id }}" title="{{ $monitorStateLabels[$monitorState] }}">

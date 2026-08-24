@@ -298,6 +298,59 @@ class AdminRestoreCancelledOrderTest extends TestCase
         ]);
     }
 
+    public function test_sale_can_cancel_and_trash_own_old_order_before_shipper_pickup(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-24 10:00:00', 'Asia/Bangkok'));
+        [$admin, $order, $inventory] = $this->createCancelledOrder(10, 4);
+        $sale = User::factory()->create();
+        $sale->roles()->attach(Role::query()->create(['name' => 'sale']));
+
+        $this->actingAs($admin)
+            ->post(route('orders.restore-cancelled', $order))
+            ->assertSessionHas('success');
+
+        $order->forceFill([
+            'user_id' => $sale->id,
+            'status' => Order::STATUS_READY_TO_SHIP,
+            'created_at' => Carbon::parse('2026-08-23 09:00:00', 'Asia/Bangkok'),
+        ])->saveQuietly();
+
+        $this->actingAs($sale)
+            ->get(route('pages.my_orders.monitoring', [
+                'date' => '2026-08-23',
+                'highlight' => $order->id,
+            ]))
+            ->assertOk()
+            ->assertSee(route('site.orders.cancel', $order), false)
+            ->assertSee('Hủy đơn hàng');
+
+        $this->actingAs($sale)
+            ->post(route('site.orders.cancel', $order), [
+                'cancel_reason' => 'Hủy đơn cũ chưa giao',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertSame(Order::STATUS_CANCELLED, $order->fresh()->status);
+        $this->assertSame(0, (int) $inventory->fresh()->reserved_quantity);
+
+        $this->actingAs($sale)
+            ->get(route('pages.my_orders.monitoring', [
+                'date' => '2026-08-23',
+                'highlight' => $order->id,
+            ]))
+            ->assertOk()
+            ->assertSee(route('site.orders.trash', $order), false)
+            ->assertSee('Xóa đơn');
+
+        $this->actingAs($sale)
+            ->post(route('site.orders.trash', $order))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertNotNull($order->fresh()->trash_at);
+    }
+
     public function test_admin_can_cancel_any_eligible_order_from_orders_page_for_a_past_date(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-08-24 10:00:00', 'Asia/Bangkok'));
