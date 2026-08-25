@@ -1,19 +1,36 @@
 @extends('layouts.accounting')
 
-@section('title', 'Thông báo điều chỉnh đơn')
-@section('subtitle', 'Các thay đổi giá và số lượng đang chờ Kế toán xác nhận')
+@section('title', 'Duyệt điều chỉnh đơn')
+@section('subtitle', 'Danh sách yêu cầu thuộc bước phê duyệt của Kế toán')
 
 @section('accounting_content')
 <div class="acc-card mb-3">
     <div class="card-body">
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
             <div>
-                <h5 class="mb-1"><i class="bi bi-bell-fill text-warning me-2"></i>Số liệu cần duyệt</h5>
-                <div class="text-muted small">Chỉ hiển thị yêu cầu đã qua Leader và Manager, hiện đang chờ bước Kế toán.</div>
+                <h5 class="mb-1"><i class="bi bi-clipboard-check text-primary me-2"></i>Danh sách Kế toán duyệt</h5>
+                <div class="text-muted small">Yêu cầu chờ xử lý và lịch sử Kế toán đã duyệt hoặc từ chối.</div>
             </div>
-            <span class="badge text-bg-warning fs-6">{{ $adjustments->total() }} yêu cầu</span>
+            <span class="badge {{ $status === 'pending' ? 'text-bg-warning' : 'text-bg-primary' }} fs-6">{{ $adjustments->total() }} yêu cầu</span>
         </div>
+
+        <div class="nav nav-pills gap-2 mt-3">
+            <a class="nav-link {{ $status === 'pending' ? 'active' : '' }}"
+               href="{{ request()->fullUrlWithQuery(['status' => 'pending', 'page' => 1]) }}">
+                Chờ duyệt <span class="badge {{ $status === 'pending' ? 'text-bg-light text-dark' : 'text-bg-warning' }} ms-1">{{ $pendingCount }}</span>
+            </a>
+            <a class="nav-link {{ $status === 'processed' ? 'active' : '' }}"
+               href="{{ request()->fullUrlWithQuery(['status' => 'processed', 'page' => 1]) }}">
+                Đã xử lý <span class="badge {{ $status === 'processed' ? 'text-bg-light text-dark' : 'text-bg-secondary' }} ms-1">{{ $processedCount }}</span>
+            </a>
+            <a class="nav-link {{ $status === 'all' ? 'active' : '' }}"
+               href="{{ request()->fullUrlWithQuery(['status' => 'all', 'page' => 1]) }}">
+                Tất cả
+            </a>
+        </div>
+
         <form method="GET" class="row g-2 mt-2">
+            <input type="hidden" name="status" value="{{ $status }}">
             <div class="col-md-9">
                 <input class="form-control" name="keyword" value="{{ $keyword }}" placeholder="Tìm mã đơn, khách hàng, sale hoặc mã yêu cầu">
             </div>
@@ -27,6 +44,10 @@
 
 <div class="d-grid gap-3">
 @forelse($adjustments as $adjustment)
+    @php
+        $accountingReview = $adjustment->relationLoaded('accountingReview') ? $adjustment->accountingReview : null;
+        $isPendingAccounting = $accountingReview === null;
+    @endphp
     <article class="acc-card" id="adjustment-{{ $adjustment->id }}">
         <div class="card-body">
             <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
@@ -37,10 +58,25 @@
                     </div>
                 </div>
                 <div class="text-end">
-                    <span class="badge text-bg-warning">Chờ Kế toán duyệt</span>
-                    <div class="small text-muted mt-1">{{ optional($adjustment->submitted_at)->format('d/m/Y H:i') }}</div>
+                    @if($isPendingAccounting)
+                        <span class="badge text-bg-warning">Chờ Kế toán duyệt</span>
+                        <div class="small text-muted mt-1">Gửi {{ optional($adjustment->submitted_at)->format('d/m/Y H:i') }}</div>
+                    @else
+                        <span class="badge {{ $accountingReview->status === 'approved' ? 'text-bg-success' : 'text-bg-danger' }}">
+                            {{ $accountingReview->status === 'approved' ? 'Kế toán đã duyệt' : 'Kế toán đã từ chối' }}
+                        </span>
+                        <div class="small text-muted mt-1">
+                            {{ $accountingReview->approver?->name ?? 'Kế toán' }} · {{ optional($accountingReview->approved_at)->format('d/m/Y H:i') }}
+                        </div>
+                    @endif
                 </div>
             </div>
+
+            @if($accountingReview?->note)
+                <div class="alert {{ $accountingReview->status === 'approved' ? 'alert-success' : 'alert-danger' }} py-2">
+                    <strong>Ý kiến Kế toán:</strong> {{ $accountingReview->note }}
+                </div>
+            @endif
 
             @if($adjustment->adjustment_note)
                 <div class="alert alert-light border py-2"><strong>Lý do điều chỉnh:</strong> {{ $adjustment->adjustment_note }}</div>
@@ -74,24 +110,28 @@
 
             <div class="d-flex flex-wrap justify-content-end gap-2">
                 <a href="{{ route('site.order-adjustments.show', $adjustment) }}" class="btn btn-outline-primary btn-sm">Xem chi tiết</a>
-                <button class="btn btn-outline-danger btn-sm" data-bs-toggle="collapse" data-bs-target="#rejectAccountingAdjustment{{ $adjustment->id }}">Từ chối</button>
-                <form method="POST" action="{{ route('site.order-adjustments.approve', $adjustment) }}">
-                    @csrf
-                    <button class="btn btn-success btn-sm" onclick="return confirm('Kế toán xác nhận duyệt yêu cầu #{{ $adjustment->id }}?')"><i class="bi bi-check2-circle me-1"></i>Xác nhận và duyệt</button>
-                </form>
+                @if($isPendingAccounting)
+                    <button class="btn btn-outline-danger btn-sm" data-bs-toggle="collapse" data-bs-target="#rejectAccountingAdjustment{{ $adjustment->id }}">Từ chối</button>
+                    <form method="POST" action="{{ route('site.order-adjustments.approve', $adjustment) }}">
+                        @csrf
+                        <button class="btn btn-success btn-sm" onclick="return confirm('Kế toán xác nhận duyệt yêu cầu #{{ $adjustment->id }}?')"><i class="bi bi-check2-circle me-1"></i>Xác nhận và duyệt</button>
+                    </form>
+                @endif
             </div>
-            <div class="collapse mt-3" id="rejectAccountingAdjustment{{ $adjustment->id }}">
-                <form method="POST" action="{{ route('site.order-adjustments.reject', $adjustment) }}" class="border rounded p-3 bg-light">
-                    @csrf
-                    <label class="form-label fw-semibold">Lý do từ chối</label>
-                    <textarea name="reason" class="form-control mb-2" rows="2" required></textarea>
-                    <button class="btn btn-danger btn-sm">Xác nhận từ chối</button>
-                </form>
-            </div>
+            @if($isPendingAccounting)
+                <div class="collapse mt-3" id="rejectAccountingAdjustment{{ $adjustment->id }}">
+                    <form method="POST" action="{{ route('site.order-adjustments.reject', $adjustment) }}" class="border rounded p-3 bg-light">
+                        @csrf
+                        <label class="form-label fw-semibold">Lý do từ chối</label>
+                        <textarea name="reason" class="form-control mb-2" rows="2" required></textarea>
+                        <button class="btn btn-danger btn-sm">Xác nhận từ chối</button>
+                    </form>
+                </div>
+            @endif
         </div>
     </article>
 @empty
-    <div class="acc-card"><div class="card-body text-center text-muted py-5"><i class="bi bi-check-circle fs-2 text-success d-block mb-2"></i>Không có yêu cầu điều chỉnh nào đang chờ Kế toán.</div></div>
+    <div class="acc-card"><div class="card-body text-center text-muted py-5"><i class="bi bi-check-circle fs-2 text-success d-block mb-2"></i>{{ $status === 'pending' ? 'Không có yêu cầu điều chỉnh nào đang chờ Kế toán.' : 'Chưa có yêu cầu nào trong danh sách này.' }}</div></div>
 @endforelse
 </div>
 

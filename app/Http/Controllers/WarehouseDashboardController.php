@@ -1004,6 +1004,7 @@ class WarehouseDashboardController extends Controller
             'customer',
             'user',
             'warehouse',
+            'adjustments:id,order_id,status',
             'histories.user.warehouse',
             'items.product.avatar.media',
             'items.variant' => function ($query) {
@@ -5182,6 +5183,7 @@ class WarehouseDashboardController extends Controller
     {
         return $order->accounting_sales_import_batch_id !== null
             || (bool) $order->skip_auto_cancel
+            || $order->hasCompletedAdjustment()
             || ($order->created_at && $order->created_at->isToday());
     }
 

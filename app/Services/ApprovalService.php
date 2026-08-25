@@ -1,4 +1,5 @@
-<?php 
+<?php
+
 namespace App\Services;
 
 use App\Enums\OrderStatus;
@@ -11,7 +12,7 @@ use App\Models\Transaction;
 use App\Models\User;
 use Exception;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB; 
+use Illuminate\Support\Facades\DB;
 
 class ApprovalService
 {
@@ -79,6 +80,43 @@ class ApprovalService
     public function pendingAccountingAdjustments(): Collection
     {
         return $this->pendingAdjustmentsForRoles($this->financeAccountingRoleSlugs());
+    }
+
+    /**
+     * Hồ sơ mà bước Kế toán đã thực sự duyệt hoặc từ chối.
+     * Giữ ApprovalOrder trên từng hồ sơ để giao diện hiển thị người xử lý,
+     * thời gian và ghi chú mà không suy đoán từ trạng thái cuối của yêu cầu.
+     */
+    public function reviewedAccountingAdjustments(): Collection
+    {
+        $roleSlugs = $this->financeAccountingRoleSlugs();
+
+        return ApprovalOrder::query()
+            ->whereNotNull('order_adjustment_id')
+            ->whereNotNull('approved_by')
+            ->whereIn('status', ['approved', 'rejected'])
+            ->whereHas('step', fn ($step) => $step->whereIn(DB::raw('LOWER(role_slug)'), $roleSlugs))
+            ->with([
+                'approver:id,name',
+                'step:id,role_slug,step_order',
+                'orderAdjustment' => fn ($adjustments) => $adjustments->with($this->adjustmentQueueRelations()),
+            ])
+            ->latest('approved_at')
+            ->latest('id')
+            ->get()
+            ->map(function (ApprovalOrder $approval): ?OrderAdjustment {
+                $adjustment = $approval->orderAdjustment;
+                if (! $adjustment) {
+                    return null;
+                }
+
+                $adjustment->setRelation('accountingReview', $approval);
+
+                return $adjustment;
+            })
+            ->filter()
+            ->unique('id')
+            ->values();
     }
 
     public function pendingWarehouseAdjustments(): Collection
@@ -217,8 +255,9 @@ class ApprovalService
         DB::transaction(function () use ($order, $activity): void {
             $workflow = $this->resolveActiveWorkflowForActivity($activity);
 
-            if (!$workflow || $workflow->steps->isEmpty()) {
+            if (! $workflow || $workflow->steps->isEmpty()) {
                 $order->update(['status' => OrderStatus::Approved->value]);
+
                 return;
             }
 
@@ -234,6 +273,7 @@ class ApprovalService
 
             if ($approverSteps->isEmpty()) {
                 $order->update(['status' => OrderStatus::Approved->value]);
+
                 return;
             }
 
@@ -279,7 +319,7 @@ class ApprovalService
     {
         $current = $this->getCurrentPendingStep($order);
 
-        if (!$current?->step) {
+        if (! $current?->step) {
             return false;
         }
 
@@ -307,19 +347,19 @@ class ApprovalService
     {
         $step = $this->getCurrentPendingStep($order);
 
-        if (!$step) {
+        if (! $step) {
             throw new Exception('Không tìm thấy bước duyệt đang chờ xử lý.');
         }
 
-        if (!$this->canApproveCurrentStep($order, $user)) {
+        if (! $this->canApproveCurrentStep($order, $user)) {
             throw new Exception('Bạn không có quyền duyệt bước hiện tại.');
         }
 
         $step->update([
             'approved_by' => $user->id,
             'approved_at' => now(),
-            'status'      => 'approved',
-            'note'        => $note,
+            'status' => 'approved',
+            'note' => $note,
         ]);
 
         $hasPending = $order->approvals()
@@ -328,7 +368,7 @@ class ApprovalService
                 $q->whereIn(DB::raw('LOWER(role_slug)'), $this->approverRoleSlugs());
             })
             ->exists();
-        if (!$hasPending) {
+        if (! $hasPending) {
             $order->update(['status' => OrderStatus::Approved->value]);
 
             if ((bool) ($order->is_return_order ?? false)) {
@@ -345,7 +385,9 @@ class ApprovalService
                     }
                 }
             } else {
-                $wUsers = \App\Models\User::whereHas('roles', function($q) { $q->whereIn('name', ['warehouse', 'package']); })->get();
+                $wUsers = \App\Models\User::whereHas('roles', function ($q) {
+                    $q->whereIn('name', ['warehouse', 'package']);
+                })->get();
                 foreach ($wUsers as $wUser) {
                     $wUser->notify(new \App\Notifications\WarehouseNewOrderApproved($order));
                 }
@@ -366,11 +408,11 @@ class ApprovalService
     {
         $step = $this->getCurrentPendingStep($order);
 
-        if (!$step) {
+        if (! $step) {
             throw new Exception('Không tìm thấy bước duyệt đang chờ xử lý.');
         }
 
-        if (!$this->canApproveCurrentStep($order, $user)) {
+        if (! $this->canApproveCurrentStep($order, $user)) {
             throw new Exception('Bạn không có quyền từ chối bước hiện tại.');
         }
 
@@ -401,7 +443,7 @@ class ApprovalService
     {
         $workflow = $this->resolveActiveWorkflowForActivity(ApprovalWorkflow::ACTIVITY_ORDER_ADJUSTMENT_REQUEST);
 
-        if (!$workflow || $workflow->steps->isEmpty()) {
+        if (! $workflow || $workflow->steps->isEmpty()) {
             return false; // no workflow configured → caller handles fallback
         }
 
@@ -446,7 +488,7 @@ class ApprovalService
 
         $current = $this->getCurrentPendingAdjustmentStep($adjustment);
 
-        if (!$current?->step) {
+        if (! $current?->step) {
             return false;
         }
 
@@ -467,19 +509,19 @@ class ApprovalService
     {
         $step = $this->getCurrentPendingAdjustmentStep($adjustment);
 
-        if (!$step) {
+        if (! $step) {
             throw new Exception('Không tìm thấy bước duyệt đang chờ xử lý.');
         }
 
-        if (!$this->canApproveAdjustmentStep($adjustment, $user)) {
+        if (! $this->canApproveAdjustmentStep($adjustment, $user)) {
             throw new Exception('Bạn không có quyền duyệt bước hiện tại.');
         }
 
         $step->update([
             'approved_by' => $user->id,
             'approved_at' => now(),
-            'status'      => 'approved',
-            'note'        => $note,
+            'status' => 'approved',
+            'note' => $note,
         ]);
 
         $this->skipUnneededWarehouseAdjustmentSteps($adjustment);
@@ -488,7 +530,7 @@ class ApprovalService
             ->where('status', 'pending')
             ->exists();
 
-        return !$hasPending; // returns true when all steps approved (adjustment can proceed)
+        return ! $hasPending; // returns true when all steps approved (adjustment can proceed)
     }
 
     private function skipUnneededWarehouseAdjustmentSteps(OrderAdjustment $adjustment): int
@@ -516,11 +558,11 @@ class ApprovalService
     {
         $step = $this->getCurrentPendingAdjustmentStep($adjustment);
 
-        if (!$step) {
+        if (! $step) {
             throw new Exception('Không tìm thấy bước duyệt đang chờ xử lý.');
         }
 
-        if (!$this->canApproveAdjustmentStep($adjustment, $user)) {
+        if (! $this->canApproveAdjustmentStep($adjustment, $user)) {
             throw new Exception('Bạn không có quyền từ chối bước hiện tại.');
         }
 
@@ -547,7 +589,7 @@ class ApprovalService
     {
         $workflow = $this->resolveActiveWorkflowForActivity(ApprovalWorkflow::ACTIVITY_TRANSACTION_CREATE);
 
-        if (!$workflow || $workflow->steps->isEmpty()) {
+        if (! $workflow || $workflow->steps->isEmpty()) {
             return false;
         }
 
@@ -573,7 +615,7 @@ class ApprovalService
     {
         $workflow = $this->resolveActiveWorkflowForActivity(ApprovalWorkflow::ACTIVITY_TRANSACTION_CREATE);
 
-        if (!$workflow || $workflow->steps->isEmpty()) {
+        if (! $workflow || $workflow->steps->isEmpty()) {
             return false;
         }
 
@@ -678,11 +720,12 @@ class ApprovalService
 
         $current = $this->getCurrentPendingTransactionStep($transaction);
 
-        if (!$current?->step) {
+        if (! $current?->step) {
             return false;
         }
 
         $requiredRole = strtolower((string) $current->step->role_slug);
+
         return $user->roles->contains(fn ($role) => strtolower((string) $role->name) === $requiredRole);
     }
 
@@ -690,19 +733,19 @@ class ApprovalService
     {
         $step = $this->getCurrentPendingTransactionStep($transaction);
 
-        if (!$step) {
+        if (! $step) {
             throw new Exception('Không tìm thấy bước duyệt đang chờ xử lý.');
         }
 
-        if (!$this->canApproveTransactionStep($transaction, $user)) {
+        if (! $this->canApproveTransactionStep($transaction, $user)) {
             throw new Exception('Bạn không có quyền duyệt bước hiện tại.');
         }
 
         $step->update([
             'approved_by' => $user->id,
             'approved_at' => now(),
-            'status'      => 'approved',
-            'note'        => $note,
+            'status' => 'approved',
+            'note' => $note,
         ]);
 
         $hasPending = ApprovalOrder::where('transaction_id', $transaction->id)
@@ -712,18 +755,18 @@ class ApprovalService
             })
             ->exists();
 
-        return !$hasPending;
+        return ! $hasPending;
     }
 
     public function rejectTransactionStep(Transaction $transaction, User $user, string $note): void
     {
         $step = $this->getCurrentPendingTransactionStep($transaction);
 
-        if (!$step) {
+        if (! $step) {
             throw new Exception('Không tìm thấy bước duyệt đang chờ xử lý.');
         }
 
-        if (!$this->canApproveTransactionStep($transaction, $user)) {
+        if (! $this->canApproveTransactionStep($transaction, $user)) {
             throw new Exception('Bạn không có quyền từ chối bước hiện tại.');
         }
 
@@ -757,9 +800,10 @@ class ApprovalService
             ApprovalWorkflow::ACTIVITY_TASK_ASSIGNMENT
         );
 
-        if (!$workflow || $workflow->steps->isEmpty()) {
+        if (! $workflow || $workflow->steps->isEmpty()) {
             // No workflow — mark as in_progress immediately
             $task->update(['status' => 'in_progress']);
+
             return false;
         }
 
@@ -769,13 +813,14 @@ class ApprovalService
 
         foreach ($workflow->steps as $step) {
             ApprovalOrder::create([
-                'task_id'          => $task->id,
+                'task_id' => $task->id,
                 'approval_step_id' => $step->id,
-                'status'           => 'pending',
+                'status' => 'pending',
             ]);
         }
 
         $task->update(['status' => 'in_progress']);
+
         return true;
     }
 
@@ -791,10 +836,14 @@ class ApprovalService
     public function canApproveTaskStep(\App\Models\TaskAssignment $task, User $user): bool
     {
         $step = $this->getCurrentPendingTaskStep($task);
-        if (!$step) return false;
+        if (! $step) {
+            return false;
+        }
 
         $roleSlug = $step->step?->role_slug;
-        if (!$roleSlug) return false;
+        if (! $roleSlug) {
+            return false;
+        }
 
         return $user->hasRole($roleSlug) || $user->hasRole('admin');
     }
@@ -807,24 +856,25 @@ class ApprovalService
     {
         $step = $this->getCurrentPendingTaskStep($task);
 
-        if (!$step || !$this->canApproveTaskStep($task, $user)) {
+        if (! $step || ! $this->canApproveTaskStep($task, $user)) {
             throw new Exception('Bạn không có quyền phê duyệt bước hiện tại.');
         }
 
         $step->update([
             'approved_by' => $user->id,
             'approved_at' => now(),
-            'status'      => 'approved',
-            'note'        => $note,
+            'status' => 'approved',
+            'note' => $note,
         ]);
 
         $remaining = ApprovalOrder::where('task_id', $task->id)->where('status', 'pending')->count();
 
         if ($remaining === 0) {
             $task->update([
-                'status'       => \App\Models\TaskAssignment::STATUS_COMPLETED,
+                'status' => \App\Models\TaskAssignment::STATUS_COMPLETED,
                 'completed_at' => now(),
             ]);
+
             return true;
         }
 
@@ -835,15 +885,15 @@ class ApprovalService
     {
         $step = $this->getCurrentPendingTaskStep($task);
 
-        if (!$step || !$this->canApproveTaskStep($task, $user)) {
+        if (! $step || ! $this->canApproveTaskStep($task, $user)) {
             throw new Exception('Bạn không có quyền từ chối bước hiện tại.');
         }
 
         $step->update([
             'approved_by' => $user->id,
             'approved_at' => now(),
-            'status'      => 'rejected',
-            'note'        => $note,
+            'status' => 'rejected',
+            'note' => $note,
         ]);
 
         ApprovalOrder::where('task_id', $task->id)
@@ -851,11 +901,11 @@ class ApprovalService
             ->where('id', '!=', $step->id)
             ->update([
                 'status' => 'rejected',
-                'note'   => 'Tu dong ket thuc do cong viec bi tu choi o buoc truoc.',
+                'note' => 'Tu dong ket thuc do cong viec bi tu choi o buoc truoc.',
             ]);
 
         $task->update([
-            'status'        => \App\Models\TaskAssignment::STATUS_REJECTED,
+            'status' => \App\Models\TaskAssignment::STATUS_REJECTED,
             'reject_reason' => $note,
         ]);
     }

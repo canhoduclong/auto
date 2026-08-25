@@ -367,8 +367,8 @@
             <a href="{{ route('accounting.dashboard') }}" class="{{ request()->routeIs('accounting.dashboard') ? 'active' : '' }}">
                 <i class="bi bi-speedometer2"></i> Dashboard
             </a>
-            <a href="{{ route('accounting.order-adjustments') }}" class="{{ request()->routeIs('accounting.order-adjustments') ? 'active' : '' }}" data-label="Thông báo cần duyệt">
-                <i class="bi bi-bell-fill"></i> Thông báo cần duyệt
+            <a href="{{ route('accounting.order-adjustments') }}" class="{{ request()->routeIs('accounting.order-adjustments') ? 'active' : '' }}" data-label="Duyệt điều chỉnh đơn">
+                <i class="bi bi-clipboard-check-fill"></i> Duyệt điều chỉnh đơn
                 @if(($pendingAccountingAdjustmentCount ?? 0) > 0)
                     <span class="acc-nav-badge">{{ $pendingAccountingAdjustmentCount }}</span>
                 @endif

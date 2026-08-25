@@ -83,7 +83,18 @@ class AccountingDashboardController extends Controller
     public function orderAdjustments(Request $request, ApprovalService $approvalService)
     {
         $keyword = trim((string) $request->input('keyword', ''));
-        $adjustments = $approvalService->pendingAccountingAdjustments();
+        $status = (string) $request->input('status', 'pending');
+        if (! in_array($status, ['pending', 'processed', 'all'], true)) {
+            $status = 'pending';
+        }
+
+        $pendingAdjustments = $approvalService->pendingAccountingAdjustments();
+        $reviewedAdjustments = $approvalService->reviewedAccountingAdjustments();
+        $adjustments = match ($status) {
+            'processed' => $reviewedAdjustments,
+            'all' => $pendingAdjustments->concat($reviewedAdjustments)->unique('id')->values(),
+            default => $pendingAdjustments,
+        };
 
         if ($keyword !== '') {
             $needle = mb_strtolower($keyword);
@@ -109,6 +120,9 @@ class AccountingDashboardController extends Controller
         return view('accounting.order_adjustments', [
             'adjustments' => $paginator,
             'keyword' => $keyword,
+            'status' => $status,
+            'pendingCount' => $pendingAdjustments->count(),
+            'processedCount' => $reviewedAdjustments->count(),
         ]);
     }
 

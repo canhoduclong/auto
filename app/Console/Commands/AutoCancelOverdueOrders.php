@@ -48,6 +48,10 @@ class AutoCancelOverdueOrders extends Command
         $orders = Order::with(['items', 'customer:id,delivery_time'])
             ->whereIn('status', self::CANCELLABLE_STATUSES)
             ->where('skip_auto_cancel', false)
+            // Yêu cầu điều chỉnh đã hoàn tất xác nhận đơn vẫn còn hiệu lực và
+            // cần tiếp tục qua Kho, kể cả khi ngày nghiệp vụ đã qua.
+            ->whereDoesntHave('adjustments', fn ($adjustments) => $adjustments
+                ->where('status', \App\Models\OrderAdjustment::STATUS_COMPLETED))
             ->where(function ($query) use ($now): void {
                 $query->whereDate('delivery_date', '<=', $now->toDateString())
                     ->orWhereNull('delivery_date');

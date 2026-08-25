@@ -194,6 +194,24 @@ class Order extends Model
         return $this->hasMany(ApprovalOrder::class);
     }
 
+    /**
+     * Đơn cũ có hồ sơ điều chỉnh đã hoàn tất vẫn phải tiếp tục được Kho xử lý.
+     * Việc Sale gửi và các cấp duyệt thay đổi sau ngày nghiệp vụ thể hiện đơn
+     * vẫn còn hiệu lực, không phải một đơn quá hạn bị bỏ quên.
+     */
+    public function hasCompletedAdjustment(): bool
+    {
+        if ($this->relationLoaded('adjustments')) {
+            return $this->adjustments->contains(
+                fn (OrderAdjustment $adjustment): bool => $adjustment->status === OrderAdjustment::STATUS_COMPLETED
+            );
+        }
+
+        return $this->adjustments()
+            ->where('status', OrderAdjustment::STATUS_COMPLETED)
+            ->exists();
+    }
+
     public function orderTransfer()
     {
         return $this->belongsTo(OrderTransfer::class, 'order_transfer_id');

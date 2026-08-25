@@ -17,11 +17,17 @@ class AccountingAdjustmentNotificationTest extends TestCase
         $this->assertStringContainsString("'/order-adjustments'", $routes);
         $this->assertStringContainsString("name('order-adjustments')", $routes);
         $this->assertStringContainsString('pendingAccountingAdjustmentCount', $layout);
-        $this->assertStringContainsString('Thông báo cần duyệt', $layout);
+        $this->assertStringContainsString('Duyệt điều chỉnh đơn', $layout);
         $this->assertStringContainsString('Xác nhận và duyệt', $view);
         $this->assertStringContainsString('site.order-adjustments.approve', $view);
         $this->assertStringContainsString('site.order-adjustments.reject', $view);
         $this->assertStringContainsString('pendingAccountingAdjustments', $service);
+        $this->assertStringContainsString('reviewedAccountingAdjustments', $service);
         $this->assertStringContainsString('sortBy(fn (ApprovalOrder $approval)', $service);
+        $this->assertStringContainsString('Chờ duyệt', $view);
+        $this->assertStringContainsString('Đã xử lý', $view);
+        $this->assertStringContainsString('Kế toán đã duyệt', $view);
+        $this->assertStringContainsString('Kế toán đã từ chối', $view);
+        $this->assertStringContainsString('@if($isPendingAccounting)', $view);
     }
 }

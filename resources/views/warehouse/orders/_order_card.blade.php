@@ -4,6 +4,7 @@
                 $canProcessThisOrder = !$orderCardReadonly && (
                     $order->accounting_sales_import_batch_id !== null
                     || (bool) $order->skip_auto_cancel
+                    || $order->hasCompletedAdjustment()
                     || ($isTodaySelected && $order->created_at->isToday())
                 );
                 $meta = $statusMeta[$order->status] ?? ['label' => $order->status, 'class' => 'bg-secondary'];
