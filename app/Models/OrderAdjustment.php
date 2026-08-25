@@ -163,6 +163,22 @@ class OrderAdjustment extends Model
         };
     }
 
+    public function canBeDeletedBy(User $user): bool
+    {
+        if ((int) $this->requested_by !== (int) $user->id
+            || ! in_array($this->status, [self::STATUS_DRAFT, self::STATUS_PENDING_APPROVAL], true)) {
+            return false;
+        }
+
+        $approvals = $this->relationLoaded('approvalSteps')
+            ? $this->approvalSteps
+            : $this->approvalSteps()->get();
+
+        // Các bước tự động bỏ qua không có approved_by nên sale vẫn có thể
+        // xóa yêu cầu gửi trùng trước khi một người thực sự xử lý.
+        return ! $approvals->contains(fn ($approval) => $approval->approved_by !== null);
+    }
+
     public function requiresWarehouseConfirmation(): bool
     {
         if (! $this->relationLoaded('items')) {

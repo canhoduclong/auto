@@ -5,6 +5,8 @@ namespace Tests\Unit;
 use App\Models\ApprovalOrder;
 use App\Models\ApprovalStep;
 use App\Models\OrderAdjustment;
+use App\Models\Role;
+use App\Models\User;
 use PHPUnit\Framework\TestCase;
 
 class OrderAdjustmentMonitoringVisibilityTest extends TestCase
@@ -53,5 +55,29 @@ class OrderAdjustmentMonitoringVisibilityTest extends TestCase
         $adjustment->status = OrderAdjustment::STATUS_REJECTED;
         $this->assertSame('Đã bị từ chối', $adjustment->progressLabel());
         $this->assertSame('danger', $adjustment->progressTone());
+    }
+
+    public function test_sale_can_only_delete_own_unreviewed_adjustment(): void
+    {
+        $sale = new User();
+        $sale->id = 10;
+        $sale->setRelation('roles', collect([new Role(['name' => 'sale'])]));
+
+        $adjustment = new OrderAdjustment([
+            'requested_by' => 10,
+            'status' => OrderAdjustment::STATUS_PENDING_APPROVAL,
+        ]);
+        $pending = new ApprovalOrder(['status' => 'pending']);
+        $adjustment->setRelation('approvalSteps', collect([$pending]));
+
+        $this->assertTrue($adjustment->canBeDeletedBy($sale));
+
+        $pending->approved_by = 20;
+        $pending->status = 'approved';
+        $this->assertFalse($adjustment->canBeDeletedBy($sale));
+
+        $pending->approved_by = null;
+        $adjustment->requested_by = 99;
+        $this->assertFalse($adjustment->canBeDeletedBy($sale));
     }
 }

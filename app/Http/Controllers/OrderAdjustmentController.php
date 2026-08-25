@@ -19,6 +19,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
@@ -351,6 +352,8 @@ class OrderAdjustmentController extends Controller
                 'status_label' => $adjustment->progressLabel(),
                 'status_tone' => $adjustment->progressTone(),
                 'requested_at' => optional($adjustment->submitted_at ?? $adjustment->created_at)->format('d/m/Y H:i'),
+                'can_delete' => $adjustment->canBeDeletedBy($request->user()),
+                'delete_url' => route('site.order-adjustments.destroy', $adjustment),
             ]);
         }
 
@@ -514,6 +517,52 @@ class OrderAdjustmentController extends Controller
         ]);
 
         return back()->with('success', 'Da tu choi yeu cau dieu chinh.');
+    }
+
+    public function destroy(Request $request, OrderAdjustment $orderAdjustment): RedirectResponse|JsonResponse
+    {
+        $user = $request->user();
+        abort_unless($user, 403);
+
+        $evidenceImages = [];
+
+        DB::transaction(function () use ($orderAdjustment, $user, &$evidenceImages): void {
+            $adjustment = OrderAdjustment::query()
+                ->with(['approvalSteps', 'orderReturn'])
+                ->lockForUpdate()
+                ->findOrFail($orderAdjustment->id);
+
+            abort_unless(
+                $adjustment->canBeDeletedBy($user),
+                403,
+                'Yêu cầu đã có người xử lý nên không thể xóa.'
+            );
+
+            if ($adjustment->orderReturn
+                && ! in_array((string) $adjustment->orderReturn->status, ['pending', 'ship_confirmed'], true)) {
+                abort(403, 'Phiếu trả hàng đã được xử lý nên không thể xóa yêu cầu.');
+            }
+
+            $evidenceImages = collect((array) $adjustment->evidence_images)
+                ->filter(fn ($path) => is_string($path) && $path !== '')
+                ->values()
+                ->all();
+
+            $adjustment->approvalSteps()->delete();
+            $adjustment->orderReturn?->delete();
+            $adjustment->delete();
+        });
+
+        if ($evidenceImages !== []) {
+            Storage::disk('public')->delete($evidenceImages);
+        }
+
+        $message = 'Đã xóa yêu cầu điều chỉnh gửi trùng.';
+        if ($request->expectsJson()) {
+            return response()->json(['success' => true, 'message' => $message]);
+        }
+
+        return back()->with('success', $message);
     }
 
     public function warehouseConfirm(Request $request, OrderAdjustment $orderAdjustment): RedirectResponse

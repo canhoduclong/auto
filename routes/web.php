@@ -106,7 +106,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::post('/layout-selection', [LayoutPreferenceController::class, 'store'])->name('layout-selection.store');
 
     // ─── Package module (Đóng hàng) ─────────────────────────────
-    Route::prefix('package')->name('package.')->middleware('role:package,admin')->group(function () {
+    Route::prefix('package')->name('package.')->middleware(['role:package,admin', 'active.role:package'])->group(function () {
         Route::get('/', [PackageDashboardController::class, 'index'])->name('dashboard');
         Route::get('/orders', [OrderPackingController::class, 'index'])->name('orders');
         Route::post('/cutting-batches/{batch}/materials/{variant}/picked', [OrderPackingController::class, 'markCuttingMaterialPicked'])->name('cutting-batches.materials.picked');
@@ -1106,6 +1106,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/my-order-adjustments/{orderAdjustment}/approve', [\App\Http\Controllers\OrderAdjustmentController::class, 'approve'])->name('site.order-adjustments.approve');
     Route::post('/my-order-adjustments/{orderAdjustment}/reject', [\App\Http\Controllers\OrderAdjustmentController::class, 'reject'])->name('site.order-adjustments.reject');
     Route::post('/my-order-adjustments/{orderAdjustment}/warehouse-confirm', [\App\Http\Controllers\OrderAdjustmentController::class, 'warehouseConfirm'])->name('site.order-adjustments.warehouse-confirm');
+    Route::delete('/my-order-adjustments/{orderAdjustment}', [\App\Http\Controllers\OrderAdjustmentController::class, 'destroy'])->name('site.order-adjustments.destroy');
 });
 
 Route::get('/page/{slug}', [PageController::class, 'show'])->name('pages.show');

@@ -37,6 +37,7 @@ return Application::configure(basePath: dirname(__DIR__))
         'permission' => \App\Http\Middleware\PermissionMiddleware::class,
         'setLocale' => \App\Http\Middleware\SetLocale::class,
         'role' => \App\Http\Middleware\RoleMiddleware::class,
+        'active.role' => \App\Http\Middleware\RequireActiveRole::class,
         'mobile.api' => \App\Http\Middleware\AuthenticateMobileApiToken::class,
         'mobile.api.log' => \App\Http\Middleware\LogMobileApiRequest::class,
         'mobile.role.redirect' => \App\Http\Middleware\CheckMobileRoleRedirect::class,

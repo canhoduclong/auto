@@ -9,8 +9,6 @@ use App\Models\Customer;
 use App\Models\OrderHistory;
 use App\Models\Product;
 use App\Models\ProductVariant;
-use App\Notifications\WarehouseOrderAdjustmentConfirmed;
-use App\Notifications\WarehouseOrderAdjustmentRejected;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -19,6 +17,10 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use App\Models\Setting;
+use App\Notifications\OrderWorkflowNotification;
+use App\Notifications\WarehouseNewOrderApproved;
+use App\Notifications\WarehouseOrderAdjustmentConfirmed;
+use App\Notifications\WarehouseOrderAdjustmentRejected;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\View\View;
 
@@ -55,8 +57,14 @@ class MyDashboardController extends Controller
         $user = auth()->user();
         abort_unless($user, 403);
 
-        $notifications = $user->notifications()
-            ->where('type', '!=', \App\Notifications\DepartmentBroadcastNotification::class)
+        $notificationsQuery = $user->notifications()
+            ->where('type', '!=', \App\Notifications\DepartmentBroadcastNotification::class);
+
+        if (function_exists('userHasActiveSalesRole') && userHasActiveSalesRole($user)) {
+            $notificationsQuery->whereNotIn('type', $this->packingNotificationClasses());
+        }
+
+        $notifications = $notificationsQuery
             ->latest()
             ->paginate(20);
 
@@ -76,9 +84,56 @@ class MyDashboardController extends Controller
             $notification->markAsRead();
         }
 
+        if (function_exists('userHasActiveSalesRole') && userHasActiveSalesRole($user)) {
+            $notificationClass = (string) $notification->type;
+            $businessType = (string) ($notification->data['type'] ?? '');
+
+            if (in_array($notificationClass, $this->packingNotificationClasses(), true)
+                || str_starts_with($businessType, 'order_workflow_')
+                || $notificationClass === OrderWorkflowNotification::class) {
+                return redirect()->to($this->salesOrderNotificationUrl($user, $notification->data ?? []));
+            }
+        }
+
         $url = (string) ($notification->data['url'] ?? '');
 
         return redirect()->to($url !== '' ? $url : route('pages.my_dashboard.notifications'));
+    }
+
+    private function packingNotificationClasses(): array
+    {
+        return [
+            WarehouseNewOrderApproved::class,
+            WarehouseOrderAdjustmentConfirmed::class,
+            WarehouseOrderAdjustmentRejected::class,
+        ];
+    }
+
+    private function salesOrderNotificationUrl(User $user, array $data): string
+    {
+        $activeRole = strtolower(trim((string) session('active_role', '')));
+        $orderId = max(0, (int) ($data['order_id'] ?? 0));
+
+        if (in_array($activeRole, ['leader', 'leader_sale', 'sale_manager'], true)) {
+            return route('pages.my_team_orders', ['highlight' => $orderId ?: null]);
+        }
+
+        if (in_array($activeRole, ['manager', 'manager_sale'], true)) {
+            return route('pages.all_team_orders', ['highlight' => $orderId ?: null]);
+        }
+
+        $order = $orderId > 0 ? Order::query()->find($orderId) : null;
+        $date = $order?->business_date
+            ?? $order?->created_at?->toDateString()
+            ?? now()->toDateString();
+
+        return route('pages.my_orders.monitoring', [
+            'tab' => 'today',
+            'view' => 'cards',
+            'date_field' => 'business_date',
+            'date' => $date,
+            'highlight' => $orderId ?: null,
+        ]);
     }
 
     public function markAllNotificationsAsRead(): RedirectResponse

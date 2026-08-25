@@ -343,6 +343,8 @@
     .monitor-sent-adjustment.is-secondary .monitor-sent-adjustment-state { color: #475569; }
     .monitor-sent-adjustment-meta { margin-top: 2px; color: #64748b; font-size: .66rem; line-height: 1.4; }
     .monitor-sent-adjustment-link { white-space: nowrap; font-size: .68rem; font-weight: 800; }
+    .monitor-sent-adjustment-actions { display: flex; align-items: center; gap: 6px; }
+    .monitor-sent-adjustment-actions form { margin: 0; }
     .monitor-order-footer {
         display: flex;
         flex-direction: column;
@@ -853,6 +855,7 @@
         .monitor-order-main { padding: 12px; }
         .monitor-sent-adjustment { grid-template-columns: 1fr; }
         .monitor-sent-adjustment-link { justify-self: start; }
+        .monitor-sent-adjustment-actions { justify-self: start; }
         .monitor-create-steps { padding-inline: 8px; }
         .monitor-create-step { font-size: .66rem; }
         .monitor-confirm-grid { grid-template-columns: 1fr; }
@@ -1789,6 +1792,7 @@
                                         <div data-sent-adjustment-items>
                                             @foreach($saleAdjustments as $adjustment)
                                                 @php
+                                                    $canDeleteAdjustment = $adjustment->canBeDeletedBy($user);
                                                     $approvedStages = $adjustment->approvalSteps
                                                         ->where('status', 'approved')
                                                         ->sortBy(fn ($approval) => (int) ($approval->step?->step_order ?? PHP_INT_MAX))
@@ -1802,7 +1806,16 @@
                                                         @if($approvedStages !== '')<div class="monitor-sent-adjustment-meta">{{ $approvedStages }}</div>@endif
                                                         @if($adjustment->reject_reason)<div class="monitor-sent-adjustment-meta text-danger"><strong>Lý do từ chối:</strong> {{ $adjustment->reject_reason }}</div>@endif
                                                     </div>
-                                                    <a href="{{ route('site.order-adjustments.show', $adjustment) }}" class="btn btn-sm btn-outline-primary monitor-sent-adjustment-link">Xem tiến trình</a>
+                                                    <div class="monitor-sent-adjustment-actions">
+                                                        <a href="{{ route('site.order-adjustments.show', $adjustment) }}" class="btn btn-sm btn-outline-primary monitor-sent-adjustment-link">Xem tiến trình</a>
+                                                        @if($canDeleteAdjustment)
+                                                            <form method="POST" action="{{ route('site.order-adjustments.destroy', $adjustment) }}" onsubmit="return confirm('Xóa yêu cầu điều chỉnh #{{ $adjustment->id }}? Thao tác này không thể hoàn tác.');">
+                                                                @csrf
+                                                                @method('DELETE')
+                                                                <button type="submit" class="btn btn-sm btn-outline-danger monitor-sent-adjustment-link"><i class="bi bi-trash me-1"></i>Xóa</button>
+                                                            </form>
+                                                        @endif
+                                                    </div>
                                                 </div>
                                             @endforeach
                                         </div>
@@ -3101,7 +3114,11 @@ document.addEventListener('submit', async function (event) {
             const statusItems = statusPanel?.querySelector('[data-sent-adjustment-items]');
             if (statusPanel && statusItems) {
                 statusPanel.hidden = false;
-                statusItems.insertAdjacentHTML('afterbegin', `<div class="monitor-sent-adjustment is-${escapeHtml(data.status_tone || 'warning')} mb-1" data-adjustment-id="${escapeHtml(data.adjustment_id)}"><div><div class="monitor-sent-adjustment-name">Yêu cầu #${escapeHtml(data.adjustment_id)} · ${escapeHtml(data.requested_at || '')}</div><div class="monitor-sent-adjustment-state"><i class="bi bi-hourglass-split me-1"></i>${escapeHtml(data.status_label || 'Đang chờ duyệt')}</div></div><a href="${escapeHtml(data.url)}" class="btn btn-sm btn-outline-primary monitor-sent-adjustment-link">Xem tiến trình</a></div>`);
+                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+                const deleteAction = data.can_delete
+                    ? `<form method="POST" action="${escapeHtml(data.delete_url)}" onsubmit="return confirm('Xóa yêu cầu điều chỉnh #${escapeHtml(data.adjustment_id)}? Thao tác này không thể hoàn tác.');"><input type="hidden" name="_token" value="${escapeHtml(csrfToken)}"><input type="hidden" name="_method" value="DELETE"><button type="submit" class="btn btn-sm btn-outline-danger monitor-sent-adjustment-link"><i class="bi bi-trash me-1"></i>Xóa</button></form>`
+                    : '';
+                statusItems.insertAdjacentHTML('afterbegin', `<div class="monitor-sent-adjustment is-${escapeHtml(data.status_tone || 'warning')} mb-1" data-adjustment-id="${escapeHtml(data.adjustment_id)}"><div><div class="monitor-sent-adjustment-name">Yêu cầu #${escapeHtml(data.adjustment_id)} · ${escapeHtml(data.requested_at || '')}</div><div class="monitor-sent-adjustment-state"><i class="bi bi-hourglass-split me-1"></i>${escapeHtml(data.status_label || 'Đang chờ duyệt')}</div></div><div class="monitor-sent-adjustment-actions"><a href="${escapeHtml(data.url)}" class="btn btn-sm btn-outline-primary monitor-sent-adjustment-link">Xem tiến trình</a>${deleteAction}</div></div>`);
             }
             const opener = orderCard?.querySelector('.monitor-adjustment-open');
             if (opener) { opener.disabled = true; opener.innerHTML = '<i class="bi bi-check2"></i><span>Đã gửi yêu cầu</span>'; }

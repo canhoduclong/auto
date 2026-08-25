@@ -238,6 +238,8 @@
                                             $role = strtolower((string) ($approval->step?->role_slug ?? ''));
                                             return ($adjustmentRoleLabels[$role] ?? $role).($approval->status === 'rejected' ? ' từ chối' : ' đã duyệt');
                                         })->implode(' · ');
+                                    $canDeleteAdjustment = (int) $adjustment->requested_by === (int) $user->id
+                                        && $adjustment->canBeDeletedBy($user);
                                 @endphp
                                 <div class="monitor-adjustment is-{{ $adjustmentTone }}">
                                     <div>
@@ -246,7 +248,16 @@
                                         @if($processedSteps !== '')<div class="monitor-adjustment-meta">{{ $processedSteps }}</div>@endif
                                         @if($adjustment->reject_reason)<div class="monitor-adjustment-meta text-danger"><strong>Lý do:</strong> {{ $adjustment->reject_reason }}</div>@endif
                                     </div>
-                                    <a class="btn btn-sm btn-outline-primary monitor-adjustment-link" href="{{ route('site.order-adjustments.show', $adjustment) }}">Xem tiến trình</a>
+                                    <div class="d-flex flex-wrap gap-1">
+                                        <a class="btn btn-sm btn-outline-primary monitor-adjustment-link" href="{{ route('site.order-adjustments.show', $adjustment) }}">Xem tiến trình</a>
+                                        @if($canDeleteAdjustment)
+                                            <form method="POST" action="{{ route('site.order-adjustments.destroy', $adjustment) }}" onsubmit="return confirm('Xóa yêu cầu điều chỉnh #{{ $adjustment->id }}? Thao tác này không thể hoàn tác.');">
+                                                @csrf
+                                                @method('DELETE')
+                                                <button class="btn btn-sm btn-outline-danger monitor-adjustment-link"><i class="bi bi-trash me-1"></i>Xóa</button>
+                                            </form>
+                                        @endif
+                                    </div>
                                 </div>
                             @endforeach
                         </section>

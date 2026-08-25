@@ -192,8 +192,18 @@ if (!function_exists('getUserOrderNotifications')) {
             return collect();
         }
 
-        return $user->notifications()
-            ->where('type', '!=', \App\Notifications\DepartmentBroadcastNotification::class)
+        $query = $user->notifications()
+            ->where('type', '!=', \App\Notifications\DepartmentBroadcastNotification::class);
+
+        if (function_exists('userHasActiveSalesRole') && userHasActiveSalesRole($user)) {
+            $query->whereNotIn('type', [
+                \App\Notifications\WarehouseNewOrderApproved::class,
+                \App\Notifications\WarehouseOrderAdjustmentConfirmed::class,
+                \App\Notifications\WarehouseOrderAdjustmentRejected::class,
+            ]);
+        }
+
+        return $query
             ->latest()
             ->limit($limit)
             ->get()
@@ -221,6 +231,25 @@ if (!function_exists('getUserOrderNotifications')) {
                     'note' => (string) ($data['note'] ?? ''),
                 ];
             });
+    }
+}
+
+if (!function_exists('userHasActiveSalesRole')) {
+    function userHasActiveSalesRole($user): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        $activeRole = strtolower(trim((string) session('active_role', '')));
+        if ($activeRole === '') {
+            $user->loadMissing('defaultRole');
+            $activeRole = strtolower(trim((string) ($user->defaultRole?->name ?? '')));
+        }
+
+        return in_array($activeRole, [
+            'sale', 'leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale',
+        ], true);
     }
 }
 
