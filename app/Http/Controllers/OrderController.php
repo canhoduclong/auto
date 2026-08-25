@@ -703,6 +703,7 @@ class OrderController extends Controller
             'vat_percent' => [Rule::requiredIf($request->boolean('charge_vat')), 'nullable', 'numeric', 'gt:0', 'max:100'],
             'collect_customer_shipping_fee' => ['nullable', 'boolean'],
             'customer_shipping_fee' => [Rule::requiredIf($request->boolean('collect_customer_shipping_fee')), 'nullable', 'numeric', 'gt:0', 'max:999999999999.99'],
+            'business_date' => ['nullable', 'date', 'before_or_equal:today'],
         ]);
 
         $customerQuery = Customer::query()->whereKey((int) $validated['customer_id']);
@@ -731,6 +732,13 @@ class OrderController extends Controller
         ])->values()->all();
 
         $useTruckStation = (bool) ($validated['use_truck_station'] ?? false);
+        $businessDate = isset($validated['business_date'])
+            ? Carbon::parse($validated['business_date'])->toDateString()
+            : now()->toDateString();
+        $isHistoricalException = Carbon::parse($businessDate)->startOfDay()->lt(Carbon::today());
+        $businessCreatedAt = $isHistoricalException
+            ? Carbon::parse($businessDate)->endOfDay()
+            : now();
 
         try {
             $order = $this->createOrderWithUnifiedStockFlow(
@@ -759,6 +767,11 @@ class OrderController extends Controller
                     'vat_percent' => (float) ($validated['vat_percent'] ?? 0),
                     'collect_customer_shipping_fee' => (bool) ($validated['collect_customer_shipping_fee'] ?? false),
                     'customer_shipping_fee' => (float) ($validated['customer_shipping_fee'] ?? 0),
+                    'created_at' => $businessCreatedAt,
+                    'delivery_date' => $isHistoricalException
+                        ? $businessDate
+                        : now()->addDay()->toDateString(),
+                    'skip_auto_cancel' => $isHistoricalException,
                     'allow_backorder' => true,
                     'status' => OrderStatus::Pending->value,
                     'payment_status' => PaymentStatus::Unpaid->value,
@@ -775,7 +788,8 @@ class OrderController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Đã tạo đơn hàng ' . ($order->code ?: ('#' . $order->id)) . '.',
+            'message' => 'Đã tạo đơn hàng ' . ($order->code ?: ('#' . $order->id))
+                . ($isHistoricalException ? ' cho ngày ' . Carbon::parse($businessDate)->format('d/m/Y') . ' (đơn ngoại lệ).' : '.'),
             'order' => [
                 'id' => (int) $order->id,
                 'code' => $order->code ?: ('#' . $order->id),
@@ -784,7 +798,10 @@ class OrderController extends Controller
                 'url' => route('site.orders.show', $order),
             ],
             'monitoring_url' => route('pages.my_orders.monitoring', [
-                'date' => $order->created_at?->toDateString() ?: now()->toDateString(),
+                'tab' => 'today',
+                'view' => 'cards',
+                'date_field' => 'business_date',
+                'date' => $businessDate,
                 'highlight' => $order->id,
             ]),
         ], 201);
@@ -1974,7 +1991,12 @@ class OrderController extends Controller
                 'order_discount' => $orderLevelDiscountAmount,
                 'order_discount_type' => $orderDiscountType,
                 'total_weight' => round($totalWeight, 3),
+                'skip_auto_cancel' => (bool) ($orderData['skip_auto_cancel'] ?? false),
             ]);
+
+            if (isset($orderData['created_at'])) {
+                $orderInsert['created_at'] = $orderData['created_at'];
+            }
 
             if ($this->hasColumn('orders', 'code')) {
                 $orderInsert['code'] = 'ORD-' . strtoupper(substr(bin2hex(random_bytes(5)), 0, 10));

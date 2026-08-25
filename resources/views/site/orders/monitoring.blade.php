@@ -1269,6 +1269,9 @@
             </div>
             <button type="button" class="btn btn-sm btn-success" id="monitorOpenCreate">
                 <i class="bi bi-plus-circle me-1"></i>Thêm đơn
+                @if(\Carbon\Carbon::parse($selectedDate)->isBefore(\Carbon\Carbon::today()))
+                    ngày {{ \Carbon\Carbon::parse($selectedDate)->format('d/m') }}
+                @endif
             </button>
         </div>
 
@@ -1471,9 +1474,15 @@
 
         <section class="monitor-panel monitor-create" id="monitorCreateOrder" hidden aria-label="Tạo đơn hàng mới">
             <div class="monitor-create-head d-flex align-items-center justify-content-between gap-2">
-                <h2>Tạo đơn hàng mới</h2>
+                <h2>Tạo đơn hàng ngày {{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}</h2>
                 <button type="button" class="btn-close" id="monitorCloseCreate" aria-label="Đóng"></button>
             </div>
+            @if(\Carbon\Carbon::parse($selectedDate)->isBefore(\Carbon\Carbon::today()))
+                <div class="alert alert-warning mx-3 mt-3 mb-0 py-2 small">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    Đây là đơn bổ sung cho ngày trước. Đơn sẽ tự động được đánh dấu <strong>đơn ngoại lệ</strong>, không bị tự hủy do quá hạn và được xếp cuối thứ tự ưu tiên ngày {{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}.
+                </div>
+            @endif
             <div class="monitor-create-steps" aria-label="Các bước tạo đơn">
                 @foreach(['Chọn sản phẩm', 'Chọn khách hàng', 'Xác nhận', 'Hoàn thành'] as $createStep)
                     <div class="monitor-create-step {{ $loop->first ? 'is-active' : '' }}" data-create-step-indicator="{{ $loop->iteration }}">
@@ -2260,6 +2269,7 @@ window.monitorAdminDeleteOrder = function (form, orderCode, saleName, orderTotal
     const variantEndpoint = @json(route('site.orders.variants.ajax'));
     const customerEndpoint = @json(route('site.orders.customers.ajax'));
     const storeEndpoint = @json(route('pages.my_orders.monitoring.store'));
+    const selectedBusinessDate = @json($selectedDate);
     const selectedItems = new Map();
     let selectedCustomer = null;
     let variantsLoaded = false;
@@ -2648,7 +2658,8 @@ window.monitorAdminDeleteOrder = function (form, orderCode, saleName, orderTotal
                     charge_vat: chargeVat,
                     vat_percent: chargeVat ? vatPercent : null,
                     collect_customer_shipping_fee: collectCustomerShippingFee,
-                    customer_shipping_fee: collectCustomerShippingFee ? customerShippingFee : null
+                    customer_shipping_fee: collectCustomerShippingFee ? customerShippingFee : null,
+                    business_date: selectedBusinessDate
                 })
             });
             const data = await response.json();
