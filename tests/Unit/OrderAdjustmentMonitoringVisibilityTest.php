@@ -39,9 +39,11 @@ class OrderAdjustmentMonitoringVisibilityTest extends TestCase
         $this->assertStringContainsString("adjustments._applied_summary", $todayCards);
         $this->assertStringContainsString('monitor-order-fee-row', $todayCards);
         $this->assertStringContainsString("['name' => 'Phí Ship'", $todayCards);
+        $this->assertStringContainsString('Sale, Leader và Manager đều được xem', $todayCards);
 
         $appliedSummary = file_get_contents($base.'/resources/views/site/orders/adjustments/_applied_summary.blade.php');
         $this->assertStringContainsString('đã duyệt và áp dụng vào đơn', $appliedSummary);
+        $this->assertStringContainsString('$adjustment->requester?->name', $appliedSummary);
         $this->assertStringNotContainsString("adjustments._fee_changes", $appliedSummary);
 
         $leaderReview = file_get_contents($base.'/resources/views/site/orders/adjustments/_leader_review_card.blade.php');

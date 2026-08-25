@@ -1900,6 +1900,7 @@
                                 </div>
                                 <div class="monitor-order-total"><span>Tổng đơn sau phí/chiết khấu</span><strong>{{ number_format((float) $order->total, 0, ',', '.') }}đ</strong></div>
 
+                                {{-- Lịch sử đã áp dụng là dữ liệu của đơn: Sale, Leader và Manager đều được xem. --}}
                                 @if($completedOrderAdjustments->isNotEmpty())
                                     <section class="monitor-applied-adjustments" aria-label="Điều chỉnh đã duyệt và áp dụng">
                                         @foreach($completedOrderAdjustments as $adjustment)
