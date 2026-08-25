@@ -191,11 +191,41 @@ class OrderAutoApprovalService
     {
         $adjustment->loadMissing('items.variant.latestPriceRule');
 
+        if ($this->adjustmentRequiresManualApproval($adjustment)) {
+            return false;
+        }
+
         return $this->itemsMatchRule(
             $adjustment->items,
             $rule,
             fn ($item): int => (int) ($item->adjusted_quantity ?? 0),
             fn ($item): float => (float) ($item->adjusted_price ?? 0)
+        );
+    }
+
+    /**
+     * Phí, chiết khấu và số cân thực tế ảnh hưởng trực tiếp đến đối soát.
+     * Các thay đổi này luôn phải đi qua đầy đủ quy trình duyệt thủ công.
+     */
+    private function adjustmentRequiresManualApproval(OrderAdjustment $adjustment): bool
+    {
+        $hasFeeOrDiscountChange = collect((array) ($adjustment->fee_changes ?? []))
+            ->contains(function ($change): bool {
+                $original = (array) ($change['original'] ?? []);
+                $adjusted = (array) ($change['adjusted'] ?? []);
+
+                return (bool) ($original['enabled'] ?? false) !== (bool) ($adjusted['enabled'] ?? false)
+                    || abs((float) ($original['value'] ?? 0) - (float) ($adjusted['value'] ?? 0)) > .001;
+            });
+
+        if ($hasFeeOrDiscountChange) {
+            return true;
+        }
+
+        return $adjustment->items->contains(
+            fn ($item): bool => abs(
+                (float) ($item->original_weight ?? 0) - (float) ($item->adjusted_weight ?? 0)
+            ) > .001
         );
     }
 

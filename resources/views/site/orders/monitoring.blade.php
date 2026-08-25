@@ -1374,6 +1374,7 @@
                             <div class="monitor-auto-help">
                                 <span>Trưởng phòng chỉ duyệt đơn của sale cùng team. Giám đốc chỉ duyệt khi các bước trước đã hoàn tất.</span>
                                 <span>Đơn không đạt điều kiện vẫn giữ trạng thái chờ duyệt thủ công.</span>
+                                <span>Điều chỉnh có thay đổi phí, chiết khấu hoặc cân ký luôn phải duyệt thủ công, không áp dụng quy tắc tự động.</span>
                             </div>
                             <div class="monitor-auto-footer">
                                 <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-check2-circle me-1"></i>Lưu cấu hình và duyệt đơn phù hợp</button>
