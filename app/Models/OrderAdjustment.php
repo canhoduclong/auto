@@ -106,6 +106,63 @@ class OrderAdjustment extends Model
         return $this->hasMany(\App\Models\ApprovalOrder::class, 'order_adjustment_id');
     }
 
+    public static function approvalRoleLabel(?string $roleSlug): string
+    {
+        $role = strtolower((string) $roleSlug);
+
+        return match ($role) {
+            'leader', 'leader_sale', 'sale_manager' => 'Leader',
+            'manager', 'manager_sale', 'director' => 'Manager',
+            'account', 'accountant', 'accounting' => 'Kế toán',
+            'warehouse' => 'Kho',
+            default => $role !== '' ? $role : 'bộ phận phụ trách',
+        };
+    }
+
+    public function currentPendingApprovalStep(): ?\App\Models\ApprovalOrder
+    {
+        $approvals = $this->relationLoaded('approvalSteps')
+            ? $this->approvalSteps
+            : $this->approvalSteps()->with('step')->get();
+
+        return $approvals
+            ->where('status', 'pending')
+            ->filter(fn ($approval) => $approval->step)
+            ->sortBy(fn ($approval) => (int) ($approval->step?->step_order ?? PHP_INT_MAX))
+            ->first();
+    }
+
+    public function progressLabel(): string
+    {
+        if ($this->status === self::STATUS_PENDING_APPROVAL) {
+            $current = $this->currentPendingApprovalStep();
+
+            return $current?->step
+                ? 'Đang chờ '.self::approvalRoleLabel($current->step->role_slug).' duyệt'
+                : 'Đang chờ duyệt';
+        }
+
+        return match ($this->status) {
+            self::STATUS_DRAFT => 'Bản nháp, chưa gửi duyệt',
+            self::STATUS_APPROVED => $this->warehouse_confirmation_status === 'pending'
+                ? 'Đã duyệt, chờ Kho xác nhận'
+                : 'Đã được duyệt',
+            self::STATUS_REJECTED => 'Đã bị từ chối',
+            self::STATUS_COMPLETED => 'Đã duyệt và hoàn tất',
+            default => str_replace('_', ' ', (string) $this->status),
+        };
+    }
+
+    public function progressTone(): string
+    {
+        return match ($this->status) {
+            self::STATUS_APPROVED, self::STATUS_COMPLETED => 'success',
+            self::STATUS_REJECTED => 'danger',
+            self::STATUS_DRAFT => 'secondary',
+            default => 'warning',
+        };
+    }
+
     public function requiresWarehouseConfirmation(): bool
     {
         if (! $this->relationLoaded('items')) {

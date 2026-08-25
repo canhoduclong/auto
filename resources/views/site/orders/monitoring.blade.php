@@ -329,6 +329,20 @@
     }
     .monitor-items td { border-color: #edf2f7; vertical-align: middle; }
     .monitor-order-total { display: none; }
+    .monitor-sent-adjustments { display: grid; gap: 7px; margin-top: 11px; padding-top: 10px; border-top: 1px dashed #cbd5e1; }
+    .monitor-sent-adjustments[hidden] { display: none; }
+    .monitor-sent-adjustments-title { display: flex; align-items: center; gap: 6px; color: #075985; font-size: .7rem; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; }
+    .monitor-sent-adjustment { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 9px 11px; border: 1px solid #fde68a; border-left: 4px solid #f59e0b; border-radius: 7px; background: #fffbeb; }
+    .monitor-sent-adjustment.is-success { border-color: #bbf7d0; border-left-color: #22c55e; background: #f0fdf4; }
+    .monitor-sent-adjustment.is-danger { border-color: #fecaca; border-left-color: #ef4444; background: #fef2f2; }
+    .monitor-sent-adjustment.is-secondary { border-color: #dbe4ef; border-left-color: #94a3b8; background: #f8fafc; }
+    .monitor-sent-adjustment-name { color: #0f172a; font-size: .74rem; font-weight: 900; }
+    .monitor-sent-adjustment-state { margin-top: 2px; color: #92400e; font-size: .7rem; font-weight: 800; }
+    .monitor-sent-adjustment.is-success .monitor-sent-adjustment-state { color: #166534; }
+    .monitor-sent-adjustment.is-danger .monitor-sent-adjustment-state { color: #b91c1c; }
+    .monitor-sent-adjustment.is-secondary .monitor-sent-adjustment-state { color: #475569; }
+    .monitor-sent-adjustment-meta { margin-top: 2px; color: #64748b; font-size: .66rem; line-height: 1.4; }
+    .monitor-sent-adjustment-link { white-space: nowrap; font-size: .68rem; font-weight: 800; }
     .monitor-order-footer {
         display: flex;
         flex-direction: column;
@@ -837,6 +851,8 @@
         .monitor-actions .monitor-cancel-form { margin-top: 0; padding-top: 0; border-top: 0; }
         .monitor-timeline { min-width: 0; }
         .monitor-order-main { padding: 12px; }
+        .monitor-sent-adjustment { grid-template-columns: 1fr; }
+        .monitor-sent-adjustment-link { justify-self: start; }
         .monitor-create-steps { padding-inline: 8px; }
         .monitor-create-step { font-size: .66rem; }
         .monitor-confirm-grid { grid-template-columns: 1fr; }
@@ -1683,6 +1699,9 @@
                             $canCancel = in_array($order->status, \App\Models\Order::CANCELLABLE_STATUSES, true)
                                 && ($isAdminUser || $canManageOrder);
                             $canRequestAdjustment = $canManageOrder && $order->canRequestAdjustment();
+                            $saleAdjustments = $canManageOrder
+                                ? $order->adjustments->where('requested_by', auth()->id())->values()
+                                : collect();
                         @endphp
                         <article class="monitor-panel monitor-order status-{{ $monitorState }} {{ $canManageOrder ? 'is-mine' : '' }} {{ $isCancelled ? 'is-cancelled' : '' }}" id="monitor-order-{{ $order->id }}" title="{{ $monitorStateLabels[$monitorState] }}">
                             <div class="monitor-order-main">
@@ -1763,6 +1782,32 @@
                                     </table>
                                 </div>
                                 <div class="monitor-order-total">{{ number_format((float) $order->total, 0, ',', '.') }}đ</div>
+
+                                @if($canManageOrder)
+                                    <section class="monitor-sent-adjustments" data-sent-adjustments {{ $saleAdjustments->isEmpty() ? 'hidden' : '' }}>
+                                        <div class="monitor-sent-adjustments-title"><i class="bi bi-send-check"></i>Sale đã gửi yêu cầu điều chỉnh</div>
+                                        <div data-sent-adjustment-items>
+                                            @foreach($saleAdjustments as $adjustment)
+                                                @php
+                                                    $approvedStages = $adjustment->approvalSteps
+                                                        ->where('status', 'approved')
+                                                        ->sortBy(fn ($approval) => (int) ($approval->step?->step_order ?? PHP_INT_MAX))
+                                                        ->map(fn ($approval) => \App\Models\OrderAdjustment::approvalRoleLabel($approval->step?->role_slug).' đã duyệt')
+                                                        ->implode(' · ');
+                                                @endphp
+                                                <div class="monitor-sent-adjustment is-{{ $adjustment->progressTone() }} mb-1" data-adjustment-id="{{ $adjustment->id }}">
+                                                    <div>
+                                                        <div class="monitor-sent-adjustment-name">Yêu cầu #{{ $adjustment->id }} · {{ optional($adjustment->submitted_at ?? $adjustment->created_at)->format('d/m/Y H:i') }}</div>
+                                                        <div class="monitor-sent-adjustment-state"><i class="bi bi-hourglass-split me-1"></i>{{ $adjustment->progressLabel() }}</div>
+                                                        @if($approvedStages !== '')<div class="monitor-sent-adjustment-meta">{{ $approvedStages }}</div>@endif
+                                                        @if($adjustment->reject_reason)<div class="monitor-sent-adjustment-meta text-danger"><strong>Lý do từ chối:</strong> {{ $adjustment->reject_reason }}</div>@endif
+                                                    </div>
+                                                    <a href="{{ route('site.order-adjustments.show', $adjustment) }}" class="btn btn-sm btn-outline-primary monitor-sent-adjustment-link">Xem tiến trình</a>
+                                                </div>
+                                            @endforeach
+                                        </div>
+                                    </section>
+                                @endif
 
                                 @if($isEditable)
                                     <div class="collapse monitor-inline-edit" id="monitorEdit{{ $order->id }}">
@@ -3051,7 +3096,14 @@ document.addEventListener('submit', async function (event) {
             const data = await response.json();
             if (!response.ok || !data.success) throw new Error(data.errors ? Object.values(data.errors).flat().join(' ') : (data.message || 'Không gửi được yêu cầu.'));
             form.innerHTML = `<div class="alert alert-success mb-0"><strong>${escapeHtml(data.message)}</strong><div class="mt-2"><a class="btn btn-sm btn-outline-success" href="${escapeHtml(data.url)}">Xem yêu cầu #${escapeHtml(data.adjustment_id)}</a></div></div>`;
-            const opener = form.closest('.monitor-order')?.querySelector('.monitor-adjustment-open');
+            const orderCard = form.closest('.monitor-order');
+            const statusPanel = orderCard?.querySelector('[data-sent-adjustments]');
+            const statusItems = statusPanel?.querySelector('[data-sent-adjustment-items]');
+            if (statusPanel && statusItems) {
+                statusPanel.hidden = false;
+                statusItems.insertAdjacentHTML('afterbegin', `<div class="monitor-sent-adjustment is-${escapeHtml(data.status_tone || 'warning')} mb-1" data-adjustment-id="${escapeHtml(data.adjustment_id)}"><div><div class="monitor-sent-adjustment-name">Yêu cầu #${escapeHtml(data.adjustment_id)} · ${escapeHtml(data.requested_at || '')}</div><div class="monitor-sent-adjustment-state"><i class="bi bi-hourglass-split me-1"></i>${escapeHtml(data.status_label || 'Đang chờ duyệt')}</div></div><a href="${escapeHtml(data.url)}" class="btn btn-sm btn-outline-primary monitor-sent-adjustment-link">Xem tiến trình</a></div>`);
+            }
+            const opener = orderCard?.querySelector('.monitor-adjustment-open');
             if (opener) { opener.disabled = true; opener.innerHTML = '<i class="bi bi-check2"></i><span>Đã gửi yêu cầu</span>'; }
             notify(data.message, 'success');
         } catch (error) {

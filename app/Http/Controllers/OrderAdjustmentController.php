@@ -341,11 +341,16 @@ class OrderAdjustmentController extends Controller
             : 'Đã gửi yêu cầu điều chỉnh đơn hàng cho quy trình duyệt.';
 
         if ($request->expectsJson()) {
+            $adjustment->loadMissing('approvalSteps.step');
+
             return response()->json([
                 'success' => true,
                 'message' => $message,
                 'adjustment_id' => $adjustment->id,
                 'url' => route('site.order-adjustments.show', $adjustment),
+                'status_label' => $adjustment->progressLabel(),
+                'status_tone' => $adjustment->progressTone(),
+                'requested_at' => optional($adjustment->submitted_at ?? $adjustment->created_at)->format('d/m/Y H:i'),
             ]);
         }
 
