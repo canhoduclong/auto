@@ -232,6 +232,18 @@ class WarehouseDashboardController extends Controller
         Order::STATUS_READY_TO_SHIP,
     ];
 
+    /**
+     * Stock has already left the warehouse for these orders. Any reservation
+     * rows that remain are stale and must not reduce the packing FIFO pool.
+     */
+    private const EXPORTED_ORDER_STATUSES = [
+        Order::STATUS_SHIPPING,
+        Order::STATUS_IN_DELIVERY,
+        Order::STATUS_DELIVERING,
+        Order::STATUS_DELIVERED,
+        Order::STATUS_COMPLETED,
+    ];
+
     private const EDITABLE_LOGISTICS_STATUSES = [
         Order::STATUS_PACKING,
     ];
@@ -1901,12 +1913,34 @@ class WarehouseDashboardController extends Controller
                 ->all();
         }
 
+        // A delivered/in-delivery order is no longer part of the packing queue:
+        // its stock was exported when the shipper accepted it. Legacy or drifted
+        // reservation rows may still be included in inventories.reserved_quantity;
+        // add those rows back so completed deliveries cannot block a later order.
+        $exportedResvByVariant = [];
+        if (! $isHistoricalDate) {
+            $exportedResvByVariant = InventoryReservation::query()
+                ->join('order_items', 'order_items.id', '=', 'inventory_reservations.order_item_id')
+                ->join('orders', 'orders.id', '=', 'order_items.order_id')
+                ->join('inventories', 'inventories.id', '=', 'inventory_reservations.inventory_id')
+                ->whereIn('inventories.product_variant_id', $variantIds->all())
+                ->whereIn('orders.status', self::EXPORTED_ORDER_STATUSES)
+                ->when($warehouseId, fn ($q) => $q->where('inventories.warehouse_id', $warehouseId))
+                ->selectRaw('inventories.product_variant_id, COALESCE(SUM(inventory_reservations.quantity), 0) as qty')
+                ->groupBy('inventories.product_variant_id')
+                ->pluck('qty', 'inventories.product_variant_id')
+                ->map(fn ($v) => (int) $v)
+                ->all();
+        }
+
         $stockByVariant = [];
         foreach ($variantIds as $vid) {
             $vid = (int) $vid;
             $stockByVariant[$vid] = max(
                 0,
-                ((int) ($availableByVariant[$vid] ?? 0)) + ((int) ($todayResvByVariant[$vid] ?? 0))
+                ((int) ($availableByVariant[$vid] ?? 0))
+                    + ((int) ($todayResvByVariant[$vid] ?? 0))
+                    + ((int) ($exportedResvByVariant[$vid] ?? 0))
             );
         }
 
