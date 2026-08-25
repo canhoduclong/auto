@@ -357,7 +357,15 @@
         text-transform: uppercase;
     }
     .monitor-items td { border-color: #edf2f7; vertical-align: middle; }
-    .monitor-order-total { display: none; }
+    .monitor-order-total { display: flex; align-items: baseline; justify-content: flex-end; gap: 8px; padding: 7px 2px 2px; color: #475569; font-size: .68rem; }
+    .monitor-order-total strong { color: #0f172a; font-size: .86rem; }
+    .monitor-applied-adjustments { display: grid; gap: 7px; margin-top: 8px; }
+    .monitor-applied-adjustment { padding: 9px 10px; border: 1px solid #bbf7d0; border-left: 4px solid #22c55e; border-radius: 7px; background: #f0fdf4; }
+    .monitor-applied-adjustment-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px; }
+    .monitor-applied-adjustment-title { color: #166534; font-size: .72rem; font-weight: 900; }
+    .monitor-applied-adjustment-meta { color: #64748b; font-size: .64rem; }
+    .monitor-applied-adjustment-changes { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+    .monitor-applied-adjustment-changes > span { padding: 4px 7px; border-radius: 5px; background: #dcfce7; color: #14532d; font-size: .67rem; }
     .monitor-sent-adjustments { display: grid; gap: 7px; margin-top: 11px; padding-top: 10px; border-top: 1px dashed #cbd5e1; }
     .monitor-sent-adjustments[hidden] { display: none; }
     .monitor-sent-adjustments-title { display: flex; align-items: center; gap: 6px; color: #075985; font-size: .7rem; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; }
@@ -1761,8 +1769,15 @@
                                 && ($isAdminUser || $canManageOrder);
                             $canRequestAdjustment = $canManageOrder && $order->canRequestAdjustment();
                             $saleAdjustments = $canManageOrder
-                                ? $order->adjustments->where('requested_by', auth()->id())->values()
+                                ? $order->adjustments
+                                    ->where('requested_by', auth()->id())
+                                    ->where('status', '!=', \App\Models\OrderAdjustment::STATUS_COMPLETED)
+                                    ->values()
                                 : collect();
+                            $completedOrderAdjustments = $order->adjustments
+                                ->where('status', \App\Models\OrderAdjustment::STATUS_COMPLETED)
+                                ->sortByDesc(fn ($adjustment) => $adjustment->completed_at?->timestamp ?? $adjustment->id)
+                                ->values();
                             $orderPendingAdjustments = ($pendingAdjustmentsByOrder ?? collect())->get($order->id, collect());
                         @endphp
                         <article class="monitor-panel monitor-order status-{{ $monitorState }} {{ $canManageOrder ? 'is-mine' : '' }} {{ $isCancelled ? 'is-cancelled' : '' }}" id="monitor-order-{{ $order->id }}" title="{{ $monitorStateLabels[$monitorState] }}">
@@ -1798,6 +1813,9 @@
                                         <span><i class="bi bi-pin-map me-1"></i>Khu vực: {{ $deliveryArea }}</span>
                                     @endif
                                     <span><i class="bi bi-clock me-1"></i>Giờ giao: {{ $deliveryTime }}</span>
+                                    @if($order->recipient_name || $order->recipient_phone)
+                                        <span><i class="bi bi-person-check me-1"></i>Người nhận: {{ $order->recipient_name ?: '—' }}{{ $order->recipient_phone ? ' · '.$order->recipient_phone : '' }}</span>
+                                    @endif
                                     @if($order->shipper)
                                         <span><i class="bi bi-truck me-1"></i>Shipper: {{ $order->shipper->name }}</span>
                                     @endif
@@ -1843,7 +1861,15 @@
                                         </tbody>
                                     </table>
                                 </div>
-                                <div class="monitor-order-total">{{ number_format((float) $order->total, 0, ',', '.') }}đ</div>
+                                <div class="monitor-order-total"><span>Tổng đơn sau phí/chiết khấu</span><strong>{{ number_format((float) $order->total, 0, ',', '.') }}đ</strong></div>
+
+                                @if($completedOrderAdjustments->isNotEmpty())
+                                    <section class="monitor-applied-adjustments" aria-label="Điều chỉnh đã duyệt và áp dụng">
+                                        @foreach($completedOrderAdjustments as $adjustment)
+                                            @include('site.orders.adjustments._applied_summary', ['adjustment' => $adjustment])
+                                        @endforeach
+                                    </section>
+                                @endif
 
                                 @foreach($orderPendingAdjustments as $adjustment)
                                     @include('site.orders.adjustments._leader_review_card', ['adjustment' => $adjustment, 'compact' => false])

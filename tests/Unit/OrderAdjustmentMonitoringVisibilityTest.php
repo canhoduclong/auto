@@ -35,6 +35,12 @@ class OrderAdjustmentMonitoringVisibilityTest extends TestCase
         $this->assertStringContainsString('Yêu cầu điều chỉnh chờ {{ $adjustmentApprovalRoleLabel }} duyệt', $todayCards);
         $this->assertStringContainsString('pendingAdjustmentRequests', $todayCards);
         $this->assertStringContainsString('không phụ thuộc trang phân trang hiện tại', $controller);
+        $this->assertStringContainsString('Tổng đơn sau phí/chiết khấu', $todayCards);
+        $this->assertStringContainsString("adjustments._applied_summary", $todayCards);
+
+        $appliedSummary = file_get_contents($base.'/resources/views/site/orders/adjustments/_applied_summary.blade.php');
+        $this->assertStringContainsString('đã duyệt và áp dụng vào đơn', $appliedSummary);
+        $this->assertStringContainsString("adjustments._fee_changes", $appliedSummary);
 
         $leaderReview = file_get_contents($base.'/resources/views/site/orders/adjustments/_leader_review_card.blade.php');
         $this->assertStringContainsString('Tới đơn cần duyệt', $leaderReview);
