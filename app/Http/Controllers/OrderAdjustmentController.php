@@ -717,7 +717,30 @@ class OrderAdjustmentController extends Controller
         $hasPendingStep = $adjustment->approvalSteps()->where('status', 'pending')->exists();
 
         if ($hasPendingStep) {
-            return $approvalService->canApproveAdjustmentStep($adjustment, $user);
+            if (! $approvalService->canApproveAdjustmentStep($adjustment, $user)) {
+                return false;
+            }
+
+            $currentRole = strtolower((string) ($approvalService->getCurrentPendingAdjustmentStep($adjustment)?->step?->role_slug ?? ''));
+            $activeRole = strtolower(trim((string) (session('active_role') ?: $user->defaultRole?->name)));
+            $acceptedActiveRoles = match (true) {
+                in_array($currentRole, ['leader', 'leader_sale', 'sale_manager'], true) => ['leader', 'leader_sale', 'sale_manager'],
+                in_array($currentRole, ['manager', 'manager_sale', 'director'], true) => ['manager', 'manager_sale', 'director'],
+                in_array($currentRole, ['account', 'accountant', 'accounting'], true) => ['account', 'accountant', 'accounting'],
+                default => [$currentRole],
+            };
+            if ($activeRole !== '' && ! in_array($activeRole, $acceptedActiveRoles, true)) {
+                return false;
+            }
+
+            if (in_array($currentRole, ['leader', 'leader_sale', 'sale_manager'], true)) {
+                $adjustment->loadMissing('order.user');
+
+                return (int) ($user->team_id ?? 0) > 0
+                    && (int) ($adjustment->order?->user?->team_id ?? 0) === (int) $user->team_id;
+            }
+
+            return true;
         }
 
         // Fallback: no workflow configured → accountant can approve

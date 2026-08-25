@@ -74,6 +74,23 @@
     .monitor-sequence.status-delivered { --monitor-state-color: #8b5e3c; }
     .monitor-sequence.status-accounted { --monitor-state-color: #581c87; }
     .monitor-sequence.status-cancelled { --monitor-state-color: #dc2626; }
+    .leader-adjustment-queue { display: grid; gap: 9px; margin: -5px 0 16px; padding: 13px; border: 1px solid #fbbf24; border-radius: 10px; background: #fffbeb; box-shadow: 0 5px 18px rgba(146, 64, 14, .08); }
+    .leader-adjustment-queue-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #92400e; font-size: .78rem; font-weight: 900; text-transform: uppercase; }
+    .leader-adjustment-review { padding: 11px 12px; border: 1px solid #fde68a; border-left: 4px solid #f59e0b; border-radius: 8px; background: #fff; }
+    .leader-adjustment-review.is-detail { scroll-margin-top: 185px; margin-top: 12px; background: #fffbeb; }
+    .leader-adjustment-review.is-detail:target { border-color: #f59e0b; box-shadow: 0 0 0 4px rgba(245, 158, 11, .18); }
+    .leader-adjustment-review-link { display: block; color: inherit; text-decoration: none; }
+    .leader-adjustment-review-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+    .leader-adjustment-review-title { color: #0f172a; font-size: .77rem; font-weight: 900; }
+    .leader-adjustment-review-meta { margin-top: 2px; color: #64748b; font-size: .67rem; }
+    .leader-adjustment-jump { display: inline-flex; align-items: center; gap: 4px; color: #b45309; font-size: .67rem; font-weight: 900; white-space: nowrap; }
+    .leader-adjustment-reason { margin-top: 7px; color: #713f12; font-size: .72rem; }
+    .leader-adjustment-change-list { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+    .leader-adjustment-change-list > span { padding: 4px 7px; border-radius: 5px; background: #fef3c7; color: #78350f; font-size: .67rem; }
+    .leader-adjustment-review-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+    .leader-adjustment-review-actions form { margin: 0; }
+    .leader-adjustment-review-actions .btn { font-size: .69rem; font-weight: 800; }
+    .leader-adjustment-reject-form { margin-top: 9px; padding-top: 9px; border-top: 1px dashed #fbbf24; font-size: .72rem; }
     .monitor-summary-head {
         display: flex;
         flex-wrap: wrap;
@@ -873,6 +890,7 @@
         .monitor-product-choice-label { font-size: 0; }
         .monitor-product-choice-label i { font-size: .8rem; }
         .monitor-priority-legend-grid { grid-template-columns: 1fr; }
+        .leader-adjustment-review-head { flex-direction: column; }
     }
     @media (max-width: 575.98px) {
         .monitor-actions { grid-template-columns: 1fr; }
@@ -1120,6 +1138,18 @@
                 @endforeach
             </div>
         </div>
+        @endif
+
+        @if($viewMode === 'cards' && ($leaderAdjustmentRequests ?? collect())->isNotEmpty())
+            <section class="leader-adjustment-queue" aria-label="Yêu cầu điều chỉnh chờ Leader duyệt">
+                <div class="leader-adjustment-queue-head">
+                    <span><i class="bi bi-exclamation-circle-fill me-1"></i>Yêu cầu điều chỉnh chờ Leader duyệt</span>
+                    <span class="badge text-bg-warning">{{ $leaderAdjustmentRequests->count() }}</span>
+                </div>
+                @foreach($leaderAdjustmentRequests as $adjustment)
+                    @include('site.orders.adjustments._leader_review_card', ['adjustment' => $adjustment, 'compact' => true])
+                @endforeach
+            </section>
         @endif
 
         <div class="monitor-bulk-actions mb-2">
@@ -1705,6 +1735,7 @@
                             $saleAdjustments = $canManageOrder
                                 ? $order->adjustments->where('requested_by', auth()->id())->values()
                                 : collect();
+                            $orderLeaderAdjustments = ($leaderAdjustmentsByOrder ?? collect())->get($order->id, collect());
                         @endphp
                         <article class="monitor-panel monitor-order status-{{ $monitorState }} {{ $canManageOrder ? 'is-mine' : '' }} {{ $isCancelled ? 'is-cancelled' : '' }}" id="monitor-order-{{ $order->id }}" title="{{ $monitorStateLabels[$monitorState] }}">
                             <div class="monitor-order-main">
@@ -1785,6 +1816,10 @@
                                     </table>
                                 </div>
                                 <div class="monitor-order-total">{{ number_format((float) $order->total, 0, ',', '.') }}đ</div>
+
+                                @foreach($orderLeaderAdjustments as $adjustment)
+                                    @include('site.orders.adjustments._leader_review_card', ['adjustment' => $adjustment, 'compact' => false])
+                                @endforeach
 
                                 @if($canManageOrder)
                                     <section class="monitor-sent-adjustments" data-sent-adjustments {{ $saleAdjustments->isEmpty() ? 'hidden' : '' }}>

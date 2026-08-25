@@ -30,6 +30,14 @@ class OrderAdjustmentMonitoringVisibilityTest extends TestCase
         $this->assertStringContainsString('data-sent-adjustments', $todayCards);
         $this->assertStringContainsString('$adjustment->progressLabel()', $todayCards);
         $this->assertStringContainsString("statusItems.insertAdjacentHTML('afterbegin'", $todayCards);
+        $this->assertStringContainsString('Yêu cầu điều chỉnh chờ Leader duyệt', $todayCards);
+        $this->assertStringContainsString('leaderAdjustmentRequests', $todayCards);
+
+        $leaderReview = file_get_contents($base.'/resources/views/site/orders/adjustments/_leader_review_card.blade.php');
+        $this->assertStringContainsString('Tới đơn cần duyệt', $leaderReview);
+        $this->assertStringContainsString('Nội dung:', $leaderReview);
+        $this->assertStringContainsString('Duyệt yêu cầu', $leaderReview);
+        $this->assertStringContainsString('Lý do từ chối', $leaderReview);
     }
 
     public function test_all_accounting_role_aliases_can_open_and_approve_adjustment_details(): void

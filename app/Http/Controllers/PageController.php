@@ -1033,6 +1033,7 @@ class PageController extends Controller
                         'requester:id,name',
                         'approvalSteps.step:id,role_slug,step_order',
                         'approvalSteps.approver:id,name',
+                        'items.variant.product:id,name',
                     ])->latest('id');
                 },
                 'items.product',
@@ -1216,6 +1217,35 @@ class PageController extends Controller
                 : false;
         }
 
+        $activeMonitoringRole = strtolower(trim((string) (session('active_role') ?: $user->defaultRole?->name)));
+        $isLeaderWorkspace = in_array($activeMonitoringRole, ['leader', 'leader_sale', 'sale_manager'], true);
+        if ($activeMonitoringRole === '') {
+            $isLeaderWorkspace = $user->hasRole(['leader', 'leader_sale', 'sale_manager'])
+                && ! $user->hasRole(['manager', 'manager_sale', 'director', 'admin']);
+        }
+
+        $leaderAdjustmentRequests = collect();
+        if ($isLeaderWorkspace && (int) ($user->team_id ?? 0) > 0) {
+            $leaderAdjustmentRequests = $orders->getCollection()
+                ->filter(fn (Order $order) => (int) ($order->user?->team_id ?? 0) === (int) $user->team_id)
+                ->flatMap(fn (Order $order) => $order->adjustments->map(function ($adjustment) use ($order) {
+                    $adjustment->setRelation('order', $order);
+
+                    return $adjustment;
+                }))
+                ->filter(function ($adjustment): bool {
+                    if ($adjustment->status !== \App\Models\OrderAdjustment::STATUS_PENDING_APPROVAL) {
+                        return false;
+                    }
+
+                    $currentRole = strtolower((string) ($adjustment->currentPendingApprovalStep()?->step?->role_slug ?? ''));
+
+                    return in_array($currentRole, ['leader', 'leader_sale', 'sale_manager'], true);
+                })
+                ->sortByDesc(fn ($adjustment) => $adjustment->submitted_at?->timestamp ?? $adjustment->id)
+                ->values();
+        }
+
         $monitoringItems = $filteredOrders->flatMap(fn (Order $order) => $order->items);
         $monitoringVariantIds = $monitoringItems
             ->pluck('product_variant_id')
@@ -1386,6 +1416,8 @@ class PageController extends Controller
             'sampleDraftCustomerIds' => $sampleDraftCustomerIds,
             'customerTabSales' => $customerTabSales,
             'canApproveByOrder' => $canApproveByOrder,
+            'leaderAdjustmentRequests' => $leaderAdjustmentRequests,
+            'leaderAdjustmentsByOrder' => $leaderAdjustmentRequests->groupBy('order_id'),
             'canApproveManagedSales' => $canApproveManagedSales,
             'canApproveManagedSalesAny' => $canApproveManagedSalesAny,
             'canApproveAllOrders' => $canApproveAllOrders,
