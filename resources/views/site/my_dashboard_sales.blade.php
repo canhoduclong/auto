@@ -69,6 +69,17 @@
         background: #fff;
         box-shadow: 0 3px 9px rgba(15, 23, 42, .035);
     }
+    .dashboard-approval-queue { margin-bottom: 14px; padding: 14px; border-color: #f5c451; background: #fffbeb; }
+    .dashboard-approval-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; color: #92400e; }
+    .dashboard-approval-head h2 { margin: 0; font-size: .86rem; font-weight: 900; }
+    .dashboard-approval-count { min-width: 25px; padding: 3px 7px; border-radius: 999px; background: #f59e0b; color: #fff; font-size: .7rem; font-weight: 900; text-align: center; }
+    .dashboard-approval-list { display: grid; gap: 8px; }
+    .dashboard-approval-item { display: block; padding: 10px 11px; border: 1px solid #fde68a; border-left: 4px solid #f59e0b; border-radius: 7px; background: #fff; color: inherit; text-decoration: none; }
+    .dashboard-approval-item:hover { border-color: #f59e0b; color: inherit; box-shadow: 0 4px 12px rgba(146, 64, 14, .1); }
+    .dashboard-approval-title { color: #172033; font-size: .77rem; font-weight: 900; }
+    .dashboard-approval-meta { margin-top: 2px; color: #64748b; font-size: .67rem; }
+    .dashboard-approval-note { margin-top: 6px; color: #334155; font-size: .72rem; }
+    .dashboard-approval-change { margin-top: 3px; color: #92400e; font-size: .68rem; font-weight: 700; }
     .dashboard-commission {
         min-height: 69px;
         margin-bottom: 14px;
@@ -320,6 +331,24 @@
         </aside>
 
         <main class="dashboard-main">
+            @if(($pendingApprovalAdjustments ?? collect())->isNotEmpty())
+                <section class="dashboard-card dashboard-approval-queue" aria-label="Yêu cầu điều chỉnh đơn đang chờ duyệt">
+                    <div class="dashboard-approval-head">
+                        <h2><i class="bi bi-exclamation-circle-fill me-1"></i>Yêu cầu điều chỉnh đơn chờ duyệt</h2>
+                        <span class="dashboard-approval-count">{{ $pendingApprovalAdjustments->count() }}</span>
+                    </div>
+                    <div class="dashboard-approval-list">
+                        @foreach($pendingApprovalAdjustments as $adjustment)
+                            <a class="dashboard-approval-item" href="{{ $adjustment['url'] }}">
+                                <div class="dashboard-approval-title">{{ $adjustment['customer_name'] }} · Đơn {{ $adjustment['order_code'] }}</div>
+                                <div class="dashboard-approval-meta">Sale {{ $adjustment['sale_name'] }} · Gửi {{ $adjustment['submitted_at'] }} · Chờ {{ $adjustment['approval_role'] }} duyệt</div>
+                                <div class="dashboard-approval-note"><strong>Nội dung:</strong> {{ $adjustment['note'] }}</div>
+                                <div class="dashboard-approval-change"><i class="bi bi-pencil-square me-1"></i>{{ $adjustment['change_summary'] }} · Bấm để tới đơn cần duyệt</div>
+                            </a>
+                        @endforeach
+                    </div>
+                </section>
+            @endif
             @if($isManagerDashboard ?? false)
                 @include('site.partials.manager_dashboard')
             @else

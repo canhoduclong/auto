@@ -1159,14 +1159,14 @@
         </div>
         @endif
 
-        @if($viewMode === 'cards' && ($leaderAdjustmentRequests ?? collect())->isNotEmpty())
-            <section class="leader-adjustment-queue" aria-label="Yêu cầu điều chỉnh chờ Leader duyệt">
+        @if($viewMode === 'cards' && ($pendingAdjustmentRequests ?? collect())->isNotEmpty())
+            <section class="leader-adjustment-queue" aria-label="Yêu cầu điều chỉnh chờ {{ $adjustmentApprovalRoleLabel }} duyệt">
                 <div class="leader-adjustment-queue-head">
-                    <span><i class="bi bi-exclamation-circle-fill me-1"></i>Yêu cầu điều chỉnh chờ Leader duyệt</span>
-                    <span class="badge text-bg-warning">{{ $leaderAdjustmentRequests->count() }}</span>
+                    <span><i class="bi bi-exclamation-circle-fill me-1"></i>Yêu cầu điều chỉnh chờ {{ $adjustmentApprovalRoleLabel }} duyệt</span>
+                    <span class="badge text-bg-warning">{{ $pendingAdjustmentRequests->count() }}</span>
                 </div>
-                @foreach($leaderAdjustmentRequests as $adjustment)
-                    @include('site.orders.adjustments._leader_review_card', ['adjustment' => $adjustment, 'compact' => true])
+                @foreach($pendingAdjustmentRequests as $adjustment)
+                    @include('site.orders.adjustments._leader_review_card', ['adjustment' => $adjustment, 'compact' => true, 'approvalRoleLabel' => $adjustmentApprovalRoleLabel])
                 @endforeach
             </section>
         @endif
@@ -1754,7 +1754,7 @@
                             $saleAdjustments = $canManageOrder
                                 ? $order->adjustments->where('requested_by', auth()->id())->values()
                                 : collect();
-                            $orderLeaderAdjustments = ($leaderAdjustmentsByOrder ?? collect())->get($order->id, collect());
+                            $orderPendingAdjustments = ($pendingAdjustmentsByOrder ?? collect())->get($order->id, collect());
                         @endphp
                         <article class="monitor-panel monitor-order status-{{ $monitorState }} {{ $canManageOrder ? 'is-mine' : '' }} {{ $isCancelled ? 'is-cancelled' : '' }}" id="monitor-order-{{ $order->id }}" title="{{ $monitorStateLabels[$monitorState] }}">
                             <div class="monitor-order-main">
@@ -1836,8 +1836,8 @@
                                 </div>
                                 <div class="monitor-order-total">{{ number_format((float) $order->total, 0, ',', '.') }}đ</div>
 
-                                @foreach($orderLeaderAdjustments as $adjustment)
-                                    @include('site.orders.adjustments._leader_review_card', ['adjustment' => $adjustment, 'compact' => false])
+                                @foreach($orderPendingAdjustments as $adjustment)
+                                    @include('site.orders.adjustments._leader_review_card', ['adjustment' => $adjustment, 'compact' => false, 'approvalRoleLabel' => $adjustmentApprovalRoleLabel])
                                 @endforeach
 
                                 @if($canManageOrder)
@@ -2858,7 +2858,10 @@ window.monitorAdminDeleteOrder = function (form, orderCode, saleName, orderTotal
         const card = document.getElementById(`monitor-order-${highlightedOrder}`);
         if (card) {
             card.style.boxShadow = '0 0 0 3px rgba(245, 158, 11, .35), 0 8px 24px rgba(15, 23, 42, .08)';
-            setTimeout(() => card.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250);
+            const adjustmentTarget = window.location.hash
+                ? document.querySelector(window.location.hash)
+                : null;
+            setTimeout(() => (adjustmentTarget || card).scrollIntoView({ behavior: 'smooth', block: adjustmentTarget ? 'start' : 'center' }), 250);
         }
     }
 })();

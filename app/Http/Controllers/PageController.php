@@ -1165,6 +1165,11 @@ class PageController extends Controller
             'total_quantity' => $filteredOrders->sum(fn (Order $order) => (float) $order->items->sum('quantity')),
         ];
 
+        $highlightOrderId = (int) $request->input('highlight', 0);
+        if ($highlightOrderId > 0) {
+            $dateQuery->orderByRaw('CASE WHEN orders.id = ? THEN 0 ELSE 1 END', [$highlightOrderId]);
+        }
+
         $dateQuery->orderByRaw(
             'CASE WHEN status = ? THEN 1 ELSE 0 END ASC',
             [Order::STATUS_CANCELLED]
@@ -1218,29 +1223,39 @@ class PageController extends Controller
         }
 
         $activeMonitoringRole = strtolower(trim((string) (session('active_role') ?: $user->defaultRole?->name)));
-        $isLeaderWorkspace = in_array($activeMonitoringRole, ['leader', 'leader_sale', 'sale_manager'], true);
+        $leaderApprovalRoles = ['leader', 'leader_sale', 'sale_manager'];
+        $managerApprovalRoles = ['manager', 'manager_sale', 'director'];
+        $isLeaderWorkspace = in_array($activeMonitoringRole, $leaderApprovalRoles, true);
+        $isManagerAdjustmentWorkspace = in_array($activeMonitoringRole, $managerApprovalRoles, true);
         if ($activeMonitoringRole === '') {
-            $isLeaderWorkspace = $user->hasRole(['leader', 'leader_sale', 'sale_manager'])
+            $isLeaderWorkspace = $user->hasRole($leaderApprovalRoles)
                 && ! $user->hasRole(['manager', 'manager_sale', 'director', 'admin']);
+            $isManagerAdjustmentWorkspace = $user->hasRole($managerApprovalRoles);
         }
 
-        $leaderAdjustmentRequests = collect();
-        if ($isLeaderWorkspace && (int) ($user->team_id ?? 0) > 0) {
-            $leaderAdjustmentRequests = $orders->getCollection()
-                ->filter(fn (Order $order) => (int) ($order->user?->team_id ?? 0) === (int) $user->team_id)
+        $adjustmentApprovalRoles = $isLeaderWorkspace
+            ? $leaderApprovalRoles
+            : ($isManagerAdjustmentWorkspace ? $managerApprovalRoles : []);
+        $adjustmentApprovalRoleLabel = $isLeaderWorkspace ? 'Leader' : 'Manager';
+        $pendingAdjustmentRequests = collect();
+        if ($adjustmentApprovalRoles !== []) {
+            $pendingAdjustmentRequests = $filteredOrders
+                ->when($isLeaderWorkspace, fn ($orders) => $orders->filter(
+                    fn (Order $order) => (int) ($order->user?->team_id ?? 0) === (int) ($user->team_id ?? 0)
+                ))
                 ->flatMap(fn (Order $order) => $order->adjustments->map(function ($adjustment) use ($order) {
                     $adjustment->setRelation('order', $order);
 
                     return $adjustment;
                 }))
-                ->filter(function ($adjustment): bool {
+                ->filter(function ($adjustment) use ($adjustmentApprovalRoles): bool {
                     if ($adjustment->status !== \App\Models\OrderAdjustment::STATUS_PENDING_APPROVAL) {
                         return false;
                     }
 
                     $currentRole = strtolower((string) ($adjustment->currentPendingApprovalStep()?->step?->role_slug ?? ''));
 
-                    return in_array($currentRole, ['leader', 'leader_sale', 'sale_manager'], true);
+                    return in_array($currentRole, $adjustmentApprovalRoles, true);
                 })
                 ->sortByDesc(fn ($adjustment) => $adjustment->submitted_at?->timestamp ?? $adjustment->id)
                 ->values();
@@ -1416,8 +1431,9 @@ class PageController extends Controller
             'sampleDraftCustomerIds' => $sampleDraftCustomerIds,
             'customerTabSales' => $customerTabSales,
             'canApproveByOrder' => $canApproveByOrder,
-            'leaderAdjustmentRequests' => $leaderAdjustmentRequests,
-            'leaderAdjustmentsByOrder' => $leaderAdjustmentRequests->groupBy('order_id'),
+            'pendingAdjustmentRequests' => $pendingAdjustmentRequests,
+            'pendingAdjustmentsByOrder' => $pendingAdjustmentRequests->groupBy('order_id'),
+            'adjustmentApprovalRoleLabel' => $adjustmentApprovalRoleLabel,
             'canApproveManagedSales' => $canApproveManagedSales,
             'canApproveManagedSalesAny' => $canApproveManagedSalesAny,
             'canApproveAllOrders' => $canApproveAllOrders,

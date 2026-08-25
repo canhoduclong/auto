@@ -1,5 +1,8 @@
 @php
     $compact = (bool) ($compact ?? false);
+    $approvalRoleLabel = $approvalRoleLabel ?? $adjustment->approvalRoleLabel(
+        $adjustment->currentPendingApprovalStep()?->step?->role_slug
+    );
     $order = $adjustment->order;
     $targetId = 'leader-adjustment-review-'.$adjustment->id;
     $changedItems = $adjustment->items->filter(fn ($item) =>
@@ -64,7 +67,7 @@
         <a href="{{ route('site.order-adjustments.show', $adjustment) }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye me-1"></i>Xem đầy đủ</a>
         <form method="POST" action="{{ route('site.order-adjustments.approve', $adjustment) }}">
             @csrf
-            <input type="hidden" name="note" value="Leader duyệt từ trang theo dõi đơn hàng">
+            <input type="hidden" name="note" value="{{ $approvalRoleLabel }} duyệt từ trang theo dõi đơn hàng">
             <button class="btn btn-sm btn-success" onclick="return confirm('Duyệt yêu cầu điều chỉnh #{{ $adjustment->id }}?')"><i class="bi bi-check2-circle me-1"></i>Duyệt yêu cầu</button>
         </form>
         <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="collapse" data-bs-target="#leaderAdjustmentReject{{ $compact ? 'Queue' : 'Order' }}{{ $adjustment->id }}"><i class="bi bi-x-circle me-1"></i>Từ chối</button>

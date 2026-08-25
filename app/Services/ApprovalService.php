@@ -88,6 +88,29 @@ class ApprovalService
             ->values();
     }
 
+    /**
+     * Yêu cầu điều chỉnh đang chờ đúng cấp duyệt bán hàng mà người dùng đang mở.
+     */
+    public function pendingSalesAdjustmentApprovals(User $user, ?string $activeRole = null): Collection
+    {
+        $activeRole = strtolower(trim((string) $activeRole));
+
+        if (in_array($activeRole, $this->leaderRoleSlugs(), true)) {
+            $teamId = (int) ($user->team_id ?? 0);
+            if ($teamId <= 0) {
+                return collect();
+            }
+
+            return $this->pendingAdjustmentsForRoles($this->leaderRoleSlugs(), $teamId);
+        }
+
+        if (in_array($activeRole, $this->managerRoleSlugs(), true)) {
+            return $this->pendingAdjustmentsForRoles($this->managerRoleSlugs());
+        }
+
+        return collect();
+    }
+
     public function warehouseAdjustmentQueue(): Collection
     {
         $waitingForConfirmation = OrderAdjustment::query()
@@ -106,12 +129,16 @@ class ApprovalService
             ->values();
     }
 
-    private function pendingAdjustmentsForRoles(array $roleSlugs): Collection
+    private function pendingAdjustmentsForRoles(array $roleSlugs, ?int $saleTeamId = null): Collection
     {
         $roleSlugs = array_values(array_unique(array_map('strtolower', $roleSlugs)));
 
         return OrderAdjustment::query()
             ->where('status', OrderAdjustment::STATUS_PENDING_APPROVAL)
+            ->when($saleTeamId, fn ($query) => $query->whereHas(
+                'order.user',
+                fn ($userQuery) => $userQuery->where('team_id', $saleTeamId)
+            ))
             ->whereHas('approvalSteps', function ($query) use ($roleSlugs): void {
                 $query->where('status', 'pending')
                     ->whereHas('step', fn ($step) => $step->whereIn(DB::raw('LOWER(role_slug)'), $roleSlugs));
@@ -134,9 +161,9 @@ class ApprovalService
     private function adjustmentQueueRelations(): array
     {
         return [
-            'order:id,code,customer_id,user_id,status',
+            'order:id,code,customer_id,user_id,status,created_at,delivery_date,accounting_sales_import_batch_id',
             'order.customer:id,name',
-            'order.user:id,name',
+            'order.user:id,name,short_name,team_id',
             'requester:id,name',
             'items.orderItem:id,product_id,product_variant_id,quantity,price',
             'items.variant.product',

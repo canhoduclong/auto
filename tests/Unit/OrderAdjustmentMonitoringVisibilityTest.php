@@ -30,14 +30,26 @@ class OrderAdjustmentMonitoringVisibilityTest extends TestCase
         $this->assertStringContainsString('data-sent-adjustments', $todayCards);
         $this->assertStringContainsString('$adjustment->progressLabel()', $todayCards);
         $this->assertStringContainsString("statusItems.insertAdjacentHTML('afterbegin'", $todayCards);
-        $this->assertStringContainsString('Yêu cầu điều chỉnh chờ Leader duyệt', $todayCards);
-        $this->assertStringContainsString('leaderAdjustmentRequests', $todayCards);
+        $this->assertStringContainsString('Yêu cầu điều chỉnh chờ {{ $adjustmentApprovalRoleLabel }} duyệt', $todayCards);
+        $this->assertStringContainsString('pendingAdjustmentRequests', $todayCards);
 
         $leaderReview = file_get_contents($base.'/resources/views/site/orders/adjustments/_leader_review_card.blade.php');
         $this->assertStringContainsString('Tới đơn cần duyệt', $leaderReview);
         $this->assertStringContainsString('Nội dung:', $leaderReview);
         $this->assertStringContainsString('Duyệt yêu cầu', $leaderReview);
         $this->assertStringContainsString('Lý do từ chối', $leaderReview);
+    }
+
+    public function test_leader_and_manager_dashboard_show_pending_adjustment_links(): void
+    {
+        $base = dirname(__DIR__, 2);
+        $controller = file_get_contents($base.'/app/Http/Controllers/MyDashboardController.php');
+        $dashboard = file_get_contents($base.'/resources/views/site/my_dashboard_sales.blade.php');
+
+        $this->assertStringContainsString('pendingSalesAdjustmentApprovals', $controller);
+        $this->assertStringContainsString("'#leader-adjustment-review-'", $controller);
+        $this->assertStringContainsString('Yêu cầu điều chỉnh đơn chờ duyệt', $dashboard);
+        $this->assertStringContainsString('Bấm để tới đơn cần duyệt', $dashboard);
     }
 
     public function test_all_accounting_role_aliases_can_open_and_approve_adjustment_details(): void

@@ -21,6 +21,7 @@ use App\Notifications\OrderWorkflowNotification;
 use App\Notifications\WarehouseNewOrderApproved;
 use App\Notifications\WarehouseOrderAdjustmentConfirmed;
 use App\Notifications\WarehouseOrderAdjustmentRejected;
+use App\Services\ApprovalService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\View\View;
 
@@ -437,6 +438,7 @@ class MyDashboardController extends Controller
         $memberIds = $this->resolveScopedUserIds($user);
         $dashboardRole = $this->resolveDashboardRole($user);
         $isManagerDashboard = in_array($dashboardRole, ['manager', 'manager_sale', 'sale_manager'], true);
+        $pendingApprovalAdjustments = $this->buildPendingApprovalAdjustments($user, $dashboardRole);
 
         $ordersBaseQuery = Order::query()->whereIn('user_id', $memberIds);
 
@@ -574,6 +576,7 @@ class MyDashboardController extends Controller
 
         return [
             'isManagerDashboard' => $isManagerDashboard,
+            'pendingApprovalAdjustments' => $pendingApprovalAdjustments,
             'managerDashboard' => $isManagerDashboard
                 ? $this->buildManagerDashboard($memberIds, $request)
                 : null,
@@ -595,6 +598,63 @@ class MyDashboardController extends Controller
             'productPriceBoard' => $productPriceBoard,
             'productPriceAppliedDates' => $productPriceAppliedDates,
         ];
+    }
+
+    private function buildPendingApprovalAdjustments(User $user, string $dashboardRole): Collection
+    {
+        return app(ApprovalService::class)
+            ->pendingSalesAdjustmentApprovals($user, $dashboardRole)
+            ->take(30)
+            ->map(function ($adjustment): array {
+                $order = $adjustment->order;
+                $businessDate = $order?->accounting_sales_import_batch_id
+                    ? $order?->delivery_date
+                    : $order?->created_at;
+                $date = $businessDate ? Carbon::parse($businessDate)->toDateString() : now()->toDateString();
+                $currentRole = $adjustment->currentPendingApprovalStep()?->step?->role_slug;
+
+                $changedItemCount = $adjustment->items->filter(fn ($item): bool =>
+                    ! $item->order_item_id
+                    || (float) $item->original_quantity !== (float) $item->adjusted_quantity
+                    || abs((float) $item->original_price - (float) $item->adjusted_price) > .001
+                    || abs((float) $item->original_weight - (float) $item->adjusted_weight) > .001
+                )->count();
+                $changedFeeCount = collect((array) ($adjustment->fee_changes ?? []))->filter(function ($change): bool {
+                    $original = (array) ($change['original'] ?? []);
+                    $adjusted = (array) ($change['adjusted'] ?? []);
+
+                    return (bool) ($original['enabled'] ?? false) !== (bool) ($adjusted['enabled'] ?? false)
+                        || abs((float) ($original['value'] ?? 0) - (float) ($adjusted['value'] ?? 0)) > .001;
+                })->count();
+                $changeParts = collect([
+                    $changedItemCount > 0 ? $changedItemCount.' sản phẩm' : null,
+                    count((array) ($adjustment->order_changes ?? [])) > 0
+                        ? count((array) $adjustment->order_changes).' thông tin giao hàng'
+                        : null,
+                    $changedFeeCount > 0 ? $changedFeeCount.' khoản phí/chiết khấu' : null,
+                ])->filter()->implode(' · ');
+
+                $url = route('pages.my_orders.monitoring', [
+                    'tab' => 'today',
+                    'view' => 'cards',
+                    'date_field' => 'business_date',
+                    'date' => $date,
+                    'highlight' => $order?->id,
+                ]).'#leader-adjustment-review-'.$adjustment->id;
+
+                return [
+                    'id' => (int) $adjustment->id,
+                    'order_code' => $order?->code ?: ('#'.($order?->id ?? $adjustment->order_id)),
+                    'customer_name' => $order?->customer?->name ?: 'Khách hàng',
+                    'sale_name' => $order?->user?->short_name ?: ($order?->user?->name ?: '—'),
+                    'submitted_at' => optional($adjustment->submitted_at)->format('H:i d/m/Y'),
+                    'approval_role' => \App\Models\OrderAdjustment::approvalRoleLabel($currentRole),
+                    'note' => $adjustment->adjustment_note ?: 'Sale không nhập ghi chú.',
+                    'change_summary' => $changeParts !== '' ? $changeParts : 'Chưa xác định dữ liệu thay đổi',
+                    'url' => $url,
+                ];
+            })
+            ->values();
     }
 
     /**
@@ -1087,7 +1147,7 @@ class MyDashboardController extends Controller
 
     private function resolveDashboardRole(User $user): string
     {
-        $activeRole = strtolower(trim((string) session('active_role', '')));
+        $activeRole = strtolower(trim((string) (session('active_role') ?: $user->defaultRole?->name)));
         if ($activeRole !== '' && $user->hasRole($activeRole)) {
             return $activeRole;
         }
