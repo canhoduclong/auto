@@ -73,9 +73,11 @@ class CompletedSalesJournalService
                 'user:id,name',
                 'items.product',
                 'items.variant.product',
-                'additionalFees:id,order_id,order_fee_type_id,fee_code,fee_name,calculation_type,direction,rate,base_amount,amount',
+                'additionalFees:id,order_id,order_fee_type_id,order_adjustment_id,fee_code,fee_name,calculation_type,direction,rate,base_amount,amount',
                 'adjustments' => fn ($adjustments) => $adjustments
-                    ->where('status', OrderAdjustment::STATUS_APPROVED)
+                    // Số liệu chỉ được xem là đã áp dụng sau khi hồ sơ hoàn tất.
+                    // Trạng thái "approved" vẫn có thể đang chờ Kho xác nhận.
+                    ->where('status', OrderAdjustment::STATUS_COMPLETED)
                     ->latest('id')
                     ->with('items'),
             ])
@@ -109,11 +111,27 @@ class CompletedSalesJournalService
         $entryDate = $order->accounting_sales_import_batch_id && $order->delivery_date
             ? $order->delivery_date->toDateString()
             : $order->created_at->toDateString();
-        $adjustments = $order->adjustments
-            ->flatMap->items
-            ->filter(fn ($item) => $item->order_item_id)
-            ->groupBy('order_item_id')
+        $itemAdjustments = $order->adjustments
+            ->flatMap(fn (OrderAdjustment $adjustment) => $adjustment->items->map(fn ($item) => [
+                'item' => $item,
+                'adjustment_id' => (int) $adjustment->id,
+            ]))
+            ->filter(fn (array $entry) => $entry['item']->order_item_id)
+            ->groupBy(fn (array $entry) => (int) $entry['item']->order_item_id)
             ->map->first();
+
+        $feeAdjustmentIds = [];
+        foreach ($order->adjustments as $adjustment) {
+            foreach ((array) ($adjustment->fee_changes ?? []) as $code => $change) {
+                $original = (array) ($change['original'] ?? []);
+                $adjusted = (array) ($change['adjusted'] ?? []);
+                $changed = (bool) ($original['enabled'] ?? false) !== (bool) ($adjusted['enabled'] ?? false)
+                    || abs((float) ($original['value'] ?? 0) - (float) ($adjusted['value'] ?? 0)) > 0.001;
+                if ($changed && ! isset($feeAdjustmentIds[$code])) {
+                    $feeAdjustmentIds[$code] = (int) $adjustment->id;
+                }
+            }
+        }
         $base = [
             'entry_date' => $entryDate,
             'entry_month' => (int) substr($entryDate, 5, 2),
@@ -126,7 +144,8 @@ class CompletedSalesJournalService
         $rows = collect();
 
         foreach ($order->items as $item) {
-            $adjustment = $adjustments->get($item->id);
+            $adjustmentEntry = $itemAdjustments->get($item->id);
+            $adjustment = $adjustmentEntry['item'] ?? null;
             $quantity = (float) ($adjustment?->adjusted_quantity ?? $item->quantity ?? 0);
             $totalQuantity = (float) ($adjustment?->adjusted_weight
                 ?? $item->actual_weight
@@ -157,6 +176,7 @@ class CompletedSalesJournalService
                 'total_amount' => $calculatedAmount,
                 'entry_type' => 'product',
                 'direction' => null,
+                'adjustment_id' => $adjustmentEntry['adjustment_id'] ?? null,
             ]));
         }
 
@@ -176,6 +196,7 @@ class CompletedSalesJournalService
                 'total_amount' => $vatAmount,
                 'entry_type' => 'fee',
                 'direction' => 'charge',
+                'adjustment_id' => $feeAdjustmentIds['vat'] ?? null,
             ]));
         }
 
@@ -191,6 +212,7 @@ class CompletedSalesJournalService
                 'total_amount' => $shippingFee,
                 'entry_type' => 'fee',
                 'direction' => 'charge',
+                'adjustment_id' => $feeAdjustmentIds['shipping'] ?? null,
             ]));
         }
 
@@ -206,6 +228,7 @@ class CompletedSalesJournalService
                 'total_amount' => $discountAmount,
                 'entry_type' => 'fee',
                 'direction' => 'discount',
+                'adjustment_id' => $feeAdjustmentIds['discount'] ?? null,
             ]));
         }
 
@@ -221,6 +244,7 @@ class CompletedSalesJournalService
                 'total_amount' => $foamBoxPrice,
                 'entry_type' => 'fee',
                 'direction' => 'charge',
+                'adjustment_id' => $feeAdjustmentIds['foam_box'] ?? null,
             ]));
         }
 
@@ -237,6 +261,9 @@ class CompletedSalesJournalService
                 'total_amount' => $amount,
                 'entry_type' => 'fee',
                 'direction' => $isDiscount ? 'discount' : 'charge',
+                'adjustment_id' => $fee->order_adjustment_id
+                    ? (int) $fee->order_adjustment_id
+                    : ($feeAdjustmentIds[$fee->fee_code] ?? null),
             ]));
         }
 

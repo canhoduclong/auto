@@ -3,6 +3,7 @@
 namespace Tests\Unit;
 
 use App\Models\Order;
+use App\Models\OrderAdjustment;
 use App\Models\OrderFee;
 use App\Services\AccountingSalesLedgerService;
 use App\Services\CompletedSalesJournalService;
@@ -39,7 +40,7 @@ class CompletedSalesJournalFeeRowsTest extends TestCase
 
         $method = new ReflectionMethod(CompletedSalesJournalService::class, 'rowsForOrder');
         $method->setAccessible(true);
-        $rows = $method->invoke(new CompletedSalesJournalService(new AccountingSalesLedgerService()), $order);
+        $rows = $method->invoke(new CompletedSalesJournalService(new AccountingSalesLedgerService), $order);
 
         $this->assertCount(6, $rows);
         $this->assertSame(30000.0, (float) $rows->firstWhere('row_key', 'shipping')->total_amount);
@@ -48,6 +49,45 @@ class CompletedSalesJournalFeeRowsTest extends TestCase
         $this->assertSame(20000.0, (float) $rows->firstWhere('row_key', 'fee:1')->total_amount);
         $this->assertSame('discount', $rows->firstWhere('row_key', 'fee:2')->direction);
         $this->assertSame(-7000.0, (float) $rows->firstWhere('row_key', 'fee:2')->total_amount);
+    }
+
+    public function test_journal_links_an_applied_fee_to_its_completed_adjustment(): void
+    {
+        $order = new Order([
+            'code' => 'TEST-ADJUSTMENT-FEE',
+            'charge_shipping_fee' => true,
+            'shipping_fee' => 80000,
+        ]);
+        $order->setDateFormat('Y-m-d H:i:s');
+        $order->setAttribute('id', 100);
+        $order->setAttribute('created_at', Carbon::parse('2026-08-23 08:00:00'));
+        $order->setRelation('customer', null);
+        $order->setRelation('user', null);
+        $order->setRelation('items', collect());
+        $order->setRelation('returnRecords', collect());
+        $order->setRelation('additionalFees', collect());
+
+        $adjustment = new OrderAdjustment([
+            'status' => OrderAdjustment::STATUS_COMPLETED,
+            'fee_changes' => [
+                'shipping' => [
+                    'original' => ['enabled' => false, 'value' => 0],
+                    'adjusted' => ['enabled' => true, 'value' => 80000],
+                ],
+            ],
+        ]);
+        $adjustment->setAttribute('id', 5);
+        $adjustment->setRelation('items', collect());
+        $order->setRelation('adjustments', collect([$adjustment]));
+
+        $method = new ReflectionMethod(CompletedSalesJournalService::class, 'rowsForOrder');
+        $method->setAccessible(true);
+        $rows = $method->invoke(new CompletedSalesJournalService(new AccountingSalesLedgerService), $order);
+
+        $shipping = $rows->firstWhere('row_key', 'shipping');
+        $this->assertNotNull($shipping);
+        $this->assertSame(5, $shipping->adjustment_id);
+        $this->assertSame(80000.0, (float) $shipping->total_amount);
     }
 
     private function fee(int $id, string $code, string $name, string $direction, float $amount): OrderFee

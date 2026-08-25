@@ -1699,6 +1699,31 @@ class AccountingDashboardController extends Controller
         $sales = User::query()->orderBy('name')->select('id', 'name')->get();
         $customers = Customer::query()->orderBy('name')->select('id', 'name', 'customer_code')->get();
 
+        // Hiển thị hồ sơ theo ngày nghiệp vụ của đơn, không theo ngày sale gửi
+        // yêu cầu. Ví dụ yêu cầu gửi ngày 24 cho đơn ngày 23 phải nằm ở báo cáo 23.
+        $businessDateExpression = 'DATE(CASE
+            WHEN orders.accounting_sales_import_batch_id IS NOT NULL
+                THEN COALESCE(orders.delivery_date, orders.created_at)
+            ELSE orders.created_at
+        END)';
+        $completedAdjustments = OrderAdjustment::query()
+            ->where('status', OrderAdjustment::STATUS_COMPLETED)
+            ->whereHas('order', function ($orders) use ($businessDateExpression, $fromDate, $toDate, $saleId, $customerId): void {
+                $orders->whereRaw("{$businessDateExpression} BETWEEN ? AND ?", [$fromDate, $toDate])
+                    ->when($saleId > 0, fn ($query) => $query->where('user_id', $saleId))
+                    ->when($customerId > 0, fn ($query) => $query->where('customer_id', $customerId));
+            })
+            ->with([
+                'order:id,code,customer_id,user_id,created_at,delivery_date,accounting_sales_import_batch_id',
+                'order.customer:id,name,customer_code',
+                'order.user:id,name',
+                'requester:id,name',
+                'items:id,order_adjustment_id,order_item_id,original_quantity,adjusted_quantity,original_price,adjusted_price,original_weight,adjusted_weight',
+            ])
+            ->orderByDesc('completed_at')
+            ->orderByDesc('id')
+            ->get();
+
         if ($tab === 'journal') {
             $journal = app(CompletedSalesJournalService::class)->paginate(
                 $fromDate,
@@ -1724,20 +1749,21 @@ class AccountingDashboardController extends Controller
                 'perPage' => $perPage,
                 'sales' => $sales,
                 'customers' => $customers,
+                'completedAdjustments' => $completedAdjustments,
                 'googleSheetsConfigured' => app(GoogleSheetsJournalService::class)->isConfigured(),
             ]);
         }
 
-        // Sub-query: one approved adjustment item per order_item (latest id wins)
+        // Sub-query: one completed/applied adjustment item per order_item (latest id wins)
         $approvedAdjSub = DB::table('order_adjustment_items as oai_s')
             ->join('order_adjustments as oa_s', function ($j) {
                 $j->on('oa_s.id', '=', 'oai_s.order_adjustment_id')
-                    ->where('oa_s.status', '=', OrderAdjustment::STATUS_APPROVED);
+                    ->where('oa_s.status', '=', OrderAdjustment::STATUS_COMPLETED);
             })
             ->selectRaw('oai_s.order_item_id, MAX(oai_s.id) as adj_item_id')
             ->groupBy('oai_s.order_item_id');
 
-        $makeBase = function () use ($approvedAdjSub, $from, $to, $saleId, $customerId) {
+        $makeBase = function () use ($approvedAdjSub, $businessDateExpression, $fromDate, $toDate, $saleId, $customerId) {
             return DB::table('order_items')
                 ->join('orders', 'order_items.order_id', '=', 'orders.id')
                 ->join('products', 'order_items.product_id', '=', 'products.id')
@@ -1747,7 +1773,7 @@ class AccountingDashboardController extends Controller
                 ->leftJoinSub($approvedAdjSub, 'adj_max', 'adj_max.order_item_id', '=', 'order_items.id')
                 ->leftJoin('order_adjustment_items as adj', 'adj.id', '=', 'adj_max.adj_item_id')
                 ->whereNotIn('orders.status', ['rejected', 'cancelled'])
-                ->whereBetween('orders.created_at', [$from, $to])
+                ->whereRaw("{$businessDateExpression} BETWEEN ? AND ?", [$fromDate, $toDate])
                 ->when($saleId > 0, fn ($q) => $q->where('orders.user_id', $saleId))
                 ->when($customerId > 0, fn ($q) => $q->where('orders.customer_id', $customerId));
         };
@@ -1756,7 +1782,11 @@ class AccountingDashboardController extends Controller
         $listQ = $makeBase()->select([
             'order_items.id',
             'orders.id as order_id_val',
-            'orders.created_at as order_date',
+            DB::raw('CASE
+                WHEN orders.accounting_sales_import_batch_id IS NOT NULL
+                    THEN COALESCE(orders.delivery_date, orders.created_at)
+                ELSE orders.created_at
+            END as order_date'),
             'orders.code as order_code',
             'orders.daily_sequence',
             'products.name as product_name',
@@ -1775,6 +1805,7 @@ class AccountingDashboardController extends Controller
             DB::raw('COALESCE(adj.adjusted_price,    order_items.price)    as eff_price'),
             DB::raw('COALESCE(adj.adjusted_weight,   order_items.total_weight) as eff_weight'),
             DB::raw('CASE WHEN adj.id IS NOT NULL THEN 1 ELSE 0 END as has_adj'),
+            'adj.order_adjustment_id as adjustment_id',
             DB::raw('CASE WHEN adj.id IS NOT NULL THEN
                         CASE WHEN order_items.is_priced_by_kg = 1
                             THEN COALESCE(adj.adjusted_weight, order_items.total_weight) * COALESCE(adj.adjusted_price, order_items.price)
@@ -1783,9 +1814,9 @@ class AccountingDashboardController extends Controller
                      ELSE order_items.total END as eff_total'),
         ]);
 
-        $orderByDateAndPriority = static function ($query, string $direction) {
+        $orderByDateAndPriority = static function ($query, string $direction) use ($businessDateExpression) {
             return $query
-                ->orderByRaw('DATE(orders.created_at) '.$direction)
+                ->orderByRaw($businessDateExpression.' '.$direction)
                 ->orderByRaw('CASE WHEN orders.daily_sequence IS NULL THEN 1 ELSE 0 END')
                 ->orderBy('orders.daily_sequence')
                 ->orderBy('orders.created_at')
@@ -1825,6 +1856,15 @@ class AccountingDashboardController extends Controller
             SUM({$effTotalExpr})                                                                     as grand_total
         ")->first();
 
+        // Tổng đơn phải gồm cả phí/chiết khấu đã áp dụng, không chỉ cộng các
+        // dòng sản phẩm. order.total đã được cập nhật khi hồ sơ hoàn tất.
+        $summary->grand_total = (float) DB::table('orders')
+            ->whereNotIn('orders.status', ['rejected', 'cancelled'])
+            ->whereRaw("{$businessDateExpression} BETWEEN ? AND ?", [$fromDate, $toDate])
+            ->when($saleId > 0, fn ($query) => $query->where('orders.user_id', $saleId))
+            ->when($customerId > 0, fn ($query) => $query->where('orders.customer_id', $customerId))
+            ->sum('orders.total');
+
         // ── Product stats ──────────────────────────────────────────────
         $productStats = $makeBase()->select([
             'products.id as product_id',
@@ -1840,7 +1880,7 @@ class AccountingDashboardController extends Controller
         return view('accounting.daily_sales', compact(
             'items', 'productStats', 'summary',
             'fromDate', 'toDate', 'saleId', 'customerId',
-            'sort', 'perPage', 'sales', 'customers', 'tab',
+            'sort', 'perPage', 'sales', 'customers', 'tab', 'completedAdjustments',
         ));
     }
 
@@ -2493,12 +2533,14 @@ class AccountingDashboardController extends Controller
 
             if ($order->accountingReconciliation?->status === AccountingReconciliation::STATUS_CONFIRMED) {
                 $skipped[] = ['order_id' => $order->id, 'message' => 'Đơn đã được kế toán xác nhận.'];
+
                 continue;
             }
 
             [$canConfirm, $blockReason] = $this->canAccountingConfirmOrder($order);
             if (! $canConfirm) {
                 $skipped[] = ['order_id' => $order->id, 'message' => $blockReason];
+
                 continue;
             }
 
@@ -2512,6 +2554,7 @@ class AccountingDashboardController extends Controller
             } catch (\Throwable $exception) {
                 report($exception);
                 $skipped[] = ['order_id' => $order->id, 'message' => 'Không thể xác nhận đơn này.'];
+
                 continue;
             }
 

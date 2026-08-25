@@ -44,6 +44,12 @@
     min-width:32px; height:32px; padding:0 7px; border-radius:999px;
     background:#64748b; color:#fff; font-weight:800; font-size:.8rem;
 }
+.ds-adjustments-card { border-color:#86efac; background:#f0fdf4; }
+.ds-adjustment-list { display:grid; gap:8px; }
+.ds-adjustment-item { border:1px solid #bbf7d0; border-left:4px solid #22c55e; border-radius:9px; background:#fff; padding:9px 11px; }
+.ds-adjustment-changes { display:flex; flex-wrap:wrap; gap:6px; }
+.ds-change-chip { border-radius:6px; background:#f1f5f9; color:#334155; padding:3px 7px; font-size:.72rem; }
+.ds-change-fee { background:#fef3c7; color:#92400e; }
 
 /* ── toolbar ── */
 .ds-toolbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:space-between; margin-bottom:10px; }
@@ -163,6 +169,8 @@
 $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',', '.'), '0'), ',');
 @endphp
 
+@include('accounting.partials._completed_adjustments')
+
 @if($tab === 'journal')
 <div class="ds-kpi">
     <div class="ds-kpi-item">
@@ -256,6 +264,13 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                                     <span class="badge {{ ($row->direction ?? 'charge') === 'discount' ? 'text-bg-danger' : 'text-bg-success' }} ms-1">
                                         {{ ($row->direction ?? 'charge') === 'discount' ? 'Giảm trừ' : 'Cộng thêm' }}
                                     </span>
+                                @endif
+                                @if($row->adjustment_id ?? null)
+                                    <a class="ds-adj-badge text-decoration-none ms-1"
+                                       href="{{ route('site.order-adjustments.show', $row->adjustment_id) }}"
+                                       target="_blank" title="Xem yêu cầu điều chỉnh đã áp dụng">
+                                        Đ/C #{{ $row->adjustment_id }}
+                                    </a>
                                 @endif
                             </td>
                             <td class="text-end">{{ $fmtN((float) $row->quantity, 1) }}</td>
@@ -478,7 +493,13 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                         </td>
                         <td>
                             <div class="fw-semibold" style="max-width:160px">{{ $row->product_name }}</div>
-                            
+                            @if($row->adjustment_id ?? null)
+                                <a class="ds-adj-badge text-decoration-none"
+                                   href="{{ route('site.order-adjustments.show', $row->adjustment_id) }}"
+                                   target="_blank" title="Xem yêu cầu điều chỉnh đã áp dụng">
+                                    Đ/C #{{ $row->adjustment_id }}
+                                </a>
+                            @endif
                         </td>
                         <td class="text-muted small">
                             {{ $row->variant_size ?: '—' }}
