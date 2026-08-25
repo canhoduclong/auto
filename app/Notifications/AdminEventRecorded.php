@@ -29,6 +29,7 @@ class AdminEventRecorded extends Notification
             'message' => $this->event->message,
             'url' => $this->event->url,
             'actor_id' => $this->event->actor_id,
+            'metadata' => $this->event->metadata ?? [],
             'created_at' => optional($this->event->created_at)?->toDateTimeString(),
         ];
     }

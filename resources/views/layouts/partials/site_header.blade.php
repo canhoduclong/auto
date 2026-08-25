@@ -257,7 +257,7 @@
     color: #64748b;
     line-height: 1.28;
     display: -webkit-box;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 4;
     -webkit-box-orient: vertical;
     overflow: hidden;
 }
@@ -547,7 +547,7 @@
                                                             <i class="bi {{ $icon }}"></i>
                                                         </span>
                                                         <span class="hdr-notify-content d-flex flex-column align-items-start flex-grow-1">
-                                                            <span class="hdr-notify-title">{!! $notify['title'] !!}</span>
+                                                            <span class="hdr-notify-title">{{ $notify['title'] }}</span>
                                                             <span class="hdr-notify-meta">{{ $notify['meta'] }}<span class="ms-2 text-muted small">{{ $notify['time'] ?? '' }}</span></span>
                                                             @if(!empty($notify['details']))
                                                                 <span class="small text-start mt-1">
