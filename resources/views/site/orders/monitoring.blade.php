@@ -812,28 +812,46 @@
     .monitor-adjustment-host { display: none; grid-column: 1 / -1; }
     .monitor-adjustment-host.is-open { display: block; }
     .monitor-adjustment-loading { padding: 28px; border: 1px solid #fde68a; border-radius: 9px; background: #fffbeb; color: #92400e; text-align: center; }
-    .monitor-adjustment-form { padding: 16px; border: 1px solid #f59e0b; border-radius: 9px; background: #fffbeb; box-shadow: 0 5px 18px rgba(146, 64, 14, .08); }
-    .monitor-adjustment-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid #fde68a; color: #7c2d12; }
+    .monitor-adjustment-form { padding: 18px; overflow: hidden; border: 1px solid #f59e0b; border-radius: 11px; background: #fffdf7; box-shadow: 0 8px 24px rgba(146, 64, 14, .09); }
+    .monitor-adjustment-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin: -18px -18px 0; padding: 14px 18px; border-bottom: 1px solid #fde68a; background: #fff7db; color: #7c2d12; }
     .monitor-adjustment-heading strong { display: block; font-size: 1rem; text-transform: uppercase; }
     .monitor-adjustment-heading span { display: block; margin-top: 2px; color: #64748b; font-size: .75rem; }
-    .monitor-adjustment-fields, .monitor-adjustment-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 24px; margin-top: 14px; }
+    .monitor-adjustment-fields, .monitor-adjustment-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 24px; margin-top: 16px; }
     .monitor-adjustment-form label { display: block; margin-bottom: 4px; color: #334155; font-size: .75rem; font-weight: 800; }
+    .monitor-adjustment-form .form-control, .monitor-adjustment-form .form-select { border-color: #cbd5e1; }
+    .monitor-adjustment-form .form-control:focus, .monitor-adjustment-form .form-select:focus { border-color: #f59e0b; box-shadow: 0 0 0 .2rem rgba(245, 158, 11, .12); }
+    .monitor-adjustment-details textarea { min-height: 86px; }
+    .monitor-adjustment-items-wrap { border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; }
     .monitor-adjustment-items { min-width: 800px; font-size: .75rem; }
-    .monitor-adjustment-items th { color: #64748b; font-size: .65rem; text-transform: uppercase; }
+    .monitor-adjustment-items thead { background: #f8fafc; }
+    .monitor-adjustment-items th { padding-block: 8px; color: #64748b; font-size: .65rem; text-transform: uppercase; }
     .monitor-adjustment-items td:first-child { min-width: 180px; }
     .monitor-adjustment-items td:first-child small, .monitor-adjustment-fee-row small { display: block; color: #64748b; }
     .monitor-adjustment-items input { min-width: 82px; }
     .monitor-adjustment-return { max-width: 420px; margin-top: 12px; }
-    .monitor-adjustment-add-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
-    .monitor-adjustment-picker { margin-top: 10px; padding: 12px; border: 1px solid #fed7aa; border-radius: 8px; background: #fff; }
+    .monitor-adjustment-add-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; padding-top: 14px; border-top: 1px solid #fde68a; }
+    .monitor-adjustment-picker { margin-top: 12px; padding: 15px; border: 1px solid #fed7aa; border-radius: 10px; background: #fff; }
     .monitor-adjustment-product-results { max-height: 460px; overflow-y: auto; }
-    .monitor-adjustment-fee-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-    .monitor-adjustment-fee-row { display: grid !important; grid-template-columns: 22px minmax(105px, .7fr) minmax(140px, 1fr); align-items: center; gap: 10px; min-width: 0; margin: 0 !important; padding: 11px 12px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; }
+    .monitor-adjustment-picker-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+    .monitor-adjustment-picker-head strong, .monitor-adjustment-picker-head span { display: block; }
+    .monitor-adjustment-picker-head strong { color: #1e293b; font-size: .84rem; }
+    .monitor-adjustment-picker-head > div > span { margin-top: 3px; color: #64748b; font-size: .72rem; }
+    .monitor-adjustment-picker-hint { flex: 0 0 auto; padding: 5px 8px; border-radius: 999px; background: #f1f5f9; color: #64748b; font-size: .67rem; font-weight: 700; }
+    .monitor-adjustment-fee-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 10px; }
+    .monitor-adjustment-fee-row { display: grid; grid-template-columns: minmax(0, 1fr) 175px; align-items: center; gap: 14px; min-width: 0; padding: 13px 14px; border: 1px solid #e2e8f0; border-radius: 9px; background: #f8fafc; transition: border-color .15s ease, background .15s ease, box-shadow .15s ease; }
     .monitor-adjustment-fee-row.is-enabled { border-color: #f59e0b; background: #fffbeb; box-shadow: inset 3px 0 0 #f59e0b; }
-    .monitor-adjustment-fee-row .form-check-input { margin: 0; }
+    .monitor-adjustment-fee-identity { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .monitor-adjustment-fee-row .form-check-input { width: 18px; height: 18px; flex: 0 0 18px; margin: 0; cursor: pointer; }
+    .monitor-adjustment-fee-label { display: flex !important; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; width: 100%; margin: 0 !important; cursor: pointer; }
     .monitor-adjustment-fee-name, .monitor-adjustment-fee-value { min-width: 0; }
-    .monitor-adjustment-fee-name strong { display: block; line-height: 1.2; }
+    .monitor-adjustment-fee-name strong { display: block; overflow-wrap: anywhere; color: #0f172a; line-height: 1.25; }
+    .monitor-adjustment-fee-name small { margin-top: 3px; font-size: .67rem; font-weight: 500; }
+    .monitor-adjustment-fee-direction { flex: 0 0 auto; padding: 3px 7px; border-radius: 999px; font-size: .62rem; font-weight: 800; white-space: nowrap; }
+    .monitor-adjustment-fee-direction.is-charge { background: #dcfce7; color: #166534; }
+    .monitor-adjustment-fee-direction.is-discount { background: #fee2e2; color: #991b1b; }
+    .monitor-adjustment-fee-control > label { margin-bottom: 4px; color: #64748b; font-size: .62rem; text-transform: uppercase; letter-spacing: .03em; }
     .monitor-adjustment-fee-value { width: 100%; }
+    .monitor-adjustment-fee-value .form-control:disabled { background: #e9eef4; color: #94a3b8; }
     .monitor-adjustment-submit { display: flex; justify-content: flex-end; margin-top: 12px; padding-top: 12px; border-top: 1px solid #fde68a; }
     @media (max-width: 1199.98px) {
         .monitor-shell { max-width: 960px; }
@@ -900,8 +918,9 @@
         .monitor-edit-product-results .monitor-product-toolbar > div { justify-content: flex-end; }
         .monitor-edit-product-results .monitor-product-choice-label { min-width: auto; }
         .monitor-day-note { grid-template-columns: 1fr; gap: 5px; }
-        .monitor-adjustment-fee-row { grid-template-columns: 22px minmax(0, 1fr); }
-        .monitor-adjustment-fee-value { grid-column: 2; }
+        .monitor-adjustment-picker-head { flex-direction: column; }
+        .monitor-adjustment-fee-row { grid-template-columns: 1fr; gap: 10px; }
+        .monitor-adjustment-fee-control { padding-left: 28px; }
     }
 </style>
 @endpush
@@ -3115,7 +3134,16 @@ document.addEventListener('submit', async function (event) {
         const form = event.target.closest('[data-monitor-adjustment-form]');
         if (!form) return;
         if (event.target.matches('.monitor-adjustment-fee-enabled')) {
-            event.target.closest('.monitor-adjustment-fee-row')?.classList.toggle('is-enabled', event.target.checked);
+            const feeRow = event.target.closest('.monitor-adjustment-fee-row');
+            feeRow?.classList.toggle('is-enabled', event.target.checked);
+            const valueInput = feeRow?.querySelector('.monitor-adjustment-fee-value input');
+            if (valueInput) {
+                valueInput.disabled = !event.target.checked;
+                if (event.target.checked) {
+                    valueInput.focus();
+                    valueInput.select();
+                }
+            }
             return;
         }
         if (event.target.matches('.monitor-adjustment-product-results #per-page-select')) {

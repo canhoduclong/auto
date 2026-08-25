@@ -23,7 +23,7 @@
         <div><label>Số điện thoại</label><input name="recipient_phone" class="form-control form-control-sm" value="{{ $order->recipient_phone ?: $order->customer?->phone }}"></div>
     </div>
 
-    <div class="table-responsive mt-3">
+    <div class="table-responsive mt-3 monitor-adjustment-items-wrap">
         <table class="table table-sm align-middle monitor-adjustment-items mb-0">
             <thead><tr><th>Sản phẩm</th><th>SL mới</th><th>Size</th><th>Khối lượng mới (kg)</th><th>Đơn giá mới</th><th class="text-end">Thành tiền</th><th></th></tr></thead>
             <tbody data-adjustment-items>
@@ -71,22 +71,48 @@
     </div>
 
     <div class="monitor-adjustment-picker monitor-adjustment-fee-picker" hidden>
-        <div class="small fw-bold mb-1">Các phí và giảm trừ</div>
-        <div class="text-muted small mb-3">Đánh dấu khoản cần thay đổi, sau đó nhập giá trị mới.</div>
+        <div class="monitor-adjustment-picker-head">
+            <div>
+                <strong><i class="bi bi-receipt me-1"></i>Các phí và giảm trừ</strong>
+                <span>Chọn khoản cần điều chỉnh và nhập giá trị mới.</span>
+            </div>
+            <span class="monitor-adjustment-picker-hint"><i class="bi bi-check2-square me-1"></i>Chọn để kích hoạt</span>
+        </div>
         <div class="monitor-adjustment-fee-list">
             @forelse($feeTypes as $feeType)
                 @php
                     $state = $feeStates[$feeType->id] ?? ['enabled' => false, 'value' => (float) $feeType->default_value];
                     $enabled = (bool) $state['enabled'];
                     $percent = $feeType->calculation_type === 'percent';
+                    $currentValue = array_key_exists('value', $state) ? (float) $state['value'] : (float) $feeType->default_value;
+                    $unit = $percent ? '%' : 'đ';
+                    $formattedCurrentValue = $percent
+                        ? number_format($currentValue, 2, ',', '.') . '%'
+                        : number_format($currentValue, 0, ',', '.') . 'đ';
                 @endphp
-                <label class="monitor-adjustment-fee-row {{ $enabled ? 'is-enabled' : '' }}">
+                <div class="monitor-adjustment-fee-row {{ $enabled ? 'is-enabled' : '' }}">
                     <input type="hidden" name="fees[{{ $feeType->id }}][type_id]" value="{{ $feeType->id }}">
                     <input type="hidden" name="fees[{{ $feeType->id }}][enabled]" value="0">
-                    <input type="checkbox" class="form-check-input monitor-adjustment-fee-enabled" name="fees[{{ $feeType->id }}][enabled]" value="1" @checked($enabled)>
-                    <span class="monitor-adjustment-fee-name"><strong>{{ $feeType->name }}</strong><small>{{ $feeType->direction === 'discount' ? 'Giảm trừ' : 'Cộng thêm' }}</small></span>
-                    <div class="input-group input-group-sm monitor-adjustment-fee-value"><input type="number" min="0" @if($percent) max="100" @endif step="0.01" name="fees[{{ $feeType->id }}][value]" value="{{ $state['value'] ?: $feeType->default_value }}" class="form-control"><span class="input-group-text">{{ $percent ? '%' : 'đ' }}</span></div>
-                </label>
+                    <div class="monitor-adjustment-fee-identity">
+                        <input id="{{ $uid }}-fee-{{ $feeType->id }}" type="checkbox" class="form-check-input monitor-adjustment-fee-enabled" name="fees[{{ $feeType->id }}][enabled]" value="1" @checked($enabled)>
+                        <label for="{{ $uid }}-fee-{{ $feeType->id }}" class="monitor-adjustment-fee-label">
+                            <span class="monitor-adjustment-fee-name">
+                                <strong>{{ $feeType->name }}</strong>
+                                <small>Hiện tại: {{ $formattedCurrentValue }}</small>
+                            </span>
+                            <span class="monitor-adjustment-fee-direction {{ $feeType->direction === 'discount' ? 'is-discount' : 'is-charge' }}">
+                                {{ $feeType->direction === 'discount' ? 'Giảm trừ' : 'Cộng thêm' }}
+                            </span>
+                        </label>
+                    </div>
+                    <div class="monitor-adjustment-fee-control">
+                        <label for="{{ $uid }}-fee-value-{{ $feeType->id }}">Giá trị mới</label>
+                        <div class="input-group input-group-sm monitor-adjustment-fee-value">
+                            <input id="{{ $uid }}-fee-value-{{ $feeType->id }}" type="number" min="0" @if($percent) max="100" @endif step="0.01" name="fees[{{ $feeType->id }}][value]" value="{{ $currentValue }}" class="form-control" @disabled(!$enabled)>
+                            <span class="input-group-text">{{ $unit }}</span>
+                        </div>
+                    </div>
+                </div>
             @empty
                 <div class="text-muted small">Chưa có loại phí đang hoạt động.</div>
             @endforelse

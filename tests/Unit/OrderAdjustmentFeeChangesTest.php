@@ -62,6 +62,18 @@ class OrderAdjustmentFeeChangesTest extends TestCase
         $this->assertStringNotContainsString('adjustment-fee-toggle', $view);
     }
 
+    public function test_inline_adjustment_fee_form_has_readable_selectable_controls(): void
+    {
+        $view = file_get_contents(dirname(__DIR__, 2).'/resources/views/site/orders/adjustments/_inline_form.blade.php');
+
+        $this->assertStringContainsString('monitor-adjustment-fee-identity', $view);
+        $this->assertStringContainsString('monitor-adjustment-fee-control', $view);
+        $this->assertStringContainsString('Giá trị mới', $view);
+        $this->assertStringContainsString("array_key_exists('value', \$state)", $view);
+        $this->assertStringContainsString('@disabled(!$enabled)', $view);
+        $this->assertStringNotContainsString("\$state['value'] ?: \$feeType->default_value", $view);
+    }
+
     public function test_custom_percentage_discount_keeps_snapshot_metadata(): void
     {
         $order = new Order();
