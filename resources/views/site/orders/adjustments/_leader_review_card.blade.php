@@ -5,6 +5,12 @@
     );
     $order = $adjustment->order;
     $targetId = 'leader-adjustment-review-'.$adjustment->id;
+    $jumpUrl = request()->fullUrlWithQuery([
+        'tab' => 'today',
+        'view' => 'cards',
+        'highlight' => $adjustment->order_id,
+        'page' => 1,
+    ]).'#'.$targetId;
     $changedItems = $adjustment->items->filter(fn ($item) =>
         ! $item->order_item_id
         || (float) $item->original_quantity !== (float) $item->adjusted_quantity
@@ -27,7 +33,7 @@
 
 <article @if(!$compact) id="{{ $targetId }}" @endif class="leader-adjustment-review {{ $compact ? 'is-compact' : 'is-detail' }}">
     @if($compact)
-        <a href="#{{ $targetId }}" class="leader-adjustment-review-link">
+        <a href="{{ $jumpUrl }}" class="leader-adjustment-review-link">
     @endif
             <header class="leader-adjustment-review-head">
                 <div>
@@ -59,9 +65,8 @@
             </div>
     @if($compact)
         </a>
-    @else
-        @include('site.orders.adjustments._fee_changes', ['adjustment' => $adjustment])
     @endif
+    @include('site.orders.adjustments._fee_changes', ['adjustment' => $adjustment])
 
     <div class="leader-adjustment-review-actions">
         <a href="{{ route('site.order-adjustments.show', $adjustment) }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye me-1"></i>Xem đầy đủ</a>

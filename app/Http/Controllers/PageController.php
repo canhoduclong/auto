@@ -1223,50 +1223,23 @@ class PageController extends Controller
         }
 
         $activeMonitoringRole = strtolower(trim((string) (session('active_role') ?: $user->defaultRole?->name)));
-        $leaderApprovalRoles = ['leader', 'leader_sale', 'sale_manager'];
-        $managerApprovalRoles = ['manager', 'manager_sale', 'director'];
-        $isLeaderWorkspace = in_array($activeMonitoringRole, $leaderApprovalRoles, true);
-        $isManagerAdjustmentWorkspace = in_array($activeMonitoringRole, $managerApprovalRoles, true);
-        if (! $isLeaderWorkspace && ! $isManagerAdjustmentWorkspace) {
-            $isLeaderWorkspace = $user->hasRole($leaderApprovalRoles);
-            $isManagerAdjustmentWorkspace = $user->hasRole($managerApprovalRoles);
-        }
-
-        $adjustmentApprovalRoles = collect()
-            ->when($isLeaderWorkspace, fn ($roles) => $roles->concat($leaderApprovalRoles))
-            ->when($isManagerAdjustmentWorkspace, fn ($roles) => $roles->concat($managerApprovalRoles))
+        // Hàng chờ điều chỉnh thuộc ngày nghiệp vụ của đơn gốc, không thuộc
+        // ngày Sale gửi yêu cầu và không phụ thuộc trang phân trang hiện tại.
+        $pendingAdjustmentRequests = app(ApprovalService::class)
+            ->pendingSalesAdjustmentApprovals($user, $activeMonitoringRole)
+            ->filter(fn ($adjustment): bool =>
+                $adjustment->order
+                && $this->monitoringOrderBusinessDate($adjustment->order, $selectedDate) === $selectedDate
+            )
+            ->values();
+        $adjustmentApprovalRoleLabel = $pendingAdjustmentRequests
+            ->map(fn ($adjustment) => \App\Models\OrderAdjustment::approvalRoleLabel(
+                $adjustment->currentPendingApprovalStep()?->step?->role_slug
+            ))
             ->unique()
-            ->values()
-            ->all();
-        $adjustmentApprovalRoleLabel = $isLeaderWorkspace && $isManagerAdjustmentWorkspace
-            ? 'Leader/Manager'
-            : ($isLeaderWorkspace ? 'Leader' : 'Manager');
-        $pendingAdjustmentRequests = collect();
-        if ($adjustmentApprovalRoles !== []) {
-            $pendingAdjustmentRequests = $filteredOrders
-                ->flatMap(fn (Order $order) => $order->adjustments->map(function ($adjustment) use ($order) {
-                    $adjustment->setRelation('order', $order);
-
-                    return $adjustment;
-                }))
-                ->filter(function ($adjustment) use ($adjustmentApprovalRoles, $leaderApprovalRoles, $user): bool {
-                    if ($adjustment->status !== \App\Models\OrderAdjustment::STATUS_PENDING_APPROVAL) {
-                        return false;
-                    }
-
-                    $currentRole = strtolower((string) ($adjustment->currentPendingApprovalStep()?->step?->role_slug ?? ''));
-                    if (in_array($currentRole, $leaderApprovalRoles, true)) {
-                        if (! in_array($currentRole, $adjustmentApprovalRoles, true)) {
-                            return false;
-                        }
-
-                        return app(ApprovalService::class)->leaderCanReviewAdjustment($user, $adjustment);
-                    }
-
-                    return in_array($currentRole, $adjustmentApprovalRoles, true);
-                })
-                ->sortByDesc(fn ($adjustment) => $adjustment->submitted_at?->timestamp ?? $adjustment->id)
-                ->values();
+            ->implode('/');
+        if ($adjustmentApprovalRoleLabel === '') {
+            $adjustmentApprovalRoleLabel = 'Leader/Manager';
         }
 
         $monitoringItems = $filteredOrders->flatMap(fn (Order $order) => $order->items);
