@@ -27,7 +27,7 @@
 @endphp
 
 @if($changedFees->isNotEmpty())
-    <div class="border rounded p-3 mb-3 bg-warning-subtle">
+    <div class="border rounded p-3 mb-3 bg-warning-subtle {{ ($dense ?? false) ? 'adjustment-fees-dense' : '' }}">
         <div class="fw-bold mb-2"><i class="bi bi-receipt me-1"></i>Phí và chiết khấu đề nghị thay đổi</div>
         <div class="table-responsive">
             <table class="table table-sm align-middle mb-0">

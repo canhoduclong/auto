@@ -176,7 +176,7 @@ class ApprovalService
     private function adjustmentQueueRelations(): array
     {
         return [
-            'order:id,code,customer_id,user_id,status,created_at,delivery_date,accounting_sales_import_batch_id',
+            'order:id,code,customer_id,user_id,status,daily_sequence,created_at,delivery_date,accounting_sales_import_batch_id',
             'order.customer:id,name',
             'order.user:id,name,short_name,team_id',
             'requester:id,name,team_id',

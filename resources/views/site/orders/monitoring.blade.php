@@ -74,12 +74,19 @@
     .monitor-sequence.status-delivered { --monitor-state-color: #8b5e3c; }
     .monitor-sequence.status-accounted { --monitor-state-color: #581c87; }
     .monitor-sequence.status-cancelled { --monitor-state-color: #dc2626; }
-    .leader-adjustment-queue { display: grid; gap: 9px; margin: -5px 0 16px; padding: 13px; border: 1px solid #fbbf24; border-radius: 10px; background: #fffbeb; box-shadow: 0 5px 18px rgba(146, 64, 14, .08); }
-    .leader-adjustment-queue-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #92400e; font-size: .78rem; font-weight: 900; text-transform: uppercase; }
+    .leader-adjustment-queue { display: grid; gap: 6px; margin: -5px 0 16px; }
     .leader-adjustment-review { padding: 11px 12px; border: 1px solid #fde68a; border-left: 4px solid #f59e0b; border-radius: 8px; background: #fff; }
-    .leader-adjustment-review.is-detail { scroll-margin-top: 185px; margin-top: 12px; background: #fffbeb; }
+    .leader-adjustment-review.is-compact { padding: 0; border-width: 1px; background: #fffbeb; box-shadow: none; }
+    .leader-adjustment-review.is-compact .leader-adjustment-review-link { display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 7px 10px; }
+    .leader-adjustment-queue-number { display: inline-grid; flex: 0 0 20px; width: 20px; height: 20px; place-items: center; border-radius: 50%; background: #f59e0b; color: #fff; font-size: .65rem; font-weight: 900; }
+    .leader-adjustment-queue-copy { min-width: 0; flex: 1; }
+    .leader-adjustment-queue-title { overflow: hidden; color: #78350f; font-size: .73rem; font-weight: 900; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+    .leader-adjustment-queue-meta { margin-top: 1px; color: #92400e; font-size: .63rem; }
+    .leader-adjustment-review.is-detail { scroll-margin-top: 185px; margin-top: 10px; padding: 9px 10px; background: #fffbeb; }
     .leader-adjustment-review.is-detail:target { border-color: #f59e0b; box-shadow: 0 0 0 4px rgba(245, 158, 11, .18); }
     .leader-adjustment-review-link { display: block; color: inherit; text-decoration: none; }
+    .leader-adjustment-detail-intro { display: flex; align-items: center; flex-wrap: wrap; gap: 5px 9px; color: #64748b; font-size: .66rem; }
+    .leader-adjustment-detail-label { color: #78350f; font-size: .72rem; font-weight: 900; }
     .leader-adjustment-review-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
     .leader-adjustment-review-title { color: #0f172a; font-size: .77rem; font-weight: 900; }
     .leader-adjustment-review-meta { margin-top: 2px; color: #64748b; font-size: .67rem; }
@@ -90,6 +97,11 @@
     .leader-adjustment-review-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
     .leader-adjustment-review-actions form { margin: 0; }
     .leader-adjustment-review-actions .btn { font-size: .69rem; font-weight: 800; }
+    .leader-adjustment-review .adjustment-fees-dense { margin: 8px 0 0 !important; padding: 9px !important; }
+    .leader-adjustment-review .adjustment-fees-dense .fw-bold.mb-2 { margin-bottom: 5px !important; font-size: .74rem; }
+    .leader-adjustment-review .adjustment-fees-dense .table { font-size: .7rem; }
+    .leader-adjustment-review .adjustment-fees-dense th,
+    .leader-adjustment-review .adjustment-fees-dense td { padding: 4px 5px; }
     .leader-adjustment-reject-form { margin-top: 9px; padding-top: 9px; border-top: 1px dashed #fbbf24; font-size: .72rem; }
     .monitor-summary-head {
         display: flex;
@@ -1161,10 +1173,6 @@
 
         @if($viewMode === 'cards' && ($pendingAdjustmentRequests ?? collect())->isNotEmpty())
             <section class="leader-adjustment-queue" aria-label="Yêu cầu điều chỉnh chờ {{ $adjustmentApprovalRoleLabel }} duyệt">
-                <div class="leader-adjustment-queue-head">
-                    <span><i class="bi bi-exclamation-circle-fill me-1"></i>Yêu cầu điều chỉnh chờ {{ $adjustmentApprovalRoleLabel }} duyệt</span>
-                    <span class="badge text-bg-warning">{{ $pendingAdjustmentRequests->count() }}</span>
-                </div>
                 @foreach($pendingAdjustmentRequests as $adjustment)
                     @include('site.orders.adjustments._leader_review_card', ['adjustment' => $adjustment, 'compact' => true])
                 @endforeach

@@ -31,21 +31,27 @@
     $formatNumber = static fn ($value, int $precision = 3) => rtrim(rtrim(number_format((float) $value, $precision, ',', '.'), '0'), ',');
 @endphp
 
-<article @if(!$compact) id="{{ $targetId }}" @endif class="leader-adjustment-review {{ $compact ? 'is-compact' : 'is-detail' }}">
-    @if($compact)
-        <a href="{{ $jumpUrl }}" class="leader-adjustment-review-link">
-    @endif
-            <header class="leader-adjustment-review-head">
-                <div>
-                    <div class="leader-adjustment-review-title">Yêu cầu #{{ $adjustment->id }} · {{ $order?->customer?->name ?? 'Khách hàng' }}</div>
-                    <div class="leader-adjustment-review-meta">
-                        Đơn {{ $order?->code ?: ('#'.$adjustment->order_id) }} · Sale {{ $order?->user?->short_name ?: ($order?->user?->name ?? '—') }} · {{ optional($adjustment->submitted_at)->format('d/m H:i') }}
-                    </div>
-                </div>
-                @if($compact)<span class="leader-adjustment-jump"><i class="bi bi-arrow-down-circle"></i>Tới đơn cần duyệt</span>@endif
-            </header>
-            <div class="leader-adjustment-reason"><strong>Nội dung:</strong> {{ $adjustment->adjustment_note ?: 'Sale không nhập ghi chú.' }}</div>
-            <div class="leader-adjustment-change-list">
+@if($compact)
+    <article class="leader-adjustment-review is-compact">
+        <a href="{{ $jumpUrl }}" class="leader-adjustment-review-link" title="Tới đơn cần duyệt">
+            <span class="leader-adjustment-queue-number">{{ $order?->daily_sequence ?? '!' }}</span>
+            <span class="leader-adjustment-queue-copy">
+                <span class="leader-adjustment-queue-title">Yêu cầu #{{ $adjustment->id }} · {{ $order?->customer?->name ?? 'Khách hàng' }}</span>
+                <span class="leader-adjustment-queue-meta">Đơn {{ $order?->code ?: ('#'.$adjustment->order_id) }} · Sale {{ $order?->user?->short_name ?: ($order?->user?->name ?? '—') }}</span>
+            </span>
+            <span class="leader-adjustment-jump"><i class="bi bi-arrow-down-circle"></i>Tới đơn</span>
+        </a>
+    </article>
+@else
+    <article id="{{ $targetId }}" class="leader-adjustment-review is-detail">
+        <div class="leader-adjustment-detail-intro">
+            <span class="leader-adjustment-detail-label">Yêu cầu #{{ $adjustment->id }}</span>
+            <span>Sale {{ $order?->user?->short_name ?: ($order?->user?->name ?? '—') }} · {{ optional($adjustment->submitted_at)->format('d/m H:i') }}</span>
+        </div>
+        @if(trim((string) $adjustment->adjustment_note) !== '')
+            <div class="leader-adjustment-reason"><strong>Nội dung:</strong> {{ $adjustment->adjustment_note }}</div>
+        @endif
+        <div class="leader-adjustment-change-list">
                 @foreach($changedItems as $item)
                     @php
                         $productName = $item->variant?->product?->name ?? $item->variant?->name ?? 'Sản phẩm';
@@ -62,27 +68,25 @@
                 @endforeach
                 @if($changedFeesCount > 0)<span><strong>Phí/chiết khấu:</strong> {{ $changedFeesCount }} khoản thay đổi</span>@endif
                 @if($changedItems->isEmpty() && empty($adjustment->order_changes) && $changedFeesCount === 0)<span>Không phát hiện dòng số liệu thay đổi.</span>@endif
-            </div>
-    @if($compact)
-        </a>
-    @endif
-    @include('site.orders.adjustments._fee_changes', ['adjustment' => $adjustment])
+        </div>
+        @include('site.orders.adjustments._fee_changes', ['adjustment' => $adjustment, 'dense' => true])
 
-    <div class="leader-adjustment-review-actions">
-        <a href="{{ route('site.order-adjustments.show', $adjustment) }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye me-1"></i>Xem đầy đủ</a>
-        <form method="POST" action="{{ route('site.order-adjustments.approve', $adjustment) }}">
-            @csrf
-            <input type="hidden" name="note" value="{{ $approvalRoleLabel }} duyệt từ trang theo dõi đơn hàng">
-            <button class="btn btn-sm btn-success" onclick="return confirm('Duyệt yêu cầu điều chỉnh #{{ $adjustment->id }}?')"><i class="bi bi-check2-circle me-1"></i>Duyệt yêu cầu</button>
-        </form>
-        <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="collapse" data-bs-target="#leaderAdjustmentReject{{ $compact ? 'Queue' : 'Order' }}{{ $adjustment->id }}"><i class="bi bi-x-circle me-1"></i>Từ chối</button>
-    </div>
-    <div class="collapse" id="leaderAdjustmentReject{{ $compact ? 'Queue' : 'Order' }}{{ $adjustment->id }}">
-        <form method="POST" action="{{ route('site.order-adjustments.reject', $adjustment) }}" class="leader-adjustment-reject-form">
-            @csrf
-            <label class="form-label">Lý do từ chối</label>
-            <textarea name="reason" class="form-control form-control-sm" rows="2" required placeholder="Nêu rõ nội dung sale cần chỉnh lại..."></textarea>
-            <button class="btn btn-sm btn-danger mt-2">Xác nhận từ chối</button>
-        </form>
-    </div>
-</article>
+        <div class="leader-adjustment-review-actions">
+            <a href="{{ route('site.order-adjustments.show', $adjustment) }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye me-1"></i>Xem đầy đủ</a>
+            <form method="POST" action="{{ route('site.order-adjustments.approve', $adjustment) }}">
+                @csrf
+                <input type="hidden" name="note" value="{{ $approvalRoleLabel }} duyệt từ trang theo dõi đơn hàng">
+                <button class="btn btn-sm btn-success" onclick="return confirm('Duyệt yêu cầu điều chỉnh #{{ $adjustment->id }}?')"><i class="bi bi-check2-circle me-1"></i>Duyệt yêu cầu</button>
+            </form>
+            <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="collapse" data-bs-target="#leaderAdjustmentRejectOrder{{ $adjustment->id }}"><i class="bi bi-x-circle me-1"></i>Từ chối</button>
+        </div>
+        <div class="collapse" id="leaderAdjustmentRejectOrder{{ $adjustment->id }}">
+            <form method="POST" action="{{ route('site.order-adjustments.reject', $adjustment) }}" class="leader-adjustment-reject-form">
+                @csrf
+                <label class="form-label">Lý do từ chối</label>
+                <textarea name="reason" class="form-control form-control-sm" rows="2" required placeholder="Nêu rõ nội dung sale cần chỉnh lại..."></textarea>
+                <button class="btn btn-sm btn-danger mt-2">Xác nhận từ chối</button>
+            </form>
+        </div>
+    </article>
+@endif
