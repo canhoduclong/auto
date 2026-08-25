@@ -50,6 +50,19 @@
     .monitor-my-order-totals { display: grid; justify-content: end; margin-top: 5px; font-size: .72rem; }
     .monitor-my-order-total-line { display: grid; grid-template-columns: 95px 100px; gap: 8px; padding: 4px 0; text-align: right; }
     .monitor-my-order-total-line.is-total { border-top: 1px solid #dce6f1; font-size: .8rem; font-weight: 900; }
+    .monitor-adjustments { display: grid; gap: 8px; margin-top: 12px; padding-top: 11px; border-top: 1px solid #dce6f1; }
+    .monitor-adjustments-title { display: flex; align-items: center; gap: 6px; color: #334155; font-size: .68rem; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; }
+    .monitor-adjustment { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid #fde68a; border-left: 4px solid #f59e0b; border-radius: 7px; background: #fffbeb; }
+    .monitor-adjustment.is-success { border-color: #bbf7d0; border-left-color: #22c55e; background: #f0fdf4; }
+    .monitor-adjustment.is-danger { border-color: #fecaca; border-left-color: #ef4444; background: #fef2f2; }
+    .monitor-adjustment.is-secondary { border-color: #dbe4ef; border-left-color: #94a3b8; background: #f8fafc; }
+    .monitor-adjustment-name { color: #0f172a; font-size: .75rem; font-weight: 900; }
+    .monitor-adjustment-meta { margin-top: 3px; color: #64748b; font-size: .67rem; line-height: 1.45; }
+    .monitor-adjustment-state { display: inline-flex; align-items: center; gap: 5px; color: #92400e; font-size: .7rem; font-weight: 900; }
+    .monitor-adjustment.is-success .monitor-adjustment-state { color: #166534; }
+    .monitor-adjustment.is-danger .monitor-adjustment-state { color: #b91c1c; }
+    .monitor-adjustment.is-secondary .monitor-adjustment-state { color: #475569; }
+    .monitor-adjustment-link { white-space: nowrap; font-size: .69rem; font-weight: 800; }
     .monitor-my-order-actions { display: grid; gap: 8px; }
     .monitor-my-order-actions .btn { min-height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; border-radius: 6px; font-size: .72rem; font-weight: 800; }
     .monitor-my-order-actions form { margin: 0; }
@@ -75,6 +88,8 @@
     @media (max-width: 767.98px) {
         .monitor-my-order { grid-template-columns: 1fr; }
         .monitor-my-order-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .monitor-adjustment { grid-template-columns: 1fr; }
+        .monitor-adjustment-link { justify-self: start; }
         .monitor-my-orders-sort { align-items: flex-start; flex-direction: column; }
         .monitor-my-order-products { min-width: 650px; }
     }
@@ -122,6 +137,21 @@
                 $orderAdjustment = $itemsTotal - (float) $order->total;
                 $hasSampleDraft = $order->customer_id
                     && in_array((int) $order->customer_id, $sampleDraftCustomerIds, true);
+                $canSeeAllOrderAdjustments = $user->hasRole(['admin', 'manager', 'manager_sale', 'director']);
+                $canSeeTeamOrderAdjustments = $user->hasRole(['leader', 'leader_sale', 'sale_manager'])
+                    && (int) ($user->team_id ?? 0) > 0
+                    && (int) ($order->user?->team_id ?? 0) === (int) $user->team_id;
+                $visibleAdjustments = $order->adjustments->filter(
+                    fn ($adjustment) => (int) $adjustment->requested_by === (int) $user->id
+                        || $canSeeAllOrderAdjustments
+                        || $canSeeTeamOrderAdjustments
+                );
+                $adjustmentRoleLabels = [
+                    'leader' => 'Leader', 'leader_sale' => 'Leader', 'sale_manager' => 'Leader',
+                    'manager' => 'Manager', 'manager_sale' => 'Manager', 'director' => 'Manager',
+                    'account' => 'Kế toán', 'accountant' => 'Kế toán', 'accounting' => 'Kế toán',
+                    'warehouse' => 'Kho',
+                ];
             @endphp
             <article class="monitor-my-order" id="my-order-card-{{ $order->id }}">
                 <div class="monitor-my-order-card {{ $isCancelled ? 'is-cancelled' : '' }}">
@@ -181,6 +211,46 @@
                         @if(abs($orderAdjustment) > .01)<div class="monitor-my-order-total-line"><span>Điều chỉnh:</span><strong>{{ $orderAdjustment > 0 ? '-' : '+' }}{{ number_format(abs($orderAdjustment), 0, ',', '.') }}đ</strong></div>@endif
                         <div class="monitor-my-order-total-line is-total"><span>Tổng cộng:</span><strong>{{ number_format((float) $order->total, 0, ',', '.') }}đ</strong></div>
                     </div>
+
+                    @if($visibleAdjustments->isNotEmpty())
+                        <section class="monitor-adjustments" aria-label="Yêu cầu thay đổi đã gửi">
+                            <div class="monitor-adjustments-title"><i class="bi bi-arrow-left-right"></i>Yêu cầu thay đổi đã gửi</div>
+                            @foreach($visibleAdjustments as $adjustment)
+                                @php
+                                    $currentApproval = $adjustment->approvalSteps
+                                        ->where('status', 'pending')
+                                        ->filter(fn ($approval) => $approval->step)
+                                        ->sortBy(fn ($approval) => (int) ($approval->step?->step_order ?? PHP_INT_MAX))
+                                        ->first();
+                                    $currentRole = strtolower((string) ($currentApproval?->step?->role_slug ?? ''));
+                                    [$adjustmentTone, $adjustmentIcon, $adjustmentState] = match($adjustment->status) {
+                                        \App\Models\OrderAdjustment::STATUS_DRAFT => ['secondary', 'bi-pencil-square', 'Bản nháp, chưa gửi duyệt'],
+                                        \App\Models\OrderAdjustment::STATUS_PENDING_APPROVAL => ['warning', 'bi-hourglass-split', $currentApproval ? 'Đang chờ '.($adjustmentRoleLabels[$currentRole] ?? $currentRole).' duyệt' : 'Đang chờ duyệt'],
+                                        \App\Models\OrderAdjustment::STATUS_APPROVED => ['success', 'bi-check2-circle', $adjustment->warehouse_confirmation_status === 'pending' ? 'Đã duyệt, chờ Kho xác nhận' : 'Đã được duyệt'],
+                                        \App\Models\OrderAdjustment::STATUS_REJECTED => ['danger', 'bi-x-circle', 'Đã bị từ chối'],
+                                        \App\Models\OrderAdjustment::STATUS_COMPLETED => ['success', 'bi-check-circle-fill', 'Đã duyệt và hoàn tất'],
+                                        default => ['secondary', 'bi-info-circle', str_replace('_', ' ', $adjustment->status)],
+                                    };
+                                    $processedSteps = $adjustment->approvalSteps
+                                        ->whereIn('status', ['approved', 'rejected'])
+                                        ->sortBy(fn ($approval) => (int) ($approval->step?->step_order ?? PHP_INT_MAX))
+                                        ->map(function ($approval) use ($adjustmentRoleLabels) {
+                                            $role = strtolower((string) ($approval->step?->role_slug ?? ''));
+                                            return ($adjustmentRoleLabels[$role] ?? $role).($approval->status === 'rejected' ? ' từ chối' : ' đã duyệt');
+                                        })->implode(' · ');
+                                @endphp
+                                <div class="monitor-adjustment is-{{ $adjustmentTone }}">
+                                    <div>
+                                        <div class="monitor-adjustment-name">Yêu cầu #{{ $adjustment->id }} · {{ optional($adjustment->submitted_at ?? $adjustment->created_at)->format('d/m/Y H:i') }}</div>
+                                        <div class="monitor-adjustment-state"><i class="bi {{ $adjustmentIcon }}"></i>{{ $adjustmentState }}</div>
+                                        @if($processedSteps !== '')<div class="monitor-adjustment-meta">{{ $processedSteps }}</div>@endif
+                                        @if($adjustment->reject_reason)<div class="monitor-adjustment-meta text-danger"><strong>Lý do:</strong> {{ $adjustment->reject_reason }}</div>@endif
+                                    </div>
+                                    <a class="btn btn-sm btn-outline-primary monitor-adjustment-link" href="{{ route('site.order-adjustments.show', $adjustment) }}">Xem tiến trình</a>
+                                </div>
+                            @endforeach
+                        </section>
+                    @endif
                 </div>
 
                 <div class="monitor-my-order-actions">

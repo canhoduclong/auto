@@ -642,6 +642,13 @@ class PageController extends Controller
             'customer.truckStation.ward',
             'user',
             'accountingReconciliation',
+            'adjustments' => function ($query): void {
+                $query->with([
+                    'requester:id,name',
+                    'approvalSteps.step:id,role_slug,step_order',
+                    'approvalSteps.approver:id,name',
+                ])->latest('id');
+            },
             'customerFeedbackUser:id,name',
             'items.product.avatar.media',
             'items.variant.avatar.media',
@@ -1021,6 +1028,13 @@ class PageController extends Controller
                 'warehouse:id,name',
                 'accountingReconciliation',
                 'approvals.step',
+                'adjustments' => function ($query): void {
+                    $query->with([
+                        'requester:id,name',
+                        'approvalSteps.step:id,role_slug,step_order',
+                        'approvalSteps.approver:id,name',
+                    ])->latest('id');
+                },
                 'items.product',
                 'items.variant.product',
                 'items.variant.latestPriceRule',

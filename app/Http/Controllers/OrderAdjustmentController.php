@@ -623,7 +623,9 @@ class OrderAdjustmentController extends Controller
         $user = auth()->user();
         abort_unless($user, 403);
 
-        if ($user->hasRole('admin') || $user->hasRole('account') || $user->hasRole('accountant') || $user->hasRole('warehouse')) {
+        if ($user->hasRole('admin')
+            || $user->hasRole(['account', 'accountant', 'accounting'])
+            || $user->hasRole('warehouse')) {
             return;
         }
 
@@ -665,7 +667,7 @@ class OrderAdjustmentController extends Controller
         }
 
         // Fallback: no workflow configured → accountant can approve
-        return $user->hasRole('account') || $user->hasRole('accountant');
+        return $user->hasRole(['account', 'accountant', 'accounting']);
     }
 
     private function canWarehouseConfirm(User $user, OrderAdjustment $adjustment): bool
