@@ -38,9 +38,12 @@
         <div class="small" style="opacity:.92;">Lấy hàng tồn tại kho đang quản lý để chuyển sang kho khác, kho nhận sẽ vào phần tiếp nhận để nhập kho.</div>
         <div class="small mt-2">Kho nguồn: <strong>{{ $sourceWarehouse?->name ?? '—' }}</strong></div>
     </div>
-    <a href="{{ route('warehouse.inventory-transfers.incoming') }}" class="btn btn-light btn-sm fw-semibold">
-        <i class="bi bi-box-arrow-in-down me-1"></i>Tiếp nhận điều chuyển ({{ number_format($incomingPendingCount) }})
-    </a>
+    <div class="d-flex gap-2 flex-wrap">
+        <a href="{{ route('warehouse.dispatch-slips.index') }}" class="btn btn-warning btn-sm fw-semibold"><i class="bi bi-file-earmark-spreadsheet me-1"></i>Lập phiếu xuất tổng</a>
+        <a href="{{ route('warehouse.inventory-transfers.incoming') }}" class="btn btn-light btn-sm fw-semibold">
+            <i class="bi bi-box-arrow-in-down me-1"></i>Tiếp nhận điều chuyển ({{ number_format($incomingPendingCount) }})
+        </a>
+    </div>
 </div>
 
 @if(session('success'))
@@ -206,7 +209,12 @@
                             };
                         @endphp
                         <tr>
-                            <td class="fw-semibold">{{ $transfer->transfer_code ?? ('#' . $transfer->id) }}</td>
+                            <td class="fw-semibold">
+                                {{ $transfer->transfer_code ?? ('#' . $transfer->id) }}
+                                @if($transfer->dispatchEntry?->slip)
+                                    <a class="d-block small text-decoration-none mt-1" href="{{ route('warehouse.dispatch-slips.show', $transfer->dispatchEntry->slip) }}"><i class="bi bi-file-earmark-spreadsheet me-1"></i>{{ $transfer->dispatchEntry->slip->code }}</a>
+                                @endif
+                            </td>
                             <td>{{ $transfer->targetWarehouse?->name ?? '—' }}</td>
                             <td>
                                 @foreach($transfer->items as $item)
@@ -221,7 +229,7 @@
                             <td>{{ optional($transfer->requested_at ?? $transfer->created_at)->format('d/m/Y H:i') }}</td>
                             <td><span class="badge transfer-pill {{ $statusMeta[1] }}">{{ $statusMeta[0] }}</span></td>
                             <td class="text-end">
-                                @if($transfer->status === \App\Models\WarehouseInventoryTransfer::STATUS_PENDING_RECEIVE)
+                                @if($transfer->status === \App\Models\WarehouseInventoryTransfer::STATUS_PENDING_RECEIVE && !$transfer->dispatchEntry)
                                     <a href="{{ route('warehouse.inventory-transfers.edit', $transfer) }}" class="btn btn-sm btn-outline-primary">
                                         <i class="bi bi-pencil-square me-1"></i>Sửa
                                     </a>

@@ -5,6 +5,7 @@
         ? ['Chờ tiếp nhận', 'bg-warning text-dark']
         : ['Đã tiếp nhận', 'bg-success'];
     $sequenceNumber = $transfer->sequence_number ?? ($loop->iteration ?? 1);
+    $dispatchSlip = $order?->orderTransfer?->dispatchEntry?->slip;
 @endphp
 <div class="card border-0 shadow-sm h-100" id="transfer-card-{{ $transfer->id }}">
     <div class="card-header bg-white d-flex justify-content-between align-items-center gap-2">
@@ -17,6 +18,9 @@
             <div>
                 <div class="fw-semibold">{{ $order?->customer?->name ?? 'Khách hàng' }}</div>
                 <div class="small text-muted">{{ $order?->code ?? ('#' . $transfer->order_id) }} · Lên đơn {{ optional($order?->created_at)->format('d/m/Y') ?: '—' }} · Giao {{ optional($order?->delivery_date)->format('d/m/Y') ?: '—' }}</div>
+                @if($dispatchSlip)
+                    <a class="small text-decoration-none" href="{{ route('warehouse.dispatch-slips.show', $dispatchSlip) }}"><i class="bi bi-file-earmark-spreadsheet me-1"></i>{{ $dispatchSlip->code }}</a>
+                @endif
             </div>
         </div>
         <span class="badge {{ $statusMeta[1] }}">{{ $statusMeta[0] }}</span>

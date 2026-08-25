@@ -29,4 +29,9 @@ class OrderTransfer extends Model
     {
         return $this->belongsTo(Warehouse::class, 'warehouse_id');
     }
+
+    public function dispatchEntry()
+    {
+        return $this->hasOne(WarehouseDispatchSlipEntry::class);
+    }
 }

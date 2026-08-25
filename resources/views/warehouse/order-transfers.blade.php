@@ -61,6 +61,10 @@
 @section('content')
 <div class="card border-0 shadow-sm mb-3">
     <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-3">
+            <div><h5 class="fw-bold mb-1">Điều chuyển đơn đã đóng gói</h5><div class="small text-muted">Gom đơn theo tài xế và kho nhận như quy trình hiện tại.</div></div>
+            <a href="{{ route('warehouse.dispatch-slips.index') }}" class="btn btn-warning fw-semibold"><i class="bi bi-file-earmark-spreadsheet me-1"></i>Lập phiếu xuất kho tổng</a>
+        </div>
         <form method="GET" action="{{ route('warehouse.order-transfers') }}" class="row g-2 align-items-end">
             <div class="col-lg-3 col-md-4">
                 <label class="form-label small fw-semibold mb-1">Từ ngày</label>
@@ -168,6 +172,9 @@
                                 </div>
                                 <div class="small text-muted mb-2">
                                     Tạo lúc {{ $transfer->created_at->format('H:i') }} · {{ $transfer->orders->count() }} đơn
+                                    @if($transfer->dispatchEntry?->slip)
+                                        · <a class="text-decoration-none" href="{{ route('warehouse.dispatch-slips.show', $transfer->dispatchEntry->slip) }}"><i class="bi bi-file-earmark-spreadsheet me-1"></i>{{ $transfer->dispatchEntry->slip->code }}</a>
+                                    @endif
                                 </div>
 
                                 @foreach($transfer->orders as $order)

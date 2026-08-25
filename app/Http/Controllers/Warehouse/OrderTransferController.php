@@ -73,6 +73,7 @@ class OrderTransferController extends Controller
             'orders.warehouseTransfers' => fn ($query) => $query->latest('id'),
             'shipper',
             'warehouse',
+            'dispatchEntry.slip',
         ])
             ->when($warehouseId, fn ($query) => $query->whereHas(
                 'orders.warehouseTransfers',
@@ -120,7 +121,10 @@ class OrderTransferController extends Controller
 
     public function destroy($id)
     {
-        $transfer = OrderTransfer::with('orders.warehouseTransfers')->findOrFail($id);
+        $transfer = OrderTransfer::with(['orders.warehouseTransfers', 'dispatchEntry.slip'])->findOrFail($id);
+        if ($transfer->dispatchEntry) {
+            return back()->with('error', 'Nhóm đơn đã thuộc phiếu xuất kho tổng '.($transfer->dispatchEntry->slip?->code ?: '').'. Hãy xóa phiếu tổng đang mở trước khi xóa nhóm đơn.');
+        }
         $warehouseId = auth()->user()?->warehouse_id ? (int) auth()->user()->warehouse_id : null;
         if ($warehouseId && !$transfer->orders
             ->flatMap->warehouseTransfers
@@ -150,6 +154,10 @@ class OrderTransferController extends Controller
 
     public function detachWaitingTransfer(OrderTransfer $transfer, Order $order)
     {
+        $transfer->loadMissing('dispatchEntry.slip');
+        if ($transfer->dispatchEntry) {
+            return back()->with('error', 'Không thể gỡ đơn vì nhóm đã thuộc phiếu xuất kho tổng '.($transfer->dispatchEntry->slip?->code ?: '').'.');
+        }
         if ((int) $order->order_transfer_id !== (int) $transfer->id) {
             return back()->with('error', 'Đơn hàng không thuộc phiếu điều chuyển này.');
         }
@@ -286,6 +294,7 @@ class OrderTransferController extends Controller
         $orderTransfer = DB::transaction(function () use ($data, $orders, $sourceWarehouseId) {
             $orderTransfer = OrderTransfer::query()
                 ->with(['orders.warehouseTransfers' => fn ($query) => $query->latest('id')])
+                ->whereDoesntHave('dispatchEntry')
                 ->where('shipper_id', $data['shipper_id'])
                 ->where('warehouse_id', $data['warehouse_id'])
                 ->whereDate('created_at', Carbon::today())

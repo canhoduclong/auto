@@ -39,12 +39,16 @@
         @foreach($transfers as $transfer)
             @php
                 $isPending = (string) $transfer->status === 'pending_receive';
+                $dispatchSlip = $transfer->dispatchEntry?->slip;
             @endphp
             <div class="col-12 col-xl-6">
                 <div class="card border-0 shadow-sm h-100">
                     <div class="card-header bg-white d-flex justify-content-between align-items-center">
                         <div>
                             <div class="fw-semibold">{{ $transfer->transfer_code ?? ('#' . $transfer->id) }}</div>
+                            @if($dispatchSlip)
+                                <a class="small text-decoration-none" href="{{ route('warehouse.dispatch-slips.show', $dispatchSlip) }}"><i class="bi bi-file-earmark-spreadsheet me-1"></i>{{ $dispatchSlip->code }}</a>
+                            @endif
                             <div class="small text-muted">
                                 Từ kho <strong>{{ $transfer->sourceWarehouse?->name ?? '—' }}</strong>
                                 · {{ optional($transfer->requested_at ?? $transfer->created_at)->format('d/m/Y H:i') }}

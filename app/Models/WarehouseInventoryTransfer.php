@@ -79,4 +79,9 @@ class WarehouseInventoryTransfer extends Model
     {
         return $this->belongsTo(InventoryDocument::class, 'import_document_id');
     }
+
+    public function dispatchEntry()
+    {
+        return $this->hasOne(WarehouseDispatchSlipEntry::class, 'inventory_transfer_id');
+    }
 }

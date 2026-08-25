@@ -289,6 +289,9 @@
             <a href="{{ route('warehouse.stock-out.orders') }}" class="wh-nav-link {{ request()->routeIs('warehouse.stock-out.orders') ? 'active' : '' }}">
                 <i class="bi bi-receipt-cutoff"></i> Đơn Xuất Kho
             </a>
+            <a href="{{ route('warehouse.dispatch-slips.index') }}" class="wh-nav-link {{ request()->routeIs('warehouse.dispatch-slips.*') ? 'active' : '' }}">
+                <i class="bi bi-file-earmark-spreadsheet"></i> Phiếu xuất kho tổng
+            </a>
             <a href="{{ route('warehouse.order-transfers') }}" class="wh-nav-link {{ request()->routeIs('warehouse.order-transfers') ? 'active' : '' }}">
                 <i class="bi bi-arrow-left-right"></i> Điều chuyển đơn
             </a>

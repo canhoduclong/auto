@@ -375,6 +375,13 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/order-transfers', [\App\Http\Controllers\Warehouse\OrderTransferController::class, 'store'])->name('order-transfers.store');
         Route::delete('/order-transfers/{id}', [\App\Http\Controllers\Warehouse\OrderTransferController::class, 'destroy'])->name('order-transfers.destroy');
         Route::post('/order-transfers/{transfer}/orders/{order}/detach', [\App\Http\Controllers\Warehouse\OrderTransferController::class, 'detachWaitingTransfer'])->name('order-transfers.orders.detach');
+        Route::get('/dispatch-slips', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'index'])->name('dispatch-slips.index');
+        Route::post('/dispatch-slips', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'store'])->name('dispatch-slips.store');
+        Route::get('/dispatch-slips/{dispatchSlip}', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'show'])->name('dispatch-slips.show');
+        Route::post('/dispatch-slips/{dispatchSlip}/finalize', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'finalize'])->name('dispatch-slips.finalize');
+        Route::delete('/dispatch-slips/{dispatchSlip}', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'destroy'])->name('dispatch-slips.destroy');
+        Route::get('/dispatch-slips/{dispatchSlip}/print-export', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'printExport'])->name('dispatch-slips.print-export');
+        Route::get('/dispatch-slips/{dispatchSlip}/print-import', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'printImport'])->name('dispatch-slips.print-import');
         Route::get('/', [WarehouseDashboardController::class, 'index'])->name('dashboard');
         Route::get('/production-dashboard', [WarehouseDashboardController::class, 'productionDashboard'])->name('production-dashboard');
         Route::get('/order-adjustments', [\App\Http\Controllers\OrderAdjustmentController::class, 'warehouseIndex'])->name('order-adjustments.index');

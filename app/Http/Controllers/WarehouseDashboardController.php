@@ -1344,6 +1344,7 @@ class WarehouseDashboardController extends Controller
             ->with([
                 'order.customer',
                 'order.items.variant.product',
+                'order.orderTransfer.dispatchEntry.slip',
                 'sourceWarehouse',
                 'targetWarehouse',
                 'shipper',
@@ -3785,6 +3786,11 @@ class WarehouseDashboardController extends Controller
                 ->with('error', 'Chỉ có thể sửa phiếu đang chờ kho nhận.');
         }
 
+        if ($transfer->dispatchEntry()->exists()) {
+            return redirect()->route('warehouse.inventory-transfers.index')
+                ->with('error', 'Phiếu hàng đã thuộc một phiếu xuất kho tổng nên không thể sửa nội dung.');
+        }
+
         $transfer->load('items');
 
         return $this->renderInventoryTransferPage($managedWarehouseId, $transfer);
@@ -3877,6 +3883,7 @@ class WarehouseDashboardController extends Controller
                 'targetWarehouse:id,name',
                 'requester:id,name',
                 'items.variant.product',
+                'dispatchEntry.slip',
             ])
             ->where('source_warehouse_id', $managedWarehouseId)
             ->latest('id')
@@ -4049,6 +4056,11 @@ class WarehouseDashboardController extends Controller
         if ($transfer->status !== WarehouseInventoryTransfer::STATUS_PENDING_RECEIVE) {
             return redirect()->route('warehouse.inventory-transfers.index')
                 ->with('error', 'Chỉ có thể sửa phiếu đang chờ kho nhận.');
+        }
+
+        if ($transfer->dispatchEntry()->exists()) {
+            return redirect()->route('warehouse.inventory-transfers.index')
+                ->with('error', 'Phiếu hàng đã thuộc một phiếu xuất kho tổng. Hãy xóa phiếu tổng đang mở trước khi sửa hàng điều chuyển.');
         }
 
         $validated = $request->validate([
@@ -4244,6 +4256,7 @@ class WarehouseDashboardController extends Controller
                 'requester:id,name',
                 'receiver:id,name',
                 'items.variant.product',
+                'dispatchEntry.slip',
             ])
             ->where('target_warehouse_id', $managedWarehouseId)
             ->whereIn('status', [
@@ -4273,6 +4286,11 @@ class WarehouseDashboardController extends Controller
 
         if ($transfer->status !== WarehouseInventoryTransfer::STATUS_PENDING_RECEIVE) {
             return back()->with('error', 'Phiếu điều chuyển này không còn ở trạng thái chờ tiếp nhận.');
+        }
+
+        $transfer->loadMissing('dispatchEntry.slip');
+        if ($transfer->dispatchEntry?->slip?->status === \App\Models\WarehouseDispatchSlip::STATUS_DRAFT) {
+            return back()->with('error', 'Phiếu xuất kho tổng '.$transfer->dispatchEntry->slip->code.' chưa được kho xuất chốt.');
         }
 
         $transfer->loadMissing(['items.variant.product', 'sourceWarehouse', 'targetWarehouse']);

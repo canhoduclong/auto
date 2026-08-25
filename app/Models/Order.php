@@ -194,6 +194,11 @@ class Order extends Model
         return $this->hasMany(ApprovalOrder::class);
     }
 
+    public function orderTransfer()
+    {
+        return $this->belongsTo(OrderTransfer::class, 'order_transfer_id');
+    }
+
     public function transactions() { return $this->hasMany(Transaction::class); }
     public function histories() { return $this->hasMany(OrderHistory::class); }
     public function additionalFees() { return $this->hasMany(OrderFee::class); }

@@ -53,7 +53,7 @@
     .draft-template-pagination nav { width: 100%; }
     .draft-template-pagination .pagination { justify-content: center; margin: 0; }
     .draft-template-actions { display: grid; gap: 8px; }
-    .draft-template-actions .btn { min-height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; border-radius: 6px; font-size: .72rem; font-weight: 800; }
+    .draft-template-actions .btn { display: inline-flex; align-items: center; justify-content: center; gap: 5px; border-radius: 6px; font-size: .72rem; font-weight: 800; }
     .draft-template-editor { padding-top: 10px; }
     .draft-template-editor-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
     .draft-template-editor-grid .is-wide { grid-column: 1 / -1; }
