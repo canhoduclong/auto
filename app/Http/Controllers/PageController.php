@@ -1030,7 +1030,7 @@ class PageController extends Controller
                 'approvals.step',
                 'adjustments' => function ($query): void {
                     $query->with([
-                        'requester:id,name',
+                        'requester:id,name,team_id',
                         'approvalSteps.step:id,role_slug,step_order',
                         'approvalSteps.approver:id,name',
                         'items.variant.product:id,name',
@@ -1256,9 +1256,11 @@ class PageController extends Controller
 
                     $currentRole = strtolower((string) ($adjustment->currentPendingApprovalStep()?->step?->role_slug ?? ''));
                     if (in_array($currentRole, $leaderApprovalRoles, true)) {
-                        return in_array($currentRole, $adjustmentApprovalRoles, true)
-                            && (int) ($user->team_id ?? 0) > 0
-                            && (int) ($adjustment->order?->user?->team_id ?? 0) === (int) $user->team_id;
+                        if (! in_array($currentRole, $adjustmentApprovalRoles, true)) {
+                            return false;
+                        }
+
+                        return app(ApprovalService::class)->leaderCanReviewAdjustment($user, $adjustment);
                     }
 
                     return in_array($currentRole, $adjustmentApprovalRoles, true);

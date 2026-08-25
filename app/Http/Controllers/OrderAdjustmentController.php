@@ -687,14 +687,12 @@ class OrderAdjustmentController extends Controller
             return;
         }
 
-        $orderAdjustment->loadMissing('order.user');
         if ($user->hasRole(['manager', 'manager_sale', 'director'])) {
             return;
         }
 
         if ($user->hasRole(['leader', 'leader_sale', 'sale_manager'])
-            && (int) ($user->team_id ?? 0) > 0
-            && (int) ($orderAdjustment->order?->user?->team_id ?? 0) === (int) $user->team_id) {
+            && app(ApprovalService::class)->leaderCanReviewAdjustment($user, $orderAdjustment)) {
             return;
         }
 
@@ -738,10 +736,7 @@ class OrderAdjustmentController extends Controller
             }
 
             if (in_array($currentRole, ['leader', 'leader_sale', 'sale_manager'], true)) {
-                $adjustment->loadMissing('order.user');
-
-                return (int) ($user->team_id ?? 0) > 0
-                    && (int) ($adjustment->order?->user?->team_id ?? 0) === (int) $user->team_id;
+                return $approvalService->leaderCanReviewAdjustment($user, $adjustment);
             }
 
             return true;

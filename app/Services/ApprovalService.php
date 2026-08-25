@@ -96,6 +96,10 @@ class ApprovalService
         $activeRole = strtolower(trim((string) $activeRole));
 
         if (in_array($activeRole, $this->leaderRoleSlugs(), true)) {
+            if ($user->isAdmin()) {
+                return $this->pendingAdjustmentsForRoles($this->leaderRoleSlugs());
+            }
+
             $teamId = (int) ($user->team_id ?? 0);
             if ($teamId <= 0) {
                 return collect();
@@ -112,9 +116,12 @@ class ApprovalService
         // active_role = sale dù tài khoản thực tế có quyền duyệt Leader/Manager.
         $queues = collect();
         $teamId = (int) ($user->team_id ?? 0);
-        if ($user->hasRole($this->leaderRoleSlugs()) && $teamId > 0) {
+        if ($user->hasRole($this->leaderRoleSlugs()) && ($user->isAdmin() || $teamId > 0)) {
             $queues = $queues->concat(
-                $this->pendingAdjustmentsForRoles($this->leaderRoleSlugs(), $teamId)
+                $this->pendingAdjustmentsForRoles(
+                    $this->leaderRoleSlugs(),
+                    $user->isAdmin() ? null : $teamId
+                )
             );
         }
         if ($user->hasRole($this->managerRoleSlugs())) {
@@ -127,6 +134,29 @@ class ApprovalService
             ->unique('id')
             ->sortByDesc(fn (OrderAdjustment $adjustment) => $adjustment->submitted_at?->timestamp ?? $adjustment->id)
             ->values();
+    }
+
+    public function leaderCanReviewAdjustment(User $leader, OrderAdjustment $adjustment): bool
+    {
+        if ($leader->isAdmin()) {
+            return true;
+        }
+
+        $teamId = (int) ($leader->team_id ?? 0);
+        if ($teamId <= 0) {
+            return false;
+        }
+
+        if (! $adjustment->relationLoaded('requester')) {
+            $adjustment->load('requester:id,team_id');
+        }
+        if (! $adjustment->relationLoaded('order')
+            || ($adjustment->order && ! $adjustment->order->relationLoaded('user'))) {
+            $adjustment->load('order.user:id,team_id');
+        }
+
+        return (int) ($adjustment->requester?->team_id ?? 0) === $teamId
+            || (int) ($adjustment->order?->user?->team_id ?? 0) === $teamId;
     }
 
     public function warehouseAdjustmentQueue(): Collection
@@ -153,10 +183,15 @@ class ApprovalService
 
         return OrderAdjustment::query()
             ->where('status', OrderAdjustment::STATUS_PENDING_APPROVAL)
-            ->when($saleTeamId, fn ($query) => $query->whereHas(
-                'order.user',
-                fn ($userQuery) => $userQuery->where('team_id', $saleTeamId)
-            ))
+            ->when($saleTeamId, fn ($query) => $query->where(function ($scope) use ($saleTeamId): void {
+                $scope->whereHas(
+                    'requester',
+                    fn ($userQuery) => $userQuery->where('team_id', $saleTeamId)
+                )->orWhereHas(
+                    'order.user',
+                    fn ($userQuery) => $userQuery->where('team_id', $saleTeamId)
+                );
+            }))
             ->whereHas('approvalSteps', function ($query) use ($roleSlugs): void {
                 $query->where('status', 'pending')
                     ->whereHas('step', fn ($step) => $step->whereIn(DB::raw('LOWER(role_slug)'), $roleSlugs));
@@ -182,7 +217,7 @@ class ApprovalService
             'order:id,code,customer_id,user_id,status,created_at,delivery_date,accounting_sales_import_batch_id',
             'order.customer:id,name',
             'order.user:id,name,short_name,team_id',
-            'requester:id,name',
+            'requester:id,name,team_id',
             'items.orderItem:id,product_id,product_variant_id,quantity,price',
             'items.variant.product',
             'approvalSteps.step:id,role_slug,step_order',

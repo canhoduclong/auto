@@ -4,9 +4,11 @@ namespace Tests\Unit;
 
 use App\Models\ApprovalOrder;
 use App\Models\ApprovalStep;
+use App\Models\Order;
 use App\Models\OrderAdjustment;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\ApprovalService;
 use PHPUnit\Framework\TestCase;
 
 class OrderAdjustmentMonitoringVisibilityTest extends TestCase
@@ -54,6 +56,9 @@ class OrderAdjustmentMonitoringVisibilityTest extends TestCase
         $approvalService = file_get_contents($base.'/app/Services/ApprovalService.php');
         $this->assertStringContainsString('$user->hasRole($this->leaderRoleSlugs())', $approvalService);
         $this->assertStringContainsString('$user->hasRole($this->managerRoleSlugs())', $approvalService);
+        $this->assertStringContainsString('$user->isAdmin() ? null : $teamId', $approvalService);
+        $this->assertStringContainsString('leaderCanReviewAdjustment', $approvalService);
+        $this->assertStringContainsString('$adjustment->requester?->team_id', $approvalService);
     }
 
     public function test_all_accounting_role_aliases_can_open_and_approve_adjustment_details(): void
@@ -103,5 +108,25 @@ class OrderAdjustmentMonitoringVisibilityTest extends TestCase
         $pending->approved_by = null;
         $adjustment->requested_by = 99;
         $this->assertFalse($adjustment->canBeDeletedBy($sale));
+    }
+
+    public function test_leader_scope_uses_the_team_of_the_sale_who_sent_the_adjustment(): void
+    {
+        $leader = new User(['team_id' => 10]);
+        $leader->setRelation('roles', collect([new Role(['name' => 'leader'])]));
+
+        $requester = new User(['team_id' => 10]);
+        $orderOwner = new User(['team_id' => 99]);
+        $order = new Order();
+        $order->setRelation('user', $orderOwner);
+
+        $adjustment = new OrderAdjustment();
+        $adjustment->setRelation('requester', $requester);
+        $adjustment->setRelation('order', $order);
+
+        $this->assertTrue((new ApprovalService())->leaderCanReviewAdjustment($leader, $adjustment));
+
+        $requester->team_id = 77;
+        $this->assertFalse((new ApprovalService())->leaderCanReviewAdjustment($leader, $adjustment));
     }
 }
