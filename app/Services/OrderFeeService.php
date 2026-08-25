@@ -37,6 +37,7 @@ class OrderFeeService
     {
         return $types->mapWithKeys(function (OrderFeeType $type) use ($order, $submittedFees): array {
             $original = $this->currentState($order, $type);
+            $calculationType = $this->effectiveCalculationType($type);
             $submitted = (array) ($submittedFees[$type->id] ?? []);
             $enabled = array_key_exists('enabled', $submitted)
                 ? filter_var($submitted['enabled'], FILTER_VALIDATE_BOOLEAN)
@@ -44,13 +45,13 @@ class OrderFeeService
             $value = array_key_exists('value', $submitted)
                 ? (float) $submitted['value']
                 : $original['value'];
-            $max = $type->calculation_type === OrderFeeType::CALCULATION_PERCENT ? 100 : 999999999999.99;
+            $max = $calculationType === OrderFeeType::CALCULATION_PERCENT ? 100 : 999999999999.99;
             $value = round(min(max($value, 0), $max), 2);
 
             return [$type->code => [
                 'fee_type_id' => $type->id,
                 'name' => $type->name,
-                'calculation_type' => $type->calculation_type,
+                'calculation_type' => $calculationType,
                 'direction' => $type->direction,
                 'is_system' => $type->is_system,
                 'original' => $original,
@@ -62,7 +63,7 @@ class OrderFeeService
     public function currentState(Order $order, OrderFeeType $type): array
     {
         return match ($type->code) {
-            'vat' => ['enabled' => (bool) ($order->charge_vat ?? false), 'value' => (float) ($order->vat_percent ?? 0)],
+            'vat' => ['enabled' => (bool) ($order->charge_vat ?? false), 'value' => (float) ($order->vat_amount ?? 0)],
             'shipping' => ['enabled' => (bool) ($order->charge_shipping_fee ?? false), 'value' => (float) ($order->shipping_fee ?? 0)],
             'discount' => ['enabled' => (float) ($order->extra_discount_total ?? 0) > 0, 'value' => max(0, (float) ($order->extra_discount_total ?? 0))],
             'foam_box' => ['enabled' => (bool) ($order->charge_foam_box_fee ?? false), 'value' => (float) ($order->foam_box_price ?? 0)],
@@ -77,7 +78,13 @@ class OrderFeeService
         if (isset($changes['vat']['adjusted'])) {
             $state = $changes['vat']['adjusted'];
             $updates['charge_vat'] = (bool) ($state['enabled'] ?? false);
-            $updates['vat_percent'] = $updates['charge_vat'] ? min(max((float) ($state['value'] ?? 0), 0), 100) : 0;
+            if (($changes['vat']['calculation_type'] ?? OrderFeeType::CALCULATION_FIXED) === OrderFeeType::CALCULATION_PERCENT) {
+                // Tương thích hồ sơ cũ đã gửi trước khi VAT điều chỉnh chuyển sang số tiền.
+                $updates['vat_percent'] = $updates['charge_vat'] ? min(max((float) ($state['value'] ?? 0), 0), 100) : 0;
+            } else {
+                $updates['vat_percent'] = 0;
+                $updates['vat_amount'] = $updates['charge_vat'] ? max(0, (float) ($state['value'] ?? 0)) : 0;
+            }
         }
         if (isset($changes['shipping']['adjusted'])) {
             $state = $changes['shipping']['adjusted'];
@@ -161,5 +168,18 @@ class OrderFeeService
             'enabled' => (bool) $fee,
             'value' => $fee ? (float) $fee->rate : (float) $type->default_value,
         ];
+    }
+
+    private function effectiveCalculationType(OrderFeeType $type): string
+    {
+        // VAT trong yêu cầu điều chỉnh là một khoản tiền bổ sung trực tiếp.
+        // VAT lúc tạo đơn vẫn có thể dùng vat_percent theo quy trình cũ.
+        if ($type->code === 'vat') {
+            return OrderFeeType::CALCULATION_FIXED;
+        }
+
+        return $type->calculation_type === OrderFeeType::CALCULATION_PERCENT
+            ? OrderFeeType::CALCULATION_PERCENT
+            : OrderFeeType::CALCULATION_FIXED;
     }
 }

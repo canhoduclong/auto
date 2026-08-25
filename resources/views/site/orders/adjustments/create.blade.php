@@ -259,7 +259,7 @@
                                     $feeState = $feeStates[$feeType->id] ?? ['enabled' => false, 'value' => (float) $feeType->default_value];
                                     $feeEnabled = (bool) old('fees.'.$feeType->id.'.enabled', $feeState['enabled']);
                                     $feeValue = old('fees.'.$feeType->id.'.value', $feeState['value'] ?: $feeType->default_value);
-                                    $isPercent = $feeType->calculation_type === 'percent';
+                                    $isPercent = $feeType->code !== 'vat' && $feeType->calculation_type === 'percent';
                                     $currentFeeText = $feeState['enabled']
                                         ? ($isPercent ? rtrim(rtrim(number_format((float) $feeState['value'], 2, '.', ''), '0'), '.').'%' : number_format((float) $feeState['value'], 0, ',', '.').'đ')
                                         : 'Không áp dụng';
@@ -277,7 +277,7 @@
                                         </div>
                                     </div>
                                     <div class="input-group input-group-sm">
-                                        <input type="number" min="0" @if($isPercent) max="100" @endif step="0.01" class="form-control adjustment-fee-value" name="fees[{{ $feeType->id }}][value]" value="{{ $feeValue }}" aria-label="Giá trị {{ $feeType->name }}">
+                                        <input type="number" min="0" @if($isPercent) max="100" @endif step="{{ $isPercent ? '0.01' : '1' }}" class="form-control adjustment-fee-value" name="fees[{{ $feeType->id }}][value]" value="{{ $feeValue }}" aria-label="Giá trị {{ $feeType->name }}">
                                         <span class="input-group-text">{{ $isPercent ? '%' : 'đ' }}</span>
                                     </div>
                                     <div class="adjustment-fee-current">Hiện tại: {{ $currentFeeText }}@if(!$feeType->is_active) · <span class="text-danger">đã ngừng dùng</span>@endif</div>

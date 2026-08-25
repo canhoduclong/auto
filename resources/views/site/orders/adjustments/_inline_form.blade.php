@@ -83,7 +83,7 @@
                 @php
                     $state = $feeStates[$feeType->id] ?? ['enabled' => false, 'value' => (float) $feeType->default_value];
                     $enabled = (bool) $state['enabled'];
-                    $percent = $feeType->calculation_type === 'percent';
+                    $percent = $feeType->code !== 'vat' && $feeType->calculation_type === 'percent';
                     $currentValue = array_key_exists('value', $state) ? (float) $state['value'] : (float) $feeType->default_value;
                     $unit = $percent ? '%' : 'đ';
                     $formattedCurrentValue = $percent
@@ -108,7 +108,7 @@
                     <div class="monitor-adjustment-fee-control">
                         <label for="{{ $uid }}-fee-value-{{ $feeType->id }}">Giá trị mới</label>
                         <div class="input-group input-group-sm monitor-adjustment-fee-value">
-                            <input id="{{ $uid }}-fee-value-{{ $feeType->id }}" type="number" min="0" @if($percent) max="100" @endif step="0.01" name="fees[{{ $feeType->id }}][value]" value="{{ $currentValue }}" class="form-control" @disabled(!$enabled)>
+                            <input id="{{ $uid }}-fee-value-{{ $feeType->id }}" type="number" min="0" @if($percent) max="100" @endif step="{{ $percent ? '0.01' : '1' }}" name="fees[{{ $feeType->id }}][value]" value="{{ $currentValue }}" class="form-control" @disabled(!$enabled)>
                             <span class="input-group-text">{{ $unit }}</span>
                         </div>
                     </div>

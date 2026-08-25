@@ -2252,10 +2252,7 @@ class OrderController extends Controller
         });
 
         $productTotal = max($subtotalAfterItemDiscount - $orderLevelDiscount, 0);
-        $vatPercent = (bool) ($order->charge_vat ?? false)
-            ? min(max((float) ($order->vat_percent ?? 0), 0), 100)
-            : 0.0;
-        $vatAmount = round($productTotal * $vatPercent / 100, 2);
+        $vatAmount = $order->resolvedVatAmount($productTotal);
         $customerShippingFee = (bool) ($order->collect_customer_shipping_fee ?? false)
             ? max(0, (float) ($order->customer_shipping_fee ?? 0))
             : 0.0;

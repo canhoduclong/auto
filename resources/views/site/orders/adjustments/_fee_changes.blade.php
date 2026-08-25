@@ -1,6 +1,6 @@
 @php
     $legacyFeeDefinitions = [
-        'vat' => ['label' => 'Phí VAT', 'unit' => '%'],
+        'vat' => ['label' => 'Phí VAT', 'unit' => 'đ'],
         'shipping' => ['label' => 'Phí Ship', 'unit' => 'đ'],
         'discount' => ['label' => 'Chiết khấu đơn', 'unit' => 'đ'],
         'foam_box' => ['label' => 'Phí thùng xốp', 'unit' => 'đ'],
@@ -40,7 +40,7 @@
                             $legacyDefinition = $legacyFeeDefinitions[$key] ?? ['label' => ucfirst((string) $key), 'unit' => 'đ'];
                             $definition = [
                                 'label' => $change['name'] ?? $legacyDefinition['label'],
-                                'unit' => ($change['calculation_type'] ?? null) === 'percent' ? '%' : $legacyDefinition['unit'],
+                                'unit' => ($change['calculation_type'] ?? null) === 'percent' ? '%' : 'đ',
                                 'direction' => $change['direction'] ?? ($key === 'discount' ? 'discount' : 'charge'),
                             ];
                         @endphp

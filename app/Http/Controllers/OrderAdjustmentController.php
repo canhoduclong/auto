@@ -187,7 +187,7 @@ class OrderAdjustmentController extends Controller
         }
         foreach ($feeTypes as $feeType) {
             $submittedValue = (float) data_get($data, 'fees.'.$feeType->id.'.value', 0);
-            if ($feeType->calculation_type === 'percent' && $submittedValue > 100) {
+            if ($feeType->code !== 'vat' && $feeType->calculation_type === 'percent' && $submittedValue > 100) {
                 throw ValidationException::withMessages(['fees.'.$feeType->id.'.value' => 'Phí tính theo phần trăm không được vượt quá 100%.']);
             }
         }
@@ -942,10 +942,7 @@ class OrderAdjustmentController extends Controller
             $subtotal = (float) $order->items->sum(fn ($item) => (float) ($item->total ?? 0));
             $extraDiscount = (float) ($order->extra_discount_total ?? 0);
             $productTotal = max($subtotal - $extraDiscount, 0);
-            $vatPercent = (bool) ($order->charge_vat ?? false)
-                ? min(max((float) ($order->vat_percent ?? 0), 0), 100)
-                : 0;
-            $vatAmount = round($productTotal * $vatPercent / 100, 2);
+            $vatAmount = $order->resolvedVatAmount($productTotal);
             $customerShippingFee = (bool) ($order->collect_customer_shipping_fee ?? false)
                 ? max(0, (float) ($order->customer_shipping_fee ?? 0))
                 : 0;

@@ -1783,7 +1783,7 @@
                                 ->values();
                             $currentOrderFeeRows = collect();
                             if ((bool) ($order->charge_vat ?? false) && (float) ($order->vat_amount ?? 0) > 0) {
-                                $currentOrderFeeRows->push(['name' => 'Phí VAT', 'unit' => $formatQuantity($order->vat_percent).'%', 'amount' => (float) $order->vat_amount, 'direction' => 'charge']);
+                                $currentOrderFeeRows->push(['name' => 'Phí VAT', 'unit' => (float) $order->vat_percent > 0 ? $formatQuantity($order->vat_percent).'%' : 'Cố định', 'amount' => (float) $order->vat_amount, 'direction' => 'charge']);
                             }
                             if ((bool) ($order->charge_shipping_fee ?? false) && (float) ($order->shipping_fee ?? 0) > 0) {
                                 $currentOrderFeeRows->push(['name' => 'Phí Ship', 'unit' => number_format((float) $order->shipping_fee, 0, ',', '.').'đ', 'amount' => (float) $order->shipping_fee, 'direction' => 'charge']);

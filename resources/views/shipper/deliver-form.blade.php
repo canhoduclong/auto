@@ -25,6 +25,7 @@
     $orderAdjustment = (float) ($order->extra_discount_total ?? 0);
     $vatPercent = (bool) ($order->charge_vat ?? false) ? (float) ($order->vat_percent ?? 0) : 0;
     $vatAmount = (bool) ($order->charge_vat ?? false) ? (float) ($order->vat_amount ?? 0) : 0;
+    $fixedVatAmount = $vatPercent > 0 ? 0 : $vatAmount;
     $customerShippingFee = (bool) ($order->collect_customer_shipping_fee ?? false) ? (float) ($order->customer_shipping_fee ?? 0) : 0;
     $codAmount = (float) ($order->total ?? ($itemsSubtotal + $billableShippingFee + $foamBoxFee + $vatAmount + $customerShippingFee));
     $hasKgItem = $order->items->contains(fn($item) => (bool) $item->effective_priced_by_kg);
@@ -337,7 +338,7 @@
                     </div>
                     @if($vatAmount > 0)
                         <div class="sp-my-summary-row">
-                            <span>VAT ({{ rtrim(rtrim(number_format($vatPercent, 2, ',', '.'), '0'), ',') }}%)</span>
+                            <span>{{ $vatPercent > 0 ? 'VAT ('.rtrim(rtrim(number_format($vatPercent, 2, ',', '.'), '0'), ',').'%)' : 'Phí VAT cố định' }}</span>
                             <strong>{{ number_format($vatAmount) }}đ</strong>
                         </div>
                     @endif
@@ -698,6 +699,7 @@
     const foamBoxFee  = {{ (int) $foamBoxFee }};
     const orderAdjustment = {{ (float) $orderAdjustment }};
     const vatPercent = {{ (float) $vatPercent }};
+    const fixedVatAmount = {{ (float) $fixedVatAmount }};
     const customerShippingFee = {{ (int) $customerShippingFee }};
     const resumePaymentOnly = {{ ($resumePaymentOnly ?? false) ? 'true' : 'false' }};
     const itemData    = {
@@ -827,7 +829,8 @@
             updateReturnBadge(intId);
         }
         const productTotal = Math.max(0, subtotal - orderAdjustment);
-        const newCod = productTotal + (productTotal * vatPercent / 100) + customerShippingFee + billableShippingFee + foamBoxFee;
+        const vatValue = vatPercent > 0 ? (productTotal * vatPercent / 100) : fixedVatAmount;
+        const newCod = productTotal + vatValue + customerShippingFee + billableShippingFee + foamBoxFee;
         const codEl = document.getElementById('cod-display');
         if (codEl) codEl.textContent = formatVnd(newCod);
         const codElStep3 = document.getElementById('cod-display-step3');

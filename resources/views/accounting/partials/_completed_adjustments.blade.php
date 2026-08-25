@@ -77,7 +77,7 @@
                             @endforeach
                             @foreach($changedFees as $code => $change)
                                 @php
-                                    $isPercent = ($change['calculation_type'] ?? null) === 'percent' || $code === 'vat';
+                                    $isPercent = ($change['calculation_type'] ?? null) === 'percent';
                                     $feeName = $change['name'] ?? ($feeLabels[$code] ?? ucfirst((string) $code));
                                 @endphp
                                 <span class="ds-change-chip ds-change-fee">

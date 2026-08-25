@@ -32,14 +32,15 @@ class OrderAdjustmentFeeChangesTest extends TestCase
         $order->setRelation('additionalFees', collect());
 
         $changes = (new OrderFeeService())->prepareChanges($order, $types, [
-            1 => ['enabled' => '1', 'value' => '10'],
+            1 => ['enabled' => '1', 'value' => '80000'],
             2 => ['enabled' => '0', 'value' => '30000'],
             3 => ['enabled' => '1', 'value' => '25000'],
             4 => ['enabled' => '1', 'value' => '15000'],
         ]);
 
         $this->assertFalse($changes['vat']['original']['enabled']);
-        $this->assertSame(10.0, $changes['vat']['adjusted']['value']);
+        $this->assertSame('fixed', $changes['vat']['calculation_type']);
+        $this->assertSame(80000.0, $changes['vat']['adjusted']['value']);
         $this->assertTrue($changes['shipping']['original']['enabled']);
         $this->assertFalse($changes['shipping']['adjusted']['enabled']);
         $this->assertSame(10000.0, $changes['discount']['original']['value']);
@@ -60,6 +61,7 @@ class OrderAdjustmentFeeChangesTest extends TestCase
         $this->assertStringContainsString('class="adjustment-fee-enabled"', $view);
         $this->assertStringContainsString('remove-order-fee', $view);
         $this->assertStringNotContainsString('adjustment-fee-toggle', $view);
+        $this->assertStringContainsString("\$feeType->code !== 'vat'", $view);
     }
 
     public function test_inline_adjustment_fee_form_has_readable_selectable_controls(): void
@@ -72,6 +74,16 @@ class OrderAdjustmentFeeChangesTest extends TestCase
         $this->assertStringContainsString("array_key_exists('value', \$state)", $view);
         $this->assertStringContainsString('@disabled(!$enabled)', $view);
         $this->assertStringNotContainsString("\$state['value'] ?: \$feeType->default_value", $view);
+        $this->assertStringContainsString("\$feeType->code !== 'vat'", $view);
+    }
+
+    public function test_order_resolves_fixed_and_legacy_percentage_vat_correctly(): void
+    {
+        $fixed = new Order(['charge_vat' => true, 'vat_percent' => 0, 'vat_amount' => 80000]);
+        $legacyPercent = new Order(['charge_vat' => true, 'vat_percent' => 10, 'vat_amount' => 0]);
+
+        $this->assertSame(80000.0, $fixed->resolvedVatAmount(3500000));
+        $this->assertSame(350000.0, $legacyPercent->resolvedVatAmount(3500000));
     }
 
     public function test_custom_percentage_discount_keeps_snapshot_metadata(): void

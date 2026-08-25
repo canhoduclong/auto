@@ -212,6 +212,24 @@ class Order extends Model
             ->exists();
     }
 
+    /**
+     * VAT phần trăm dùng cho đơn cũ; vat_percent = 0 biểu thị VAT tiền cố định
+     * được bổ sung qua yêu cầu điều chỉnh.
+     */
+    public function resolvedVatAmount(float $taxableAmount): float
+    {
+        if (! (bool) ($this->charge_vat ?? false)) {
+            return 0.0;
+        }
+
+        $percent = min(max((float) ($this->vat_percent ?? 0), 0), 100);
+        if ($percent > 0) {
+            return round(max(0, $taxableAmount) * $percent / 100, 2);
+        }
+
+        return round(max(0, (float) ($this->vat_amount ?? 0)), 2);
+    }
+
     public function orderTransfer()
     {
         return $this->belongsTo(OrderTransfer::class, 'order_transfer_id');
