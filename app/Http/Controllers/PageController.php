@@ -1027,6 +1027,7 @@ class PageController extends Controller
                 'supplier',
                 'warehouse:id,name',
                 'accountingReconciliation',
+                'additionalFees',
                 'approvals.step',
                 'adjustments' => function ($query): void {
                     $query->with([

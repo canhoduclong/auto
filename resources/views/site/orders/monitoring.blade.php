@@ -357,6 +357,11 @@
         text-transform: uppercase;
     }
     .monitor-items td { border-color: #edf2f7; vertical-align: middle; }
+    .monitor-order-fee-row td { background: #fffbeb; color: #713f12; }
+    .monitor-order-fee-row.is-discount td { background: #fef2f2; color: #991b1b; }
+    .monitor-order-fee-label { display: inline-flex; align-items: center; gap: 5px; font-weight: 800; }
+    .monitor-order-fee-kind { padding: 2px 5px; border-radius: 4px; background: #dcfce7; color: #166534; font-size: .58rem; font-weight: 900; }
+    .monitor-order-fee-row.is-discount .monitor-order-fee-kind { background: #fee2e2; color: #991b1b; }
     .monitor-order-total { display: flex; align-items: baseline; justify-content: flex-end; gap: 8px; padding: 7px 2px 2px; color: #475569; font-size: .68rem; }
     .monitor-order-total strong { color: #0f172a; font-size: .86rem; }
     .monitor-applied-adjustments { display: grid; gap: 7px; margin-top: 8px; }
@@ -364,8 +369,6 @@
     .monitor-applied-adjustment-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px; }
     .monitor-applied-adjustment-title { color: #166534; font-size: .72rem; font-weight: 900; }
     .monitor-applied-adjustment-meta { color: #64748b; font-size: .64rem; }
-    .monitor-applied-adjustment-changes { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
-    .monitor-applied-adjustment-changes > span { padding: 4px 7px; border-radius: 5px; background: #dcfce7; color: #14532d; font-size: .67rem; }
     .monitor-sent-adjustments { display: grid; gap: 7px; margin-top: 11px; padding-top: 10px; border-top: 1px dashed #cbd5e1; }
     .monitor-sent-adjustments[hidden] { display: none; }
     .monitor-sent-adjustments-title { display: flex; align-items: center; gap: 6px; color: #075985; font-size: .7rem; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; }
@@ -1778,6 +1781,30 @@
                                 ->where('status', \App\Models\OrderAdjustment::STATUS_COMPLETED)
                                 ->sortByDesc(fn ($adjustment) => $adjustment->completed_at?->timestamp ?? $adjustment->id)
                                 ->values();
+                            $currentOrderFeeRows = collect();
+                            if ((bool) ($order->charge_vat ?? false) && (float) ($order->vat_amount ?? 0) > 0) {
+                                $currentOrderFeeRows->push(['name' => 'Phí VAT', 'unit' => $formatQuantity($order->vat_percent).'%', 'amount' => (float) $order->vat_amount, 'direction' => 'charge']);
+                            }
+                            if ((bool) ($order->charge_shipping_fee ?? false) && (float) ($order->shipping_fee ?? 0) > 0) {
+                                $currentOrderFeeRows->push(['name' => 'Phí Ship', 'unit' => number_format((float) $order->shipping_fee, 0, ',', '.').'đ', 'amount' => (float) $order->shipping_fee, 'direction' => 'charge']);
+                            }
+                            if ((bool) ($order->collect_customer_shipping_fee ?? false) && (float) ($order->customer_shipping_fee ?? 0) > 0) {
+                                $currentOrderFeeRows->push(['name' => 'Phí giao khách', 'unit' => number_format((float) $order->customer_shipping_fee, 0, ',', '.').'đ', 'amount' => (float) $order->customer_shipping_fee, 'direction' => 'charge']);
+                            }
+                            if ((bool) ($order->charge_foam_box_fee ?? false) && (float) ($order->foam_box_price ?? 0) > 0) {
+                                $currentOrderFeeRows->push(['name' => 'Phí thùng xốp', 'unit' => number_format((float) $order->foam_box_price, 0, ',', '.').'đ', 'amount' => (float) $order->foam_box_price, 'direction' => 'charge']);
+                            }
+                            if ((float) ($order->extra_discount_total ?? 0) > 0) {
+                                $currentOrderFeeRows->push(['name' => 'Chiết khấu đơn', 'unit' => number_format((float) $order->extra_discount_total, 0, ',', '.').'đ', 'amount' => -1 * (float) $order->extra_discount_total, 'direction' => 'discount']);
+                            }
+                            foreach ($order->additionalFees as $fee) {
+                                $currentOrderFeeRows->push([
+                                    'name' => $fee->fee_name ?: $fee->fee_code,
+                                    'unit' => $fee->calculation_type === 'percent' ? $formatQuantity($fee->rate).'%' : number_format((float) $fee->amount, 0, ',', '.').'đ',
+                                    'amount' => ($fee->direction === 'discount' ? -1 : 1) * (float) $fee->amount,
+                                    'direction' => $fee->direction === 'discount' ? 'discount' : 'charge',
+                                ]);
+                            }
                             $orderPendingAdjustments = ($pendingAdjustmentsByOrder ?? collect())->get($order->id, collect());
                         @endphp
                         <article class="monitor-panel monitor-order status-{{ $monitorState }} {{ $canManageOrder ? 'is-mine' : '' }} {{ $isCancelled ? 'is-cancelled' : '' }}" id="monitor-order-{{ $order->id }}" title="{{ $monitorStateLabels[$monitorState] }}">
@@ -1858,6 +1885,16 @@
                                             @empty
                                                 <tr><td colspan="6" class="text-center text-muted">Đơn chưa có sản phẩm.</td></tr>
                                             @endforelse
+                                            @foreach($currentOrderFeeRows as $feeRow)
+                                                <tr class="monitor-order-fee-row {{ $feeRow['direction'] === 'discount' ? 'is-discount' : '' }}">
+                                                    <td><span class="monitor-order-fee-label">{{ $feeRow['name'] }} <span class="monitor-order-fee-kind">{{ $feeRow['direction'] === 'discount' ? 'Giảm trừ' : 'Cộng thêm' }}</span></span></td>
+                                                    <td class="text-end">1</td>
+                                                    <td class="text-end">—</td>
+                                                    <td class="text-end">{{ $feeRow['direction'] === 'discount' ? 'Giảm trừ' : 'Cộng thêm' }}</td>
+                                                    <td class="text-end">{{ $feeRow['unit'] }}</td>
+                                                    <td class="text-end fw-semibold">{{ $feeRow['amount'] < 0 ? '−' : '' }}{{ number_format(abs((float) $feeRow['amount']), 0, ',', '.') }}đ</td>
+                                                </tr>
+                                            @endforeach
                                         </tbody>
                                     </table>
                                 </div>
