@@ -95,33 +95,22 @@ class ApprovalService
     {
         $activeRole = strtolower(trim((string) $activeRole));
 
-        if (in_array($activeRole, $this->leaderRoleSlugs(), true)) {
-            if ($user->isAdmin()) {
-                return $this->pendingAdjustmentsForRoles($this->leaderRoleSlugs());
-            }
-
-            $teamId = (int) ($user->team_id ?? 0);
-            if ($teamId <= 0) {
-                return collect();
-            }
-
-            return $this->pendingAdjustmentsForRoles($this->leaderRoleSlugs(), $teamId);
+        if (in_array($activeRole, $this->leaderRoleSlugs(), true)
+            && ($user->isAdmin() || $user->hasRole($this->leaderRoleSlugs()))) {
+            return $this->pendingAdjustmentsForRoles($this->leaderRoleSlugs());
         }
 
-        if (in_array($activeRole, $this->managerRoleSlugs(), true)) {
+        if (in_array($activeRole, $this->managerRoleSlugs(), true)
+            && ($user->isAdmin() || $user->hasRole($this->managerRoleSlugs()))) {
             return $this->pendingAdjustmentsForRoles($this->managerRoleSlugs());
         }
 
         // Một số vai trò Sale/Leader dùng chung layout nên workspace có thể lưu
         // active_role = sale dù tài khoản thực tế có quyền duyệt Leader/Manager.
         $queues = collect();
-        $teamId = (int) ($user->team_id ?? 0);
-        if ($user->hasRole($this->leaderRoleSlugs()) && ($user->isAdmin() || $teamId > 0)) {
+        if ($user->hasRole($this->leaderRoleSlugs())) {
             $queues = $queues->concat(
-                $this->pendingAdjustmentsForRoles(
-                    $this->leaderRoleSlugs(),
-                    $user->isAdmin() ? null : $teamId
-                )
+                $this->pendingAdjustmentsForRoles($this->leaderRoleSlugs())
             );
         }
         if ($user->hasRole($this->managerRoleSlugs())) {
@@ -138,25 +127,7 @@ class ApprovalService
 
     public function leaderCanReviewAdjustment(User $leader, OrderAdjustment $adjustment): bool
     {
-        if ($leader->isAdmin()) {
-            return true;
-        }
-
-        $teamId = (int) ($leader->team_id ?? 0);
-        if ($teamId <= 0) {
-            return false;
-        }
-
-        if (! $adjustment->relationLoaded('requester')) {
-            $adjustment->load('requester:id,team_id');
-        }
-        if (! $adjustment->relationLoaded('order')
-            || ($adjustment->order && ! $adjustment->order->relationLoaded('user'))) {
-            $adjustment->load('order.user:id,team_id');
-        }
-
-        return (int) ($adjustment->requester?->team_id ?? 0) === $teamId
-            || (int) ($adjustment->order?->user?->team_id ?? 0) === $teamId;
+        return $leader->isAdmin() || $leader->hasRole($this->leaderRoleSlugs());
     }
 
     public function warehouseAdjustmentQueue(): Collection
@@ -177,21 +148,12 @@ class ApprovalService
             ->values();
     }
 
-    private function pendingAdjustmentsForRoles(array $roleSlugs, ?int $saleTeamId = null): Collection
+    private function pendingAdjustmentsForRoles(array $roleSlugs): Collection
     {
         $roleSlugs = array_values(array_unique(array_map('strtolower', $roleSlugs)));
 
         return OrderAdjustment::query()
             ->where('status', OrderAdjustment::STATUS_PENDING_APPROVAL)
-            ->when($saleTeamId, fn ($query) => $query->where(function ($scope) use ($saleTeamId): void {
-                $scope->whereHas(
-                    'requester',
-                    fn ($userQuery) => $userQuery->where('team_id', $saleTeamId)
-                )->orWhereHas(
-                    'order.user',
-                    fn ($userQuery) => $userQuery->where('team_id', $saleTeamId)
-                );
-            }))
             ->whereHas('approvalSteps', function ($query) use ($roleSlugs): void {
                 $query->where('status', 'pending')
                     ->whereHas('step', fn ($step) => $step->whereIn(DB::raw('LOWER(role_slug)'), $roleSlugs));

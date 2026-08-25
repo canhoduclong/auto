@@ -59,9 +59,8 @@ class OrderAdjustmentMonitoringVisibilityTest extends TestCase
         $approvalService = file_get_contents($base.'/app/Services/ApprovalService.php');
         $this->assertStringContainsString('$user->hasRole($this->leaderRoleSlugs())', $approvalService);
         $this->assertStringContainsString('$user->hasRole($this->managerRoleSlugs())', $approvalService);
-        $this->assertStringContainsString('$user->isAdmin() ? null : $teamId', $approvalService);
         $this->assertStringContainsString('leaderCanReviewAdjustment', $approvalService);
-        $this->assertStringContainsString('$adjustment->requester?->team_id', $approvalService);
+        $this->assertStringContainsString('$leader->hasRole($this->leaderRoleSlugs())', $approvalService);
     }
 
     public function test_all_accounting_role_aliases_can_open_and_approve_adjustment_details(): void
@@ -113,7 +112,7 @@ class OrderAdjustmentMonitoringVisibilityTest extends TestCase
         $this->assertFalse($adjustment->canBeDeletedBy($sale));
     }
 
-    public function test_leader_scope_uses_the_team_of_the_sale_who_sent_the_adjustment(): void
+    public function test_leader_can_review_a_pending_adjustment_across_sale_teams(): void
     {
         $leader = new User(['team_id' => 10]);
         $leader->setRelation('roles', collect([new Role(['name' => 'leader'])]));
@@ -127,9 +126,11 @@ class OrderAdjustmentMonitoringVisibilityTest extends TestCase
         $adjustment->setRelation('requester', $requester);
         $adjustment->setRelation('order', $order);
 
+        $requester->team_id = 77;
         $this->assertTrue((new ApprovalService())->leaderCanReviewAdjustment($leader, $adjustment));
 
-        $requester->team_id = 77;
-        $this->assertFalse((new ApprovalService())->leaderCanReviewAdjustment($leader, $adjustment));
+        $sale = new User(['team_id' => 10]);
+        $sale->setRelation('roles', collect([new Role(['name' => 'sale'])]));
+        $this->assertFalse((new ApprovalService())->leaderCanReviewAdjustment($sale, $adjustment));
     }
 }
