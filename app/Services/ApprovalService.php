@@ -108,7 +108,25 @@ class ApprovalService
             return $this->pendingAdjustmentsForRoles($this->managerRoleSlugs());
         }
 
-        return collect();
+        // Một số vai trò Sale/Leader dùng chung layout nên workspace có thể lưu
+        // active_role = sale dù tài khoản thực tế có quyền duyệt Leader/Manager.
+        $queues = collect();
+        $teamId = (int) ($user->team_id ?? 0);
+        if ($user->hasRole($this->leaderRoleSlugs()) && $teamId > 0) {
+            $queues = $queues->concat(
+                $this->pendingAdjustmentsForRoles($this->leaderRoleSlugs(), $teamId)
+            );
+        }
+        if ($user->hasRole($this->managerRoleSlugs())) {
+            $queues = $queues->concat(
+                $this->pendingAdjustmentsForRoles($this->managerRoleSlugs())
+            );
+        }
+
+        return $queues
+            ->unique('id')
+            ->sortByDesc(fn (OrderAdjustment $adjustment) => $adjustment->submitted_at?->timestamp ?? $adjustment->id)
+            ->values();
     }
 
     public function warehouseAdjustmentQueue(): Collection

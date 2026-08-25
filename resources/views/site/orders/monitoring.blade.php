@@ -1166,7 +1166,7 @@
                     <span class="badge text-bg-warning">{{ $pendingAdjustmentRequests->count() }}</span>
                 </div>
                 @foreach($pendingAdjustmentRequests as $adjustment)
-                    @include('site.orders.adjustments._leader_review_card', ['adjustment' => $adjustment, 'compact' => true, 'approvalRoleLabel' => $adjustmentApprovalRoleLabel])
+                    @include('site.orders.adjustments._leader_review_card', ['adjustment' => $adjustment, 'compact' => true])
                 @endforeach
             </section>
         @endif
@@ -1837,7 +1837,7 @@
                                 <div class="monitor-order-total">{{ number_format((float) $order->total, 0, ',', '.') }}đ</div>
 
                                 @foreach($orderPendingAdjustments as $adjustment)
-                                    @include('site.orders.adjustments._leader_review_card', ['adjustment' => $adjustment, 'compact' => false, 'approvalRoleLabel' => $adjustmentApprovalRoleLabel])
+                                    @include('site.orders.adjustments._leader_review_card', ['adjustment' => $adjustment, 'compact' => false])
                                 @endforeach
 
                                 @if($canManageOrder)

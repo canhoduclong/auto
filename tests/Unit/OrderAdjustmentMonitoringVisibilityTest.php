@@ -50,6 +50,10 @@ class OrderAdjustmentMonitoringVisibilityTest extends TestCase
         $this->assertStringContainsString("'#leader-adjustment-review-'", $controller);
         $this->assertStringContainsString('Yêu cầu điều chỉnh đơn chờ duyệt', $dashboard);
         $this->assertStringContainsString('Bấm để tới đơn cần duyệt', $dashboard);
+
+        $approvalService = file_get_contents($base.'/app/Services/ApprovalService.php');
+        $this->assertStringContainsString('$user->hasRole($this->leaderRoleSlugs())', $approvalService);
+        $this->assertStringContainsString('$user->hasRole($this->managerRoleSlugs())', $approvalService);
     }
 
     public function test_all_accounting_role_aliases_can_open_and_approve_adjustment_details(): void

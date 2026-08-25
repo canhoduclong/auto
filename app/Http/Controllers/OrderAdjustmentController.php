@@ -729,7 +729,11 @@ class OrderAdjustmentController extends Controller
                 in_array($currentRole, ['account', 'accountant', 'accounting'], true) => ['account', 'accountant', 'accounting'],
                 default => [$currentRole],
             };
-            if ($activeRole !== '' && ! in_array($activeRole, $acceptedActiveRoles, true)) {
+            // Sale và Leader có thể dùng chung một workspace. Khi workspace lưu
+            // active_role = sale, quyền thật của tài khoản vẫn quyết định khả năng duyệt.
+            if ($activeRole !== ''
+                && $activeRole !== 'sale'
+                && ! in_array($activeRole, $acceptedActiveRoles, true)) {
                 return false;
             }
 

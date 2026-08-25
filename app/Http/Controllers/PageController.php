@@ -1227,33 +1227,39 @@ class PageController extends Controller
         $managerApprovalRoles = ['manager', 'manager_sale', 'director'];
         $isLeaderWorkspace = in_array($activeMonitoringRole, $leaderApprovalRoles, true);
         $isManagerAdjustmentWorkspace = in_array($activeMonitoringRole, $managerApprovalRoles, true);
-        if ($activeMonitoringRole === '') {
-            $isLeaderWorkspace = $user->hasRole($leaderApprovalRoles)
-                && ! $user->hasRole(['manager', 'manager_sale', 'director', 'admin']);
+        if (! $isLeaderWorkspace && ! $isManagerAdjustmentWorkspace) {
+            $isLeaderWorkspace = $user->hasRole($leaderApprovalRoles);
             $isManagerAdjustmentWorkspace = $user->hasRole($managerApprovalRoles);
         }
 
-        $adjustmentApprovalRoles = $isLeaderWorkspace
-            ? $leaderApprovalRoles
-            : ($isManagerAdjustmentWorkspace ? $managerApprovalRoles : []);
-        $adjustmentApprovalRoleLabel = $isLeaderWorkspace ? 'Leader' : 'Manager';
+        $adjustmentApprovalRoles = collect()
+            ->when($isLeaderWorkspace, fn ($roles) => $roles->concat($leaderApprovalRoles))
+            ->when($isManagerAdjustmentWorkspace, fn ($roles) => $roles->concat($managerApprovalRoles))
+            ->unique()
+            ->values()
+            ->all();
+        $adjustmentApprovalRoleLabel = $isLeaderWorkspace && $isManagerAdjustmentWorkspace
+            ? 'Leader/Manager'
+            : ($isLeaderWorkspace ? 'Leader' : 'Manager');
         $pendingAdjustmentRequests = collect();
         if ($adjustmentApprovalRoles !== []) {
             $pendingAdjustmentRequests = $filteredOrders
-                ->when($isLeaderWorkspace, fn ($orders) => $orders->filter(
-                    fn (Order $order) => (int) ($order->user?->team_id ?? 0) === (int) ($user->team_id ?? 0)
-                ))
                 ->flatMap(fn (Order $order) => $order->adjustments->map(function ($adjustment) use ($order) {
                     $adjustment->setRelation('order', $order);
 
                     return $adjustment;
                 }))
-                ->filter(function ($adjustment) use ($adjustmentApprovalRoles): bool {
+                ->filter(function ($adjustment) use ($adjustmentApprovalRoles, $leaderApprovalRoles, $user): bool {
                     if ($adjustment->status !== \App\Models\OrderAdjustment::STATUS_PENDING_APPROVAL) {
                         return false;
                     }
 
                     $currentRole = strtolower((string) ($adjustment->currentPendingApprovalStep()?->step?->role_slug ?? ''));
+                    if (in_array($currentRole, $leaderApprovalRoles, true)) {
+                        return in_array($currentRole, $adjustmentApprovalRoles, true)
+                            && (int) ($user->team_id ?? 0) > 0
+                            && (int) ($adjustment->order?->user?->team_id ?? 0) === (int) $user->team_id;
+                    }
 
                     return in_array($currentRole, $adjustmentApprovalRoles, true);
                 })
