@@ -377,6 +377,8 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/order-transfers/{transfer}/orders/{order}/detach', [\App\Http\Controllers\Warehouse\OrderTransferController::class, 'detachWaitingTransfer'])->name('order-transfers.orders.detach');
         Route::get('/dispatch-slips', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'index'])->name('dispatch-slips.index');
         Route::post('/dispatch-slips', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'store'])->name('dispatch-slips.store');
+        Route::get('/dispatch-slips/{dispatchSlip}/edit', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'edit'])->name('dispatch-slips.edit');
+        Route::put('/dispatch-slips/{dispatchSlip}', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'update'])->name('dispatch-slips.update');
         Route::get('/dispatch-slips/{dispatchSlip}', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'show'])->name('dispatch-slips.show');
         Route::post('/dispatch-slips/{dispatchSlip}/finalize', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'finalize'])->name('dispatch-slips.finalize');
         Route::delete('/dispatch-slips/{dispatchSlip}', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'destroy'])->name('dispatch-slips.destroy');

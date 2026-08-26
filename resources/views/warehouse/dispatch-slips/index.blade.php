@@ -4,7 +4,7 @@
 
 @push('styles')
 <style>
-.dispatch-hero,.dispatch-panel{border:1px solid #dbe5e3;border-radius:12px;background:#fff}.dispatch-hero{padding:18px;background:linear-gradient(135deg,#0f766e,#115e59);color:#fff}.dispatch-panel{padding:16px}.dispatch-source-list{max-height:440px;overflow:auto;border:1px solid #e2e8f0;border-radius:9px}.dispatch-source-row{display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:9px;align-items:start;padding:10px 12px;border-bottom:1px solid #eef2f7}.dispatch-source-row:last-child{border-bottom:0}.dispatch-source-row.is-hidden{display:none}.dispatch-order-list{margin-top:8px;border-top:1px dashed #dbe5e3}.dispatch-order-line{display:grid;grid-template-columns:minmax(105px,.8fr) minmax(150px,1.35fr) auto;gap:8px;padding:7px 0;border-bottom:1px dashed #edf2f7}.dispatch-order-line:last-child{border-bottom:0}.dispatch-order-products{font-size:.78rem;color:#64748b}.dispatch-quantity{white-space:nowrap;text-align:right;font-size:.8rem}.dispatch-slip-card{border:1px solid #dbe5e3;border-left:4px solid #0f766e;border-radius:10px;padding:13px;background:#fff}.dispatch-progress{height:7px;border-radius:99px;background:#e2e8f0;overflow:hidden}.dispatch-progress>span{display:block;height:100%;background:#0f766e}.dispatch-empty{padding:24px;text-align:center;color:#64748b}@media(max-width:767.98px){.dispatch-order-line{grid-template-columns:1fr auto}.dispatch-order-products{grid-column:1/-1}.dispatch-source-row{grid-template-columns:24px minmax(0,1fr)}.dispatch-source-row>span:last-child{grid-column:2;text-align:left!important}}
+.dispatch-hero,.dispatch-panel{border:1px solid #dbe5e3;border-radius:12px;background:#fff}.dispatch-hero{padding:18px;background:linear-gradient(135deg,#0f766e,#115e59);color:#fff}.dispatch-panel{padding:16px}.dispatch-source-list{max-height:440px;overflow:auto;border:1px solid #e2e8f0;border-radius:9px}.dispatch-source-row{display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:9px;align-items:start;padding:10px 12px;border-bottom:1px solid #eef2f7}.dispatch-source-row:last-child{border-bottom:0}.dispatch-source-row.is-hidden{display:none}.dispatch-order-list{margin-top:8px;border-top:1px dashed #dbe5e3}.dispatch-order-line{display:grid;grid-template-columns:minmax(105px,.8fr) minmax(150px,1.35fr) auto;gap:8px;padding:7px 0;border-bottom:1px dashed #edf2f7}.dispatch-order-line:last-child{border-bottom:0}.dispatch-order-products{font-size:.78rem;color:#64748b}.dispatch-quantity{white-space:nowrap;text-align:right;font-size:.8rem}.dispatch-slip-card{border:1px solid #dbe5e3;border-left:4px solid #0f766e;border-radius:10px;padding:13px;background:#fff}.dispatch-progress{height:7px;border-radius:99px;background:#e2e8f0;overflow:hidden}.dispatch-progress>span{display:block;height:100%;background:#0f766e}.dispatch-actions{border-top:1px solid #eef2f7;padding-top:10px;margin-top:10px}.dispatch-empty{padding:24px;text-align:center;color:#64748b}@media(max-width:767.98px){.dispatch-order-line{grid-template-columns:1fr auto}.dispatch-order-products{grid-column:1/-1}.dispatch-source-row{grid-template-columns:24px minmax(0,1fr)}.dispatch-source-row>span:last-child{grid-column:2;text-align:left!important}}
 </style>
 @endpush
 
@@ -150,6 +150,7 @@
         <form method="GET" class="row g-2 align-items-end flex-grow-1 justify-content-end">
             <div class="col-auto"><label class="small">Từ ngày</label><input type="date" name="from_date" value="{{ $from }}" class="form-control form-control-sm"></div>
             <div class="col-auto"><label class="small">Đến ngày</label><input type="date" name="to_date" value="{{ $to }}" class="form-control form-control-sm"></div>
+            <div class="col-auto"><label class="small">Trạng thái</label><select name="status" class="form-select form-select-sm"><option value="">Tất cả</option><option value="draft" @selected(request('status') === 'draft')>Đang mở</option><option value="finalized" @selected(request('status') === 'finalized')>Đã chốt</option></select></div>
             <div class="col-auto"><label class="small">Mã phiếu</label><input name="search" value="{{ request('search') }}" class="form-control form-control-sm" placeholder="PXKT-..."></div>
             <div class="col-auto"><button class="btn btn-primary btn-sm">Lọc</button></div>
         </form>
@@ -164,6 +165,15 @@
                 </div>
                 <div class="row g-2 mt-1 small"><div class="col-md-4">Tài xế: <strong>{{ $slip->shipper?->short_name ?: $slip->shipper?->name }}</strong></div><div class="col-md-4">Nội dung: <strong>{{ $slip->entry_total }} mục</strong></div><div class="col-md-4">{{ $slip->progress_label }}</div></div>
                 <div class="dispatch-progress mt-2"><span style="width:{{ $percent }}%"></span></div>
+                <div class="dispatch-actions d-flex gap-2 flex-wrap align-items-center">
+                    <a href="{{ route('warehouse.dispatch-slips.show', $slip) }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-eye me-1"></i>Xem</a>
+                    <a target="_blank" href="{{ route('warehouse.dispatch-slips.print-export', $slip) }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-printer me-1"></i>In phiếu xuất</a>
+                    @if($slip->status === 'draft' && (!auth()->user()->warehouse_id || (int) auth()->user()->warehouse_id === (int) $slip->source_warehouse_id))
+                        <a href="{{ route('warehouse.dispatch-slips.edit', $slip) }}" class="btn btn-warning btn-sm"><i class="bi bi-pencil-square me-1"></i>Sửa</a>
+                        <form method="POST" action="{{ route('warehouse.dispatch-slips.finalize', $slip) }}" onsubmit="return confirm('Chốt phiếu {{ $slip->code }} và khóa danh sách bàn giao?');">@csrf<button class="btn btn-success btn-sm"><i class="bi bi-check2-circle me-1"></i>Chốt</button></form>
+                        <form method="POST" action="{{ route('warehouse.dispatch-slips.destroy', $slip) }}" class="ms-auto" onsubmit="return confirm('Xóa phiếu {{ $slip->code }}? Nội dung sẽ được trả về danh sách để lập phiếu khác.');">@csrf @method('DELETE')<button class="btn btn-outline-danger btn-sm"><i class="bi bi-trash me-1"></i>Xóa</button></form>
+                    @endif
+                </div>
             </div>
         @empty
             <div class="dispatch-empty">Chưa có phiếu trong thời gian đã chọn.</div>

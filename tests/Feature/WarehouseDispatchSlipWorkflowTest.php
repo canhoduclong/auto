@@ -178,4 +178,71 @@ class WarehouseDispatchSlipWorkflowTest extends TestCase
             ->post(route('shipper.warehouse-transfers.pickup', $transfer))
             ->assertSessionHas('error', 'Phiếu xuất kho tổng '.$slip->code.' chưa được kho xuất chốt.');
     }
+
+    public function test_source_warehouse_can_edit_and_delete_a_draft_dispatch_slip(): void
+    {
+        $warehouseRole = Role::create(['name' => 'warehouse']);
+        $shipperRole = Role::create(['name' => 'shipper']);
+        $source = Warehouse::create(['name' => 'Kho nguồn']);
+        $target = Warehouse::create(['name' => 'Kho nhận']);
+        $warehouseUser = User::factory()->create(['warehouse_id' => $source->id]);
+        $warehouseUser->roles()->attach($warehouseRole);
+        $shipper = User::factory()->create(['name' => 'Tài xế quản trị']);
+        $shipper->roles()->attach($shipperRole);
+        $customer = Customer::create(['name' => 'Khách quản trị', 'status' => 'active']);
+        $order = Order::create([
+            'customer_id' => $customer->id,
+            'user_id' => $warehouseUser->id,
+            'warehouse_id' => $source->id,
+            'code' => 'ORD-MANAGE-1',
+            'status' => Order::STATUS_READY_TO_SHIP,
+        ]);
+        $transfer = WarehouseTransfer::create([
+            'order_id' => $order->id,
+            'source_warehouse_id' => $source->id,
+            'target_warehouse_id' => $target->id,
+            'shipper_id' => $shipper->id,
+            'status' => WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
+            'packed_total_weight' => 8,
+        ]);
+        $slip = WarehouseDispatchSlip::create([
+            'business_date' => now(),
+            'source_warehouse_id' => $source->id,
+            'target_warehouse_id' => $target->id,
+            'shipper_id' => $shipper->id,
+            'status' => WarehouseDispatchSlip::STATUS_DRAFT,
+            'created_by' => $warehouseUser->id,
+        ]);
+        $slip->entries()->create(['warehouse_transfer_id' => $transfer->id]);
+
+        $this->actingAs($warehouseUser)
+            ->get(route('warehouse.dispatch-slips.index'))
+            ->assertOk()
+            ->assertSee(route('warehouse.dispatch-slips.edit', $slip))
+            ->assertSee('Xóa');
+
+        $this->actingAs($warehouseUser)
+            ->get(route('warehouse.dispatch-slips.edit', $slip))
+            ->assertOk()
+            ->assertSee('ORD-MANAGE-1');
+
+        $this->actingAs($warehouseUser)
+            ->put(route('warehouse.dispatch-slips.update', $slip), [
+                'target_warehouse_id' => $target->id,
+                'shipper_id' => $shipper->id,
+                'business_date' => now()->subDay()->toDateString(),
+                'notes' => 'Đã cập nhật ghi chú',
+                'warehouse_transfer_ids' => [$transfer->id],
+            ])
+            ->assertSessionHasNoErrors()
+            ->assertRedirect(route('warehouse.dispatch-slips.show', $slip));
+        $this->assertSame('Đã cập nhật ghi chú', $slip->fresh()->notes);
+        $this->assertSame($transfer->id, $slip->fresh()->entries()->sole()->warehouse_transfer_id);
+
+        $this->actingAs($warehouseUser)
+            ->delete(route('warehouse.dispatch-slips.destroy', $slip))
+            ->assertRedirect(route('warehouse.dispatch-slips.index'));
+        $this->assertDatabaseMissing('warehouse_dispatch_slips', ['id' => $slip->id]);
+        $this->assertNull($transfer->fresh()->dispatchEntry);
+    }
 }
