@@ -58,6 +58,7 @@ class WarehouseDispatchSlipWorkflowTest extends TestCase
             'target_warehouse_id' => $target->id,
             'requested_by' => $warehouseUser->id,
             'status' => WarehouseInventoryTransfer::STATUS_PENDING_RECEIVE,
+            'note' => 'Hàng điều chuyển cần bảo quản lạnh',
             'requested_at' => now(),
         ]);
         $documentCount = InventoryDocument::count();
@@ -95,7 +96,10 @@ class WarehouseDispatchSlipWorkflowTest extends TestCase
             ->assertOk()
             ->assertSee('Ghi chú đơn')
             ->assertSee('Giữ lạnh khi bàn giao')
-            ->assertSee('C. GHI CHÚ BÀN GIAO');
+            ->assertSee('B. PHIẾU ĐIỀU CHUYỂN HÀNG')
+            ->assertSee('Ghi chú điều chuyển')
+            ->assertSee('Hàng điều chuyển cần bảo quản lạnh')
+            ->assertSee('D. GHI CHÚ BÀN GIAO');
     }
 
     public function test_destination_warehouse_can_view_and_print_linked_receipt_summary(): void

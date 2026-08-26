@@ -469,6 +469,7 @@ class WarehouseDispatchSlipController extends Controller
     {
         $orderRows = collect();
         $itemRows = collect();
+        $inventoryTransferRows = collect();
 
         foreach ($slip->entries as $entry) {
             if ($entry->orderTransfer) {
@@ -558,6 +559,13 @@ class WarehouseDispatchSlipController extends Controller
                 $expectedItems = ! empty($inventorySnapshot['items'])
                     ? collect($inventorySnapshot['items'])->map(fn (array $item) => (object) $item)
                     : $transfer->items;
+                $inventoryTransferRows->push([
+                    'code' => $inventorySnapshot['code'] ?? ($transfer->transfer_code ?: '#'.$transfer->id),
+                    'note' => $inventorySnapshot['note'] ?? $transfer->note,
+                    'item_count' => $expectedItems->count(),
+                    'quantity' => (int) $expectedItems->sum('quantity'),
+                    'weight' => round((float) $expectedItems->sum('weight_kg'), 3),
+                ]);
                 foreach ($expectedItems as $item) {
                     $received = $transfer->status === WarehouseInventoryTransfer::STATUS_RECEIVED_COMPLETED;
                     $variant = $transfer->items->firstWhere('product_variant_id', $item->product_variant_id)?->variant;
@@ -591,7 +599,7 @@ class WarehouseDispatchSlipController extends Controller
             ];
         })->values();
 
-        return compact('orderRows', 'itemRows', 'summaryRows');
+        return compact('orderRows', 'itemRows', 'summaryRows', 'inventoryTransferRows');
     }
 
     private function entrySnapshot($entry): array
@@ -660,6 +668,7 @@ class WarehouseDispatchSlipController extends Controller
             'inventory_transfer' => [
                 'id' => $transfer?->id,
                 'code' => $transfer?->transfer_code ?: '#'.$transfer?->id,
+                'note' => $transfer?->note,
                 'items' => $transfer?->items->map(fn ($item) => [
                     'product_variant_id' => (int) $item->product_variant_id,
                     'product_name' => $item->variant?->product?->name ?? $item->variant?->name ?? 'Sản phẩm',
