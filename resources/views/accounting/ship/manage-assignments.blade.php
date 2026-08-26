@@ -227,7 +227,7 @@
             </a>
         </form>
         <div class="small text-muted mt-2">
-            Đang hiển thị đơn lên ngày {{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}; ngày giao của từng đơn có thể là hôm nay hoặc ngày mai.
+            Chỉ hiển thị các đơn được tạo ngày {{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}; ngày giao của từng đơn có thể khác ngày tạo.
         </div>
     </div>
     <div class="col col-md-6 d-flex justify-content-end align-items-center">

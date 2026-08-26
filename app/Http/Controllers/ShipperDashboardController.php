@@ -1677,7 +1677,10 @@ class ShipperDashboardController extends Controller
                 ->orderByDesc('id'),
         ])
             ->where(fn ($query) => $this->constrainAssignmentStatuses($query))
-            ->forWorkflowDate($selectedDate)
+            // Màn hình điều phối là sổ theo ngày tạo đơn. Không dùng
+            // forWorkflowDate() tại đây vì scope đó cố ý kéo các đơn ngoại lệ
+            // được khôi phục từ ngày cũ vào luồng vận hành hôm nay.
+            ->whereDate('orders.created_at', $selectedDate)
             ->orderByRaw("CASE WHEN delivery_time IS NULL OR delivery_time = '' THEN 1 ELSE 0 END")
             ->orderBy('delivery_time', 'asc')
             ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
@@ -1828,7 +1831,7 @@ class ShipperDashboardController extends Controller
         $orders = Order::with(['customer.defaultShipper'])
             ->whereNull('shipper_id')
             ->where(fn ($query) => $this->constrainAssignmentStatuses($query))
-            ->forWorkflowDate($selectedDate)
+            ->whereDate('orders.created_at', $selectedDate)
             ->whereHas('customer', fn ($query) => $query->whereNotNull('default_shipper_id'))
             ->whereDoesntHave('histories', fn ($query) => $query->where('action', 'shipper_unassigned'))
             ->get();
@@ -1899,12 +1902,7 @@ class ShipperDashboardController extends Controller
         return OrderHistory::query()
             ->join('orders', 'orders.id', '=', 'order_histories.order_id')
             ->where('orders.shipper_id', $shipperId)
-            ->where(function ($dateQuery) use ($selectedDate): void {
-                $dateQuery->whereDate('orders.created_at', $selectedDate);
-                if (Carbon::parse($selectedDate)->isToday()) {
-                    $dateQuery->orWhere('orders.skip_auto_cancel', true);
-                }
-            })
+            ->whereDate('orders.created_at', $selectedDate)
             ->whereIn('order_histories.action', ['schedule_created', 'schedule_confirmed', 'schedule_rejected'])
             ->orderByDesc('order_histories.created_at')
             ->orderByDesc('order_histories.id')
@@ -2115,7 +2113,7 @@ class ShipperDashboardController extends Controller
         $ordersQuery = Order::query()
             ->where('shipper_id', $fromShipper->id)
             ->where(fn ($query) => $this->constrainAssignmentStatuses($query))
-            ->forWorkflowDate($date);
+            ->whereDate('orders.created_at', $date);
 
         $orders = DB::transaction(function () use ($ordersQuery, $fromShipper, $toShipper, $validated) {
             $orders = $ordersQuery->lockForUpdate()->get();
