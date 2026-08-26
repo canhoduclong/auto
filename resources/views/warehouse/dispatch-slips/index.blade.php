@@ -57,7 +57,7 @@
         </div>
 
         <div class="row g-3 mt-1">
-            <div class="col-xl-6">
+            <div class="col-xl-4">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <div><strong>Đơn đã đóng gói</strong><div class="small text-muted">Chỉ hiện nhóm đơn cùng kho nhận và tài xế đã chọn.</div></div>
                     <span class="badge bg-light text-dark border">{{ $orderTransfers->count() }} nhóm khả dụng</span>
@@ -75,7 +75,25 @@
                     <div class="dispatch-empty d-none" data-filter-empty>Chọn đúng kho nhận và tài xế để xem nhóm đơn.</div>
                 </div>
             </div>
-            <div class="col-xl-6">
+            <div class="col-xl-4">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div><strong>Đơn giao tài xế riêng</strong><div class="small text-muted">Phiếu điều chuyển tạo trực tiếp từ đơn đã đóng gói.</div></div>
+                    <span class="badge bg-light text-dark border">{{ $warehouseTransfers->count() }} phiếu</span>
+                </div>
+                <div class="dispatch-source-list" id="dispatchWarehouseSources">
+                    @forelse($warehouseTransfers as $transfer)
+                        <label class="dispatch-source-row" data-target="{{ $transfer->target_warehouse_id }}" data-shipper="{{ $transfer->shipper_id }}">
+                            <input type="checkbox" class="form-check-input mt-1 dispatch-entry-check" name="warehouse_transfer_ids[]" value="{{ $transfer->id }}" @checked(in_array($transfer->id, old('warehouse_transfer_ids', [])))>
+                            <span><strong>{{ $transfer->order?->code ?: 'Đơn #'.$transfer->order_id }}</strong><span class="d-block small text-muted">{{ $transfer->order?->customer?->name ?: 'Không rõ khách' }} · {{ number_format((float) $transfer->packed_total_weight, 3, ',', '.') }} kg</span></span>
+                            <span class="small text-end">{{ $transfer->shipper?->short_name ?: $transfer->shipper?->name }}<br>{{ $transfer->targetWarehouse?->name }}</span>
+                        </label>
+                    @empty
+                        <div class="dispatch-empty">Không có đơn giao tài xế riêng đang chờ nhận.</div>
+                    @endforelse
+                    <div class="dispatch-empty d-none" data-filter-empty>Chọn đúng kho nhận và tài xế để xem đơn.</div>
+                </div>
+            </div>
+            <div class="col-xl-4">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <div><strong>Hàng điều chuyển</strong><div class="small text-muted">Các phiếu hàng cùng kho nhận, chưa thuộc phiếu tổng khác.</div></div>
                     <span class="badge bg-light text-dark border">{{ $inventoryTransfers->count() }} phiếu khả dụng</span>
@@ -141,6 +159,11 @@
         });
         document.querySelectorAll('#dispatchInventorySources .dispatch-source-row').forEach(row => {
             const visible = !target.value || row.dataset.target === target.value;
+            row.classList.toggle('is-hidden', !visible);
+            if (!visible) row.querySelector('input').checked = false;
+        });
+        document.querySelectorAll('#dispatchWarehouseSources .dispatch-source-row').forEach(row => {
+            const visible = (!target.value || row.dataset.target === target.value) && (!shipper.value || row.dataset.shipper === shipper.value);
             row.classList.toggle('is-hidden', !visible);
             if (!visible) row.querySelector('input').checked = false;
         });

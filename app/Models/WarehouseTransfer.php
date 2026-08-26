@@ -77,4 +77,9 @@ class WarehouseTransfer extends Model
     {
         return $this->belongsTo(User::class, 'received_by');
     }
+
+    public function dispatchEntry()
+    {
+        return $this->hasOne(WarehouseDispatchSlipEntry::class);
+    }
 }

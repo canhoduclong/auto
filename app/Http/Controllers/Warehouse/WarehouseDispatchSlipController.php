@@ -33,7 +33,7 @@ class WarehouseDispatchSlipController extends Controller
         }
 
         $slips = WarehouseDispatchSlip::query()
-            ->with(['sourceWarehouse:id,name', 'targetWarehouse:id,name', 'shipper:id,name,short_name', 'creator:id,name', 'entries.orderTransfer.orders.warehouseTransfers', 'entries.inventoryTransfer'])
+            ->with(['sourceWarehouse:id,name', 'targetWarehouse:id,name', 'shipper:id,name,short_name', 'creator:id,name', 'entries.orderTransfer.orders.warehouseTransfers', 'entries.warehouseTransfer', 'entries.inventoryTransfer'])
             ->when($managedWarehouseId, fn ($query) => $query->where(function ($warehouseQuery) use ($managedWarehouseId): void {
                 $warehouseQuery->where('source_warehouse_id', $managedWarehouseId)
                     ->orWhere('target_warehouse_id', $managedWarehouseId);
@@ -80,9 +80,20 @@ class WarehouseDispatchSlipController extends Controller
             ->whereDoesntHave('dispatchEntry')
             ->latest('id')->get();
 
+        // Phiếu điều chuyển được tạo trực tiếp từ màn hình đóng hàng không có
+        // OrderTransfer cha. Tải riêng các phiếu này để kho vẫn lập được phiếu tổng.
+        $warehouseTransfers = WarehouseTransfer::query()
+            ->with(['order.customer:id,name', 'order.user:id,name,short_name', 'order.items.variant.product', 'targetWarehouse:id,name', 'shipper:id,name,short_name'])
+            ->where('source_warehouse_id', $sourceWarehouseId)
+            ->where('status', WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP)
+            ->whereDoesntHave('dispatchEntry')
+            ->whereHas('order', fn ($query) => $query->whereNull('order_transfer_id'))
+            ->latest('id')->get();
+
         return view('warehouse.dispatch-slips.index', compact(
             'slips', 'from', 'to', 'managedWarehouseId', 'sourceWarehouseId',
-            'sourceWarehouses', 'targetWarehouses', 'shippers', 'orderTransfers', 'inventoryTransfers'
+            'sourceWarehouses', 'targetWarehouses', 'shippers', 'orderTransfers',
+            'warehouseTransfers', 'inventoryTransfers'
         ));
     }
 
@@ -97,6 +108,8 @@ class WarehouseDispatchSlipController extends Controller
             'notes' => ['nullable', 'string', 'max:2000'],
             'order_transfer_ids' => ['nullable', 'array'],
             'order_transfer_ids.*' => ['integer', 'exists:order_transfers,id'],
+            'warehouse_transfer_ids' => ['nullable', 'array'],
+            'warehouse_transfer_ids.*' => ['integer', 'exists:warehouse_transfers,id'],
             'inventory_transfer_ids' => ['nullable', 'array'],
             'inventory_transfer_ids.*' => ['integer', 'exists:warehouse_inventory_transfers,id'],
         ]);
@@ -109,24 +122,30 @@ class WarehouseDispatchSlipController extends Controller
         }
 
         $orderTransferIds = collect($validated['order_transfer_ids'] ?? [])->map(fn ($id) => (int) $id)->unique()->values();
+        $warehouseTransferIds = collect($validated['warehouse_transfer_ids'] ?? [])->map(fn ($id) => (int) $id)->unique()->values();
         $inventoryTransferIds = collect($validated['inventory_transfer_ids'] ?? [])->map(fn ($id) => (int) $id)->unique()->values();
-        if ($orderTransferIds->isEmpty() && $inventoryTransferIds->isEmpty()) {
+        if ($orderTransferIds->isEmpty() && $warehouseTransferIds->isEmpty() && $inventoryTransferIds->isEmpty()) {
             throw ValidationException::withMessages(['entries' => 'Vui lòng chọn ít nhất một nhóm đơn hoặc một phiếu điều chuyển hàng.']);
         }
 
-        $slip = DB::transaction(function () use ($validated, $sourceWarehouseId, $targetWarehouseId, $shipperId, $orderTransferIds, $inventoryTransferIds): WarehouseDispatchSlip {
+        $slip = DB::transaction(function () use ($validated, $sourceWarehouseId, $targetWarehouseId, $shipperId, $orderTransferIds, $warehouseTransferIds, $inventoryTransferIds): WarehouseDispatchSlip {
             $orderTransfers = OrderTransfer::query()
                 ->with(['dispatchEntry', 'orders.warehouseTransfers' => fn ($query) => $query->latest('id')])
                 ->whereIn('id', $orderTransferIds)->lockForUpdate()->get();
             $inventoryTransfers = WarehouseInventoryTransfer::query()
                 ->with('dispatchEntry')->whereIn('id', $inventoryTransferIds)->lockForUpdate()->get();
+            $warehouseTransfers = WarehouseTransfer::query()
+                ->with(['dispatchEntry', 'order.orderTransfer.dispatchEntry'])
+                ->whereIn('id', $warehouseTransferIds)->lockForUpdate()->get();
 
-            if ($orderTransfers->count() !== $orderTransferIds->count() || $inventoryTransfers->count() !== $inventoryTransferIds->count()) {
+            if ($orderTransfers->count() !== $orderTransferIds->count()
+                || $warehouseTransfers->count() !== $warehouseTransferIds->count()
+                || $inventoryTransfers->count() !== $inventoryTransferIds->count()) {
                 throw ValidationException::withMessages(['entries' => 'Một số nội dung được chọn không còn tồn tại.']);
             }
 
             foreach ($orderTransfers as $transfer) {
-                $valid = !$transfer->dispatchEntry
+                $valid = ! $transfer->dispatchEntry
                     && (int) $transfer->warehouse_id === $targetWarehouseId
                     && (int) $transfer->shipper_id === $shipperId
                     && $transfer->orders->isNotEmpty()
@@ -137,8 +156,19 @@ class WarehouseDispatchSlipController extends Controller
                             && (int) $movement->source_warehouse_id === $sourceWarehouseId
                             && $movement->status === WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP;
                     });
-                if (!$valid) {
+                if (! $valid) {
                     throw ValidationException::withMessages(['entries' => 'Nhóm đơn #'.$transfer->id.' không cùng tài xế/kho hoặc đã bắt đầu vận chuyển.']);
+                }
+            }
+
+            foreach ($warehouseTransfers as $transfer) {
+                if ($transfer->dispatchEntry
+                    || $transfer->order?->orderTransfer?->dispatchEntry
+                    || (int) $transfer->source_warehouse_id !== $sourceWarehouseId
+                    || (int) $transfer->target_warehouse_id !== $targetWarehouseId
+                    || (int) $transfer->shipper_id !== $shipperId
+                    || $transfer->status !== WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP) {
+                    throw ValidationException::withMessages(['entries' => 'Phiếu điều chuyển đơn #'.$transfer->id.' không cùng tài xế/kho, đã thuộc phiếu tổng khác hoặc đã bắt đầu vận chuyển.']);
                 }
             }
 
@@ -162,6 +192,9 @@ class WarehouseDispatchSlipController extends Controller
             ]);
             foreach ($orderTransfers as $transfer) {
                 $slip->entries()->create(['order_transfer_id' => $transfer->id]);
+            }
+            foreach ($warehouseTransfers as $transfer) {
+                $slip->entries()->create(['warehouse_transfer_id' => $transfer->id]);
             }
             foreach ($inventoryTransfers as $transfer) {
                 $slip->entries()->create(['inventory_transfer_id' => $transfer->id]);
@@ -189,7 +222,7 @@ class WarehouseDispatchSlipController extends Controller
         if ($dispatchSlip->status !== WarehouseDispatchSlip::STATUS_DRAFT) {
             return back()->with('error', 'Phiếu đã được chốt hoặc hủy.');
         }
-        if (!$dispatchSlip->entries()->exists()) {
+        if (! $dispatchSlip->entries()->exists()) {
             return back()->with('error', 'Không thể chốt phiếu chưa có nội dung.');
         }
 
@@ -247,6 +280,9 @@ class WarehouseDispatchSlipController extends Controller
             'entries.orderTransfer.orders.user:id,name,short_name',
             'entries.orderTransfer.orders.items.variant.product',
             'entries.orderTransfer.orders.warehouseTransfers' => fn ($query) => $query->latest('id'),
+            'entries.warehouseTransfer.order.customer:id,name',
+            'entries.warehouseTransfer.order.user:id,name,short_name',
+            'entries.warehouseTransfer.order.items.variant.product',
             'entries.inventoryTransfer.items.variant.product',
             'entries.inventoryTransfer.receiver:id,name',
         ]);
@@ -277,7 +313,7 @@ class WarehouseDispatchSlipController extends Controller
                         ? collect($orderSnapshot['items'])->map(fn (array $item) => (object) $item)
                         : $order->items;
                     foreach ($expectedItems as $item) {
-                        if (!$item->product_variant_id) {
+                        if (! $item->product_variant_id) {
                             continue;
                         }
                         $liveItem = $order->items->firstWhere('id', $item->id ?? null);
@@ -298,10 +334,49 @@ class WarehouseDispatchSlipController extends Controller
                 }
             }
 
+            if ($entry->warehouseTransfer?->order) {
+                $movement = $entry->warehouseTransfer;
+                $order = $movement->order;
+                $orderSnapshot = $entry->snapshot['order'] ?? [];
+                $orderRows->push([
+                    'order' => $order,
+                    'code' => $orderSnapshot['code'] ?? ($order->code ?: '#'.$order->id),
+                    'customer_name' => $orderSnapshot['customer_name'] ?? $order->customer?->name,
+                    'sale_name' => $orderSnapshot['sale_name'] ?? ($order->user?->short_name ?: $order->user?->name),
+                    'item_quantity' => (int) ($orderSnapshot['item_quantity'] ?? $order->items->sum('quantity')),
+                    'packed_weight' => (float) ($orderSnapshot['packed_weight'] ?? $movement->packed_total_weight ?? 0),
+                    'movement' => $movement,
+                    'received' => $movement->status === WarehouseTransfer::STATUS_RECEIVED_COMPLETED,
+                ]);
+                $receivedWeights = collect($movement->received_weights ?? [])->keyBy('order_item_id');
+                $expectedItems = ! empty($orderSnapshot['items'])
+                    ? collect($orderSnapshot['items'])->map(fn (array $item) => (object) $item)
+                    : $order->items;
+                foreach ($expectedItems as $item) {
+                    if (! $item->product_variant_id) {
+                        continue;
+                    }
+                    $liveItem = $order->items->firstWhere('id', $item->id ?? null);
+                    $variant = $liveItem?->variant ?? $order->items->firstWhere('product_variant_id', $item->product_variant_id)?->variant;
+                    $itemRows->push([
+                        'source' => 'Đơn '.($orderSnapshot['code'] ?? ($order->code ?: '#'.$order->id)),
+                        'variant_id' => (int) $item->product_variant_id,
+                        'product_name' => $item->product_name ?? $variant?->product?->name ?? $variant?->name ?? 'Sản phẩm',
+                        'sku' => $item->sku ?? $variant?->sku,
+                        'size' => $item->size ?? $variant?->size,
+                        'quantity' => (int) $item->quantity,
+                        'weight' => (float) ($item->weight ?? $item->packed_weight ?? $item->total_weight ?? 0),
+                        'received_quantity' => $movement->status === WarehouseTransfer::STATUS_RECEIVED_COMPLETED ? (int) $item->quantity : null,
+                        'received_weight' => $movement->status === WarehouseTransfer::STATUS_RECEIVED_COMPLETED
+                            ? (float) ($receivedWeights->get($item->id ?? 0)['received_weight'] ?? 0) : null,
+                    ]);
+                }
+            }
+
             if ($entry->inventoryTransfer) {
                 $transfer = $entry->inventoryTransfer;
                 $inventorySnapshot = $entry->snapshot['inventory_transfer'] ?? null;
-                $expectedItems = !empty($inventorySnapshot['items'])
+                $expectedItems = ! empty($inventorySnapshot['items'])
                     ? collect($inventorySnapshot['items'])->map(fn (array $item) => (object) $item)
                     : $transfer->items;
                 foreach ($expectedItems as $item) {
@@ -370,6 +445,33 @@ class WarehouseDispatchSlipController extends Controller
             ];
         }
 
+        if ($entry->warehouseTransfer?->order) {
+            $movement = $entry->warehouseTransfer;
+            $order = $movement->order;
+
+            return [
+                'type' => 'warehouse_transfer',
+                'warehouse_transfer_id' => $movement->id,
+                'order' => [
+                    'id' => $order->id,
+                    'code' => $order->code ?: '#'.$order->id,
+                    'customer_name' => $order->customer?->name,
+                    'sale_name' => $order->user?->short_name ?: $order->user?->name,
+                    'item_quantity' => (int) $order->items->sum('quantity'),
+                    'packed_weight' => (float) ($movement->packed_total_weight ?? 0),
+                    'items' => $order->items->filter(fn ($item) => $item->product_variant_id)->map(fn ($item) => [
+                        'id' => $item->id,
+                        'product_variant_id' => (int) $item->product_variant_id,
+                        'product_name' => $item->variant?->product?->name ?? $item->variant?->name ?? 'Sản phẩm',
+                        'sku' => $item->variant?->sku,
+                        'size' => $item->variant?->size,
+                        'quantity' => (int) $item->quantity,
+                        'weight' => (float) ($item->packed_weight ?? $item->actual_weight ?? $item->total_weight ?? 0),
+                    ])->values()->all(),
+                ],
+            ];
+        }
+
         $transfer = $entry->inventoryTransfer;
 
         return [
@@ -397,6 +499,8 @@ class WarehouseDispatchSlipController extends Controller
                 foreach ($entry->orderTransfer->orders as $order) {
                     $statuses->push($order->warehouseTransfers->first()?->status);
                 }
+            } elseif ($entry->warehouseTransfer) {
+                $statuses->push($entry->warehouseTransfer->status);
             } elseif ($entry->inventoryTransfer) {
                 $statuses->push($entry->inventoryTransfer->status);
             }
@@ -413,7 +517,7 @@ class WarehouseDispatchSlipController extends Controller
     private function authorizeSlip(WarehouseDispatchSlip $slip): void
     {
         $warehouseId = Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
-        if ($warehouseId && !in_array($warehouseId, [(int) $slip->source_warehouse_id, (int) $slip->target_warehouse_id], true)) {
+        if ($warehouseId && ! in_array($warehouseId, [(int) $slip->source_warehouse_id, (int) $slip->target_warehouse_id], true)) {
             abort(403, 'Phiếu không thuộc kho bạn quản lý.');
         }
     }

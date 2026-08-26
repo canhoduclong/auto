@@ -10,7 +10,8 @@ class WarehouseDispatchSlipEntry extends Model
     use HasFactory;
 
     protected $fillable = [
-        'warehouse_dispatch_slip_id', 'order_transfer_id', 'inventory_transfer_id', 'snapshot',
+        'warehouse_dispatch_slip_id', 'order_transfer_id', 'warehouse_transfer_id',
+        'inventory_transfer_id', 'snapshot',
     ];
 
     protected $casts = ['snapshot' => 'array'];
@@ -28,5 +29,10 @@ class WarehouseDispatchSlipEntry extends Model
     public function inventoryTransfer()
     {
         return $this->belongsTo(WarehouseInventoryTransfer::class);
+    }
+
+    public function warehouseTransfer()
+    {
+        return $this->belongsTo(WarehouseTransfer::class);
     }
 }

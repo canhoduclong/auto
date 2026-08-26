@@ -87,7 +87,7 @@ class WarehouseDispatchSlipWorkflowTest extends TestCase
             ->post(route('warehouse.dispatch-slips.finalize', $slip))
             ->assertSessionHas('success');
         $this->assertSame(WarehouseDispatchSlip::STATUS_FINALIZED, $slip->fresh()->status);
-        $this->assertTrue($slip->fresh()->entries->every(fn ($entry) => !empty($entry->snapshot)));
+        $this->assertTrue($slip->fresh()->entries->every(fn ($entry) => ! empty($entry->snapshot)));
     }
 
     public function test_destination_warehouse_can_view_and_print_linked_receipt_summary(): void
@@ -123,5 +123,57 @@ class WarehouseDispatchSlipWorkflowTest extends TestCase
             ->assertOk()
             ->assertSee('PHIẾU NHẬP KHO TỔNG')
             ->assertSee($slip->code);
+    }
+
+    public function test_direct_order_transfer_is_loaded_and_can_be_added_to_a_dispatch_slip(): void
+    {
+        $warehouseRole = Role::create(['name' => 'warehouse']);
+        $shipperRole = Role::create(['name' => 'shipper']);
+        $source = Warehouse::create(['name' => 'Kho nguồn']);
+        $target = Warehouse::create(['name' => 'Kho nhận']);
+        $warehouseUser = User::factory()->create(['warehouse_id' => $source->id]);
+        $warehouseUser->roles()->attach($warehouseRole);
+        $shipper = User::factory()->create(['name' => 'Tài xế trực tiếp']);
+        $shipper->roles()->attach($shipperRole);
+        $customer = Customer::create(['name' => 'Khách trực tiếp', 'status' => 'active']);
+        $order = Order::create([
+            'customer_id' => $customer->id,
+            'user_id' => $warehouseUser->id,
+            'warehouse_id' => $source->id,
+            'shipper_id' => $shipper->id,
+            'code' => 'ORD-DIRECT-1',
+            'status' => Order::STATUS_READY_TO_SHIP,
+        ]);
+        $transfer = WarehouseTransfer::create([
+            'order_id' => $order->id,
+            'source_warehouse_id' => $source->id,
+            'target_warehouse_id' => $target->id,
+            'shipper_id' => $shipper->id,
+            'status' => WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
+            'packed_total_weight' => 12.5,
+        ]);
+
+        $this->actingAs($warehouseUser)
+            ->get(route('warehouse.dispatch-slips.index'))
+            ->assertOk()
+            ->assertSee('Đơn giao tài xế riêng')
+            ->assertSee('ORD-DIRECT-1');
+
+        $this->actingAs($warehouseUser)
+            ->post(route('warehouse.dispatch-slips.store'), [
+                'source_warehouse_id' => $source->id,
+                'target_warehouse_id' => $target->id,
+                'shipper_id' => $shipper->id,
+                'business_date' => now()->toDateString(),
+                'warehouse_transfer_ids' => [$transfer->id],
+            ])
+            ->assertSessionHasNoErrors();
+
+        $slip = WarehouseDispatchSlip::query()->sole();
+        $this->assertSame($transfer->id, $slip->entries()->sole()->warehouse_transfer_id);
+
+        $this->actingAs($shipper)
+            ->post(route('shipper.warehouse-transfers.pickup', $transfer))
+            ->assertSessionHas('error', 'Phiếu xuất kho tổng '.$slip->code.' chưa được kho xuất chốt.');
     }
 }

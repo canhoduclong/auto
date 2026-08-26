@@ -627,12 +627,12 @@ class ShipperDashboardController extends Controller
             'pickup_note' => ['nullable', 'string', 'max:1000'],
         ]);
 
-        $transfer->loadMissing(['order.items', 'order.orderTransfer.dispatchEntry.slip']);
+        $transfer->loadMissing(['dispatchEntry.slip', 'order.items', 'order.orderTransfer.dispatchEntry.slip']);
         $order = $transfer->order;
         if (! $order) {
             return back()->with('error', 'Không tìm thấy đơn hàng của phiếu điều chuyển.');
         }
-        $dispatchSlip = $order->orderTransfer?->dispatchEntry?->slip;
+        $dispatchSlip = $transfer->dispatchEntry?->slip ?? $order->orderTransfer?->dispatchEntry?->slip;
         if ($dispatchSlip && $dispatchSlip->status === \App\Models\WarehouseDispatchSlip::STATUS_DRAFT) {
             return back()->with('error', 'Phiếu xuất kho tổng '.$dispatchSlip->code.' chưa được kho xuất chốt.');
         }
@@ -783,7 +783,7 @@ class ShipperDashboardController extends Controller
         ]);
 
         $transfers = WarehouseTransfer::query()
-            ->with(['order.items', 'order.orderTransfer.dispatchEntry.slip'])
+            ->with(['dispatchEntry.slip', 'order.items', 'order.orderTransfer.dispatchEntry.slip'])
             ->whereIn('id', $validated['transfer_ids'])
             ->where('status', WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP)
             ->get();
@@ -802,7 +802,7 @@ class ShipperDashboardController extends Controller
                     if (! $order) {
                         throw new \RuntimeException('Không tìm thấy đơn hàng của phiếu #'.$transfer->id);
                     }
-                    $dispatchSlip = $order->orderTransfer?->dispatchEntry?->slip;
+                    $dispatchSlip = $transfer->dispatchEntry?->slip ?? $order->orderTransfer?->dispatchEntry?->slip;
                     if ($dispatchSlip && $dispatchSlip->status === \App\Models\WarehouseDispatchSlip::STATUS_DRAFT) {
                         throw new \RuntimeException('Phiếu xuất kho tổng '.$dispatchSlip->code.' chưa được kho xuất chốt.');
                     }

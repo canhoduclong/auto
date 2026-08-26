@@ -2322,8 +2322,7 @@ class PageController extends Controller
         // Mặc định giữ toàn bộ đơn trong ngày để leader theo dõi đầy đủ
         $fromDate = $request->input('from_date', now()->toDateString());
         $toDate = $request->input('to_date', now()->toDateString());
-        $query->whereDate('created_at', '>=', $fromDate)
-            ->whereDate('created_at', '<=', $toDate);
+        $this->applyApprovalDateRange($query, $fromDate, $toDate);
 
         // Chỉ lọc theo bước chờ duyệt khi người dùng chủ động bật
         $pendingOnly = $request->boolean('pending_only');
@@ -2513,9 +2512,8 @@ class PageController extends Controller
                     });
                 });
             })
-            ->where('status', '!=', Order::STATUS_REJECTED)
-            ->whereDate('created_at', '>=', $fromDate)
-            ->whereDate('created_at', '<=', $toDate);
+            ->where('status', '!=', Order::STATUS_REJECTED);
+        $this->applyApprovalDateRange($query, $fromDate, $toDate);
 
         if ($roleNames->isNotEmpty()) {
             $query->whereExists(function ($sub) use ($roleNames) {
@@ -2628,9 +2626,8 @@ class PageController extends Controller
                         })->orWhere('id', $user->id);
                     });
                 });
-            })
-            ->whereDate('created_at', '>=', $fromDate)
-            ->whereDate('created_at', '<=', $toDate);
+            });
+        $this->applyApprovalDateRange($query, $fromDate, $toDate);
 
         $this->applyTeamOrderFilters($query, $request);
         $this->applyCurrentApprovalStepScope($query, $roleNames);
@@ -2704,8 +2701,7 @@ class PageController extends Controller
 
         $fromDate = $request->input('from_date', now()->toDateString());
         $toDate = $request->input('to_date', now()->toDateString());
-        $query->whereDate('created_at', '>=', $fromDate)
-            ->whereDate('created_at', '<=', $toDate);
+        $this->applyApprovalDateRange($query, $fromDate, $toDate);
 
         if ($request->filled('team_id')) {
             $teamId = (int) $request->input('team_id');
@@ -2870,11 +2866,10 @@ class PageController extends Controller
             ->whereHas('user.roles', function ($q) use ($allowedCreatorRoles) {
                 $q->whereIn(DB::raw('LOWER(name)'), $allowedCreatorRoles);
             })
-            ->whereDate('created_at', '>=', $fromDate)
-            ->whereDate('created_at', '<=', $toDate)
             ->where('status', '!=', Order::STATUS_REJECTED)
             // Bắt buộc đã qua leader và đang chờ manager duyệt
             ->where('status', 'pending_manager_approval');
+        $this->applyApprovalDateRange($query, $fromDate, $toDate);
 
         if ($request->filled('team_id')) {
             $teamId = (int) $request->input('team_id');
@@ -2987,10 +2982,8 @@ class PageController extends Controller
             ->whereHas('user.roles', function ($q) use ($allowedCreatorRoles) {
                 $q->whereIn(DB::raw('LOWER(name)'), $allowedCreatorRoles);
             })
-            ->whereDate('created_at', '>=', $fromDate)
-            ->whereDate('created_at', '<=', $toDate)
-            ->where('status', '!=', Order::STATUS_REJECTED)
-            ->whereDate('created_at', now()->toDateString());
+            ->where('status', '!=', Order::STATUS_REJECTED);
+        $this->applyApprovalDateRange($query, $fromDate, $toDate);
 
         if ($request->filled('team_id')) {
             $teamId = (int) $request->input('team_id');
@@ -3049,6 +3042,26 @@ class PageController extends Controller
         return $user->roles->pluck('name')
             ->map(fn ($role) => strtolower((string) $role))
             ->values();
+    }
+
+    private function applyApprovalDateRange(Builder $query, string $fromDate, string $toDate): Builder
+    {
+        $today = now()->toDateString();
+        $includePendingHistoricalExceptions = $fromDate === $today && $toDate === $today;
+
+        return $query->where(function (Builder $dateScope) use ($fromDate, $toDate, $includePendingHistoricalExceptions): void {
+            $dateScope->where(function (Builder $selectedRange) use ($fromDate, $toDate): void {
+                $selectedRange->whereDate('created_at', '>=', $fromDate)
+                    ->whereDate('created_at', '<=', $toDate);
+            });
+
+            if ($includePendingHistoricalExceptions) {
+                $dateScope->orWhere(function (Builder $exceptionScope): void {
+                    $exceptionScope->where('skip_auto_cancel', true)
+                        ->whereHas('approvals', fn (Builder $approvals) => $approvals->where('status', 'pending'));
+                });
+            }
+        });
     }
 
     private function canApproveManagedSalesFromMonitoring(User $user): bool
