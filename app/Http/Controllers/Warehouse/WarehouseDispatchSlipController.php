@@ -480,6 +480,7 @@ class WarehouseDispatchSlipController extends Controller
                         'code' => $orderSnapshot['code'] ?? ($order->code ?: '#'.$order->id),
                         'customer_name' => $orderSnapshot['customer_name'] ?? $order->customer?->name,
                         'sale_name' => $orderSnapshot['sale_name'] ?? ($order->user?->short_name ?: $order->user?->name),
+                        'order_note' => $orderSnapshot['note'] ?? $order->note,
                         'item_quantity' => (int) ($orderSnapshot['item_quantity'] ?? $order->items->sum('quantity')),
                         'packed_weight' => (float) ($orderSnapshot['packed_weight'] ?? $movement?->packed_total_weight ?? 0),
                         'movement' => $movement,
@@ -520,6 +521,7 @@ class WarehouseDispatchSlipController extends Controller
                     'code' => $orderSnapshot['code'] ?? ($order->code ?: '#'.$order->id),
                     'customer_name' => $orderSnapshot['customer_name'] ?? $order->customer?->name,
                     'sale_name' => $orderSnapshot['sale_name'] ?? ($order->user?->short_name ?: $order->user?->name),
+                    'order_note' => $orderSnapshot['note'] ?? $order->note,
                     'item_quantity' => (int) ($orderSnapshot['item_quantity'] ?? $order->items->sum('quantity')),
                     'packed_weight' => (float) ($orderSnapshot['packed_weight'] ?? $movement->packed_total_weight ?? 0),
                     'movement' => $movement,
@@ -606,6 +608,7 @@ class WarehouseDispatchSlipController extends Controller
                         'code' => $order->code ?: '#'.$order->id,
                         'customer_name' => $order->customer?->name,
                         'sale_name' => $order->user?->short_name ?: $order->user?->name,
+                        'note' => $order->note,
                         'item_quantity' => (int) $order->items->sum('quantity'),
                         'packed_weight' => (float) ($movement?->packed_total_weight ?? 0),
                         'items' => $order->items->filter(fn ($item) => $item->product_variant_id)->map(fn ($item) => [
@@ -634,6 +637,7 @@ class WarehouseDispatchSlipController extends Controller
                     'code' => $order->code ?: '#'.$order->id,
                     'customer_name' => $order->customer?->name,
                     'sale_name' => $order->user?->short_name ?: $order->user?->name,
+                    'note' => $order->note,
                     'item_quantity' => (int) $order->items->sum('quantity'),
                     'packed_weight' => (float) ($movement->packed_total_weight ?? 0),
                     'items' => $order->items->filter(fn ($item) => $item->product_variant_id)->map(fn ($item) => [

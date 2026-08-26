@@ -41,6 +41,7 @@ class WarehouseDispatchSlipWorkflowTest extends TestCase
             'user_id' => $warehouseUser->id,
             'warehouse_id' => $source->id,
             'code' => 'ORD-DISPATCH-1',
+            'note' => 'Giữ lạnh khi bàn giao',
             'status' => Order::STATUS_READY_TO_SHIP,
         ]);
         $order->forceFill(['order_transfer_id' => $orderTransfer->id])->save();
@@ -88,6 +89,13 @@ class WarehouseDispatchSlipWorkflowTest extends TestCase
             ->assertSessionHas('success');
         $this->assertSame(WarehouseDispatchSlip::STATUS_FINALIZED, $slip->fresh()->status);
         $this->assertTrue($slip->fresh()->entries->every(fn ($entry) => ! empty($entry->snapshot)));
+
+        $this->actingAs($warehouseUser)
+            ->get(route('warehouse.dispatch-slips.print-export', $slip))
+            ->assertOk()
+            ->assertSee('Ghi chú đơn')
+            ->assertSee('Giữ lạnh khi bàn giao')
+            ->assertSee('C. GHI CHÚ BÀN GIAO');
     }
 
     public function test_destination_warehouse_can_view_and_print_linked_receipt_summary(): void
