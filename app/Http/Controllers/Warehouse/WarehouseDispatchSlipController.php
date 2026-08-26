@@ -482,6 +482,11 @@ class WarehouseDispatchSlipController extends Controller
                         'customer_name' => $orderSnapshot['customer_name'] ?? $order->customer?->name,
                         'sale_name' => $orderSnapshot['sale_name'] ?? ($order->user?->short_name ?: $order->user?->name),
                         'order_note' => $orderSnapshot['note'] ?? $order->note,
+                        'package_count' => $orderSnapshot['package_count'] ?? $order->package_count,
+                        'packing_specification' => $orderSnapshot['packing_specification'] ?? $order->packing_specification,
+                        'foam_box_fee' => (float) ($orderSnapshot['foam_box_fee'] ?? (($order->charge_foam_box_fee ?? false) ? ($order->foam_box_price ?? 0) : 0)),
+                        'shipping_fee' => (float) ($orderSnapshot['shipping_fee'] ?? $this->billableShippingFee($order)),
+                        'discount' => (float) ($orderSnapshot['discount'] ?? $order->total_discount ?? 0),
                         'item_quantity' => (int) ($orderSnapshot['item_quantity'] ?? $order->items->sum('quantity')),
                         'packed_weight' => (float) ($orderSnapshot['packed_weight'] ?? $movement?->packed_total_weight ?? 0),
                         'movement' => $movement,
@@ -523,6 +528,11 @@ class WarehouseDispatchSlipController extends Controller
                     'customer_name' => $orderSnapshot['customer_name'] ?? $order->customer?->name,
                     'sale_name' => $orderSnapshot['sale_name'] ?? ($order->user?->short_name ?: $order->user?->name),
                     'order_note' => $orderSnapshot['note'] ?? $order->note,
+                    'package_count' => $orderSnapshot['package_count'] ?? $order->package_count,
+                    'packing_specification' => $orderSnapshot['packing_specification'] ?? $order->packing_specification,
+                    'foam_box_fee' => (float) ($orderSnapshot['foam_box_fee'] ?? (($order->charge_foam_box_fee ?? false) ? ($order->foam_box_price ?? 0) : 0)),
+                    'shipping_fee' => (float) ($orderSnapshot['shipping_fee'] ?? $this->billableShippingFee($order)),
+                    'discount' => (float) ($orderSnapshot['discount'] ?? $order->total_discount ?? 0),
                     'item_quantity' => (int) ($orderSnapshot['item_quantity'] ?? $order->items->sum('quantity')),
                     'packed_weight' => (float) ($orderSnapshot['packed_weight'] ?? $movement->packed_total_weight ?? 0),
                     'movement' => $movement,
@@ -617,6 +627,11 @@ class WarehouseDispatchSlipController extends Controller
                         'customer_name' => $order->customer?->name,
                         'sale_name' => $order->user?->short_name ?: $order->user?->name,
                         'note' => $order->note,
+                        'package_count' => $order->package_count,
+                        'packing_specification' => $order->packing_specification,
+                        'foam_box_fee' => (float) (($order->charge_foam_box_fee ?? false) ? ($order->foam_box_price ?? 0) : 0),
+                        'shipping_fee' => $this->billableShippingFee($order),
+                        'discount' => (float) ($order->total_discount ?? 0),
                         'item_quantity' => (int) $order->items->sum('quantity'),
                         'packed_weight' => (float) ($movement?->packed_total_weight ?? 0),
                         'items' => $order->items->filter(fn ($item) => $item->product_variant_id)->map(fn ($item) => [
@@ -646,6 +661,11 @@ class WarehouseDispatchSlipController extends Controller
                     'customer_name' => $order->customer?->name,
                     'sale_name' => $order->user?->short_name ?: $order->user?->name,
                     'note' => $order->note,
+                    'package_count' => $order->package_count,
+                    'packing_specification' => $order->packing_specification,
+                    'foam_box_fee' => (float) (($order->charge_foam_box_fee ?? false) ? ($order->foam_box_price ?? 0) : 0),
+                    'shipping_fee' => $this->billableShippingFee($order),
+                    'discount' => (float) ($order->total_discount ?? 0),
                     'item_quantity' => (int) $order->items->sum('quantity'),
                     'packed_weight' => (float) ($movement->packed_total_weight ?? 0),
                     'items' => $order->items->filter(fn ($item) => $item->product_variant_id)->map(fn ($item) => [
@@ -679,6 +699,18 @@ class WarehouseDispatchSlipController extends Controller
                 ])->values()->all() ?? [],
             ],
         ];
+    }
+
+    private function billableShippingFee(Order $order): float
+    {
+        $assignedFee = (bool) ($order->charge_shipping_fee ?? false)
+            ? max(0, (float) ($order->shipping_fee ?? 0))
+            : 0.0;
+        $customerFee = (bool) ($order->collect_customer_shipping_fee ?? false)
+            ? max(0, (float) ($order->customer_shipping_fee ?? 0))
+            : 0.0;
+
+        return $assignedFee + $customerFee;
     }
 
     private function attachProgress(WarehouseDispatchSlip $slip): void

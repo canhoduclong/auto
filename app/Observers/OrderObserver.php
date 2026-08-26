@@ -127,6 +127,8 @@ class OrderObserver
             'payment_status' => 'Trạng thái thanh toán',
             'total_weight' => 'Tổng khối lượng',
             'actual_weight' => 'Khối lượng thực tế',
+            'package_count' => 'Số bọc',
+            'packing_specification' => 'Quy cách bọc',
             'charge_shipping_fee' => 'Tính phí giao hàng',
             'collect_customer_shipping_fee' => 'Thu phí ship khách',
             'charge_foam_box_fee' => 'Tính phí thùng xốp',
@@ -168,6 +170,10 @@ class OrderObserver
 
         if (in_array($field, ['total_weight', 'actual_weight'], true)) {
             return rtrim(rtrim(number_format((float) $value, 3, ',', '.'), '0'), ',').' kg';
+        }
+
+        if ($field === 'package_count') {
+            return number_format((int) $value).' bọc';
         }
 
         if ($field === 'vat_percent') {

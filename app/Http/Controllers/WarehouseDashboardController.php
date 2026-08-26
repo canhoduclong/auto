@@ -2373,13 +2373,54 @@ class WarehouseDashboardController extends Controller
         $rules = [
             'item_id' => ['nullable', 'integer'],
             'item_actual_weight' => ['nullable', 'numeric', 'min:0'],
+            'packing_details' => ['nullable', 'boolean'],
         ];
 
         if ($request->filled('item_id')) {
             $rules['item_actual_weight'] = ['required', 'numeric', 'min:0'];
         }
 
+        if ($request->boolean('packing_details')) {
+            $rules['package_count'] = ['nullable', 'integer', 'min:1', 'max:10000'];
+            $rules['packing_specification'] = ['nullable', 'string', 'max:500', 'required_without:package_count'];
+        }
+
         $validated = $request->validate($rules);
+
+        $packingDetailsUpdated = $request->boolean('packing_details');
+
+        if ($packingDetailsUpdated) {
+            $order->update([
+                'package_count' => filled($validated['package_count'] ?? null) ? (int) $validated['package_count'] : null,
+                'packing_specification' => trim((string) ($validated['packing_specification'] ?? '')) ?: null,
+            ]);
+
+            OrderHistory::create([
+                'order_id' => $order->id,
+                'action' => 'warehouse_update_packing_details',
+                'user_id' => Auth::id(),
+                'role' => $this->packingActorRole(),
+                'status_before' => $order->status,
+                'status_after' => $order->status,
+                'note' => 'Cập nhật đóng gói: '.($order->package_count ? $order->package_count.' bọc' : 'chưa xác định số bọc')
+                    .($order->packing_specification ? ' · Quy cách: '.$order->packing_specification : ''),
+            ]);
+
+            $message = 'Đã lưu số bọc/quy cách bọc cho đơn #'.$order->code;
+            if ($expectsJson) {
+                return response()->json([
+                    'ok' => true,
+                    'message' => $message,
+                    'order' => [
+                        'id' => (int) $order->id,
+                        'package_count' => $order->package_count,
+                        'packing_specification' => $order->packing_specification,
+                    ],
+                ]);
+            }
+
+            return back()->with('success', $message);
+        }
 
         $oldWeight = $order->actual_weight;
 

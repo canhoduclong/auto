@@ -507,6 +507,43 @@
                                 </ul>
                             </div> 
 
+                            @if($canProcessThisOrder && $isPacking)
+                                <div class="wh-section mt-2 pt-2 border-top">
+                                    <div class="wh-logistics-title">Số bọc và quy cách bọc</div>
+                                    <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.logistics', $order) }}" method="POST" class="js-logistics-fee-form">
+                                        @csrf
+                                        <input type="hidden" name="packing_details" value="1">
+                                        <div class="row g-2 align-items-end">
+                                            <div class="col-md-3">
+                                                <label class="form-label small mb-1">Số bọc</label>
+                                                <input type="number" name="package_count" class="form-control form-control-sm"
+                                                       min="1" max="10000" step="1" inputmode="numeric"
+                                                       value="{{ $order->package_count }}" placeholder="VD: 3">
+                                            </div>
+                                            <div class="col-md-7">
+                                                <label class="form-label small mb-1">Quy cách bọc</label>
+                                                <textarea name="packing_specification" class="form-control form-control-sm" rows="2" maxlength="500"
+                                                          placeholder="Nếu chưa có số bọc, nhập quy cách: 2 bọc × 5 kg, 1 bọc × 3 kg...">{{ $order->packing_specification }}</textarea>
+                                            </div>
+                                            <div class="col-md-2 d-grid">
+                                                <button class="btn btn-sm {{ $order->package_count || $order->packing_specification ? 'btn-secondary' : 'wh-warning-action-btn' }} js-logistics-submit-btn" type="submit">Lưu</button>
+                                            </div>
+                                        </div>
+                                        <div class="small text-muted mt-1">Nhập số bọc; nếu chưa xác định số bọc thì bắt buộc ghi quy cách bọc để thể hiện đúng trên phiếu xuất kho.</div>
+                                    </form>
+                                </div>
+                            @elseif($isPackedReadonly)
+                                <div class="wh-section mt-2 pt-2 border-top">
+                                    <div class="wh-logistics-title">Đóng gói</div>
+                                    <div class="small">
+                                        <strong>Số bọc:</strong> {{ $order->package_count ? number_format($order->package_count).' bọc' : 'Chưa cập nhật' }}
+                                        @if($order->packing_specification)
+                                            <span class="d-block mt-1"><strong>Quy cách:</strong> {{ $order->packing_specification }}</span>
+                                        @endif
+                                    </div>
+                                </div>
+                            @endif
+
                         </div>
                     </div>
 

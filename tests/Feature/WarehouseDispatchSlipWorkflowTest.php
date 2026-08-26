@@ -42,6 +42,13 @@ class WarehouseDispatchSlipWorkflowTest extends TestCase
             'warehouse_id' => $source->id,
             'code' => 'ORD-DISPATCH-1',
             'note' => 'Giữ lạnh khi bàn giao',
+            'package_count' => 3,
+            'packing_specification' => '2 bọc × 10 kg, 1 bọc × 5 kg',
+            'charge_foam_box_fee' => true,
+            'foam_box_price' => 15000,
+            'charge_shipping_fee' => true,
+            'shipping_fee' => 30000,
+            'total_discount' => 10000,
             'status' => Order::STATUS_READY_TO_SHIP,
         ]);
         $order->forceFill(['order_transfer_id' => $orderTransfer->id])->save();
@@ -96,6 +103,14 @@ class WarehouseDispatchSlipWorkflowTest extends TestCase
             ->assertOk()
             ->assertSee('Ghi chú đơn')
             ->assertSee('Giữ lạnh khi bàn giao')
+            ->assertSee('3 bọc')
+            ->assertSee('2 bọc × 10 kg, 1 bọc × 5 kg')
+            ->assertSee('Thùng xốp:')
+            ->assertSee('15.000đ')
+            ->assertSee('Ship:')
+            ->assertSee('30.000đ')
+            ->assertSee('CK:')
+            ->assertSee('10.000đ')
             ->assertSee('B. PHIẾU ĐIỀU CHUYỂN HÀNG')
             ->assertSee('Ghi chú điều chuyển')
             ->assertSee('Hàng điều chuyển cần bảo quản lạnh')

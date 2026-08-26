@@ -1616,7 +1616,7 @@
             });
         });
 
-        document.querySelectorAll('.js-logistics-fee-form input').forEach(function (input) {
+        document.querySelectorAll('.js-logistics-fee-form input, .js-logistics-fee-form textarea').forEach(function (input) {
             input.addEventListener('input', function () {
                 const submitBtn = input.closest('form')?.querySelector('.js-logistics-submit-btn');
                 if (submitBtn) {
