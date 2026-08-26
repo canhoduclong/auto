@@ -156,8 +156,10 @@ class WarehouseDispatchSlipWorkflowTest extends TestCase
         $this->actingAs($warehouseUser)
             ->get(route('warehouse.dispatch-slips.index'))
             ->assertOk()
+            ->assertSee('Phiếu điều chuyển đơn')
             ->assertSee('Đơn giao tài xế riêng')
-            ->assertSee('ORD-DIRECT-1');
+            ->assertSee('ORD-DIRECT-1')
+            ->assertSee('SL: 0');
 
         $this->actingAs($warehouseUser)
             ->post(route('warehouse.dispatch-slips.store'), [

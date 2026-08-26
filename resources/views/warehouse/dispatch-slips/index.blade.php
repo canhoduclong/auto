@@ -4,7 +4,7 @@
 
 @push('styles')
 <style>
-.dispatch-hero,.dispatch-panel{border:1px solid #dbe5e3;border-radius:12px;background:#fff}.dispatch-hero{padding:18px;background:linear-gradient(135deg,#0f766e,#115e59);color:#fff}.dispatch-panel{padding:16px}.dispatch-source-list{max-height:360px;overflow:auto;border:1px solid #e2e8f0;border-radius:9px}.dispatch-source-row{display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:9px;align-items:start;padding:10px 12px;border-bottom:1px solid #eef2f7}.dispatch-source-row:last-child{border-bottom:0}.dispatch-source-row.is-hidden{display:none}.dispatch-slip-card{border:1px solid #dbe5e3;border-left:4px solid #0f766e;border-radius:10px;padding:13px;background:#fff}.dispatch-progress{height:7px;border-radius:99px;background:#e2e8f0;overflow:hidden}.dispatch-progress>span{display:block;height:100%;background:#0f766e}.dispatch-empty{padding:24px;text-align:center;color:#64748b}
+.dispatch-hero,.dispatch-panel{border:1px solid #dbe5e3;border-radius:12px;background:#fff}.dispatch-hero{padding:18px;background:linear-gradient(135deg,#0f766e,#115e59);color:#fff}.dispatch-panel{padding:16px}.dispatch-source-list{max-height:440px;overflow:auto;border:1px solid #e2e8f0;border-radius:9px}.dispatch-source-row{display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:9px;align-items:start;padding:10px 12px;border-bottom:1px solid #eef2f7}.dispatch-source-row:last-child{border-bottom:0}.dispatch-source-row.is-hidden{display:none}.dispatch-order-list{margin-top:8px;border-top:1px dashed #dbe5e3}.dispatch-order-line{display:grid;grid-template-columns:minmax(105px,.8fr) minmax(150px,1.35fr) auto;gap:8px;padding:7px 0;border-bottom:1px dashed #edf2f7}.dispatch-order-line:last-child{border-bottom:0}.dispatch-order-products{font-size:.78rem;color:#64748b}.dispatch-quantity{white-space:nowrap;text-align:right;font-size:.8rem}.dispatch-slip-card{border:1px solid #dbe5e3;border-left:4px solid #0f766e;border-radius:10px;padding:13px;background:#fff}.dispatch-progress{height:7px;border-radius:99px;background:#e2e8f0;overflow:hidden}.dispatch-progress>span{display:block;height:100%;background:#0f766e}.dispatch-empty{padding:24px;text-align:center;color:#64748b}@media(max-width:767.98px){.dispatch-order-line{grid-template-columns:1fr auto}.dispatch-order-products{grid-column:1/-1}.dispatch-source-row{grid-template-columns:24px minmax(0,1fr)}.dispatch-source-row>span:last-child{grid-column:2;text-align:left!important}}
 </style>
 @endpush
 
@@ -57,16 +57,41 @@
         </div>
 
         <div class="row g-3 mt-1">
-            <div class="col-xl-4">
+            <div class="col-xl-5">
                 <div class="d-flex justify-content-between align-items-center mb-2">
-                    <div><strong>Đơn đã đóng gói</strong><div class="small text-muted">Chỉ hiện nhóm đơn cùng kho nhận và tài xế đã chọn.</div></div>
-                    <span class="badge bg-light text-dark border">{{ $orderTransfers->count() }} nhóm khả dụng</span>
+                    <div><strong>Phiếu điều chuyển đơn</strong><div class="small text-muted">Hiển thị đầy đủ từng đơn và số lượng trong nhóm đã đóng gói.</div></div>
+                    <span class="badge bg-light text-dark border">{{ $orderTransfers->sum(fn ($transfer) => $transfer->orders->count()) }} đơn / {{ $orderTransfers->count() }} nhóm</span>
                 </div>
                 <div class="dispatch-source-list" id="dispatchOrderSources">
                     @forelse($orderTransfers as $transfer)
+                        @php
+                            $groupQuantity = $transfer->orders->sum(fn ($order) => $order->items->sum('quantity'));
+                            $groupWeight = $transfer->orders->sum(fn ($order) => (float) $order->warehouseTransfers->first()?->packed_total_weight);
+                        @endphp
                         <label class="dispatch-source-row" data-target="{{ $transfer->warehouse_id }}" data-shipper="{{ $transfer->shipper_id }}">
                             <input type="checkbox" class="form-check-input mt-1 dispatch-entry-check" name="order_transfer_ids[]" value="{{ $transfer->id }}" @checked(in_array($transfer->id, old('order_transfer_ids', [])))>
-                            <span><strong>Nhóm đơn #{{ $transfer->id }}</strong><span class="d-block small text-muted">{{ $transfer->orders->count() }} đơn · {{ $transfer->orders->pluck('customer.name')->filter()->join(', ') }}</span></span>
+                            <span>
+                                <strong>Nhóm đơn #{{ $transfer->id }}</strong>
+                                <span class="d-block small text-muted">{{ $transfer->orders->count() }} đơn · Tổng SL: {{ number_format($groupQuantity) }} · {{ number_format($groupWeight, 3, ',', '.') }} kg</span>
+                                <span class="dispatch-order-list d-block">
+                                    @foreach($transfer->orders as $order)
+                                        @php
+                                            $movement = $order->warehouseTransfers->first();
+                                            $products = $order->items->map(function ($item) {
+                                                $name = $item->variant?->product?->name ?? $item->variant?->name ?? 'Sản phẩm';
+                                                $variant = collect([$item->variant?->sku, $item->variant?->size])->filter()->join('/');
+
+                                                return $name.($variant ? ' ('.$variant.')' : '').' × '.number_format((int) $item->quantity);
+                                            })->join(', ');
+                                        @endphp
+                                        <span class="dispatch-order-line">
+                                            <span><strong>{{ $order->code ?: 'Đơn #'.$order->id }}</strong><span class="d-block small text-muted">{{ $order->customer?->name ?: 'Không rõ khách' }}</span></span>
+                                            <span class="dispatch-order-products">{{ $products ?: 'Chưa có chi tiết hàng hóa' }}</span>
+                                            <span class="dispatch-quantity"><strong>SL: {{ number_format((int) $order->items->sum('quantity')) }}</strong><br>{{ number_format((float) $movement?->packed_total_weight, 3, ',', '.') }} kg</span>
+                                        </span>
+                                    @endforeach
+                                </span>
+                            </span>
                             <span class="small text-end">{{ $transfer->shipper?->short_name ?: $transfer->shipper?->name }}<br>{{ $transfer->warehouse?->name }}</span>
                         </label>
                     @empty
@@ -84,7 +109,7 @@
                     @forelse($warehouseTransfers as $transfer)
                         <label class="dispatch-source-row" data-target="{{ $transfer->target_warehouse_id }}" data-shipper="{{ $transfer->shipper_id }}">
                             <input type="checkbox" class="form-check-input mt-1 dispatch-entry-check" name="warehouse_transfer_ids[]" value="{{ $transfer->id }}" @checked(in_array($transfer->id, old('warehouse_transfer_ids', [])))>
-                            <span><strong>{{ $transfer->order?->code ?: 'Đơn #'.$transfer->order_id }}</strong><span class="d-block small text-muted">{{ $transfer->order?->customer?->name ?: 'Không rõ khách' }} · {{ number_format((float) $transfer->packed_total_weight, 3, ',', '.') }} kg</span></span>
+                            <span><strong>{{ $transfer->order?->code ?: 'Đơn #'.$transfer->order_id }}</strong><span class="d-block small text-muted">{{ $transfer->order?->customer?->name ?: 'Không rõ khách' }} · SL: {{ number_format((int) $transfer->order?->items?->sum('quantity')) }} · {{ number_format((float) $transfer->packed_total_weight, 3, ',', '.') }} kg</span><span class="dispatch-order-products d-block mt-1">{{ $transfer->order?->items?->map(function ($item) { $name = $item->variant?->product?->name ?? $item->variant?->name ?? 'Sản phẩm'; $variant = collect([$item->variant?->sku, $item->variant?->size])->filter()->join('/'); return $name.($variant ? ' ('.$variant.')' : '').' × '.number_format((int) $item->quantity); })->join(', ') ?: 'Chưa có chi tiết hàng hóa' }}</span></span>
                             <span class="small text-end">{{ $transfer->shipper?->short_name ?: $transfer->shipper?->name }}<br>{{ $transfer->targetWarehouse?->name }}</span>
                         </label>
                     @empty
@@ -93,7 +118,7 @@
                     <div class="dispatch-empty d-none" data-filter-empty>Chọn đúng kho nhận và tài xế để xem đơn.</div>
                 </div>
             </div>
-            <div class="col-xl-4">
+            <div class="col-xl-3">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <div><strong>Hàng điều chuyển</strong><div class="small text-muted">Các phiếu hàng cùng kho nhận, chưa thuộc phiếu tổng khác.</div></div>
                     <span class="badge bg-light text-dark border">{{ $inventoryTransfers->count() }} phiếu khả dụng</span>
