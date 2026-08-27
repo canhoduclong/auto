@@ -12,10 +12,14 @@ class AccountingSalesLedgerService
 {
     public function syncOrder(Order $order): int
     {
-        if (!Schema::hasTable('accounting_sales_entries')) return 0;
+        if (! Schema::hasTable('accounting_sales_entries')) {
+            return 0;
+        }
         $order->loadMissing(['customer', 'user', 'items.product', 'items.variant.product', 'accountingReconciliation']);
         $reconciliation = $order->accountingReconciliation;
-        if (!$reconciliation || $reconciliation->status !== AccountingReconciliation::STATUS_CONFIRMED) return 0;
+        if (! $reconciliation || $reconciliation->status !== AccountingReconciliation::STATUS_CONFIRMED) {
+            return 0;
+        }
 
         $date = ($order->accounting_sales_import_batch_id && $order->delivery_date
             ? $order->delivery_date
@@ -98,20 +102,30 @@ class AccountingSalesLedgerService
         AccountingReconciliation::where('status', AccountingReconciliation::STATUS_CONFIRMED)
             ->with('order')
             ->chunkById(100, function ($rows) use (&$orders, &$entries): void {
-                foreach ($rows as $row) if ($row->order) {
-                    $entries += $this->syncOrder($row->order);
-                    $orders++;
+                foreach ($rows as $row) {
+                    if ($row->order) {
+                        $entries += $this->syncOrder($row->order);
+                        $orders++;
+                    }
                 }
             });
+
         return compact('orders', 'entries');
     }
 
     public function ledgerUnit(?string $productName, ?string $unitLabel): string
     {
         $name = trim((string) $productName);
-        if ($name !== '' && !Str::contains(Str::lower($name), ['vịt nguyên con', 'nguyên con'])) {
+        $normalizedName = Str::lower(Str::ascii($name));
+
+        if (Str::contains($normalizedName, 'vit bong')) {
+            return 'Con';
+        }
+
+        if ($name !== '' && ! Str::contains($normalizedName, ['vit nguyen con', 'nguyen con'])) {
             return trim((string) preg_replace('/\s+vịt.*$/iu', '', $name)) ?: ($unitLabel ?: 'Sản phẩm');
         }
+
         return $unitLabel ?: 'Con';
     }
 }

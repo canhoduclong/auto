@@ -27,7 +27,10 @@ class AccountingSalesJournalTest extends TestCase
     {
         $admin = User::factory()->create();
         $admin->roles()->attach(Role::query()->create(['name' => 'admin']));
-        $sale = User::factory()->create(['name' => 'Duệ']);
+        $sale = User::factory()->create([
+            'name' => 'Nguyễn Văn Duệ',
+            'short_name' => 'Duệ',
+        ]);
         $customer = Customer::query()->create([
             'name' => 'HKD Trường Hưng',
             'customer_code' => '08349',

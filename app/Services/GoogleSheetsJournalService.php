@@ -15,6 +15,8 @@ use RuntimeException;
 
 class GoogleSheetsJournalService
 {
+    private const LAST_EXPORT_COLUMN = 'O';
+
     private const HEADERS = [
         'Ngày tháng',
         'Tháng',
@@ -100,7 +102,7 @@ class GoogleSheetsJournalService
             if ($values !== []) {
                 $service->spreadsheets_values->append(
                     $spreadsheetId,
-                    $rangePrefix.'!A:K',
+                    $rangePrefix.'!A:'.self::LAST_EXPORT_COLUMN,
                     new ValueRange([
                         'majorDimension' => 'ROWS',
                         'values' => $values,
@@ -209,19 +211,35 @@ class GoogleSheetsJournalService
 
     private function journalValues(Collection $rows): Collection
     {
-        return $rows->map(fn ($row) => [
-            Carbon::parse($row->entry_date)->format('d/m/Y'),
-            (int) $row->entry_month,
-            (string) $row->customer_code,
-            (string) $row->customer_name,
-            (string) $row->sale_name,
-            (string) $row->unit,
-            (float) $row->quantity,
-            (float) $row->unit_weight,
-            (float) $row->total_quantity,
-            $row->unit_price === null ? '' : (float) $row->unit_price,
-            (float) $row->total_amount,
-        ]);
+        return $rows->map(function ($row): array {
+            $entryDate = Carbon::parse($row->entry_date)->startOfDay();
+
+            return [
+                $entryDate->format('d/m/Y'),
+                (int) $row->entry_month,
+                (string) $row->customer_code,
+                (string) $row->customer_name,
+                (string) $row->sale_name,
+                (string) $row->unit,
+                (float) $row->quantity,
+                (float) $row->unit_weight,
+                (float) $row->total_quantity,
+                $row->unit_price === null ? '' : (float) $row->unit_price,
+                (float) $row->total_amount,
+                '',
+                '',
+                '',
+                $this->googleSheetsDateSerial($entryDate),
+            ];
+        });
+    }
+
+    /** Return the same numeric date value produced by DATEVALUE in Google Sheets. */
+    private function googleSheetsDateSerial(Carbon $date): int
+    {
+        $epoch = Carbon::create(1899, 12, 30, 0, 0, 0, $date->getTimezone());
+
+        return (int) $epoch->diffInDays($date);
     }
 
     /**
@@ -307,7 +325,7 @@ class GoogleSheetsJournalService
         // completely blank.
         $service->spreadsheets_values->clear(
             $spreadsheetId,
-            $rangePrefix.'!A'.(count($values) + 1).':K',
+            $rangePrefix.'!A'.(count($values) + 1).':'.self::LAST_EXPORT_COLUMN,
             new ClearValuesRequest
         );
 

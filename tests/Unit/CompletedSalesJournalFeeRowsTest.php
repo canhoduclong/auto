@@ -5,6 +5,7 @@ namespace Tests\Unit;
 use App\Models\Order;
 use App\Models\OrderAdjustment;
 use App\Models\OrderFee;
+use App\Models\User;
 use App\Services\AccountingSalesLedgerService;
 use App\Services\CompletedSalesJournalService;
 use Carbon\Carbon;
@@ -29,7 +30,10 @@ class CompletedSalesJournalFeeRowsTest extends TestCase
         $order->setAttribute('id', 99);
         $order->setAttribute('created_at', Carbon::parse('2026-08-23 08:00:00'));
         $order->setRelation('customer', null);
-        $order->setRelation('user', null);
+        $order->setRelation('user', new User([
+            'name' => 'Nguyễn Văn Duệ',
+            'short_name' => 'Duệ',
+        ]));
         $order->setRelation('items', collect());
         $order->setRelation('adjustments', collect());
         $order->setRelation('returnRecords', collect());
@@ -43,6 +47,7 @@ class CompletedSalesJournalFeeRowsTest extends TestCase
         $rows = $method->invoke(new CompletedSalesJournalService(new AccountingSalesLedgerService), $order);
 
         $this->assertCount(6, $rows);
+        $this->assertSame(['Duệ'], $rows->pluck('sale_name')->unique()->values()->all());
         $this->assertSame(30000.0, (float) $rows->firstWhere('row_key', 'shipping')->total_amount);
         $this->assertSame(-5000.0, (float) $rows->firstWhere('row_key', 'discount')->total_amount);
         $this->assertSame('charge', $rows->firstWhere('row_key', 'fee:1')->direction);

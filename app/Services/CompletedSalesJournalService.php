@@ -70,7 +70,7 @@ class CompletedSalesJournalService
         $orders = Order::query()
             ->with([
                 'customer:id,name,customer_code',
-                'user:id,name',
+                'user:id,name,short_name',
                 'items.product',
                 'items.variant.product',
                 'additionalFees:id,order_id,order_fee_type_id,order_adjustment_id,fee_code,fee_name,calculation_type,direction,rate,base_amount,amount',
@@ -137,7 +137,7 @@ class CompletedSalesJournalService
             'entry_month' => (int) substr($entryDate, 5, 2),
             'customer_code' => (string) ($order->customer?->customer_code ?? ''),
             'customer_name' => (string) ($order->customer?->name ?: $order->recipient_name ?: 'Khách hàng'),
-            'sale_name' => (string) ($order->user?->name ?? ''),
+            'sale_name' => (string) ($order->user?->short_name ?: $order->user?->name ?: ''),
             'order_id' => (int) $order->id,
             'order_code' => (string) ($order->code ?: ('#'.$order->id)),
         ];
