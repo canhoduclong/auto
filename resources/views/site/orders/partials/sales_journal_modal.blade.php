@@ -59,7 +59,7 @@
                         @csrf
                         <input type="hidden" name="date" value="{{ $selectedDate }}">
                         <button type="submit" class="btn btn-success" @disabled(! $googleSheetsConfigured)>
-                            <i class="bi bi-file-earmark-spreadsheet me-1"></i>Ghi lên Google Sheets
+                            <i class="bi bi-file-earmark-spreadsheet me-1"></i>Báo cáo lên File Điều Hành
                         </button>
                     </form>
                 </div>

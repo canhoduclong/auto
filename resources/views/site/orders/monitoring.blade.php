@@ -1214,6 +1214,8 @@
                     <button type="button" class="btn btn-sm btn-outline-primary monitor-icon-action" data-bs-toggle="collapse" data-bs-target="#monitorAutoApproval" aria-expanded="{{ $hasAutoApprovalErrors ? 'true' : 'false' }}" title="Cài đặt duyệt đơn tự động" aria-label="Cài đặt duyệt đơn tự động">
                         <i class="bi bi-gear"></i>
                     </button>
+                @endif
+                @if($canAccessMonitoringSalesJournal)
                     <button type="button" class="btn btn-sm btn-outline-primary monitor-icon-action" data-bs-toggle="modal" data-bs-target="#monitorSalesJournalModal" title="Nhật ký bán hàng ngày {{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}" aria-label="Mở nhật ký bán hàng">
                         <i class="bi bi-clock-history"></i>
                     </button>
@@ -1243,7 +1245,7 @@
                             class="btn btn-sm {{ $canApproveManagedSalesAny ? 'btn-success' : 'btn-secondary' }}"
                             @disabled(!$canApproveManagedSalesAny)
                             @if(!$canApproveManagedSalesAny) title="Không còn đơn PKD chờ duyệt" @endif>
-                            <i class="bi bi-check2-all me-1"></i>Duyệt đơn PKD
+                            <i class="bi bi-check2-all me-1"></i>Duyệt PKD
                         </button>
                     </form>
                 @endif
@@ -1262,7 +1264,7 @@
                             @if(!$canApproveAllAny)
                                 title="{{ $hasPendingLeaderApprovals ? 'Chờ các Trưởng phòng KD duyệt hết đơn PKD' : 'Không còn đơn chờ duyệt' }}"
                             @endif>
-                            <i class="bi bi-check2-all me-1"></i>Duyệt tất cả
+                            <i class="bi bi-check2-all me-1"></i>Duyệt All
                         </button>
                     </form>
                 @endif
@@ -1273,7 +1275,7 @@
             <button type="button" class="btn btn-sm btn-success" id="monitorOpenCreate">
                 <i class="bi bi-plus-circle me-1"></i>Thêm đơn
                 @if(\Carbon\Carbon::parse($selectedDate)->isBefore(\Carbon\Carbon::today()))
-                    ngày {{ \Carbon\Carbon::parse($selectedDate)->format('d/m') }}
+                    - {{ \Carbon\Carbon::parse($selectedDate)->format('d/m') }}
                 @endif
             </button>
         </div>
@@ -2238,7 +2240,7 @@
         </div>
     </div>
 </section>
-@if($activeTab === 'today' && $canConfigureAutoApproval)
+@if($activeTab === 'today' && $canAccessMonitoringSalesJournal)
     @include('site.orders.partials.sales_journal_modal')
 @endif
 @endsection

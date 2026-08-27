@@ -1110,13 +1110,14 @@ class PageController extends Controller
         $canApproveManagedSales = $this->canApproveManagedSalesFromMonitoring($user);
         $canApproveAllOrders = $this->canApproveAllFromMonitoring($user);
         $canConfigureAutoApproval = $canApproveManagedSales || $canApproveAllOrders;
+        $canAccessMonitoringSalesJournal = $this->canAccessMonitoringSalesJournal($user);
         $autoApprovalRules = $canConfigureAutoApproval
             ? $user->orderAutoApprovalRules()->get()->keyBy('order_type')
             : collect();
         $monitoringJournalRows = collect();
         $monitoringJournalSummary = ['rows' => 0, 'orders' => 0, 'quantity' => 0.0, 'amount' => 0.0];
         $googleSheetsConfigured = false;
-        if ($activeTab === 'today' && $canConfigureAutoApproval) {
+        if ($activeTab === 'today' && $canAccessMonitoringSalesJournal) {
             $monitoringJournalRows = app(CompletedSalesJournalService::class)
                 ->all($selectedDate, $selectedDate, 0, 0, 'date_asc');
             $monitoringJournalSummary = [
@@ -1438,6 +1439,7 @@ class PageController extends Controller
             'canApproveAllAny' => $canApproveAllAny,
             'hasPendingLeaderApprovals' => $hasPendingLeaderApprovals,
             'canConfigureAutoApproval' => $canConfigureAutoApproval,
+            'canAccessMonitoringSalesJournal' => $canAccessMonitoringSalesJournal,
             'autoApprovalRules' => $autoApprovalRules,
             'monitoringJournalRows' => $monitoringJournalRows,
             'monitoringJournalSummary' => $monitoringJournalSummary,
@@ -1458,7 +1460,7 @@ class PageController extends Controller
         GoogleSheetsJournalService $googleSheets
     ) {
         $user = $this->monitoringUserOrFail();
-        if (! ($this->canApproveManagedSalesFromMonitoring($user) || $this->canApproveAllFromMonitoring($user))) {
+        if (! $this->canAccessMonitoringSalesJournal($user)) {
             abort(403, 'Bạn không có quyền ghi nhật ký bán hàng lên Google Sheets.');
         }
 
@@ -3124,6 +3126,11 @@ class PageController extends Controller
     private function canApproveAllFromMonitoring(User $user): bool
     {
         return $user->hasRole(['manager', 'manager_sale', 'director', 'admin']);
+    }
+
+    private function canAccessMonitoringSalesJournal(User $user): bool
+    {
+        return $user->hasRole(['manager', 'manager_sale']);
     }
 
     private function applyManagedSalesScope(Builder $query, User $user): Builder

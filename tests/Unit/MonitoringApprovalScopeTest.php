@@ -36,6 +36,20 @@ class MonitoringApprovalScopeTest extends TestCase
         $this->assertFalse($method->invoke($controller, $this->userWithRole('director')));
     }
 
+    public function test_only_manager_roles_can_access_monitoring_sales_journal(): void
+    {
+        $controller = (new ReflectionClass(PageController::class))->newInstanceWithoutConstructor();
+        $method = new \ReflectionMethod(PageController::class, 'canAccessMonitoringSalesJournal');
+
+        $this->assertTrue($method->invoke($controller, $this->userWithRole('manager')));
+        $this->assertTrue($method->invoke($controller, $this->userWithRole('manager_sale')));
+        $this->assertFalse($method->invoke($controller, $this->userWithRole('leader')));
+        $this->assertFalse($method->invoke($controller, $this->userWithRole('sale_manager')));
+        $this->assertFalse($method->invoke($controller, $this->userWithRole('director')));
+        $this->assertFalse($method->invoke($controller, $this->userWithRole('admin')));
+        $this->assertFalse($method->invoke($controller, $this->userWithRole('sale')));
+    }
+
     public function test_leader_can_only_approve_sale_in_the_same_team(): void
     {
         $controller = (new ReflectionClass(OrderApprovalController::class))->newInstanceWithoutConstructor();
