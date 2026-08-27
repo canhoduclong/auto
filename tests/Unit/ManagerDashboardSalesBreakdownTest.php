@@ -25,9 +25,11 @@ class ManagerDashboardSalesBreakdownTest extends TestCase
         $method = new ReflectionMethod(MyDashboardController::class, 'managerSalesBreakdown');
         $method->setAccessible(true);
 
-        /** @var array{revenue: float, quantity: float, customer_count: int, sales: Collection, products: Collection, customers: Collection} $result */
+        /** @var array{goods_revenue: float, fee_revenue: float, revenue: float, quantity: float, customer_count: int, sales: Collection, products: Collection, customers: Collection} $result */
         $result = $method->invoke($controller, $rows);
 
+        $this->assertSame(8_750_000.0, $result['goods_revenue']);
+        $this->assertSame(10_000.0, $result['fee_revenue']);
         $this->assertSame(8_760_000.0, $result['revenue']);
         $this->assertSame(65.0, $result['quantity']);
         $this->assertSame(2, $result['customer_count']);

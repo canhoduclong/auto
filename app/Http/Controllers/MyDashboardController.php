@@ -766,8 +766,7 @@ class MyDashboardController extends Controller
             $to->toDateString(),
             0,
             0,
-            'date_asc',
-            $memberIds
+            'date_asc'
         );
         $salesBreakdown = $this->managerSalesBreakdown($journalRows);
         $orderIds = $journalRows->pluck('order_id')->filter()->unique()->values();
@@ -834,6 +833,8 @@ class MyDashboardController extends Controller
             'customers' => (int) $salesBreakdown['customer_count'],
             'quantity' => $quantity,
             'orders' => (int) $orderIds->count(),
+            'goods_revenue' => (float) $salesBreakdown['goods_revenue'],
+            'fee_revenue' => (float) $salesBreakdown['fee_revenue'],
             'revenue' => (float) $salesBreakdown['revenue'],
             'collected' => $collected,
             'defect_rate' => $quantity > 0 ? round($returnedQuantity * 100 / $quantity, 2) : 0.0,
@@ -991,6 +992,10 @@ class MyDashboardController extends Controller
             ->values();
 
         return [
+            'goods_revenue' => (float) $productRows->sum('total_amount'),
+            'fee_revenue' => (float) $journalRows
+                ->reject(fn ($row) => ($row->entry_type ?? 'product') === 'product')
+                ->sum('total_amount'),
             'revenue' => (float) $journalRows->sum('total_amount'),
             'quantity' => (float) $productRows->sum('quantity'),
             'customer_count' => $journalRows

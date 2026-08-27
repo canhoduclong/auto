@@ -110,7 +110,9 @@
         <article class="manager-panel panel-teal">
             <h2>Công nợ phải thu</h2>
             <dl class="manager-metric-list">
-                <div><dt>Doanh thu bán hàng</dt><dd>{{ number_format($summary['revenue'] ?? 0, 0, ',', '.') }}đ</dd></div>
+                <div><dt>Tiền hàng</dt><dd>{{ number_format($summary['goods_revenue'] ?? 0, 0, ',', '.') }}đ</dd></div>
+                <div><dt>Phí/VAT/chiết khấu</dt><dd>{{ number_format($summary['fee_revenue'] ?? 0, 0, ',', '.') }}đ</dd></div>
+                <div><dt>Tổng doanh thu Nhật ký</dt><dd>{{ number_format($summary['revenue'] ?? 0, 0, ',', '.') }}đ</dd></div>
                 <div><dt>Đã thu</dt><dd>{{ number_format($summary['collected'] ?? 0, 0, ',', '.') }}đ</dd></div>
                 <div><dt>Công nợ phải thu</dt><dd>{{ number_format($summary['receivables'] ?? 0, 0, ',', '.') }}đ</dd></div>
                 <div><dt>Công nợ quá hạn trên 7 ngày</dt><dd>{{ number_format($summary['overdue_receivables'] ?? 0, 0, ',', '.') }}đ</dd></div>

@@ -56,8 +56,7 @@ class CompletedSalesJournalService
         string $toDate,
         int $saleId = 0,
         int $customerId = 0,
-        string $sort = 'date_desc',
-        array $saleIds = []
+        string $sort = 'date_desc'
     ): Collection {
         // Keep the journal on the same business date as order monitoring:
         // imported workflow orders belong to their delivery/operational day,
@@ -97,7 +96,6 @@ class CompletedSalesJournalService
             })
             ->whereRaw("{$dateExpression} BETWEEN ? AND ?", [$fromDate, $toDate])
             ->when($saleId > 0, fn ($orders) => $orders->where('user_id', $saleId))
-            ->when($saleId <= 0 && $saleIds !== [], fn ($orders) => $orders->whereIn('user_id', $saleIds))
             ->when($customerId > 0, fn ($orders) => $orders->where('customer_id', $customerId))
             ->orderByRaw("{$dateExpression}")
             ->orderBy('id')
