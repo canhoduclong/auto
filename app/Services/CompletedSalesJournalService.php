@@ -56,7 +56,8 @@ class CompletedSalesJournalService
         string $toDate,
         int $saleId = 0,
         int $customerId = 0,
-        string $sort = 'date_desc'
+        string $sort = 'date_desc',
+        array $saleIds = []
     ): Collection {
         // Keep the journal on the same business date as order monitoring:
         // imported workflow orders belong to their delivery/operational day,
@@ -96,6 +97,7 @@ class CompletedSalesJournalService
             })
             ->whereRaw("{$dateExpression} BETWEEN ? AND ?", [$fromDate, $toDate])
             ->when($saleId > 0, fn ($orders) => $orders->where('user_id', $saleId))
+            ->when($saleId <= 0 && $saleIds !== [], fn ($orders) => $orders->whereIn('user_id', $saleIds))
             ->when($customerId > 0, fn ($orders) => $orders->where('customer_id', $customerId))
             ->orderByRaw("{$dateExpression}")
             ->orderBy('id')
@@ -136,7 +138,9 @@ class CompletedSalesJournalService
             'entry_date' => $entryDate,
             'entry_month' => (int) substr($entryDate, 5, 2),
             'customer_code' => (string) ($order->customer?->customer_code ?? ''),
+            'customer_id' => (int) ($order->customer_id ?? 0),
             'customer_name' => (string) ($order->customer?->name ?: $order->recipient_name ?: 'Khách hàng'),
+            'sale_id' => (int) ($order->user_id ?? 0),
             'sale_name' => (string) ($order->user?->short_name ?: $order->user?->name ?: ''),
             'order_id' => (int) $order->id,
             'order_code' => (string) ($order->code ?: ('#'.$order->id)),
@@ -165,6 +169,7 @@ class CompletedSalesJournalService
 
             $rows->push((object) array_merge($base, [
                 'row_key' => 'item:'.$item->id,
+                'product_name' => (string) ($product?->name ?: $item->display_name ?: 'Sản phẩm'),
                 'unit' => $this->ledgerService->ledgerUnit($product?->name ?: $item->display_name, $product?->unit_label),
                 'quantity' => $quantity,
                 'unit_weight' => $unitWeight,

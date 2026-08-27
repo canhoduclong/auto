@@ -22,6 +22,7 @@ use App\Notifications\WarehouseNewOrderApproved;
 use App\Notifications\WarehouseOrderAdjustmentConfirmed;
 use App\Notifications\WarehouseOrderAdjustmentRejected;
 use App\Services\ApprovalService;
+use App\Services\CompletedSalesJournalService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\View\View;
 
@@ -744,7 +745,7 @@ class MyDashboardController extends Controller
         $current = $this->managerPeriodSnapshot($memberIds, $from, $to);
         $previous = $this->managerPeriodSnapshot($memberIds, $previousFrom, $previousTo, false);
 
-        foreach (['customers', 'quantity', 'defect_rate', 'receivables', 'shipping_cost'] as $key) {
+        foreach (['customers', 'quantity', 'revenue', 'defect_rate', 'receivables', 'shipping_cost'] as $key) {
             $current['changes'][$key] = $this->percentageChange(
                 (float) ($current['summary'][$key] ?? 0),
                 (float) ($previous['summary'][$key] ?? 0)
@@ -760,22 +761,22 @@ class MyDashboardController extends Controller
 
     private function managerPeriodSnapshot(array $memberIds, Carbon $from, Carbon $to, bool $withDetails = true): array
     {
-        $excludedStatuses = ['draft', 'cancelled', 'rejected'];
+        $journalRows = app(CompletedSalesJournalService::class)->all(
+            $from->toDateString(),
+            $to->toDateString(),
+            0,
+            0,
+            'date_asc',
+            $memberIds
+        );
+        $salesBreakdown = $this->managerSalesBreakdown($journalRows);
+        $orderIds = $journalRows->pluck('order_id')->filter()->unique()->values();
         $orders = Order::query()
-            ->with($withDetails ? ['items.variant', 'user:id,name', 'customer:id,created_at'] : [])
-            ->whereIn('user_id', $memberIds)
-            ->whereBetween('created_at', [$from, $to])
-            ->whereNotIn('status', $excludedStatuses)
-            ->when(Schema::hasColumn('orders', 'is_return_order'), fn ($q) => $q->where(function ($nested) {
-                $nested->whereNull('is_return_order')->orWhere('is_return_order', false);
-            }))
+            ->with($withDetails ? ['user:id,name,short_name', 'customer:id,created_at'] : [])
+            ->whereIn('id', $orderIds)
             ->get();
 
-        $orderIds = $orders->pluck('id');
-        $items = $withDetails ? $orders->pluck('items')->flatten() : collect();
-        $quantity = $withDetails
-            ? (int) $items->sum(fn ($item) => (int) ($item->quantity ?? 0))
-            : (int) DB::table('order_items')->whereIn('order_id', $orderIds)->sum('quantity');
+        $quantity = (float) $salesBreakdown['quantity'];
 
         $returnRows = collect();
         $returnedQuantityByOrder = collect();
@@ -786,7 +787,7 @@ class MyDashboardController extends Controller
         if (Schema::hasTable('order_returns')) {
             $returnRows = DB::table('order_returns as ore')
                 ->join('orders as return_orders', 'return_orders.id', '=', 'ore.order_id')
-                ->whereIn('return_orders.user_id', $memberIds)
+                ->whereIn('ore.order_id', $orderIds)
                 ->whereBetween('ore.created_at', [$from, $to])
                 ->get(['ore.*', 'return_orders.user_id as sale_user_id']);
             $returnIds = $returnRows->pluck('id');
@@ -814,6 +815,10 @@ class MyDashboardController extends Controller
         $receivables = Schema::hasColumn('orders', 'amount_due')
             ? (float) $orders->sum('amount_due')
             : 0.0;
+        $collected = (float) $orders->sum(fn ($order) => max(
+            (float) ($order->amount_paid ?? 0),
+            (float) ($order->collected_amount ?? 0)
+        ));
         $overdue = Schema::hasColumn('orders', 'amount_due')
             ? (float) $orders->filter(fn ($order) => (float) $order->amount_due > 0 && $order->created_at->lt(now()->subDays(7)))->sum('amount_due')
             : 0.0;
@@ -826,8 +831,11 @@ class MyDashboardController extends Controller
         $shippingCost = $deliveryShippingCost + $returnShippingCost;
 
         $summary = [
-            'customers' => (int) $orders->pluck('customer_id')->filter()->unique()->count(),
+            'customers' => (int) $salesBreakdown['customer_count'],
             'quantity' => $quantity,
+            'orders' => (int) $orderIds->count(),
+            'revenue' => (float) $salesBreakdown['revenue'],
+            'collected' => $collected,
             'defect_rate' => $quantity > 0 ? round($returnedQuantity * 100 / $quantity, 2) : 0.0,
             'receivables' => $receivables,
             'shipping_cost' => $shippingCost,
@@ -843,14 +851,13 @@ class MyDashboardController extends Controller
             ['key' => 'size_3', 'label' => 'Size 3', 'range' => '2,5 – 3,0 kg', 'min' => 2.5, 'max' => 3.001, 'color' => '#f59e0b'],
             ['key' => 'size_4', 'label' => 'Size 4', 'range' => '>3,0 kg', 'min' => 3.001, 'max' => PHP_FLOAT_MAX, 'color' => '#dc2638'],
         ];
-        $sizes = collect($sizeDefinitions)->map(function (array $definition) use ($items, $quantity) {
-            $sizeQuantity = (int) $items->sum(function ($item) use ($definition) {
-                $weight = (float) ($item->unit_weight ?? 0);
-                if ($weight <= 0) {
-                    $weight = (float) ($item->variant?->size ?? 0);
-                }
+        $productJournalRows = $journalRows->filter(fn ($row) => ($row->entry_type ?? 'product') === 'product');
+        $sizes = collect($sizeDefinitions)->map(function (array $definition) use ($productJournalRows, $quantity) {
+            $sizeQuantity = (float) $productJournalRows->sum(function ($row) use ($definition) {
+                $weight = (float) ($row->unit_weight ?? 0);
+
                 return $weight >= $definition['min'] && $weight < $definition['max']
-                    ? (int) ($item->quantity ?? 0)
+                    ? (float) ($row->quantity ?? 0)
                     : 0;
             });
             return array_merge($definition, [
@@ -860,16 +867,19 @@ class MyDashboardController extends Controller
         })->values();
         $bestSize = $sizes->sortByDesc('quantity')->first();
 
-        $confirmedRevenueByUser = $this->confirmedRevenueByUser($memberIds, $from, $to);
-
-        $employeeRows = $orders->groupBy('user_id')->map(function (Collection $userOrders, $userId) use ($confirmedRevenueByUser, $returnedQuantityByUser, $returnShippingByUser, $from, $to) {
-            $employeeQuantity = (int) $userOrders->pluck('items')->flatten()->sum('quantity');
+        $ordersByUser = $orders->groupBy('user_id');
+        $employeeRows = $salesBreakdown['sales']->map(function (array $sale, int $index) use ($ordersByUser, $returnedQuantityByUser, $returnShippingByUser, $from, $to) {
+            $userId = (int) $sale['sale_id'];
+            $userOrders = $ordersByUser->get($userId, collect());
+            $employeeQuantity = (float) $sale['quantity'];
             $employeeReturns = (int) ($returnedQuantityByUser[$userId] ?? 0);
             $completed = (int) $userOrders->whereIn('status', ['delivered', 'completed'])->count();
             return [
-                'name' => (string) ($userOrders->first()?->user?->name ?? ('NV #' . $userId)),
+                'rank' => $index + 1,
+                'name' => (string) $sale['sale_name'],
                 'quantity' => $employeeQuantity,
-                'revenue' => (float) ($confirmedRevenueByUser[$userId] ?? 0),
+                'revenue' => (float) $sale['revenue'],
+                'orders' => (int) $sale['orders'],
                 'new_customers' => $userOrders->filter(fn ($order) => $order->customer && $order->customer->created_at->between($from, $to))->pluck('customer_id')->unique()->count(),
                 'defect_rate' => $employeeQuantity > 0 ? round($employeeReturns * 100 / $employeeQuantity, 1) : 0,
                 'debt' => (float) $userOrders->sum('amount_due'),
@@ -877,7 +887,15 @@ class MyDashboardController extends Controller
                     + (float) ($returnShippingByUser[$userId] ?? 0),
                 'completion_rate' => $userOrders->count() > 0 ? round($completed * 100 / $userOrders->count(), 1) : 0,
             ];
-        })->sortByDesc('revenue')->values();
+        })->values();
+
+        $debtByCustomer = $orders->groupBy('customer_id')
+            ->map(fn (Collection $customerOrders) => (float) $customerOrders->sum('amount_due'));
+        $topCustomers = $salesBreakdown['customers']->map(function (array $customer) use ($debtByCustomer): array {
+            $customer['debt'] = (float) ($debtByCustomer[$customer['customer_id']] ?? 0);
+
+            return $customer;
+        });
 
         $completedOrders = $orders->whereIn('status', ['delivered', 'completed']);
         $onTimeOrders = $completedOrders->filter(function ($order) {
@@ -900,10 +918,90 @@ class MyDashboardController extends Controller
             'return_reasons' => $returnRows->groupBy(fn ($row) => trim((string) ($row->reason ?? '')) ?: 'Khác')
                 ->map->count()->sortDesc()->take(4),
             'employees' => $employeeRows,
+            'products' => $salesBreakdown['products'],
+            'customers' => $topCustomers,
             'kpis' => [
                 'completion_rate' => $orders->count() > 0 ? round($completedOrders->count() * 100 / $orders->count(), 1) : 0,
                 'on_time_rate' => $completedOrders->count() > 0 ? round($onTimeOrders * 100 / $completedOrders->count(), 1) : 0,
             ],
+        ];
+    }
+
+    /**
+     * Build every sales ranking from the same delivered-sales journal used by
+     * Google Sheets, so revenue, quantities, products and customers reconcile.
+     */
+    private function managerSalesBreakdown(Collection $journalRows): array
+    {
+        $productRows = $journalRows->filter(
+            fn ($row) => ($row->entry_type ?? 'product') === 'product'
+        );
+        $productRowsBySale = $productRows->groupBy(fn ($row) => (int) ($row->sale_id ?? 0));
+        $productRowsByCustomer = $productRows->groupBy(fn ($row) => (int) ($row->customer_id ?? 0));
+
+        $sales = $journalRows
+            ->groupBy(fn ($row) => (int) ($row->sale_id ?? 0))
+            ->map(function (Collection $rows, int $saleId) use ($productRowsBySale): array {
+                $saleProducts = $productRowsBySale->get($saleId, collect());
+
+                return [
+                    'sale_id' => $saleId,
+                    'sale_name' => (string) ($rows->first()->sale_name ?: 'Chưa phân công'),
+                    'orders' => $rows->pluck('order_id')->unique()->count(),
+                    'quantity' => (float) $saleProducts->sum('quantity'),
+                    'weight' => (float) $saleProducts->sum('total_quantity'),
+                    'revenue' => (float) $rows->sum('total_amount'),
+                ];
+            })
+            ->sort(fn (array $left, array $right) => $right['revenue'] <=> $left['revenue']
+                ?: $right['quantity'] <=> $left['quantity'])
+            ->values();
+
+        $products = $productRows
+            ->groupBy(fn ($row) => trim((string) ($row->product_name ?? '')) ?: 'Sản phẩm')
+            ->map(fn (Collection $rows, string $name): array => [
+                'name' => $name,
+                'orders' => $rows->pluck('order_id')->unique()->count(),
+                'quantity' => (float) $rows->sum('quantity'),
+                'weight' => (float) $rows->sum('total_quantity'),
+                'revenue' => (float) $rows->sum('total_amount'),
+            ])
+            ->sort(fn (array $left, array $right) => $right['revenue'] <=> $left['revenue']
+                ?: $right['quantity'] <=> $left['quantity'])
+            ->take(10)
+            ->values();
+
+        $customers = $journalRows
+            ->groupBy(fn ($row) => (int) ($row->customer_id ?? 0))
+            ->map(function (Collection $rows, int $customerId) use ($productRowsByCustomer): array {
+                $customerProducts = $productRowsByCustomer->get($customerId, collect());
+
+                return [
+                    'customer_id' => $customerId,
+                    'name' => (string) ($rows->first()->customer_name ?: 'Khách hàng'),
+                    'orders' => $rows->pluck('order_id')->unique()->count(),
+                    'quantity' => (float) $customerProducts->sum('quantity'),
+                    'weight' => (float) $customerProducts->sum('total_quantity'),
+                    'revenue' => (float) $rows->sum('total_amount'),
+                ];
+            })
+            ->sort(fn (array $left, array $right) => $right['revenue'] <=> $left['revenue']
+                ?: $right['quantity'] <=> $left['quantity'])
+            ->take(10)
+            ->values();
+
+        return [
+            'revenue' => (float) $journalRows->sum('total_amount'),
+            'quantity' => (float) $productRows->sum('quantity'),
+            'customer_count' => $journalRows
+                ->map(fn ($row) => (int) ($row->customer_id ?? 0) > 0
+                    ? 'id:'.(int) $row->customer_id
+                    : 'name:'.mb_strtolower(trim((string) ($row->customer_name ?? 'Khách hàng'))))
+                ->unique()
+                ->count(),
+            'sales' => $sales,
+            'products' => $products,
+            'customers' => $customers,
         ];
     }
 

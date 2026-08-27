@@ -28,7 +28,7 @@
     <header class="manager-board-head">
         <div>
             <h1 id="manager-board-title">Bảng điều hành phòng kinh doanh</h1>
-            <p>Kiểm soát hoạt động kinh doanh · nhân sự · hiệu quả bán hàng</p>
+            <p>Doanh thu và sản lượng đối soát theo Nhật ký bán hàng đã giao/hoàn tất</p>
         </div>
         <form method="GET" action="{{ route('pages.my_dashboard') }}" class="manager-date-filter">
             <label><span>Từ ngày</span><input type="date" name="from" value="{{ $manager['from'] ?? '' }}"></label>
@@ -50,10 +50,11 @@
             <strong>{{ number_format($summary['quantity'] ?? 0, 0, ',', '.') }} <em>con</em></strong>
             <small class="{{ $quantityTrend['class'] }}">{{ $quantityTrend['icon'] }} {{ $quantityTrend['text'] }}</small>
         </article>
+        @php $revenueTrend = $trend('revenue'); @endphp
         <article class="manager-summary-card tone-purple">
-            <div class="manager-summary-label"><i class="bi bi-rulers"></i><span>Size bán chạy</span></div>
-            <strong>{{ data_get($summary, 'best_size.label', 'Chưa có') }}</strong>
-            <small>{{ data_get($summary, 'best_size.quantity', 0) ? number_format(data_get($summary, 'best_size.quantity'), 0, ',', '.') . ' con · ' . data_get($summary, 'best_size.percentage', 0) . '%' : 'Chưa có sản lượng theo size' }}</small>
+            <div class="manager-summary-label"><i class="bi bi-cash-stack"></i><span>Doanh thu bán hàng</span></div>
+            <strong>{{ number_format($summary['revenue'] ?? 0, 0, ',', '.') }}đ</strong>
+            <small class="{{ $revenueTrend['class'] }}">{{ $revenueTrend['icon'] }} {{ $revenueTrend['text'] }}</small>
         </article>
         @php $defectTrend = $trend('defect_rate', true); @endphp
         <article class="manager-summary-card tone-orange">
@@ -109,6 +110,8 @@
         <article class="manager-panel panel-teal">
             <h2>Công nợ phải thu</h2>
             <dl class="manager-metric-list">
+                <div><dt>Doanh thu bán hàng</dt><dd>{{ number_format($summary['revenue'] ?? 0, 0, ',', '.') }}đ</dd></div>
+                <div><dt>Đã thu</dt><dd>{{ number_format($summary['collected'] ?? 0, 0, ',', '.') }}đ</dd></div>
                 <div><dt>Công nợ phải thu</dt><dd>{{ number_format($summary['receivables'] ?? 0, 0, ',', '.') }}đ</dd></div>
                 <div><dt>Công nợ quá hạn trên 7 ngày</dt><dd>{{ number_format($summary['overdue_receivables'] ?? 0, 0, ',', '.') }}đ</dd></div>
                 <div><dt>Tỷ lệ công nợ quá hạn</dt><dd>{{ number_format($summary['overdue_rate'] ?? 0, 2, ',', '.') }}%</dd></div>
@@ -125,22 +128,68 @@
         </article>
     </div>
 
+    <div class="manager-detail-grid">
+        <article class="manager-panel manager-performance panel-blue">
+            <h2>Danh sách mặt hàng bán chạy</h2>
+            <div class="table-responsive">
+                <table>
+                    <thead><tr><th>#</th><th>Mặt hàng</th><th>Đơn</th><th>SL</th><th>Tổng KL</th><th>Doanh thu</th></tr></thead>
+                    <tbody>
+                    @forelse(($manager['products'] ?? []) as $index => $product)
+                        <tr>
+                            <td>{{ $index + 1 }}</td><td>{{ $product['name'] }}</td>
+                            <td>{{ number_format($product['orders'], 0, ',', '.') }}</td>
+                            <td>{{ number_format($product['quantity'], 0, ',', '.') }}</td>
+                            <td>{{ number_format($product['weight'], 1, ',', '.') }}</td>
+                            <td>{{ number_format($product['revenue'], 0, ',', '.') }}đ</td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="6" class="manager-table-empty">Chưa có mặt hàng bán trong khoảng ngày đã chọn.</td></tr>
+                    @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </article>
+
+        <article class="manager-panel manager-performance panel-green">
+            <h2>Top khách hàng</h2>
+            <div class="table-responsive">
+                <table>
+                    <thead><tr><th>#</th><th>Khách hàng</th><th>Đơn</th><th>SL</th><th>Doanh thu</th><th>Công nợ</th></tr></thead>
+                    <tbody>
+                    @forelse(($manager['customers'] ?? []) as $index => $customer)
+                        <tr>
+                            <td>{{ $index + 1 }}</td><td>{{ $customer['name'] }}</td>
+                            <td>{{ number_format($customer['orders'], 0, ',', '.') }}</td>
+                            <td>{{ number_format($customer['quantity'], 0, ',', '.') }}</td>
+                            <td>{{ number_format($customer['revenue'], 0, ',', '.') }}đ</td>
+                            <td>{{ number_format($customer['debt'], 0, ',', '.') }}đ</td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="6" class="manager-table-empty">Chưa có khách hàng trong khoảng ngày đã chọn.</td></tr>
+                    @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </article>
+    </div>
+
     <article class="manager-panel manager-performance panel-navy">
-        <h2>Hiệu suất kinh doanh theo nhân viên</h2>
+        <h2>Xếp hạng sale bán nhiều</h2>
         <div class="table-responsive">
             <table>
-                <thead><tr><th>Nhân viên</th><th>Sản lượng</th><th>Doanh thu</th><th>KH mới</th><th>Lỗi hàng</th><th>Công nợ</th><th>Phí ship</th><th>Hoàn tất</th></tr></thead>
+                <thead><tr><th>Hạng</th><th>Sale</th><th>Đơn</th><th>Sản lượng</th><th>Doanh thu</th><th>KH mới</th><th>Lỗi hàng</th><th>Công nợ</th><th>Phí ship</th></tr></thead>
                 <tbody>
                 @forelse(($manager['employees'] ?? []) as $employee)
                     <tr>
-                        <td>{{ $employee['name'] }}</td><td>{{ number_format($employee['quantity'], 0, ',', '.') }}</td>
+                        <td>{{ $employee['rank'] }}</td><td>{{ $employee['name'] }}</td><td>{{ number_format($employee['orders'], 0, ',', '.') }}</td>
+                        <td>{{ number_format($employee['quantity'], 0, ',', '.') }}</td>
                         <td>{{ number_format($employee['revenue'], 0, ',', '.') }}đ</td><td>{{ $employee['new_customers'] }}</td>
                         <td>{{ number_format($employee['defect_rate'], 1, ',', '.') }}%</td><td>{{ number_format($employee['debt'], 0, ',', '.') }}đ</td>
                         <td>{{ number_format($employee['shipping_cost'], 0, ',', '.') }}đ</td>
-                        <td><span class="manager-progress"><i style="width:{{ min(100, $employee['completion_rate']) }}%"></i></span>{{ number_format($employee['completion_rate'], 0, ',', '.') }}%</td>
                     </tr>
                 @empty
-                    <tr><td colspan="8" class="manager-table-empty">Chưa có dữ liệu nhân viên trong khoảng ngày đã chọn.</td></tr>
+                    <tr><td colspan="9" class="manager-table-empty">Chưa có dữ liệu sale trong khoảng ngày đã chọn.</td></tr>
                 @endforelse
                 </tbody>
             </table>

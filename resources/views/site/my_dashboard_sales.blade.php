@@ -258,6 +258,7 @@
     .manager-panel > h2 { margin: 0; padding: 7px 11px; background: var(--panel-color, #17376e); color: #fff; font-size: .72rem; font-weight: 800; text-transform: uppercase; }
     .panel-blue { --panel-color:#1463a5; } .panel-orange { --panel-color:#e36b08; } .panel-teal { --panel-color:#08717b; }
     .panel-red { --panel-color:#cf2237; } .panel-navy { --panel-color:#17376e; } .panel-purple { --panel-color:#55309b; }
+    .panel-green { --panel-color:#15803d; }
     .manager-size-body { display: flex; align-items: center; gap: 14px; min-height: 178px; padding: 13px; }
     .manager-donut { display: grid; flex: 0 0 112px; width: 112px; height: 112px; place-items: center; border-radius: 50%; background: var(--manager-donut); }
     .manager-donut::before { content:""; grid-area:1/1; width: 68px; height: 68px; border-radius:50%; background:#fff; }
@@ -274,7 +275,7 @@
     .manager-reasons b { width:100%; } .manager-reasons span { color:#64748b; }
     .manager-performance table { width:100%; border-collapse:collapse; font-size:.58rem; }
     .manager-performance th, .manager-performance td { padding:7px 6px; border:1px solid #e5eaf0; white-space:nowrap; text-align:right; }
-    .manager-performance th:first-child, .manager-performance td:first-child { text-align:left; }
+    .manager-performance th:nth-child(2), .manager-performance td:nth-child(2) { text-align:left; }
     .manager-performance thead { background:#f2f6fa; } .manager-table-empty { padding:18px!important; color:#64748b; text-align:center!important; }
     .manager-progress { display:inline-block; width:30px; height:4px; margin-right:4px; overflow:hidden; border-radius:4px; background:#e5e7eb; vertical-align:middle; }
     .manager-progress i { display:block; height:100%; background:#16865c; }

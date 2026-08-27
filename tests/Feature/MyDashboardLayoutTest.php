@@ -54,8 +54,11 @@ class MyDashboardLayoutTest extends TestCase
             ->assertSee('dashboard-main', false)
             ->assertSee('manager-board', false)
             ->assertSee('Bảng điều hành phòng kinh doanh')
+            ->assertSee('Doanh thu bán hàng')
             ->assertSee('Sản lượng bán theo size')
-            ->assertSee('Hiệu suất kinh doanh theo nhân viên')
+            ->assertSee('Danh sách mặt hàng bán chạy')
+            ->assertSee('Top khách hàng')
+            ->assertSee('Xếp hạng sale bán nhiều')
             ->assertSee('KPI tổng hợp')
             ->assertSee('Bảng báo giá sản phẩm');
     }
