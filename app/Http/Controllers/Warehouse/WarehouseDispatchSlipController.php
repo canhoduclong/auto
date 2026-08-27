@@ -19,6 +19,64 @@ use Illuminate\Validation\ValidationException;
 
 class WarehouseDispatchSlipController extends Controller
 {
+    public function ceoIndex(Request $request)
+    {
+        $from = $request->filled('from_date')
+            ? Carbon::parse($request->input('from_date'))->toDateString()
+            : now()->startOfMonth()->toDateString();
+        $to = $request->filled('to_date')
+            ? Carbon::parse($request->input('to_date'))->toDateString()
+            : now()->toDateString();
+        if ($from > $to) {
+            [$from, $to] = [$to, $from];
+        }
+
+        $slips = WarehouseDispatchSlip::query()
+            ->with([
+                'sourceWarehouse:id,name',
+                'targetWarehouse:id,name',
+                'shipper:id,name,short_name',
+                'entries.orderTransfer.orders.warehouseTransfers',
+                'entries.warehouseTransfer',
+                'entries.inventoryTransfer',
+            ])
+            ->whereBetween('business_date', [$from, $to])
+            ->when($request->integer('source_warehouse_id') > 0, fn ($query) => $query->where('source_warehouse_id', $request->integer('source_warehouse_id')))
+            ->when($request->filled('status'), fn ($query) => $query->where('status', $request->input('status')))
+            ->when($request->filled('search'), fn ($query) => $query->where('code', 'like', '%'.trim((string) $request->input('search')).'%'))
+            ->latest('business_date')
+            ->latest('id')
+            ->paginate(20)
+            ->withQueryString();
+
+        $slips->getCollection()->each(fn (WarehouseDispatchSlip $slip) => $this->attachProgress($slip));
+        $warehouses = Warehouse::query()->orderBy('name')->get(['id', 'name']);
+
+        return view('ceo.warehouse-dispatch-slips.index', compact('slips', 'warehouses', 'from', 'to'));
+    }
+
+    public function ceoShow(WarehouseDispatchSlip $dispatchSlip)
+    {
+        $this->loadSlip($dispatchSlip);
+        $this->attachProgress($dispatchSlip);
+
+        return view('warehouse.dispatch-slips.show', [
+            'slip' => $dispatchSlip,
+            'layout' => 'layouts.ceo',
+            'dispatchRoutePrefix' => 'ceo.warehouse-dispatch-slips',
+            'readOnly' => true,
+        ] + $this->documentData($dispatchSlip));
+    }
+
+    public function ceoPrintExport(WarehouseDispatchSlip $dispatchSlip)
+    {
+        $this->loadSlip($dispatchSlip);
+        $this->attachProgress($dispatchSlip);
+        $dispatchSlip->increment('print_count');
+
+        return view('warehouse.dispatch-slips.print-export', ['slip' => $dispatchSlip] + $this->documentData($dispatchSlip));
+    }
+
     public function index(Request $request)
     {
         $managedWarehouseId = Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;

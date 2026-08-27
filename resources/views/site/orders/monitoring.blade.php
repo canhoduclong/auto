@@ -1214,6 +1214,9 @@
                     <button type="button" class="btn btn-sm btn-outline-primary monitor-icon-action" data-bs-toggle="collapse" data-bs-target="#monitorAutoApproval" aria-expanded="{{ $hasAutoApprovalErrors ? 'true' : 'false' }}" title="Cài đặt duyệt đơn tự động" aria-label="Cài đặt duyệt đơn tự động">
                         <i class="bi bi-gear"></i>
                     </button>
+                    <button type="button" class="btn btn-sm btn-outline-primary monitor-icon-action" data-bs-toggle="modal" data-bs-target="#monitorSalesJournalModal" title="Nhật ký bán hàng ngày {{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}" aria-label="Mở nhật ký bán hàng">
+                        <i class="bi bi-clock-history"></i>
+                    </button>
                 @endif
                 <form method="POST" action="{{ route('pages.my_orders.monitoring.refresh_sequence') }}" onsubmit="return confirm('Quét duyệt tự động các đơn đủ điều kiện và cập nhật lại số thứ tự ưu tiên?');">
                     @csrf
@@ -1264,7 +1267,7 @@
                     </form>
                 @endif
                 <button class="btn btn-sm btn-outline-primary monitor-summary-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#monitorProductSummary" aria-expanded="false">
-                    <i class="bi bi-inbox me-1"></i>Hàng - Số lượng
+                    <i class="bi bi-inbox me-1"></i>Hàng Hóa
                 </button>
             </div>
             <button type="button" class="btn btn-sm btn-success" id="monitorOpenCreate">
@@ -2235,6 +2238,9 @@
         </div>
     </div>
 </section>
+@if($activeTab === 'today' && $canConfigureAutoApproval)
+    @include('site.orders.partials.sales_journal_modal')
+@endif
 @endsection
 
 @push('scripts')

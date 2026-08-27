@@ -582,6 +582,9 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/sales', [CeoDashboardController::class, 'sales'])->name('sales');
         Route::get('/debts', [CeoDashboardController::class, 'debts'])->name('debts');
         Route::get('/warehouse', [CeoDashboardController::class, 'warehouse'])->name('warehouse');
+        Route::get('/warehouse/dispatch-slips', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'ceoIndex'])->name('warehouse-dispatch-slips.index');
+        Route::get('/warehouse/dispatch-slips/{dispatchSlip}', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'ceoShow'])->name('warehouse-dispatch-slips.show');
+        Route::get('/warehouse/dispatch-slips/{dispatchSlip}/print-export', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'ceoPrintExport'])->name('warehouse-dispatch-slips.print-export');
         Route::get('/shipper', [CeoDashboardController::class, 'shipper'])->name('shipper');
         Route::get('/shipper-costs', [CeoDashboardController::class, 'shipperCosts'])->name('shipper-costs');
         Route::get('/customers', [CeoDashboardController::class, 'customers'])->name('customers');
@@ -1063,6 +1066,8 @@ Route::middleware(['auth', 'role:sale,leader,leader_sale,sale_manager,manager,ma
         ->middleware('permission:orders.monitoring');
     Route::post('/my-orders/monitoring/refresh-sequence', [PageController::class, 'myOrdersMonitoringRefreshSequence'])
         ->name('pages.my_orders.monitoring.refresh_sequence');
+    Route::post('/my-orders/monitoring/sales-journal/google-sheets', [PageController::class, 'myOrdersMonitoringSyncSalesJournal'])
+        ->name('pages.my_orders.monitoring.sales_journal.google_sheets');
     Route::post('/my-orders/monitoring/restore-all', [OrderController::class, 'restoreAllCancelledFromMonitoring'])
         ->name('pages.my_orders.monitoring.restore_all')
         ->middleware('role:admin');

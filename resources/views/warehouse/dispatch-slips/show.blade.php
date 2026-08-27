@@ -1,21 +1,25 @@
-@extends('layouts.warehouse')
+@extends($layout ?? 'layouts.warehouse')
 
 @section('title', $slip->code)
 
 @section('content')
 @php
     $formatKg = static fn (float|int|string $value): string => rtrim(rtrim(number_format((float) $value, 3, ',', '.'), '0'), ',').' kg';
+    $dispatchRoutePrefix = $dispatchRoutePrefix ?? 'warehouse.dispatch-slips';
+    $readOnly = $readOnly ?? false;
 @endphp
 <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
-    <div><a href="{{ route('warehouse.dispatch-slips.index') }}" class="small text-decoration-none"><i class="bi bi-arrow-left"></i> Danh sách phiếu</a><h4 class="fw-bold mt-1 mb-1">{{ $slip->code }}</h4><div class="text-muted">{{ $slip->sourceWarehouse?->name }} → {{ $slip->targetWarehouse?->name }} · {{ $slip->business_date->format('d/m/Y') }}</div></div>
+    <div><a href="{{ route($dispatchRoutePrefix.'.index') }}" class="small text-decoration-none"><i class="bi bi-arrow-left"></i> Danh sách phiếu</a><h4 class="fw-bold mt-1 mb-1">{{ $slip->code }}</h4><div class="text-muted">{{ $slip->sourceWarehouse?->name }} → {{ $slip->targetWarehouse?->name }} · {{ $slip->business_date->format('d/m/Y') }}</div></div>
     <div class="d-flex gap-2 flex-wrap">
-        <a target="_blank" href="{{ route('warehouse.dispatch-slips.print-export', $slip) }}" class="btn btn-outline-primary"><i class="bi bi-printer me-1"></i>In phiếu xuất tổng</a>
+        <a target="_blank" href="{{ route($dispatchRoutePrefix.'.print-export', $slip) }}" class="btn btn-outline-primary"><i class="bi bi-printer me-1"></i>In phiếu xuất tổng</a>
+        @unless($readOnly)
         <a target="_blank" href="{{ route('warehouse.dispatch-slips.print-import', $slip) }}" class="btn btn-outline-success"><i class="bi bi-printer me-1"></i>In phiếu nhập tổng</a>
         @if($slip->status === 'draft' && (!auth()->user()->warehouse_id || (int) auth()->user()->warehouse_id === (int) $slip->source_warehouse_id))
             <a href="{{ route('warehouse.dispatch-slips.edit', $slip) }}" class="btn btn-warning"><i class="bi bi-pencil-square me-1"></i>Sửa phiếu</a>
             <form method="POST" action="{{ route('warehouse.dispatch-slips.finalize', $slip) }}" onsubmit="return confirm('Chốt phiếu và khóa danh sách bàn giao?');">@csrf<button class="btn btn-success fw-bold">Chốt phiếu</button></form>
             <form method="POST" action="{{ route('warehouse.dispatch-slips.destroy', $slip) }}" onsubmit="return confirm('Xóa phiếu đang mở này?');">@csrf @method('DELETE')<button class="btn btn-outline-danger">Xóa</button></form>
         @endif
+        @endunless
     </div>
 </div>
 

@@ -322,14 +322,19 @@
             <a href="{{ route('ceo.debts') }}" class="ceo-nav-link {{ request()->routeIs('ceo.debts') ? 'active' : '' }}">
                 <i class="bi bi-cash-coin"></i> Công nợ
             </a>
-            <a href="{{ route('ceo.warehouse') }}" class="ceo-nav-link {{ request()->routeIs('ceo.warehouse') ? 'active' : '' }}">
-                <i class="bi bi-box-seam"></i> Kho
-            </a>
             <a href="{{ route('ceo.shipper') }}" class="ceo-nav-link {{ request()->routeIs('ceo.shipper') ? 'active' : '' }}">
                 <i class="bi bi-truck"></i> Shipper
             </a>
             <a href="{{ route('ceo.shipper-costs') }}" class="ceo-nav-link {{ request()->routeIs('ceo.shipper-costs') ? 'active' : '' }}">
                 <i class="bi bi-cash-stack"></i> Chi phí Shipper
+            </a>
+
+            <div style="padding: 12px 16px; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.06em; margin-top: 8px;">Kho</div>
+            <a href="{{ route('ceo.warehouse') }}" class="ceo-nav-link {{ request()->routeIs('ceo.warehouse') ? 'active' : '' }}">
+                <i class="bi bi-box-seam"></i> Tổng quan kho
+            </a>
+            <a href="{{ route('ceo.warehouse-dispatch-slips.index') }}" class="ceo-nav-link {{ request()->routeIs('ceo.warehouse-dispatch-slips.*') ? 'active' : '' }}">
+                <i class="bi bi-file-earmark-spreadsheet"></i> Phiếu xuất kho tổng
             </a>
 
             <div style="padding: 12px 16px; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.06em; margin-top: 8px;">Báo Cáo</div>

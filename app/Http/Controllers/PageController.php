@@ -31,6 +31,8 @@ use App\Models\Transaction;
 use App\Services\AdminActivityService;
 use App\Services\CustomerPriorityService;
 use App\Services\CustomerClassificationService;
+use App\Services\CompletedSalesJournalService;
+use App\Services\GoogleSheetsJournalService;
 use Carbon\Carbon;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Enums\DeliveryStatus;
@@ -1111,6 +1113,20 @@ class PageController extends Controller
         $autoApprovalRules = $canConfigureAutoApproval
             ? $user->orderAutoApprovalRules()->get()->keyBy('order_type')
             : collect();
+        $monitoringJournalRows = collect();
+        $monitoringJournalSummary = ['rows' => 0, 'orders' => 0, 'quantity' => 0.0, 'amount' => 0.0];
+        $googleSheetsConfigured = false;
+        if ($activeTab === 'today' && $canConfigureAutoApproval) {
+            $monitoringJournalRows = app(CompletedSalesJournalService::class)
+                ->all($selectedDate, $selectedDate, 0, 0, 'date_asc');
+            $monitoringJournalSummary = [
+                'rows' => $monitoringJournalRows->count(),
+                'orders' => $monitoringJournalRows->pluck('order_id')->unique()->count(),
+                'quantity' => (float) $monitoringJournalRows->sum('total_quantity'),
+                'amount' => (float) $monitoringJournalRows->sum('total_amount'),
+            ];
+            $googleSheetsConfigured = app(GoogleSheetsJournalService::class)->isConfigured();
+        }
 
         $managedSalesApprovalQuery = clone $dateQuery;
         if ($canApproveManagedSales) {
@@ -1423,6 +1439,9 @@ class PageController extends Controller
             'hasPendingLeaderApprovals' => $hasPendingLeaderApprovals,
             'canConfigureAutoApproval' => $canConfigureAutoApproval,
             'autoApprovalRules' => $autoApprovalRules,
+            'monitoringJournalRows' => $monitoringJournalRows,
+            'monitoringJournalSummary' => $monitoringJournalSummary,
+            'googleSheetsConfigured' => $googleSheetsConfigured,
             'activeTab' => $activeTab,
             'tabContentHtml' => $tabContentHtml,
             'truckStations' => TruckStation::query()
@@ -1431,6 +1450,35 @@ class PageController extends Controller
                 ->orderBy('name')
                 ->get(),
         ]);
+    }
+
+    public function myOrdersMonitoringSyncSalesJournal(
+        Request $request,
+        CompletedSalesJournalService $journalService,
+        GoogleSheetsJournalService $googleSheets
+    ) {
+        $user = $this->monitoringUserOrFail();
+        if (! ($this->canApproveManagedSalesFromMonitoring($user) || $this->canApproveAllFromMonitoring($user))) {
+            abort(403, 'Bạn không có quyền ghi nhật ký bán hàng lên Google Sheets.');
+        }
+
+        $validated = $request->validate([
+            'date' => ['required', 'date_format:Y-m-d'],
+        ]);
+        $date = $validated['date'];
+
+        try {
+            $rows = $journalService->all($date, $date, 0, 0, 'date_asc');
+            $result = $googleSheets->syncJournalDates($rows, [$date]);
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return back()->with('error', 'Không thể ghi Google Sheets: '.$exception->getMessage());
+        }
+
+        return back()
+            ->with('success', "Đã ghi thêm {$result['rows']} dòng của ngày ".Carbon::parse($date)->format('d/m/Y')." vào trang tính “{$result['sheet_name']}”.")
+            ->with('google_sheets_url', $result['spreadsheet_url']);
     }
 
     private function monitoringSupplierProfitability($orders, string $selectedDate): array
