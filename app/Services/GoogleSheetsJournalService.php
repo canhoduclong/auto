@@ -248,6 +248,11 @@ class GoogleSheetsJournalService
         string $rangePrefix,
         array $values
     ): void {
+        // A basic filter cannot cover merged cells. Unmerge only the merged
+        // ranges intersecting the journal table and leave the rest untouched.
+        // Do this before writing so every exported value has its own cell.
+        $this->unmergeJournalCells($service, $spreadsheetId, $sheetId, count($values));
+
         $service->spreadsheets_values->update(
             $spreadsheetId,
             $rangePrefix.'!A1',
@@ -268,6 +273,60 @@ class GoogleSheetsJournalService
         );
 
         $this->formatSheet($service, $spreadsheetId, $sheetId, count($values));
+    }
+
+    private function unmergeJournalCells(
+        Sheets $service,
+        string $spreadsheetId,
+        int $sheetId,
+        int $rowCount
+    ): void {
+        $spreadsheet = $service->spreadsheets->get($spreadsheetId, [
+            'fields' => 'sheets(properties.sheetId,merges)',
+        ]);
+        $requests = [];
+        $columnCount = count(self::HEADERS);
+
+        foreach ($spreadsheet->getSheets() ?? [] as $sheet) {
+            if ((int) $sheet->getProperties()?->getSheetId() !== $sheetId) {
+                continue;
+            }
+
+            foreach ($sheet->getMerges() ?? [] as $merge) {
+                $startRow = (int) ($merge->getStartRowIndex() ?? 0);
+                $endRow = (int) ($merge->getEndRowIndex() ?? 0);
+                $startColumn = (int) ($merge->getStartColumnIndex() ?? 0);
+                $endColumn = (int) ($merge->getEndColumnIndex() ?? 0);
+
+                if ($startRow >= $rowCount || $endRow <= 0
+                    || $startColumn >= $columnCount || $endColumn <= 0) {
+                    continue;
+                }
+
+                // Use the merge's exact range because Google rejects an
+                // unmerge request that only partially spans a merged region.
+                $requests[] = new SheetsRequest([
+                    'unmergeCells' => [
+                        'range' => [
+                            'sheetId' => $sheetId,
+                            'startRowIndex' => $startRow,
+                            'endRowIndex' => $endRow,
+                            'startColumnIndex' => $startColumn,
+                            'endColumnIndex' => $endColumn,
+                        ],
+                    ],
+                ]);
+            }
+
+            break;
+        }
+
+        if ($requests !== []) {
+            $service->spreadsheets->batchUpdate(
+                $spreadsheetId,
+                new BatchUpdateSpreadsheetRequest(['requests' => $requests])
+            );
+        }
     }
 
     private function formatSheet(Sheets $service, string $spreadsheetId, int $sheetId, int $rowCount): void
