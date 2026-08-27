@@ -1937,7 +1937,7 @@ class AccountingDashboardController extends Controller
         }
 
         return back()
-            ->with('success', "Đã đồng bộ {$result['rows']} dòng của {$result['dates']} ngày vào trang tính “{$result['sheet_name']}”.")
+            ->with('success', "Đã ghi thêm {$result['rows']} dòng của {$result['dates']} ngày vào trang tính “{$result['sheet_name']}”.")
             ->with('google_sheets_url', $result['spreadsheet_url']);
     }
 

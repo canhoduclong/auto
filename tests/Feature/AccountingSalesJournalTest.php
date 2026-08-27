@@ -163,7 +163,7 @@ class AccountingSalesJournalTest extends TestCase
             ->assertSee('Phí đóng gói đặc biệt')
             ->assertSee('Cộng thêm')
             ->assertSee('Giảm trừ')
-            ->assertSee('Đồng bộ Google Sheets');
+            ->assertSee('Ghi thêm vào Google Sheets');
 
         $journal = app(CompletedSalesJournalService::class)->paginate(
             '2026-08-10',
@@ -212,7 +212,7 @@ class AccountingSalesJournalTest extends TestCase
             'customer_id' => 0,
             'sort' => 'date_asc',
         ])->assertRedirect()
-            ->assertSessionHas('success', 'Đã đồng bộ 6 dòng của 1 ngày vào trang tính “Nhật ký bán hàng”.')
+            ->assertSessionHas('success', 'Đã ghi thêm 6 dòng của 1 ngày vào trang tính “Nhật ký bán hàng”.')
             ->assertSessionHas('google_sheets_url', 'https://docs.google.com/spreadsheets/d/test/edit');
     }
 

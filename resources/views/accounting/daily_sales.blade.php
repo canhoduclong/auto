@@ -212,9 +212,9 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                     <input type="hidden" name="customer_id" value="{{ $customerId }}">
                     <input type="hidden" name="sort" value="{{ $sort }}">
                     <button class="btn btn-sm btn-success" type="submit" @disabled(! $googleSheetsConfigured)
-                            title="{{ $googleSheetsConfigured ? 'Đồng bộ các ngày trong bộ lọc và giữ nguyên dữ liệu ngày khác' : 'Chưa cài khóa JSON của service account trên máy chủ' }}"
-                            onclick="return confirm('Đồng bộ lại dữ liệu các ngày đang lọc lên Google Sheets?')">
-                        <i class="bi bi-file-earmark-spreadsheet me-1"></i>Đồng bộ Google Sheets
+                            title="{{ $googleSheetsConfigured ? 'Ghi thêm các dòng chưa có và giữ nguyên cấu trúc trang tính' : 'Chưa cài khóa JSON của service account trên máy chủ' }}"
+                            onclick="return confirm('Ghi thêm dữ liệu các ngày đang lọc xuống cuối Google Sheets?')">
+                        <i class="bi bi-file-earmark-spreadsheet me-1"></i>Ghi thêm vào Google Sheets
                     </button>
                 </form>
             </div>

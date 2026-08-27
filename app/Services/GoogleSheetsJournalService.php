@@ -63,8 +63,7 @@ class GoogleSheetsJournalService
     }
 
     /**
-     * Read the worksheet and replace only rows belonging to the supplied dates.
-     * Rows from every other date remain untouched.
+     * Append rows that are not already present without changing sheet layout.
      *
      * @param  array<int, string>  $dates
      * @return array{rows:int, dates:int, spreadsheet_url:string, sheet_name:string}
@@ -89,31 +88,32 @@ class GoogleSheetsJournalService
 
             $service = new Sheets($this->client());
             $sheet = $this->resolveSheet($service, $spreadsheetId, $sheetName);
-            $sheetId = $sheet['id'];
             $sheetName = $sheet['title'];
             $rangePrefix = "'".str_replace("'", "''", $sheetName)."'";
-            $response = $service->spreadsheets_values->get($spreadsheetId, $rangePrefix.'!A:K');
-            $existingRows = collect($response->getValues() ?? [])->skip(1);
+            $values = $this->newJournalValues(
+                $service,
+                $spreadsheetId,
+                $rangePrefix,
+                $this->journalValues($rows)
+            );
 
-            $preservedRows = $existingRows
-                ->filter(function (array $row) use ($targetDates): bool {
-                    $date = $this->normalizeSheetDate($row[0] ?? null);
-
-                    return $date === null || ! $targetDates->contains($date);
-                });
-
-            $mergedRows = $preservedRows
-                ->concat($this->journalValues($rows))
-                ->sortByDesc(function (array $row): string {
-                    return $this->normalizeSheetDate($row[0] ?? null) ?? '0000-00-00';
-                })
-                ->values();
-            $values = collect([self::HEADERS])->concat($mergedRows)->all();
-
-            $this->writeValues($service, $spreadsheetId, $sheetId, $rangePrefix, $values);
+            if ($values !== []) {
+                $service->spreadsheets_values->append(
+                    $spreadsheetId,
+                    $rangePrefix.'!A:K',
+                    new ValueRange([
+                        'majorDimension' => 'ROWS',
+                        'values' => $values,
+                    ]),
+                    [
+                        'valueInputOption' => 'RAW',
+                        'insertDataOption' => 'OVERWRITE',
+                    ]
+                );
+            }
 
             return [
-                'rows' => $rows->count(),
+                'rows' => count($values),
                 'dates' => $targetDates->count(),
                 'spreadsheet_url' => 'https://docs.google.com/spreadsheets/d/'.$spreadsheetId.'/edit',
                 'sheet_name' => $sheetName,
@@ -224,21 +224,65 @@ class GoogleSheetsJournalService
         ]);
     }
 
-    private function normalizeSheetDate(mixed $value): ?string
-    {
-        $value = trim((string) $value);
-        foreach (['d/m/Y', 'Y-m-d', 'd-m-Y'] as $format) {
-            try {
-                $date = Carbon::createFromFormat('!'.$format, $value);
-                if ($date !== false && $date->format($format) === $value) {
-                    return $date->toDateString();
-                }
-            } catch (\Throwable) {
-                // Preserve rows whose date is not in a supported format.
-            }
+    /**
+     * Return only rows that are not already present in the sheet.
+     *
+     * @param  Collection<int, array<int, mixed>>  $values
+     * @return array<int, array<int, mixed>>
+     */
+    private function newJournalValues(
+        Sheets $service,
+        string $spreadsheetId,
+        string $rangePrefix,
+        Collection $values
+    ): array {
+        $response = $service->spreadsheets_values->get(
+            $spreadsheetId,
+            $rangePrefix.'!A:K',
+            [
+                'valueRenderOption' => 'UNFORMATTED_VALUE',
+                'dateTimeRenderOption' => 'FORMATTED_STRING',
+            ]
+        );
+        $existingCounts = [];
+
+        foreach (collect($response->getValues() ?? [])->skip(1) as $row) {
+            $fingerprint = $this->journalValueFingerprint($row);
+            $existingCounts[$fingerprint] = ($existingCounts[$fingerprint] ?? 0) + 1;
         }
 
-        return null;
+        return $values
+            ->filter(function (array $row) use (&$existingCounts): bool {
+                $fingerprint = $this->journalValueFingerprint($row);
+                if (($existingCounts[$fingerprint] ?? 0) <= 0) {
+                    return true;
+                }
+
+                $existingCounts[$fingerprint]--;
+
+                return false;
+            })
+            ->values()
+            ->all();
+    }
+
+    private function journalValueFingerprint(array $row): string
+    {
+        $numericColumns = [1, 6, 7, 8, 9, 10];
+        $normalized = collect(array_pad(array_slice($row, 0, count(self::HEADERS)), count(self::HEADERS), ''))
+            ->map(function (mixed $value, int $column) use ($numericColumns): mixed {
+                if (in_array($column, $numericColumns, true) && $value !== '' && is_numeric($value)) {
+                    return (float) $value;
+                }
+
+                return trim((string) $value);
+            })
+            ->all();
+
+        return (string) json_encode(
+            $normalized,
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION
+        );
     }
 
     private function writeValues(
@@ -248,11 +292,6 @@ class GoogleSheetsJournalService
         string $rangePrefix,
         array $values
     ): void {
-        // A basic filter cannot cover merged cells. Unmerge only the merged
-        // ranges intersecting the journal table and leave the rest untouched.
-        // Do this before writing so every exported value has its own cell.
-        $this->unmergeJournalCells($service, $spreadsheetId, $sheetId, count($values));
-
         $service->spreadsheets_values->update(
             $spreadsheetId,
             $rangePrefix.'!A1',
@@ -273,60 +312,6 @@ class GoogleSheetsJournalService
         );
 
         $this->formatSheet($service, $spreadsheetId, $sheetId, count($values));
-    }
-
-    private function unmergeJournalCells(
-        Sheets $service,
-        string $spreadsheetId,
-        int $sheetId,
-        int $rowCount
-    ): void {
-        $spreadsheet = $service->spreadsheets->get($spreadsheetId, [
-            'fields' => 'sheets(properties.sheetId,merges)',
-        ]);
-        $requests = [];
-        $columnCount = count(self::HEADERS);
-
-        foreach ($spreadsheet->getSheets() ?? [] as $sheet) {
-            if ((int) $sheet->getProperties()?->getSheetId() !== $sheetId) {
-                continue;
-            }
-
-            foreach ($sheet->getMerges() ?? [] as $merge) {
-                $startRow = (int) ($merge->getStartRowIndex() ?? 0);
-                $endRow = (int) ($merge->getEndRowIndex() ?? 0);
-                $startColumn = (int) ($merge->getStartColumnIndex() ?? 0);
-                $endColumn = (int) ($merge->getEndColumnIndex() ?? 0);
-
-                if ($startRow >= $rowCount || $endRow <= 0
-                    || $startColumn >= $columnCount || $endColumn <= 0) {
-                    continue;
-                }
-
-                // Use the merge's exact range because Google rejects an
-                // unmerge request that only partially spans a merged region.
-                $requests[] = new SheetsRequest([
-                    'unmergeCells' => [
-                        'range' => [
-                            'sheetId' => $sheetId,
-                            'startRowIndex' => $startRow,
-                            'endRowIndex' => $endRow,
-                            'startColumnIndex' => $startColumn,
-                            'endColumnIndex' => $endColumn,
-                        ],
-                    ],
-                ]);
-            }
-
-            break;
-        }
-
-        if ($requests !== []) {
-            $service->spreadsheets->batchUpdate(
-                $spreadsheetId,
-                new BatchUpdateSpreadsheetRequest(['requests' => $requests])
-            );
-        }
     }
 
     private function formatSheet(Sheets $service, string $spreadsheetId, int $sheetId, int $rowCount): void
