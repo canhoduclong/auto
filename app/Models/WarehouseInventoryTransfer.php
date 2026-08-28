@@ -10,10 +10,13 @@ class WarehouseInventoryTransfer extends Model
     use HasFactory;
 
     public const STATUS_PENDING_RECEIVE = 'pending_receive';
+
     public const STATUS_RECEIVED_COMPLETED = 'received_completed';
+
     public const STATUS_CANCELLED = 'cancelled';
 
     protected $fillable = [
+        'order_id',
         'transfer_code',
         'source_warehouse_id',
         'target_warehouse_id',
@@ -40,7 +43,7 @@ class WarehouseInventoryTransfer extends Model
             }
 
             $transfer->updateQuietly([
-                'transfer_code' => 'DCK-' . now()->format('Ymd') . '-' . str_pad((string) $transfer->id, 5, '0', STR_PAD_LEFT),
+                'transfer_code' => 'DCK-'.now()->format('Ymd').'-'.str_pad((string) $transfer->id, 5, '0', STR_PAD_LEFT),
             ]);
         });
     }
@@ -48,6 +51,11 @@ class WarehouseInventoryTransfer extends Model
     public function sourceWarehouse()
     {
         return $this->belongsTo(Warehouse::class, 'source_warehouse_id');
+    }
+
+    public function order()
+    {
+        return $this->belongsTo(Order::class);
     }
 
     public function targetWarehouse()

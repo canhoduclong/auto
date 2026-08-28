@@ -1155,6 +1155,22 @@ class WarehouseDashboardController extends Controller
             ->get()
             ->unique('order_id')
             ->keyBy('order_id');
+        $activePackingGoodsTransfersByOrder = WarehouseInventoryTransfer::query()
+            ->with(['sourceWarehouse:id,name', 'targetWarehouse:id,name', 'items.variant:id,name,sku'])
+            ->whereIn('order_id', $orderIds)
+            ->where('status', WarehouseInventoryTransfer::STATUS_PENDING_RECEIVE)
+            ->orderByDesc('id')
+            ->get()
+            ->unique('order_id')
+            ->keyBy('order_id');
+        $packingReservedQuantitiesByOrder = InventoryReservation::query()
+            ->join('order_items', 'order_items.id', '=', 'inventory_reservations.order_item_id')
+            ->join('inventories', 'inventories.id', '=', 'inventory_reservations.inventory_id')
+            ->whereIn('order_items.order_id', $orderIds)
+            ->when($managedWarehouseId, fn ($query) => $query->where('inventories.warehouse_id', $managedWarehouseId))
+            ->selectRaw('order_items.order_id, COALESCE(SUM(inventory_reservations.quantity), 0) as reserved_qty')
+            ->groupBy('order_items.order_id')
+            ->pluck('reserved_qty', 'order_items.order_id');
 
         $warehouses = Warehouse::query()
             ->where('status', true)
@@ -1180,6 +1196,8 @@ class WarehouseDashboardController extends Controller
             'quickDates',
             'fifoRemainingStock',
             'activeTransfersByOrder',
+            'activePackingGoodsTransfersByOrder',
+            'packingReservedQuantitiesByOrder',
             'warehouses',
             'shippers',
             'ordersLayout',
@@ -1241,7 +1259,7 @@ class WarehouseDashboardController extends Controller
         }
 
         try {
-            [$sourceWarehouseName, $targetWarehouseName] = DB::transaction(function () use ($order, $user, $sourceWarehouseId, $targetWarehouse): array {
+            [$sourceWarehouseName, $targetWarehouseName, $goodsTransfer] = DB::transaction(function () use ($order, $user, $sourceWarehouseId, $targetWarehouse): array {
                 $lockedOrder = Order::query()
                     ->with(['items.variant', 'warehouse:id,name'])
                     ->lockForUpdate()
@@ -1275,8 +1293,20 @@ class WarehouseDashboardController extends Controller
                     ->exists()) {
                     throw new \RuntimeException('Đơn đang có điều chuyển kho hoạt động nên chưa thể đổi kho đóng hàng.');
                 }
+                if (WarehouseInventoryTransfer::query()
+                    ->where('order_id', $lockedOrder->id)
+                    ->where('status', WarehouseInventoryTransfer::STATUS_PENDING_RECEIVE)
+                    ->exists()) {
+                    throw new \RuntimeException('Đơn đang có hàng gửi sang kho khác chờ tiếp nhận nên chưa thể chuyển tiếp.');
+                }
 
                 $sourceWarehouseName = $lockedOrder->warehouse?->name ?: 'Kho hiện tại';
+                $goodsTransfer = $this->createPackingOrderGoodsTransfer(
+                    $lockedOrder,
+                    $sourceWarehouseId,
+                    (int) $targetWarehouse->id,
+                    (int) $user->id
+                );
                 $this->releaseOrderReservations($lockedOrder);
                 $this->reserveOrderStockAtWarehouse($lockedOrder, (int) $targetWarehouse->id);
                 $lockedOrder->forceFill([
@@ -1293,16 +1323,130 @@ class WarehouseDashboardController extends Controller
                     'role' => 'warehouse',
                     'status_before' => $lockedOrder->status,
                     'status_after' => $lockedOrder->status,
-                    'note' => "Kho điều chuyển đơn thiếu hàng từ {$sourceWarehouseName} sang {$targetWarehouse->name} để kho mới hoàn thiện đóng hàng.",
+                    'note' => "Kho điều chuyển đơn thiếu hàng từ {$sourceWarehouseName} sang {$targetWarehouse->name} để kho mới hoàn thiện đóng hàng."
+                        .($goodsTransfer ? ' Hàng đã gom gửi kèm phiếu '.$goodsTransfer->transfer_code.'.' : ' Chưa có hàng đã giữ tại kho nguồn để gửi kèm.'),
                 ]);
 
-                return [$sourceWarehouseName, (string) $targetWarehouse->name];
+                return [$sourceWarehouseName, (string) $targetWarehouse->name, $goodsTransfer];
             });
         } catch (\RuntimeException $exception) {
             return back()->with('error', $exception->getMessage());
         }
 
-        return back()->with('success', "Đã chuyển đơn thiếu hàng từ {$sourceWarehouseName} sang {$targetWarehouseName}. Đơn sẽ chỉ xuất hiện tại kho mới để tiếp tục đóng hàng.");
+        $goodsMessage = $goodsTransfer
+            ? ' Đã tạo phiếu '.$goodsTransfer->transfer_code.' gửi phần hàng đang giữ cho đơn; kho nhận xác nhận tại mục Tiếp nhận điều chuyển.'
+            : ' Đơn chưa có hàng được giữ tại kho nguồn nên không phát sinh phiếu hàng gửi kèm.';
+
+        return back()->with('success', "Đã chuyển đơn thiếu hàng từ {$sourceWarehouseName} sang {$targetWarehouseName}. Đơn sẽ chỉ xuất hiện tại kho mới để tiếp tục đóng hàng.".$goodsMessage);
+    }
+
+    private function createPackingOrderGoodsTransfer(
+        Order $order,
+        int $sourceWarehouseId,
+        int $targetWarehouseId,
+        int $userId
+    ): ?WarehouseInventoryTransfer {
+        $order->loadMissing(['items.variant.product']);
+        $itemsById = $order->items->keyBy('id');
+        $reservations = InventoryReservation::query()
+            ->whereIn('order_item_id', $itemsById->keys()->all())
+            ->lockForUpdate()
+            ->get();
+        $shipmentEntries = collect();
+
+        foreach ($reservations as $reservation) {
+            $item = $itemsById->get((int) $reservation->order_item_id);
+            $inventory = Inventory::query()->lockForUpdate()->find($reservation->inventory_id);
+            if (! $item || ! $inventory || (int) $inventory->warehouse_id !== $sourceWarehouseId) {
+                continue;
+            }
+
+            $quantity = min(
+                max(0, (int) $reservation->quantity),
+                max(0, (int) $inventory->quantity),
+                max(0, (int) $inventory->reserved_quantity)
+            );
+            if ($quantity <= 0) {
+                continue;
+            }
+
+            $shipmentEntries->push(compact('reservation', 'inventory', 'item', 'quantity'));
+        }
+
+        if ($shipmentEntries->isEmpty()) {
+            return null;
+        }
+
+        $targetWarehouse = Warehouse::query()->find($targetWarehouseId);
+        $transfer = WarehouseInventoryTransfer::create([
+            'order_id' => $order->id,
+            'source_warehouse_id' => $sourceWarehouseId,
+            'target_warehouse_id' => $targetWarehouseId,
+            'requested_by' => $userId,
+            'status' => WarehouseInventoryTransfer::STATUS_PENDING_RECEIVE,
+            'note' => 'Hàng đã gom cho đơn '.($order->code ?: '#'.$order->id)
+                .' để '.($targetWarehouse?->name ?? ('Kho #'.$targetWarehouseId)).' tiếp tục đóng hàng.',
+            'requested_at' => now(),
+        ]);
+        $exportDocument = InventoryDocument::create([
+            'type' => 'export',
+            'document_date' => now()->toDateString(),
+            'warehouse_id' => $sourceWarehouseId,
+            'supplier_id' => null,
+            'shipping_fee' => 0,
+            'notes' => 'Gửi hàng đã gom cho đơn '.($order->code ?: '#'.$order->id)
+                .' theo phiếu '.$transfer->transfer_code.' sang '.($targetWarehouse?->name ?? ('Kho #'.$targetWarehouseId)),
+            'user_id' => $userId,
+        ]);
+
+        $groupedItems = [];
+        foreach ($shipmentEntries as $entry) {
+            $reservation = $entry['reservation'];
+            $inventory = $entry['inventory'];
+            $item = $entry['item'];
+            $quantity = (int) $entry['quantity'];
+            $variantId = (int) $item->product_variant_id;
+            $weight = round($quantity * (float) $item->effective_unit_weight, 3);
+
+            $inventory->update([
+                'quantity' => max(0, (float) $inventory->quantity - $quantity),
+                'reserved_quantity' => max(0, (float) $inventory->reserved_quantity - $quantity),
+            ]);
+            $reservation->delete();
+            InventoryMovement::create([
+                'inventory_id' => $inventory->id,
+                'quantity' => -$quantity,
+                'type' => 'transfer_out',
+                'reference_id' => $transfer->id,
+                'reference_type' => WarehouseInventoryTransfer::class,
+                'user_id' => $userId,
+            ]);
+
+            $groupedItems[$variantId] ??= ['quantity' => 0, 'weight_kg' => 0.0];
+            $groupedItems[$variantId]['quantity'] += $quantity;
+            $groupedItems[$variantId]['weight_kg'] = round($groupedItems[$variantId]['weight_kg'] + $weight, 3);
+        }
+
+        foreach ($groupedItems as $variantId => $row) {
+            $transfer->items()->create([
+                'product_variant_id' => $variantId,
+                'quantity' => $row['quantity'],
+                'weight_kg' => $row['weight_kg'],
+                'unit_cost' => 0,
+            ]);
+            $exportDocument->items()->create([
+                'product_variant_id' => $variantId,
+                'quantity' => $row['quantity'],
+                'unit_cost' => 0,
+                'note' => 'Hàng đã gom cho đơn '.($order->code ?: '#'.$order->id),
+            ]);
+            ProductVariant::query()->whereKey($variantId)->update([
+                'stock' => Inventory::query()->where('product_variant_id', $variantId)->sum('quantity'),
+            ]);
+        }
+        $transfer->update(['export_document_id' => $exportDocument->id]);
+
+        return $transfer;
     }
 
     private function releaseOrderReservations(Order $order): void
@@ -1331,7 +1475,12 @@ class WarehouseDashboardController extends Controller
     {
         $order->loadMissing('items.variant');
         foreach ($order->items as $item) {
-            $requiredQty = max(0, (int) $item->quantity);
+            $alreadyReserved = (int) InventoryReservation::query()
+                ->join('inventories', 'inventories.id', '=', 'inventory_reservations.inventory_id')
+                ->where('inventory_reservations.order_item_id', $item->id)
+                ->where('inventories.warehouse_id', $warehouseId)
+                ->sum('inventory_reservations.quantity');
+            $requiredQty = max(0, (int) $item->quantity - $alreadyReserved);
             if ($requiredQty <= 0) {
                 continue;
             }
@@ -4044,6 +4193,10 @@ class WarehouseDashboardController extends Controller
             return redirect()->route('warehouse.inventory-transfers.index')
                 ->with('error', 'Phiếu hàng đã thuộc một phiếu xuất kho tổng nên không thể sửa nội dung.');
         }
+        if ($transfer->order_id) {
+            return redirect()->route('warehouse.inventory-transfers.index')
+                ->with('error', 'Phiếu này đang gắn với đơn thiếu hàng nên không thể sửa thủ công.');
+        }
 
         $transfer->load('items');
 
@@ -4134,6 +4287,8 @@ class WarehouseDashboardController extends Controller
 
         $outgoingTransfers = WarehouseInventoryTransfer::query()
             ->with([
+                'order:id,code,customer_id',
+                'order.customer:id,name',
                 'targetWarehouse:id,name',
                 'requester:id,name',
                 'items.variant.product',
@@ -4315,6 +4470,10 @@ class WarehouseDashboardController extends Controller
         if ($transfer->dispatchEntry()->exists()) {
             return redirect()->route('warehouse.inventory-transfers.index')
                 ->with('error', 'Phiếu hàng đã thuộc một phiếu xuất kho tổng. Hãy xóa phiếu tổng đang mở trước khi sửa hàng điều chuyển.');
+        }
+        if ($transfer->order_id) {
+            return redirect()->route('warehouse.inventory-transfers.index')
+                ->with('error', 'Phiếu này đang gắn với đơn thiếu hàng nên không thể sửa thủ công.');
         }
 
         $validated = $request->validate([
@@ -4509,6 +4668,8 @@ class WarehouseDashboardController extends Controller
                 'targetWarehouse:id,name',
                 'requester:id,name',
                 'receiver:id,name',
+                'order:id,code,customer_id,warehouse_id,created_at,delivery_date,accounting_sales_import_batch_id',
+                'order.customer:id,name',
                 'items.variant.product',
                 'dispatchEntry.slip',
             ])
@@ -4547,69 +4708,109 @@ class WarehouseDashboardController extends Controller
             return back()->with('error', 'Phiếu xuất kho tổng '.$transfer->dispatchEntry->slip->code.' chưa được kho xuất chốt.');
         }
 
-        $transfer->loadMissing(['items.variant.product', 'sourceWarehouse', 'targetWarehouse']);
+        $transfer->loadMissing(['items.variant.product', 'sourceWarehouse', 'targetWarehouse', 'order.items.variant']);
 
-        DB::transaction(function () use ($transfer): void {
-            $importDocument = InventoryDocument::create([
-                'type' => 'import',
-                'document_date' => now()->toDateString(),
-                'warehouse_id' => (int) $transfer->target_warehouse_id,
-                'supplier_id' => null,
-                'shipping_fee' => 0,
-                'notes' => 'Tiếp nhận điều chuyển kho #'.($transfer->transfer_code ?? $transfer->id)
-                    .' từ '.($transfer->sourceWarehouse?->name ?? ('Kho #'.$transfer->source_warehouse_id)),
-                'user_id' => Auth::id(),
-            ]);
+        try {
+            DB::transaction(function () use ($transfer): void {
+                $lockedTransfer = WarehouseInventoryTransfer::query()
+                    ->with(['items', 'sourceWarehouse', 'order.items.variant'])
+                    ->lockForUpdate()
+                    ->findOrFail($transfer->id);
+                if ($lockedTransfer->status !== WarehouseInventoryTransfer::STATUS_PENDING_RECEIVE) {
+                    throw new \RuntimeException('Phiếu điều chuyển này đã được người khác tiếp nhận.');
+                }
 
-            foreach ($transfer->items as $item) {
-                $variantId = (int) $item->product_variant_id;
-                $qty = (int) $item->quantity;
-                $unitCost = (float) $item->unit_cost;
-
-                $importDocument->items()->create([
-                    'product_variant_id' => $variantId,
-                    'quantity' => $qty,
-                    'unit_cost' => $unitCost,
-                ]);
-
-                $inventory = Inventory::query()->firstOrCreate(
-                    [
-                        'warehouse_id' => (int) $transfer->target_warehouse_id,
-                        'product_variant_id' => $variantId,
-                    ],
-                    [
-                        'quantity' => 0,
-                        'reserved_quantity' => 0,
-                        'low_stock_threshold' => 5,
-                    ]
-                );
-
-                InventoryMovement::create([
-                    'inventory_id' => $inventory->id,
-                    'quantity' => $qty,
-                    'type' => 'transfer_in',
-                    'reference_id' => $transfer->id,
-                    'reference_type' => WarehouseInventoryTransfer::class,
+                $importDocument = InventoryDocument::create([
+                    'type' => 'import',
+                    'document_date' => now()->toDateString(),
+                    'warehouse_id' => (int) $lockedTransfer->target_warehouse_id,
+                    'supplier_id' => null,
+                    'shipping_fee' => 0,
+                    'notes' => 'Tiếp nhận điều chuyển kho #'.($lockedTransfer->transfer_code ?? $lockedTransfer->id)
+                        .' từ '.($lockedTransfer->sourceWarehouse?->name ?? ('Kho #'.$lockedTransfer->source_warehouse_id))
+                        .($lockedTransfer->order ? ' cho đơn '.($lockedTransfer->order->code ?: '#'.$lockedTransfer->order->id) : ''),
                     'user_id' => Auth::id(),
                 ]);
 
-                $inventory->increment('quantity', $qty);
+                foreach ($lockedTransfer->items as $item) {
+                    $variantId = (int) $item->product_variant_id;
+                    $qty = (int) $item->quantity;
+                    $unitCost = (float) $item->unit_cost;
 
-                $totalStock = (int) Inventory::query()
-                    ->where('product_variant_id', $variantId)
-                    ->sum('quantity');
-                ProductVariant::query()->where('id', $variantId)->update(['stock' => $totalStock]);
-            }
+                    $importDocument->items()->create([
+                        'product_variant_id' => $variantId,
+                        'quantity' => $qty,
+                        'unit_cost' => $unitCost,
+                    ]);
 
-            $transfer->update([
-                'status' => WarehouseInventoryTransfer::STATUS_RECEIVED_COMPLETED,
-                'received_by' => Auth::id(),
-                'received_at' => now(),
-                'import_document_id' => $importDocument->id,
-            ]);
-        });
+                    $inventory = Inventory::query()->firstOrCreate(
+                        [
+                            'warehouse_id' => (int) $lockedTransfer->target_warehouse_id,
+                            'product_variant_id' => $variantId,
+                        ],
+                        [
+                            'quantity' => 0,
+                            'reserved_quantity' => 0,
+                            'low_stock_threshold' => 5,
+                        ]
+                    );
+                    $inventory = Inventory::query()->whereKey($inventory->id)->lockForUpdate()->firstOrFail();
 
-        return back()->with('success', 'Đã tiếp nhận phiếu điều chuyển và cập nhật nhập kho thành công.');
+                    InventoryMovement::create([
+                        'inventory_id' => $inventory->id,
+                        'quantity' => $qty,
+                        'type' => 'transfer_in',
+                        'reference_id' => $lockedTransfer->id,
+                        'reference_type' => WarehouseInventoryTransfer::class,
+                        'user_id' => Auth::id(),
+                    ]);
+
+                    $inventory->increment('quantity', $qty);
+
+                    $totalStock = (int) Inventory::query()
+                        ->where('product_variant_id', $variantId)
+                        ->sum('quantity');
+                    ProductVariant::query()->where('id', $variantId)->update(['stock' => $totalStock]);
+                }
+
+                $lockedTransfer->update([
+                    'status' => WarehouseInventoryTransfer::STATUS_RECEIVED_COMPLETED,
+                    'received_by' => Auth::id(),
+                    'received_at' => now(),
+                    'import_document_id' => $importDocument->id,
+                ]);
+
+                if ($lockedTransfer->order
+                && (int) $lockedTransfer->order->warehouse_id === (int) $lockedTransfer->target_warehouse_id
+                && in_array((string) $lockedTransfer->order->status, self::READY_TO_PACK_STATUSES, true)
+                ) {
+                    $order = Order::query()->with('items.variant')->lockForUpdate()->findOrFail($lockedTransfer->order->id);
+                    $this->reserveOrderStockAtWarehouse($order, (int) $lockedTransfer->target_warehouse_id);
+                    $order->forceFill([
+                        'stock_sufficient' => null,
+                        'stock_shortage_detail' => null,
+                        'stock_alert_status' => null,
+                    ])->save();
+                    OrderHistory::create([
+                        'order_id' => $order->id,
+                        'action' => 'warehouse_order_goods_received',
+                        'user_id' => Auth::id(),
+                        'role' => 'warehouse',
+                        'status_before' => $order->status,
+                        'status_after' => $order->status,
+                        'note' => 'Kho nhận đã tiếp nhận phiếu '.$lockedTransfer->transfer_code.' và bổ sung hàng để tiếp tục đóng đơn.',
+                    ]);
+                }
+            });
+        } catch (\RuntimeException $exception) {
+            return back()->with('error', $exception->getMessage());
+        }
+
+        $this->refreshQueuedOrdersAfterInventoryChange((int) $transfer->target_warehouse_id);
+
+        return back()->with('success', $transfer->order_id
+            ? 'Đã tiếp nhận hàng, nhập kho và bổ sung giữ hàng cho đơn '.($transfer->order?->code ?: '#'.$transfer->order_id).'. Kho có thể tiếp tục hoàn thiện đóng hàng.'
+            : 'Đã tiếp nhận phiếu điều chuyển và cập nhật nhập kho thành công.');
     }
 
     /**

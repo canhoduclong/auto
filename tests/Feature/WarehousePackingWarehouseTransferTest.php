@@ -11,6 +11,7 @@ use App\Models\ProductVariant;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\Warehouse;
+use App\Models\WarehouseInventoryTransfer;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -32,6 +33,7 @@ class WarehousePackingWarehouseTransferTest extends TestCase
             ->assertSessionHas('success');
 
         $this->assertSame((int) $targetInventory->warehouse_id, (int) $order->fresh()->warehouse_id);
+        $this->assertSame(0, (int) $sourceInventory->fresh()->quantity);
         $this->assertSame(0, (int) $sourceInventory->fresh()->reserved_quantity);
         $this->assertSame(5, (int) $targetInventory->fresh()->reserved_quantity);
         $this->assertDatabaseMissing('inventory_reservations', [
@@ -48,9 +50,42 @@ class WarehousePackingWarehouseTransferTest extends TestCase
             'action' => 'warehouse_transfer_packing_warehouse',
             'user_id' => $sourceUser->id,
         ]);
+        $goodsTransfer = WarehouseInventoryTransfer::query()->where('order_id', $order->id)->firstOrFail();
+        $this->assertSame(WarehouseInventoryTransfer::STATUS_PENDING_RECEIVE, $goodsTransfer->status);
+        $this->assertSame((int) $sourceInventory->warehouse_id, (int) $goodsTransfer->source_warehouse_id);
+        $this->assertSame((int) $targetInventory->warehouse_id, (int) $goodsTransfer->target_warehouse_id);
+        $this->assertNotNull($goodsTransfer->export_document_id);
+        $this->assertDatabaseHas('warehouse_inventory_transfer_items', [
+            'transfer_id' => $goodsTransfer->id,
+            'product_variant_id' => $sourceInventory->product_variant_id,
+            'quantity' => 2,
+        ]);
+        $this->assertDatabaseHas('inventory_movements', [
+            'inventory_id' => $sourceInventory->id,
+            'quantity' => -2,
+            'type' => 'transfer_out',
+            'reference_id' => $goodsTransfer->id,
+            'reference_type' => WarehouseInventoryTransfer::class,
+        ]);
 
         $this->assertFalse(Order::query()->whereKey($order->id)->where('warehouse_id', $sourceInventory->warehouse_id)->exists());
         $this->assertTrue(Order::query()->whereKey($order->id)->where('warehouse_id', $targetUser->warehouse_id)->exists());
+
+        $this->actingAs($targetUser)
+            ->withSession(['active_role' => 'warehouse'])
+            ->post(route('warehouse.inventory-transfers.confirm', $goodsTransfer))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertSame(WarehouseInventoryTransfer::STATUS_RECEIVED_COMPLETED, $goodsTransfer->fresh()->status);
+        $this->assertNotNull($goodsTransfer->fresh()->import_document_id);
+        $this->assertSame(12, (int) $targetInventory->fresh()->quantity);
+        $this->assertSame(5, (int) $targetInventory->fresh()->reserved_quantity);
+        $this->assertDatabaseHas('order_histories', [
+            'order_id' => $order->id,
+            'action' => 'warehouse_order_goods_received',
+            'user_id' => $targetUser->id,
+        ]);
     }
 
     public function test_warehouse_cannot_move_order_to_itself_or_move_another_warehouses_order(): void
@@ -76,15 +111,37 @@ class WarehousePackingWarehouseTransferTest extends TestCase
         $this->assertSame(0, (int) $targetInventory->fresh()->reserved_quantity);
     }
 
+    public function test_short_order_without_collected_goods_still_moves_to_the_selected_warehouse(): void
+    {
+        [$sourceUser, $targetUser, $order, $sourceInventory, $targetInventory] = $this->createShortOrder();
+        InventoryReservation::query()->where('inventory_id', $sourceInventory->id)->delete();
+        $sourceInventory->update(['quantity' => 0, 'reserved_quantity' => 0]);
+
+        $this->actingAs($sourceUser)
+            ->withSession(['active_role' => 'warehouse'])
+            ->post(route('warehouse.orders.transfer-packing-warehouse', $order), [
+                'warehouse_id' => $targetInventory->warehouse_id,
+                'packing_date' => now()->toDateString(),
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertSame((int) $targetUser->warehouse_id, (int) $order->fresh()->warehouse_id);
+        $this->assertSame(5, (int) $targetInventory->fresh()->reserved_quantity);
+        $this->assertDatabaseMissing('warehouse_inventory_transfers', ['order_id' => $order->id]);
+    }
+
     public function test_shortage_card_only_offers_other_warehouses(): void
     {
         $card = file_get_contents(resource_path('views/warehouse/orders/_order_card.blade.php'));
 
-        $this->assertStringContainsString('Điều chuyển hàng', $card);
+        $this->assertStringContainsString('Gửi hàng & chuyển đơn', $card);
         $this->assertStringContainsString("route('warehouse.orders.transfer-packing-warehouse', \$order)", $card);
         $this->assertStringContainsString('(int) $warehouse->id !== $currentWorkingWarehouseId', $card);
         $this->assertStringContainsString('$stockShortages->isNotEmpty()', $card);
         $this->assertStringContainsString('(int) ($order->warehouse_id ?? 0) === $currentWorkingWarehouseId', $card);
+        $this->assertStringContainsString('$activePackingGoodsTransfer', $card);
+        $this->assertStringContainsString("route('warehouse.inventory-transfers.incoming')", $card);
     }
 
     /** @return array{User, User, Order, Inventory, Inventory} */

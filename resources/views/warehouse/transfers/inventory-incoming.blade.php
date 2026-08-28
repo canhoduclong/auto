@@ -46,6 +46,9 @@
                     <div class="card-header bg-white d-flex justify-content-between align-items-center">
                         <div>
                             <div class="fw-semibold">{{ $transfer->transfer_code ?? ('#' . $transfer->id) }}</div>
+                            @if($transfer->order)
+                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle mt-1"><i class="bi bi-box-seam me-1"></i>Hàng gửi cho đơn {{ $transfer->order->code ?: '#'.$transfer->order->id }}</span>
+                            @endif
                             @if($dispatchSlip)
                                 <a class="small text-decoration-none" href="{{ route('warehouse.dispatch-slips.show', $dispatchSlip) }}"><i class="bi bi-file-earmark-spreadsheet me-1"></i>{{ $dispatchSlip->code }}</a>
                             @endif
@@ -59,6 +62,11 @@
                         </span>
                     </div>
                     <div class="card-body">
+                        @if($transfer->order)
+                            <div class="alert alert-info py-2 px-3 small">
+                                <strong>{{ $transfer->order->customer?->name ?? 'Khách hàng' }}</strong> · Sau khi nhận, hệ thống sẽ giữ thêm hàng cho đơn và kho tiếp tục hoàn thiện đóng gói.
+                            </div>
+                        @endif
                         @if($transfer->note)
                             <div class="small text-muted mb-2">Ghi chú: {{ $transfer->note }}</div>
                         @endif
@@ -102,10 +110,10 @@
                             @endif
                         </div>
                         @if($isPending)
-                            <form method="POST" action="{{ route('warehouse.inventory-transfers.confirm', $transfer) }}" onsubmit="return confirm('Xác nhận tiếp nhận và nhập kho cho phiếu này?');">
+                            <form method="POST" action="{{ route('warehouse.inventory-transfers.confirm', $transfer) }}" onsubmit="return confirm('{{ $transfer->order ? 'Xác nhận nhận hàng cho đơn '.addslashes($transfer->order->code ?: '#'.$transfer->order->id).', nhập kho và tiếp tục đóng hàng?' : 'Xác nhận tiếp nhận và nhập kho cho phiếu này?' }}');">
                                 @csrf
                                 <button type="submit" class="btn btn-success btn-sm">
-                                    <i class="bi bi-check2-circle me-1"></i>Xác nhận nhập kho
+                                    <i class="bi bi-check2-circle me-1"></i>{{ $transfer->order ? 'Nhận hàng cho đơn' : 'Xác nhận nhập kho' }}
                                 </button>
                             </form>
                         @else

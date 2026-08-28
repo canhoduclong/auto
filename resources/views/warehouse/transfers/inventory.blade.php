@@ -211,6 +211,9 @@
                         <tr>
                             <td class="fw-semibold">
                                 {{ $transfer->transfer_code ?? ('#' . $transfer->id) }}
+                                @if($transfer->order)
+                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle d-block mt-1">Đơn {{ $transfer->order->code ?: '#'.$transfer->order->id }}</span>
+                                @endif
                                 @if($transfer->dispatchEntry?->slip)
                                     <a class="d-block small text-decoration-none mt-1" href="{{ route('warehouse.dispatch-slips.show', $transfer->dispatchEntry->slip) }}"><i class="bi bi-file-earmark-spreadsheet me-1"></i>{{ $transfer->dispatchEntry->slip->code }}</a>
                                 @endif
@@ -229,7 +232,7 @@
                             <td>{{ optional($transfer->requested_at ?? $transfer->created_at)->format('d/m/Y H:i') }}</td>
                             <td><span class="badge transfer-pill {{ $statusMeta[1] }}">{{ $statusMeta[0] }}</span></td>
                             <td class="text-end">
-                                @if($transfer->status === \App\Models\WarehouseInventoryTransfer::STATUS_PENDING_RECEIVE && !$transfer->dispatchEntry)
+                                @if($transfer->status === \App\Models\WarehouseInventoryTransfer::STATUS_PENDING_RECEIVE && !$transfer->dispatchEntry && !$transfer->order_id)
                                     <a href="{{ route('warehouse.inventory-transfers.edit', $transfer) }}" class="btn btn-sm btn-outline-primary">
                                         <i class="bi bi-pencil-square me-1"></i>Sửa
                                     </a>
