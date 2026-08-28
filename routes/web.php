@@ -212,6 +212,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::middleware('role:admin,CEO,ceo,Director,director,leader,leader_sale,sale_manager,manager,manager_sale,warehouse,account,accountant,accounting,Shipper,shipper,manager_shipper')->group(function () {
         Route::get('/department-notifications', [AdminNotificationController::class, 'index'])->name('department-notifications.index');
         Route::post('/department-notifications', [AdminNotificationController::class, 'storeDepartmentBroadcast'])->name('department-notifications.department_broadcast');
+        Route::delete('/department-notifications/inbox/{notificationId}', [AdminNotificationController::class, 'destroyNotification'])->name('department-notifications.notification.destroy');
         Route::put('/department-notifications/{broadcastId}', [AdminNotificationController::class, 'updateDepartmentBroadcast'])->name('department-notifications.update');
         Route::delete('/department-notifications/{broadcastId}', [AdminNotificationController::class, 'destroyDepartmentBroadcast'])->name('department-notifications.destroy');
         Route::post('/department-notifications/read-all', [AdminNotificationController::class, 'markAllAsRead'])->name('department-notifications.read_all');
@@ -692,6 +693,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::middleware('role:admin')->group(function () {
         Route::get('admin/notifications', [AdminNotificationController::class, 'index'])->name('admin.notifications.index');
         Route::post('admin/notifications/department-broadcast', [AdminNotificationController::class, 'storeDepartmentBroadcast'])->name('admin.notifications.department_broadcast');
+        Route::delete('admin/notifications/inbox/{notificationId}', [AdminNotificationController::class, 'destroyNotification'])->name('admin.notifications.notification.destroy');
         Route::put('admin/notifications/department-broadcast/{broadcastId}', [AdminNotificationController::class, 'updateDepartmentBroadcast'])->name('admin.notifications.update');
         Route::delete('admin/notifications/department-broadcast/{broadcastId}', [AdminNotificationController::class, 'destroyDepartmentBroadcast'])->name('admin.notifications.destroy');
         Route::post('admin/notifications/read-all', [AdminNotificationController::class, 'markAllAsRead'])->name('admin.notifications.read_all');

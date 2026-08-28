@@ -94,6 +94,45 @@ class AdminNotificationManagementTest extends TestCase
             ->assertSee('Kế hoạch bảo trì');
     }
 
+    public function test_admin_can_delete_a_notification_from_own_inbox_only(): void
+    {
+        $admin = $this->userWithRole('admin');
+        $otherAdmin = $this->userWithRole('admin');
+        $broadcastId = (string) Str::uuid();
+
+        Notification::send([$admin, $otherAdmin], new DepartmentBroadcastNotification(
+            'Thông báo cần xóa',
+            'Nội dung thông báo',
+            ['admin'],
+            ['admin'],
+            null,
+            $broadcastId,
+            null,
+            $admin->id,
+        ));
+
+        $ownNotification = $admin->notifications()->firstOrFail();
+        $otherNotification = $otherAdmin->notifications()->firstOrFail();
+
+        $this->actingAs($admin)
+            ->get(route('admin.notifications.index'))
+            ->assertOk()
+            ->assertSee(route('admin.notifications.notification.destroy', $ownNotification->id), false)
+            ->assertSee('Xóa thông báo');
+
+        $this->actingAs($admin)
+            ->delete(route('admin.notifications.notification.destroy', $ownNotification->id))
+            ->assertRedirect()
+            ->assertSessionHas('success', 'Đã xóa thông báo khỏi hộp thư.');
+
+        $this->assertDatabaseMissing('notifications', ['id' => $ownNotification->id]);
+        $this->assertDatabaseHas('notifications', ['id' => $otherNotification->id]);
+
+        $this->actingAs($admin)
+            ->delete(route('admin.notifications.notification.destroy', $otherNotification->id))
+            ->assertNotFound();
+    }
+
     private function userWithRole(string $roleName): User
     {
         $role = Role::query()->firstOrCreate(['name' => $roleName]);

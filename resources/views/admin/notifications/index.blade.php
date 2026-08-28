@@ -119,7 +119,17 @@
 
     <div class="card shadow-sm"><div class="card-header bg-white"><h5 class="mb-0">Hộp thư của tôi</h5></div><div class="list-group list-group-flush">
         @forelse($notifications as $notification)@php $receivedMeta=$priorityMeta[$notification->data['priority'] ?? 'info'] ?? $priorityMeta['info']; @endphp
-            <a href="{{ route($notificationShowRouteName ?? 'admin.notifications.show', ['notificationId'=>$notification->id,'layout'=>$notificationLayoutKey ?? null]) }}" class="list-group-item list-group-item-action d-flex gap-3 py-3 {{ is_null($notification->read_at) ? 'bg-light' : '' }}"><span class="notification-icon text-bg-{{ $receivedMeta[1] }}"><i class="ph {{ $receivedMeta[2] }}"></i></span><span class="flex-grow-1"><span class="d-flex justify-content-between"><strong>{{ $notification->data['title'] ?? 'Thông báo' }}</strong><small class="text-muted">{{ optional($notification->created_at)->format('d/m/Y H:i') }}</small></span><span class="text-muted">{{ \Illuminate\Support\Str::limit($notification->data['message'] ?? '-',180) }}</span></span>@if(is_null($notification->read_at))<span class="badge bg-primary rounded-pill align-self-center">Mới</span>@endif</a>
+            <div class="list-group-item d-flex align-items-center gap-2 p-0 {{ is_null($notification->read_at) ? 'bg-light' : '' }}">
+                <a href="{{ route($notificationShowRouteName ?? 'admin.notifications.show', ['notificationId'=>$notification->id,'layout'=>$notificationLayoutKey ?? null]) }}" class="list-group-item-action d-flex gap-3 py-3 px-3 text-decoration-none text-body flex-grow-1">
+                    <span class="notification-icon text-bg-{{ $receivedMeta[1] }}"><i class="ph {{ $receivedMeta[2] }}"></i></span>
+                    <span class="flex-grow-1"><span class="d-flex justify-content-between"><strong>{{ $notification->data['title'] ?? 'Thông báo' }}</strong><small class="text-muted">{{ optional($notification->created_at)->format('d/m/Y H:i') }}</small></span><span class="text-muted">{{ \Illuminate\Support\Str::limit($notification->data['message'] ?? '-',180) }}</span></span>
+                    @if(is_null($notification->read_at))<span class="badge bg-primary rounded-pill align-self-center">Mới</span>@endif
+                </a>
+                <form action="{{ route($notificationDeleteRouteName ?? 'admin.notifications.notification.destroy', ['notificationId'=>$notification->id,'layout'=>$notificationLayoutKey ?? null]) }}" method="POST" class="pe-3" onsubmit="return confirm('Bạn có chắc muốn xóa thông báo này khỏi hộp thư?')">
+                    @csrf @method('DELETE')
+                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Xóa thông báo" aria-label="Xóa thông báo"><i class="ph-trash"></i></button>
+                </form>
+            </div>
         @empty<div class="text-center text-muted py-5">Chưa có thông báo nào trong hộp thư.</div>@endforelse
     </div>@if($notifications->hasPages())<div class="card-footer bg-white">{{ $notifications->links('pagination::bootstrap-5') }}</div>@endif</div>
 </div>

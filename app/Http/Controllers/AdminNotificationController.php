@@ -258,6 +258,27 @@ class AdminNotificationController extends Controller
         return back()->with('success', 'Đã xóa thông báo khỏi ' . $count . ' người nhận.');
     }
 
+    public function destroyNotification(Request $request, string $notificationId): RedirectResponse
+    {
+        abort_unless($this->canManageDepartmentNotifications($request), 403);
+
+        $notification = $request->user()
+            ->notifications()
+            ->where('type', DepartmentBroadcastNotification::class)
+            ->where('id', $notificationId)
+            ->firstOrFail();
+
+        $viewContext = $this->resolveNotificationViewContext($request);
+        abort_unless(
+            $this->notificationMatchesLayout($notification->data ?? [], $viewContext['notificationLayoutKey'] ?? null),
+            403
+        );
+
+        $notification->delete();
+
+        return back()->with('success', 'Đã xóa thông báo khỏi hộp thư.');
+    }
+
     public function markAsRead(Request $request, string $notificationId): RedirectResponse
     {
         abort_unless($this->canManageDepartmentNotifications($request), 403);
@@ -374,6 +395,7 @@ class AdminNotificationController extends Controller
             'notificationShowRouteName' => $layoutKey === 'admin' ? 'admin.notifications.show' : 'department-notifications.show',
             'notificationUpdateRouteName' => $layoutKey === 'admin' ? 'admin.notifications.update' : 'department-notifications.update',
             'notificationDestroyRouteName' => $layoutKey === 'admin' ? 'admin.notifications.destroy' : 'department-notifications.destroy',
+            'notificationDeleteRouteName' => $layoutKey === 'admin' ? 'admin.notifications.notification.destroy' : 'department-notifications.notification.destroy',
         ];
     }
 
