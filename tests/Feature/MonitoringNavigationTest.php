@@ -99,4 +99,50 @@ class MonitoringNavigationTest extends TestCase
                 ->assertSee('monitor-panel monitor-order status-' . $visualState, false);
         }
     }
+
+    public function test_refresh_resequences_open_and_closed_orders_together_without_duplicates(): void
+    {
+        $saleRole = Role::query()->create(['name' => 'sale']);
+        $sale = User::factory()->create();
+        $sale->roles()->attach($saleRole);
+        $customer = Customer::query()->create([
+            'user_id' => $sale->id,
+            'name' => 'Khách kiểm tra làm mới số thứ tự',
+            'status' => 'active',
+        ]);
+        $date = now()->startOfDay();
+        $orders = collect([
+            [Order::STATUS_READY_TO_PACK, 1],
+            [Order::STATUS_PACKED, 1],
+            [Order::STATUS_COMPLETED, 2],
+            [Order::STATUS_DELIVERED, 2],
+        ])->map(function (array $row, int $index) use ($sale, $customer, $date): Order {
+            $order = new Order;
+            $order->forceFill([
+                'customer_id' => $customer->id,
+                'user_id' => $sale->id,
+                'code' => 'MONITOR-REFRESH-' . ($index + 1),
+                'status' => $row[0],
+                'daily_sequence' => $row[1],
+                'created_at' => $date->copy()->addHours($index + 8),
+                'updated_at' => $date->copy()->addHours($index + 8),
+            ])->save();
+
+            return $order;
+        });
+
+        $this->actingAs($sale)
+            ->withSession(['active_role' => 'sale'])
+            ->post(route('pages.my_orders.monitoring.refresh_sequence'), [
+                'date' => $date->toDateString(),
+                'date_field' => 'business_date',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success', fn (string $message): bool => str_contains($message, 'sửa 2 số trùng'));
+
+        $this->assertSame(
+            [1, 2, 3, 4],
+            $orders->map(fn (Order $order): int => (int) $order->fresh()->daily_sequence)->all()
+        );
+    }
 }

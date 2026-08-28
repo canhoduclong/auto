@@ -1958,7 +1958,7 @@ class PageController extends Controller
                 }
             });
 
-        $response = $this->refreshMissingDailySequencesFromQuery($query, 'theo dõi');
+        $response = $this->refreshMonitoringDailySequences($request);
         if ($autoApprovedOrders > 0) {
             $sequenceMessage = (string) session('success', 'Đã cập nhật số thứ tự ưu tiên.');
             $response->with(
@@ -3328,6 +3328,80 @@ class PageController extends Controller
             'success',
             'Đã cập nhật lại số thứ tự ưu tiên cho ' . $missingOrders->count() . " đơn {$scope} thiếu số."
         );
+    }
+
+    private function refreshMonitoringDailySequences(Request $request)
+    {
+        try {
+            $selectedDate = Carbon::parse(
+                $request->input('date', $request->input('from_date', now()->toDateString()))
+            )->toDateString();
+        } catch (\Throwable) {
+            $selectedDate = now()->toDateString();
+        }
+        $dateField = $this->monitoringDateField($request);
+        $query = Order::query();
+        $this->applyMonitoringDateFilter($query, $selectedDate, $dateField);
+        if ($this->hasOrderColumn('trash_at')) {
+            $query->whereNull('trash_at');
+        }
+
+        $result = DB::transaction(function () use ($query): array {
+            $orders = $query
+                ->select(['id', 'status', 'daily_sequence', 'created_at'])
+                ->orderByRaw('CASE WHEN status = ? THEN 1 ELSE 0 END', [Order::STATUS_CANCELLED])
+                ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
+                ->orderBy('daily_sequence')
+                ->orderBy('created_at')
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+
+            $duplicateCount = $orders
+                ->whereNotNull('daily_sequence')
+                ->groupBy('daily_sequence')
+                ->sum(fn ($group): int => max(0, $group->count() - 1));
+            $missingCount = $orders->whereNull('daily_sequence')->count();
+            $changedCount = 0;
+
+            foreach ($orders->values() as $index => $order) {
+                $sequence = $index + 1;
+                if ((int) ($order->daily_sequence ?? 0) === $sequence) {
+                    continue;
+                }
+
+                Order::query()->whereKey($order->id)->update(['daily_sequence' => $sequence]);
+                $changedCount++;
+            }
+
+            return [
+                'total' => $orders->count(),
+                'changed' => $changedCount,
+                'duplicates' => $duplicateCount,
+                'missing' => $missingCount,
+                'created_dates' => $orders
+                    ->pluck('created_at')
+                    ->filter()
+                    ->map(fn ($date) => Carbon::parse($date)->toDateString())
+                    ->unique()
+                    ->values(),
+            ];
+        });
+
+        foreach ($result['created_dates'] as $createdDate) {
+            app(OrderController::class)->syncDailySequenceAndStockSufficiency($createdDate, true);
+        }
+
+        if ($result['total'] === 0) {
+            return back()->with('success', 'Không có đơn trong ngày đã chọn để cập nhật số thứ tự.');
+        }
+        if ($result['changed'] === 0) {
+            return back()->with('success', "Đã kiểm tra {$result['total']} đơn: số thứ tự đang liên tục và không trùng.");
+        }
+
+        return back()->with('success', 'Đã đánh lại số thứ tự liên tục cho '.$result['total'].' đơn trong ngày'
+            .' (sửa '.$result['duplicates'].' số trùng, '.$result['missing'].' đơn thiếu số, '
+            .$result['changed'].' đơn thay đổi số).');
     }
 
     private function approveOrdersFromQuery(Builder $query, User $user, ApprovalService $approvalService, string $note): array

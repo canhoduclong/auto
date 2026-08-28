@@ -1220,7 +1220,7 @@
                         <i class="bi bi-clock-history"></i>
                     </button>
                 @endif
-                <form method="POST" action="{{ route('pages.my_orders.monitoring.refresh_sequence') }}" onsubmit="return confirm('Quét duyệt tự động các đơn đủ điều kiện và cập nhật lại số thứ tự ưu tiên?');">
+                <form method="POST" action="{{ route('pages.my_orders.monitoring.refresh_sequence') }}" onsubmit="return confirm('Quét duyệt tự động và đánh lại số thứ tự chung cho tất cả đơn đã đóng/chưa đóng của ngày này?');">
                     @csrf
                     <input type="hidden" name="date" value="{{ $selectedDate }}">
                     <input type="hidden" name="date_field" value="{{ $selectedDateField }}">
@@ -1228,7 +1228,7 @@
                     <input type="hidden" name="status" value="{{ $selectedStatus }}">
                     <input type="hidden" name="sale_id" value="{{ $selectedSaleId }}">
                     <input type="hidden" name="customer_id" value="{{ $selectedCustomerId }}">
-                    <button type="submit" class="btn btn-sm btn-primary monitor-icon-action" title="Làm mới danh sách và số thứ tự" aria-label="Làm mới danh sách và số thứ tự">
+                    <button type="submit" class="btn btn-sm btn-primary monitor-icon-action" title="Làm mới và sửa số thứ tự trùng" aria-label="Làm mới và sửa số thứ tự trùng">
                         <i class="bi bi-arrow-clockwise"></i>
                     </button>
                 </form>
