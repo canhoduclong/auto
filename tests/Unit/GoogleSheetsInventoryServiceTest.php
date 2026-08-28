@@ -20,6 +20,7 @@ class GoogleSheetsInventoryServiceTest extends TestCase
             ['HÀNG MÓC'],
             ['M 2', '7', '', '', '', '5'],
             ['M 2,1', '', '', '', '', '8'],
+            ['Loại lớn', '', '', '', '', '4'],
             ['CHIẾN LƯỢC'],
             ['HÀNG MÓC'],
             ['M 2', '', '', '', '', '-'],
@@ -27,6 +28,7 @@ class GoogleSheetsInventoryServiceTest extends TestCase
         $variants = new Collection([
             $this->variant(10, '2.00', 'MOC - 2.00', '2.0 kg', 'M2.0'),
             $this->variant(11, '2.10', 'MOC - 2.1', '2.1 kg'),
+            $this->variant(13, '', 'HANG-LOAI', 'Vịt loại bầm', 'Loại lớn'),
         ]);
 
         $result = (new GoogleSheetsInventoryService)->parseValues(
@@ -40,7 +42,8 @@ class GoogleSheetsInventoryServiceTest extends TestCase
         $this->assertSame(10, $result['rows'][0]['variant_id']);
         $this->assertSame('inventory_name', $result['rows'][0]['match_method']);
         $this->assertSame('MOC - 2.0', $result['rows'][0]['normalized_code']);
-        $this->assertSame(13.0, $result['total_quantity']);
+        $this->assertSame(17.0, $result['total_quantity']);
+        $this->assertSame(13, $result['rows']->firstWhere('sheet_code', 'Loại lớn')['variant_id']);
         $this->assertFalse($result['has_blocking_errors']);
     }
 

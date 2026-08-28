@@ -105,7 +105,7 @@ class GoogleSheetsInventoryService
 
                 return Str::contains($identity, ['moc', 'vit nguyen con']);
             });
-        $variantsByInventoryName = $variantsForInventory
+        $variantsByInventoryName = $variants
             ->filter(fn (ProductVariant $variant) => filled($variant->inventory_name))
             ->groupBy(fn (ProductVariant $variant) => $this->canonicalInventoryName((string) $variant->inventory_name));
         $variantBySize = $variantsForInventory
@@ -121,24 +121,27 @@ class GoogleSheetsInventoryService
         $rows = collect();
         for ($rowIndex = $start; $rowIndex < $end; $rowIndex++) {
             $sheetCode = trim((string) ($values[$rowIndex][0] ?? ''));
-            if (! preg_match('/^M\s*(\d+)(?:[,.](\d+))?$/iu', $sheetCode, $matches)) {
+            $configuredMatches = $variantsByInventoryName->get($this->canonicalInventoryName($sheetCode), collect());
+            $isMocCode = preg_match('/^M\s*(\d+)(?:[,.](\d+))?$/iu', $sheetCode, $matches) === 1;
+            if ($configuredMatches->isEmpty() && ! $isMocCode) {
                 continue;
             }
 
-            $size = number_format((float) ($matches[1].'.'.($matches[2] ?? '0')), 1, '.', '');
+            $size = $isMocCode
+                ? number_format((float) ($matches[1].'.'.($matches[2] ?? '0')), 1, '.', '')
+                : null;
             $quantity = $this->number($values[$rowIndex][$stockColumn] ?? null);
-            $configuredMatches = $variantsByInventoryName->get($this->canonicalInventoryName($sheetCode), collect());
             $hasAmbiguousInventoryName = $configuredMatches->count() > 1;
             $variant = $configuredMatches->count() === 1
                 ? $configuredMatches->first()
-                : ($hasAmbiguousInventoryName ? null : $variantBySize->get($size));
+                : ($hasAmbiguousInventoryName || $size === null ? null : $variantBySize->get($size));
             $matchMethod = $variant
                 ? ($configuredMatches->count() === 1 ? 'inventory_name' : 'fallback_size')
                 : null;
             $rows->push([
                 'sheet_row' => $rowIndex + 1,
                 'sheet_code' => $sheetCode,
-                'normalized_code' => 'MOC - '.$size,
+                'normalized_code' => $size !== null ? 'MOC - '.$size : ($variant?->inventory_name ?: $sheetCode),
                 'quantity' => $quantity,
                 'variant_id' => $variant?->id,
                 'variant_name' => $variant ? trim(($variant->product?->name ? $variant->product->name.' – ' : '').($variant->name ?: $variant->sku)) : null,
