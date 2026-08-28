@@ -18,7 +18,7 @@ class WarehouseGoogleSheetInventoryImportTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_confirming_preview_creates_one_import_document_and_prevents_duplicate_import(): void
+    public function test_duplicate_import_requires_explicit_confirmation_and_records_import_number(): void
     {
         $warehouse = Warehouse::query()->create(['name' => 'Kho Long An', 'status' => true]);
         $role = Role::query()->create(['name' => 'warehouse']);
@@ -48,7 +48,7 @@ class WarehouseGoogleSheetInventoryImportTest extends TestCase
             'total_quantity' => 12.0,
         ];
         $this->mock(GoogleSheetsInventoryService::class, function (MockInterface $mock) use ($warehouse, $preview): void {
-            $mock->shouldReceive('preview')->twice()->withArgs(fn ($actualWarehouse, $date) => $actualWarehouse->is($warehouse) && $date === '2026-08-26')->andReturn($preview);
+            $mock->shouldReceive('preview')->times(3)->withArgs(fn ($actualWarehouse, $date) => $actualWarehouse->is($warehouse) && $date === '2026-08-26')->andReturn($preview);
         });
 
         $payload = ['date' => '2026-08-26', 'confirm_import' => '1'];
@@ -70,9 +70,15 @@ class WarehouseGoogleSheetInventoryImportTest extends TestCase
         ]);
 
         $this->actingAs($user)->post(route('warehouse.google-sheet-inventory.store'), $payload)
-            ->assertRedirect(route('warehouse.stock-in.show', $document))
-            ->assertSessionHas('error');
+            ->assertRedirect(route('warehouse.google-sheet-inventory.index', ['date' => '2026-08-26', 'warehouse_id' => $warehouse->id]))
+            ->assertSessionHas('warning');
         $this->assertSame(1, InventoryDocument::query()->count());
         $this->assertSame(12.0, (float) Inventory::query()->firstOrFail()->quantity);
+
+        $this->actingAs($user)->post(route('warehouse.google-sheet-inventory.store'), $payload + ['allow_duplicate' => '1'])
+            ->assertRedirect();
+        $this->assertSame(2, InventoryDocument::query()->count());
+        $this->assertSame(24.0, (float) Inventory::query()->firstOrFail()->quantity);
+        $this->assertStringContainsString('lần nhập 2', (string) InventoryDocument::query()->latest('id')->value('notes'));
     }
 }

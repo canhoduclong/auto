@@ -28,16 +28,17 @@ class WarehouseGoogleSheetInventoryController extends Controller
         $selectedDate = Carbon::parse($validated['date'] ?? now())->toDateString();
         $preview = null;
         $loadError = null;
-        $existingDocument = null;
+        $existingDocuments = collect();
 
         try {
             $preview = $this->withInventoryState($sheets->preview($warehouse, $selectedDate), $warehouse);
             $marker = $this->importMarker($preview['spreadsheet_id'], $preview['sheet_id'], $selectedDate, (int) $warehouse->id);
-            $existingDocument = InventoryDocument::query()
+            $existingDocuments = InventoryDocument::query()
                 ->where('warehouse_id', $warehouse->id)
                 ->where('type', 'import')
                 ->where('notes', 'like', '%'.$marker.'%')
-                ->first();
+                ->orderBy('id')
+                ->get();
         } catch (\Throwable $exception) {
             report($exception);
             $loadError = $this->friendlyGoogleError($exception, $sheets);
@@ -53,7 +54,7 @@ class WarehouseGoogleSheetInventoryController extends Controller
             'selectedDate',
             'preview',
             'loadError',
-            'existingDocument'
+            'existingDocuments'
         ));
     }
 
@@ -64,6 +65,7 @@ class WarehouseGoogleSheetInventoryController extends Controller
             'warehouse_id' => ['nullable', 'integer', 'exists:warehouses,id'],
             'confirm_import' => ['accepted'],
             'ignore_unmatched' => ['nullable', 'boolean'],
+            'allow_duplicate' => ['nullable', 'boolean'],
         ]);
         $warehouse = $this->resolveWarehouse($request);
         $selectedDate = Carbon::parse($validated['date'])->toDateString();
@@ -94,17 +96,19 @@ class WarehouseGoogleSheetInventoryController extends Controller
 
         try {
             $document = Cache::lock('google-sheet-inventory-import:'.sha1($marker), 120)
-                ->block(10, function () use ($preview, $warehouse, $selectedDate, $marker) {
-                    $existing = InventoryDocument::query()
+                ->block(10, function () use ($preview, $warehouse, $selectedDate, $marker, $validated) {
+                    $existingDocuments = InventoryDocument::query()
                         ->where('warehouse_id', $warehouse->id)
                         ->where('type', 'import')
                         ->where('notes', 'like', '%'.$marker.'%')
-                        ->first();
-                    if ($existing) {
-                        throw new RuntimeException('DUPLICATE:'.$existing->id);
+                        ->orderBy('id')
+                        ->get();
+                    if ($existingDocuments->isNotEmpty() && empty($validated['allow_duplicate'])) {
+                        throw new RuntimeException('DUPLICATE:'.$existingDocuments->last()->id);
                     }
 
-                    return DB::transaction(function () use ($preview, $warehouse, $selectedDate, $marker) {
+                    return DB::transaction(function () use ($preview, $warehouse, $selectedDate, $marker, $existingDocuments) {
+                        $importNumber = $existingDocuments->count() + 1;
                         $document = InventoryDocument::create([
                             'type' => 'import',
                             'document_date' => $selectedDate,
@@ -112,7 +116,8 @@ class WarehouseGoogleSheetInventoryController extends Controller
                             'supplier_id' => null,
                             'shipping_fee' => 0,
                             'notes' => 'Nhập tồn đầu kỳ từ Google Sheet '.$preview['sheet_name']
-                                .' ngày '.Carbon::parse($selectedDate)->format('d/m/Y')."\n".$marker,
+                                .' ngày '.Carbon::parse($selectedDate)->format('d/m/Y')
+                                .' – lần nhập '.$importNumber."\n".$marker,
                             'user_id' => Auth::id(),
                         ]);
 
@@ -155,8 +160,11 @@ class WarehouseGoogleSheetInventoryController extends Controller
             if (str_starts_with($exception->getMessage(), 'DUPLICATE:')) {
                 $documentId = (int) str($exception->getMessage())->after('DUPLICATE:')->toString();
 
-                return redirect()->route('warehouse.stock-in.show', $documentId)
-                    ->with('error', 'Ngày này đã được load vào kho trước đó; hệ thống không nhập trùng.');
+                return redirect()->route('warehouse.google-sheet-inventory.index', [
+                    'date' => $selectedDate,
+                    'warehouse_id' => $warehouse->id,
+                ])->with('warning', 'Tồn kho ngày '.Carbon::parse($selectedDate)->format('d/m/Y')
+                    .' đã được nhập trước đó. Nếu vẫn muốn nhập thêm lần nữa, hãy tích xác nhận nhập lại bên cạnh nút nhập kho.');
             }
             throw $exception;
         }
