@@ -414,6 +414,12 @@
 						</li>
 						@if(auth()->user()?->isAdmin())
 						<li class="nav-item">
+							<a href="{{ route('admin.notifications.index') }}" class="nav-link{{ request()->routeIs('admin.notifications.*') ? ' active' : '' }}">
+								<i class="ph-bell-ringing"></i>
+								<span>Quản trị thông báo</span>
+							</a>
+						</li>
+						<li class="nav-item">
 							<a href="{{ route('layouts.index') }}" class="nav-link{{ request()->routeIs('layouts.*') ? ' active' : '' }}">
 								<i class="ph-layout"></i>
 								<span>Layout</span>

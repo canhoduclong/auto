@@ -43,6 +43,7 @@ class NotificationApiController extends BaseApiController
             ->limit(max($limit * 6, 60))
             ->get()
             ->filter(fn ($n) => !$this->isExpired($n->data ?? []))
+            ->filter(fn ($n) => !$this->isScheduled($n->data ?? []))
             ->filter(fn ($n) => $this->matchesCurrentLayout($n->data ?? [], $layoutKey))
             ->take($limit)
             ->values();
@@ -60,6 +61,7 @@ class NotificationApiController extends BaseApiController
                 'sender_id' => isset($n->data['sender_id']) ? (int) $n->data['sender_id'] : null,
                 'broadcast_id' => (string) ($n->data['broadcast_id'] ?? ''),
                 'expires_at' => (string) ($n->data['expires_at'] ?? ''),
+                'scheduled_at' => (string) ($n->data['scheduled_at'] ?? ''),
                 'route_key' => (string) ($n->data['route_key'] ?? ''),
                 'order_id' => isset($n->data['order_id']) ? (int) $n->data['order_id'] : null,
                 'daily_sequence' => isset($n->data['daily_sequence']) ? (int) $n->data['daily_sequence'] : null,
@@ -191,6 +193,7 @@ class NotificationApiController extends BaseApiController
         $user?->unreadNotifications()
             ->get()
             ->filter(fn ($n) => !$this->isExpired($n->data ?? []))
+            ->filter(fn ($n) => !$this->isScheduled($n->data ?? []))
             ->filter(fn ($n) => $this->matchesCurrentLayout($n->data ?? [], $layoutKey))
             ->each->markAsRead();
 
@@ -228,6 +231,13 @@ class NotificationApiController extends BaseApiController
     {
         return function_exists('departmentBroadcastIsExpired')
             ? departmentBroadcastIsExpired($data)
+            : false;
+    }
+
+    private function isScheduled(array $data): bool
+    {
+        return function_exists('departmentBroadcastIsScheduled')
+            ? departmentBroadcastIsScheduled($data)
             : false;
     }
 

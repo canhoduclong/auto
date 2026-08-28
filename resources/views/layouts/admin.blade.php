@@ -68,8 +68,16 @@
                     @php
                         $currentUser = auth()->user();
                         $hasNotificationsTable = \Illuminate\Support\Facades\Schema::hasTable('notifications');
-                        $unreadNotificationsCount = $hasNotificationsTable ? ($currentUser?->unreadNotifications()->count() ?? 0) : 0;
-                        $latestNotifications = $hasNotificationsTable ? ($currentUser?->notifications()->latest()->take(5)->get() ?? collect()) : collect();
+                        $visibleUnreadNotifications = $hasNotificationsTable
+                            ? ($currentUser?->unreadNotifications()->get() ?? collect())
+                                ->filter(fn ($item) => !departmentBroadcastIsExpired($item->data ?? []) && !departmentBroadcastIsScheduled($item->data ?? []))
+                            : collect();
+                        $latestNotifications = $hasNotificationsTable
+                            ? ($currentUser?->notifications()->latest()->take(50)->get() ?? collect())
+                                ->filter(fn ($item) => !departmentBroadcastIsExpired($item->data ?? []) && !departmentBroadcastIsScheduled($item->data ?? []))
+                                ->take(5)
+                            : collect();
+                        $unreadNotificationsCount = $visibleUnreadNotifications->count();
                     @endphp
 
                     <button type="button" class="btn btn-light btn-sm d-lg-none me-2 js-global-mobile-menu-toggle" aria-label="Open menu">
@@ -245,4 +253,3 @@
 </script>
 </body>
 </html>
-

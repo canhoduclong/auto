@@ -18,6 +18,10 @@ class DepartmentBroadcastNotification extends Notification
         private readonly ?string $broadcastId = null,
         private readonly ?string $url = null,
         private readonly ?int $senderId = null,
+        private readonly string $priority = 'info',
+        private readonly ?string $scheduledAt = null,
+        private readonly array $targetUserIds = [],
+        private readonly ?int $updatedBy = null,
     ) {
     }
 
@@ -38,6 +42,10 @@ class DepartmentBroadcastNotification extends Notification
             'expires_at' => $this->expiresAt,
             'broadcast_id' => $this->broadcastId,
             'sender_id' => $this->senderId,
+            'priority' => $this->priority,
+            'scheduled_at' => $this->scheduledAt,
+            'target_user_ids' => $this->targetUserIds,
+            'updated_by' => $this->updatedBy,
         ];
     }
 }

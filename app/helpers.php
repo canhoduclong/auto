@@ -268,6 +268,9 @@ if (!function_exists('getDepartmentBroadcastNotifications')) {
             ->filter(fn ($notification) => function_exists('departmentBroadcastIsExpired')
                 ? !departmentBroadcastIsExpired($notification->data ?? [])
                 : true)
+            ->filter(fn ($notification) => function_exists('departmentBroadcastIsScheduled')
+                ? !departmentBroadcastIsScheduled($notification->data ?? [])
+                : true)
             ->values();
 
         if ($layoutKey !== null && function_exists('departmentBroadcastMatchesLayout')) {
@@ -315,6 +318,8 @@ if (!function_exists('getDepartmentBroadcastNotifications')) {
                     'sender_name' => $sender?->name ?: 'Hệ thống',
                     'sender_department' => $sender?->department?->name ?: ($senderRoles ? implode(', ', $senderRoles) : 'Hệ thống'),
                     'sender_roles' => $senderRoles,
+                    'priority' => $notification->data['priority'] ?? 'info',
+                    'scheduled_at' => $notification->data['scheduled_at'] ?? null,
                 ];
             });
     }
@@ -369,6 +374,10 @@ if (!function_exists('departmentBroadcastLayoutRoles')) {
 if (!function_exists('departmentBroadcastMatchesLayout')) {
     function departmentBroadcastMatchesLayout(array $data, ?string $layoutKey): bool
     {
+        if (in_array((int) auth()->id(), array_map('intval', (array) ($data['target_user_ids'] ?? [])), true)) {
+            return true;
+        }
+
         $layoutRoles = departmentBroadcastLayoutRoles($layoutKey);
         if (in_array('*', $layoutRoles, true) || $layoutRoles === []) {
             return true;
@@ -382,6 +391,10 @@ if (!function_exists('departmentBroadcastMatchesLayout')) {
             ->map(fn ($role) => strtolower((string) $role))
             ->filter();
 
+        if ($targetRoles->contains('*')) {
+            return true;
+        }
+
         if ($targetRoles->isEmpty()) {
             return true;
         }
@@ -390,6 +403,22 @@ if (!function_exists('departmentBroadcastMatchesLayout')) {
             ->map(fn ($role) => strtolower((string) $role));
 
         return $targetRoles->intersect($layoutRoles)->isNotEmpty();
+    }
+}
+
+if (!function_exists('departmentBroadcastIsScheduled')) {
+    function departmentBroadcastIsScheduled(array $data): bool
+    {
+        $scheduledAt = $data['scheduled_at'] ?? null;
+        if (blank($scheduledAt)) {
+            return false;
+        }
+
+        try {
+            return \Carbon\Carbon::parse($scheduledAt)->isFuture();
+        } catch (\Throwable) {
+            return false;
+        }
     }
 }
 

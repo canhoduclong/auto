@@ -13,6 +13,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class AdminNotificationController extends Controller
@@ -38,6 +39,8 @@ class AdminNotificationController extends Controller
     ];
 
     private const DEPARTMENT_ROLE_OPTIONS = [
+        'all' => 'Tất cả nhân sự',
+        'admin' => 'Quản trị viên',
         'CEO' => 'CEO',
         'warehouse' => 'Warehouse',
         'accountant' => 'Account',
@@ -46,9 +49,13 @@ class AdminNotificationController extends Controller
         'manager' => 'Manager',
         'Director' => 'Director',
         'sale' => 'Sale',
+        'package' => 'Đóng hàng',
+        'procurement_manager' => 'Thu mua',
     ];
 
     private const TARGET_ROLE_ALIASES = [
+        'all' => ['*'],
+        'admin' => ['admin'],
         'CEO' => ['CEO', 'ceo'],
         'warehouse' => ['warehouse'],
         'accountant' => ['account', 'accountant', 'accounting'],
@@ -57,6 +64,15 @@ class AdminNotificationController extends Controller
         'manager' => ['manager', 'manager_sale'],
         'Director' => ['Director', 'director'],
         'sale' => ['sale'],
+        'package' => ['package'],
+        'procurement_manager' => ['procurement_manager'],
+    ];
+
+    private const PRIORITY_OPTIONS = [
+        'info' => 'Thông tin',
+        'success' => 'Tích cực',
+        'warning' => 'Quan trọng',
+        'danger' => 'Khẩn cấp',
     ];
 
     private const LAYOUT_ROLE_SCOPE = [
@@ -82,6 +98,7 @@ class AdminNotificationController extends Controller
             ->get()
             ->filter(fn ($notification) => $this->notificationMatchesLayout($notification->data ?? [], $layoutKey))
             ->filter(fn ($notification) => !$this->notificationIsExpired($notification->data ?? []))
+            ->filter(fn ($notification) => !$this->notificationIsScheduled($notification->data ?? []))
             ->values();
         $page = LengthAwarePaginator::resolveCurrentPage();
         $perPage = 20;
@@ -93,11 +110,36 @@ class AdminNotificationController extends Controller
             ['path' => $request->url(), 'query' => $request->query()]
         );
 
-        $departmentRoleOptions = self::DEPARTMENT_ROLE_OPTIONS;
-        $sentBroadcasts = $this->buildSentBroadcasts($request->user());
+        $isAdminNotificationCenter = $this->isAdminNotificationCenter($request);
+        $departmentRoleOptions = $isAdminNotificationCenter
+            ? self::DEPARTMENT_ROLE_OPTIONS
+            : array_intersect_key(self::DEPARTMENT_ROLE_OPTIONS, array_flip(['CEO', 'warehouse', 'accountant', 'Shipper', 'leader', 'manager', 'Director', 'sale']));
+        $priorityOptions = self::PRIORITY_OPTIONS;
+        $allSentBroadcasts = $this->buildSentBroadcasts($request->user(), $isAdminNotificationCenter);
+        $broadcastMetrics = $this->broadcastMetrics($allSentBroadcasts);
+        $filteredBroadcasts = $this->filterBroadcasts($allSentBroadcasts, $request);
+        $broadcastPage = max(1, (int) $request->query('broadcast_page', 1));
+        $sentBroadcasts = new LengthAwarePaginator(
+            $filteredBroadcasts->forPage($broadcastPage, 15)->values(),
+            $filteredBroadcasts->count(),
+            15,
+            $broadcastPage,
+            ['path' => $request->url(), 'pageName' => 'broadcast_page', 'query' => $request->query()]
+        );
+        $notificationUsers = $isAdminNotificationCenter
+            ? User::query()->orderBy('name')->get(['id', 'name', 'email'])
+            : collect();
 
         return view('admin.notifications.index', array_merge(
-            compact('notifications', 'departmentRoleOptions', 'sentBroadcasts'),
+            compact(
+                'notifications',
+                'departmentRoleOptions',
+                'priorityOptions',
+                'sentBroadcasts',
+                'broadcastMetrics',
+                'notificationUsers',
+                'isAdminNotificationCenter'
+            ),
             $viewContext
         ));
     }
@@ -106,24 +148,17 @@ class AdminNotificationController extends Controller
     {
         abort_unless($this->canManageDepartmentNotifications($request), 403);
 
-        $validated = $request->validate([
-            'title' => ['required', 'string', 'max:160'],
-            'message' => ['required', 'string', 'max:2000'],
-            'target_roles' => ['required', 'array', 'min:1'],
-            'target_roles.*' => ['required', Rule::in(array_keys(self::DEPARTMENT_ROLE_OPTIONS))],
-            'url' => ['nullable', 'string', 'max:500'],
-            'expires_at' => ['nullable', 'date'],
-        ]);
+        $validated = $this->validateBroadcast($request);
 
-        $targetRoles = array_values(array_unique($validated['target_roles']));
+        $targetRoles = array_values(array_unique($validated['target_roles'] ?? []));
+        $targetUserIds = $this->isAdminNotificationCenter($request)
+            ? array_values(array_unique(array_map('intval', $validated['target_user_ids'] ?? [])))
+            : [];
         $targetRoleNames = $this->expandTargetRoles($targetRoles);
         $expiresAt = $this->normalizeExpiresAt($validated['expires_at'] ?? null);
+        $scheduledAt = $this->normalizeScheduledAt($validated['scheduled_at'] ?? null);
         $broadcastId = (string) Str::uuid();
-        $users = User::query()
-            ->whereHas('roles', function ($query) use ($targetRoleNames) {
-                $query->whereIn('name', $targetRoleNames);
-            })
-            ->get();
+        $users = $this->broadcastRecipients($targetRoleNames, $targetUserIds);
 
         if ($users->isEmpty()) {
             return back()->with('error', 'Không tìm thấy user thuộc phòng ban đã chọn.')->withInput();
@@ -138,43 +173,42 @@ class AdminNotificationController extends Controller
             $broadcastId,
             !empty($validated['url']) ? trim($validated['url']) : null,
             $request->user()->id,
+            $validated['priority'] ?? 'info',
+            $scheduledAt,
+            $targetUserIds,
         ));
 
-        return back()->with('success', 'Đã gửi thông báo tới ' . $users->count() . ' người nhận.');
+        $message = $scheduledAt
+            ? 'Đã lên lịch thông báo cho ' . $users->count() . ' người nhận.'
+            : 'Đã gửi thông báo tới ' . $users->count() . ' người nhận.';
+
+        return back()->with('success', $message);
     }
 
     public function updateDepartmentBroadcast(Request $request, string $broadcastId): RedirectResponse
     {
         abort_unless($this->canManageDepartmentNotifications($request), 403);
 
-        $validated = $request->validate([
-            'title' => ['required', 'string', 'max:160'],
-            'message' => ['required', 'string', 'max:2000'],
-            'target_roles' => ['required', 'array', 'min:1'],
-            'target_roles.*' => ['required', Rule::in(array_keys(self::DEPARTMENT_ROLE_OPTIONS))],
-            'url' => ['nullable', 'string', 'max:500'],
-            'expires_at' => ['nullable', 'date'],
-        ]);
+        $validated = $this->validateBroadcast($request);
 
         $existing = $this->broadcastNotificationsFor($request->user(), $broadcastId)->get();
         abort_if($existing->isEmpty(), 404);
 
-        $targetRoles = array_values(array_unique($validated['target_roles']));
+        $targetRoles = array_values(array_unique($validated['target_roles'] ?? []));
+        $targetUserIds = $this->isAdminNotificationCenter($request)
+            ? array_values(array_unique(array_map('intval', $validated['target_user_ids'] ?? [])))
+            : [];
         $targetRoleNames = $this->expandTargetRoles($targetRoles);
         $expiresAt = $this->normalizeExpiresAt($validated['expires_at'] ?? null);
-        $users = User::query()
-            ->whereHas('roles', function ($query) use ($targetRoleNames) {
-                $query->whereIn('name', $targetRoleNames);
-            })
-            ->get();
+        $scheduledAt = $this->normalizeScheduledAt($validated['scheduled_at'] ?? null);
+        $users = $this->broadcastRecipients($targetRoleNames, $targetUserIds);
 
         if ($users->isEmpty()) {
             return back()->with('error', 'Không tìm thấy user thuộc phòng ban đã chọn.')->withInput();
         }
 
-        $existing->each->delete();
-
-        Notification::send($users, new DepartmentBroadcastNotification(
+        $originalSenderId = (int) ($existing->first()?->data['sender_id'] ?? $request->user()->id);
+        $updatedNotification = new DepartmentBroadcastNotification(
             trim($validated['title']),
             trim($validated['message']),
             $targetRoles,
@@ -182,8 +216,31 @@ class AdminNotificationController extends Controller
             $expiresAt,
             $broadcastId,
             !empty($validated['url']) ? trim($validated['url']) : null,
+            $originalSenderId,
+            $validated['priority'] ?? 'info',
+            $scheduledAt,
+            $targetUserIds,
             $request->user()->id,
-        ));
+        );
+
+        $recipientsById = $users->keyBy('id');
+        $existingByRecipient = $existing->groupBy(fn (DatabaseNotification $item) => (int) $item->notifiable_id);
+
+        foreach ($recipientsById as $recipientId => $recipient) {
+            $recipientNotifications = $existingByRecipient->get((int) $recipientId, collect());
+            $currentNotification = $recipientNotifications->shift();
+
+            if ($currentNotification) {
+                $currentNotification->forceFill(['data' => $updatedNotification->toArray($recipient)])->save();
+                $recipientNotifications->each->delete();
+            } else {
+                $recipient->notify($updatedNotification);
+            }
+        }
+
+        $existing
+            ->reject(fn (DatabaseNotification $item) => $recipientsById->has((int) $item->notifiable_id))
+            ->each->delete();
 
         return back()->with('success', 'Đã cập nhật thông báo và gửi tới ' . $users->count() . ' người nhận.');
     }
@@ -213,6 +270,7 @@ class AdminNotificationController extends Controller
         $viewContext = $this->resolveNotificationViewContext($request);
         abort_unless($this->notificationMatchesLayout($notification->data ?? [], $viewContext['notificationLayoutKey'] ?? null), 403);
         abort_unless(!$this->notificationIsExpired($notification->data ?? []), 404);
+        abort_unless(!$this->notificationIsScheduled($notification->data ?? []), 404);
 
         if (is_null($notification->read_at)) {
             $notification->markAsRead();
@@ -235,6 +293,7 @@ class AdminNotificationController extends Controller
         $viewContext = $this->resolveNotificationViewContext($request);
         abort_unless($this->notificationMatchesLayout($notification->data ?? [], $viewContext['notificationLayoutKey'] ?? null), 403);
         abort_unless(!$this->notificationIsExpired($notification->data ?? []), 404);
+        abort_unless(!$this->notificationIsScheduled($notification->data ?? []), 404);
 
         if (is_null($notification->read_at)) {
             $notification->markAsRead();
@@ -259,6 +318,7 @@ class AdminNotificationController extends Controller
             ->get()
             ->filter(fn ($notification) => $this->notificationMatchesLayout($notification->data ?? [], $layoutKey))
             ->filter(fn ($notification) => !$this->notificationIsExpired($notification->data ?? []))
+            ->filter(fn ($notification) => !$this->notificationIsScheduled($notification->data ?? []))
             ->each->markAsRead();
 
         return back()->with('success', 'Da danh dau tat ca thong bao la da doc.');
@@ -267,6 +327,11 @@ class AdminNotificationController extends Controller
     private function canManageDepartmentNotifications(Request $request): bool
     {
         return (bool) $request->user()?->hasRole(self::NOTIFICATION_MANAGER_ROLES);
+    }
+
+    private function isAdminNotificationCenter(Request $request): bool
+    {
+        return $request->routeIs('admin.notifications.*') && (bool) $request->user()?->isAdmin();
     }
 
     private function resolveNotificationViewContext(Request $request): array
@@ -329,6 +394,10 @@ class AdminNotificationController extends Controller
             return true;
         }
 
+        if (in_array((int) auth()->id(), array_map('intval', (array) ($data['target_user_ids'] ?? [])), true)) {
+            return true;
+        }
+
         $layoutRoles = self::LAYOUT_ROLE_SCOPE[strtolower((string) $layoutKey)] ?? [];
         if ($layoutRoles === []) {
             return true;
@@ -342,6 +411,10 @@ class AdminNotificationController extends Controller
             ->map(fn ($role) => strtolower((string) $role))
             ->filter()
             ->values();
+
+        if ($targetRoles->contains('*')) {
+            return true;
+        }
 
         if ($targetRoles->isEmpty()) {
             return true;
@@ -366,6 +439,20 @@ class AdminNotificationController extends Controller
         }
     }
 
+    private function notificationIsScheduled(array $data): bool
+    {
+        $scheduledAt = $data['scheduled_at'] ?? null;
+        if (blank($scheduledAt)) {
+            return false;
+        }
+
+        try {
+            return Carbon::parse($scheduledAt)->isFuture();
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
     private function normalizeExpiresAt(?string $expiresAt): ?string
     {
         if (blank($expiresAt)) {
@@ -375,26 +462,50 @@ class AdminNotificationController extends Controller
         return Carbon::parse($expiresAt)->toDateTimeString();
     }
 
-    private function broadcastNotificationsFor(User $sender, string $broadcastId)
+    private function normalizeScheduledAt(?string $scheduledAt): ?string
     {
-        return DatabaseNotification::query()
-            ->where('type', DepartmentBroadcastNotification::class)
-            ->where('data->broadcast_id', $broadcastId)
-            ->where('data->sender_id', $sender->id);
+        if (blank($scheduledAt)) {
+            return null;
+        }
+
+        return Carbon::parse($scheduledAt)->toDateTimeString();
     }
 
-    private function buildSentBroadcasts(User $sender): Collection
+    private function broadcastNotificationsFor(User $sender, string $broadcastId)
     {
-        return DatabaseNotification::query()
+        $query = DatabaseNotification::query()
             ->where('type', DepartmentBroadcastNotification::class)
-            ->where('data->sender_id', $sender->id)
-            ->latest()
-            ->limit(300)
-            ->get()
+            ->where('data->broadcast_id', $broadcastId);
+
+        if (!(request()->routeIs('admin.notifications.*') && $sender->isAdmin())) {
+            $query->where('data->sender_id', $sender->id);
+        }
+
+        return $query;
+    }
+
+    private function buildSentBroadcasts(User $sender, bool $includeAll = false): Collection
+    {
+        $query = DatabaseNotification::query()
+            ->where('type', DepartmentBroadcastNotification::class)
+            ->latest();
+
+        if (!$includeAll) {
+            $query->where('data->sender_id', $sender->id);
+        }
+
+        $notifications = $query->get();
+        $senderIds = $notifications->pluck('data.sender_id')->filter()->map(fn ($id) => (int) $id)->unique();
+        $senders = User::query()->whereIn('id', $senderIds)->get(['id', 'name', 'email'])->keyBy('id');
+        $recipientIds = $notifications->pluck('notifiable_id')->map(fn ($id) => (int) $id)->unique();
+        $recipients = User::query()->whereIn('id', $recipientIds)->get(['id', 'name', 'email'])->keyBy('id');
+
+        return $notifications
             ->groupBy(fn (DatabaseNotification $notification) => $notification->data['broadcast_id'] ?? $notification->id)
-            ->map(function (Collection $group, string $broadcastId) {
+            ->map(function (Collection $group, string $broadcastId) use ($senders, $recipients) {
                 $first = $group->sortByDesc('created_at')->first();
                 $data = $first->data ?? [];
+                $sender = $senders->get((int) ($data['sender_id'] ?? 0));
 
                 return [
                     'broadcast_id' => $broadcastId,
@@ -403,16 +514,132 @@ class AdminNotificationController extends Controller
                     'url' => $data['url'] ?? '',
                     'target_roles' => (array) ($data['target_roles'] ?? []),
                     'target_role_names' => (array) ($data['target_role_names'] ?? []),
+                    'target_user_ids' => (array) ($data['target_user_ids'] ?? []),
                     'expires_at' => $data['expires_at'] ?? null,
+                    'scheduled_at' => $data['scheduled_at'] ?? null,
+                    'priority' => $data['priority'] ?? 'info',
+                    'sender_id' => $data['sender_id'] ?? null,
+                    'sender_name' => $sender?->name ?? 'Hệ thống',
+                    'sender_email' => $sender?->email,
                     'created_at' => $first->created_at,
                     'updated_at' => $first->updated_at,
                     'recipient_count' => $group->count(),
                     'read_count' => $group->whereNotNull('read_at')->count(),
                     'is_expired' => $this->notificationIsExpired($data),
+                    'is_scheduled' => $this->notificationIsScheduled($data),
                     'can_edit' => !empty($data['broadcast_id']),
+                    'recipients' => $group->map(function (DatabaseNotification $notification) use ($recipients) {
+                        $recipient = $recipients->get((int) $notification->notifiable_id);
+
+                        return [
+                            'id' => (int) $notification->notifiable_id,
+                            'name' => $recipient?->name ?? 'Tài khoản #' . $notification->notifiable_id,
+                            'email' => $recipient?->email,
+                            'read_at' => $notification->read_at,
+                        ];
+                    })->sortBy('name')->values(),
                 ];
             })
             ->sortByDesc('created_at')
+            ->values();
+    }
+
+    private function validateBroadcast(Request $request): array
+    {
+        $isAdminCenter = $this->isAdminNotificationCenter($request);
+        $validated = $request->validate([
+            'title' => ['required', 'string', 'max:160'],
+            'message' => ['required', 'string', 'max:2000'],
+            'target_roles' => ['nullable', 'array'],
+            'target_roles.*' => ['required', Rule::in(array_keys(self::DEPARTMENT_ROLE_OPTIONS))],
+            'target_user_ids' => [$isAdminCenter ? 'nullable' : 'prohibited', 'array'],
+            'target_user_ids.*' => ['integer', 'exists:users,id'],
+            'url' => ['nullable', 'string', 'max:500'],
+            'priority' => ['nullable', Rule::in(array_keys(self::PRIORITY_OPTIONS))],
+            'scheduled_at' => [$isAdminCenter ? 'nullable' : 'prohibited', 'date'],
+            'expires_at' => ['nullable', 'date'],
+        ]);
+
+        if (empty($validated['target_roles']) && empty($validated['target_user_ids'])) {
+            throw ValidationException::withMessages([
+                'target_roles' => 'Hãy chọn ít nhất một phòng ban hoặc một nhân sự nhận thông báo.',
+            ]);
+        }
+
+        if (!$isAdminCenter && array_intersect((array) ($validated['target_roles'] ?? []), ['all', 'admin', 'package', 'procurement_manager'])) {
+            throw ValidationException::withMessages([
+                'target_roles' => 'Bạn không có quyền gửi tới nhóm người nhận này.',
+            ]);
+        }
+
+        if (!empty($validated['scheduled_at']) && !empty($validated['expires_at'])
+            && Carbon::parse($validated['expires_at'])->lte(Carbon::parse($validated['scheduled_at']))) {
+            throw ValidationException::withMessages([
+                'expires_at' => 'Thời hạn phải sau thời điểm bắt đầu hiển thị.',
+            ]);
+        }
+
+        return $validated;
+    }
+
+    private function broadcastRecipients(array $targetRoleNames, array $targetUserIds): Collection
+    {
+        $query = User::query();
+
+        if (in_array('*', $targetRoleNames, true)) {
+            return $query->get();
+        }
+
+        $query->where(function ($recipientQuery) use ($targetRoleNames, $targetUserIds) {
+            if ($targetRoleNames !== []) {
+                $recipientQuery->whereHas('roles', fn ($roleQuery) => $roleQuery->whereIn('name', $targetRoleNames));
+            }
+            if ($targetUserIds !== []) {
+                $method = $targetRoleNames === [] ? 'whereIn' : 'orWhereIn';
+                $recipientQuery->{$method}('id', $targetUserIds);
+            }
+        });
+
+        return $query->get()->unique('id')->values();
+    }
+
+    private function broadcastMetrics(Collection $broadcasts): array
+    {
+        $recipientCount = (int) $broadcasts->sum('recipient_count');
+        $readCount = (int) $broadcasts->sum('read_count');
+
+        return [
+            'total' => $broadcasts->count(),
+            'active' => $broadcasts->where('is_expired', false)->where('is_scheduled', false)->count(),
+            'scheduled' => $broadcasts->where('is_scheduled', true)->count(),
+            'expired' => $broadcasts->where('is_expired', true)->count(),
+            'recipient_count' => $recipientCount,
+            'read_count' => $readCount,
+            'read_rate' => $recipientCount > 0 ? (int) round(($readCount / $recipientCount) * 100) : 0,
+        ];
+    }
+
+    private function filterBroadcasts(Collection $broadcasts, Request $request): Collection
+    {
+        $search = Str::lower(trim((string) $request->query('broadcast_search', '')));
+        $status = (string) $request->query('broadcast_status', '');
+        $priority = (string) $request->query('broadcast_priority', '');
+        $role = (string) $request->query('broadcast_role', '');
+
+        return $broadcasts
+            ->when($search !== '', fn (Collection $items) => $items->filter(function (array $item) use ($search) {
+                return Str::contains(Str::lower(implode(' ', [
+                    $item['title'], $item['message'], $item['sender_name'], $item['sender_email'] ?? '',
+                ])), $search);
+            }))
+            ->when($status !== '', fn (Collection $items) => $items->filter(fn (array $item) => match ($status) {
+                'active' => !$item['is_expired'] && !$item['is_scheduled'],
+                'scheduled' => $item['is_scheduled'],
+                'expired' => $item['is_expired'],
+                default => true,
+            }))
+            ->when($priority !== '', fn (Collection $items) => $items->where('priority', $priority))
+            ->when($role !== '', fn (Collection $items) => $items->filter(fn (array $item) => in_array($role, $item['target_roles'], true)))
             ->values();
     }
 }

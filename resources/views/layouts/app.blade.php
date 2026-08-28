@@ -130,12 +130,16 @@
                         $isAdmin = $currentUser?->hasRole('admin') ?? false;
                         $hasNotificationsTable = \Illuminate\Support\Facades\Schema::hasTable('notifications');
                         $hasUserLastSeenColumn = \Illuminate\Support\Facades\Schema::hasColumn('users', 'last_seen_at');
-                        $unreadNotificationsCount = ($isAdmin && $hasNotificationsTable)
-                            ? ($currentUser?->unreadNotifications()->count() ?? 0)
-                            : 0;
-                        $latestNotifications = ($isAdmin && $hasNotificationsTable)
-                            ? ($currentUser?->notifications()->latest()->take(5)->get() ?? collect())
+                        $visibleUnreadNotifications = ($isAdmin && $hasNotificationsTable)
+                            ? ($currentUser?->unreadNotifications()->get() ?? collect())
+                                ->filter(fn ($item) => !departmentBroadcastIsExpired($item->data ?? []) && !departmentBroadcastIsScheduled($item->data ?? []))
                             : collect();
+                        $latestNotifications = ($isAdmin && $hasNotificationsTable)
+                            ? ($currentUser?->notifications()->latest()->take(50)->get() ?? collect())
+                                ->filter(fn ($item) => !departmentBroadcastIsExpired($item->data ?? []) && !departmentBroadcastIsScheduled($item->data ?? []))
+                                ->take(5)
+                            : collect();
+                        $unreadNotificationsCount = $visibleUnreadNotifications->count();
                         $onlineWindowMinutes = 5;
                         $presenceUsers = ($isAdmin && $hasUserLastSeenColumn)
                             ? (\App\Models\User::query()
@@ -439,4 +443,3 @@
 </script>
 </body>
 </html>
-

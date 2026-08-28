@@ -689,13 +689,15 @@ Route::middleware(['auth', 'assigned'])->group(function () {
 
     Route::post('/ai/generate-description', [AIController::class, 'generateDescription'])->name('ai.generateDescription');
 
-    Route::get('admin/notifications', [AdminNotificationController::class, 'index'])->name('admin.notifications.index');
-    Route::post('admin/notifications/department-broadcast', [AdminNotificationController::class, 'storeDepartmentBroadcast'])->name('admin.notifications.department_broadcast');
-    Route::put('admin/notifications/department-broadcast/{broadcastId}', [AdminNotificationController::class, 'updateDepartmentBroadcast'])->name('admin.notifications.update');
-    Route::delete('admin/notifications/department-broadcast/{broadcastId}', [AdminNotificationController::class, 'destroyDepartmentBroadcast'])->name('admin.notifications.destroy');
-    Route::post('admin/notifications/read-all', [AdminNotificationController::class, 'markAllAsRead'])->name('admin.notifications.read_all');
-    Route::get('admin/notifications/{notificationId}', [AdminNotificationController::class, 'show'])->name('admin.notifications.show');
-    Route::post('admin/notifications/{notificationId}/read', [AdminNotificationController::class, 'markAsRead'])->name('admin.notifications.read');
+    Route::middleware('role:admin')->group(function () {
+        Route::get('admin/notifications', [AdminNotificationController::class, 'index'])->name('admin.notifications.index');
+        Route::post('admin/notifications/department-broadcast', [AdminNotificationController::class, 'storeDepartmentBroadcast'])->name('admin.notifications.department_broadcast');
+        Route::put('admin/notifications/department-broadcast/{broadcastId}', [AdminNotificationController::class, 'updateDepartmentBroadcast'])->name('admin.notifications.update');
+        Route::delete('admin/notifications/department-broadcast/{broadcastId}', [AdminNotificationController::class, 'destroyDepartmentBroadcast'])->name('admin.notifications.destroy');
+        Route::post('admin/notifications/read-all', [AdminNotificationController::class, 'markAllAsRead'])->name('admin.notifications.read_all');
+        Route::get('admin/notifications/{notificationId}', [AdminNotificationController::class, 'show'])->name('admin.notifications.show');
+        Route::post('admin/notifications/{notificationId}/read', [AdminNotificationController::class, 'markAsRead'])->name('admin.notifications.read');
+    });
     Route::get('admin/events', [AdminEventController::class, 'index'])->name('admin.events.index');
     Route::get('admin/organization-units', [OrganizationUnitController::class, 'index'])->name('admin.organization-units.index')->middleware('role:admin');
     Route::patch('admin/order-fee-types/{orderFeeType}/toggle', [\App\Http\Controllers\Admin\OrderFeeTypeController::class, 'toggle'])->name('admin.order-fee-types.toggle')->middleware('role:admin');
