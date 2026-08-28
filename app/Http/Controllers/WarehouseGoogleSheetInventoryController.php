@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\GoogleSheetInventorySync;
 use App\Models\Inventory;
+use App\Models\InventoryAdjustment;
 use App\Models\InventoryDocument;
 use App\Models\InventoryMovement;
 use App\Models\ProductVariant;
 use App\Models\Warehouse;
+use App\Services\GoogleSheetInventoryComparisonService;
 use App\Services\GoogleSheetsInventoryService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -14,12 +17,14 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
-use RuntimeException;
 
 class WarehouseGoogleSheetInventoryController extends Controller
 {
-    public function index(Request $request, GoogleSheetsInventoryService $sheets)
-    {
+    public function index(
+        Request $request,
+        GoogleSheetsInventoryService $sheets,
+        GoogleSheetInventoryComparisonService $comparisonService
+    ) {
         $validated = $request->validate([
             'date' => ['nullable', 'date'],
             'warehouse_id' => ['nullable', 'integer', 'exists:warehouses,id'],
@@ -28,17 +33,13 @@ class WarehouseGoogleSheetInventoryController extends Controller
         $selectedDate = Carbon::parse($validated['date'] ?? now())->toDateString();
         $preview = null;
         $loadError = null;
-        $existingDocuments = collect();
+        $comparison = null;
 
         try {
-            $preview = $this->withInventoryState($sheets->preview($warehouse, $selectedDate), $warehouse);
+            $preview = $sheets->preview($warehouse, $selectedDate);
             $marker = $this->importMarker($preview['spreadsheet_id'], $preview['sheet_id'], $selectedDate, (int) $warehouse->id);
-            $existingDocuments = InventoryDocument::query()
-                ->where('warehouse_id', $warehouse->id)
-                ->where('type', 'import')
-                ->where('notes', 'like', '%'.$marker.'%')
-                ->orderBy('id')
-                ->get();
+            $comparison = $comparisonService->compare($preview, $warehouse, $marker);
+            $preview['rows'] = $comparison['rows'];
         } catch (\Throwable $exception) {
             report($exception);
             $loadError = $this->friendlyGoogleError($exception, $sheets);
@@ -54,18 +55,22 @@ class WarehouseGoogleSheetInventoryController extends Controller
             'selectedDate',
             'preview',
             'loadError',
-            'existingDocuments'
+            'comparison'
         ));
     }
 
-    public function store(Request $request, GoogleSheetsInventoryService $sheets)
-    {
+    public function store(
+        Request $request,
+        GoogleSheetsInventoryService $sheets,
+        GoogleSheetInventoryComparisonService $comparisonService
+    ) {
         $validated = $request->validate([
             'date' => ['required', 'date'],
             'warehouse_id' => ['nullable', 'integer', 'exists:warehouses,id'],
             'confirm_import' => ['accepted'],
             'ignore_unmatched' => ['nullable', 'boolean'],
-            'allow_duplicate' => ['nullable', 'boolean'],
+            'selected_variant_ids' => ['required', 'array', 'min:1'],
+            'selected_variant_ids.*' => ['required', 'integer', 'distinct', 'exists:product_variants,id'],
         ]);
         $warehouse = $this->resolveWarehouse($request);
         $selectedDate = Carbon::parse($validated['date'])->toDateString();
@@ -81,12 +86,6 @@ class WarehouseGoogleSheetInventoryController extends Controller
                 'ignore_unmatched' => 'Sheet có mã đang có tồn nhưng chưa ghép được với biến thể. Hãy kiểm tra hoặc xác nhận bỏ qua các mã này.',
             ]);
         }
-        if ($preview['import_rows']->isEmpty()) {
-            throw ValidationException::withMessages([
-                'date' => 'Ngày đã chọn không có số tồn Móc hợp lệ để nhập.',
-            ]);
-        }
-
         $marker = $this->importMarker(
             (string) $preview['spreadsheet_id'],
             (int) $preview['sheet_id'],
@@ -95,57 +94,104 @@ class WarehouseGoogleSheetInventoryController extends Controller
         );
 
         try {
-            $document = Cache::lock('google-sheet-inventory-import:'.sha1($marker), 120)
-                ->block(10, function () use ($preview, $warehouse, $selectedDate, $marker, $validated) {
-                    $existingDocuments = InventoryDocument::query()
-                        ->where('warehouse_id', $warehouse->id)
-                        ->where('type', 'import')
-                        ->where('notes', 'like', '%'.$marker.'%')
-                        ->orderBy('id')
-                        ->get();
-                    if ($existingDocuments->isNotEmpty() && empty($validated['allow_duplicate'])) {
-                        throw new RuntimeException('DUPLICATE:'.$existingDocuments->last()->id);
-                    }
+            $result = Cache::lock('google-sheet-inventory-import:'.sha1($marker), 120)
+                ->block(10, function () use ($preview, $warehouse, $selectedDate, $marker, $validated, $comparisonService) {
+                    return DB::transaction(function () use ($preview, $warehouse, $selectedDate, $marker, $validated, $comparisonService) {
+                        $comparison = $comparisonService->compare($preview, $warehouse, $marker);
+                        $selectedIds = collect($validated['selected_variant_ids'])->map(fn ($id) => (int) $id)->unique()->values();
+                        $selectedRows = $comparison['changed_rows']
+                            ->filter(fn (array $row): bool => $selectedIds->contains((int) $row['variant_id']))
+                            ->values();
 
-                    return DB::transaction(function () use ($preview, $warehouse, $selectedDate, $marker, $existingDocuments) {
-                        $importNumber = $existingDocuments->count() + 1;
-                        $document = InventoryDocument::create([
-                            'type' => 'import',
-                            'document_date' => $selectedDate,
-                            'warehouse_id' => $warehouse->id,
-                            'supplier_id' => null,
-                            'shipping_fee' => 0,
-                            'notes' => 'Nhập tồn đầu kỳ từ Google Sheet '.$preview['sheet_name']
-                                .' ngày '.Carbon::parse($selectedDate)->format('d/m/Y')
-                                .' – lần nhập '.$importNumber."\n".$marker,
-                            'user_id' => Auth::id(),
-                        ]);
-
-                        foreach ($preview['import_rows'] as $row) {
-                            $quantity = round((float) $row['quantity'], 3);
-                            $variantId = (int) $row['variant_id'];
-                            $document->items()->create([
-                                'product_variant_id' => $variantId,
-                                'quantity' => $quantity,
-                                'unit_cost' => 0,
-                                'note' => 'Google Sheet dòng '.$row['sheet_row'].' – '.$row['sheet_code'],
+                        if ($selectedRows->count() !== $selectedIds->count()) {
+                            throw ValidationException::withMessages([
+                                'selected_variant_ids' => 'Dữ liệu Sheet đã thay đổi hoặc có sản phẩm không còn chênh lệch. Vui lòng tải lại để kiểm tra.',
                             ]);
+                        }
+                        if ($selectedRows->contains(fn (array $row): bool => ! $row['can_apply'])) {
+                            throw ValidationException::withMessages([
+                                'selected_variant_ids' => 'Có sản phẩm không thể điều chỉnh do tồn sau cập nhật thấp hơn số lượng đang giữ chỗ.',
+                            ]);
+                        }
 
+                        $sync = GoogleSheetInventorySync::create([
+                            'warehouse_id' => $warehouse->id,
+                            'spreadsheet_id' => $preview['spreadsheet_id'],
+                            'sheet_id' => $preview['sheet_id'],
+                            'inventory_date' => $selectedDate,
+                            'sync_number' => $comparison['next_sync_number'],
+                            'created_by' => Auth::id(),
+                            'status' => 'applying',
+                            'snapshot' => $comparison['baseline']->all(),
+                        ]);
+                        $positiveRows = $selectedRows->filter(fn (array $row): bool => (float) $row['delta'] > 0)->values();
+                        $negativeRows = $selectedRows->filter(fn (array $row): bool => (float) $row['delta'] < 0)->values();
+                        $document = null;
+
+                        if ($positiveRows->isNotEmpty()) {
+                            $document = InventoryDocument::create([
+                                'type' => 'import',
+                                'document_date' => $selectedDate,
+                                'warehouse_id' => $warehouse->id,
+                                'supplier_id' => null,
+                                'shipping_fee' => 0,
+                                'notes' => 'Đồng bộ tăng tồn từ Google Sheet '.$preview['sheet_name']
+                                .' ngày '.Carbon::parse($selectedDate)->format('d/m/Y')
+                                .' – lần đồng bộ '.$comparison['next_sync_number']."\n"
+                                .$marker."\n[google_sheet_inventory_sync:".$sync->id.']',
+                                'user_id' => Auth::id(),
+                            ]);
+                        }
+
+                        foreach ($selectedRows as $row) {
+                            $delta = round((float) $row['delta'], 3);
+                            $variantId = (int) $row['variant_id'];
                             $inventory = Inventory::query()->firstOrCreate([
                                 'product_variant_id' => $variantId,
                                 'warehouse_id' => $warehouse->id,
                             ], ['quantity' => 0, 'reserved_quantity' => 0]);
                             $inventory = Inventory::query()->whereKey($inventory->id)->lockForUpdate()->firstOrFail();
 
-                            InventoryMovement::create([
-                                'inventory_id' => $inventory->id,
-                                'quantity' => $quantity,
-                                'type' => 'import',
-                                'reference_id' => $document->id,
-                                'reference_type' => InventoryDocument::class,
-                                'user_id' => Auth::id(),
-                            ]);
-                            $inventory->increment('quantity', $quantity);
+                            $newQuantity = round((float) $inventory->quantity + $delta, 3);
+                            if ($newQuantity < (float) $inventory->reserved_quantity) {
+                                throw ValidationException::withMessages([
+                                    'selected_variant_ids' => 'Không thể giảm '.$row['variant_name'].' vì tồn sau cập nhật thấp hơn số lượng đang giữ chỗ.',
+                                ]);
+                            }
+
+                            if ($delta > 0) {
+                                $document->items()->create([
+                                    'product_variant_id' => $variantId,
+                                    'quantity' => $delta,
+                                    'unit_cost' => 0,
+                                    'note' => 'Chênh lệch Google Sheet dòng '.$row['sheet_row'].' – '.$row['sheet_code'],
+                                ]);
+                                InventoryMovement::create([
+                                    'inventory_id' => $inventory->id,
+                                    'quantity' => $delta,
+                                    'type' => 'import',
+                                    'reference_id' => $document->id,
+                                    'reference_type' => InventoryDocument::class,
+                                    'user_id' => Auth::id(),
+                                ]);
+                            } else {
+                                InventoryAdjustment::create([
+                                    'inventory_id' => $inventory->id,
+                                    'quantity' => $delta,
+                                    'reason' => 'Giảm theo Google Sheet ngày '.Carbon::parse($selectedDate)->format('d/m/Y')
+                                        .' (lần đồng bộ '.$comparison['next_sync_number'].')',
+                                    'user_id' => Auth::id(),
+                                ]);
+                                InventoryMovement::create([
+                                    'inventory_id' => $inventory->id,
+                                    'quantity' => $delta,
+                                    'type' => 'google_sheet_adjustment',
+                                    'reference_id' => $sync->id,
+                                    'reference_type' => GoogleSheetInventorySync::class,
+                                    'user_id' => Auth::id(),
+                                ]);
+                            }
+                            $inventory->update(['quantity' => $newQuantity]);
 
                             $totalStock = (float) Inventory::query()
                                 ->where('product_variant_id', $variantId)
@@ -153,19 +199,35 @@ class WarehouseGoogleSheetInventoryController extends Controller
                             ProductVariant::query()->whereKey($variantId)->update(['stock' => $totalStock]);
                         }
 
-                        return $document;
+                        $snapshot = collect($comparison['baseline']);
+                        foreach ($selectedRows as $row) {
+                            $snapshot->put((string) $row['variant_id'], round((float) $row['quantity'], 3));
+                        }
+                        $changes = $selectedRows->map(fn (array $row): array => [
+                            'product_variant_id' => (int) $row['variant_id'],
+                            'variant_name' => $row['variant_name'],
+                            'variant_sku' => $row['variant_sku'],
+                            'sheet_code' => $row['sheet_code'],
+                            'sheet_row' => (int) $row['sheet_row'],
+                            'previous_quantity' => (float) $row['previous_sheet_quantity'],
+                            'sheet_quantity' => (float) $row['quantity'],
+                            'delta' => (float) $row['delta'],
+                            'change_type' => $row['change_type'],
+                        ])->all();
+                        $sync->update([
+                            'import_document_id' => $document?->id,
+                            'status' => 'completed',
+                            'total_positive_delta' => $positiveRows->sum('delta'),
+                            'total_negative_delta' => abs((float) $negativeRows->sum('delta')),
+                            'applied_rows_count' => $selectedRows->count(),
+                            'snapshot' => $snapshot->all(),
+                            'changes' => $changes,
+                        ]);
+
+                        return ['sync' => $sync, 'document' => $document];
                     });
                 });
-        } catch (RuntimeException $exception) {
-            if (str_starts_with($exception->getMessage(), 'DUPLICATE:')) {
-                $documentId = (int) str($exception->getMessage())->after('DUPLICATE:')->toString();
-
-                return redirect()->route('warehouse.google-sheet-inventory.index', [
-                    'date' => $selectedDate,
-                    'warehouse_id' => $warehouse->id,
-                ])->with('warning', 'Tồn kho ngày '.Carbon::parse($selectedDate)->format('d/m/Y')
-                    .' đã được nhập trước đó. Nếu vẫn muốn nhập thêm lần nữa, hãy tích xác nhận nhập lại bên cạnh nút nhập kho.');
-            }
+        } catch (ValidationException $exception) {
             throw $exception;
         }
 
@@ -176,9 +238,15 @@ class WarehouseGoogleSheetInventoryController extends Controller
             report($exception);
         }
 
-        return redirect()->route('warehouse.stock-in.show', $document)
-            ->with('success', 'Đã nhập '.number_format((float) $preview['total_quantity'], 0, ',', '.')
-                .' sản phẩm từ Google Sheet vào '.$warehouse->name.'.');
+        $sync = $result['sync'];
+
+        return redirect()->route('warehouse.google-sheet-inventory.index', [
+            'date' => $selectedDate,
+            'warehouse_id' => $warehouse->id,
+        ])->with('success', 'Đã đồng bộ lần '.$sync->sync_number.': nhập thêm '
+            .number_format((float) $sync->total_positive_delta, 0, ',', '.')
+            .', điều chỉnh giảm '.number_format((float) $sync->total_negative_delta, 0, ',', '.')
+            .' tại '.$warehouse->name.'.');
     }
 
     private function resolveWarehouse(Request $request): Warehouse
@@ -194,23 +262,6 @@ class WarehouseGoogleSheetInventoryController extends Controller
         return $warehouseId > 0
             ? Warehouse::query()->findOrFail($warehouseId)
             : Warehouse::query()->where('status', true)->orderByRaw("CASE WHEN name LIKE '%Long An%' THEN 0 ELSE 1 END")->firstOrFail();
-    }
-
-    /** @param array<string, mixed> $preview */
-    private function withInventoryState(array $preview, Warehouse $warehouse): array
-    {
-        $current = Inventory::query()
-            ->where('warehouse_id', $warehouse->id)
-            ->whereIn('product_variant_id', $preview['rows']->pluck('variant_id')->filter()->all())
-            ->pluck('quantity', 'product_variant_id');
-        $preview['rows'] = $preview['rows']->map(function (array $row) use ($current): array {
-            $row['current_quantity'] = $row['variant_id'] ? (float) ($current[$row['variant_id']] ?? 0) : null;
-            $row['projected_quantity'] = $row['variant_id'] ? $row['current_quantity'] + $row['quantity'] : null;
-
-            return $row;
-        });
-
-        return $preview;
     }
 
     private function importMarker(string $spreadsheetId, int $sheetId, string $date, int $warehouseId): string
