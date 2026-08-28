@@ -216,7 +216,7 @@
 
 <div class="row g-3 mb-4">
     <!-- Cột trái: Nhiệm vụ hàng ngày và Thống kê tồn kho -->
-    <div class="col-md-12 col-lg-5"> 
+    <div class="col-md-12 col-lg-4"> 
         <div class="underline mb-4">
             <span class="fw-semibold progress-title-underline d-flex align-items-center text-uppercase">Tiến độ công việc</span>
         </div>
@@ -355,7 +355,7 @@
 
     </div>
     <!-- Cột phải: Nghiệp vụ mới nhất -->
-    <div class="col-md-12 col-lg-7">
+    <div class="col-md-12 col-lg-8">
         <div class="mb-3 toolsdaily d-flex align-items-center gap-3 flex-wrap">
             <a href="{{ route('warehouse.stock-in.create') }}" class="btn btn-success fw-700" >
                 <i class="bi bi-plus-circle me-1"></i> Tạo phiếu nhập kho
