@@ -432,7 +432,7 @@
             </div>
         @endif
         <!-- Thống kê tồn kho -->
-        <div class="underline mb-4 align-items-center gap-2">
+        <div class="underline mb-4 d-flex align-items-center gap-2">
             <span class="fw-semibold progress-title-underline  align-items-center text-uppercase">Thống kê tồn kho</span>
         </div>
         @include('warehouse._inventory_summary', [
