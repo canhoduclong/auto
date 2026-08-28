@@ -249,6 +249,7 @@ class ProductController extends Controller
                 'gallery.*'   => 'integer|exists:media,id',
                 'variants'    => 'nullable|array',
                 'variants.*.sku' => 'nullable|string|max:255',
+                'variants.*.inventory_name' => 'nullable|string|max:100',
                 'variants.*.size' => 'nullable|string|max:255',
                 'variants.*.kg' => 'nullable|numeric|gt:0',
                 'variants.*.is_priced_by_kg' => 'nullable|boolean',
@@ -260,6 +261,7 @@ class ProductController extends Controller
                 'cutting_component_variant_ids' => 'nullable|array',
                 'cutting_component_variant_ids.*' => 'integer|exists:product_variants,id',
             ]);
+            $this->guardUniqueInventoryNames($validated['variants'] ?? []);
 
             // ===== Cập nhật thông tin cơ bản =====
             $product->update([
@@ -320,6 +322,7 @@ class ProductController extends Controller
                         ['id' => $variantId, 'product_id' => $product->id],
                         [
                             'sku'             => $skuFromInput ?: ProductVariant::where('id', $variantId)->value('sku') ?: Str::upper(Str::random(10)),
+                            'inventory_name'  => trim((string) ($variantData['inventory_name'] ?? '')) ?: null,
                             'size'            => $variantData['size'] ?? null,
                             'kg'              => isset($variantData['kg']) ? (float) $variantData['kg'] : 1,
                             'is_priced_by_kg' => (bool) ($variantData['is_priced_by_kg'] ?? true),
@@ -335,6 +338,7 @@ class ProductController extends Controller
                     $variant = ProductVariant::create([
                         'product_id'       => $product->id,
                         'sku'              => $skuFromInput ?? Str::upper(Str::random(10)),
+                        'inventory_name'   => trim((string) ($variantData['inventory_name'] ?? '')) ?: null,
                         'size'             => $variantData['size'] ?? null,
                         'kg'               => isset($variantData['kg']) ? (float) $variantData['kg'] : 1,
                         'is_priced_by_kg'  => (bool) ($variantData['is_priced_by_kg'] ?? true),
@@ -432,6 +436,31 @@ class ProductController extends Controller
         }
 
         return $sku;
+    }
+
+    private function guardUniqueInventoryNames(array $variants): void
+    {
+        $seen = [];
+        foreach ($variants as $variantId => $variantData) {
+            $inventoryName = trim((string) ($variantData['inventory_name'] ?? ''));
+            if ($inventoryName === '') {
+                continue;
+            }
+
+            $key = mb_strtolower($inventoryName);
+            if (isset($seen[$key])) {
+                throw new \RuntimeException('Tên tồn kho "'.$inventoryName.'" đang được nhập cho nhiều biến thể.');
+            }
+            $seen[$key] = true;
+
+            $query = ProductVariant::query()->whereRaw('LOWER(TRIM(inventory_name)) = ?', [$key]);
+            if (is_numeric($variantId)) {
+                $query->whereKeyNot((int) $variantId);
+            }
+            if ($query->exists()) {
+                throw new \RuntimeException('Tên tồn kho "'.$inventoryName.'" đã được sử dụng bởi biến thể khác.');
+            }
+        }
     }
 
     private function syncCuttingComponentTemplate(array $validated, Product $product): void

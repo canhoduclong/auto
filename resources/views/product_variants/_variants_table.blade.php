@@ -5,6 +5,7 @@
             <th>ID</th>
             <th>Ảnh</th>
             <th>SKU</th>
+            <th>Tên tồn kho</th>
             <th>Sản phẩm</th>
             <th>Size</th>
             <th>Chất lượng</th>
@@ -25,6 +26,7 @@
                 @endif
             </td>
             <td>{{ $v->sku }}</td>
+            <td>{{ $v->inventory_name ?: '—' }}</td>
             <td>{{ $v->product->name ?? '' }}</td>
             <td>{{ $v->size }}</td>
             <td>{{ $v->quality }}</td>

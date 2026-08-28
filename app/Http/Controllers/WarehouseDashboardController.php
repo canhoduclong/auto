@@ -2308,6 +2308,11 @@ class WarehouseDashboardController extends Controller
         }
     }
 
+    public function refreshQueuedOrdersAfterInventoryChange(int $warehouseId): void
+    {
+        $this->syncAllQueuedOrdersStockSufficiency($warehouseId);
+    }
+
     private function getTotalQuantityByVariant(Collection $variantIds, ?int $warehouseId): array
     {
         if ($variantIds->isEmpty()) {

@@ -363,6 +363,9 @@
             <a href="{{ route('warehouse.stocktakes.index') }}" class="btn btn-sm btn-outline-primary">
                 <i class="bi bi-clipboard2-check me-1"></i>Kiểm kê kho
             </a>
+            <a href="{{ route('warehouse.google-sheet-inventory.index') }}" class="btn btn-sm btn-outline-success">
+                <i class="bi bi-file-earmark-spreadsheet me-1"></i>Load tồn kho
+            </a>
         </div>
         @if(($deferredComponentImportRequests ?? collect())->isNotEmpty())
             <div class="card border-warning shadow-sm mb-4">

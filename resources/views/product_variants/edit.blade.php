@@ -23,6 +23,11 @@
             <input type="text" name="sku" class="form-control" value="{{ $variant->sku }}" required>
         </div>
         <div class="mb-3">
+            <label class="form-label">Tên tồn kho</label>
+            <input type="text" name="inventory_name" class="form-control" maxlength="100" value="{{ old('inventory_name', $variant->inventory_name) }}" placeholder="Ví dụ: M 2 hoặc M 2,1">
+            <div class="form-text">Ưu tiên dùng để ghép với tên dòng trong Google Sheet tồn kho.</div>
+        </div>
+        <div class="mb-3">
             <label class="form-label">Size</label>
             <input type="text" name="size" class="form-control" value="{{ $variant->size }}">
         </div>

@@ -49,6 +49,8 @@ return [
         'spreadsheet_id' => env('GOOGLE_SHEETS_SPREADSHEET_ID', '1-8AJdim75RgLGTYD6DPpuKc7Or-5tHwHJzb_qljITp4'),
         'sheet_id' => (int) env('GOOGLE_SHEETS_JOURNAL_SHEET_ID', 1912361038),
         'sheet_name' => env('GOOGLE_SHEETS_JOURNAL_SHEET', 'Nhật ký bán hàng'),
+        'inventory_spreadsheet_id' => env('GOOGLE_SHEETS_INVENTORY_SPREADSHEET_ID', '1SLq3sid9Z57jbi3qoAzRiNS4YyK4q5qzm3cWf8-9C6g'),
+        'inventory_sheet_id' => (int) env('GOOGLE_SHEETS_INVENTORY_SHEET_ID', 943551638),
     ],
 
 ];

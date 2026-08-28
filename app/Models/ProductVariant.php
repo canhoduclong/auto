@@ -9,7 +9,7 @@ use Illuminate\Support\Str;
 class ProductVariant extends Model
 {
     use HasFactory;
-    protected $fillable = ['product_id', 'sku', 'name', 'slug', 'size', 'quality', 'production_date', 'stock', 'kg', 'is_priced_by_kg', 'sort_order']; // đã có sku, giá xử lý qua priceRules
+    protected $fillable = ['product_id', 'sku', 'inventory_name', 'name', 'slug', 'size', 'quality', 'production_date', 'stock', 'kg', 'is_priced_by_kg', 'sort_order']; // đã có sku, giá xử lý qua priceRules
 
     protected $casts = [
         'kg' => 'float',

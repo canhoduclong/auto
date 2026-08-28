@@ -14,7 +14,7 @@
             <form method="get" id="filter-form">
                 <div class="row g-2">
                     <div class="col-md-3">
-                        <input type="text" name="q" class="form-control form-control-sm" placeholder="SKU, size, chất lượng, tên sản phẩm..." value="{{ request('q') }}">
+                        <input type="text" name="q" class="form-control form-control-sm" placeholder="SKU, tên tồn kho, size, tên sản phẩm..." value="{{ request('q') }}">
                     </div>
                     <div class="col-md-3">
                         <select name="product_id" class="form-select form-select-sm">
@@ -69,6 +69,7 @@
                         <th width="70">Ảnh</th>
                         <th width="180">Tên biến thể</th>
                         <th>SKU</th>
+                        <th width="120">Tên tồn kho</th>
                         <th width="90">Size</th>
                         <th width="80">Thứ tự</th>
                         <th width="110">Giá bán</th>
@@ -99,7 +100,7 @@
                             <td>
                                 <input type="checkbox" class="group-select" data-product-id="{{ $productId }}">
                             </td>
-                            <td colspan="10" class="fw-semibold text-primary bg-light">
+                            <td colspan="11" class="fw-semibold text-primary bg-light">
                                 {{ $product->name ?? 'Không xác định' }}
                                 <span class="text-muted ms-2">({{ $productVariants->count() }} biến thể)</span>
                             </td>
@@ -129,6 +130,7 @@
                                 </td>
                                 <td>{{ $variant->name ?: '-' }}</td>
                                 <td class="fw-semibold">{{ $variant->sku }}</td>
+                                <td><span class="badge bg-light text-dark border">{{ $variant->inventory_name ?: '—' }}</span></td>
                                 <td>{{ $variant->size ?: '-' }}</td>
                                 <td><span class="badge bg-light text-dark border">{{ $variant->sort_order ?? 0 }}</span></td>
                                 <td>
@@ -167,7 +169,7 @@
                         @endforeach
                     @empty
                         <tr>
-                            <td colspan="11" class="text-center text-muted py-4">Không có dữ liệu phù hợp</td>
+                            <td colspan="12" class="text-center text-muted py-4">Không có dữ liệu phù hợp</td>
                         </tr>
                     @endforelse
                 </tbody>
@@ -342,20 +344,25 @@ $(document).ready(function() {
 
         const tds = tr.find('td');
         const sku = $(tds[5]).text().trim() || '';
-        const size = $(tds[6]).text().trim() || '';
-        const sortOrder = $(tds[7]).text().trim().replace(/[^0-9]/g, '') || '0';
-        const price = $(tds[8]).text().trim().replace(/[^0-9]/g, '') || '0';
-        const stock = $(tds[9]).text().trim().replace(/[^0-9]/g, '') || '0';
+        const inventoryName = $(tds[6]).text().trim().replace('—', '') || '';
+        const size = $(tds[7]).text().trim() || '';
+        const sortOrder = $(tds[8]).text().trim().replace(/[^0-9]/g, '') || '0';
+        const price = $(tds[9]).text().trim().replace(/[^0-9]/g, '') || '0';
+        const stock = $(tds[10]).text().trim().replace(/[^0-9]/g, '') || '0';
 
         const html = `
             <tr class="quick-edit-row">
-                <td colspan="11" class="bg-light">
+                <td colspan="12" class="bg-light">
                     <form method="POST" action="/product-variants/${variantId}" class="quick-edit-form d-flex flex-wrap gap-2 align-items-end p-2">
                         <input type="hidden" name="_token" value="${$('meta[name="csrf-token"]').attr('content')}">
                         <input type="hidden" name="_method" value="PUT">
                         <div>
                             <label class="form-label small mb-1">SKU</label>
                             <input type="text" name="sku" value="${sku}" class="form-control form-control-sm" style="width: 120px;">
+                        </div>
+                        <div>
+                            <label class="form-label small mb-1">Tên tồn kho</label>
+                            <input type="text" name="inventory_name" value="${inventoryName}" class="form-control form-control-sm" style="width: 110px;" placeholder="M 2,1">
                         </div>
                         <div>
                             <label class="form-label small mb-1">Size</label>

@@ -397,6 +397,10 @@
                                         <input type="text" name="variants[{{ $variant->id }}][sku]" class="form-control" value="{{ old('variants.'.$variant->id.'.sku', $variant->sku) }}">
                                     </div>
                                     <div class="variant-cell">
+                                        <label class="variant-cell-label">Tên tồn kho</label>
+                                        <input type="text" name="variants[{{ $variant->id }}][inventory_name]" class="form-control" maxlength="100" value="{{ old('variants.'.$variant->id.'.inventory_name', $variant->inventory_name) }}" placeholder="M 2,1">
+                                    </div>
+                                    <div class="variant-cell">
                                         <label class="variant-cell-label">Size</label>
                                         <input type="text" name="variants[{{ $variant->id }}][size]" class="form-control" value="{{ old('variants.'.$variant->id.'.size', $variant->size) }}">
                                     </div>
@@ -640,6 +644,10 @@ document.addEventListener('DOMContentLoaded', function () {
                         <div class="variant-cell">
                             <label class="variant-cell-label">SKU</label>
                             <input type="text" name="variants[new_${index}][sku]" class="form-control">
+                        </div>
+                        <div class="variant-cell">
+                            <label class="variant-cell-label">Tên tồn kho</label>
+                            <input type="text" name="variants[new_${index}][inventory_name]" class="form-control" maxlength="100" placeholder="M 2,1">
                         </div>
                         <div class="variant-cell">
                             <label class="variant-cell-label">Size</label>

@@ -22,6 +22,11 @@
             <input type="text" name="name" class="form-control" value="{{ old('name') }}">
         </div>
         <div class="mb-3">
+            <label class="form-label">Tên tồn kho</label>
+            <input type="text" name="inventory_name" class="form-control" maxlength="100" value="{{ old('inventory_name') }}" placeholder="Ví dụ: M 2 hoặc M 2,1">
+            <div class="form-text">Tên/mã dùng để đối chiếu chính xác với cột đầu tiên trong Google Sheet tồn kho.</div>
+        </div>
+        <div class="mb-3">
             <label class="form-label">Size</label>
             <input type="text" name="size" class="form-control">
         </div>

@@ -17,9 +17,10 @@ class ProductVariantController extends Controller
             abort(403, 'Bạn không có quyền nhân bản biến thể này.');
         }
         // Tạo bản sao
-        $new = $variant->replicate(['sku']);
+        $new = $variant->replicate(['sku', 'inventory_name']);
         // Tạo SKU mới (nếu trùng)
         $new->sku = $variant->sku . '-COPY-' . strtoupper(Str::random(4));
+        $new->inventory_name = null;
         $new->push();
         // Copy media nếu có
         if ($variant->mediaLink) {
@@ -62,6 +63,7 @@ class ProductVariantController extends Controller
             'product_id' => 'sometimes|exists:products,id',
             'name' => 'nullable|string|max:255',
             'sku' => 'required|string|unique:product_variants,sku,' . $variant->id,
+            'inventory_name' => 'nullable|string|max:100|unique:product_variants,inventory_name,' . $variant->id,
             'size' => 'nullable',
             'kg' => 'nullable|numeric|gt:0',
             'is_priced_by_kg' => 'nullable|boolean',
@@ -76,6 +78,7 @@ class ProductVariantController extends Controller
             'component_weights.*' => 'nullable|numeric|min:0',
             'component_percentages.*' => 'nullable|numeric|min:0|max:100',
         ]);
+        $data['inventory_name'] = trim((string) ($data['inventory_name'] ?? '')) ?: null;
         // Chuyển size từ 2,5 thành 2.5 nếu là string
         if (isset($data['size']) && is_string($data['size'])) {
             $data['size'] = str_replace(',', '.', $data['size']);
@@ -215,7 +218,6 @@ class ProductVariantController extends Controller
             'component_weights.*' => 'nullable|numeric|min:0',
             'component_percentages.*' => 'nullable|numeric|min:0|max:100',
         ]);
-
         $variant->load('product.cuttingComponents');
         if ((string) ($variant->product?->product_type ?? '') !== Product::TYPE_WHOLE) {
             abort(422, 'Chỉ biến thể thuộc sản phẩm nguyên con mới có thành phần pha lóc.');
@@ -246,6 +248,7 @@ class ProductVariantController extends Controller
         if ($request->filled('q')) {
             $q = $request->input('q');
             $query->where('sku', 'like', "%$q%")
+                  ->orWhere('inventory_name', 'like', "%$q%")
                   ->orWhere('size', 'like', "%$q%")
                   ->orWhere('quality', 'like', "%$q%")
                   ->orWhereHas('product', function($sub) use ($q) {
@@ -322,6 +325,7 @@ class ProductVariantController extends Controller
             'product_id' => 'required|exists:products,id',
             'name' => 'nullable|string|max:255',
             'sku' => 'required|string|unique:product_variants,sku',
+            'inventory_name' => 'nullable|string|max:100|unique:product_variants,inventory_name',
             'size' => 'nullable|string',
             'kg' => 'nullable|numeric|gt:0',
             'is_priced_by_kg' => 'nullable|boolean',
@@ -332,6 +336,7 @@ class ProductVariantController extends Controller
             'media_id' => 'nullable|integer|exists:media,id',
             'price' => 'nullable|numeric|min:0',
         ]);
+        $data['inventory_name'] = trim((string) ($data['inventory_name'] ?? '')) ?: null;
         $data['kg'] = $data['kg'] ?? 1;
         $data['is_priced_by_kg'] = $request->boolean('is_priced_by_kg');
         $variant = ProductVariant::create($data);
