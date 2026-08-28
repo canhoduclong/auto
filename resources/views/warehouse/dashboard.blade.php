@@ -356,8 +356,8 @@
     </div>
     <!-- Cột phải: Nghiệp vụ mới nhất -->
     <div class="col-md-12 col-lg-8">
-        <div class="mb-3 toolsdaily d-flex align-items-center gap-3 flex-wrap">
-            <a href="{{ route('warehouse.stock-in.create') }}" class="btn btn-success fw-700" >
+        <div class="mb-3 toolsdaily align-items-center ">
+            <a href="{{ route('warehouse.stock-in.create') }}" class="btn btn-sm btn-success fw-700" >
                 <i class="bi bi-plus-circle me-1"></i> Tạo phiếu nhập kho
             </a>
             <a href="{{ route('warehouse.stocktakes.index') }}" class="btn btn-sm btn-outline-primary">
@@ -366,7 +366,7 @@
         </div>
         @if(($deferredComponentImportRequests ?? collect())->isNotEmpty())
             <div class="card border-warning shadow-sm mb-4">
-                <div class="card-header bg-warning-subtle d-flex justify-content-between align-items-center gap-2 flex-wrap">
+                <div class="card-header bg-warning-subtle justify-content-between align-items-center gap-2 flex-wrap">
                     <div>
                         <div class="fw-semibold">
                             <i class="bi bi-hourglass-split me-1"></i>Yêu cầu nhập kho thành phần pha lóc
