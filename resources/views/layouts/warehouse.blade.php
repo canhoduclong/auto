@@ -11,7 +11,8 @@
     @stack('styles')
     <style>
         :root {
-            --sidebar-width: 190px;
+            --sidebar-width: 240px;
+            --sidebar-collapsed-width: 64px;
             --theme-primary: #0f766e;
             --theme-primary-hover: #115e59;
             --theme-accent: #ffc107;
@@ -32,12 +33,28 @@
             height: 100vh;
             height: 100dvh;
             overflow: hidden;
+            transition: width .2s ease, transform .22s ease, box-shadow .2s ease;
         }
         .wh-brand {
             padding: 1rem 1.25rem; background: var(--sidebar-bg-strong); color: #fff; font-weight: 700;
             font-size: 1.02rem; display: flex; align-items: center; gap: .5rem; border-bottom: 1px solid rgba(255,255,255,.15);
         }
         .wh-brand .badge { font-size: .65rem; background: var(--theme-accent); color: #1f2937; }
+        .wh-sidebar-control {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 30px;
+            width: 30px;
+            height: 30px;
+            padding: 0;
+            border: 0;
+            border-radius: 50%;
+            background: rgba(255,255,255,.1);
+            color: #fff;
+        }
+        .wh-sidebar-control:hover,
+        .wh-sidebar-control:focus-visible { background: rgba(255,255,255,.2); color: #fff; }
         .wh-nav-section {
             padding: .75rem 1.25rem .25rem; font-size: .78rem; color: #fef3c7;
             text-transform: uppercase; letter-spacing: .08em; font-weight: 600;
@@ -47,6 +64,8 @@
             color: #e6fffb; font-size: .95rem; text-decoration: none;
             border-left: 3px solid transparent; transition: all .15s;
         }
+        .wh-nav-link > i { flex: 0 0 1.15rem; text-align: center; }
+        .wh-nav-label { min-width: 0; }
         .wh-nav-link:hover { color: #fff; background: rgba(255,255,255,.08); border-left-color: var(--theme-accent); }
         .wh-nav-link.active { color: #fff; background: rgba(255,193,7,.16); border-left-color: var(--sidebar-active); }
         .wh-nav-link .badge { margin-left: auto; font-size: .65rem; }
@@ -229,111 +248,160 @@
             .wh-main {
                 margin-left: var(--sidebar-width) !important;
                 width: calc(100% - var(--sidebar-width)) !important;
+                transition: margin-left .2s ease, width .2s ease;
+            }
+            body.wh-sidebar-is-collapsed .wh-sidebar {
+                width: var(--sidebar-collapsed-width);
+            }
+            body.wh-sidebar-is-collapsed .wh-main {
+                margin-left: var(--sidebar-collapsed-width) !important;
+                width: calc(100% - var(--sidebar-collapsed-width)) !important;
+            }
+            body.wh-sidebar-is-collapsed .wh-sidebar.wh-sidebar-unfold {
+                width: var(--sidebar-width);
+                box-shadow: .35rem 0 1.25rem rgba(3, 43, 40, .28);
+                z-index: 210;
+            }
+            body.wh-sidebar-is-collapsed .wh-sidebar:not(.wh-sidebar-unfold) .wh-brand {
+                justify-content: center;
+                padding-left: .75rem;
+                padding-right: .75rem;
+            }
+            body.wh-sidebar-is-collapsed .wh-sidebar:not(.wh-sidebar-unfold) .wh-brand-label,
+            body.wh-sidebar-is-collapsed .wh-sidebar:not(.wh-sidebar-unfold) .wh-brand .badge,
+            body.wh-sidebar-is-collapsed .wh-sidebar:not(.wh-sidebar-unfold) .wh-brand > .bi-box-seam-fill,
+            body.wh-sidebar-is-collapsed .wh-sidebar:not(.wh-sidebar-unfold) .wh-nav-label,
+            body.wh-sidebar-is-collapsed .wh-sidebar:not(.wh-sidebar-unfold) .wh-nav-link .badge,
+            body.wh-sidebar-is-collapsed .wh-sidebar:not(.wh-sidebar-unfold) .wh-nav-section,
+            body.wh-sidebar-is-collapsed .wh-sidebar:not(.wh-sidebar-unfold) .wh-account {
+                display: none !important;
+            }
+            body.wh-sidebar-is-collapsed .wh-sidebar:not(.wh-sidebar-unfold) .wh-nav-link {
+                justify-content: center;
+                gap: 0;
+                padding-left: .75rem;
+                padding-right: .75rem;
+            }
+            body.wh-sidebar-is-collapsed .wh-sidebar:not(.wh-sidebar-unfold) .wh-nav-link > i {
+                font-size: 1.15rem;
             }
         }
     </style>
 </head>
 <body class="{{ !empty($isMobileClient) ? 'is-mobile-client' : '' }}">
+    <script>
+        try {
+            if (window.localStorage.getItem('warehouse.sidebar.collapsed') === '1') {
+                document.body.classList.add('wh-sidebar-is-collapsed');
+            }
+        } catch (error) {
+            // Use the expanded default when browser storage is unavailable.
+        }
+    </script>
     @include('layouts.notifications')
 
     <!-- Sidebar -->
-    <aside class="wh-sidebar">
+    <aside class="wh-sidebar" id="warehouse-sidebar">
         <div class="wh-brand">
             <i class="bi bi-box-seam-fill fs-5"></i>
-            <span>Warehouse</span>
+            <span class="wh-brand-label">Warehouse</span>
             <span class="badge ms-auto">WH</span>
+            <button type="button" class="wh-sidebar-control d-none d-md-inline-flex js-wh-sidebar-control" aria-controls="warehouse-sidebar" aria-expanded="true" title="Thu nhỏ menu">
+                <i class="bi bi-chevron-left" aria-hidden="true"></i>
+                <span class="visually-hidden">Thu nhỏ menu</span>
+            </button>
         </div>
         <nav class="mt-1 flex-grow-1 overflow-auto">
             <div class="wh-nav-section">Tổng quan</div>
             <a href="{{ route('warehouse.dashboard') }}" class="wh-nav-link {{ request()->routeIs('warehouse.dashboard') ? 'active' : '' }}">
-                <i class="bi bi-speedometer2"></i> Bảng điều khiển
+                <i class="bi bi-speedometer2"></i><span class="wh-nav-label">Bảng điều khiển</span>
             </a>
             <a href="{{ route('warehouse.production-dashboard') }}" class="wh-nav-link {{ request()->routeIs('warehouse.production-dashboard') ? 'active' : '' }}">
-                <i class="bi bi-bar-chart-line-fill"></i> Bảng điều khiển sản xuất
+                <i class="bi bi-bar-chart-line-fill"></i><span class="wh-nav-label">Bảng điều khiển sản xuất</span>
             </a>
             <a href="{{ route('department-notifications.index', ['layout' => 'warehouse']) }}" class="wh-nav-link {{ request()->routeIs('department-notifications.*') && request('layout') === 'warehouse' ? 'active' : '' }}">
-                <i class="bi bi-megaphone"></i> Tạo thông báo
+                <i class="bi bi-megaphone"></i><span class="wh-nav-label">Tạo thông báo</span>
             </a>
             <a href="{{ route('warehouse.orders') }}" class="wh-nav-link {{ request()->routeIs('warehouse.orders') ? 'active' : '' }}">
-                <i class="bi bi-box2-fill"></i> Đơn cần đóng gói
+                <i class="bi bi-box2-fill"></i><span class="wh-nav-label">Đơn cần đóng gói</span>
             </a>
             <a href="{{ route('warehouse.order-adjustments.index') }}" class="wh-nav-link {{ request()->routeIs('warehouse.order-adjustments.*') ? 'active' : '' }}">
-                <i class="bi bi-clipboard2-check-fill"></i> Duyệt điều chỉnh sản lượng
+                <i class="bi bi-clipboard2-check-fill"></i><span class="wh-nav-label">Duyệt điều chỉnh sản lượng</span>
                 @if(($warehouseAdjustmentQueueCount ?? 0) > 0)
                     <span class="badge rounded-pill bg-danger ms-auto">{{ $warehouseAdjustmentQueueCount }}</span>
                 @endif
             </a>
             <a href="{{ route('admin.imported-sales-orders.index') }}" class="wh-nav-link {{ request()->routeIs('admin.imported-sales-orders.*') ? 'active' : '' }}">
-                <i class="bi bi-clipboard-check"></i> Hoàn chỉnh đơn lịch sử
+                <i class="bi bi-clipboard-check"></i><span class="wh-nav-label">Hoàn chỉnh đơn lịch sử</span>
             </a>
             <a href="{{ route('warehouse.transfers.incoming') }}" class="wh-nav-link {{ request()->routeIs('warehouse.transfers.incoming') ? 'active' : '' }}">
-                <i class="bi bi-arrow-left-right"></i> Tiếp nhận Đơn
+                <i class="bi bi-arrow-left-right"></i><span class="wh-nav-label">Tiếp nhận Đơn</span>
             </a>
             <a href="{{ route('warehouse.inventory-transfers.incoming') }}" class="wh-nav-link {{ request()->routeIs('warehouse.inventory-transfers.incoming') ? 'active' : '' }}">
-                <i class="bi bi-box-arrow-in-down"></i> Tiếp nhận hàng
+                <i class="bi bi-box-arrow-in-down"></i><span class="wh-nav-label">Tiếp nhận hàng</span>
             </a>
             <a href="{{ route('warehouse.procurement-receipts.index') }}" class="wh-nav-link {{ request()->routeIs('warehouse.procurement-receipts.*') ? 'active' : '' }}">
-                <i class="bi bi-basket2-fill"></i> Nhập kho từ thu mua
+                <i class="bi bi-basket2-fill"></i><span class="wh-nav-label">Nhập kho từ thu mua</span>
             </a>
 
             <div class="wh-nav-section">Quản lý kho</div>
             <a href="{{ route('warehouse.stock-in') }}" class="wh-nav-link {{ request()->routeIs('warehouse.stock-in') ? 'active' : '' }}">
-                <i class="bi bi-box-seam"></i> Nhập Kho
+                <i class="bi bi-box-seam"></i><span class="wh-nav-label">Nhập Kho</span>
             </a>
             <a href="{{ route('warehouse.supplier-prices.index') }}" class="wh-nav-link {{ request()->routeIs('warehouse.supplier-prices.*') ? 'active' : '' }}">
-                <i class="bi bi-cash-coin"></i> Bảng giá thu mua
+                <i class="bi bi-cash-coin"></i><span class="wh-nav-label">Bảng giá thu mua</span>
             </a>
             <a href="{{ route('warehouse.stock-out') }}" class="wh-nav-link {{ request()->routeIs('warehouse.stock-out') ? 'active' : '' }}">
-                <i class="bi bi-box-arrow-right"></i> Xuất Kho
+                <i class="bi bi-box-arrow-right"></i><span class="wh-nav-label">Xuất Kho</span>
             </a>
             <a href="{{ route('warehouse.stock-out.orders') }}" class="wh-nav-link {{ request()->routeIs('warehouse.stock-out.orders') ? 'active' : '' }}">
-                <i class="bi bi-receipt-cutoff"></i> Đơn Xuất Kho
+                <i class="bi bi-receipt-cutoff"></i><span class="wh-nav-label">Đơn Xuất Kho</span>
             </a>
             <a href="{{ route('warehouse.dispatch-slips.index') }}" class="wh-nav-link {{ request()->routeIs('warehouse.dispatch-slips.*') ? 'active' : '' }}">
-                <i class="bi bi-file-earmark-spreadsheet"></i> Phiếu xuất kho tổng
+                <i class="bi bi-file-earmark-spreadsheet"></i><span class="wh-nav-label">Phiếu xuất kho tổng</span>
             </a>
             <a href="{{ route('warehouse.order-transfers') }}" class="wh-nav-link {{ request()->routeIs('warehouse.order-transfers') ? 'active' : '' }}">
-                <i class="bi bi-arrow-left-right"></i> Điều chuyển đơn
+                <i class="bi bi-arrow-left-right"></i><span class="wh-nav-label">Điều chuyển đơn</span>
             </a>
             <a href="{{ route('warehouse.inventory-transfers.index') }}" class="wh-nav-link {{ request()->routeIs('warehouse.inventory-transfers.index') ? 'active' : '' }}">
-                <i class="bi bi-arrow-left-right"></i> Điều chuyển hàng
+                <i class="bi bi-arrow-left-right"></i><span class="wh-nav-label">Điều chuyển hàng</span>
             </a>
             <a href="{{ route('warehouse.inventory') }}" class="wh-nav-link {{ request()->routeIs('warehouse.inventory') ? 'active' : '' }}">
-                <i class="bi bi-stack"></i> Tồn Kho
+                <i class="bi bi-stack"></i><span class="wh-nav-label">Tồn Kho</span>
             </a>
             <a href="{{ route('warehouse.stocktakes.index') }}" class="wh-nav-link {{ request()->routeIs('warehouse.stocktakes.*') ? 'active' : '' }}">
-                <i class="bi bi-clipboard2-check"></i> Kiểm Kê Kho
+                <i class="bi bi-clipboard2-check"></i><span class="wh-nav-label">Kiểm Kê Kho</span>
             </a>
             <a href="{{ route('warehouse.inventory-daily') }}" class="wh-nav-link {{ request()->routeIs('warehouse.inventory-daily') ? 'active' : '' }}">
-                <i class="bi bi-calendar3"></i> Tồn kho Daily
+                <i class="bi bi-calendar3"></i><span class="wh-nav-label">Tồn kho Daily</span>
             </a>
             <a href="{{ route('warehouse.products') }}" class="wh-nav-link {{ request()->routeIs('warehouse.products') ? 'active' : '' }}">
-                <i class="bi bi-box"></i> Sản Phẩm
+                <i class="bi bi-box"></i><span class="wh-nav-label">Sản Phẩm</span>
             </a>
 
             <div class="wh-nav-section">Tài chính</div>
             <a href="{{ route('warehouse.finance-requests.index') }}" class="wh-nav-link {{ request()->routeIs('warehouse.finance-requests.*') ? 'active' : '' }}">
-                <i class="bi bi-file-earmark-text"></i> Phiếu yêu cầu
+                <i class="bi bi-file-earmark-text"></i><span class="wh-nav-label">Phiếu yêu cầu</span>
             </a>
 
             <div class="wh-nav-section">Nhiệm vụ & Trả hàng</div>
             <a href="{{ route('tasks.my-tasks') }}" class="wh-nav-link {{ request()->routeIs('tasks.my-tasks') || request()->routeIs('task-assignments.assigned-to-me') ? 'active' : '' }}">
-                <i class="bi bi-list-task"></i> Nhiệm vụ
+                <i class="bi bi-list-task"></i><span class="wh-nav-label">Nhiệm vụ</span>
             </a>
             <a href="{{ route('task-assignments.in-progress') }}" class="wh-nav-link {{ request()->routeIs('task-assignments.in-progress') || request()->routeIs('task-assignments.complete-form') ? 'active' : '' }}">
-                <i class="bi bi-check2-circle"></i> Thực hiện
+                <i class="bi bi-check2-circle"></i><span class="wh-nav-label">Thực hiện</span>
             </a>
             <a href="{{ route('warehouse.returns') }}" class="wh-nav-link {{ request()->routeIs('warehouse.returns') ? 'active' : '' }}">
-                <i class="bi bi-arrow-return-left"></i> Đơn trả về
+                <i class="bi bi-arrow-return-left"></i><span class="wh-nav-label">Đơn trả về</span>
             </a>
 
             <div class="wh-nav-section">Báo cáo</div>
             <a href="{{ route('warehouse.reports') }}" class="wh-nav-link {{ request()->routeIs('warehouse.reports') ? 'active' : '' }}">
-                <i class="bi bi-graph-up"></i> Thống Kê
+                <i class="bi bi-graph-up"></i><span class="wh-nav-label">Thống Kê</span>
             </a>
         </nav>
         <!-- Account info moved to header -->
-        <div class="p-3 border-top border-secondary d-none d-md-block" style="opacity:0.3;pointer-events:none;">
+        <div class="wh-account p-3 border-top border-secondary d-none d-md-block" style="opacity:0.3;pointer-events:none;">
             <div class="d-flex align-items-center gap-2 mb-2">
                 <i class="bi bi-person-circle text-secondary"></i>
                 <div class="small">
@@ -603,6 +671,83 @@
             const sidebar = document.querySelector('.wh-sidebar');
             const toggle = document.querySelector('.js-wh-toggle');
             const overlay = document.querySelector('.js-wh-overlay');
+            const sidebarControl = document.querySelector('.js-wh-sidebar-control');
+
+            if (sidebar && sidebarControl) {
+                const storageKey = 'warehouse.sidebar.collapsed';
+                const controlIcon = sidebarControl.querySelector('i');
+                const controlText = sidebarControl.querySelector('.visually-hidden');
+                let unfoldTimer;
+
+                const updateSidebarControl = function () {
+                    const isCollapsed = document.body.classList.contains('wh-sidebar-is-collapsed');
+                    const isUnfolded = sidebar.classList.contains('wh-sidebar-unfold');
+                    let label = 'Thu nhỏ menu';
+                    let iconClass = 'bi-chevron-left';
+
+                    if (isCollapsed && isUnfolded) {
+                        label = 'Neo menu đang mở';
+                        iconClass = 'bi-pin-angle-fill';
+                    } else if (isCollapsed) {
+                        label = 'Mở và neo menu';
+                        iconClass = 'bi-chevron-right';
+                    }
+
+                    sidebarControl.setAttribute('title', label);
+                    sidebarControl.setAttribute('aria-label', label);
+                    sidebarControl.setAttribute('aria-expanded', String(!isCollapsed || isUnfolded));
+                    controlText.textContent = label;
+                    controlIcon.className = 'bi ' + iconClass;
+                };
+
+                const setCollapsed = function (isCollapsed, remember) {
+                    document.body.classList.toggle('wh-sidebar-is-collapsed', isCollapsed);
+                    sidebar.classList.remove('wh-sidebar-unfold');
+                    if (remember) {
+                        try {
+                            window.localStorage.setItem(storageKey, isCollapsed ? '1' : '0');
+                        } catch (error) {
+                            // Sidebar remains usable when storage is unavailable.
+                        }
+                    }
+                    updateSidebarControl();
+                };
+
+                let initiallyCollapsed = false;
+                try {
+                    initiallyCollapsed = window.localStorage.getItem(storageKey) === '1';
+                } catch (error) {
+                    initiallyCollapsed = false;
+                }
+                setCollapsed(initiallyCollapsed, false);
+
+                sidebar.querySelectorAll('.wh-nav-link').forEach(function (link) {
+                    const label = link.querySelector('.wh-nav-label');
+                    if (label) link.setAttribute('title', label.textContent.trim());
+                });
+
+                sidebarControl.addEventListener('click', function () {
+                    setCollapsed(!document.body.classList.contains('wh-sidebar-is-collapsed'), true);
+                });
+
+                sidebar.addEventListener('mouseenter', function () {
+                    window.clearTimeout(unfoldTimer);
+                    if (!document.body.classList.contains('wh-sidebar-is-collapsed')) return;
+                    unfoldTimer = window.setTimeout(function () {
+                        sidebar.classList.add('wh-sidebar-unfold');
+                        updateSidebarControl();
+                    }, 150);
+                });
+
+                sidebar.addEventListener('mouseleave', function () {
+                    window.clearTimeout(unfoldTimer);
+                    if (!document.body.classList.contains('wh-sidebar-is-collapsed')) return;
+                    unfoldTimer = window.setTimeout(function () {
+                        sidebar.classList.remove('wh-sidebar-unfold');
+                        updateSidebarControl();
+                    }, 150);
+                });
+            }
 
             if (sidebar && toggle && overlay) {
                 const closeDrawer = function () {
