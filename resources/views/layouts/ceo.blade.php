@@ -333,6 +333,9 @@
             <a href="{{ route('ceo.warehouse') }}" class="ceo-nav-link {{ request()->routeIs('ceo.warehouse') ? 'active' : '' }}">
                 <i class="bi bi-box-seam"></i> Tổng quan kho
             </a>
+            <a href="{{ route('ceo.warehouse-inventory') }}" class="ceo-nav-link {{ request()->routeIs('ceo.warehouse-inventory') ? 'active' : '' }}">
+                <i class="bi bi-boxes"></i> Báo cáo tồn kho
+            </a>
             <a href="{{ route('ceo.warehouse-dispatch-slips.index') }}" class="ceo-nav-link {{ request()->routeIs('ceo.warehouse-dispatch-slips.*') ? 'active' : '' }}">
                 <i class="bi bi-file-earmark-spreadsheet"></i> Phiếu xuất kho tổng
             </a>

@@ -1,4 +1,4 @@
-@extends('layouts.warehouse')
+@extends(request()->routeIs('ceo.warehouse-inventory') ? 'layouts.ceo' : 'layouts.warehouse')
 
 @section('title', 'Tồn Kho Tổng Hợp')
 
@@ -29,15 +29,21 @@
 @endpush
 
 @section('content')
+@php
+    $isCeoInventoryView = request()->routeIs('ceo.warehouse-inventory');
+    $inventoryIndexRoute = $isCeoInventoryView ? 'ceo.warehouse-inventory' : 'warehouse.inventory';
+@endphp
 <div class="d-flex align-items-start justify-content-between gap-3 flex-wrap mb-3">
     <div>
         <h1 class="h5 fw-bold mb-1">Tồn kho tổng hợp các kho</h1>
         <div class="text-muted small">Mỗi kho gồm Tồn đầu, Nhập, Xuất, Tồn cuối. Available = Tổng tồn cuối - Book.</div>
     </div>
-    <div class="d-flex gap-2">
-        <a href="{{ route('warehouse.stock-in') }}" class="btn btn-sm btn-outline-secondary">Nhập kho</a>
-        <a href="{{ route('warehouse.stock-out') }}" class="btn btn-sm btn-outline-secondary">Xuất kho</a>
-    </div>
+    @unless($isCeoInventoryView)
+        <div class="d-flex gap-2">
+            <a href="{{ route('warehouse.stock-in') }}" class="btn btn-sm btn-outline-secondary">Nhập kho</a>
+            <a href="{{ route('warehouse.stock-out') }}" class="btn btn-sm btn-outline-secondary">Xuất kho</a>
+        </div>
+    @endunless
 </div>
 
 <div class="inv-card">
@@ -69,7 +75,7 @@
             </div>
             <div class="col-lg-2 d-flex gap-2">
                 <button class="btn btn-primary flex-fill">Xem tồn kho</button>
-                <a href="{{ route('warehouse.inventory') }}" class="btn btn-outline-secondary">Đặt lại</a>
+                <a href="{{ route($inventoryIndexRoute) }}" class="btn btn-outline-secondary">Đặt lại</a>
             </div>
         </form>
     </div>

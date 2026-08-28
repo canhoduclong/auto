@@ -1156,7 +1156,10 @@ class WarehouseDashboardController extends Controller
             ->unique('order_id')
             ->keyBy('order_id');
 
-        $warehouses = Warehouse::query()->orderBy('name')->get(['id', 'name']);
+        $warehouses = Warehouse::query()
+            ->where('status', true)
+            ->orderBy('name')
+            ->get(['id', 'name']);
         $shippers = User::query()
             ->whereHas('roles', function ($query) {
                 $query->whereIn('name', ['shipper', 'manager_shipper']);
@@ -1186,6 +1189,176 @@ class WarehouseDashboardController extends Controller
             'cuttingPlansByOrder',
             'activeCuttingBatchesByOrder'
         ));
+    }
+
+    /**
+     * Move a stock-short packing order to another warehouse. This mirrors the
+     * manager warehouse selector while keeping the action scoped to the source
+     * warehouse that currently owns the order.
+     */
+    public function transferPackingWarehouse(Request $request, Order $order)
+    {
+        $user = $request->user();
+        $sourceWarehouseId = $user?->warehouse_id ? (int) $user->warehouse_id : 0;
+        if ($sourceWarehouseId <= 0) {
+            return back()->with('error', 'Tài khoản chưa được gán kho đang làm việc.');
+        }
+
+        $validated = $request->validate([
+            'warehouse_id' => ['required', 'integer', 'exists:warehouses,id'],
+            'packing_date' => ['nullable', 'date_format:Y-m-d', 'before_or_equal:today'],
+        ]);
+        $targetWarehouse = Warehouse::query()
+            ->whereKey((int) $validated['warehouse_id'])
+            ->where('status', true)
+            ->first();
+
+        if (! $targetWarehouse) {
+            return back()->withErrors(['warehouse_id' => 'Kho nhận đã ngừng hoạt động hoặc không tồn tại.']);
+        }
+        if ((int) $targetWarehouse->id === $sourceWarehouseId) {
+            return back()->withErrors(['warehouse_id' => 'Chỉ được chọn kho khác kho bạn đang làm.']);
+        }
+
+        if ((int) ($order->warehouse_id ?? 0) !== $sourceWarehouseId) {
+            return back()->with('error', 'Đơn không thuộc kho bạn đang làm hoặc đã được chuyển sang kho khác.');
+        }
+        if (! in_array((string) $order->status, self::READY_TO_PACK_STATUSES, true)) {
+            return back()->with('error', 'Chỉ có thể điều chuyển đơn đang ở trạng thái chờ đóng gói.');
+        }
+        if (! $this->canProcessOrderOnCurrentRun($order)) {
+            return back()->with('error', 'Đơn không còn thuộc ngày nghiệp vụ được phép xử lý.');
+        }
+
+        $defaultPackingDate = $order->accounting_sales_import_batch_id && $order->delivery_date
+            ? $order->delivery_date->toDateString()
+            : $order->created_at->toDateString();
+        $packingDate = (string) ($validated['packing_date'] ?? $defaultPackingDate);
+        $order->loadMissing(['items.product', 'items.variant.product']);
+        $stockCheck = $this->evaluateSingleOrderStock($order, $sourceWarehouseId, $packingDate);
+        if (! ($stockCheck['has_shortage'] ?? false)) {
+            return back()->with('error', 'Đơn hiện đã đủ hàng tại kho đang làm nên không cần điều chuyển.');
+        }
+
+        try {
+            [$sourceWarehouseName, $targetWarehouseName] = DB::transaction(function () use ($order, $user, $sourceWarehouseId, $targetWarehouse): array {
+                $lockedOrder = Order::query()
+                    ->with(['items.variant', 'warehouse:id,name'])
+                    ->lockForUpdate()
+                    ->findOrFail($order->id);
+
+                if ((int) ($lockedOrder->warehouse_id ?? 0) !== $sourceWarehouseId) {
+                    throw new \RuntimeException('Đơn không còn thuộc kho bạn đang làm hoặc đã được chuyển sang kho khác.');
+                }
+                if (! in_array((string) $lockedOrder->status, self::READY_TO_PACK_STATUSES, true)) {
+                    throw new \RuntimeException('Chỉ có thể điều chuyển đơn đang ở trạng thái chờ đóng gói.');
+                }
+                if (! $this->canProcessOrderOnCurrentRun($lockedOrder)) {
+                    throw new \RuntimeException('Đơn không còn thuộc ngày nghiệp vụ được phép xử lý.');
+                }
+                if ($lockedOrder->order_transfer_id) {
+                    throw new \RuntimeException('Đơn đã nằm trong một phiếu điều chuyển khác.');
+                }
+                if (ProductCuttingBatch::query()
+                    ->where('order_id', $lockedOrder->id)
+                    ->where('status', ProductCuttingBatch::STATUS_IN_PROGRESS)
+                    ->exists()) {
+                    throw new \RuntimeException('Đơn đang thực hiện pha lóc nên chưa thể đổi kho đóng hàng.');
+                }
+                if (WarehouseTransfer::query()
+                    ->where('order_id', $lockedOrder->id)
+                    ->whereIn('status', [
+                        WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
+                        WarehouseTransfer::STATUS_IN_TRANSIT,
+                        WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
+                    ])
+                    ->exists()) {
+                    throw new \RuntimeException('Đơn đang có điều chuyển kho hoạt động nên chưa thể đổi kho đóng hàng.');
+                }
+
+                $sourceWarehouseName = $lockedOrder->warehouse?->name ?: 'Kho hiện tại';
+                $this->releaseOrderReservations($lockedOrder);
+                $this->reserveOrderStockAtWarehouse($lockedOrder, (int) $targetWarehouse->id);
+                $lockedOrder->forceFill([
+                    'warehouse_id' => $targetWarehouse->id,
+                    'stock_sufficient' => null,
+                    'stock_shortage_detail' => null,
+                    'stock_alert_status' => null,
+                ])->save();
+
+                OrderHistory::create([
+                    'order_id' => $lockedOrder->id,
+                    'action' => 'warehouse_transfer_packing_warehouse',
+                    'user_id' => $user->id,
+                    'role' => 'warehouse',
+                    'status_before' => $lockedOrder->status,
+                    'status_after' => $lockedOrder->status,
+                    'note' => "Kho điều chuyển đơn thiếu hàng từ {$sourceWarehouseName} sang {$targetWarehouse->name} để kho mới hoàn thiện đóng hàng.",
+                ]);
+
+                return [$sourceWarehouseName, (string) $targetWarehouse->name];
+            });
+        } catch (\RuntimeException $exception) {
+            return back()->with('error', $exception->getMessage());
+        }
+
+        return back()->with('success', "Đã chuyển đơn thiếu hàng từ {$sourceWarehouseName} sang {$targetWarehouseName}. Đơn sẽ chỉ xuất hiện tại kho mới để tiếp tục đóng hàng.");
+    }
+
+    private function releaseOrderReservations(Order $order): void
+    {
+        $order->loadMissing('items');
+        foreach ($order->items as $item) {
+            $reservations = InventoryReservation::query()
+                ->where('order_item_id', $item->id)
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($reservations as $reservation) {
+                $inventory = Inventory::query()->lockForUpdate()->find($reservation->inventory_id);
+                if ($inventory) {
+                    $inventory->reserved_quantity = max(0, (int) $inventory->reserved_quantity - (int) $reservation->quantity);
+                    $inventory->save();
+                }
+            }
+
+            InventoryReservation::query()->where('order_item_id', $item->id)->delete();
+        }
+    }
+
+    /** Reserve as much as possible at the destination; missing stock remains a backorder. */
+    private function reserveOrderStockAtWarehouse(Order $order, int $warehouseId): void
+    {
+        $order->loadMissing('items.variant');
+        foreach ($order->items as $item) {
+            $requiredQty = max(0, (int) $item->quantity);
+            if ($requiredQty <= 0) {
+                continue;
+            }
+
+            $inventory = Inventory::query()
+                ->lockForUpdate()
+                ->where('product_variant_id', $item->product_variant_id)
+                ->where('warehouse_id', $warehouseId)
+                ->first();
+            if (! $inventory) {
+                continue;
+            }
+
+            $availableQty = max(0, (int) $inventory->quantity - (int) $inventory->reserved_quantity);
+            $reserveQty = min($requiredQty, $availableQty);
+            if ($reserveQty <= 0) {
+                continue;
+            }
+
+            $inventory->increment('reserved_quantity', $reserveQty);
+            InventoryReservation::create([
+                'order_item_id' => $item->id,
+                'inventory_id' => $inventory->id,
+                'quantity' => $reserveQty,
+                'reserved_at' => now(),
+            ]);
+        }
     }
 
     private function attachCustomerFeedbackContext(Collection $orders): void

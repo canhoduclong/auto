@@ -45,6 +45,21 @@
                 $customerFeedbackMeta = $customerFeedbackContext['highest_meta'] ?? \App\Models\Order::customerFeedbackMeta(null);
                 $customerFeedbackRows = collect($customerFeedbackContext['recent'] ?? []);
                 $hasCustomerFeedback = (bool) ($customerFeedbackContext['has_feedback'] ?? false);
+                $currentWorkingWarehouseId = (int) (auth()->user()?->warehouse_id ?? 0);
+                $packingWarehouseOptions = collect($warehouses ?? [])->filter(
+                    fn ($warehouse) => (int) $warehouse->id !== $currentWorkingWarehouseId
+                );
+                $canTransferPackingWarehouse = !$isPackageOrderLayout
+                    && $canProcessThisOrder
+                    && $isReadyToPack
+                    && !$isPendingSaleConfirmation
+                    && $stockShortages->isNotEmpty()
+                    && !$hasActiveCuttingBatch
+                    && !$activeTransfer
+                    && !$order->order_transfer_id
+                    && $currentWorkingWarehouseId > 0
+                    && (int) ($order->warehouse_id ?? 0) === $currentWorkingWarehouseId
+                    && $packingWarehouseOptions->isNotEmpty();
 
                 if ($activeTransfer?->targetWarehouse?->name) {
                     $shipPickupWarehouseName = $activeTransfer->targetWarehouse->name;
@@ -791,6 +806,34 @@
                                     <a class="btn btn-outline-danger btn-sm wh-inventory-action-btn" href="{{ route($packingInventoryRoute ?? 'warehouse.stock-in') }}">
                                         <i class="bi bi-box-arrow-in-down me-1"></i>Nhập kho
                                     </a>
+                                @endif
+
+                                @if($canTransferPackingWarehouse)
+                                    <details class="wh-footer-adjustment wh-footer-transfer">
+                                        <summary>
+                                            <i class="bi bi-arrow-left-right me-1"></i>Điều chuyển hàng
+                                        </summary>
+                                        <form action="{{ route('warehouse.orders.transfer-packing-warehouse', $order) }}"
+                                              method="POST"
+                                              class="wh-footer-transfer-form"
+                                              onsubmit="return confirm('Chuyển đơn #{{ addslashes($order->code ?: $order->id) }} khỏi {{ addslashes($order->warehouse?->name ?: 'kho hiện tại') }} sang kho đã chọn để tiếp tục đóng hàng?');">
+                                            @csrf
+                                            <input type="hidden" name="packing_date" value="{{ $selectedDate ?? now()->toDateString() }}">
+                                            <div>
+                                                <label class="form-label small fw-semibold mb-1">Kho tiếp tục đóng hàng</label>
+                                                <select name="warehouse_id" class="form-select form-select-sm" required>
+                                                    <option value="">-- Chọn kho khác --</option>
+                                                    @foreach($packingWarehouseOptions as $warehouse)
+                                                        <option value="{{ $warehouse->id }}">{{ $warehouse->name }}</option>
+                                                    @endforeach
+                                                </select>
+                                                <div class="form-text">Đơn sẽ biến mất khỏi {{ $order->warehouse?->name ?: 'kho hiện tại' }} và chỉ xuất hiện tại kho được chọn.</div>
+                                            </div>
+                                            <button type="submit" class="btn btn-success btn-sm">
+                                                <i class="bi bi-check2-circle me-1"></i>Xác nhận chuyển
+                                            </button>
+                                        </form>
+                                    </details>
                                 @endif
 
                                 @if($isReadyToPack)

@@ -380,6 +380,26 @@
     .wh-footer-adjustment[open] > summary {
         margin-bottom: 8px;
     }
+    .wh-footer-transfer > summary {
+        border-color: #0f766e;
+        background: #ecfdf5;
+        color: #0f766e;
+    }
+    .wh-footer-transfer[open] {
+        border-color: #99f6e4;
+        background: #f0fdfa;
+    }
+    .wh-footer-transfer-form {
+        display: grid;
+        grid-template-columns: minmax(220px, 360px) auto;
+        gap: 8px;
+        align-items: end;
+    }
+    @media (max-width: 575.98px) {
+        .wh-footer-transfer-form {
+            grid-template-columns: 1fr;
+        }
+    }
     .wh-inventory-action-btn {
         min-width: 166px;
         font-weight: 700;

@@ -17,20 +17,25 @@ class CeoWarehouseDispatchSlipMenuTest extends TestCase
         $this->assertStringContainsString('>Kho</div>', $layout);
         $this->assertStringContainsString("route('ceo.warehouse')", $layout);
         $this->assertStringContainsString('Tổng quan kho', $layout);
+        $this->assertStringContainsString("route('ceo.warehouse-inventory')", $layout);
+        $this->assertStringContainsString('Báo cáo tồn kho', $layout);
         $this->assertStringContainsString("route('ceo.warehouse-dispatch-slips.index')", $layout);
         $this->assertStringContainsString('Phiếu xuất kho tổng', $layout);
 
         $warehouseHeadingPosition = strpos($layout, '>Kho</div>');
         $warehouseOverviewPosition = strpos($layout, "route('ceo.warehouse')", $warehouseHeadingPosition);
-        $dispatchSlipsPosition = strpos($layout, "route('ceo.warehouse-dispatch-slips.index')", $warehouseOverviewPosition);
+        $warehouseInventoryPosition = strpos($layout, "route('ceo.warehouse-inventory')", $warehouseOverviewPosition);
+        $dispatchSlipsPosition = strpos($layout, "route('ceo.warehouse-dispatch-slips.index')", $warehouseInventoryPosition);
         $reportsHeadingPosition = strpos($layout, '>Báo Cáo</div>', $dispatchSlipsPosition);
 
         $this->assertIsInt($warehouseHeadingPosition);
         $this->assertIsInt($warehouseOverviewPosition);
+        $this->assertIsInt($warehouseInventoryPosition);
         $this->assertIsInt($dispatchSlipsPosition);
         $this->assertIsInt($reportsHeadingPosition);
         $this->assertLessThan($warehouseOverviewPosition, $warehouseHeadingPosition);
-        $this->assertLessThan($dispatchSlipsPosition, $warehouseOverviewPosition);
+        $this->assertLessThan($warehouseInventoryPosition, $warehouseOverviewPosition);
+        $this->assertLessThan($dispatchSlipsPosition, $warehouseInventoryPosition);
         $this->assertLessThan($reportsHeadingPosition, $dispatchSlipsPosition);
         $this->assertStringContainsString("'ceoIndex'", $routes);
         $this->assertStringContainsString("'ceoShow'", $routes);
@@ -39,10 +44,14 @@ class CeoWarehouseDispatchSlipMenuTest extends TestCase
         $this->assertStringNotContainsString('Lập phiếu tổng', $index);
 
         $indexRoute = Route::getRoutes()->getByName('ceo.warehouse-dispatch-slips.index');
+        $inventoryRoute = Route::getRoutes()->getByName('ceo.warehouse-inventory');
         $showRoute = Route::getRoutes()->getByName('ceo.warehouse-dispatch-slips.show');
         $printRoute = Route::getRoutes()->getByName('ceo.warehouse-dispatch-slips.print-export');
 
         $this->assertSame('ceo/warehouse/dispatch-slips', $indexRoute?->uri());
+        $this->assertSame('ceo/warehouse/inventory', $inventoryRoute?->uri());
+        $this->assertSame(\App\Http\Controllers\WarehouseDashboardController::class.'@inventory', $inventoryRoute?->getActionName());
+        $this->assertContains('role:ceo,admin', $inventoryRoute?->gatherMiddleware() ?? []);
         $this->assertSame(WarehouseDispatchSlipController::class.'@ceoIndex', $indexRoute?->getActionName());
         $this->assertSame(WarehouseDispatchSlipController::class.'@ceoShow', $showRoute?->getActionName());
         $this->assertSame(WarehouseDispatchSlipController::class.'@ceoPrintExport', $printRoute?->getActionName());

@@ -393,6 +393,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/cutting-batches/{batch}/revert', [WarehouseDashboardController::class, 'revertCuttingBatch'])->name('cutting-batches.revert');
         Route::post('/cutting-component-import-requests/{componentImportRequest}/receive', [WarehouseDashboardController::class, 'receiveCuttingComponentImportRequest'])->name('cutting-component-import-requests.receive');
         Route::get('/orders', [WarehouseDashboardController::class, 'orders'])->name('orders');
+        Route::post('/orders/{order}/transfer-packing-warehouse', [WarehouseDashboardController::class, 'transferPackingWarehouse'])->name('orders.transfer-packing-warehouse');
         Route::post('/orders/{order}/logistics', [WarehouseDashboardController::class, 'updateLogistics'])->name('orders.logistics');
         Route::post('/orders/{order}/start-packing', [WarehouseDashboardController::class, 'startPacking'])->name('orders.start-packing');
         Route::post('/orders/{order}/complete-packing', [WarehouseDashboardController::class, 'completePacking'])->name('orders.complete-packing');
@@ -582,6 +583,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/sales', [CeoDashboardController::class, 'sales'])->name('sales');
         Route::get('/debts', [CeoDashboardController::class, 'debts'])->name('debts');
         Route::get('/warehouse', [CeoDashboardController::class, 'warehouse'])->name('warehouse');
+        Route::get('/warehouse/inventory', [WarehouseDashboardController::class, 'inventory'])->name('warehouse-inventory');
         Route::get('/warehouse/dispatch-slips', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'ceoIndex'])->name('warehouse-dispatch-slips.index');
         Route::get('/warehouse/dispatch-slips/{dispatchSlip}', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'ceoShow'])->name('warehouse-dispatch-slips.show');
         Route::get('/warehouse/dispatch-slips/{dispatchSlip}/print-export', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'ceoPrintExport'])->name('warehouse-dispatch-slips.print-export');
