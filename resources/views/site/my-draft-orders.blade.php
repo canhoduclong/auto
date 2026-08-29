@@ -58,7 +58,7 @@
     .draft-template-editor-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
     .draft-template-editor-grid .is-wide { grid-column: 1 / -1; }
     .draft-template-editor label { margin-bottom: 3px; color: #64748b; font-size: .66rem; font-weight: 800; }
-    .draft-edit-delivery { display: grid; grid-template-columns: minmax(0, 2fr) minmax(160px, 1fr); gap: 12px; padding: 10px 0; border-bottom: 1px dashed #dce6f1; }
+    .draft-edit-delivery { display: grid; grid-template-columns: minmax(0, 2fr) minmax(150px, 1fr) minmax(145px, 1fr); gap: 12px; padding: 10px 0; border-bottom: 1px dashed #dce6f1; }
     .draft-edit-delivery .input-group-text { border: 0; background: transparent; color: #527394; padding-left: 0; }
     .draft-edit-delivery .form-control { border: 0; border-bottom: 1px solid transparent; border-radius: 0; padding-left: 2px; }
     .draft-edit-delivery .form-control:focus { border-bottom-color: #0f766e; box-shadow: none; }
@@ -255,6 +255,7 @@
                             <div class="draft-template-section">
                                 <div class="draft-template-section-title">Giao hàng</div>
                                 <div class="draft-template-delivery">
+                                    <span><i class="bi bi-calendar3 me-1"></i>Ngày lên đơn: {{ $draft->delivery_date?->format('d/m/Y') ?: 'Chưa chọn' }}</span>
                                     <span><i class="bi bi-geo-alt me-1"></i>Địa chỉ nhận hàng: {{ $draft->address ?: 'Chưa cập nhật' }}</span>
                                     <span><i class="bi bi-clock me-1"></i>Giờ giao: {{ $draft->delivery_time ?: 'Chưa cập nhật' }}</span>
                                     @if($usesTruckStation)
@@ -320,6 +321,7 @@
                                 <div class="draft-template-section-title mt-2">Giao hàng</div>
                                 <div class="draft-edit-delivery">
                                     <div class="input-group input-group-sm"><span class="input-group-text"><i class="bi bi-geo-alt me-1"></i>Địa chỉ nhận hàng:</span><input name="address" class="form-control" value="{{ $draft->address }}" placeholder="Chưa cập nhật"></div>
+                                    <div class="input-group input-group-sm"><span class="input-group-text"><i class="bi bi-calendar3 me-1"></i>Ngày lên đơn:</span><input type="date" name="delivery_date" class="form-control" value="{{ $draft->delivery_date?->toDateString() ?: now('Asia/Bangkok')->toDateString() }}" required></div>
                                     <div class="input-group input-group-sm"><span class="input-group-text"><i class="bi bi-clock me-1"></i>Giờ giao:</span><input name="delivery_time" class="form-control" value="{{ $draft->delivery_time }}" placeholder="Chưa cập nhật"></div>
                                 </div>
 
@@ -497,7 +499,7 @@
                     </div>
 
                     <div class="draft-template-actions">
-                        @if($draft->status !== 'confirmed')<button type="button" class="btn btn-sm btn-outline-success js-show-draft-editor"><i class="bi bi-pencil"></i>Sửa</button>@endif
+                        @if($draft->status !== 'confirmed')<button type="button" class="btn btn-sm btn-outline-success js-show-draft-editor"><i class="bi bi-calendar3"></i>Sửa / chọn ngày</button>@endif
                         <button type="button" class="btn btn-sm btn-outline-info js-show-draft-details"><i class="bi bi-eye"></i>Chi tiết</button>
                         <button type="button" class="btn btn-sm btn-outline-secondary js-copy-draft"><i class="bi bi-files"></i>Sao chép đơn</button>
                         <button type="button" class="btn btn-sm btn-outline-primary js-show-draft-automation"><i class="bi bi-calendar2-check"></i>Lịch lên đơn</button>
@@ -742,7 +744,7 @@ document.addEventListener('DOMContentLoaded', () => {
             truck_brand_id: value('truck_brand_id'), truck_station_id: value('truck_station_id'), truck_brand_name: value('truck_brand_name'), truck_station_address: value('truck_station_address'),
             use_truck_station: editor?.querySelector('.js-draft-use-truck')?.checked ? 1 : 0,
             truck_station_name: value('truck_station_name'), truck_station_phone: value('truck_station_phone'), truck_receive_time: value('truck_receive_time'),
-            delivery_time: value('delivery_time'), note: value('note'),
+            delivery_date: value('delivery_date'), delivery_time: value('delivery_time'), note: value('note'),
             items: Array.from(editor?.querySelectorAll('[data-draft-item]') || []).map(item => ({
                 product_variant_id: item.querySelector('[name="item_product_variant_id"]')?.value || null,
                 quantity: item.querySelector('[name="item_quantity"]')?.value || null,
@@ -1006,7 +1008,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!button) return;
         const card = button.closest('[data-draft-card]');
         if (!card) return;
-        if (button.classList.contains('js-confirm-draft') && !confirm('Lên đơn từ đơn mẫu này?')) return;
+        if (button.classList.contains('js-confirm-draft')) {
+            const selectedDate = rowData(card).delivery_date;
+            if (!selectedDate) {
+                notify('Hãy chọn ngày lên đơn.', 'error');
+                return;
+            }
+            const formattedDate = selectedDate.split('-').reverse().join('/');
+            if (!confirm(`Lên đơn vào ngày ${formattedDate}?`)) return;
+        }
         button.disabled = true;
         try {
             const payload = button.classList.contains('js-save-draft')

@@ -82,6 +82,7 @@ class AdminSaleTextOrderImportTest extends TestCase
             ->once()
             ->withArgs(function (array $items, array $orderData): bool {
                 $this->assertSame('2026-08-28', $orderData['delivery_date']);
+                $this->assertSame('2026-08-28', $orderData['created_at']->toDateString());
                 $this->assertSame(2, $items[0]['quantity']);
 
                 return true;
@@ -105,6 +106,69 @@ class AdminSaleTextOrderImportTest extends TestCase
             ->assertJsonPath('delivery_date', '2026-08-28');
 
         $this->assertSame('2026-08-28', $draft->fresh()->delivery_date->toDateString());
+    }
+
+    public function test_sale_can_choose_an_old_business_date_when_confirming_each_draft(): void
+    {
+        [, $sale] = $this->adminAndSale();
+        $customer = Customer::query()->create([
+            'user_id' => $sale->id,
+            'assigned_to' => $sale->id,
+            'current_owner_sale_id' => $sale->id,
+            'name' => 'Khách đơn ngày cũ',
+            'status' => 'active',
+        ]);
+        $variant = ProductVariant::factory()->create();
+        $draft = TextOrderDraft::query()->create([
+            'created_by' => $sale->id,
+            'draft_scope' => TextOrderDraft::SCOPE_SALE_PRIVATE,
+            'sale_id' => $sale->id,
+            'customer_id' => $customer->id,
+            'customer_name' => $customer->name,
+            'delivery_date' => '2026-08-20',
+            'parsed_items' => [[
+                'product_variant_id' => $variant->id,
+                'quantity' => 1,
+                'size_kg' => 2.5,
+                'unit_price' => 100000,
+            ]],
+            'raw_text' => 'Đơn mẫu ngày cũ',
+            'status' => 'draft',
+        ]);
+        $order = Order::query()->create([
+            'customer_id' => $customer->id,
+            'user_id' => $sale->id,
+            'code' => 'SALE-OLD-DATE',
+            'total' => 100000,
+            'delivery_date' => '2026-08-20',
+            'status' => 'pending',
+        ]);
+
+        $controller = Mockery::mock(OrderController::class);
+        $controller->shouldReceive('createOrderFromSchedule')
+            ->once()
+            ->withArgs(function (array $items, array $orderData): bool {
+                $this->assertSame('2026-08-20', $orderData['delivery_date']);
+                $this->assertSame('2026-08-20', $orderData['created_at']->toDateString());
+
+                return true;
+            })
+            ->andReturn($order);
+        $this->app->instance(OrderController::class, $controller);
+
+        $this->actingAs($sale)
+            ->postJson(route('pages.my_order_drafts.confirm', $draft), [
+                'delivery_date' => '2026-08-20',
+                'customer_id' => $customer->id,
+                'items' => [[
+                    'product_variant_id' => $variant->id,
+                    'quantity' => 1,
+                    'size_kg' => 2.5,
+                    'unit_price' => 100000,
+                ]],
+            ])
+            ->assertOk()
+            ->assertJsonPath('delivery_date', '2026-08-20');
     }
 
     private function adminAndSale(): array

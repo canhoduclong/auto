@@ -629,6 +629,8 @@ class TextOrderImportController extends Controller
         }
 
         return DB::transaction(function () use ($draft, $customer, $draftItems, $truckStation, $approvalService, $deliveryDate) {
+            $businessCreatedAt = Carbon::parse($deliveryDate, 'Asia/Bangkok')
+                ->setTimeFrom(now('Asia/Bangkok'));
             $order = app(OrderController::class)->createOrderFromSchedule(
                 $draftItems->map(fn ($item) => [
                     'variant_id' => (int) $item['product_variant_id'],
@@ -647,6 +649,9 @@ class TextOrderImportController extends Controller
                     'recipient_address' => $draft->address ?: $customer->address,
                     'note' => $draft->note,
                     'delivery_date' => $deliveryDate,
+                    // Ngày Sale/Admin chọn là ngày nghiệp vụ của đơn trên các
+                    // màn hình kho vốn phân nhóm đơn thường theo created_at.
+                    'created_at' => $businessCreatedAt,
                     'delivery_time' => $draft->delivery_time,
                     'use_truck_station' => (bool) $draft->use_truck_station,
                     'truck_station_id' => $truckStation?->id,
