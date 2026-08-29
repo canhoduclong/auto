@@ -180,12 +180,20 @@ class AdminSaleTextOrderImportTest extends TestCase
         $this->actingAs($sale)
             ->get(route('pages.my_order_drafts', ['draft_date' => '2026-08-20']))
             ->assertOk()
+            ->assertSee('Khách hàng đơn mẫu')
+            ->assertSee($customer->name)
             ->assertSee('Đã lên đơn 20/08/2026');
 
         $this->actingAs($sale)
             ->get(route('pages.my_order_drafts', ['draft_date' => '2026-08-21']))
             ->assertOk()
             ->assertSee('Lên đơn 21/08');
+
+        $this->actingAs($sale)
+            ->postJson(route('pages.my_order_drafts.customers.pin', $customer), ['is_pinned' => true])
+            ->assertOk()
+            ->assertJsonPath('is_pinned', true);
+        $this->assertTrue((bool) $customer->fresh()->is_pinned);
     }
 
     private function adminAndSale(): array

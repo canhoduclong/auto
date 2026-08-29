@@ -185,6 +185,30 @@ class TextOrderImportController extends Controller
             : '';
         $perPage = (int) $request?->input('per_page', 10);
         $perPage = in_array($perPage, [10, 20, 50], true) ? $perPage : 10;
+        $selectedDraftCustomerId = max(0, (int) $request?->input('draft_customer_id', 0));
+        $draftCustomerIds = TextOrderDraft::query()
+            ->where('draft_scope', $saleId ? TextOrderDraft::SCOPE_SALE_PRIVATE : TextOrderDraft::SCOPE_ADMIN_IMPORT)
+            ->when($saleId, fn ($query) => $query->where('sale_id', $saleId))
+            ->whereNotNull('customer_id')
+            ->select('customer_id');
+        $draftCustomers = Customer::query()
+            ->whereIn('id', $draftCustomerIds)
+            ->select(['customers.id', 'customers.name', 'customers.phone', 'customers.is_pinned', 'customers.sort_order'])
+            ->addSelect([
+                'drafts_count' => TextOrderDraft::query()
+                    ->selectRaw('COUNT(*)')
+                    ->whereColumn('customer_id', 'customers.id')
+                    ->where('draft_scope', $saleId ? TextOrderDraft::SCOPE_SALE_PRIVATE : TextOrderDraft::SCOPE_ADMIN_IMPORT)
+                    ->when($saleId, fn ($query) => $query->where('sale_id', $saleId)),
+            ])
+            ->orderByDesc('is_pinned')
+            ->orderByRaw('CASE WHEN sort_order IS NULL OR sort_order = 0 THEN 1 ELSE 0 END')
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
+        if ($selectedDraftCustomerId > 0 && ! $draftCustomers->contains('id', $selectedDraftCustomerId)) {
+            $selectedDraftCustomerId = 0;
+        }
         $draftQuery = TextOrderDraft::query()
             ->with([
                 'sale:id,name,zalo_name',
@@ -200,6 +224,7 @@ class TextOrderImportController extends Controller
             ])
             ->where('draft_scope', $saleId ? TextOrderDraft::SCOPE_SALE_PRIVATE : TextOrderDraft::SCOPE_ADMIN_IMPORT)
             ->when($saleId, fn ($query) => $query->where('sale_id', $saleId))
+            ->when($selectedDraftCustomerId, fn ($query) => $query->where('customer_id', $selectedDraftCustomerId))
             ->when($customerSearch !== '', function ($query) use ($customerSearch, $customerSearchPhone) {
                 $query->where(function ($searchQuery) use ($customerSearch, $customerSearchPhone) {
                     $searchQuery->where('customer_name', 'like', "%{$customerSearch}%")
@@ -242,8 +267,26 @@ class TextOrderImportController extends Controller
         $viewName = $saleMode ? 'site.my-draft-orders' : 'admin.text-order-import.index';
 
         return view($viewName, compact(
-            'drafts', 'sales', 'variants', 'truckStations', 'saleMode', 'pageTitle', 'actionBaseUrl', 'parseRoute', 'settings', 'sortBy', 'sortDir', 'customerSearch', 'perPage', 'selectedDraftDate'
+            'drafts', 'sales', 'variants', 'truckStations', 'saleMode', 'pageTitle', 'actionBaseUrl', 'parseRoute', 'settings', 'sortBy', 'sortDir', 'customerSearch', 'perPage', 'selectedDraftDate', 'draftCustomers', 'selectedDraftCustomerId'
         ));
+    }
+
+    public function updateCustomerPin(Request $request, Customer $customer): JsonResponse
+    {
+        $saleId = (int) $request->user()->id;
+        abort_unless(TextOrderDraft::query()
+            ->where('draft_scope', TextOrderDraft::SCOPE_SALE_PRIVATE)
+            ->where('sale_id', $saleId)
+            ->where('customer_id', $customer->id)
+            ->exists(), 403);
+
+        $validated = $request->validate(['is_pinned' => ['required', 'boolean']]);
+        $customer->forceFill(['is_pinned' => (bool) $validated['is_pinned']])->save();
+
+        return response()->json([
+            'message' => $customer->is_pinned ? 'Đã ghim khách hàng lên đầu danh sách.' : 'Đã bỏ ghim khách hàng.',
+            'is_pinned' => (bool) $customer->is_pinned,
+        ]);
     }
 
     public function parse(Request $request, ZaloOrderTextParser $parser)

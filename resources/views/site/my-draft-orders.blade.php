@@ -12,6 +12,18 @@
     .draft-template-sort { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 18px 4px 12px; }
     .draft-template-sort-actions { display: flex; flex-wrap: wrap; gap: 6px; }
     .draft-template-sort .btn { border-radius: 4px; font-size: .7rem; }
+    .draft-workspace { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 16px; align-items: start; }
+    .draft-customer-sidebar { position: sticky; top: 12px; overflow: hidden; border: 1px solid #dce6f1; border-radius: 8px; background: #fff; box-shadow: 0 5px 16px rgba(15, 23, 42, .05); }
+    .draft-customer-sidebar-title { padding: 11px 12px; border-bottom: 1px solid #e5e7eb; color: #0f4770; font-size: .72rem; font-weight: 900; text-transform: uppercase; }
+    .draft-customer-sidebar-all, .draft-customer-row-link { display: flex; min-width: 0; flex: 1; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 10px; color: #334155; font-size: .72rem; font-weight: 800; text-decoration: none; }
+    .draft-customer-sidebar-all { border-bottom: 1px solid #eef2f7; }
+    .draft-customer-sidebar-all:hover, .draft-customer-sidebar-all.is-active, .draft-customer-row-link:hover, .draft-customer-sidebar-item.is-active { background: #eaf5f6; color: #075985; }
+    .draft-customer-sidebar-item { display: flex; align-items: stretch; border-bottom: 1px solid #eef2f7; }
+    .draft-customer-sidebar-item:last-child { border-bottom: 0; }
+    .draft-customer-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .draft-customer-count { display: inline-flex; min-width: 22px; height: 22px; align-items: center; justify-content: center; border-radius: 50%; background: #64748b; color: #fff; font-size: .65rem; }
+    .draft-customer-pin { width: 36px; flex: 0 0 36px; border: 0; border-left: 1px solid #eef2f7; background: #fff; color: #94a3b8; }
+    .draft-customer-pin:hover, .draft-customer-pin.is-pinned { color: #d97706; background: #fffbeb; }
     .draft-customer-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 4px 0; }
     .draft-customer-filter .input-group { width: min(100%, 520px); }
     .draft-customer-filter .form-control, .draft-customer-filter .btn { height: 38px; }
@@ -120,6 +132,8 @@
     .draft-template-empty { padding: 48px 20px; border: 1px solid #dce6f1; border-radius: 8px; background: #fff; color: #64748b; text-align: center; }
     @media (max-width: 767.98px) {
         .draft-template-row { grid-template-columns: 1fr; }
+        .draft-workspace { grid-template-columns: 1fr; }
+        .draft-customer-sidebar { position: static; max-height: 280px; overflow-y: auto; }
         .draft-template-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .draft-template-sort { align-items: flex-start; flex-direction: column; }
         .draft-customer-filter { align-items: stretch; flex-direction: column; }
@@ -155,6 +169,10 @@
         'product_name' => $variant->product?->name ?: 'Sản phẩm',
         'image' => $variant->product?->avatar?->media?->file_path ? asset('storage/' . $variant->product->avatar->media->file_path) : '',
     ])->values();
+    $draftCustomerIndexUrl = ($monitoringEmbedded ?? false)
+        ? route('pages.my_orders.monitoring')
+        : route('pages.my_order_drafts');
+    $draftCustomerBaseQuery = request()->except(['draft_customer_id', 'page']);
 @endphp
 
 <section class="drafts-page">
@@ -209,6 +227,33 @@
             </div>
         </div>
 
+        <div class="draft-workspace">
+            <aside class="draft-customer-sidebar" aria-label="Khách hàng có đơn mẫu">
+                <div class="draft-customer-sidebar-title"><i class="bi bi-people me-1"></i>Khách hàng đơn mẫu</div>
+                <a class="draft-customer-sidebar-all {{ !$selectedDraftCustomerId ? 'is-active' : '' }}" href="{{ $draftCustomerIndexUrl.'?'.http_build_query($draftCustomerBaseQuery) }}#draft-list-start">
+                    <span>Tất cả khách hàng</span><span class="draft-customer-count">{{ $draftCustomers->count() }}</span>
+                </a>
+                <div class="draft-customer-items">
+                    @forelse($draftCustomers as $draftCustomer)
+                        <div class="draft-customer-sidebar-item {{ $selectedDraftCustomerId === $draftCustomer->id ? 'is-active' : '' }}" data-draft-customer-row data-pinned="{{ $draftCustomer->is_pinned ? '1' : '0' }}">
+                            <a class="draft-customer-row-link" href="{{ $draftCustomerIndexUrl.'?'.http_build_query(array_merge($draftCustomerBaseQuery, ['draft_customer_id' => $draftCustomer->id])) }}#draft-list-start" title="Mở đơn mẫu của {{ $draftCustomer->name }}">
+                                <span class="draft-customer-name">{{ $draftCustomer->name }}</span>
+                                <span class="draft-customer-count">{{ (int) $draftCustomer->drafts_count }}</span>
+                            </a>
+                            <button type="button" class="draft-customer-pin js-draft-customer-pin {{ $draftCustomer->is_pinned ? 'is-pinned' : '' }}"
+                                    data-pin-url="{{ route('pages.my_order_drafts.customers.pin', $draftCustomer) }}"
+                                    aria-label="{{ $draftCustomer->is_pinned ? 'Bỏ ghim' : 'Ghim' }} {{ $draftCustomer->name }}"
+                                    title="{{ $draftCustomer->is_pinned ? 'Bỏ ghim khách hàng' : 'Ghim khách hàng lên đầu' }}">
+                                <i class="bi {{ $draftCustomer->is_pinned ? 'bi-star-fill' : 'bi-star' }}"></i>
+                            </button>
+                        </div>
+                    @empty
+                        <div class="p-3 text-muted small">Chưa có khách hàng trong đơn mẫu.</div>
+                    @endforelse
+                </div>
+            </aside>
+
+            <div id="draft-list-start">
         <div class="draft-template-list">
             @forelse($drafts as $draft)
                 @php
@@ -532,6 +577,8 @@
                 {{ $drafts->appends(request()->query())->links('pagination::bootstrap-5') }}
             </footer>
         @endif
+            </div>
+        </div>
     </div>
 </section>
 
@@ -781,6 +828,26 @@ document.addEventListener('DOMContentLoaded', () => {
         return payload;
     };
     document.addEventListener('click', async event => {
+        const customerPin = event.target.closest('.js-draft-customer-pin');
+        if (customerPin) {
+            customerPin.disabled = true;
+            try {
+                const response = await fetch(customerPin.dataset.pinUrl, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrf},
+                    body: JSON.stringify({is_pinned: !customerPin.classList.contains('is-pinned')}),
+                });
+                const payload = await response.json();
+                if (!response.ok) throw new Error(payload.message || 'Không thể cập nhật ghim khách hàng.');
+                notify(payload.message || 'Đã cập nhật ghim khách hàng.');
+                window.location.reload();
+            } catch (error) {
+                notify(error.message, 'error');
+                customerPin.disabled = false;
+            }
+            return;
+        }
+
         const openTruckStationModalButton = event.target.closest('.js-open-truck-station-modal');
         if (openTruckStationModalButton) {
             activeTruckEditor = openTruckStationModalButton.closest('.draft-template-editor');
