@@ -227,6 +227,7 @@
             </div>
         </div>
 
+        @unless($monitoringEmbedded ?? false)
         <div class="draft-workspace">
             <aside class="draft-customer-sidebar" aria-label="Khách hàng có đơn mẫu">
                 <div class="draft-customer-sidebar-title"><i class="bi bi-people me-1"></i>Khách hàng đơn mẫu</div>
@@ -252,8 +253,10 @@
                     @endforelse
                 </div>
             </aside>
-
             <div id="draft-list-start">
+        @else
+            <div id="draft-list-start">
+        @endunless
         <div class="draft-template-list">
             @forelse($drafts as $draft)
                 @php
@@ -578,7 +581,7 @@
             </footer>
         @endif
             </div>
-        </div>
+        @unless($monitoringEmbedded ?? false)</div>@endunless
     </div>
 </section>
 

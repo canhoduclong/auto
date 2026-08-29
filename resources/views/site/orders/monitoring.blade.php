@@ -228,6 +228,13 @@
         color: #fff;
         font-size: .68rem;
     }
+    .monitor-draft-customer-list { max-height: 440px; overflow-y: auto; }
+    .monitor-draft-customer-row { display: flex; align-items: stretch; border-bottom: 1px solid #eef2f7; }
+    .monitor-draft-customer-row:last-child { border-bottom: 0; }
+    .monitor-draft-customer-row .monitor-filter-link { min-width: 0; flex: 1; border-bottom: 0; }
+    .monitor-draft-customer-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .monitor-draft-customer-pin { width: 34px; flex: 0 0 34px; border: 0; border-left: 1px solid #eef2f7; background: #fff; color: #94a3b8; }
+    .monitor-draft-customer-pin:hover, .monitor-draft-customer-pin.is-pinned { color: #d97706; background: #fffbeb; }
     .monitor-orders { display: grid; gap: 18px; margin-top: 8px; }
     .monitor-order {
         --monitor-state-color: #6b7280;
@@ -1061,6 +1068,35 @@
         <div class="monitor-layout">
             <aside class="monitor-sidebar">
                 @include('site.orders.partials.monitor_sidebar_nav')
+
+                @if($activeTab === 'drafts')
+                @php $draftCustomerQuery = request()->except(['draft_customer_id', 'page']); @endphp
+                <div class="monitor-panel monitor-filter-block">
+                    <div class="monitor-filter-title"><i class="bi bi-people me-1"></i>Khách hàng đơn mẫu</div>
+                    <div class="monitor-draft-customer-list">
+                        <a class="monitor-filter-link {{ !$selectedDraftCustomerId ? 'active' : '' }}" href="{{ route('pages.my_orders.monitoring', $draftCustomerQuery) }}#draft-list-start">
+                            <span>Tất cả khách hàng</span><span class="monitor-filter-count">{{ $draftSidebarCustomers->count() }}</span>
+                        </a>
+                        @forelse($draftSidebarCustomers as $draftCustomer)
+                            <div class="monitor-draft-customer-row">
+                                <a class="monitor-filter-link {{ $selectedDraftCustomerId === $draftCustomer->id ? 'active' : '' }}"
+                                   href="{{ route('pages.my_orders.monitoring', array_merge($draftCustomerQuery, ['draft_customer_id' => $draftCustomer->id])) }}#draft-list-start"
+                                   title="Mở đơn mẫu của {{ $draftCustomer->name }}">
+                                    <span class="monitor-draft-customer-name">{{ $draftCustomer->name }}</span>
+                                    <span class="monitor-filter-count">{{ (int) $draftCustomer->drafts_count }}</span>
+                                </a>
+                                <button type="button" class="monitor-draft-customer-pin js-monitor-draft-customer-pin {{ $draftCustomer->is_pinned ? 'is-pinned' : '' }}"
+                                        data-pin-url="{{ route('pages.my_order_drafts.customers.pin', $draftCustomer) }}"
+                                        title="{{ $draftCustomer->is_pinned ? 'Bỏ ghim khách hàng' : 'Ghim khách hàng lên đầu' }}">
+                                    <i class="bi {{ $draftCustomer->is_pinned ? 'bi-star-fill' : 'bi-star' }}"></i>
+                                </button>
+                            </div>
+                        @empty
+                            <div class="p-3 text-muted small">Chưa có khách hàng trong đơn mẫu.</div>
+                        @endforelse
+                    </div>
+                </div>
+                @endif
 
                 @if($activeTab === 'today')
                 <div class="monitor-panel monitor-filter-block">
@@ -2267,6 +2303,29 @@ window.monitorAdminDeleteOrder = function (form, orderCode, saleName, orderTotal
     form.querySelector('button[type="submit"]').disabled = true;
     return true;
 };
+
+document.addEventListener('click', async event => {
+    const pin = event.target.closest('.js-monitor-draft-customer-pin');
+    if (!pin) return;
+    pin.disabled = true;
+    try {
+        const response = await fetch(pin.dataset.pinUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || @json(csrf_token()),
+            },
+            body: JSON.stringify({is_pinned: !pin.classList.contains('is-pinned')}),
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.message || 'Không thể cập nhật ghim khách hàng.');
+        window.location.reload();
+    } catch (error) {
+        window.alert(error.message);
+        pin.disabled = false;
+    }
+});
 
 (() => {
     const createPanel = document.getElementById('monitorCreateOrder');

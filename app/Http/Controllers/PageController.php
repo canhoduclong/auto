@@ -1400,6 +1400,33 @@ class PageController extends Controller
             ? null
             : $this->renderMonitoringTab($activeTab, $request);
         $customerTabSales = collect();
+        $selectedDraftCustomerId = max(0, (int) $request->input('draft_customer_id', 0));
+        $draftSidebarCustomers = collect();
+        if ($activeTab === 'drafts') {
+            $draftSidebarCustomers = Customer::query()
+                ->whereIn('id', TextOrderDraft::query()
+                    ->where('draft_scope', TextOrderDraft::SCOPE_SALE_PRIVATE)
+                    ->where('sale_id', $user->id)
+                    ->whereNotNull('customer_id')
+                    ->select('customer_id'))
+                ->select(['customers.id', 'customers.name', 'customers.is_pinned', 'customers.sort_order'])
+                ->addSelect([
+                    'drafts_count' => TextOrderDraft::query()
+                        ->selectRaw('COUNT(*)')
+                        ->whereColumn('customer_id', 'customers.id')
+                        ->where('draft_scope', TextOrderDraft::SCOPE_SALE_PRIVATE)
+                        ->where('sale_id', $user->id),
+                ])
+                ->orderByDesc('is_pinned')
+                ->orderByRaw('CASE WHEN sort_order IS NULL OR sort_order = 0 THEN 1 ELSE 0 END')
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get();
+
+            if ($selectedDraftCustomerId > 0 && ! $draftSidebarCustomers->contains('id', $selectedDraftCustomerId)) {
+                $selectedDraftCustomerId = 0;
+            }
+        }
 
         return view('site.orders.monitoring', [
             'settings' => $this->settings,
@@ -1429,6 +1456,8 @@ class PageController extends Controller
             'customerFilters' => $customerFilters,
             'sampleDraftCustomerIds' => $sampleDraftCustomerIds,
             'customerTabSales' => $customerTabSales,
+            'draftSidebarCustomers' => $draftSidebarCustomers,
+            'selectedDraftCustomerId' => $selectedDraftCustomerId,
             'canApproveByOrder' => $canApproveByOrder,
             'pendingAdjustmentRequests' => $pendingAdjustmentRequests,
             'pendingAdjustmentsByOrder' => $pendingAdjustmentRequests->groupBy('order_id'),
