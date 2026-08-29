@@ -145,6 +145,30 @@ class Order extends Model
     }
 
     /**
+     * Date used by the warehouse packing workflow.
+     *
+     * Regular orders belong to their creation date. Orders created by the
+     * accounting import belong to their operational delivery date, matching
+     * the date under which they are displayed on the warehouse order screen.
+     */
+    public function scopeForPackingDate($query, string $date)
+    {
+        $createdAt = $this->qualifyColumn('created_at');
+        $deliveryDate = $this->qualifyColumn('delivery_date');
+        $importBatchId = $this->qualifyColumn('accounting_sales_import_batch_id');
+
+        return $query->where(function ($dateQuery) use ($date, $createdAt, $deliveryDate, $importBatchId): void {
+            $dateQuery->where(function ($regularOrder) use ($date, $createdAt, $importBatchId): void {
+                $regularOrder->whereNull($importBatchId)
+                    ->whereDate($createdAt, $date);
+            })->orWhere(function ($importedOrder) use ($date, $deliveryDate, $importBatchId): void {
+                $importedOrder->whereNotNull($importBatchId)
+                    ->whereDate($deliveryDate, $date);
+            });
+        });
+    }
+
+    /**
      * Keep explicitly restored orders in today's operational queue even when
      * their original creation date is older.
      */

@@ -232,18 +232,6 @@ class WarehouseDashboardController extends Controller
         Order::STATUS_READY_TO_SHIP,
     ];
 
-    /**
-     * Stock has already left the warehouse for these orders. Any reservation
-     * rows that remain are stale and must not reduce the packing FIFO pool.
-     */
-    private const EXPORTED_ORDER_STATUSES = [
-        Order::STATUS_SHIPPING,
-        Order::STATUS_IN_DELIVERY,
-        Order::STATUS_DELIVERING,
-        Order::STATUS_DELIVERED,
-        Order::STATUS_COMPLETED,
-    ];
-
     private const EDITABLE_LOGISTICS_STATUSES = [
         Order::STATUS_PACKING,
     ];
@@ -885,15 +873,7 @@ class WarehouseDashboardController extends Controller
 
         $todayOrdersQuery = Order::with(['items.product', 'items.variant.product'])
             ->whereIn('status', $queueStatuses)
-            ->where(function ($dateQuery) use ($selectedDate): void {
-                $dateQuery->where(function ($normalQuery) use ($selectedDate): void {
-                    $normalQuery->whereNull('accounting_sales_import_batch_id')
-                        ->whereDate('created_at', $selectedDate);
-                })->orWhere(function ($importQuery) use ($selectedDate): void {
-                    $importQuery->whereNotNull('accounting_sales_import_batch_id')
-                        ->whereDate('delivery_date', $selectedDate);
-                });
-            });
+            ->forPackingDate($selectedDate);
 
         if ($managedWarehouseId && Auth::user()?->hasRole('warehouse')) {
             $todayOrdersQuery->where(function ($warehouseScope) use ($managedWarehouseId, $queueStatuses) {
@@ -971,14 +951,16 @@ class WarehouseDashboardController extends Controller
         $today = Carbon::today();
         $startDate = $today->copy()->subDays(6)->toDateString();
 
+        $packingDateSql = 'CASE WHEN accounting_sales_import_batch_id IS NOT NULL '
+            .'THEN DATE(delivery_date) ELSE DATE(created_at) END';
         $dailyCountsQuery = Order::query()
-            ->selectRaw('DATE(created_at) as day_key, COUNT(*) as total')
+            ->selectRaw($packingDateSql.' as day_key, COUNT(*) as total')
             ->where(function ($query) {
                 $query->whereNull('is_return_order')
                     ->orWhere('is_return_order', false);
             })
-            ->whereDate('created_at', '>=', $startDate)
-            ->whereDate('created_at', '<=', $today->toDateString());
+            ->whereRaw($packingDateSql.' >= ?', [$startDate])
+            ->whereRaw($packingDateSql.' <= ?', [$today->toDateString()]);
 
         if ($managedWarehouseId && ($currentUser?->hasRole('warehouse') || $currentUser?->hasRole('package'))) {
             $dailyCountsQuery->where(function ($warehouseScope) use ($managedWarehouseId, $sharedQueueStatuses) {
@@ -1027,15 +1009,7 @@ class WarehouseDashboardController extends Controller
                 $query->whereNull('is_return_order')
                     ->orWhere('is_return_order', false);
             })
-            ->where(function ($dateQuery) use ($selectedDate): void {
-                $dateQuery->where(function ($normalQuery) use ($selectedDate): void {
-                    $normalQuery->whereNull('accounting_sales_import_batch_id')
-                        ->whereDate('created_at', $selectedDate);
-                })->orWhere(function ($importQuery) use ($selectedDate): void {
-                    $importQuery->whereNotNull('accounting_sales_import_batch_id')
-                        ->whereDate('delivery_date', $selectedDate);
-                });
-            });
+            ->forPackingDate($selectedDate);
 
         if ($managedWarehouseId && ($currentUser?->hasRole('warehouse') || $currentUser?->hasRole('package'))) {
             $ordersQuery->where(function ($warehouseScope) use ($managedWarehouseId, $sharedQueueStatuses) {
@@ -1920,7 +1894,7 @@ class WarehouseDashboardController extends Controller
 
         $belongsToPackingDate = ! $hasPackingDate || Order::query()
             ->whereKey($order->id)
-            ->forWorkflowDate($packingDate)
+            ->forPackingDate($packingDate)
             ->exists();
 
         if (! $belongsToPackingDate) {
@@ -2090,7 +2064,7 @@ class WarehouseDashboardController extends Controller
                     ->orWhere('is_return_order', false);
             })
             ->whereIn('status', $queueStatuses)
-            ->forWorkflowDate($forDate)
+            ->forPackingDate($forDate)
             ->when($warehouseId, fn ($query) => $query->where(function ($scope) use ($warehouseId) {
                 $scope->where('warehouse_id', $warehouseId)->orWhereNull('warehouse_id');
             }))
@@ -2171,11 +2145,11 @@ class WarehouseDashboardController extends Controller
             return ['guards' => [], 'remaining_by_variant' => []];
         }
 
-        // Load ALL queued orders from the SAME date for FIFO simulation (oldest first).
-        // Cross-date FIFO is wrong: old orders from other dates should have been auto-cancelled.
+        // Load ALL queued orders from the SAME packing date for FIFO simulation
+        // (oldest first). Orders belonging to another date never enter this pool.
         $allQueueOrders = Order::with(['items.product', 'items.variant.product'])
             ->whereIn('status', $queueStatuses)
-            ->forWorkflowDate($forDate)
+            ->forPackingDate($forDate)
             ->when($warehouseId, fn ($query) => $query->where(function ($scope) use ($warehouseId) {
                 $scope->where('warehouse_id', $warehouseId)->orWhereNull('warehouse_id');
             }))
@@ -2194,77 +2168,12 @@ class WarehouseDashboardController extends Controller
             ->unique()
             ->values();
 
-        // All order-item IDs in this FIFO set (used for the reservation add-back below).
-        $fifoOrderItemIds = $allQueueOrders
-            ->flatMap(fn (Order $o) => $o->items->pluck('id'))
-            ->filter()
-            ->unique()
-            ->values();
-
-        // ── FIFO pool: available stock + today's own reservations ──────────────────────
-        //
-        // "Tồn kho khả dụng" = quantity - reserved_quantity.
-        // reserved_quantity already includes the reservations committed to today's queued
-        // orders, so starting from available_stock gives a near-zero pool (all stock is
-        // already logically claimed). We add back those reservations so the FIFO can
-        // re-simulate from scratch who gets priority.
-        //
-        // Pool = available_stock + today_fifo_reservations
-        //      = (quantity - reserved_quantity) + today_fifo_reservations
-        //      = quantity - external_reservations   (mathematically equivalent)
-        //
-        // This keeps the pool consistent with the "Khả dụng" number shown on the
-        // inventory page and the warehouse/orders stock panel.
-        // ──────────────────────────────────────────────────────────────────────────────
-        $isHistoricalDate = Carbon::parse($forDate)->startOfDay()->lt(Carbon::today());
-        $availableByVariant = $isHistoricalDate
-            ? $this->getStockAtDate($variantIds, $warehouseId, $forDate)
-            : $this->getAvailableByVariant($variantIds, $warehouseId);
-
-        // Reservations belonging to today's FIFO orders, grouped by variant.
-        $todayResvByVariant = [];
-        if (! $isHistoricalDate && $fifoOrderItemIds->isNotEmpty()) {
-            $todayResvByVariant = InventoryReservation::query()
-                ->join('inventories', 'inventories.id', '=', 'inventory_reservations.inventory_id')
-                ->whereIn('inventory_reservations.order_item_id', $fifoOrderItemIds->all())
-                ->when($warehouseId, fn ($q) => $q->where('inventories.warehouse_id', $warehouseId))
-                ->selectRaw('inventories.product_variant_id, COALESCE(SUM(inventory_reservations.quantity), 0) as qty')
-                ->groupBy('inventories.product_variant_id')
-                ->pluck('qty', 'product_variant_id')
-                ->map(fn ($v) => (int) $v)
-                ->all();
-        }
-
-        // A delivered/in-delivery order is no longer part of the packing queue:
-        // its stock was exported when the shipper accepted it. Legacy or drifted
-        // reservation rows may still be included in inventories.reserved_quantity;
-        // add those rows back so completed deliveries cannot block a later order.
-        $exportedResvByVariant = [];
-        if (! $isHistoricalDate) {
-            $exportedResvByVariant = InventoryReservation::query()
-                ->join('order_items', 'order_items.id', '=', 'inventory_reservations.order_item_id')
-                ->join('orders', 'orders.id', '=', 'order_items.order_id')
-                ->join('inventories', 'inventories.id', '=', 'inventory_reservations.inventory_id')
-                ->whereIn('inventories.product_variant_id', $variantIds->all())
-                ->whereIn('orders.status', self::EXPORTED_ORDER_STATUSES)
-                ->when($warehouseId, fn ($q) => $q->where('inventories.warehouse_id', $warehouseId))
-                ->selectRaw('inventories.product_variant_id, COALESCE(SUM(inventory_reservations.quantity), 0) as qty')
-                ->groupBy('inventories.product_variant_id')
-                ->pluck('qty', 'inventories.product_variant_id')
-                ->map(fn ($v) => (int) $v)
-                ->all();
-        }
-
-        $stockByVariant = [];
-        foreach ($variantIds as $vid) {
-            $vid = (int) $vid;
-            $stockByVariant[$vid] = max(
-                0,
-                ((int) ($availableByVariant[$vid] ?? 0))
-                    + ((int) ($todayResvByVariant[$vid] ?? 0))
-                    + ((int) ($exportedResvByVariant[$vid] ?? 0))
-            );
-        }
+        // Each date owns an independent packing pool. Its starting quantity is
+        // the closing inventory snapshot of that date. Global reservation rows
+        // can belong to orders from other dates, so they must not reduce this
+        // pool. Orders from this date are applied exactly once by the FIFO loop
+        // below; orders from every other date are excluded by forPackingDate().
+        $stockByVariant = $this->getStockAtDate($variantIds, $warehouseId, $forDate);
 
         // Running pool — decremented only when a complete order can be packed (FIFO)
         $remainingByVariant = array_map(fn ($v) => (float) $v, $stockByVariant);
@@ -2421,16 +2330,23 @@ class WarehouseDashboardController extends Controller
     {
         $queueStatuses = array_merge(self::READY_TO_PACK_STATUSES, [Order::STATUS_PACKING]);
 
-        // Find all distinct dates that have queued orders.
+        $packingDateSql = 'CASE WHEN accounting_sales_import_batch_id IS NOT NULL '
+            .'THEN DATE(delivery_date) ELSE DATE(created_at) END';
+
+        // Find all distinct packing dates that have queued orders.
         $dates = Order::whereIn('status', $queueStatuses)
-            ->selectRaw('DATE(created_at) as order_date')
-            ->groupBy('order_date')
+            ->selectRaw($packingDateSql.' as order_date')
+            ->whereRaw($packingDateSql.' IS NOT NULL')
+            ->groupByRaw($packingDateSql)
             ->pluck('order_date');
 
         foreach ($dates as $forDate) {
             $allQueueOrders = Order::with(['items.variant'])
                 ->whereIn('status', $queueStatuses)
-                ->whereDate('created_at', $forDate)
+                ->forPackingDate($forDate)
+                ->when($warehouseId, fn ($query) => $query->where(function ($scope) use ($warehouseId) {
+                    $scope->where('warehouse_id', $warehouseId)->orWhereNull('warehouse_id');
+                }))
                 ->orderBy('created_at', 'asc')
                 ->orderBy('id', 'asc')
                 ->get();
@@ -3120,7 +3036,7 @@ class WarehouseDashboardController extends Controller
 
         $belongsToPackingDate = ! $hasPackingDate || Order::query()
             ->whereKey($order->id)
-            ->forWorkflowDate($packingDate)
+            ->forPackingDate($packingDate)
             ->exists();
 
         if (! $belongsToPackingDate) {

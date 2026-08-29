@@ -90,12 +90,144 @@ class WarehousePackingDeliveredReservationTest extends TestCase
             app(WarehouseDashboardController::class),
             collect([$waitingOrder]),
             $warehouse->id,
-            now()->toDateString()
+            '2026-08-23'
         );
 
         $this->assertFalse($result['guards'][$waitingOrder->id]['has_shortage']);
         $this->assertTrue($result['guards'][$waitingOrder->id]['can_start_packing']);
         $this->assertSame([], $result['guards'][$waitingOrder->id]['shortages']);
+    }
+
+    public function test_reservation_from_another_day_does_not_reduce_selected_days_packing_stock(): void
+    {
+        Carbon::setTestNow('2026-08-25 10:00:00');
+
+        $user = User::factory()->create();
+        $customer = Customer::query()->create(['name' => 'Khách tách tồn theo ngày', 'status' => 'active']);
+        $warehouse = Warehouse::query()->create(['name' => 'Kho tách ngày', 'status' => true]);
+        $product = Product::query()->create([
+            'user_id' => $user->id,
+            'name' => 'Sản phẩm tách ngày',
+            'unit' => 'cái',
+            'status' => true,
+        ]);
+        $variant = $product->variants()->create([
+            'name' => 'Loại ngày',
+            'sku' => 'FIFO-SEPARATE-DATE',
+        ]);
+        $inventory = Inventory::query()->create([
+            'warehouse_id' => $warehouse->id,
+            'product_variant_id' => $variant->id,
+            'quantity' => 5,
+            'reserved_quantity' => 5,
+        ]);
+
+        $previousOrder = Order::query()->create([
+            'customer_id' => $customer->id,
+            'user_id' => $user->id,
+            'warehouse_id' => $warehouse->id,
+            'code' => 'PREVIOUS-DAY',
+            'status' => Order::STATUS_READY_TO_PACK,
+        ]);
+        $previousOrder->forceFill(['created_at' => '2026-08-24 08:00:00'])->saveQuietly();
+        $previousItem = $previousOrder->items()->create([
+            'product_id' => $product->id,
+            'product_variant_id' => $variant->id,
+            'quantity' => 5,
+            'price' => 10000,
+            'total' => 50000,
+            'is_priced_by_kg' => false,
+        ]);
+        InventoryReservation::query()->create([
+            'order_item_id' => $previousItem->id,
+            'inventory_id' => $inventory->id,
+            'quantity' => 5,
+        ]);
+
+        $todayOrder = Order::query()->create([
+            'customer_id' => $customer->id,
+            'user_id' => $user->id,
+            'warehouse_id' => $warehouse->id,
+            'code' => 'CURRENT-DAY',
+            'status' => Order::STATUS_READY_TO_PACK,
+        ]);
+        $todayOrder->items()->create([
+            'product_id' => $product->id,
+            'product_variant_id' => $variant->id,
+            'quantity' => 5,
+            'price' => 10000,
+            'total' => 50000,
+            'is_priced_by_kg' => false,
+        ]);
+
+        $method = new ReflectionMethod(WarehouseDashboardController::class, 'buildPackingQueueStockGuards');
+        $result = $method->invoke(
+            app(WarehouseDashboardController::class),
+            collect([$todayOrder]),
+            $warehouse->id,
+            '2026-08-25'
+        );
+
+        $this->assertTrue($result['guards'][$todayOrder->id]['can_start_packing']);
+        $this->assertSame(0.0, $result['remaining_by_variant'][$variant->id]);
+    }
+
+    public function test_orders_on_the_same_day_still_share_one_fifo_stock_pool(): void
+    {
+        Carbon::setTestNow('2026-08-25 10:00:00');
+
+        $user = User::factory()->create();
+        $customer = Customer::query()->create(['name' => 'Khách FIFO cùng ngày', 'status' => 'active']);
+        $warehouse = Warehouse::query()->create(['name' => 'Kho FIFO cùng ngày', 'status' => true]);
+        $product = Product::query()->create([
+            'user_id' => $user->id,
+            'name' => 'Sản phẩm FIFO cùng ngày',
+            'unit' => 'cái',
+            'status' => true,
+        ]);
+        $variant = $product->variants()->create([
+            'name' => 'Loại FIFO',
+            'sku' => 'FIFO-SAME-DATE',
+        ]);
+        Inventory::query()->create([
+            'warehouse_id' => $warehouse->id,
+            'product_variant_id' => $variant->id,
+            'quantity' => 5,
+            'reserved_quantity' => 0,
+        ]);
+
+        $orders = collect();
+        foreach (['08:00:00', '09:00:00'] as $index => $time) {
+            $order = Order::query()->create([
+                'customer_id' => $customer->id,
+                'user_id' => $user->id,
+                'warehouse_id' => $warehouse->id,
+                'code' => 'SAME-DAY-'.($index + 1),
+                'status' => Order::STATUS_READY_TO_PACK,
+            ]);
+            $order->forceFill(['created_at' => '2026-08-25 '.$time])->saveQuietly();
+            $order->items()->create([
+                'product_id' => $product->id,
+                'product_variant_id' => $variant->id,
+                'quantity' => 3,
+                'price' => 10000,
+                'total' => 30000,
+                'is_priced_by_kg' => false,
+            ]);
+            $orders->push($order);
+        }
+
+        $method = new ReflectionMethod(WarehouseDashboardController::class, 'buildPackingQueueStockGuards');
+        $result = $method->invoke(
+            app(WarehouseDashboardController::class),
+            $orders,
+            $warehouse->id,
+            '2026-08-25'
+        );
+
+        $this->assertTrue($result['guards'][$orders[0]->id]['can_start_packing']);
+        $this->assertFalse($result['guards'][$orders[1]->id]['can_start_packing']);
+        $this->assertSame(2.0, $result['guards'][$orders[1]->id]['shortages'][0]['available_qty']);
     }
 
     protected function tearDown(): void
