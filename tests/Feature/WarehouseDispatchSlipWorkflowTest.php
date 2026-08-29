@@ -78,7 +78,14 @@ class WarehouseDispatchSlipWorkflowTest extends TestCase
         WarehouseDispatchSlipEntry::create([
             'warehouse_dispatch_slip_id' => $currentSlip->id,
             'order_transfer_id' => $orderTransfer->id,
+            'snapshot' => [
+                'type' => 'order_transfer',
+                'orders' => [['id' => $order->id]],
+            ],
         ]);
+        // Reproduce production data: the live grouping was later cleared,
+        // while the finalized current slip still contains the order snapshot.
+        $order->forceFill(['order_transfer_id' => null])->save();
 
         $this->actingAs($shipper)
             ->post(route('shipper.warehouse-transfers.pickup', $transfer))

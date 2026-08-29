@@ -18,6 +18,8 @@ use App\Models\Transaction;
 use App\Models\TransactionCategory;
 use App\Models\User;
 use App\Models\Warehouse;
+use App\Models\WarehouseDispatchSlip;
+use App\Models\WarehouseDispatchSlipEntry;
 use App\Models\WarehouseTransfer;
 use App\Services\ShipperAssignmentService;
 use Carbon\Carbon;
@@ -1569,14 +1571,36 @@ class ShipperDashboardController extends Controller
      * legacy direct-slip entry after its order is regrouped; that stale entry
      * must not hide the dispatch slip which now contains the order group.
      */
-    private function currentDispatchSlipForWarehouseTransfer(WarehouseTransfer $transfer): ?\App\Models\WarehouseDispatchSlip
+    private function currentDispatchSlipForWarehouseTransfer(WarehouseTransfer $transfer): ?WarehouseDispatchSlip
     {
         $order = $transfer->order;
-        if ($order?->order_transfer_id) {
-            return $order->orderTransfer?->dispatchEntry?->slip;
+        if (! $order) {
+            return $transfer->dispatchEntry?->slip;
         }
 
-        return $transfer->dispatchEntry?->slip;
+        $entry = WarehouseDispatchSlipEntry::query()
+            ->with('slip')
+            ->select('warehouse_dispatch_slip_entries.*')
+            ->join('warehouse_dispatch_slips', 'warehouse_dispatch_slips.id', '=', 'warehouse_dispatch_slip_entries.warehouse_dispatch_slip_id')
+            ->whereIn('warehouse_dispatch_slips.status', [
+                WarehouseDispatchSlip::STATUS_DRAFT,
+                WarehouseDispatchSlip::STATUS_FINALIZED,
+            ])
+            ->where('warehouse_dispatch_slips.source_warehouse_id', $transfer->source_warehouse_id)
+            ->where('warehouse_dispatch_slips.target_warehouse_id', $transfer->target_warehouse_id)
+            ->where(function ($entryQuery) use ($transfer, $order): void {
+                $entryQuery->where('warehouse_dispatch_slip_entries.warehouse_transfer_id', $transfer->id)
+                    ->orWhereHas('orderTransfer.orders', fn ($orders) => $orders->whereKey($order->id))
+                    // Phiếu đã chốt giữ snapshot ngay cả khi đơn sau đó bị
+                    // gỡ/đổi nhóm, nên snapshot mới là dấu vết bền vững nhất.
+                    ->orWhereJsonContains('warehouse_dispatch_slip_entries.snapshot->orders', ['id' => (int) $order->id])
+                    ->orWhere('warehouse_dispatch_slip_entries.snapshot->order->id', (int) $order->id);
+            })
+            ->orderByDesc('warehouse_dispatch_slips.business_date')
+            ->orderByDesc('warehouse_dispatch_slips.id')
+            ->first();
+
+        return $entry?->slip;
     }
 
     private function deductStockForWarehouseTransferItem(Order $order, InventoryDocument $document, $item, int $warehouseId): void
