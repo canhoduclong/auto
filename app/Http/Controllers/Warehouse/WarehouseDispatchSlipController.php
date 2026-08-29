@@ -546,6 +546,7 @@ class WarehouseDispatchSlipController extends Controller
                         'shipping_fee' => (float) ($orderSnapshot['shipping_fee'] ?? $this->billableShippingFee($order)),
                         'discount' => (float) ($orderSnapshot['discount'] ?? $order->total_discount ?? 0),
                         'item_quantity' => (int) ($orderSnapshot['item_quantity'] ?? $order->items->sum('quantity')),
+                        'sizes' => $this->orderSizes($order, (array) $orderSnapshot),
                         'packed_weight' => (float) ($orderSnapshot['packed_weight'] ?? $movement?->packed_total_weight ?? 0),
                         'movement' => $movement,
                         'received' => $movement?->status === WarehouseTransfer::STATUS_RECEIVED_COMPLETED,
@@ -592,6 +593,7 @@ class WarehouseDispatchSlipController extends Controller
                     'shipping_fee' => (float) ($orderSnapshot['shipping_fee'] ?? $this->billableShippingFee($order)),
                     'discount' => (float) ($orderSnapshot['discount'] ?? $order->total_discount ?? 0),
                     'item_quantity' => (int) ($orderSnapshot['item_quantity'] ?? $order->items->sum('quantity')),
+                    'sizes' => $this->orderSizes($order, (array) $orderSnapshot),
                     'packed_weight' => (float) ($orderSnapshot['packed_weight'] ?? $movement->packed_total_weight ?? 0),
                     'movement' => $movement,
                     'received' => $movement->status === WarehouseTransfer::STATUS_RECEIVED_COMPLETED,
@@ -668,6 +670,22 @@ class WarehouseDispatchSlipController extends Controller
         })->values();
 
         return compact('orderRows', 'itemRows', 'summaryRows', 'inventoryTransferRows');
+    }
+
+    private function orderSizes(Order $order, array $snapshot = []): string
+    {
+        $sizes = collect($snapshot['items'] ?? [])
+            ->pluck('size')
+            ->map(fn ($size) => trim((string) $size))
+            ->filter();
+
+        if ($sizes->isEmpty()) {
+            $sizes = $order->items
+                ->map(fn ($item) => trim((string) ($item->variant?->size ?? '')))
+                ->filter();
+        }
+
+        return $sizes->unique()->values()->join(', ') ?: '—';
     }
 
     private function entrySnapshot($entry): array
