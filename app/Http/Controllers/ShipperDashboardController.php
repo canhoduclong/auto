@@ -632,7 +632,7 @@ class ShipperDashboardController extends Controller
         if (! $order) {
             return back()->with('error', 'Không tìm thấy đơn hàng của phiếu điều chuyển.');
         }
-        $dispatchSlip = $transfer->dispatchEntry?->slip ?? $order->orderTransfer?->dispatchEntry?->slip;
+        $dispatchSlip = $this->currentDispatchSlipForWarehouseTransfer($transfer);
         if ($dispatchSlip && $dispatchSlip->status === \App\Models\WarehouseDispatchSlip::STATUS_DRAFT) {
             return back()->with('error', 'Phiếu xuất kho tổng '.$dispatchSlip->code.' chưa được kho xuất chốt.');
         }
@@ -802,7 +802,7 @@ class ShipperDashboardController extends Controller
                     if (! $order) {
                         throw new \RuntimeException('Không tìm thấy đơn hàng của phiếu #'.$transfer->id);
                     }
-                    $dispatchSlip = $transfer->dispatchEntry?->slip ?? $order->orderTransfer?->dispatchEntry?->slip;
+                    $dispatchSlip = $this->currentDispatchSlipForWarehouseTransfer($transfer);
                     if ($dispatchSlip && $dispatchSlip->status === \App\Models\WarehouseDispatchSlip::STATUS_DRAFT) {
                         throw new \RuntimeException('Phiếu xuất kho tổng '.$dispatchSlip->code.' chưa được kho xuất chốt.');
                     }
@@ -1562,6 +1562,21 @@ class ShipperDashboardController extends Controller
         }
 
         $this->syncVariantStockFromInventories((int) $item->product_variant_id);
+    }
+
+    /**
+     * The order's current group is authoritative. A transfer may retain a
+     * legacy direct-slip entry after its order is regrouped; that stale entry
+     * must not hide the dispatch slip which now contains the order group.
+     */
+    private function currentDispatchSlipForWarehouseTransfer(WarehouseTransfer $transfer): ?\App\Models\WarehouseDispatchSlip
+    {
+        $order = $transfer->order;
+        if ($order?->order_transfer_id) {
+            return $order->orderTransfer?->dispatchEntry?->slip;
+        }
+
+        return $transfer->dispatchEntry?->slip;
     }
 
     private function deductStockForWarehouseTransferItem(Order $order, InventoryDocument $document, $item, int $warehouseId): void

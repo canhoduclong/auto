@@ -10,6 +10,7 @@ use App\Models\Role;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Models\WarehouseDispatchSlip;
+use App\Models\WarehouseDispatchSlipEntry;
 use App\Models\WarehouseInventoryTransfer;
 use App\Models\WarehouseTransfer;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -18,6 +19,74 @@ use Tests\TestCase;
 class WarehouseDispatchSlipWorkflowTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_shipper_uses_the_current_group_slip_instead_of_a_stale_direct_slip(): void
+    {
+        $warehouseRole = Role::create(['name' => 'warehouse']);
+        $shipperRole = Role::create(['name' => 'shipper']);
+        $source = Warehouse::create(['name' => 'Kho nguồn']);
+        $target = Warehouse::create(['name' => 'Kho nhận']);
+        $warehouseUser = User::factory()->create(['warehouse_id' => $source->id]);
+        $warehouseUser->roles()->attach($warehouseRole);
+        $shipper = User::factory()->create(['name' => 'Tài xế nhận phiếu hiện hành']);
+        $shipper->roles()->attach($shipperRole);
+        $customer = Customer::create(['name' => 'Khách phiếu hiện hành', 'status' => 'active']);
+        $orderTransfer = OrderTransfer::create([
+            'shipper_id' => $shipper->id,
+            'warehouse_id' => $target->id,
+            'created_by' => $warehouseUser->id,
+        ]);
+        $order = Order::create([
+            'customer_id' => $customer->id,
+            'warehouse_id' => $source->id,
+            'code' => 'ORD-CURRENT-DISPATCH',
+            'status' => Order::STATUS_READY_TO_SHIP,
+        ]);
+        $order->forceFill(['order_transfer_id' => $orderTransfer->id])->save();
+        $transfer = WarehouseTransfer::create([
+            'order_id' => $order->id,
+            'source_warehouse_id' => $source->id,
+            'target_warehouse_id' => $target->id,
+            'shipper_id' => $shipper->id,
+            'status' => WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
+            'packed_total_weight' => 0,
+        ]);
+        $oldDraftSlip = WarehouseDispatchSlip::create([
+            'code' => 'PXKT-OLD-DRAFT',
+            'business_date' => now()->subDays(5),
+            'source_warehouse_id' => $source->id,
+            'target_warehouse_id' => $target->id,
+            'shipper_id' => $shipper->id,
+            'status' => WarehouseDispatchSlip::STATUS_DRAFT,
+            'created_by' => $warehouseUser->id,
+        ]);
+        WarehouseDispatchSlipEntry::create([
+            'warehouse_dispatch_slip_id' => $oldDraftSlip->id,
+            'warehouse_transfer_id' => $transfer->id,
+        ]);
+        $currentSlip = WarehouseDispatchSlip::create([
+            'code' => 'PXKT-CURRENT-FINALIZED',
+            'business_date' => now(),
+            'source_warehouse_id' => $source->id,
+            'target_warehouse_id' => $target->id,
+            'shipper_id' => $shipper->id,
+            'status' => WarehouseDispatchSlip::STATUS_FINALIZED,
+            'created_by' => $warehouseUser->id,
+            'finalized_by' => $warehouseUser->id,
+            'finalized_at' => now(),
+        ]);
+        WarehouseDispatchSlipEntry::create([
+            'warehouse_dispatch_slip_id' => $currentSlip->id,
+            'order_transfer_id' => $orderTransfer->id,
+        ]);
+
+        $this->actingAs($shipper)
+            ->post(route('shipper.warehouse-transfers.pickup', $transfer))
+            ->assertSessionHas('success')
+            ->assertSessionMissing('error');
+
+        $this->assertSame(WarehouseTransfer::STATUS_IN_TRANSIT, $transfer->fresh()->status);
+    }
 
     public function test_source_warehouse_can_group_existing_transfers_without_duplicate_inventory_posting(): void
     {
