@@ -12,7 +12,7 @@
     .draft-template-sort { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 18px 4px 12px; }
     .draft-template-sort-actions { display: flex; flex-wrap: wrap; gap: 6px; }
     .draft-template-sort .btn { border-radius: 4px; font-size: .7rem; }
-    .draft-customer-filter { display: flex; align-items: center; gap: 8px; padding: 12px 4px 0; }
+    .draft-customer-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 4px 0; }
     .draft-customer-filter .input-group { width: min(100%, 520px); }
     .draft-customer-filter .form-control, .draft-customer-filter .btn { height: 38px; }
     .draft-customer-filter .btn { white-space: nowrap; }
@@ -178,6 +178,10 @@
             @if($monitoringEmbedded ?? false)<input type="hidden" name="tab" value="drafts">@endif
             <input type="hidden" name="sort_by" value="{{ $currentSortBy }}">
             <input type="hidden" name="sort_dir" value="{{ $currentSortDir }}">
+            <div class="input-group" style="width:min(100%, 290px)">
+                <span class="input-group-text fw-bold"><i class="bi bi-calendar3 me-1"></i>Ngày lên đơn</span>
+                <input type="date" class="form-control" name="draft_date" value="{{ $selectedDraftDate }}" required onchange="this.form.submit()">
+            </div>
             <div class="input-group">
                 <input type="search"
                        class="form-control"
@@ -188,7 +192,7 @@
                        aria-label="Tìm khách hàng trong đơn mẫu">
                 <button type="submit" class="btn btn-primary"><i class="bi bi-search me-1"></i>Tìm kiếm</button>
                 @if(filled($customerSearch ?? ''))
-                    <a class="btn btn-outline-secondary" href="{{ ($monitoringEmbedded ?? false) ? route('pages.my_orders.monitoring', ['tab' => 'drafts', 'sort_by' => $currentSortBy, 'sort_dir' => $currentSortDir]) : route('pages.my_order_drafts', ['sort_by' => $currentSortBy, 'sort_dir' => $currentSortDir]) }}" title="Xóa từ khóa tìm kiếm"><i class="bi bi-x-lg"></i></a>
+                    <a class="btn btn-outline-secondary" href="{{ ($monitoringEmbedded ?? false) ? route('pages.my_orders.monitoring', ['tab' => 'drafts', 'draft_date' => $selectedDraftDate, 'sort_by' => $currentSortBy, 'sort_dir' => $currentSortDir]) : route('pages.my_order_drafts', ['draft_date' => $selectedDraftDate, 'sort_by' => $currentSortBy, 'sort_dir' => $currentSortDir]) }}" title="Xóa từ khóa tìm kiếm"><i class="bi bi-x-lg"></i></a>
                 @endif
             </div>
             @if(filled($customerSearch ?? ''))
@@ -220,8 +224,12 @@
                         $weight = max(0.01, (float) ($item['size_kg'] ?? 1));
                         return $quantity * $weight * max(0, (float) ($item['unit_price'] ?? 0));
                     });
-                    $statusText = $draft->status === 'confirmed' ? 'Đã lên đơn' : ($draft->status === 'error' ? 'Có lỗi' : 'Đơn mẫu');
-                    $statusClass = $draft->status === 'confirmed' ? 'is-confirmed' : ($draft->status === 'error' ? 'is-error' : '');
+                    $selectedSchedule = $draft->automatedSchedules->first();
+                    $hasOrderForSelectedDate = (bool) $selectedSchedule?->generated_order_id;
+                    $statusText = $hasOrderForSelectedDate
+                        ? 'Đã lên đơn '.\Carbon\Carbon::parse($selectedDraftDate)->format('d/m/Y')
+                        : ($draft->status === 'error' ? 'Có lỗi' : 'Chưa lên ngày '.\Carbon\Carbon::parse($selectedDraftDate)->format('d/m/Y'));
+                    $statusClass = $hasOrderForSelectedDate ? 'is-confirmed' : ($draft->status === 'error' ? 'is-error' : '');
                     $isEditingDraft = (int) request('edit') === (int) $draft->id;
                     $usesTruckStation = (bool) $draft->use_truck_station
                         || filled($draft->truck_station_id)
@@ -230,7 +238,7 @@
                         || filled($draft->truck_station_address);
                     $selectedTruckStation = $draft->truck_station_id ? $truckStations->firstWhere('id', (int) $draft->truck_station_id) : null;
                 @endphp
-                <article class="draft-template-row" data-draft-card data-draft-id="{{ $draft->id }}" data-draft-editable="{{ $draft->status !== 'confirmed' ? '1' : '0' }}">
+                <article class="draft-template-row" data-draft-card data-draft-id="{{ $draft->id }}" data-draft-editable="1">
                     <div class="draft-template-card">
                         <div class="draft-template-head">
                             <div>
@@ -255,7 +263,10 @@
                             <div class="draft-template-section">
                                 <div class="draft-template-section-title">Giao hàng</div>
                                 <div class="draft-template-delivery">
-                                    <span><i class="bi bi-calendar3 me-1"></i>Ngày lên đơn: {{ $draft->delivery_date?->format('d/m/Y') ?: 'Chưa chọn' }}</span>
+                                    <span><i class="bi bi-calendar3 me-1"></i>Ngày đang kiểm tra: {{ \Carbon\Carbon::parse($selectedDraftDate)->format('d/m/Y') }}</span>
+                                    @if($hasOrderForSelectedDate)
+                                        <span class="text-success"><i class="bi bi-check-circle me-1"></i>Đã tạo đơn {{ $selectedSchedule->generatedOrder?->code ?: '#'.$selectedSchedule->generated_order_id }}</span>
+                                    @endif
                                     <span><i class="bi bi-geo-alt me-1"></i>Địa chỉ nhận hàng: {{ $draft->address ?: 'Chưa cập nhật' }}</span>
                                     <span><i class="bi bi-clock me-1"></i>Giờ giao: {{ $draft->delivery_time ?: 'Chưa cập nhật' }}</span>
                                     @if($usesTruckStation)
@@ -309,6 +320,7 @@
                                 <input type="hidden" name="truck_brand_id" value="{{ $draft->truck_brand_id }}">
                                 <input type="hidden" name="customer_name" value="{{ $draft->customer_name }}">
                                 <input type="hidden" name="phone" value="{{ $draft->phone }}">
+                                <input type="hidden" name="delivery_date" value="{{ $selectedDraftDate }}">
 
                                 <div class="draft-picker draft-customer-picker" hidden>
                                         <div class="draft-picker-search">
@@ -321,7 +333,7 @@
                                 <div class="draft-template-section-title mt-2">Giao hàng</div>
                                 <div class="draft-edit-delivery">
                                     <div class="input-group input-group-sm"><span class="input-group-text"><i class="bi bi-geo-alt me-1"></i>Địa chỉ nhận hàng:</span><input name="address" class="form-control" value="{{ $draft->address }}" placeholder="Chưa cập nhật"></div>
-                                    <div class="input-group input-group-sm"><span class="input-group-text"><i class="bi bi-calendar3 me-1"></i>Ngày lên đơn:</span><input type="date" name="delivery_date" class="form-control" value="{{ $draft->delivery_date?->toDateString() ?: now('Asia/Bangkok')->toDateString() }}" required></div>
+                                    <div class="input-group input-group-sm"><span class="input-group-text"><i class="bi bi-calendar3 me-1"></i>Ngày lên đơn:</span><input class="form-control fw-bold" value="{{ \Carbon\Carbon::parse($selectedDraftDate)->format('d/m/Y') }}" readonly></div>
                                     <div class="input-group input-group-sm"><span class="input-group-text"><i class="bi bi-clock me-1"></i>Giờ giao:</span><input name="delivery_time" class="form-control" value="{{ $draft->delivery_time }}" placeholder="Chưa cập nhật"></div>
                                 </div>
 
@@ -420,7 +432,7 @@
                                         </tbody>
                                     </table>
                                 </div>
-                                @if($draft->status !== 'confirmed')
+                                @if(!$hasOrderForSelectedDate)
                                     <div class="draft-picker draft-product-picker" hidden>
                                         <div class="draft-picker-search">
                                             <input type="search" class="form-control form-control-sm draft-product-search" placeholder="Tìm sản phẩm, SKU hoặc size...">
@@ -499,11 +511,15 @@
                     </div>
 
                     <div class="draft-template-actions">
-                        @if($draft->status !== 'confirmed')<button type="button" class="btn btn-sm btn-outline-success js-show-draft-editor"><i class="bi bi-calendar3"></i>Sửa / chọn ngày</button>@endif
+                        <button type="button" class="btn btn-sm btn-outline-success js-show-draft-editor"><i class="bi bi-pencil"></i>Sửa mẫu</button>
                         <button type="button" class="btn btn-sm btn-outline-info js-show-draft-details"><i class="bi bi-eye"></i>Chi tiết</button>
                         <button type="button" class="btn btn-sm btn-outline-secondary js-copy-draft"><i class="bi bi-files"></i>Sao chép đơn</button>
                         <button type="button" class="btn btn-sm btn-outline-primary js-show-draft-automation"><i class="bi bi-calendar2-check"></i>Lịch lên đơn</button>
-                        @if($draft->status !== 'confirmed')<button type="button" class="btn btn-sm btn-success js-confirm-draft"><i class="bi bi-check2-circle"></i>Lên đơn</button>@endif
+                        @if(!$hasOrderForSelectedDate)
+                            <button type="button" class="btn btn-sm btn-success js-confirm-draft"><i class="bi bi-check2-circle"></i>Lên đơn {{ \Carbon\Carbon::parse($selectedDraftDate)->format('d/m') }}</button>
+                        @else
+                            <button type="button" class="btn btn-sm btn-outline-success" disabled><i class="bi bi-check-circle"></i>Đã lên đơn</button>
+                        @endif
                         <button type="button" class="btn btn-sm btn-outline-danger js-delete-draft"><i class="bi bi-trash"></i>Xóa đơn</button>
                     </div>
                 </article>

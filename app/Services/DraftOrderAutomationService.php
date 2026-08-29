@@ -110,7 +110,9 @@ class DraftOrderAutomationService
                     'recipient_phone' => $draft->phone ?: $customer->phone,
                     'recipient_address' => $draft->address ?: $customer->address,
                     'note' => $draft->note,
-                    'delivery_date' => Carbon::today('Asia/Bangkok')->toDateString(),
+                    'delivery_date' => $scheduledDate,
+                    'created_at' => Carbon::parse($scheduledDate, 'Asia/Bangkok')
+                        ->setTimeFrom(Carbon::now('Asia/Bangkok')),
                     'delivery_time' => $draft->delivery_time,
                     'use_truck_station' => (bool) $draft->use_truck_station,
                     'truck_station_id' => $truckStation?->id,

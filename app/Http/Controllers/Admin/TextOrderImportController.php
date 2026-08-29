@@ -9,6 +9,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Controllers\OrderController;
 use App\Models\Customer;
 use App\Models\Order;
+use App\Models\OrderSchedule;
 use App\Models\ProductVariant;
 use App\Models\TextOrderDraft;
 use App\Models\TruckBrand;
@@ -165,6 +166,14 @@ class TextOrderImportController extends Controller
     private function draftIndex(?int $saleId = null, ?Request $request = null)
     {
         $settings = $this->settings;
+        try {
+            $selectedDraftDate = Carbon::parse(
+                $request?->input('draft_date', $this->today()),
+                'Asia/Bangkok'
+            )->toDateString();
+        } catch (\Throwable) {
+            $selectedDraftDate = $this->today();
+        }
         $sortBy = in_array($request?->input('sort_by'), ['created_at', 'unit_price', 'customer_name', 'status'], true)
             ? (string) $request->input('sort_by')
             : 'created_at';
@@ -177,7 +186,18 @@ class TextOrderImportController extends Controller
         $perPage = (int) $request?->input('per_page', 10);
         $perPage = in_array($perPage, [10, 20, 50], true) ? $perPage : 10;
         $draftQuery = TextOrderDraft::query()
-            ->with(['sale:id,name,zalo_name', 'customer:id,name,phone', 'truckBrand:id,name', 'truckStation:id,name,address,phone,brand_id', 'truckStation.brand:id,name', 'variant.product.avatar.media', 'order:id,code'])
+            ->with([
+                'sale:id,name,zalo_name',
+                'customer:id,name,phone',
+                'truckBrand:id,name',
+                'truckStation:id,name,address,phone,brand_id',
+                'truckStation.brand:id,name',
+                'variant.product.avatar.media',
+                'order:id,code,created_at',
+                'automatedSchedules' => fn ($query) => $query
+                    ->whereDate('schedule_date', $selectedDraftDate)
+                    ->with('generatedOrder:id,code'),
+            ])
             ->where('draft_scope', $saleId ? TextOrderDraft::SCOPE_SALE_PRIVATE : TextOrderDraft::SCOPE_ADMIN_IMPORT)
             ->when($saleId, fn ($query) => $query->where('sale_id', $saleId))
             ->when($customerSearch !== '', function ($query) use ($customerSearch, $customerSearchPhone) {
@@ -222,7 +242,7 @@ class TextOrderImportController extends Controller
         $viewName = $saleMode ? 'site.my-draft-orders' : 'admin.text-order-import.index';
 
         return view($viewName, compact(
-            'drafts', 'sales', 'variants', 'truckStations', 'saleMode', 'pageTitle', 'actionBaseUrl', 'parseRoute', 'settings', 'sortBy', 'sortDir', 'customerSearch', 'perPage'
+            'drafts', 'sales', 'variants', 'truckStations', 'saleMode', 'pageTitle', 'actionBaseUrl', 'parseRoute', 'settings', 'sortBy', 'sortDir', 'customerSearch', 'perPage', 'selectedDraftDate'
         ));
     }
 
@@ -581,7 +601,11 @@ class TextOrderImportController extends Controller
 
     private function confirmDraft(Request $request, TextOrderDraft $draft, ApprovalService $approvalService)
     {
-        abort_if($draft->status === 'confirmed', 422, 'Đơn nháp này đã được xác nhận.');
+        abort_if(
+            $draft->status === 'confirmed' && $draft->draft_scope !== TextOrderDraft::SCOPE_SALE_PRIVATE,
+            422,
+            'Đơn nháp này đã được xác nhận.'
+        );
 
         $draftData = $this->validatedDraftData($request);
         $deliveryDate = Carbon::parse(
@@ -629,6 +653,36 @@ class TextOrderImportController extends Controller
         }
 
         return DB::transaction(function () use ($draft, $customer, $draftItems, $truckStation, $approvalService, $deliveryDate) {
+            $schedule = null;
+            if ($draft->draft_scope === TextOrderDraft::SCOPE_SALE_PRIVATE) {
+                $schedule = OrderSchedule::query()
+                    ->where('text_order_draft_id', $draft->id)
+                    ->whereDate('schedule_date', $deliveryDate)
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($schedule?->generated_order_id) {
+                    throw ValidationException::withMessages([
+                        'delivery_date' => 'Đơn mẫu này đã được lên đơn trong ngày '.Carbon::parse($deliveryDate)->format('d/m/Y').'.',
+                    ]);
+                }
+
+                $schedule ??= OrderSchedule::query()->create([
+                    'customer_id' => $customer->id,
+                    'text_order_draft_id' => $draft->id,
+                    'schedule_date' => $deliveryDate,
+                    'status' => 'pending',
+                    'price_status' => 'ok',
+                    'stock_status' => 'ok',
+                    'created_by' => $draft->sale_id,
+                    'is_active' => true,
+                    'review_meta' => [
+                        'source' => 'manual_draft_confirmation',
+                        'selected_date' => $deliveryDate,
+                    ],
+                ]);
+            }
+
             $businessCreatedAt = Carbon::parse($deliveryDate, 'Asia/Bangkok')
                 ->setTimeFrom(now('Asia/Bangkok'));
             $order = app(OrderController::class)->createOrderFromSchedule(
@@ -667,7 +721,22 @@ class TextOrderImportController extends Controller
                 $approvalService
             );
 
-            $draft->update(['status' => 'confirmed', 'order_id' => $order->id, 'error_message' => null]);
+            if ($schedule) {
+                $schedule->update([
+                    'customer_id' => $customer->id,
+                    'status' => 'generated',
+                    'generated_order_id' => $order->id,
+                    'review_meta' => array_merge((array) $schedule->review_meta, [
+                        'generated_at' => now('Asia/Bangkok')->toDateTimeString(),
+                    ]),
+                ]);
+            }
+
+            $draft->update([
+                'status' => $draft->draft_scope === TextOrderDraft::SCOPE_SALE_PRIVATE ? 'draft' : 'confirmed',
+                'order_id' => $order->id,
+                'error_message' => null,
+            ]);
             return $order;
         });
     }

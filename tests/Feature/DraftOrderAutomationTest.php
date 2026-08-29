@@ -91,6 +91,7 @@ class DraftOrderAutomationTest extends TestCase
                 $this->assertSame(125000.0, $items[0]['base_price']);
                 $this->assertSame(2, $items[0]['quantity']);
                 $this->assertSame('2026-07-22', $orderData['delivery_date']);
+                $this->assertSame('2026-07-22', $orderData['created_at']->toDateString());
 
                 return true;
             })
