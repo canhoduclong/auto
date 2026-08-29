@@ -79,6 +79,41 @@ class WarehouseGoogleSheetInventoryResetTest extends TestCase
             ->assertSessionHas('error', 'Chỉ Admin được reset dữ liệu tồn kho Google Sheet.');
     }
 
+    public function test_admin_can_clear_one_day_before_importing_stock_and_import_columns_again(): void
+    {
+        $warehouse = Warehouse::query()->create(['name' => 'Kho Clear ngày', 'status' => true]);
+        $adminRole = Role::query()->create(['name' => 'admin']);
+        $admin = User::factory()->create(['warehouse_id' => $warehouse->id]);
+        $admin->roles()->attach($adminRole);
+        $product = Product::factory()->create();
+        $variant = $product->variants()->create(['name' => 'M 2.5', 'sku' => 'CLEAR-2.5']);
+        $inventory = Inventory::query()->create([
+            'warehouse_id' => $warehouse->id,
+            'product_variant_id' => $variant->id,
+            'quantity' => 10,
+            'reserved_quantity' => 0,
+        ]);
+        $sync = $this->sync($warehouse, $admin, $variant->id, '2026-08-25', 1, 6);
+
+        $this->actingAs($admin)
+            ->delete(route('warehouse.google-sheet-inventory.clear-day'), [
+                'warehouse_id' => $warehouse->id,
+                'date' => '2026-08-25',
+                'confirmation_date' => '2026-08-25',
+                'clear_reason' => 'Đọc lại hai cột',
+                'confirm_clear' => '1',
+            ])
+            ->assertRedirect(route('warehouse.google-sheet-inventory.index', [
+                'date' => '2026-08-25',
+                'warehouse_id' => $warehouse->id,
+            ]))
+            ->assertSessionHas('success');
+
+        $this->assertSame(4.0, (float) $inventory->fresh()->quantity);
+        $this->assertSame('reset', $sync->fresh()->status);
+        $this->assertStringContainsString('Clear ngày', (string) $sync->fresh()->reset_reason);
+    }
+
     private function sync(
         Warehouse $warehouse,
         User $user,

@@ -89,6 +89,14 @@ class GoogleSheetsInventoryService
         }
 
         $stockColumn = $availableDates[$selectedDate];
+        $importColumns = collect($columnDates)
+            ->filter(fn (?string $date): bool => $date === $selectedDate)
+            ->keys()
+            ->filter(fn (int $column): bool => str_starts_with(
+                $this->normalize((string) ($typeHeader[$column] ?? '')),
+                'nhap'
+            ))
+            ->values();
         $section = Str::contains($this->normalize($warehouse->name), 'chien luoc') ? 'strategic' : 'main';
         $strategicStart = collect($values)->search(fn ($row) => $this->normalize((string) ($row[0] ?? '')) === 'chien luoc');
         $strategicStart = $strategicStart === false ? count($values) : (int) $strategicStart;
@@ -130,7 +138,11 @@ class GoogleSheetsInventoryService
             $size = $isMocCode
                 ? number_format((float) ($matches[1].'.'.($matches[2] ?? '0')), 1, '.', '')
                 : null;
-            $quantity = $this->number($values[$rowIndex][$stockColumn] ?? null);
+            $stockQuantity = $this->number($values[$rowIndex][$stockColumn] ?? null);
+            $importQuantity = (float) $importColumns->sum(
+                fn (int $column): float => $this->number($values[$rowIndex][$column] ?? null)
+            );
+            $quantity = round($stockQuantity + $importQuantity, 3);
             $hasAmbiguousInventoryName = $configuredMatches->count() > 1;
             $variant = $configuredMatches->count() === 1
                 ? $configuredMatches->first()
@@ -142,6 +154,8 @@ class GoogleSheetsInventoryService
                 'sheet_row' => $rowIndex + 1,
                 'sheet_code' => $sheetCode,
                 'normalized_code' => $size !== null ? 'MOC - '.$size : ($variant?->inventory_name ?: $sheetCode),
+                'stock_quantity' => $stockQuantity,
+                'import_quantity' => $importQuantity,
                 'quantity' => $quantity,
                 'variant_id' => $variant?->id,
                 'variant_name' => $variant ? trim(($variant->product?->name ? $variant->product->name.' – ' : '').($variant->name ?: $variant->sku)) : null,
@@ -163,6 +177,10 @@ class GoogleSheetsInventoryService
             'selected_date' => $selectedDate,
             'available_dates' => array_keys($availableDates),
             'stock_column' => $stockColumn + 1,
+            'import_columns' => $importColumns->map(fn (int $column): int => $column + 1)->all(),
+            'import_column_labels' => $importColumns
+                ->map(fn (int $column): string => trim((string) ($typeHeader[$column] ?? 'Nhập')))
+                ->all(),
             'warehouse_section' => $section,
             'warehouse_section_label' => $section === 'strategic' ? 'CHIẾN LƯỢC' : 'QUAY LÔNG / HÀNG MÓC',
             'rows' => $rows,

@@ -40,6 +40,30 @@
     </div></div>
 
     @if(auth()->user()?->isAdmin())
+        <div class="card sheet-import-card mb-3 border border-warning"><div class="card-body">
+            <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+                <div>
+                    <h5 class="text-warning-emphasis mb-1"><i class="bi bi-eraser me-1"></i>Admin · Clear dữ liệu ngày {{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}</h5>
+                    <div class="text-muted small">Chỉ hoàn tác phần tồn đã đồng bộ từ Google Sheet của đúng ngày và kho này. Tồn từ đơn hàng, nhập kho hoặc nghiệp vụ khác không bị xóa.</div>
+                </div>
+                <button type="button" class="btn btn-outline-warning" data-bs-toggle="collapse" data-bs-target="#sheet-clear-day">Mở chức năng Clear</button>
+            </div>
+            <div class="collapse mt-3" id="sheet-clear-day">
+                <form method="POST" action="{{ route('warehouse.google-sheet-inventory.clear-day') }}" onsubmit="return confirm('Clear dữ liệu đồng bộ Google Sheet ngày {{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }} để nhập lại?');">
+                    @csrf
+                    @method('DELETE')
+                    <input type="hidden" name="date" value="{{ $selectedDate }}">
+                    <input type="hidden" name="warehouse_id" value="{{ $warehouse->id }}">
+                    <div class="row g-3">
+                        <div class="col-md-4"><label class="form-label">Nhập lại ngày để xác nhận</label><input type="date" name="confirmation_date" class="form-control" required></div>
+                        <div class="col-md-8"><label class="form-label">Lý do Clear</label><input type="text" name="clear_reason" class="form-control" maxlength="500" placeholder="Ví dụ: Cần đọc lại cột Tồn và Nhập"></div>
+                        <div class="col-12"><label class="form-check p-3 rounded border border-warning bg-warning-subtle"><input class="form-check-input" type="checkbox" name="confirm_clear" value="1" required><span class="form-check-label">Tôi xác nhận Clear dữ liệu đồng bộ của ngày này để nhập lại từ Google Sheet.</span></label></div>
+                        <div class="col-12"><button class="btn btn-warning"><i class="bi bi-eraser me-1"></i>Clear dữ liệu ngày này</button></div>
+                    </div>
+                </form>
+            </div>
+        </div></div>
+
         <div class="card sheet-import-card mb-3 border border-danger-subtle"><div class="card-body">
             <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
                 <div>
@@ -74,7 +98,7 @@
         <div class="alert alert-danger"><strong>Không tải được dữ liệu.</strong><div class="mt-1">{{ $loadError }}</div></div>
     @elseif($preview && $comparison)
         <div class="sheet-summary p-3 mb-3 d-flex flex-wrap justify-content-between gap-3">
-            <div><div class="small text-muted">Nguồn dữ liệu</div><strong>{{ $preview['sheet_name'] }}</strong> · {{ $preview['warehouse_section_label'] }} · cột {{ $preview['stock_column'] }}<div><a href="{{ $preview['spreadsheet_url'] }}" target="_blank" rel="noopener" class="small">Mở Google Sheet <i class="bi bi-box-arrow-up-right"></i></a></div></div>
+            <div><div class="small text-muted">Nguồn dữ liệu</div><strong>{{ $preview['sheet_name'] }}</strong> · {{ $preview['warehouse_section_label'] }}<div class="small">Tồn: cột {{ $preview['stock_column'] }} · Nhập: {{ collect($preview['import_columns'] ?? [])->join(', ') ?: 'không có' }}</div><div><a href="{{ $preview['spreadsheet_url'] }}" target="_blank" rel="noopener" class="small">Mở Google Sheet <i class="bi bi-box-arrow-up-right"></i></a></div></div>
             <div><div class="small text-muted">Ngày tồn</div><strong>{{ \Carbon\Carbon::parse($preview['selected_date'])->format('d/m/Y') }}</strong></div>
             <div><div class="small text-muted">Kho áp dụng</div><strong>{{ $warehouse->name }}</strong></div>
             <div class="text-end"><div class="small text-muted">Lần đồng bộ kế tiếp</div><strong class="fs-3 text-success">#{{ $comparison['next_sync_number'] }}</strong></div>
@@ -103,7 +127,7 @@
         @endif
 
         <div class="card sheet-import-card mb-3"><div class="table-responsive"><table class="table table-hover align-middle mb-0 sheet-import-table">
-            <thead><tr><th>Dòng</th><th>Mã Sheet</th><th>Sản phẩm hệ thống</th><th class="text-end">Lần trước</th><th class="text-end">Sheet hiện tại</th><th class="text-end">Chênh lệch</th><th class="text-end">Tồn hệ thống</th><th class="text-end">Sau áp dụng</th><th>Trạng thái</th></tr></thead>
+            <thead><tr><th>Dòng</th><th>Mã Sheet</th><th>Sản phẩm hệ thống</th><th class="text-end">Lần trước</th><th class="text-end">Tồn Sheet</th><th class="text-end">Nhập trong ngày</th><th class="text-end">Tổng đọc</th><th class="text-end">Chênh lệch</th><th class="text-end">Tồn hệ thống</th><th class="text-end">Sau áp dụng</th><th>Trạng thái</th></tr></thead>
             <tbody>
             @foreach($preview['rows'] as $row)
                 @php($isProblem = !$row['matched'] && $row['quantity'] > 0)
@@ -112,6 +136,8 @@
                     <td><span class="sheet-code">{{ $row['sheet_code'] }}</span><div class="small text-muted">{{ $row['normalized_code'] }}</div></td>
                     <td>@if($row['matched'])<strong>{{ $row['variant_name'] }}</strong><div class="small text-muted">{{ $row['variant_sku'] }}</div>@else<span class="text-danger">Chưa có biến thể tương ứng</span>@endif</td>
                     <td class="text-end">{{ $row['matched'] ? number_format($row['previous_sheet_quantity'], 0, ',', '.') : '—' }}</td>
+                    <td class="text-end">{{ number_format($row['stock_quantity'] ?? $row['quantity'], 0, ',', '.') }}</td>
+                    <td class="text-end text-success">+{{ number_format($row['import_quantity'] ?? 0, 0, ',', '.') }}</td>
                     <td class="text-end fw-semibold">{{ number_format($row['quantity'], 0, ',', '.') }}</td>
                     <td class="text-end fw-bold {{ $row['delta'] > 0 ? 'delta-positive' : ($row['delta'] < 0 ? 'delta-negative' : 'delta-zero') }}">@if($row['matched']){{ $row['delta'] > 0 ? '+' : '' }}{{ number_format($row['delta'], 0, ',', '.') }}@else—@endif</td>
                     <td class="text-end">{{ $row['matched'] ? number_format($row['current_quantity'], 0, ',', '.') : '—' }}</td>
@@ -160,18 +186,18 @@
                             <button type="button" class="btn btn-sm btn-outline-dark" data-select-sync="all">Chọn tất cả hợp lệ</button><button type="button" class="btn btn-sm btn-outline-success" data-select-sync="positive">Chỉ hàng mới / tăng</button><button type="button" class="btn btn-sm btn-outline-danger" data-select-sync="negative">Chỉ điều chỉnh giảm</button><button type="button" class="btn btn-sm btn-outline-secondary" data-select-sync="none">Bỏ chọn</button>
                         </div>
                         <div class="table-responsive border rounded"><table class="table align-middle mb-0">
-                            <thead class="table-light"><tr><th style="width:46px"></th><th>Sản phẩm</th><th class="text-end">Lần trước</th><th class="text-end">Sheet mới</th><th class="text-end">Chênh lệch</th><th>Nghiệp vụ</th></tr></thead>
+                            <thead class="table-light"><tr><th style="width:46px"></th><th>Sản phẩm</th><th class="text-end">Lần trước</th><th class="text-end">Tồn</th><th class="text-end">Nhập</th><th class="text-end">Tổng đọc</th><th class="text-end">Chênh lệch</th><th>Nghiệp vụ</th></tr></thead>
                             <tbody>
                             @forelse($comparison['changed_rows'] as $row)
                                 <tr class="sync-product-row {{ !$row['can_apply'] ? 'is-disabled' : '' }}">
                                     <td><input class="form-check-input sync-row-checkbox" type="checkbox" name="selected_variant_ids[]" value="{{ $row['variant_id'] }}" data-delta="{{ $row['delta'] > 0 ? 'positive' : 'negative' }}" @checked(old('selected_variant_ids') ? in_array($row['variant_id'], array_map('intval', (array) old('selected_variant_ids', [])), true) : $row['can_apply']) @disabled(!$row['can_apply'])></td>
                                     <td><strong>{{ $row['variant_name'] }}</strong><div class="small text-muted">{{ $row['variant_sku'] }} · Sheet: {{ $row['sheet_code'] }}</div></td>
-                                    <td class="text-end">{{ number_format($row['previous_sheet_quantity'], 0, ',', '.') }}</td><td class="text-end fw-semibold">{{ number_format($row['quantity'], 0, ',', '.') }}</td>
+                                    <td class="text-end">{{ number_format($row['previous_sheet_quantity'], 0, ',', '.') }}</td><td class="text-end">{{ number_format($row['stock_quantity'] ?? $row['quantity'], 0, ',', '.') }}</td><td class="text-end text-success">+{{ number_format($row['import_quantity'] ?? 0, 0, ',', '.') }}</td><td class="text-end fw-semibold">{{ number_format($row['quantity'], 0, ',', '.') }}</td>
                                     <td class="text-end fw-bold {{ $row['delta'] > 0 ? 'delta-positive' : 'delta-negative' }}">{{ $row['delta'] > 0 ? '+' : '' }}{{ number_format($row['delta'], 0, ',', '.') }}</td>
                                     <td>@if($row['delta'] > 0)<span class="badge bg-success">Tạo phiếu nhập +{{ number_format($row['delta'], 0, ',', '.') }}</span>@else<span class="badge bg-danger">Điều chỉnh giảm {{ number_format(abs($row['delta']), 0, ',', '.') }}</span>@endif @if($row['apply_error'])<div class="small text-danger mt-1">{{ $row['apply_error'] }}</div>@endif</td>
                                 </tr>
                             @empty
-                                <tr><td colspan="6" class="text-center text-muted py-4">Dữ liệu Sheet đang trùng khớp với lần áp dụng trước, không có thay đổi cần xử lý.</td></tr>
+                                <tr><td colspan="8" class="text-center text-muted py-4">Dữ liệu Sheet đang trùng khớp với lần áp dụng trước, không có thay đổi cần xử lý.</td></tr>
                             @endforelse
                             </tbody>
                         </table></div>

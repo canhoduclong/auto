@@ -71,6 +71,31 @@ class GoogleSheetsInventoryServiceTest extends TestCase
         $this->assertSame(3.0, $result['total_quantity']);
     }
 
+    public function test_it_combines_stock_and_all_import_columns_for_the_selected_date(): void
+    {
+        $values = [
+            ['0'],
+            ['SIZE/Ngày Tháng', '25/08/2026', '', ''],
+            ['QUAY LÔNG', 'Nhập SX', 'Nhập Từ KCL', 'Tồn'],
+            ['HÀNG MÓC'],
+            ['M 2', '3', '2', '10'],
+            ['CHIẾN LƯỢC'],
+        ];
+
+        $result = (new GoogleSheetsInventoryService)->parseValues(
+            $values,
+            new Warehouse(['name' => 'Kho Long An']),
+            '2026-08-25',
+            new Collection([$this->variant(10, '2.00', 'MOC - 2.00', '2.0 kg')])
+        );
+
+        $row = $result['rows']->first();
+        $this->assertSame(10.0, $row['stock_quantity']);
+        $this->assertSame(5.0, $row['import_quantity']);
+        $this->assertSame(15.0, $row['quantity']);
+        $this->assertSame([2, 3], $result['import_columns']);
+    }
+
     private function variant(int $id, string $size, string $sku, string $name, ?string $inventoryName = null): ProductVariant
     {
         $variant = new ProductVariant(['size' => $size, 'sku' => $sku, 'name' => $name, 'inventory_name' => $inventoryName]);

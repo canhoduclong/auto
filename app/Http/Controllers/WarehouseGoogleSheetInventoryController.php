@@ -384,6 +384,38 @@ class WarehouseGoogleSheetInventoryController extends Controller
             .Carbon::parse($fromDate)->format('d/m/Y').' – '.Carbon::parse($toDate)->format('d/m/Y').'.');
     }
 
+    public function clearDay(Request $request)
+    {
+        abort_unless($request->user()?->isAdmin(), 403, 'Chỉ Admin được Clear dữ liệu tồn kho Google Sheet.');
+
+        $validated = $request->validate([
+            'date' => ['required', 'date_format:Y-m-d'],
+            'warehouse_id' => ['nullable', 'integer', 'exists:warehouses,id'],
+            'confirmation_date' => ['required', 'date_format:Y-m-d', 'same:date'],
+            'clear_reason' => ['nullable', 'string', 'max:500'],
+            'confirm_clear' => ['accepted'],
+        ], [
+            'confirmation_date.same' => 'Ngày xác nhận phải trùng với ngày cần Clear.',
+        ]);
+
+        $date = Carbon::parse($validated['date'])->toDateString();
+        $request->merge([
+            'from_date' => $date,
+            'to_date' => $date,
+            'confirm_reset' => '1',
+            'reset_reason' => 'Clear ngày để nhập lại Google Sheet'
+                .(filled($validated['clear_reason'] ?? null) ? ': '.trim($validated['clear_reason']) : ''),
+        ]);
+
+        $response = $this->resetRange($request);
+
+        return $response->with(
+            'success',
+            'Đã Clear dữ liệu đồng bộ Google Sheet ngày '.Carbon::parse($date)->format('d/m/Y')
+            .'. Hệ thống đã hoàn tác phần tồn từng áp dụng; bạn có thể Load lại hai nhóm cột Tồn + Nhập.'
+        );
+    }
+
     private function resolveWarehouse(Request $request): Warehouse
     {
         $user = Auth::user();

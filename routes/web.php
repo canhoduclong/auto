@@ -418,6 +418,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/stock-in', [WarehouseDashboardController::class, 'storeStockIn'])->name('stock-in.store');
         Route::get('/google-sheet-inventory', [\App\Http\Controllers\WarehouseGoogleSheetInventoryController::class, 'index'])->name('google-sheet-inventory.index');
         Route::post('/google-sheet-inventory', [\App\Http\Controllers\WarehouseGoogleSheetInventoryController::class, 'store'])->name('google-sheet-inventory.store');
+        Route::delete('/google-sheet-inventory/clear-day', [\App\Http\Controllers\WarehouseGoogleSheetInventoryController::class, 'clearDay'])->name('google-sheet-inventory.clear-day');
         Route::delete('/google-sheet-inventory/reset', [\App\Http\Controllers\WarehouseGoogleSheetInventoryController::class, 'resetRange'])->name('google-sheet-inventory.reset');
         Route::post('/stock-in-templates', [\App\Http\Controllers\InventoryDocumentTemplateController::class, 'store'])->name('stock-in-templates.store');
         Route::delete('/stock-in-templates/{template}', [\App\Http\Controllers\InventoryDocumentTemplateController::class, 'destroy'])->name('stock-in-templates.destroy');
