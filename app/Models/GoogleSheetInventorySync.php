@@ -20,6 +20,9 @@ class GoogleSheetInventorySync extends Model
         'applied_rows_count',
         'snapshot',
         'changes',
+        'reset_by',
+        'reset_at',
+        'reset_reason',
     ];
 
     protected $casts = [
@@ -31,6 +34,7 @@ class GoogleSheetInventorySync extends Model
         'applied_rows_count' => 'integer',
         'snapshot' => 'array',
         'changes' => 'array',
+        'reset_at' => 'datetime',
     ];
 
     public function warehouse()
@@ -46,5 +50,10 @@ class GoogleSheetInventorySync extends Model
     public function creator()
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function resetter()
+    {
+        return $this->belongsTo(User::class, 'reset_by');
     }
 }

@@ -13,15 +13,15 @@ class GoogleSheetInventoryComparisonService
     /** @param array<string, mixed> $preview */
     public function compare(array $preview, Warehouse $warehouse, string $marker): array
     {
-        $syncs = GoogleSheetInventorySync::query()
+        $allSyncs = GoogleSheetInventorySync::query()
             ->with(['creator:id,name', 'importDocument:id,document_number'])
             ->where('warehouse_id', $warehouse->id)
             ->where('spreadsheet_id', $preview['spreadsheet_id'])
             ->where('sheet_id', $preview['sheet_id'])
             ->whereDate('inventory_date', $preview['selected_date'])
-            ->where('status', 'completed')
             ->orderBy('id')
             ->get();
+        $syncs = $allSyncs->where('status', 'completed')->values();
         $lastSync = $syncs->last();
         $allDocuments = InventoryDocument::query()
             ->with('items:id,inventory_document_id,product_variant_id,quantity')
@@ -104,10 +104,13 @@ class GoogleSheetInventoryComparisonService
             'baseline' => $baseline,
             'baseline_source' => $baselineSource,
             'has_previous' => $lastSync !== null || $legacyDocuments->isNotEmpty(),
-            'syncs' => $syncs,
+            'syncs' => $allSyncs,
             'legacy_documents' => $legacyDocuments,
             'import_documents' => $allDocuments,
-            'next_sync_number' => $syncs->count() + $legacyDocuments->count() + 1,
+            'next_sync_number' => max(
+                (int) $allSyncs->max('sync_number'),
+                $legacyDocuments->count()
+            ) + 1,
         ];
     }
 }

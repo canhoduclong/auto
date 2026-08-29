@@ -249,6 +249,141 @@ class WarehouseGoogleSheetInventoryController extends Controller
             .' tại '.$warehouse->name.'.');
     }
 
+    public function resetRange(Request $request)
+    {
+        abort_unless($request->user()?->isAdmin(), 403, 'Chỉ Admin được reset dữ liệu tồn kho Google Sheet.');
+
+        $validated = $request->validate([
+            'from_date' => ['required', 'date'],
+            'to_date' => ['required', 'date', 'after_or_equal:from_date'],
+            'warehouse_id' => ['nullable', 'integer', 'exists:warehouses,id'],
+            'confirm_reset' => ['accepted'],
+            'reset_reason' => ['nullable', 'string', 'max:500'],
+        ]);
+        $warehouse = $this->resolveWarehouse($request);
+        $fromDate = Carbon::parse($validated['from_date'])->toDateString();
+        $toDate = Carbon::parse($validated['to_date'])->toDateString();
+
+        try {
+            $result = Cache::lock(
+                'google-sheet-inventory-reset:'.$warehouse->id,
+                120
+            )->block(10, function () use ($warehouse, $fromDate, $toDate, $validated) {
+                return DB::transaction(function () use ($warehouse, $fromDate, $toDate, $validated): array {
+                    $syncs = GoogleSheetInventorySync::query()
+                        ->where('warehouse_id', $warehouse->id)
+                        ->where('status', 'completed')
+                        ->whereBetween('inventory_date', [$fromDate, $toDate])
+                        ->orderByDesc('inventory_date')
+                        ->orderByDesc('id')
+                        ->lockForUpdate()
+                        ->get();
+
+                    if ($syncs->isEmpty()) {
+                        throw ValidationException::withMessages([
+                            'from_date' => 'Không có lần đồng bộ Google Sheet nào cần reset trong khoảng ngày đã chọn.',
+                        ]);
+                    }
+
+                    $deltasByVariant = [];
+                    foreach ($syncs as $sync) {
+                        foreach ((array) $sync->changes as $change) {
+                            $variantId = (int) ($change['product_variant_id'] ?? 0);
+                            $delta = round((float) ($change['delta'] ?? 0), 3);
+                            if ($variantId > 0 && abs($delta) >= 0.001) {
+                                $deltasByVariant[$variantId] = round(
+                                    ($deltasByVariant[$variantId] ?? 0) + $delta,
+                                    3
+                                );
+                            }
+                        }
+                    }
+
+                    $inventories = Inventory::query()
+                        ->where('warehouse_id', $warehouse->id)
+                        ->whereIn('product_variant_id', array_keys($deltasByVariant))
+                        ->lockForUpdate()
+                        ->get()
+                        ->keyBy('product_variant_id');
+
+                    foreach ($deltasByVariant as $variantId => $appliedDelta) {
+                        $inventory = $inventories->get($variantId);
+                        if (! $inventory) {
+                            throw ValidationException::withMessages([
+                                'from_date' => 'Không thể reset vì sản phẩm #'.$variantId.' không còn dòng tồn kho tương ứng.',
+                            ]);
+                        }
+
+                        $quantityAfterReset = round((float) $inventory->quantity - $appliedDelta, 3);
+                        if ($quantityAfterReset < 0 || $quantityAfterReset < (float) $inventory->reserved_quantity) {
+                            throw ValidationException::withMessages([
+                                'from_date' => 'Không thể reset vì tồn của sản phẩm #'.$variantId
+                                    .' sau hoàn tác sẽ thấp hơn 0 hoặc thấp hơn số lượng đang giữ chỗ.',
+                            ]);
+                        }
+                    }
+
+                    foreach ($syncs as $sync) {
+                        $syncDeltas = collect((array) $sync->changes)
+                            ->groupBy(fn (array $change) => (int) ($change['product_variant_id'] ?? 0))
+                            ->map(fn ($changes) => round((float) $changes->sum('delta'), 3))
+                            ->filter(fn ($delta, $variantId) => (int) $variantId > 0 && abs((float) $delta) >= 0.001);
+
+                        foreach ($syncDeltas as $variantId => $appliedDelta) {
+                            $inventory = $inventories->get((int) $variantId);
+                            InventoryMovement::query()->create([
+                                'inventory_id' => $inventory->id,
+                                'quantity' => -$appliedDelta,
+                                'type' => 'google_sheet_reset',
+                                'reference_id' => $sync->id,
+                                'reference_type' => GoogleSheetInventorySync::class,
+                                'user_id' => Auth::id(),
+                            ]);
+                        }
+
+                        $sync->update([
+                            'status' => 'reset',
+                            'reset_by' => Auth::id(),
+                            'reset_at' => now(),
+                            'reset_reason' => trim((string) ($validated['reset_reason'] ?? '')) ?: null,
+                        ]);
+                    }
+
+                    foreach ($deltasByVariant as $variantId => $appliedDelta) {
+                        $inventory = $inventories->get($variantId);
+                        $inventory->update([
+                            'quantity' => round((float) $inventory->quantity - $appliedDelta, 3),
+                        ]);
+                        ProductVariant::query()->whereKey($variantId)->update([
+                            'stock' => Inventory::query()->where('product_variant_id', $variantId)->sum('quantity'),
+                        ]);
+                    }
+
+                    return [
+                        'sync_count' => $syncs->count(),
+                        'variant_count' => count($deltasByVariant),
+                    ];
+                });
+            });
+        } catch (ValidationException $exception) {
+            throw $exception;
+        }
+
+        try {
+            app(WarehouseDashboardController::class)
+                ->refreshQueuedOrdersAfterInventoryChange((int) $warehouse->id);
+        } catch (\Throwable $exception) {
+            report($exception);
+        }
+
+        return redirect()->route('warehouse.google-sheet-inventory.index', [
+            'date' => $fromDate,
+            'warehouse_id' => $warehouse->id,
+        ])->with('success', 'Đã reset '.$result['sync_count'].' lần đồng bộ, hoàn tác tồn của '
+            .$result['variant_count'].' sản phẩm trong khoảng '
+            .Carbon::parse($fromDate)->format('d/m/Y').' – '.Carbon::parse($toDate)->format('d/m/Y').'.');
+    }
+
     private function resolveWarehouse(Request $request): Warehouse
     {
         $user = Auth::user();

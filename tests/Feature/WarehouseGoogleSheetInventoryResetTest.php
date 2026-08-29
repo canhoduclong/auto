@@ -1,0 +1,108 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\GoogleSheetInventorySync;
+use App\Models\Inventory;
+use App\Models\InventoryMovement;
+use App\Models\Product;
+use App\Models\Role;
+use App\Models\User;
+use App\Models\Warehouse;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+class WarehouseGoogleSheetInventoryResetTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_admin_can_reset_completed_sheet_syncs_in_a_date_range(): void
+    {
+        $warehouse = Warehouse::query()->create(['name' => 'Kho reset', 'status' => true]);
+        $adminRole = Role::query()->create(['name' => 'admin']);
+        $admin = User::factory()->create(['warehouse_id' => $warehouse->id]);
+        $admin->roles()->attach($adminRole);
+        $product = Product::factory()->create();
+        $variant = $product->variants()->create(['name' => 'M 2.5', 'sku' => 'RESET-2.5']);
+        $inventory = Inventory::query()->create([
+            'warehouse_id' => $warehouse->id,
+            'product_variant_id' => $variant->id,
+            'quantity' => 19,
+            'reserved_quantity' => 0,
+        ]);
+
+        $sync27 = $this->sync($warehouse, $admin, $variant->id, '2026-08-27', 1, 10);
+        $sync28 = $this->sync($warehouse, $admin, $variant->id, '2026-08-28', 1, 5);
+        $sync29 = $this->sync($warehouse, $admin, $variant->id, '2026-08-29', 1, 4);
+
+        $this->actingAs($admin)
+            ->delete(route('warehouse.google-sheet-inventory.reset'), [
+                'warehouse_id' => $warehouse->id,
+                'from_date' => '2026-08-27',
+                'to_date' => '2026-08-28',
+                'reset_reason' => 'Nhập lại dữ liệu kiểm thử',
+                'confirm_reset' => '1',
+            ])
+            ->assertRedirect(route('warehouse.google-sheet-inventory.index', [
+                'date' => '2026-08-27',
+                'warehouse_id' => $warehouse->id,
+            ]))
+            ->assertSessionHas('success');
+
+        $this->assertSame(4.0, (float) $inventory->fresh()->quantity);
+        $this->assertSame(4.0, (float) $variant->fresh()->stock);
+        $this->assertSame('reset', $sync27->fresh()->status);
+        $this->assertSame('reset', $sync28->fresh()->status);
+        $this->assertSame('completed', $sync29->fresh()->status);
+        $this->assertSame($admin->id, $sync27->fresh()->reset_by);
+        $this->assertSame('Nhập lại dữ liệu kiểm thử', $sync27->fresh()->reset_reason);
+        $this->assertSame(-15.0, (float) InventoryMovement::query()
+            ->where('inventory_id', $inventory->id)
+            ->where('type', 'google_sheet_reset')
+            ->sum('quantity'));
+    }
+
+    public function test_warehouse_user_cannot_reset_sheet_syncs(): void
+    {
+        $warehouse = Warehouse::query()->create(['name' => 'Kho thường', 'status' => true]);
+        $role = Role::query()->create(['name' => 'warehouse']);
+        $user = User::factory()->create(['warehouse_id' => $warehouse->id]);
+        $user->roles()->attach($role);
+
+        $this->actingAs($user)
+            ->delete(route('warehouse.google-sheet-inventory.reset'), [
+                'from_date' => '2026-08-27',
+                'to_date' => '2026-08-28',
+                'confirm_reset' => '1',
+            ])
+            ->assertRedirect(route('home'))
+            ->assertSessionHas('error', 'Chỉ Admin được reset dữ liệu tồn kho Google Sheet.');
+    }
+
+    private function sync(
+        Warehouse $warehouse,
+        User $user,
+        int $variantId,
+        string $date,
+        int $number,
+        float $delta
+    ): GoogleSheetInventorySync {
+        return GoogleSheetInventorySync::query()->create([
+            'warehouse_id' => $warehouse->id,
+            'spreadsheet_id' => 'reset-range-test',
+            'sheet_id' => 456,
+            'inventory_date' => $date,
+            'sync_number' => $number,
+            'created_by' => $user->id,
+            'status' => 'completed',
+            'total_positive_delta' => max(0, $delta),
+            'total_negative_delta' => abs(min(0, $delta)),
+            'applied_rows_count' => 1,
+            'snapshot' => [(string) $variantId => $delta],
+            'changes' => [[
+                'product_variant_id' => $variantId,
+                'delta' => $delta,
+            ]],
+        ]);
+    }
+}
