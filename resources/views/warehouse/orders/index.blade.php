@@ -937,6 +937,7 @@
                 ? max(0, (float) $fifoRemainingStock[$variantId])
                 : $rawStock;
             return [
+                'variant_id'    => $variantId,
                 'name'          => $first['name'] ?? 'Sản phẩm',
                 'raw_stock'     => $rawStock,
                 'fifo_remaining'=> $fifoRemaining,
@@ -1184,7 +1185,7 @@
         @if($inventoryStats->isEmpty())
             <div class="text-center text-muted py-5">
                 <i class="bi bi-inbox fs-1"></i>
-                <p class="mt-2">Không có đơn hàng nào trong ngày này.</p>
+                <p class="mt-2">Không có dữ liệu tồn cuối cho ngày này.</p>
             </div>
         @else
            
@@ -1192,7 +1193,7 @@
                 <div class="wh-stock-row head">
                     <div class="wh-stock-col">Tên sản phẩm</div>
                     <div class="wh-stock-col col-size">Size</div>
-                    <div class="wh-stock-col num">Tồn kho</div>
+                    <div class="wh-stock-col num">Tồn cuối đã chốt</div>
                     <div class="wh-stock-col num col-available">Khả dụng</div>
                     <div class="wh-stock-col num col-ordered">SL đặt</div>
                     <div class="wh-stock-col num col-packed">Đã đóng</div>

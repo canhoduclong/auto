@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\CuttingComponentImportRequest;
+use App\Models\GoogleSheetInventorySync;
 use App\Models\Inventory;
 use App\Models\InventoryDocument;
 use App\Models\InventoryDocumentItem;
@@ -1036,6 +1037,35 @@ class WarehouseDashboardController extends Controller
         $stockGuardMap = $stockGuardResult['guards'];
         $fifoRemainingStock = $stockGuardResult['remaining_by_variant']; // variantId => float remaining after FIFO
 
+        // The stock drawer is a daily closing-stock report, so it must not be
+        // derived only from the products present in that day's orders. Include
+        // every variant held by the managed warehouse and reconstruct its
+        // quantity at the selected business date. This also keeps historical
+        // days visible after their orders have moved out of the packing queue.
+        $inventoryVariantIds = Inventory::query()
+            ->when($managedWarehouseId, fn ($query) => $query->where('warehouse_id', $managedWarehouseId))
+            ->pluck('product_variant_id')
+            ->map(fn ($id) => (int) $id);
+        $orderVariantIds = $orders
+            ->flatMap(fn (Order $order) => $order->items->pluck('product_variant_id'))
+            ->filter()
+            ->map(fn ($id) => (int) $id);
+        $stockPanelVariantIds = $inventoryVariantIds
+            ->merge($orderVariantIds)
+            ->unique()
+            ->values();
+        $stockPanelVariants = ProductVariant::query()
+            ->with('product')
+            ->whereIn('id', $stockPanelVariantIds->all())
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get();
+        $variantStock = $this->getStockAtDate(
+            $stockPanelVariantIds,
+            $managedWarehouseId,
+            $selectedDate
+        );
+
         $availableVariants = Inventory::query()
             ->with(['productVariant.product', 'productVariant.values.attribute'])
             ->where('warehouse_id', $managedWarehouseId)
@@ -1169,6 +1199,8 @@ class WarehouseDashboardController extends Controller
             'status',
             'quickDates',
             'fifoRemainingStock',
+            'variantStock',
+            'stockPanelVariants',
             'activeTransfersByOrder',
             'activePackingGoodsTransfersByOrder',
             'packingReservedQuantitiesByOrder',
@@ -2293,6 +2325,10 @@ class WarehouseDashboardController extends Controller
                 $join->on('movement_documents.id', '=', 'inventory_movements.reference_id')
                     ->where('inventory_movements.reference_type', InventoryDocument::class);
             })
+            ->leftJoin('google_sheet_inventory_syncs as movement_sheet_syncs', function ($join): void {
+                $join->on('movement_sheet_syncs.id', '=', 'inventory_movements.reference_id')
+                    ->where('inventory_movements.reference_type', GoogleSheetInventorySync::class);
+            })
             ->whereIn('inventory_movements.inventory_id', $inventoryIds->all())
             ->where(function ($query) use ($date): void {
                 $query->where(function ($documentMovement) use ($date): void {
@@ -2305,11 +2341,24 @@ class WarehouseDashboardController extends Controller
                                         ->whereDate('inventory_movements.created_at', '>', $date);
                                 });
                         });
+                })->orWhere(function ($sheetMovement) use ($date): void {
+                    $sheetMovement
+                        ->where('inventory_movements.reference_type', GoogleSheetInventorySync::class)
+                        ->where(function ($effectiveDate) use ($date): void {
+                            $effectiveDate->whereDate('movement_sheet_syncs.inventory_date', '>', $date)
+                                ->orWhere(function ($missingSync) use ($date): void {
+                                    $missingSync->whereNull('movement_sheet_syncs.id')
+                                        ->whereDate('inventory_movements.created_at', '>', $date);
+                                });
+                        });
                 })->orWhere(function ($otherMovement) use ($date): void {
                     $otherMovement
                         ->where(function ($referenceType): void {
                             $referenceType->whereNull('inventory_movements.reference_type')
-                                ->orWhere('inventory_movements.reference_type', '!=', InventoryDocument::class);
+                                ->orWhere(function ($knownTypes): void {
+                                    $knownTypes->where('inventory_movements.reference_type', '!=', InventoryDocument::class)
+                                        ->where('inventory_movements.reference_type', '!=', GoogleSheetInventorySync::class);
+                                });
                         })
                         ->whereDate('inventory_movements.created_at', '>', $date);
                 });
