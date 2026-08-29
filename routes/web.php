@@ -724,12 +724,15 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::post('admin/order-schedule-runs/run-daily-rules-now', [OrderScheduleRunController::class, 'runDailyRulesNow'])->name('admin.order-schedule-runs.run-daily-rules-now')->middleware('role:admin');
     Route::get('admin/text-order-import', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'index'])->name('admin.text-order-import.index')->middleware('role:admin');
     Route::post('admin/text-order-import/parse', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'parse'])->name('admin.text-order-import.parse')->middleware('role:admin');
+    Route::post('admin/text-order-import/parse-for-sale', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'parseForSale'])->name('admin.text-order-import.parse-for-sale')->middleware('role:admin');
     Route::post('admin/text-order-import/bulk-confirm', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'bulkConfirm'])->name('admin.text-order-import.bulk-confirm')->middleware('role:admin');
     Route::post('admin/text-order-import/bulk-delete', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'bulkDestroy'])->name('admin.text-order-import.bulk-delete')->middleware('role:admin');
     Route::post('admin/text-order-import/{draft}/copy', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'copy'])->name('admin.text-order-import.copy')->middleware('role:admin');
     Route::post('admin/text-order-import/{draft}/copy-confirm', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'copyConfirm'])->name('admin.text-order-import.copy-confirm')->middleware('role:admin');
     Route::post('admin/text-order-import/{draft}/confirm', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'confirm'])->name('admin.text-order-import.confirm')->middleware('role:admin');
     Route::delete('admin/text-order-import/{draft}', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'destroy'])->name('admin.text-order-import.destroy')->middleware('role:admin');
+    Route::get('admin/daily-rebuild', [\App\Http\Controllers\AdminDailyRebuildController::class, 'index'])->name('admin.daily-rebuild.index')->middleware('role:admin');
+    Route::post('admin/daily-rebuild', [\App\Http\Controllers\AdminDailyRebuildController::class, 'execute'])->name('admin.daily-rebuild.execute')->middleware('role:admin');
 
     // Quản lý đơn hàng
     Route::get('orders/list-ajax', [OrderController::class, 'listAjax'])->name('orders.list-ajax');

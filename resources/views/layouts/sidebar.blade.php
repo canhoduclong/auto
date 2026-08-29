@@ -149,6 +149,12 @@
 							</a>
 						</li>
 						<li class="nav-item">
+							<a href="{{ route('admin.daily-rebuild.index') }}" class="nav-link{{ request()->routeIs('admin.daily-rebuild.*') ? ' active' : '' }}">
+								<i class="ph-arrow-counter-clockwise"></i>
+								<span>Làm lại nguyên ngày</span>
+							</a>
+						</li>
+						<li class="nav-item">
 							<a href="{{ route('admin.imported-sales-orders.index') }}" class="nav-link{{ request()->routeIs('admin.imported-sales-orders.*') ? ' active' : '' }}">
 								<i class="ph-clipboard-text"></i>
 								<span>Hoàn chỉnh đơn lịch sử</span>

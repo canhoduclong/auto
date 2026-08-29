@@ -15,11 +15,45 @@
     @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
     @if($errors->any())<div class="alert alert-danger">{{ $errors->first() }}</div>@endif
 
+    @unless($saleMode ?? false)
+    <div class="card border-primary shadow-sm mb-4">
+        <div class="card-header bg-primary text-white">
+            <strong><i class="ph-user-circle-plus me-1"></i>Nhập text đơn cho từng Sale</strong>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ route('admin.text-order-import.parse-for-sale') }}">
+                @csrf
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Sale nhận đơn <span class="text-danger">*</span></label>
+                        <select name="sale_id" class="form-select" required>
+                            <option value="">Chọn Sale</option>
+                            @foreach($sales as $sale)
+                                <option value="{{ $sale->id }}" @selected((int) old('sale_id') === $sale->id)>{{ $sale->name }}{{ $sale->zalo_name ? ' · '.$sale->zalo_name : '' }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Ngày giao / ngày áp dụng <span class="text-danger">*</span></label>
+                        <input type="date" name="delivery_date" class="form-control" value="{{ old('delivery_date', request('delivery_date', now('Asia/Bangkok')->toDateString())) }}" required>
+                    </div>
+                </div>
+                <label class="form-label fw-semibold">Nội dung đơn hàng <span class="text-danger">*</span></label>
+                <textarea name="text" rows="10" class="form-control" required placeholder="Có thể dán nguyên nội dung xuất từ Zalo hoặc một đơn dạng: KH, SĐT, địa chỉ, sản phẩm, số lượng, size, giá...">{{ old('text') }}</textarea>
+                <div class="d-flex justify-content-between align-items-center gap-3 mt-3">
+                    <small class="text-muted">Tất cả đơn nhận diện trong nội dung sẽ được gán cho Sale và ngày đã chọn. Hệ thống tạo bản import để Admin kiểm tra trước khi xác nhận.</small>
+                    <button class="btn btn-primary text-nowrap"><i class="ph-magic-wand me-1"></i>Tạo đơn import</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    @endunless
+
     <div class="card border-0 shadow-sm mb-4">
         <div class="card-body">
             <form method="POST" action="{{ $parseRoute ?? route('admin.text-order-import.parse') }}">
                 @csrf
-                <label class="form-label fw-semibold">Nội dung copy từ Zalo</label>
+                <label class="form-label fw-semibold">Nhập tự động theo tên và ngày trong nội dung Zalo</label>
                 <textarea name="text" rows="12" class="form-control" required placeholder="[14/06/2026 10:45:10] Tên Zalo sale: KH: ...">{{ old('text') }}</textarea>
                 <div class="d-flex justify-content-between align-items-center mt-3">
                     <small class="text-muted">Tin nhắn ghi chú cùng sale sẽ được nối vào đơn gần nhất. Danh thiếp, hình ảnh và tin thu hồi được bỏ qua.</small>

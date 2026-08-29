@@ -241,6 +241,58 @@ class TextOrderImportController extends Controller
         return back()->with('success', 'Đã nhận diện ' . $parsed->count() . ' đơn nháp từ nội dung Zalo.');
     }
 
+    /**
+     * Admin import for one explicitly selected sale and business date.
+     * The text may be a normal Zalo export or a plain single-order message.
+     */
+    public function parseForSale(Request $request, ZaloOrderTextParser $parser)
+    {
+        $validated = $request->validate([
+            'sale_id' => ['required', 'integer', 'exists:users,id'],
+            'delivery_date' => ['required', 'date'],
+            'text' => ['required', 'string', 'max:200000'],
+        ]);
+        $sale = User::query()->with('roles')->findOrFail((int) $validated['sale_id']);
+        if (! $sale->hasRole('sale')) {
+            throw ValidationException::withMessages([
+                'sale_id' => 'Tài khoản được chọn không có vai trò Sale.',
+            ]);
+        }
+
+        $deliveryDate = Carbon::parse($validated['delivery_date'])->toDateString();
+        $parsed = $parser->parse($validated['text']);
+
+        // Allow Admin to paste one plain order without the Zalo export header.
+        if ($parsed->isEmpty()) {
+            $messageDate = Carbon::parse($deliveryDate)->subDay()->format('d/m/Y');
+            $sender = trim((string) ($sale->zalo_name ?: $sale->name)) ?: 'Sale';
+            $parsed = $parser->parse(
+                '['.$messageDate.' 00:00:00] '.$sender.': '.trim($validated['text'])
+            );
+        }
+
+        if ($parsed->isEmpty()) {
+            throw ValidationException::withMessages([
+                'text' => 'Không nhận diện được đơn hàng trong nội dung. Hãy kiểm tra tên khách, số điện thoại, sản phẩm và số lượng.',
+            ]);
+        }
+
+        DB::transaction(function () use ($parsed, $sale, $deliveryDate, $request): void {
+            foreach ($parsed as $data) {
+                TextOrderDraft::query()->create(array_merge($data, [
+                    'created_by' => (int) $request->user()->id,
+                    'draft_scope' => TextOrderDraft::SCOPE_ADMIN_IMPORT,
+                    'sale_id' => (int) $sale->id,
+                    'delivery_date' => $deliveryDate,
+                ]));
+            }
+        });
+
+        return redirect()->route('admin.text-order-import.index')
+            ->with('success', 'Đã tạo '.$parsed->count().' đơn import cho '.$sale->name
+                .' ngày '.Carbon::parse($deliveryDate)->format('d/m/Y').'.');
+    }
+
     public function saleConfirm(Request $request, TextOrderDraft $draft, ApprovalService $approvalService): JsonResponse
     {
         $this->ensureSaleDraft($request, $draft);
@@ -403,7 +455,7 @@ class TextOrderImportController extends Controller
                 'message' => 'Đã xác nhận đơn ' . ($order->code ?: '#' . $order->id),
                 'order_id' => $order->id,
                 'order_code' => $order->code,
-                'delivery_date' => $this->today(),
+                'delivery_date' => optional($order->delivery_date)->toDateString() ?: $this->today(),
             ]);
         } catch (\Throwable $exception) {
             $draft->update(['status' => 'error', 'error_message' => $exception->getMessage()]);
@@ -426,7 +478,7 @@ class TextOrderImportController extends Controller
             return response()->json([
                 'message' => 'Đã sao chép thành bản nháp #' . $copy->id . ' cho sale.',
                 'draft_id' => $copy->id,
-                'delivery_date' => $this->today(),
+                'delivery_date' => optional($copy->delivery_date)->toDateString() ?: $this->today(),
             ]);
         } catch (\Throwable $exception) {
             return response()->json(['message' => $exception->getMessage()], 422);
@@ -454,7 +506,7 @@ class TextOrderImportController extends Controller
                 'draft_id' => $copy->id,
                 'order_id' => $order->id,
                 'order_code' => $order->code,
-                'delivery_date' => $this->today(),
+                'delivery_date' => optional($order->delivery_date)->toDateString() ?: $this->today(),
             ]);
         } catch (\Throwable $exception) {
             return response()->json(['message' => $exception->getMessage()], 422);
@@ -531,8 +583,12 @@ class TextOrderImportController extends Controller
     {
         abort_if($draft->status === 'confirmed', 422, 'Đơn nháp này đã được xác nhận.');
 
-        $draft->fill($this->validatedDraftData($request));
-        $draft->delivery_date = $this->today();
+        $draftData = $this->validatedDraftData($request);
+        $deliveryDate = Carbon::parse(
+            $draftData['delivery_date'] ?? $draft->delivery_date?->toDateString() ?? $this->today()
+        )->toDateString();
+        $draftData['delivery_date'] = $deliveryDate;
+        $draft->fill($draftData);
         if ($draft->sale_id) {
             $draft->created_by = $draft->sale_id;
         }
@@ -572,7 +628,7 @@ class TextOrderImportController extends Controller
             ]);
         }
 
-        return DB::transaction(function () use ($draft, $customer, $draftItems, $truckStation, $approvalService) {
+        return DB::transaction(function () use ($draft, $customer, $draftItems, $truckStation, $approvalService, $deliveryDate) {
             $order = app(OrderController::class)->createOrderFromSchedule(
                 $draftItems->map(fn ($item) => [
                     'variant_id' => (int) $item['product_variant_id'],
@@ -590,7 +646,7 @@ class TextOrderImportController extends Controller
                     'recipient_phone' => $draft->phone ?: $customer->phone,
                     'recipient_address' => $draft->address ?: $customer->address,
                     'note' => $draft->note,
-                    'delivery_date' => $this->today(),
+                    'delivery_date' => $deliveryDate,
                     'delivery_time' => $draft->delivery_time,
                     'use_truck_station' => (bool) $draft->use_truck_station,
                     'truck_station_id' => $truckStation?->id,
@@ -703,7 +759,9 @@ class TextOrderImportController extends Controller
         ]);
         $copy->fill($data);
         $copy->created_by = $data['sale_id'];
-        $copy->delivery_date = $this->today();
+        $copy->delivery_date = Carbon::parse(
+            $data['delivery_date'] ?? $draft->delivery_date?->toDateString() ?? $this->today()
+        )->toDateString();
         $copy->order_id = null;
         $copy->status = 'draft';
         $copy->error_message = null;
