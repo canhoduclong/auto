@@ -734,6 +734,17 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::delete('admin/text-order-import/{draft}', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'destroy'])->name('admin.text-order-import.destroy')->middleware('role:admin');
     Route::get('admin/daily-rebuild', [\App\Http\Controllers\AdminDailyRebuildController::class, 'index'])->name('admin.daily-rebuild.index')->middleware('role:admin');
     Route::post('admin/daily-rebuild', [\App\Http\Controllers\AdminDailyRebuildController::class, 'execute'])->name('admin.daily-rebuild.execute')->middleware('role:admin');
+    Route::prefix('admin/warehouse-dispatch-slips')->name('admin.warehouse-dispatch-slips.')->middleware('role:admin')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'index'])->name('index');
+        Route::post('/', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'store'])->name('store');
+        Route::get('/{dispatchSlip}/edit', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'edit'])->name('edit');
+        Route::put('/{dispatchSlip}', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'update'])->name('update');
+        Route::get('/{dispatchSlip}', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'show'])->name('show');
+        Route::post('/{dispatchSlip}/finalize', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'finalize'])->name('finalize');
+        Route::delete('/{dispatchSlip}', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'destroy'])->name('destroy');
+        Route::get('/{dispatchSlip}/print-export', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'printExport'])->name('print-export');
+        Route::get('/{dispatchSlip}/print-import', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'printImport'])->name('print-import');
+    });
 
     // Quản lý đơn hàng
     Route::get('orders/list-ajax', [OrderController::class, 'listAjax'])->name('orders.list-ajax');

@@ -1,4 +1,4 @@
-@extends('layouts.warehouse')
+@extends($dispatchLayout ?? 'layouts.warehouse')
 
 @section('title', 'Sửa '.$dispatchSlip->code)
 
@@ -11,7 +11,7 @@
 @section('content')
 <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
     <div>
-        <a href="{{ route('warehouse.dispatch-slips.show', $dispatchSlip) }}" class="small text-decoration-none"><i class="bi bi-arrow-left"></i> Quay lại phiếu</a>
+        <a href="{{ route($dispatchRoutePrefix.'.show', $dispatchSlip) }}" class="small text-decoration-none"><i class="bi bi-arrow-left"></i> Quay lại phiếu</a>
         <h4 class="fw-bold mt-1 mb-1">Sửa {{ $dispatchSlip->code }}</h4>
         <div class="text-muted">Chỉ phiếu đang mở mới được thay đổi nội dung bàn giao.</div>
     </div>
@@ -21,7 +21,7 @@
     <div class="alert alert-danger"><strong>Chưa thể cập nhật:</strong><ul class="mb-0 mt-1">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>
 @endif
 
-<form method="POST" action="{{ route('warehouse.dispatch-slips.update', $dispatchSlip) }}" id="dispatchEditForm" class="dispatch-edit-panel">
+<form method="POST" action="{{ route($dispatchRoutePrefix.'.update', $dispatchSlip) }}" id="dispatchEditForm" class="dispatch-edit-panel">
     @csrf
     @method('PUT')
     <div class="row g-3">
@@ -67,7 +67,7 @@
     </div>
 
     <div class="mt-3"><label class="form-label fw-semibold">Ghi chú bàn giao</label><textarea name="notes" class="form-control" rows="3" maxlength="2000" placeholder="Số kiện, lưu ý bảo quản, thông tin bàn giao...">{{ old('notes', $dispatchSlip->notes) }}</textarea></div>
-    <div class="d-flex justify-content-end gap-2 mt-3"><a href="{{ route('warehouse.dispatch-slips.show', $dispatchSlip) }}" class="btn btn-outline-secondary">Hủy</a><button class="btn btn-primary fw-bold" type="submit"><i class="bi bi-check2-circle me-1"></i>Lưu thay đổi</button></div>
+    <div class="d-flex justify-content-end gap-2 mt-3"><a href="{{ route($dispatchRoutePrefix.'.show', $dispatchSlip) }}" class="btn btn-outline-secondary">Hủy</a><button class="btn btn-primary fw-bold" type="submit"><i class="bi bi-check2-circle me-1"></i>Lưu thay đổi</button></div>
 </form>
 
 <script>

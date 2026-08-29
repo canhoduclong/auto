@@ -326,6 +326,12 @@
 							</a>
 						</li>
 						<li class="nav-item">
+							<a href="{{ route('admin.warehouse-dispatch-slips.index') }}" class="nav-link{{ request()->routeIs('admin.warehouse-dispatch-slips.*') ? ' active' : '' }}">
+								<i class="ph-file-text"></i>
+								<span>Phiếu xuất kho tổng</span>
+							</a>
+						</li>
+						<li class="nav-item">
 							<a href="{{ route('inventories.index') }}" class="nav-link{{ request()->routeIs('inventories.*') ? ' active' : '' }}">
 								<i class="ph-chart-bar"></i>
 								<span>Báo cáo tồn kho</span>

@@ -13,11 +13,11 @@
     <div class="d-flex gap-2 flex-wrap">
         <a target="_blank" href="{{ route($dispatchRoutePrefix.'.print-export', $slip) }}" class="btn btn-outline-primary"><i class="bi bi-printer me-1"></i>In phiếu xuất tổng</a>
         @unless($readOnly)
-        <a target="_blank" href="{{ route('warehouse.dispatch-slips.print-import', $slip) }}" class="btn btn-outline-success"><i class="bi bi-printer me-1"></i>In phiếu nhập tổng</a>
-        @if($slip->status === 'draft' && (!auth()->user()->warehouse_id || (int) auth()->user()->warehouse_id === (int) $slip->source_warehouse_id))
-            <a href="{{ route('warehouse.dispatch-slips.edit', $slip) }}" class="btn btn-warning"><i class="bi bi-pencil-square me-1"></i>Sửa phiếu</a>
-            <form method="POST" action="{{ route('warehouse.dispatch-slips.finalize', $slip) }}" onsubmit="return confirm('Chốt phiếu và khóa danh sách bàn giao?');">@csrf<button class="btn btn-success fw-bold">Chốt phiếu</button></form>
-            <form method="POST" action="{{ route('warehouse.dispatch-slips.destroy', $slip) }}" onsubmit="return confirm('Xóa phiếu đang mở này?');">@csrf @method('DELETE')<button class="btn btn-outline-danger">Xóa</button></form>
+        <a target="_blank" href="{{ route($dispatchRoutePrefix.'.print-import', $slip) }}" class="btn btn-outline-success"><i class="bi bi-printer me-1"></i>In phiếu nhập tổng</a>
+        @if($slip->status === 'draft' && (auth()->user()->hasRole('admin') || !auth()->user()->warehouse_id || (int) auth()->user()->warehouse_id === (int) $slip->source_warehouse_id))
+            <a href="{{ route($dispatchRoutePrefix.'.edit', $slip) }}" class="btn btn-warning"><i class="bi bi-pencil-square me-1"></i>Sửa phiếu</a>
+            <form method="POST" action="{{ route($dispatchRoutePrefix.'.finalize', $slip) }}" onsubmit="return confirm('Chốt phiếu và khóa danh sách bàn giao?');">@csrf<button class="btn btn-success fw-bold">Chốt phiếu</button></form>
+            <form method="POST" action="{{ route($dispatchRoutePrefix.'.destroy', $slip) }}" onsubmit="return confirm('Xóa phiếu đang mở này?');">@csrf @method('DELETE')<button class="btn btn-outline-danger">Xóa</button></form>
         @endif
         @endunless
     </div>

@@ -348,4 +348,37 @@ class WarehouseDispatchSlipWorkflowTest extends TestCase
         $this->assertDatabaseMissing('warehouse_dispatch_slips', ['id' => $slip->id]);
         $this->assertNull($transfer->fresh()->dispatchEntry);
     }
+
+    public function test_admin_can_manage_a_draft_slip_from_another_warehouse_in_admin_layout(): void
+    {
+        $adminRole = Role::create(['name' => 'admin']);
+        $assignedWarehouse = Warehouse::create(['name' => 'Kho gắn với admin']);
+        $source = Warehouse::create(['name' => 'Kho nguồn khác']);
+        $target = Warehouse::create(['name' => 'Kho nhận khác']);
+        $admin = User::factory()->create(['warehouse_id' => $assignedWarehouse->id]);
+        $admin->roles()->attach($adminRole);
+        $shipper = User::factory()->create();
+        $slip = WarehouseDispatchSlip::create([
+            'business_date' => now()->subDays(2),
+            'source_warehouse_id' => $source->id,
+            'target_warehouse_id' => $target->id,
+            'shipper_id' => $shipper->id,
+            'status' => WarehouseDispatchSlip::STATUS_DRAFT,
+            'created_by' => $admin->id,
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.warehouse-dispatch-slips.index'))
+            ->assertOk()
+            ->assertSee('Quản trị phiếu xuất kho tổng')
+            ->assertSee($slip->code)
+            ->assertSee(route('admin.warehouse-dispatch-slips.edit', $slip));
+
+        $this->actingAs($admin)
+            ->delete(route('admin.warehouse-dispatch-slips.destroy', $slip))
+            ->assertRedirect(route('admin.warehouse-dispatch-slips.index'))
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseMissing('warehouse_dispatch_slips', ['id' => $slip->id]);
+    }
 }

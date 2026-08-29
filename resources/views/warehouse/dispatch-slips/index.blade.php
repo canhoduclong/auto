@@ -1,4 +1,4 @@
-@extends('layouts.warehouse')
+@extends($dispatchLayout ?? 'layouts.warehouse')
 
 @section('title', 'Phiếu xuất kho tổng')
 
@@ -11,7 +11,7 @@
 @section('content')
 <div class="dispatch-hero mb-3 d-flex justify-content-between align-items-start gap-3 flex-wrap">
     <div>
-        <h4 class="fw-bold mb-1"><i class="bi bi-file-earmark-spreadsheet me-2"></i>Phiếu xuất kho tổng</h4>
+        <h4 class="fw-bold mb-1"><i class="bi bi-file-earmark-spreadsheet me-2"></i>{{ !empty($isAdminManagement) ? 'Quản trị phiếu xuất kho tổng' : 'Phiếu xuất kho tổng' }}</h4>
         <div class="small opacity-75">Gom đơn hoàn thiện và hàng điều chuyển theo tài xế để bàn giao, in và đối chiếu.</div>
     </div>
 </div>
@@ -22,7 +22,7 @@
 
 <div class="dispatch-panel mb-4">
     <h6 class="fw-bold mb-3">Lập phiếu mới</h6>
-    <form method="POST" action="{{ route('warehouse.dispatch-slips.store') }}" id="dispatchCreateForm">
+    <form method="POST" action="{{ route($dispatchRoutePrefix.'.store') }}" id="dispatchCreateForm">
         @csrf
         <div class="row g-3">
             <div class="col-lg-3">
@@ -31,7 +31,7 @@
                     <input type="hidden" name="source_warehouse_id" value="{{ $managedWarehouseId }}">
                     <input class="form-control" value="{{ $sourceWarehouses->firstWhere('id', $managedWarehouseId)?->name ?? 'Kho hiện tại' }}" readonly>
                 @else
-                    <select name="source_warehouse_id" class="form-select" onchange="location.href='{{ route('warehouse.dispatch-slips.index') }}?source_warehouse_id='+this.value">
+                    <select name="source_warehouse_id" class="form-select" onchange="location.href='{{ route($dispatchRoutePrefix.'.index') }}?source_warehouse_id='+this.value">
                         @foreach($sourceWarehouses as $warehouse)<option value="{{ $warehouse->id }}" @selected($sourceWarehouseId === $warehouse->id)>{{ $warehouse->name }}</option>@endforeach
                     </select>
                 @endif
@@ -151,6 +151,9 @@
             <div class="col-auto"><label class="small">Từ ngày</label><input type="date" name="from_date" value="{{ $from }}" class="form-control form-control-sm"></div>
             <div class="col-auto"><label class="small">Đến ngày</label><input type="date" name="to_date" value="{{ $to }}" class="form-control form-control-sm"></div>
             <div class="col-auto"><label class="small">Trạng thái</label><select name="status" class="form-select form-select-sm"><option value="">Tất cả</option><option value="draft" @selected(request('status') === 'draft')>Đang mở</option><option value="finalized" @selected(request('status') === 'finalized')>Đã chốt</option></select></div>
+            @if(!empty($isAdminManagement))
+                <div class="col-auto"><label class="small">Kho xuất</label><select name="source_warehouse_filter" class="form-select form-select-sm"><option value="">Tất cả kho</option>@foreach($sourceWarehouses as $warehouse)<option value="{{ $warehouse->id }}" @selected((int) request('source_warehouse_filter') === (int) $warehouse->id)>{{ $warehouse->name }}</option>@endforeach</select></div>
+            @endif
             <div class="col-auto"><label class="small">Mã phiếu</label><input name="search" value="{{ request('search') }}" class="form-control form-control-sm" placeholder="PXKT-..."></div>
             <div class="col-auto"><button class="btn btn-primary btn-sm">Lọc</button></div>
         </form>
@@ -160,18 +163,18 @@
             @php $percent = $slip->entry_total ? round($slip->entry_received * 100 / $slip->entry_total) : 0; @endphp
             <div class="dispatch-slip-card">
                 <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
-                    <div><a class="fw-bold text-decoration-none" href="{{ route('warehouse.dispatch-slips.show', $slip) }}">{{ $slip->code }}</a><div class="small text-muted">{{ $slip->business_date->format('d/m/Y') }} · {{ $slip->sourceWarehouse?->name }} → {{ $slip->targetWarehouse?->name }}</div></div>
+                    <div><a class="fw-bold text-decoration-none" href="{{ route($dispatchRoutePrefix.'.show', $slip) }}">{{ $slip->code }}</a><div class="small text-muted">{{ $slip->business_date->format('d/m/Y') }} · {{ $slip->sourceWarehouse?->name }} → {{ $slip->targetWarehouse?->name }}</div></div>
                     <span class="badge {{ $slip->status === 'draft' ? 'bg-warning text-dark' : 'bg-success' }}">{{ $slip->status === 'draft' ? 'Đang mở' : 'Đã chốt' }}</span>
                 </div>
                 <div class="row g-2 mt-1 small"><div class="col-md-4">Tài xế: <strong>{{ $slip->shipper?->short_name ?: $slip->shipper?->name }}</strong></div><div class="col-md-4">Nội dung: <strong>{{ $slip->entry_total }} mục</strong></div><div class="col-md-4">{{ $slip->progress_label }}</div></div>
                 <div class="dispatch-progress mt-2"><span style="width:{{ $percent }}%"></span></div>
                 <div class="dispatch-actions d-flex gap-2 flex-wrap align-items-center">
-                    <a href="{{ route('warehouse.dispatch-slips.show', $slip) }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-eye me-1"></i>Xem</a>
-                    <a target="_blank" href="{{ route('warehouse.dispatch-slips.print-export', $slip) }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-printer me-1"></i>In phiếu xuất</a>
-                    @if($slip->status === 'draft' && (!auth()->user()->warehouse_id || (int) auth()->user()->warehouse_id === (int) $slip->source_warehouse_id))
-                        <a href="{{ route('warehouse.dispatch-slips.edit', $slip) }}" class="btn btn-warning btn-sm"><i class="bi bi-pencil-square me-1"></i>Sửa</a>
-                        <form method="POST" action="{{ route('warehouse.dispatch-slips.finalize', $slip) }}" onsubmit="return confirm('Chốt phiếu {{ $slip->code }} và khóa danh sách bàn giao?');">@csrf<button class="btn btn-success btn-sm"><i class="bi bi-check2-circle me-1"></i>Chốt</button></form>
-                        <form method="POST" action="{{ route('warehouse.dispatch-slips.destroy', $slip) }}" class="ms-auto" onsubmit="return confirm('Xóa phiếu {{ $slip->code }}? Nội dung sẽ được trả về danh sách để lập phiếu khác.');">@csrf @method('DELETE')<button class="btn btn-outline-danger btn-sm"><i class="bi bi-trash me-1"></i>Xóa</button></form>
+                    <a href="{{ route($dispatchRoutePrefix.'.show', $slip) }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-eye me-1"></i>Xem</a>
+                    <a target="_blank" href="{{ route($dispatchRoutePrefix.'.print-export', $slip) }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-printer me-1"></i>In phiếu xuất</a>
+                    @if($slip->status === 'draft' && (auth()->user()->hasRole('admin') || !auth()->user()->warehouse_id || (int) auth()->user()->warehouse_id === (int) $slip->source_warehouse_id))
+                        <a href="{{ route($dispatchRoutePrefix.'.edit', $slip) }}" class="btn btn-warning btn-sm"><i class="bi bi-pencil-square me-1"></i>Sửa</a>
+                        <form method="POST" action="{{ route($dispatchRoutePrefix.'.finalize', $slip) }}" onsubmit="return confirm('Chốt phiếu {{ $slip->code }} và khóa danh sách bàn giao?');">@csrf<button class="btn btn-success btn-sm"><i class="bi bi-check2-circle me-1"></i>Chốt</button></form>
+                        <form method="POST" action="{{ route($dispatchRoutePrefix.'.destroy', $slip) }}" class="ms-auto" onsubmit="return confirm('Xóa phiếu {{ $slip->code }}? Nội dung sẽ được trả về danh sách để lập phiếu khác.');">@csrf @method('DELETE')<button class="btn btn-outline-danger btn-sm"><i class="bi bi-trash me-1"></i>Xóa</button></form>
                     @endif
                 </div>
             </div>

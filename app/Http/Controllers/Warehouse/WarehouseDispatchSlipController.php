@@ -79,10 +79,11 @@ class WarehouseDispatchSlipController extends Controller
 
     public function index(Request $request)
     {
-        $managedWarehouseId = Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
+        $isAdminManagement = $request->routeIs('admin.warehouse-dispatch-slips.*');
+        $managedWarehouseId = $this->managedWarehouseId();
         $from = $request->filled('from_date')
             ? Carbon::parse($request->input('from_date'))->toDateString()
-            : now()->toDateString();
+            : ($isAdminManagement ? now()->startOfMonth()->toDateString() : now()->toDateString());
         $to = $request->filled('to_date')
             ? Carbon::parse($request->input('to_date'))->toDateString()
             : now()->toDateString();
@@ -97,6 +98,7 @@ class WarehouseDispatchSlipController extends Controller
                     ->orWhere('target_warehouse_id', $managedWarehouseId);
             }))
             ->whereBetween('business_date', [$from, $to])
+            ->when($request->filled('source_warehouse_filter'), fn ($query) => $query->where('source_warehouse_id', $request->integer('source_warehouse_filter')))
             ->when($request->filled('status'), fn ($query) => $query->where('status', $request->input('status')))
             ->when($request->filled('shipper_id'), fn ($query) => $query->where('shipper_id', $request->integer('shipper_id')))
             ->when($request->filled('search'), fn ($query) => $query->where('code', 'like', '%'.trim((string) $request->input('search')).'%'))
@@ -148,16 +150,20 @@ class WarehouseDispatchSlipController extends Controller
             ->whereHas('order', fn ($query) => $query->whereNull('order_transfer_id'))
             ->latest('id')->get();
 
+        $dispatchRoutePrefix = $this->managementRoutePrefix();
+        $dispatchLayout = $isAdminManagement ? 'layouts.admin' : 'layouts.warehouse';
+
         return view('warehouse.dispatch-slips.index', compact(
             'slips', 'from', 'to', 'managedWarehouseId', 'sourceWarehouseId',
             'sourceWarehouses', 'targetWarehouses', 'shippers', 'orderTransfers',
-            'warehouseTransfers', 'inventoryTransfers'
+            'warehouseTransfers', 'inventoryTransfers', 'dispatchRoutePrefix',
+            'dispatchLayout', 'isAdminManagement'
         ));
     }
 
     public function store(Request $request)
     {
-        $managedWarehouseId = Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
+        $managedWarehouseId = $this->managedWarehouseId();
         $validated = $request->validate([
             'source_warehouse_id' => ['required', 'integer', 'exists:warehouses,id'],
             'target_warehouse_id' => ['required', 'integer', 'different:source_warehouse_id', 'exists:warehouses,id'],
@@ -261,7 +267,7 @@ class WarehouseDispatchSlipController extends Controller
             return $slip;
         });
 
-        return redirect()->route('warehouse.dispatch-slips.show', $slip)
+        return redirect()->route($this->managementRoutePrefix().'.show', $slip)
             ->with('success', 'Đã lập phiếu xuất kho tổng '.$slip->code.'. Vui lòng kiểm tra trước khi chốt.');
     }
 
@@ -271,14 +277,18 @@ class WarehouseDispatchSlipController extends Controller
         $this->loadSlip($dispatchSlip);
         $this->attachProgress($dispatchSlip);
 
-        return view('warehouse.dispatch-slips.show', ['slip' => $dispatchSlip] + $this->documentData($dispatchSlip));
+        return view('warehouse.dispatch-slips.show', [
+            'slip' => $dispatchSlip,
+            'dispatchRoutePrefix' => $this->managementRoutePrefix(),
+            'layout' => request()->routeIs('admin.warehouse-dispatch-slips.*') ? 'layouts.admin' : 'layouts.warehouse',
+        ] + $this->documentData($dispatchSlip));
     }
 
     public function edit(WarehouseDispatchSlip $dispatchSlip)
     {
         $this->authorizeSource($dispatchSlip);
         if ($dispatchSlip->status !== WarehouseDispatchSlip::STATUS_DRAFT) {
-            return redirect()->route('warehouse.dispatch-slips.show', $dispatchSlip)
+            return redirect()->route($this->managementRoutePrefix().'.show', $dispatchSlip)
                 ->with('error', 'Phiếu đã chốt nên không thể sửa.');
         }
 
@@ -291,9 +301,12 @@ class WarehouseDispatchSlipController extends Controller
 
         [$orderTransfers, $warehouseTransfers, $inventoryTransfers] = $this->editableEntries($dispatchSlip);
 
+        $dispatchRoutePrefix = $this->managementRoutePrefix();
+        $dispatchLayout = request()->routeIs('admin.warehouse-dispatch-slips.*') ? 'layouts.admin' : 'layouts.warehouse';
+
         return view('warehouse.dispatch-slips.edit', compact(
             'dispatchSlip', 'targetWarehouses', 'shippers', 'orderTransfers',
-            'warehouseTransfers', 'inventoryTransfers'
+            'warehouseTransfers', 'inventoryTransfers', 'dispatchRoutePrefix', 'dispatchLayout'
         ));
     }
 
@@ -409,7 +422,7 @@ class WarehouseDispatchSlipController extends Controller
             }
         });
 
-        return redirect()->route('warehouse.dispatch-slips.show', $dispatchSlip)
+        return redirect()->route($this->managementRoutePrefix().'.show', $dispatchSlip)
             ->with('success', 'Đã cập nhật phiếu xuất kho tổng '.$dispatchSlip->code.'.');
     }
 
@@ -446,7 +459,8 @@ class WarehouseDispatchSlipController extends Controller
         }
         $dispatchSlip->delete();
 
-        return redirect()->route('warehouse.dispatch-slips.index')->with('success', 'Đã xóa phiếu tổng đang mở.');
+        return redirect()->route($this->managementRoutePrefix().'.index')
+            ->with('success', 'Đã xóa phiếu tổng đang mở '.$dispatchSlip->code.'. Các đơn/hàng trong phiếu đã được trả về danh sách để lập phiếu khác.');
     }
 
     public function printExport(WarehouseDispatchSlip $dispatchSlip)
@@ -814,6 +828,9 @@ class WarehouseDispatchSlipController extends Controller
 
     private function authorizeSlip(WarehouseDispatchSlip $slip): void
     {
+        if (Auth::user()?->hasRole('admin')) {
+            return;
+        }
         $warehouseId = Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
         if ($warehouseId && ! in_array($warehouseId, [(int) $slip->source_warehouse_id, (int) $slip->target_warehouse_id], true)) {
             abort(403, 'Phiếu không thuộc kho bạn quản lý.');
@@ -822,9 +839,28 @@ class WarehouseDispatchSlipController extends Controller
 
     private function authorizeSource(WarehouseDispatchSlip $slip): void
     {
+        if (Auth::user()?->hasRole('admin')) {
+            return;
+        }
         $warehouseId = Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
         if ($warehouseId && $warehouseId !== (int) $slip->source_warehouse_id) {
             abort(403, 'Chỉ kho xuất được thay đổi phiếu này.');
         }
+    }
+
+    private function managedWarehouseId(): ?int
+    {
+        if (Auth::user()?->hasRole('admin')) {
+            return null;
+        }
+
+        return Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
+    }
+
+    private function managementRoutePrefix(): string
+    {
+        return request()->routeIs('admin.warehouse-dispatch-slips.*')
+            ? 'admin.warehouse-dispatch-slips'
+            : 'warehouse.dispatch-slips';
     }
 }
