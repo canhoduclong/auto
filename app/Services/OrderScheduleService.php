@@ -6,6 +6,7 @@ use App\Http\Controllers\OrderController;
 use App\Models\Order;
 use App\Models\OrderSchedule;
 use App\Models\ProductVariant;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class OrderScheduleService
@@ -115,12 +116,16 @@ class OrderScheduleService
         $orderController = app(OrderController::class);
         /** @var \App\Services\ApprovalService $approvalService */
         $approvalService = app(ApprovalService::class);
+        $businessDate = Carbon::parse($schedule->schedule_date, 'Asia/Bangkok')->toDateString();
 
         $order = $orderController->createOrderFromSchedule(
             $items,
             [
                 'customer_id' => (int) $schedule->customer_id,
                 'user_id' => (int) $schedule->created_by,
+                'delivery_date' => $businessDate,
+                'created_at' => Carbon::parse($businessDate, 'Asia/Bangkok')
+                    ->setTimeFrom(Carbon::now('Asia/Bangkok')),
                 'delivery_time' => optional($schedule->customer)->delivery_time,
             ],
             $approvalService

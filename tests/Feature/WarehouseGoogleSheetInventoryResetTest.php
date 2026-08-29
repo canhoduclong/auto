@@ -2,9 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Models\Customer;
 use App\Models\GoogleSheetInventorySync;
 use App\Models\Inventory;
 use App\Models\InventoryMovement;
+use App\Models\InventoryReservation;
+use App\Models\Order;
 use App\Models\Product;
 use App\Models\Role;
 use App\Models\User;
@@ -91,9 +94,37 @@ class WarehouseGoogleSheetInventoryResetTest extends TestCase
             'warehouse_id' => $warehouse->id,
             'product_variant_id' => $variant->id,
             'quantity' => 10,
-            'reserved_quantity' => 0,
+            'reserved_quantity' => 5,
         ]);
         $sync = $this->sync($warehouse, $admin, $variant->id, '2026-08-25', 1, 6);
+        $customer = Customer::query()->create([
+            'user_id' => $admin->id,
+            'name' => 'Khách chờ kho đóng lại',
+            'status' => 'active',
+        ]);
+        $order = Order::query()->create([
+            'customer_id' => $customer->id,
+            'user_id' => $admin->id,
+            'warehouse_id' => $warehouse->id,
+            'code' => 'CLEAR-DAY-RESERVATION',
+            'status' => Order::STATUS_APPROVED,
+            'total' => 0,
+        ]);
+        $order->forceFill(['created_at' => '2026-08-25 08:00:00'])->saveQuietly();
+        $item = $order->items()->create([
+            'product_id' => $product->id,
+            'product_variant_id' => $variant->id,
+            'quantity' => 5,
+            'price' => 0,
+            'total' => 0,
+            'is_priced_by_kg' => false,
+        ]);
+        $reservation = InventoryReservation::query()->create([
+            'order_item_id' => $item->id,
+            'inventory_id' => $inventory->id,
+            'quantity' => 5,
+            'reserved_at' => now(),
+        ]);
 
         $this->actingAs($admin)
             ->delete(route('warehouse.google-sheet-inventory.clear-day'), [
@@ -110,6 +141,9 @@ class WarehouseGoogleSheetInventoryResetTest extends TestCase
             ->assertSessionHas('success');
 
         $this->assertSame(4.0, (float) $inventory->fresh()->quantity);
+        $this->assertSame(0.0, (float) $inventory->fresh()->reserved_quantity);
+        $this->assertDatabaseMissing('inventory_reservations', ['id' => $reservation->id]);
+        $this->assertSame(Order::STATUS_APPROVED, $order->fresh()->status);
         $this->assertSame('reset', $sync->fresh()->status);
         $this->assertStringContainsString('Clear ngày', (string) $sync->fresh()->reset_reason);
     }

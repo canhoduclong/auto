@@ -9,6 +9,7 @@ use App\Models\ProductVariant;
 use App\Models\Role;
 use App\Models\TextOrderDraft;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
 use Tests\TestCase;
@@ -43,6 +44,7 @@ class AdminSaleTextOrderImportTest extends TestCase
 
     public function test_confirming_text_import_preserves_the_selected_delivery_date(): void
     {
+        Carbon::setTestNow('2026-08-29 10:00:00');
         [$admin, $sale] = $this->adminAndSale();
         $customer = Customer::query()->create([
             'user_id' => $sale->id,
@@ -83,6 +85,8 @@ class AdminSaleTextOrderImportTest extends TestCase
             ->withArgs(function (array $items, array $orderData): bool {
                 $this->assertSame('2026-08-28', $orderData['delivery_date']);
                 $this->assertSame('2026-08-28', $orderData['created_at']->toDateString());
+                $this->assertTrue(Order::isNonCurrentBusinessDate($orderData['created_at']));
+                $this->assertTrue($orderData['skip_auto_cancel']);
                 $this->assertSame(2, $items[0]['quantity']);
 
                 return true;
@@ -110,6 +114,7 @@ class AdminSaleTextOrderImportTest extends TestCase
 
     public function test_sale_can_choose_an_old_business_date_when_confirming_each_draft(): void
     {
+        Carbon::setTestNow('2026-08-29 10:00:00');
         [, $sale] = $this->adminAndSale();
         $customer = Customer::query()->create([
             'user_id' => $sale->id,
@@ -150,6 +155,8 @@ class AdminSaleTextOrderImportTest extends TestCase
             ->withArgs(function (array $items, array $orderData): bool {
                 $this->assertSame('2026-08-20', $orderData['delivery_date']);
                 $this->assertSame('2026-08-20', $orderData['created_at']->toDateString());
+                $this->assertTrue(Order::isNonCurrentBusinessDate($orderData['created_at']));
+                $this->assertTrue($orderData['skip_auto_cancel']);
 
                 return true;
             })

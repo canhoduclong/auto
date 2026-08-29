@@ -44,12 +44,12 @@
             <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
                 <div>
                     <h5 class="text-warning-emphasis mb-1"><i class="bi bi-eraser me-1"></i>Admin · Clear dữ liệu ngày {{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}</h5>
-                    <div class="text-muted small">Chỉ hoàn tác phần tồn đã đồng bộ từ Google Sheet của đúng ngày và kho này. Tồn từ đơn hàng, nhập kho hoặc nghiệp vụ khác không bị xóa.</div>
+                    <div class="text-muted small">Hệ thống giải phóng phần tồn đang giữ chỗ của đơn chờ kho đóng trong đúng ngày và kho này, nhưng giữ nguyên trạng thái đơn đã duyệt; sau đó hoàn tác phần tồn đã đồng bộ từ Google Sheet để kho nhập và đóng hàng lại.</div>
                 </div>
                 <button type="button" class="btn btn-outline-warning" data-bs-toggle="collapse" data-bs-target="#sheet-clear-day">Mở chức năng Clear</button>
             </div>
             <div class="collapse mt-3" id="sheet-clear-day">
-                <form method="POST" action="{{ route('warehouse.google-sheet-inventory.clear-day') }}" onsubmit="return confirm('Clear dữ liệu đồng bộ Google Sheet ngày {{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }} để nhập lại?');">
+                <form method="POST" action="{{ route('warehouse.google-sheet-inventory.clear-day') }}" onsubmit="return confirm('Clear dữ liệu ngày {{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}? Các giữ chỗ của đơn chờ kho đóng trong ngày này sẽ được giải phóng, trạng thái đơn vẫn được giữ nguyên.');">
                     @csrf
                     @method('DELETE')
                     <input type="hidden" name="date" value="{{ $selectedDate }}">
@@ -57,7 +57,7 @@
                     <div class="row g-3">
                         <div class="col-md-4"><label class="form-label">Nhập lại ngày để xác nhận</label><input type="date" name="confirmation_date" class="form-control" required></div>
                         <div class="col-md-8"><label class="form-label">Lý do Clear</label><input type="text" name="clear_reason" class="form-control" maxlength="500" placeholder="Ví dụ: Cần đọc lại cột Tồn và Nhập"></div>
-                        <div class="col-12"><label class="form-check p-3 rounded border border-warning bg-warning-subtle"><input class="form-check-input" type="checkbox" name="confirm_clear" value="1" required><span class="form-check-label">Tôi xác nhận Clear dữ liệu đồng bộ của ngày này để nhập lại từ Google Sheet.</span></label></div>
+                        <div class="col-12"><label class="form-check p-3 rounded border border-warning bg-warning-subtle"><input class="form-check-input" type="checkbox" name="confirm_clear" value="1" required><span class="form-check-label">Tôi xác nhận giải phóng giữ chỗ của đơn chờ kho đóng và Clear dữ liệu đồng bộ ngày này để nhập lại từ Google Sheet.</span></label></div>
                         <div class="col-12"><button class="btn btn-warning"><i class="bi bi-eraser me-1"></i>Clear dữ liệu ngày này</button></div>
                     </div>
                 </form>

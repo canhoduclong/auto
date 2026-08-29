@@ -749,6 +749,7 @@ class TextOrderImportController extends Controller
                     // Ngày Sale/Admin chọn là ngày nghiệp vụ của đơn trên các
                     // màn hình kho vốn phân nhóm đơn thường theo created_at.
                     'created_at' => $businessCreatedAt,
+                    'skip_auto_cancel' => Order::isNonCurrentBusinessDate($businessCreatedAt),
                     'delivery_time' => $draft->delivery_time,
                     'use_truck_station' => (bool) $draft->use_truck_station,
                     'truck_station_id' => $truckStation?->id,

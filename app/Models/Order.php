@@ -101,6 +101,15 @@ class Order extends Model
         // Công nợ đơn hàng chỉ được ghi nhận sau khi kế toán xác nhận đối soát.
         // Chặn mọi luồng cập nhật tổng tiền/thanh toán vô tình làm phát sinh nợ sớm.
         static::saving(function (Order $order): void {
+            // Mọi đơn được tạo/gán ngày nghiệp vụ khác hôm nay đều là đơn
+            // ngoại lệ. Không cho phép các luồng tạo đơn riêng lẻ quên bật
+            // cờ này rồi để tác vụ tự hủy xử lý nhầm đơn lên bù ngày cũ.
+            if ($order->created_at
+                && (! $order->exists || $order->isDirty('created_at'))
+                && self::isNonCurrentBusinessDate($order->created_at)) {
+                $order->skip_auto_cancel = true;
+            }
+
             if (!$order->isDirty('amount_due')) {
                 return;
             }
@@ -124,6 +133,15 @@ class Order extends Model
             );
             $order->amount_due = max(0, (float) $recognizedRevenue - $effectivePaid);
         });
+    }
+
+    public static function isNonCurrentBusinessDate(mixed $date): bool
+    {
+        if (blank($date)) {
+            return false;
+        }
+
+        return Carbon::parse($date)->toDateString() !== Carbon::today()->toDateString();
     }
 
     private function resolveDefaultShipperId(): ?int

@@ -7,6 +7,8 @@ use App\Models\Inventory;
 use App\Models\InventoryAdjustment;
 use App\Models\InventoryDocument;
 use App\Models\InventoryMovement;
+use App\Models\InventoryReservation;
+use App\Models\Order;
 use App\Models\ProductVariant;
 use App\Models\Warehouse;
 use App\Services\GoogleSheetInventoryComparisonService;
@@ -263,13 +265,14 @@ class WarehouseGoogleSheetInventoryController extends Controller
         $warehouse = $this->resolveWarehouse($request);
         $fromDate = Carbon::parse($validated['from_date'])->toDateString();
         $toDate = Carbon::parse($validated['to_date'])->toDateString();
+        $clearDayMode = $request->boolean('_clear_day_mode');
 
         try {
             $result = Cache::lock(
                 'google-sheet-inventory-reset:'.$warehouse->id,
                 120
-            )->block(10, function () use ($warehouse, $fromDate, $toDate, $validated) {
-                return DB::transaction(function () use ($warehouse, $fromDate, $toDate, $validated): array {
+            )->block(10, function () use ($warehouse, $fromDate, $toDate, $validated, $clearDayMode) {
+                return DB::transaction(function () use ($warehouse, $fromDate, $toDate, $validated, $clearDayMode): array {
                     $syncs = GoogleSheetInventorySync::query()
                         ->where('warehouse_id', $warehouse->id)
                         ->where('status', 'completed')
@@ -298,6 +301,10 @@ class WarehouseGoogleSheetInventoryController extends Controller
                             }
                         }
                     }
+
+                    $releasedReservations = $clearDayMode
+                        ? $this->releasePackingReservationsForDay($fromDate, (int) $warehouse->id)
+                        : ['count' => 0, 'quantity' => 0];
 
                     $inventories = Inventory::query()
                         ->where('warehouse_id', $warehouse->id)
@@ -362,6 +369,8 @@ class WarehouseGoogleSheetInventoryController extends Controller
                     return [
                         'sync_count' => $syncs->count(),
                         'variant_count' => count($deltasByVariant),
+                        'reservation_count' => $releasedReservations['count'],
+                        'reservation_quantity' => $releasedReservations['quantity'],
                     ];
                 });
             });
@@ -376,10 +385,19 @@ class WarehouseGoogleSheetInventoryController extends Controller
             report($exception);
         }
 
-        return redirect()->route('warehouse.google-sheet-inventory.index', [
+        $response = redirect()->route('warehouse.google-sheet-inventory.index', [
             'date' => $fromDate,
             'warehouse_id' => $warehouse->id,
-        ])->with('success', 'Đã reset '.$result['sync_count'].' lần đồng bộ, hoàn tác tồn của '
+        ]);
+
+        if ($clearDayMode) {
+            return $response->with('success', 'Đã Clear dữ liệu ngày '.Carbon::parse($fromDate)->format('d/m/Y')
+                .', giải phóng '.$result['reservation_count'].' lượt giữ chỗ ('
+                .number_format((float) $result['reservation_quantity'], 0, ',', '.').' sản phẩm) của đơn chờ kho đóng, và hoàn tác '
+                .$result['sync_count'].' lần đồng bộ Google Sheet. Bạn có thể Load và nhập lại Tồn + Nhập.');
+        }
+
+        return $response->with('success', 'Đã reset '.$result['sync_count'].' lần đồng bộ, hoàn tác tồn của '
             .$result['variant_count'].' sản phẩm trong khoảng '
             .Carbon::parse($fromDate)->format('d/m/Y').' – '.Carbon::parse($toDate)->format('d/m/Y').'.');
     }
@@ -403,17 +421,53 @@ class WarehouseGoogleSheetInventoryController extends Controller
             'from_date' => $date,
             'to_date' => $date,
             'confirm_reset' => '1',
+            '_clear_day_mode' => '1',
             'reset_reason' => 'Clear ngày để nhập lại Google Sheet'
                 .(filled($validated['clear_reason'] ?? null) ? ': '.trim($validated['clear_reason']) : ''),
         ]);
 
-        $response = $this->resetRange($request);
+        return $this->resetRange($request);
+    }
 
-        return $response->with(
-            'success',
-            'Đã Clear dữ liệu đồng bộ Google Sheet ngày '.Carbon::parse($date)->format('d/m/Y')
-            .'. Hệ thống đã hoàn tác phần tồn từng áp dụng; bạn có thể Load lại hai nhóm cột Tồn + Nhập.'
-        );
+    /** @return array{count:int,quantity:float} */
+    private function releasePackingReservationsForDay(string $date, int $warehouseId): array
+    {
+        $orderIds = Order::query()
+            ->forPackingDate($date)
+            ->where('warehouse_id', $warehouseId)
+            ->whereIn('status', [Order::STATUS_APPROVED, Order::STATUS_READY_TO_PACK, Order::STATUS_PACKING])
+            ->whereNull('trash_at')
+            ->pluck('id');
+
+        if ($orderIds->isEmpty()) {
+            return ['count' => 0, 'quantity' => 0];
+        }
+
+        $orderItemIds = DB::table('order_items')->whereIn('order_id', $orderIds)->pluck('id');
+        $reservations = InventoryReservation::query()
+            ->whereIn('order_item_id', $orderItemIds)
+            ->whereHas('inventory', fn ($query) => $query->where('warehouse_id', $warehouseId))
+            ->lockForUpdate()
+            ->get();
+        $inventoryIds = $reservations->pluck('inventory_id')->unique();
+        $quantity = (float) $reservations->sum('quantity');
+
+        InventoryReservation::query()->whereIn('id', $reservations->pluck('id'))->delete();
+        foreach ($inventoryIds as $inventoryId) {
+            Inventory::query()->whereKey($inventoryId)->update([
+                'reserved_quantity' => InventoryReservation::query()
+                    ->where('inventory_id', $inventoryId)
+                    ->sum('quantity'),
+            ]);
+        }
+
+        Order::query()->whereIn('id', $orderIds)->update([
+            'stock_sufficient' => null,
+            'stock_shortage_detail' => null,
+            'stock_alert_status' => null,
+        ]);
+
+        return ['count' => $reservations->count(), 'quantity' => $quantity];
     }
 
     private function resolveWarehouse(Request $request): Warehouse

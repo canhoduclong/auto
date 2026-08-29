@@ -735,8 +735,8 @@ class OrderController extends Controller
         $businessDate = isset($validated['business_date'])
             ? Carbon::parse($validated['business_date'])->toDateString()
             : now()->toDateString();
-        $isHistoricalException = Carbon::parse($businessDate)->startOfDay()->lt(Carbon::today());
-        $businessCreatedAt = $isHistoricalException
+        $isBusinessDateException = Order::isNonCurrentBusinessDate($businessDate);
+        $businessCreatedAt = $isBusinessDateException
             ? Carbon::parse($businessDate)->endOfDay()
             : now();
 
@@ -768,10 +768,10 @@ class OrderController extends Controller
                     'collect_customer_shipping_fee' => (bool) ($validated['collect_customer_shipping_fee'] ?? false),
                     'customer_shipping_fee' => (float) ($validated['customer_shipping_fee'] ?? 0),
                     'created_at' => $businessCreatedAt,
-                    'delivery_date' => $isHistoricalException
+                    'delivery_date' => $isBusinessDateException
                         ? $businessDate
                         : now()->addDay()->toDateString(),
-                    'skip_auto_cancel' => $isHistoricalException,
+                    'skip_auto_cancel' => $isBusinessDateException,
                     'allow_backorder' => true,
                     'status' => OrderStatus::Pending->value,
                     'payment_status' => PaymentStatus::Unpaid->value,
@@ -789,7 +789,7 @@ class OrderController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Đã tạo đơn hàng ' . ($order->code ?: ('#' . $order->id))
-                . ($isHistoricalException ? ' cho ngày ' . Carbon::parse($businessDate)->format('d/m/Y') . ' (đơn ngoại lệ).' : '.'),
+                . ($isBusinessDateException ? ' cho ngày ' . Carbon::parse($businessDate)->format('d/m/Y') . ' (đơn ngoại lệ).' : '.'),
             'order' => [
                 'id' => (int) $order->id,
                 'code' => $order->code ?: ('#' . $order->id),
@@ -1952,6 +1952,8 @@ class OrderController extends Controller
                 : 0.0;
             $commissionAmountSnapshot = round(($total * $commissionPercentSnapshot) / 100, 2);
 
+            $isBusinessDateException = isset($orderData['created_at'])
+                && Order::isNonCurrentBusinessDate($orderData['created_at']);
             $orderInsert = $this->filterExistingColumns('orders', [
                 'customer_id' => $orderData['customer_id'] ?? null,
                 'user_id' => $orderData['user_id'] ?? auth()->id(),
@@ -1991,7 +1993,7 @@ class OrderController extends Controller
                 'order_discount' => $orderLevelDiscountAmount,
                 'order_discount_type' => $orderDiscountType,
                 'total_weight' => round($totalWeight, 3),
-                'skip_auto_cancel' => (bool) ($orderData['skip_auto_cancel'] ?? false),
+                'skip_auto_cancel' => (bool) ($orderData['skip_auto_cancel'] ?? false) || $isBusinessDateException,
             ]);
 
             if (isset($orderData['created_at'])) {
