@@ -105,6 +105,15 @@ class ShipperDispatchHistoryTest extends TestCase
             ->assertSee('Đơn đã hoàn thành, không còn thao tác')
             ->assertDontSee('Nhận đơn để giao');
 
+        $this->actingAs($shipper)
+            ->get(route('shipper.delivery-schedules', ['date' => now()->toDateString()]))
+            ->assertOk()
+            ->assertSee('Danh sách đã giao')
+            ->assertSee('ORD-ALREADY-DELIVERED')
+            ->assertSee('Đang thực hiện: <strong>0</strong> đơn', false)
+            ->assertSee('Đã giao: <strong>1</strong> đơn', false)
+            ->assertDontSee('name="order_ids[]" value="'.$order->id.'"', false);
+
         $routePlan = [[
             'shipper_id' => $shipper->id,
             'shipper_name' => $shipper->name,

@@ -2619,6 +2619,31 @@ class ShipperDashboardController extends Controller
 
         $orders = $this->deliveryScheduleOrdersForShipper($userId, $selectedDate)->get();
 
+        $deliveredOrders = Order::with([
+            'customer:id,name,address',
+            'items:id,order_id,quantity',
+            'histories' => fn ($historyQuery) => $historyQuery
+                ->whereIn('action', $this->customerDeliveryCompletionActions())
+                ->latest('id'),
+        ])
+            ->where('shipper_id', $userId)
+            ->where(function ($deliveredQuery): void {
+                $deliveredQuery->where('status', Order::STATUS_DELIVERED)
+                    ->orWhere(function ($completedQuery): void {
+                        $completedQuery->where('status', Order::STATUS_COMPLETED)
+                            ->where(function ($finishedOperationally): void {
+                                $finishedOperationally->whereNull('accounting_sales_import_batch_id')
+                                    ->orWhere('needs_operational_completion', false);
+                            });
+                    })
+                    ->orWhereHas('histories', fn ($historyQuery) => $historyQuery
+                        ->whereIn('action', $this->customerDeliveryCompletionActions()));
+            })
+            ->forWorkflowDate($selectedDate)
+            ->orderByDesc('delivered_at')
+            ->orderByDesc('id')
+            ->get();
+
         $currentSnapshot = $this->buildDeliveryScheduleSnapshot($orders);
         $currentSnapshotHash = $this->hashDeliveryScheduleSnapshot($currentSnapshot);
         $latestHistory = $this->latestDeliveryScheduleHistoryForShipperOnDate($userId, $selectedDate);
@@ -2627,6 +2652,7 @@ class ShipperDashboardController extends Controller
 
         return view('shipper.delivery-schedules', compact(
             'orders',
+            'deliveredOrders',
             'selectedDate',
             'scheduleAlreadyConfirmed'
         ));

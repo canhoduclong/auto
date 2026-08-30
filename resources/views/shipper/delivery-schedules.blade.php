@@ -105,8 +105,11 @@
     <div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
             <div>
-                <div class="fw-bold text-dark">Lịch trình giao hàng hôm nay</div>
-                <div class="text-muted small">Các đơn hàng được manager giao phó cho bạn. Tổng: <strong>{{ $orders->count() }}</strong> đơn</div>
+                <div class="fw-bold text-dark">Lịch trình giao hàng</div>
+                <div class="text-muted small">
+                    Đang thực hiện: <strong>{{ $orders->count() }}</strong> đơn
+                    · Đã giao: <strong>{{ $deliveredOrders->count() }}</strong> đơn
+                </div>
             </div>
             <form method="GET" action="{{ route('shipper.delivery-schedules') }}" class="d-flex gap-2 align-items-center">
                 <input type="date" name="date" value="{{ $selectedDate }}" class="form-control form-control-sm" style="max-width: 150px">
@@ -254,5 +257,47 @@
             </div>
         @endif
     </form>
+@endif
+
+@if($deliveredOrders->isNotEmpty())
+    <div class="card border-0 shadow-sm mt-4">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <div>
+                <div class="fw-bold text-success"><i class="bi bi-check-circle me-1"></i>Danh sách đã giao</div>
+                <div class="text-muted small">Các đơn này chỉ để theo dõi và không được đưa vào xác nhận lộ trình.</div>
+            </div>
+            <span class="badge bg-success rounded-pill">{{ $deliveredOrders->count() }} đơn</span>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Mã đơn</th>
+                        <th>Khách hàng</th>
+                        <th>Địa chỉ</th>
+                        <th class="text-center">Số lượng</th>
+                        <th>Thời gian giao</th>
+                        <th class="text-end">Trạng thái</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach($deliveredOrders as $deliveredOrder)
+                        @php
+                            $deliveryHistory = $deliveredOrder->histories->first();
+                            $completedAt = $deliveredOrder->delivered_at ?: $deliveryHistory?->created_at;
+                        @endphp
+                        <tr>
+                            <td class="fw-semibold">{{ $deliveredOrder->code ?: '#'.$deliveredOrder->id }}</td>
+                            <td>{{ $deliveredOrder->customer?->name ?: $deliveredOrder->recipient_name ?: '—' }}</td>
+                            <td class="text-muted">{{ $deliveredOrder->recipient_address ?: $deliveredOrder->customer?->address ?: '—' }}</td>
+                            <td class="text-center">{{ $deliveredOrder->items->sum('quantity') }}</td>
+                            <td>{{ $completedAt ? $completedAt->format('H:i d/m/Y') : '—' }}</td>
+                            <td class="text-end"><span class="badge bg-success">Đã giao</span></td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    </div>
 @endif
 @endsection
