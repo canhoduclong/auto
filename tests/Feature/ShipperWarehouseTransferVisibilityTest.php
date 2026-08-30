@@ -7,6 +7,8 @@ use App\Models\Order;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\Warehouse;
+use App\Models\WarehouseDispatchSlip;
+use App\Models\WarehouseDispatchSlipEntry;
 use App\Models\WarehouseTransfer;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -88,5 +90,80 @@ class ShipperWarehouseTransferVisibilityTest extends TestCase
             ->assertOk()
             ->assertSee('WAITING-RECEIVE-TOMORROW')
             ->assertSee('Khách chờ kho nhận khác ngày');
+    }
+
+    public function test_shipper_date_uses_dispatch_business_date_and_frozen_item_quantities(): void
+    {
+        $shipperRole = Role::create(['name' => 'shipper']);
+        $shipper = User::factory()->create(['name' => 'Ship xem đúng ngày chuyển']);
+        $shipper->roles()->attach($shipperRole);
+        $source = Warehouse::factory()->create();
+        $target = Warehouse::factory()->create();
+        $customer = Customer::create([
+            'name' => 'Khách snapshot điều chuyển',
+            'status' => 'active',
+        ]);
+        $order = Order::create([
+            'customer_id' => $customer->id,
+            'user_id' => $shipper->id,
+            'warehouse_id' => $source->id,
+            'code' => 'TRANSFER-SNAPSHOT-25',
+            'status' => Order::STATUS_READY_TO_SHIP,
+            'delivery_date' => '2026-08-30',
+            'total' => 0,
+        ]);
+        $transfer = WarehouseTransfer::create([
+            'order_id' => $order->id,
+            'source_warehouse_id' => $source->id,
+            'target_warehouse_id' => $target->id,
+            'shipper_id' => $shipper->id,
+            'status' => WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
+            'packed_total_weight' => 33.6,
+        ]);
+        $slip = WarehouseDispatchSlip::create([
+            'business_date' => '2026-08-25',
+            'source_warehouse_id' => $source->id,
+            'target_warehouse_id' => $target->id,
+            'shipper_id' => $shipper->id,
+            'status' => WarehouseDispatchSlip::STATUS_FINALIZED,
+            'created_by' => $shipper->id,
+            'finalized_by' => $shipper->id,
+            'finalized_at' => now(),
+        ]);
+        WarehouseDispatchSlipEntry::create([
+            'warehouse_dispatch_slip_id' => $slip->id,
+            'warehouse_transfer_id' => $transfer->id,
+            'snapshot' => [
+                'type' => 'warehouse_transfer',
+                'order' => [
+                    'id' => $order->id,
+                    'code' => $order->code,
+                    'packed_weight' => 33.6,
+                    'items' => [[
+                        'product_name' => 'Vịt Nguyên Con snapshot',
+                        'sku' => 'MOC-SNAPSHOT-28',
+                        'size' => '2.8 kg',
+                        'quantity' => 12,
+                        'weight' => 33.6,
+                    ]],
+                ],
+            ],
+        ]);
+
+        $this->actingAs($shipper)
+            ->get(route('shipper.warehouse-transfers', ['date' => '2026-08-25']))
+            ->assertOk()
+            ->assertSee('TRANSFER-SNAPSHOT-25')
+            ->assertSee('Ngày chuyển:')
+            ->assertSee('25/08/2026')
+            ->assertSee('Tổng số lượng chuyển:')
+            ->assertSee('Vịt Nguyên Con snapshot')
+            ->assertSee('MOC-SNAPSHOT-28')
+            ->assertSee('SL: 12');
+
+        $this->actingAs($shipper)
+            ->get(route('shipper.warehouse-transfers', ['date' => '2026-08-26']))
+            ->assertOk()
+            ->assertDontSee('TRANSFER-SNAPSHOT-25');
     }
 }

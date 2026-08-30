@@ -3,6 +3,12 @@
     $sequenceNumber = $transfer->sequence_number ?? $order->daily_sequence ?? '—';
     $deliveryTime = $order?->delivery_time ?: $order?->customer?->delivery_time ?: '—';
     $deliveryDate = optional($order?->delivery_date)->format('d/m/Y') ?: '—';
+    $transferDate = !empty($transfer->dispatch_business_date)
+        ? \Carbon\Carbon::parse($transfer->dispatch_business_date)->format('d/m/Y')
+        : optional($transfer->created_at)->format('d/m/Y');
+    $dispatchItems = collect($transfer->dispatch_items ?? []);
+    $dispatchQuantity = (int) ($transfer->dispatch_total_quantity ?? $dispatchItems->sum('quantity'));
+    $dispatchWeight = (float) ($transfer->dispatch_total_weight ?? $transfer->packed_total_weight ?? 0);
     $saleName = $order?->user?->name ?: $order?->customer?->currentOwner?->name ?: '—';
     $status = $status ?? match($transfer->status) {
         'pending_shipper_pickup' => 'pending',
@@ -29,15 +35,19 @@
         <div class="small text-muted mb-1">Kho gửi: <strong class="text-dark">{{ $transfer->sourceWarehouse?->name ?? '—' }}</strong></div>
         <div class="small text-muted mb-1">Kho nhận: <strong class="text-dark">{{ $transfer->targetWarehouse?->name ?? '—' }}</strong></div>
         <div class="small text-muted mb-1">Shipper phụ trách: <strong class="text-dark">{{ $transfer->shipper?->name ?? '—' }}</strong></div>
-        <div class="small text-muted mb-2">KL bàn giao: <strong class="text-dark">{{ $transfer->packed_total_weight !== null ? number_format((float) $transfer->packed_total_weight, 3, ',', '.') . ' kg' : '—' }}</strong></div>
-        <div class="small text-muted mb-2">Ngày lên đơn: <strong class="text-dark">{{ optional($order?->created_at)->format('d/m/Y') ?: '—' }}</strong> · Ngày giao: <strong class="text-primary">{{ $deliveryDate }}</strong></div>
+        <div class="small text-muted mb-1">Tổng số lượng chuyển: <strong class="text-primary fs-6">{{ number_format($dispatchQuantity) }}</strong></div>
+        <div class="small text-muted mb-2">KL bàn giao: <strong class="text-dark">{{ $dispatchWeight > 0 ? number_format($dispatchWeight, 3, ',', '.') . ' kg' : '—' }}</strong></div>
+        <div class="small text-muted mb-2">Ngày chuyển: <strong class="text-primary">{{ $transferDate ?: '—' }}</strong> · Ngày giao đơn: <strong class="text-dark">{{ $deliveryDate }}</strong></div>
         <div class="border-top pt-2 mt-2">
             <div class="small fw-semibold mb-1">Sản phẩm</div>
-            @foreach($order?->items ?? [] as $item)
-                <div class="small text-muted">
-                    - {{ $item->variant?->name ?? $item->product?->name ?? 'Sản phẩm' }} (SL: {{ (int) ($item->quantity ?? 0) }})
+            @forelse($dispatchItems as $item)
+                <div class="small text-muted d-flex justify-content-between gap-2">
+                    <span>- {{ $item['product_name'] ?? 'Sản phẩm' }}{{ !empty($item['size']) ? ' · '.$item['size'] : '' }}{{ !empty($item['sku']) ? ' · '.$item['sku'] : '' }}</span>
+                    <strong class="text-dark text-nowrap">SL: {{ number_format((int) ($item['quantity'] ?? 0)) }}</strong>
                 </div>
-            @endforeach
+            @empty
+                <div class="small text-muted">Chưa có chi tiết hàng hóa.</div>
+            @endforelse
         </div>
         <div class="small text-muted border-top pt-2 mt-2">
             Mã đơn: <strong class="text-dark">{{ $order?->code ?? ('#' . $transfer->order_id) }}</strong>

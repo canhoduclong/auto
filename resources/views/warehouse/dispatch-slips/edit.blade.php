@@ -4,7 +4,7 @@
 
 @push('styles')
 <style>
-.dispatch-edit-panel{border:1px solid #dbe5e3;border-radius:12px;background:#fff;padding:18px}.dispatch-edit-list{max-height:390px;overflow:auto;border:1px solid #e2e8f0;border-radius:9px}.dispatch-edit-row{display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:9px;align-items:start;padding:10px 12px;border-bottom:1px solid #eef2f7}.dispatch-edit-row:last-child{border-bottom:0}.dispatch-edit-row.is-hidden{display:none}.dispatch-edit-empty{padding:22px;text-align:center;color:#64748b}
+.dispatch-edit-panel{border:1px solid #dbe5e3;border-radius:12px;background:#fff;padding:18px}.dispatch-edit-list{max-height:390px;overflow:auto;border:1px solid #e2e8f0;border-radius:9px}.dispatch-edit-row{display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:9px;align-items:start;padding:10px 12px;border-bottom:1px solid #eef2f7}.dispatch-edit-row:last-child{border-bottom:0}.dispatch-edit-row.is-hidden{display:none}.dispatch-edit-empty{padding:22px;text-align:center;color:#64748b}.dispatch-inventory-items{display:grid;gap:4px;margin-top:7px;padding-top:7px;border-top:1px dashed #dbe5e3}.dispatch-inventory-item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:start;font-size:.76rem}.dispatch-inventory-item-name{min-width:0;color:#334155}.dispatch-inventory-item-name small{display:block;color:#64748b}.dispatch-inventory-item-quantity{text-align:right;white-space:nowrap;font-weight:700;color:#0f766e}.dispatch-inventory-item-quantity small{display:block;color:#64748b;font-weight:400}
 </style>
 @endpush
 
@@ -59,7 +59,7 @@
             <div class="d-flex justify-content-between align-items-center mb-2"><div><strong>Hàng điều chuyển</strong><div class="small text-muted">Các phiếu hàng chưa thuộc phiếu tổng khác.</div></div><span class="badge bg-light text-dark border">{{ $inventoryTransfers->count() }} phiếu</span></div>
             <div class="dispatch-edit-list" data-edit-list>
                 @forelse($inventoryTransfers as $transfer)
-                    <label class="dispatch-edit-row" data-target="{{ $transfer->target_warehouse_id }}"><input type="checkbox" class="form-check-input mt-1 dispatch-edit-check" name="inventory_transfer_ids[]" value="{{ $transfer->id }}" @checked(in_array($transfer->id, $selectedInventoryTransfers, true))><span><strong>{{ $transfer->transfer_code ?: '#'.$transfer->id }}</strong><span class="d-block small text-muted">{{ $transfer->items->count() }} mặt hàng · SL: {{ number_format((int) $transfer->items->sum('quantity')) }}</span></span><span class="small text-end">{{ $transfer->targetWarehouse?->name }}</span></label>
+                    <label class="dispatch-edit-row" data-target="{{ $transfer->target_warehouse_id }}"><input type="checkbox" class="form-check-input mt-1 dispatch-edit-check" name="inventory_transfer_ids[]" value="{{ $transfer->id }}" @checked(in_array($transfer->id, $selectedInventoryTransfers, true))>@include('warehouse.dispatch-slips._inventory_transfer_summary', ['transfer' => $transfer])<span class="small text-end">{{ $transfer->targetWarehouse?->name }}</span></label>
                 @empty<div class="dispatch-edit-empty">Không có phiếu hàng khả dụng.</div>@endforelse
                 <div class="dispatch-edit-empty d-none" data-filter-empty>Không có phiếu hàng phù hợp kho nhận đã chọn.</div>
             </div>

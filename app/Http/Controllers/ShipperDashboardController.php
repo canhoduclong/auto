@@ -596,6 +596,8 @@ class ShipperDashboardController extends Controller
                 'order.customer.currentOwner',
                 'order.user',
                 'order.items.variant.product',
+                'order.orderTransfer.dispatchEntry.slip',
+                'dispatchEntry.slip',
                 'sourceWarehouse',
                 'targetWarehouse',
                 'shipper',
@@ -611,21 +613,60 @@ class ShipperDashboardController extends Controller
             ])
             ->whereHas('order')
             ->where(function ($query) use ($today): void {
-                // Phiếu đang hoạt động phải luôn hiện cho shipper được giao, kể cả
-                // ngày giao của đơn khác ngày tạo phiếu hoặc ngày đang xem.
-                $query->whereIn('status', [
-                    WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
-                    WarehouseTransfer::STATUS_IN_TRANSIT,
-                    WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
-                ])->orWhere(function ($completedQuery) use ($today): void {
-                    $completedQuery
-                        ->where('status', WarehouseTransfer::STATUS_RECEIVED_COMPLETED)
-                        ->whereHas('order', fn ($orderQuery) => $orderQuery->forDeliveryDate($today));
-                });
+                // Once grouped, the dispatch slip business date is the
+                // authoritative transfer date. Ungrouped transfers fall back
+                // to the date on which the movement was created.
+                $query->whereDate('warehouse_transfers.created_at', $today)
+                    ->orWhereHas('dispatchEntry.slip', fn ($slipQuery) => $slipQuery
+                        ->whereIn('status', [WarehouseDispatchSlip::STATUS_DRAFT, WarehouseDispatchSlip::STATUS_FINALIZED])
+                        ->whereDate('business_date', $today))
+                    ->orWhereHas('order.orderTransfer.dispatchEntry.slip', fn ($slipQuery) => $slipQuery
+                        ->whereIn('status', [WarehouseDispatchSlip::STATUS_DRAFT, WarehouseDispatchSlip::STATUS_FINALIZED])
+                        ->whereDate('business_date', $today));
             })
             ->orderByRaw("CASE WHEN status = 'pending_shipper_pickup' THEN 0 WHEN status = 'in_transit' THEN 1 WHEN status = 'delivered_waiting_receive' THEN 2 ELSE 3 END")
             ->orderByDesc('id')
             ->get()
+            ->map(function (WarehouseTransfer $transfer) use ($today): ?WarehouseTransfer {
+                $entry = $this->currentDispatchEntryForWarehouseTransfer($transfer);
+                $transferDate = $entry?->slip?->business_date?->toDateString()
+                    ?? $transfer->created_at?->toDateString();
+
+                // Remove candidates found through a stale legacy entry. The
+                // order's current group/snapshot remains authoritative.
+                if ($transferDate !== $today) {
+                    return null;
+                }
+
+                $snapshot = $this->dispatchOrderSnapshot($entry, (int) $transfer->order_id);
+                $items = collect($snapshot['items'] ?? [])->map(fn (array $item): array => [
+                    'product_name' => (string) ($item['product_name'] ?? 'Sản phẩm'),
+                    'sku' => $item['sku'] ?? null,
+                    'size' => $item['size'] ?? null,
+                    'quantity' => (int) ($item['quantity'] ?? 0),
+                    'weight' => (float) ($item['weight'] ?? 0),
+                ]);
+                if ($items->isEmpty()) {
+                    $items = $transfer->order->items->map(fn ($item): array => [
+                        'product_name' => (string) ($item->variant?->product?->name ?? $item->variant?->name ?? $item->product?->name ?? 'Sản phẩm'),
+                        'sku' => $item->variant?->sku,
+                        'size' => $item->variant?->size,
+                        'quantity' => (int) ($item->quantity ?? 0),
+                        'weight' => (float) ($item->packed_weight ?? $item->total_weight ?? 0),
+                    ]);
+                }
+
+                $transfer->setAttribute('dispatch_business_date', $transferDate);
+                $transfer->setAttribute('dispatch_items', $items);
+                $transfer->setAttribute('dispatch_total_quantity', (int) $items->sum('quantity'));
+                $transfer->setAttribute(
+                    'dispatch_total_weight',
+                    (float) ($snapshot['packed_weight'] ?? $transfer->packed_total_weight ?? $items->sum('weight'))
+                );
+
+                return $transfer;
+            })
+            ->filter()
             ->unique('order_id')
             ->sortBy(function (WarehouseTransfer $transfer): array {
                 $order = $transfer->order;
@@ -1620,9 +1661,14 @@ class ShipperDashboardController extends Controller
      */
     private function currentDispatchSlipForWarehouseTransfer(WarehouseTransfer $transfer): ?WarehouseDispatchSlip
     {
+        return $this->currentDispatchEntryForWarehouseTransfer($transfer)?->slip;
+    }
+
+    private function currentDispatchEntryForWarehouseTransfer(WarehouseTransfer $transfer): ?WarehouseDispatchSlipEntry
+    {
         $order = $transfer->order;
         if (! $order) {
-            return $transfer->dispatchEntry?->slip;
+            return $transfer->dispatchEntry;
         }
 
         $entry = WarehouseDispatchSlipEntry::query()
@@ -1647,7 +1693,25 @@ class ShipperDashboardController extends Controller
             ->orderByDesc('warehouse_dispatch_slips.id')
             ->first();
 
-        return $entry?->slip;
+        return $entry;
+    }
+
+    private function dispatchOrderSnapshot(?WarehouseDispatchSlipEntry $entry, int $orderId): array
+    {
+        if (! $entry || empty($entry->snapshot)) {
+            return [];
+        }
+
+        if (($entry->snapshot['type'] ?? null) === 'order_transfer') {
+            return (array) (collect($entry->snapshot['orders'] ?? [])->firstWhere('id', $orderId) ?? []);
+        }
+
+        if (($entry->snapshot['type'] ?? null) === 'warehouse_transfer'
+            && (int) ($entry->snapshot['order']['id'] ?? 0) === $orderId) {
+            return (array) ($entry->snapshot['order'] ?? []);
+        }
+
+        return [];
     }
 
     private function deductStockForWarehouseTransferItem(Order $order, InventoryDocument $document, $item, int $warehouseId): void

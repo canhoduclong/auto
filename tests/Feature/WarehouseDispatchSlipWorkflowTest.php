@@ -6,6 +6,7 @@ use App\Models\Customer;
 use App\Models\InventoryDocument;
 use App\Models\Order;
 use App\Models\OrderTransfer;
+use App\Models\ProductVariant;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\Warehouse;
@@ -144,7 +145,27 @@ class WarehouseDispatchSlipWorkflowTest extends TestCase
             'note' => 'Hàng điều chuyển cần bảo quản lạnh',
             'requested_at' => now(),
         ]);
+        $inventoryVariant = ProductVariant::factory()->create([
+            'name' => '2.8 kg',
+            'sku' => 'MOC-2.8-DISPATCH',
+        ]);
+        $inventoryVariant->product()->update(['name' => 'Vịt Nguyên Con Điều Chuyển']);
+        $inventoryTransfer->items()->create([
+            'product_variant_id' => $inventoryVariant->id,
+            'quantity' => 12,
+            'weight_kg' => 33.6,
+            'unit_cost' => 54000,
+        ]);
         $documentCount = InventoryDocument::count();
+
+        $this->actingAs($warehouseUser)
+            ->get(route('warehouse.transfers.index'))
+            ->assertOk()
+            ->assertSee('Vịt Nguyên Con Điều Chuyển')
+            ->assertSee('MOC-2.8-DISPATCH')
+            ->assertSee('Tổng SL: 12')
+            ->assertSee('SL: 12')
+            ->assertSee('33,600 kg');
 
         $response = $this->actingAs($warehouseUser)->post(route('warehouse.dispatch-slips.store'), [
             'source_warehouse_id' => $source->id,

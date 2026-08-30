@@ -111,7 +111,7 @@
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 alert alert-info py-2 mb-3">
         <span>
             <i class="bi bi-calendar-event me-1"></i>
-            Ngày giao <strong>{{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}</strong>
+            Ngày điều chuyển <strong>{{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}</strong>
         </span>
         <form method="GET" class="d-flex gap-2">
             <input type="date" name="date" value="{{ $selectedDate }}" class="form-control form-control-sm">
