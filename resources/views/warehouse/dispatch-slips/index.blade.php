@@ -1,6 +1,6 @@
 @extends($dispatchLayout ?? 'layouts.warehouse')
 
-@section('title', 'Phiếu xuất kho tổng')
+@section('title', 'Điều chuyển')
 
 @push('styles')
 <style>
@@ -9,10 +9,13 @@
 @endpush
 
 @section('content')
+@if(empty($isAdminManagement))
+    @include('warehouse.transfers._module_nav')
+@endif
 <div class="dispatch-hero mb-3 d-flex justify-content-between align-items-start gap-3 flex-wrap">
     <div>
-        <h4 class="fw-bold mb-1"><i class="bi bi-file-earmark-spreadsheet me-2"></i>{{ !empty($isAdminManagement) ? 'Quản trị phiếu xuất kho tổng' : 'Phiếu xuất kho tổng' }}</h4>
-        <div class="small opacity-75">Gom đơn hoàn thiện và hàng điều chuyển theo tài xế để bàn giao, in và đối chiếu.</div>
+        <h4 class="fw-bold mb-1"><i class="bi bi-file-earmark-spreadsheet me-2"></i>{{ !empty($isAdminManagement) ? 'Quản trị phiếu xuất kho tổng' : 'Tổng hợp điều chuyển & phiếu xuất kho' }}</h4>
+        <div class="small opacity-75">Chọn các tác vụ điều chuyển đơn và hàng có cùng kho nhận, tài xế để gom vào một phiếu bàn giao.</div>
     </div>
 </div>
 
@@ -146,7 +149,15 @@
 
 <div class="dispatch-panel">
     <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
-        <h6 class="fw-bold mb-0">Tra cứu phiếu theo ngày</h6>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <h6 class="fw-bold mb-0">Tra cứu phiếu theo ngày</h6>
+            @if(empty($isAdminManagement))
+                <form id="dispatchBulkPrintForm" method="POST" action="{{ route('warehouse.dispatch-slips.print-selected') }}" target="_blank">
+                    @csrf
+                    <button type="submit" class="btn btn-outline-success btn-sm"><i class="bi bi-printer me-1"></i>In phiếu xuất kho tổng đã chọn</button>
+                </form>
+            @endif
+        </div>
         <form method="GET" class="row g-2 align-items-end flex-grow-1 justify-content-end">
             <div class="col-auto"><label class="small">Từ ngày</label><input type="date" name="from_date" value="{{ $from }}" class="form-control form-control-sm"></div>
             <div class="col-auto"><label class="small">Đến ngày</label><input type="date" name="to_date" value="{{ $to }}" class="form-control form-control-sm"></div>
@@ -163,14 +174,19 @@
             @php $percent = $slip->entry_total ? round($slip->entry_received * 100 / $slip->entry_total) : 0; @endphp
             <div class="dispatch-slip-card">
                 <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
-                    <div><a class="fw-bold text-decoration-none" href="{{ route($dispatchRoutePrefix.'.show', $slip) }}">{{ $slip->code }}</a><div class="small text-muted">{{ $slip->business_date->format('d/m/Y') }} · {{ $slip->sourceWarehouse?->name }} → {{ $slip->targetWarehouse?->name }}</div></div>
+                    <div class="d-flex align-items-start gap-2">
+                        @if(empty($isAdminManagement))
+                            <input class="form-check-input mt-1" type="checkbox" form="dispatchBulkPrintForm" name="dispatch_slip_ids[]" value="{{ $slip->id }}" aria-label="Chọn phiếu {{ $slip->code }} để in tổng">
+                        @endif
+                        <div><a class="fw-bold text-decoration-none" href="{{ route($dispatchRoutePrefix.'.show', $slip) }}">{{ $slip->code }}</a><div class="small text-muted">{{ $slip->business_date->format('d/m/Y') }} · {{ $slip->sourceWarehouse?->name }} → {{ $slip->targetWarehouse?->name }}</div></div>
+                    </div>
                     <span class="badge {{ $slip->status === 'draft' ? 'bg-warning text-dark' : 'bg-success' }}">{{ $slip->status === 'draft' ? 'Đang mở' : 'Đã chốt' }}</span>
                 </div>
                 <div class="row g-2 mt-1 small"><div class="col-md-4">Tài xế: <strong>{{ $slip->shipper?->short_name ?: $slip->shipper?->name }}</strong></div><div class="col-md-4">Nội dung: <strong>{{ $slip->entry_total }} mục</strong></div><div class="col-md-4">{{ $slip->progress_label }}</div></div>
                 <div class="dispatch-progress mt-2"><span style="width:{{ $percent }}%"></span></div>
                 <div class="dispatch-actions d-flex gap-2 flex-wrap align-items-center">
                     <a href="{{ route($dispatchRoutePrefix.'.show', $slip) }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-eye me-1"></i>Xem</a>
-                    <a target="_blank" href="{{ route($dispatchRoutePrefix.'.print-export', $slip) }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-printer me-1"></i>In phiếu xuất</a>
+                    <a target="_blank" href="{{ route($dispatchRoutePrefix.'.print-export', $slip) }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-printer me-1"></i>In phiếu theo tài xế</a>
                     @if($slip->status === 'draft' && (auth()->user()->hasRole('admin') || !auth()->user()->warehouse_id || (int) auth()->user()->warehouse_id === (int) $slip->source_warehouse_id))
                         <a href="{{ route($dispatchRoutePrefix.'.edit', $slip) }}" class="btn btn-warning btn-sm"><i class="bi bi-pencil-square me-1"></i>Sửa</a>
                         <form method="POST" action="{{ route($dispatchRoutePrefix.'.finalize', $slip) }}" onsubmit="return confirm('Chốt phiếu {{ $slip->code }} và khóa danh sách bàn giao?');">@csrf<button class="btn btn-success btn-sm"><i class="bi bi-check2-circle me-1"></i>Chốt</button></form>
@@ -213,6 +229,12 @@
         if (!document.querySelector('.dispatch-entry-check:checked')) {
             event.preventDefault();
             alert('Vui lòng chọn ít nhất một nhóm đơn hoặc phiếu điều chuyển hàng.');
+        }
+    });
+    document.getElementById('dispatchBulkPrintForm')?.addEventListener('submit', event => {
+        if (!document.querySelector('input[name="dispatch_slip_ids[]"]:checked')) {
+            event.preventDefault();
+            alert('Vui lòng chọn ít nhất một phiếu để in tổng.');
         }
     });
 })();

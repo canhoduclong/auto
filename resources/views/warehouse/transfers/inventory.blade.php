@@ -32,6 +32,7 @@
 @endpush
 
 @section('content')
+@include('warehouse.transfers._module_nav')
 <div class="transfer-hero d-flex justify-content-between align-items-start flex-wrap gap-2">
     <div>
         <h4 class="mb-1 fw-bold"><i class="bi bi-arrow-left-right me-2"></i>{{ $editingTransfer ? 'Sửa phiếu điều chuyển '.($editingTransfer->transfer_code ?? '#'.$editingTransfer->id) : 'Tạo phiếu điều chuyển kho' }}</h4>
@@ -39,7 +40,7 @@
         <div class="small mt-2">Kho nguồn: <strong>{{ $sourceWarehouse?->name ?? '—' }}</strong></div>
     </div>
     <div class="d-flex gap-2 flex-wrap">
-        <a href="{{ route('warehouse.dispatch-slips.index') }}" class="btn btn-warning btn-sm fw-semibold"><i class="bi bi-file-earmark-spreadsheet me-1"></i>Lập phiếu xuất tổng</a>
+        <a href="{{ route('warehouse.transfers.index') }}" class="btn btn-warning btn-sm fw-semibold"><i class="bi bi-file-earmark-spreadsheet me-1"></i>Lập phiếu xuất tổng</a>
         <a href="{{ route('warehouse.inventory-transfers.incoming') }}" class="btn btn-light btn-sm fw-semibold">
             <i class="bi bi-box-arrow-in-down me-1"></i>Tiếp nhận điều chuyển ({{ number_format($incomingPendingCount) }})
         </a>

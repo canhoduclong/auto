@@ -381,4 +381,56 @@ class WarehouseDispatchSlipWorkflowTest extends TestCase
 
         $this->assertDatabaseMissing('warehouse_dispatch_slips', ['id' => $slip->id]);
     }
+
+    public function test_unified_transfer_screen_links_both_creation_flows_and_prints_selected_driver_slips(): void
+    {
+        $warehouseRole = Role::create(['name' => 'warehouse']);
+        $source = Warehouse::create(['name' => 'Kho nguồn tổng hợp']);
+        $target = Warehouse::create(['name' => 'Kho nhận tổng hợp']);
+        $warehouseUser = User::factory()->create(['warehouse_id' => $source->id]);
+        $warehouseUser->roles()->attach($warehouseRole);
+        $driverA = User::factory()->create(['name' => 'Tài xế phiếu A']);
+        $driverB = User::factory()->create(['name' => 'Tài xế phiếu B']);
+
+        $slipA = WarehouseDispatchSlip::create([
+            'business_date' => now(),
+            'source_warehouse_id' => $source->id,
+            'target_warehouse_id' => $target->id,
+            'shipper_id' => $driverA->id,
+            'status' => WarehouseDispatchSlip::STATUS_DRAFT,
+            'created_by' => $warehouseUser->id,
+        ]);
+        $slipB = WarehouseDispatchSlip::create([
+            'business_date' => now(),
+            'source_warehouse_id' => $source->id,
+            'target_warehouse_id' => $target->id,
+            'shipper_id' => $driverB->id,
+            'status' => WarehouseDispatchSlip::STATUS_DRAFT,
+            'created_by' => $warehouseUser->id,
+        ]);
+
+        $this->actingAs($warehouseUser)
+            ->get(route('warehouse.transfers.index'))
+            ->assertOk()
+            ->assertSee('Tổng hợp điều chuyển &amp; phiếu xuất kho', false)
+            ->assertSee(route('warehouse.order-transfers'))
+            ->assertSee(route('warehouse.inventory-transfers.index'))
+            ->assertSee('dispatch_slip_ids[]', false)
+            ->assertSee('In phiếu xuất kho tổng đã chọn');
+
+        $this->actingAs($warehouseUser)
+            ->post(route('warehouse.dispatch-slips.print-selected'), [
+                'dispatch_slip_ids' => [$slipA->id, $slipB->id],
+            ])
+            ->assertOk()
+            ->assertSee('PHIẾU XUẤT KHO TỔNG')
+            ->assertSee('PHIẾU XUẤT KHO THEO TÀI XẾ')
+            ->assertSee('Tài xế phiếu A')
+            ->assertSee('Tài xế phiếu B')
+            ->assertSee($slipA->code)
+            ->assertSee($slipB->code);
+
+        $this->assertSame(1, $slipA->fresh()->print_count);
+        $this->assertSame(1, $slipB->fresh()->print_count);
+    }
 }

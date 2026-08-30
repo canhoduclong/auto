@@ -473,6 +473,38 @@ class WarehouseDispatchSlipController extends Controller
         return view('warehouse.dispatch-slips.print-export', ['slip' => $dispatchSlip] + $this->documentData($dispatchSlip));
     }
 
+    public function printSelected(Request $request)
+    {
+        $validated = $request->validate([
+            'dispatch_slip_ids' => ['required', 'array', 'min:1'],
+            'dispatch_slip_ids.*' => ['integer', 'distinct', 'exists:warehouse_dispatch_slips,id'],
+        ], [
+            'dispatch_slip_ids.required' => 'Vui lòng chọn ít nhất một phiếu để in tổng.',
+            'dispatch_slip_ids.min' => 'Vui lòng chọn ít nhất một phiếu để in tổng.',
+        ]);
+
+        $slips = WarehouseDispatchSlip::query()
+            ->whereIn('id', $validated['dispatch_slip_ids'])
+            ->orderBy('business_date')
+            ->orderBy('shipper_id')
+            ->orderBy('id')
+            ->get();
+
+        // Kiểm tra toàn bộ quyền trước khi cập nhật lượt in để tránh thay đổi
+        // một phần dữ liệu nếu danh sách có phiếu không thuộc kho hiện tại.
+        $slips->each(fn (WarehouseDispatchSlip $slip) => $this->authorizeSlip($slip));
+
+        $documents = $slips->map(function (WarehouseDispatchSlip $slip): array {
+            $this->loadSlip($slip);
+            $this->attachProgress($slip);
+            $slip->increment('print_count');
+
+            return ['slip' => $slip] + $this->documentData($slip);
+        });
+
+        return view('warehouse.dispatch-slips.print-selected', compact('documents'));
+    }
+
     public function printImport(WarehouseDispatchSlip $dispatchSlip)
     {
         $this->authorizeSlip($dispatchSlip);

@@ -357,14 +357,8 @@
             <a href="{{ route('warehouse.stock-out.orders') }}" class="wh-nav-link {{ request()->routeIs('warehouse.stock-out.orders') ? 'active' : '' }}">
                 <i class="bi bi-receipt-cutoff"></i><span class="wh-nav-label">Đơn Xuất Kho</span>
             </a>
-            <a href="{{ route('warehouse.dispatch-slips.index') }}" class="wh-nav-link {{ request()->routeIs('warehouse.dispatch-slips.*') ? 'active' : '' }}">
-                <i class="bi bi-file-earmark-spreadsheet"></i><span class="wh-nav-label">Phiếu xuất kho tổng</span>
-            </a>
-            <a href="{{ route('warehouse.order-transfers') }}" class="wh-nav-link {{ request()->routeIs('warehouse.order-transfers') ? 'active' : '' }}">
-                <i class="bi bi-arrow-left-right"></i><span class="wh-nav-label">Điều chuyển đơn</span>
-            </a>
-            <a href="{{ route('warehouse.inventory-transfers.index') }}" class="wh-nav-link {{ request()->routeIs('warehouse.inventory-transfers.index') ? 'active' : '' }}">
-                <i class="bi bi-arrow-left-right"></i><span class="wh-nav-label">Điều chuyển hàng</span>
+            <a href="{{ route('warehouse.transfers.index') }}" class="wh-nav-link {{ request()->routeIs('warehouse.transfers.index', 'warehouse.dispatch-slips.*', 'warehouse.order-transfers', 'warehouse.order-transfers.*', 'warehouse.inventory-transfers.index', 'warehouse.inventory-transfers.edit') ? 'active' : '' }}">
+                <i class="bi bi-arrow-left-right"></i><span class="wh-nav-label">Điều chuyển</span>
             </a>
             <a href="{{ route('warehouse.inventory') }}" class="wh-nav-link {{ request()->routeIs('warehouse.inventory') ? 'active' : '' }}">
                 <i class="bi bi-stack"></i><span class="wh-nav-label">Tồn Kho</span>
