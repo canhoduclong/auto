@@ -16,12 +16,18 @@ class InventoryStocktakeItem extends Model
         'system_quantity',
         'counted_quantity',
         'difference',
+        'system_weight_kg',
+        'counted_weight_kg',
+        'weight_difference',
     ];
 
     protected $casts = [
         'system_quantity' => 'float',
         'counted_quantity' => 'float',
         'difference' => 'float',
+        'system_weight_kg' => 'float',
+        'counted_weight_kg' => 'float',
+        'weight_difference' => 'float',
     ];
 
     public function stocktake()

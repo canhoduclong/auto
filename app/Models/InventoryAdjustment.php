@@ -12,12 +12,14 @@ class InventoryAdjustment extends Model
     protected $fillable = [
         'inventory_id',
         'quantity',
+        'weight_kg',
         'reason',
         'user_id',
     ];
 
     protected $casts = [
         'quantity' => 'float',
+        'weight_kg' => 'float',
     ];
 
     public function inventory()

@@ -75,17 +75,29 @@ class WarehouseStocktakeController extends Controller
             'counted_at' => ['required', 'date', 'before_or_equal:now'],
             'note' => ['nullable', 'string', 'max:2000'],
             'items' => ['required', 'array'],
-            'items.*.expected_quantity' => ['required_with:items.*.counted_quantity', 'nullable', 'numeric', 'min:0'],
-            'items.*.counted_quantity' => ['nullable', 'numeric', 'min:0'],
+            'items.*.expected_quantity' => ['required', 'numeric', 'min:0'],
+            'items.*.expected_weight_kg' => ['required', 'numeric', 'min:0'],
+            'items.*.counted_quantity' => ['nullable', 'integer', 'min:0'],
+            'items.*.counted_weight_kg' => ['nullable', 'numeric', 'min:0'],
         ]);
 
         $countedRows = collect($validated['items'])
-            ->filter(fn ($row) => array_key_exists('counted_quantity', $row) && $row['counted_quantity'] !== null && $row['counted_quantity'] !== '')
-            ->mapWithKeys(fn ($row, $inventoryId) => [(int) $inventoryId => $row]);
+            ->filter(fn ($row) => $this->hasCountedValue($row, 'counted_quantity')
+                || $this->hasCountedValue($row, 'counted_weight_kg'))
+            ->mapWithKeys(function ($row, $inventoryId) {
+                $row['counted_quantity'] = $this->hasCountedValue($row, 'counted_quantity')
+                    ? $row['counted_quantity']
+                    : $row['expected_quantity'];
+                $row['counted_weight_kg'] = $this->hasCountedValue($row, 'counted_weight_kg')
+                    ? $row['counted_weight_kg']
+                    : $row['expected_weight_kg'];
+
+                return [(int) $inventoryId => $row];
+            });
 
         if ($countedRows->isEmpty()) {
             throw ValidationException::withMessages([
-                'items' => 'Vui lòng nhập số lượng thực tế cho ít nhất một sản phẩm.',
+                'items' => 'Vui lòng nhập số con/số lượng hoặc số kg thực tế cho ít nhất một sản phẩm.',
             ]);
         }
 
@@ -122,6 +134,9 @@ class WarehouseStocktakeController extends Controller
                 $systemQuantity = round((float) $inventory->quantity, 3);
                 $countedQuantity = round((float) $row['counted_quantity'], 3);
                 $difference = round($countedQuantity - $systemQuantity, 3);
+                $systemWeight = round((float) $inventory->weight_kg, 3);
+                $countedWeight = round((float) $row['counted_weight_kg'], 3);
+                $weightDifference = round($countedWeight - $systemWeight, 3);
 
                 $stocktake->items()->create([
                     'inventory_id' => $inventory->id,
@@ -129,18 +144,23 @@ class WarehouseStocktakeController extends Controller
                     'system_quantity' => $systemQuantity,
                     'counted_quantity' => $countedQuantity,
                     'difference' => $difference,
+                    'system_weight_kg' => $systemWeight,
+                    'counted_weight_kg' => $countedWeight,
+                    'weight_difference' => $weightDifference,
                 ]);
 
-                if (abs($difference) >= 0.001) {
+                if (abs($difference) >= 0.001 || abs($weightDifference) >= 0.001) {
                     InventoryAdjustment::create([
                         'inventory_id' => $inventory->id,
                         'quantity' => $difference,
+                        'weight_kg' => $weightDifference,
                         'reason' => 'Kiểm kê kho '.$stocktake->code,
                         'user_id' => Auth::id(),
                     ]);
                     InventoryMovement::create([
                         'inventory_id' => $inventory->id,
                         'quantity' => $difference,
+                        'weight_kg' => $weightDifference,
                         'type' => 'stocktake_adjustment',
                         'reference_id' => $stocktake->id,
                         'reference_type' => InventoryStocktake::class,
@@ -148,7 +168,10 @@ class WarehouseStocktakeController extends Controller
                     ]);
                 }
 
-                $inventory->update(['quantity' => $countedQuantity]);
+                $inventory->update([
+                    'quantity' => $countedQuantity,
+                    'weight_kg' => $countedWeight,
+                ]);
                 $variantIds->push((int) $inventory->product_variant_id);
             }
 
@@ -187,13 +210,20 @@ class WarehouseStocktakeController extends Controller
         foreach ($countedRows as $inventoryId => $row) {
             $expected = round((float) $row['expected_quantity'], 3);
             $current = round((float) $inventories->get($inventoryId)->quantity, 3);
+            $expectedWeight = round((float) $row['expected_weight_kg'], 3);
+            $currentWeight = round((float) $inventories->get($inventoryId)->weight_kg, 3);
 
-            if (abs($expected - $current) >= 0.001) {
+            if (abs($expected - $current) >= 0.001 || abs($expectedWeight - $currentWeight) >= 0.001) {
                 throw ValidationException::withMessages([
                     'items' => 'Tồn kho đã thay đổi trong lúc kiểm kê. Vui lòng tải lại trang và kiểm tra lại số thực tế.',
                 ]);
             }
         }
+    }
+
+    private function hasCountedValue(array $row, string $key): bool
+    {
+        return array_key_exists($key, $row) && $row[$key] !== null && $row[$key] !== '';
     }
 
     private function syncVariantStocks(Collection $variantIds): void

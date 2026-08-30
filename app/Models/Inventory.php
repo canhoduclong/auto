@@ -13,12 +13,14 @@ class Inventory extends Model
         'product_variant_id',
         'warehouse_id',
         'quantity',
+        'weight_kg',
         'reserved_quantity',
         'low_stock_threshold',
     ];
 
     protected $casts = [
         'quantity' => 'float',
+        'weight_kg' => 'float',
         'reserved_quantity' => 'float',
         'low_stock_threshold' => 'float',
     ];

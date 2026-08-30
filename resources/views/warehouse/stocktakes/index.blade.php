@@ -6,7 +6,7 @@
 @push('styles')
 <style>
     .stocktake-card { background:#fff; border:1px solid #e2e8f0; border-radius:12px; box-shadow:0 4px 14px rgba(15,23,42,.05); overflow:hidden; }
-    .stocktake-table { min-width:980px; }
+    .stocktake-table { min-width:1320px; }
     .stocktake-table th { white-space:nowrap; font-size:.75rem; text-transform:uppercase; color:#64748b; background:#f8fafc; }
     .stocktake-table td, .stocktake-table th { vertical-align:middle; }
     .stocktake-input { min-width:130px; text-align:right; font-variant-numeric:tabular-nums; }
@@ -32,7 +32,7 @@
 
 <div class="stocktake-help rounded p-3 mb-3 small">
     <div class="fw-semibold mb-1"><i class="bi bi-info-circle me-1"></i>Hướng dẫn kiểm kê</div>
-    Chỉ nhập số thực tế cho các mặt hàng đã cân/đếm. Khi chốt, hệ thống ghi lại tồn sổ sách, tồn thực tế, chênh lệch và tự động cập nhật tồn kho.
+    Có thể nhập số con/số lượng, số kg hoặc cả hai cho mặt hàng đã cân/đếm. Đại lượng để trống sẽ được giữ nguyên. Khi chốt, hệ thống lưu riêng chênh lệch số lượng và chênh lệch khối lượng rồi cập nhật tồn kho.
 </div>
 
 <div class="stocktake-card mb-3">
@@ -89,10 +89,13 @@
                         <th>Sản phẩm / Biến thể</th>
                         <th>SKU</th>
                         <th>ĐVT</th>
-                        <th class="text-end">Tồn hệ thống</th>
+                        <th class="text-end">SL hệ thống</th>
                         <th class="text-end">Đã giữ chỗ</th>
-                        <th class="text-end">Số thực tế</th>
-                        <th class="text-end">Chênh lệch</th>
+                        <th class="text-end">SL thực tế</th>
+                        <th class="text-end">Lệch SL</th>
+                        <th class="text-end">Kg hệ thống</th>
+                        <th class="text-end">Kg thực tế</th>
+                        <th class="text-end">Lệch kg</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -101,7 +104,8 @@
                             $variant = $inventory->productVariant;
                             $productName = $variant?->product?->name ?? 'Sản phẩm';
                             $variantName = $variant?->name ?: 'Mặc định';
-                            $oldValue = old('items.'.$inventory->id.'.counted_quantity');
+                            $oldQuantity = old('items.'.$inventory->id.'.counted_quantity');
+                            $oldWeight = old('items.'.$inventory->id.'.counted_weight_kg');
                         @endphp
                         <tr>
                             <td class="text-muted">{{ $inventories->firstItem() + $loop->index }}</td>
@@ -111,27 +115,44 @@
                             </td>
                             <td>{{ $variant?->sku ?: '—' }}</td>
                             <td>{{ $variant?->product?->unit_label ?? '—' }}</td>
-                            <td class="text-end fw-semibold">{{ format_kg((float) $inventory->quantity) }}</td>
+                            <td class="text-end fw-semibold">{{ number_format((float) $inventory->quantity, 0, ',', '.') }}</td>
                             <td class="text-end {{ (float) $inventory->reserved_quantity > (float) $inventory->quantity ? 'text-danger fw-semibold' : 'text-muted' }}">
-                                {{ format_kg((float) $inventory->reserved_quantity) }}
+                                {{ number_format((float) $inventory->reserved_quantity, 0, ',', '.') }}
                             </td>
                             <td class="text-end">
                                 <input type="hidden" name="items[{{ $inventory->id }}][expected_quantity]" value="{{ number_format((float) $inventory->quantity, 3, '.', '') }}">
+                                <input type="hidden" name="items[{{ $inventory->id }}][expected_weight_kg]" value="{{ number_format((float) $inventory->weight_kg, 3, '.', '') }}">
                                 <input type="number"
                                        name="items[{{ $inventory->id }}][counted_quantity]"
-                                       class="form-control form-control-sm stocktake-input ms-auto js-counted-quantity"
-                                       value="{{ $oldValue }}"
-                                       min="0" step="0.001"
+                                       class="form-control form-control-sm stocktake-input ms-auto js-counted-value"
+                                       value="{{ $oldQuantity }}"
+                                       min="0" step="1"
                                        data-system="{{ number_format((float) $inventory->quantity, 3, '.', '') }}"
-                                       data-diff-target="diff-{{ $inventory->id }}"
-                                       placeholder="Nhập thực tế">
+                                       data-diff-target="quantity-diff-{{ $inventory->id }}"
+                                       data-suffix=""
+                                       placeholder="Số thực tế">
                             </td>
                             <td class="text-end">
-                                <span id="diff-{{ $inventory->id }}" class="stocktake-diff equal">—</span>
+                                <span id="quantity-diff-{{ $inventory->id }}" class="stocktake-diff equal">—</span>
+                            </td>
+                            <td class="text-end fw-semibold">{{ format_kg((float) $inventory->weight_kg) }}</td>
+                            <td class="text-end">
+                                <input type="number"
+                                       name="items[{{ $inventory->id }}][counted_weight_kg]"
+                                       class="form-control form-control-sm stocktake-input ms-auto js-counted-value"
+                                       value="{{ $oldWeight }}"
+                                       min="0" step="0.001"
+                                       data-system="{{ number_format((float) $inventory->weight_kg, 3, '.', '') }}"
+                                       data-diff-target="weight-diff-{{ $inventory->id }}"
+                                       data-suffix=" kg"
+                                       placeholder="Kg thực tế">
+                            </td>
+                            <td class="text-end">
+                                <span id="weight-diff-{{ $inventory->id }}" class="stocktake-diff equal">—</span>
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="8" class="text-center text-muted py-4">Kho chưa có dữ liệu tồn phù hợp.</td></tr>
+                        <tr><td colspan="11" class="text-center text-muted py-4">Kho chưa có dữ liệu tồn phù hợp.</td></tr>
                     @endforelse
                 </tbody>
             </table>
@@ -139,7 +160,7 @@
 
         @if($inventories->isNotEmpty())
             <div class="p-3 border-top d-flex flex-wrap align-items-center justify-content-between gap-2">
-                <div class="small text-muted">Bỏ trống những mặt hàng chưa kiểm kê. Phiếu chỉ ghi nhận các dòng đã nhập số thực tế.</div>
+                <div class="small text-muted">Bỏ trống mặt hàng chưa kiểm kê. Nếu chỉ nhập một đại lượng, đại lượng còn lại được giữ nguyên.</div>
                 <button type="submit" class="btn btn-success" onclick="return confirm('Chốt kiểm kê và cập nhật tồn kho theo số thực tế đã nhập?');">
                     <i class="bi bi-check2-square me-1"></i>Chốt kiểm kê & cập nhật tồn
                 </button>
@@ -158,7 +179,8 @@
         @forelse($recentStocktakes as $stocktake)
             @php
                 $totalDifference = (float) $stocktake->items->sum('difference');
-                $changedCount = $stocktake->items->filter(fn ($item) => abs((float) $item->difference) >= 0.001)->count();
+                $totalWeightDifference = (float) $stocktake->items->sum('weight_difference');
+                $changedCount = $stocktake->items->filter(fn ($item) => abs((float) $item->difference) >= 0.001 || abs((float) $item->weight_difference) >= 0.001)->count();
             @endphp
             <details class="stocktake-history-item">
                 <summary class="stocktake-history-head d-flex flex-wrap align-items-center gap-3" style="cursor:pointer;">
@@ -168,22 +190,30 @@
                     <span class="badge bg-light text-dark border">{{ $stocktake->items_count }} mặt hàng</span>
                     <span class="badge {{ $changedCount > 0 ? 'bg-warning text-dark' : 'bg-success' }}">{{ $changedCount }} chênh lệch</span>
                     <span class="ms-auto fw-semibold {{ $totalDifference < 0 ? 'text-danger' : ($totalDifference > 0 ? 'text-success' : 'text-muted') }}">
-                        Tổng lệch: {{ $totalDifference > 0 ? '+' : '' }}{{ format_kg($totalDifference) }}
+                        Lệch SL: {{ $totalDifference > 0 ? '+' : '' }}{{ number_format($totalDifference, 0, ',', '.') }}
+                    </span>
+                    <span class="fw-semibold {{ $totalWeightDifference < 0 ? 'text-danger' : ($totalWeightDifference > 0 ? 'text-success' : 'text-muted') }}">
+                        Lệch kg: {{ $totalWeightDifference > 0 ? '+' : '' }}{{ format_kg($totalWeightDifference) }}
                     </span>
                 </summary>
                 <div class="table-responsive">
                     <table class="table table-sm align-middle mb-0">
                         <thead>
-                            <tr><th>Sản phẩm</th><th class="text-end">Hệ thống</th><th class="text-end">Thực tế</th><th class="text-end">Chênh lệch</th></tr>
+                            <tr><th>Sản phẩm</th><th class="text-end">SL hệ thống</th><th class="text-end">SL thực tế</th><th class="text-end">Lệch SL</th><th class="text-end">Kg hệ thống</th><th class="text-end">Kg thực tế</th><th class="text-end">Lệch kg</th></tr>
                         </thead>
                         <tbody>
                             @foreach($stocktake->items as $item)
                                 <tr>
                                     <td>{{ trim(($item->productVariant?->product?->name ?? 'Sản phẩm') . ' ' . ($item->productVariant?->name ?: '')) }}</td>
-                                    <td class="text-end">{{ format_kg((float) $item->system_quantity) }}</td>
-                                    <td class="text-end">{{ format_kg((float) $item->counted_quantity) }}</td>
+                                    <td class="text-end">{{ number_format((float) $item->system_quantity, 0, ',', '.') }}</td>
+                                    <td class="text-end">{{ number_format((float) $item->counted_quantity, 0, ',', '.') }}</td>
                                     <td class="text-end fw-semibold {{ (float) $item->difference < 0 ? 'text-danger' : ((float) $item->difference > 0 ? 'text-success' : 'text-muted') }}">
-                                        {{ (float) $item->difference > 0 ? '+' : '' }}{{ format_kg((float) $item->difference) }}
+                                        {{ (float) $item->difference > 0 ? '+' : '' }}{{ number_format((float) $item->difference, 0, ',', '.') }}
+                                    </td>
+                                    <td class="text-end">{{ format_kg((float) $item->system_weight_kg) }}</td>
+                                    <td class="text-end">{{ format_kg((float) $item->counted_weight_kg) }}</td>
+                                    <td class="text-end fw-semibold {{ (float) $item->weight_difference < 0 ? 'text-danger' : ((float) $item->weight_difference > 0 ? 'text-success' : 'text-muted') }}">
+                                        {{ (float) $item->weight_difference > 0 ? '+' : '' }}{{ format_kg((float) $item->weight_difference) }}
                                     </td>
                                 </tr>
                             @endforeach
@@ -206,7 +236,7 @@
 document.addEventListener('DOMContentLoaded', function () {
     const formatter = new Intl.NumberFormat('vi-VN', { minimumFractionDigits: 0, maximumFractionDigits: 3 });
 
-    document.querySelectorAll('.js-counted-quantity').forEach(function (input) {
+    document.querySelectorAll('.js-counted-value').forEach(function (input) {
         const updateDifference = function () {
             const target = document.getElementById(input.dataset.diffTarget);
             if (!target) return;
@@ -217,7 +247,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             const difference = Number(input.value) - Number(input.dataset.system || 0);
-            target.textContent = `${difference > 0 ? '+' : ''}${formatter.format(difference)} kg`;
+            target.textContent = `${difference > 0 ? '+' : ''}${formatter.format(difference)}${input.dataset.suffix || ''}`;
             target.className = `stocktake-diff ${difference > 0 ? 'positive' : (difference < 0 ? 'negative' : 'equal')}`;
         };
 

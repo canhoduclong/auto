@@ -12,6 +12,7 @@ class InventoryMovement extends Model
     protected $fillable = [
         'inventory_id',
         'quantity',
+        'weight_kg',
         'type',
         'reference_id',
         'reference_type',
@@ -20,6 +21,7 @@ class InventoryMovement extends Model
 
     protected $casts = [
         'quantity' => 'float',
+        'weight_kg' => 'float',
     ];
 
     public function inventory()
