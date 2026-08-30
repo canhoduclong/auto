@@ -7,11 +7,15 @@ use App\Models\Customer;
 use App\Models\User;
 use App\Services\AdminActivityService;
 use App\Services\GoogleSheetsJournalSyncScheduler;
+use App\Services\GoogleSheetsOrderSyncScheduler;
 use Carbon\Carbon;
 
 class OrderObserver
 {
-    public function __construct(private readonly GoogleSheetsJournalSyncScheduler $journalSync) {}
+    public function __construct(
+        private readonly GoogleSheetsJournalSyncScheduler $journalSync,
+        private readonly GoogleSheetsOrderSyncScheduler $orderSheetSync,
+    ) {}
 
     public function created(Order $order): void
     {
@@ -26,6 +30,9 @@ class OrderObserver
         );
 
         $this->journalSync->scheduleDates([$order->created_at]);
+        if (in_array((string) $order->status, [Order::STATUS_APPROVED, Order::STATUS_CANCELLED], true)) {
+            $this->orderSheetSync->schedule([$order->id]);
+        }
     }
 
     public function updated(Order $order): void
@@ -59,6 +66,10 @@ class OrderObserver
             $order->created_at,
             $order->getRawOriginal('created_at'),
         ]);
+        if ($order->wasChanged('status')
+            && in_array((string) $order->status, [Order::STATUS_APPROVED, Order::STATUS_CANCELLED], true)) {
+            $this->orderSheetSync->schedule([$order->id]);
+        }
     }
 
     /**

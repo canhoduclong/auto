@@ -51,6 +51,12 @@ return [
         'sheet_name' => env('GOOGLE_SHEETS_JOURNAL_SHEET', 'Nhật ký bán hàng'),
         'inventory_spreadsheet_id' => env('GOOGLE_SHEETS_INVENTORY_SPREADSHEET_ID', '1SLq3sid9Z57jbi3qoAzRiNS4YyK4q5qzm3cWf8-9C6g'),
         'inventory_sheet_id' => (int) env('GOOGLE_SHEETS_INVENTORY_SHEET_ID', 943551638),
+        'order_sync_enabled' => (bool) env('GOOGLE_SHEETS_ORDER_SYNC_ENABLED', false),
+        'order_spreadsheet_id' => env('GOOGLE_SHEETS_ORDER_SPREADSHEET_ID'),
+        'order_sheet_id' => (int) env('GOOGLE_SHEETS_ORDER_SHEET_ID', 282952252),
+        'order_sheet_name' => env('GOOGLE_SHEETS_ORDER_SHEET_NAME', '01_DON_HANG'),
+        'order_detail_sheet_id' => (int) env('GOOGLE_SHEETS_ORDER_DETAIL_SHEET_ID', 151191626),
+        'order_detail_sheet_name' => env('GOOGLE_SHEETS_ORDER_DETAIL_SHEET_NAME', '02_CHI_TIET_DON_HANG'),
     ],
 
 ];
