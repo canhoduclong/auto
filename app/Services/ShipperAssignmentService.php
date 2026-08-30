@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Order;
 use App\Models\OrderHistory;
 use App\Models\User;
+use App\Models\WarehouseTransfer;
 use App\Notifications\ShipperDeliveryScheduleUpdated;
 use Carbon\Carbon;
 
@@ -19,6 +20,19 @@ class ShipperAssignmentService
             Order::STATUS_PACKED,
             Order::STATUS_READY_TO_SHIP,
         ];
+    }
+
+    private function constrainAssignmentOrders($query): void
+    {
+        $query->whereIn('status', $this->assignmentStatuses())
+            ->orWhere(function ($importedOrderQuery): void {
+                $importedOrderQuery
+                    ->where('status', Order::STATUS_COMPLETED)
+                    ->whereNotNull('accounting_sales_import_batch_id')
+                    ->where('needs_operational_completion', true)
+                    ->whereHas('warehouseTransfers', fn ($transferQuery) => $transferQuery
+                        ->where('status', WarehouseTransfer::STATUS_RECEIVED_COMPLETED));
+            });
     }
 
     private function plannedOrderIdsForShipper(array $routePlan, int $shipperId): array
@@ -44,7 +58,7 @@ class ShipperAssignmentService
 
         $orders = Order::query()
             ->where('shipper_id', $shipperId)
-            ->whereIn('status', $this->assignmentStatuses())
+            ->where(fn ($query) => $this->constrainAssignmentOrders($query))
             ->forWorkflowDate($dateString)
             ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
             ->orderBy('daily_sequence')
@@ -100,7 +114,7 @@ class ShipperAssignmentService
 
         $orders = Order::query()
             ->where('shipper_id', $shipperId)
-            ->whereIn('status', $this->assignmentStatuses())
+            ->where(fn ($query) => $this->constrainAssignmentOrders($query))
             ->when(
                 $plannedOrderIds !== [],
                 fn ($query) => $query->whereIn('id', $plannedOrderIds)

@@ -122,15 +122,23 @@
 
 @section('content')
 @php
+    $isPendingImportedDelivery = fn ($order) => $order->status === 'completed'
+        && $order->accounting_sales_import_batch_id !== null
+        && (bool) $order->needs_operational_completion
+        && $order->warehouseTransfers->isNotEmpty();
     $waitingCount = $orders->whereIn('status', ['approved', 'ready_to_pack', 'packing'])->count();
-    $readyToShipCount = $orders->where('status', 'packed_waiting_pickup')->count();
+    $readyToShipCount = $orders
+        ->filter(fn ($order) => $order->status === 'packed_waiting_pickup' || $isPendingImportedDelivery($order))
+        ->count();
     $awaitingCompletionCount = $orders
         ->filter(fn ($order) => $order->status === 'delivering' && $order->returnRecords->isNotEmpty())
         ->count();
     $deliveringCount = $orders
         ->filter(fn ($order) => $order->status === 'delivering' && $order->returnRecords->isEmpty())
         ->count();
-    $completedCount = $orders->where('status', 'completed')->count();
+    $completedCount = $orders
+        ->filter(fn ($order) => $order->status === 'completed' && !$isPendingImportedDelivery($order))
+        ->count();
 @endphp
 
 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -158,6 +166,7 @@
 <div class="row g-3">
     @foreach($orders as $order)
     @php
+        $isPendingCustomerDelivery = $isPendingImportedDelivery($order);
         $isAwaitingPaymentCompletion = $order->status === 'delivering'
             && $order->returnRecords->isNotEmpty();
         $recipientName = $order->recipient_name ?: ($order->customer?->name ?? '—');
@@ -228,6 +237,9 @@
                             'completed' => ['Hoàn thành', 'bg-success'],
                         ];
                         [$statusLabel, $statusClass] = $statusMap[$order->status] ?? [strtoupper((string) $order->status), 'bg-light text-dark border'];
+                        if ($isPendingCustomerDelivery) {
+                            [$statusLabel, $statusClass] = ['Chờ ship nhận giao khách', 'bg-primary'];
+                        }
                         if ($isAwaitingPaymentCompletion) {
                             [$statusLabel, $statusClass] = ['Chờ thu tiền & hoàn tất', 'bg-info text-dark'];
                         }
@@ -325,7 +337,16 @@
                 </div>
             </div>
 
-            @if($order->status === 'completed')
+            @if($isPendingCustomerDelivery)
+                <div class="card-footer bg-white border-top d-flex gap-2">
+                    <form method="POST" action="{{ route('shipper.accept', $order) }}" class="w-100">
+                        @csrf
+                        <button type="submit" class="btn btn-primary w-100 btn-sm">
+                            <i class="bi bi-truck me-1"></i>Nhận đơn để giao khách
+                        </button>
+                    </form>
+                </div>
+            @elseif($order->status === 'completed')
                 <div class="card-footer bg-white border-top">
                     <span class="badge bg-success-subtle text-success-emphasis border border-success-subtle">Đơn đã hoàn thành, không còn thao tác</span>
                 </div>

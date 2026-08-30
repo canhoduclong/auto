@@ -93,6 +93,18 @@ class ShipperDashboardController extends Controller
                     ->orWhere(function ($returnQuery) {
                         $returnQuery->where('status', Order::STATUS_APPROVED)
                             ->where('is_return_order', true);
+                    })
+                    ->orWhere(function ($importedOrderQuery): void {
+                        // Imported accounting orders are financially completed before
+                        // their physical delivery is replayed. A received warehouse
+                        // transfer only completes the inter-warehouse leg; the order
+                        // still has to be accepted and delivered to the customer.
+                        $importedOrderQuery
+                            ->where('status', Order::STATUS_COMPLETED)
+                            ->whereNotNull('accounting_sales_import_batch_id')
+                            ->where('needs_operational_completion', true)
+                            ->whereHas('warehouseTransfers', fn ($transferQuery) => $transferQuery
+                                ->where('status', WarehouseTransfer::STATUS_RECEIVED_COMPLETED));
                     });
             });
 
@@ -549,10 +561,21 @@ class ShipperDashboardController extends Controller
             'items.variant.product',
             'warehouse',
             'histories.user.warehouse',
+            'warehouseTransfers' => fn ($query) => $query
+                ->where('status', WarehouseTransfer::STATUS_RECEIVED_COMPLETED)
+                ->latest('id'),
             'returnRecords' => fn ($query) => $query->where('return_scope', 'partial'),
         ])
             ->where('shipper_id', Auth::id())
-            ->whereIn('status', [Order::STATUS_DELIVERING, Order::STATUS_COMPLETED])
+            ->whereIn('status', [
+                Order::STATUS_APPROVED,
+                Order::STATUS_READY_TO_PACK,
+                Order::STATUS_PACKING,
+                Order::STATUS_PACKED,
+                Order::STATUS_READY_TO_SHIP,
+                Order::STATUS_DELIVERING,
+                Order::STATUS_COMPLETED,
+            ])
             ->orderBy('created_at', 'asc')
             ->get();
 
@@ -1165,15 +1188,32 @@ class ShipperDashboardController extends Controller
         $foamBoxFee = (float) (($order->charge_foam_box_fee ?? false) ? ($order->foam_box_price ?? 0) : 0);
         [$newTotal, $vatAmount] = $this->customerOrderTotal($order, $newSubtotal, $shippingFee, $foamBoxFee);
 
-        $order->update([
-            'status' => 'delivered',
+        $isImportedOperationalDelivery = $order->accounting_sales_import_batch_id !== null
+            && (bool) $order->needs_operational_completion;
+        $finalStatus = $isImportedOperationalDelivery
+            ? Order::STATUS_COMPLETED
+            : Order::STATUS_DELIVERED;
+
+        $deliveryUpdates = [
+            'status' => $finalStatus,
             'collected_amount' => $collectedAmount,
             'delivered_at' => now(),
             'proof_images' => $proofImages,
             'subtotal_amount' => $newSubtotal,
             'vat_amount' => $vatAmount,
             'total' => $newTotal,
-        ]);
+        ];
+
+        if ($isImportedOperationalDelivery) {
+            $deliveryUpdates += [
+                'needs_operational_completion' => false,
+                'operational_completion_note' => 'Shipper đã hoàn tất chặng giao từ kho đích tới khách hàng.',
+                'operational_completed_by' => Auth::id(),
+                'operational_completed_at' => now(),
+            ];
+        }
+
+        $order->update($deliveryUpdates);
 
         OrderHistory::create([
             'order_id' => $order->id,
@@ -1181,7 +1221,7 @@ class ShipperDashboardController extends Controller
             'user_id' => Auth::id(),
             'role' => 'shipper',
             'status_before' => Order::STATUS_DELIVERING,
-            'status_after' => 'delivered',
+            'status_after' => $finalStatus,
             'note' => $noteText,
         ]);
 
@@ -2724,14 +2764,17 @@ class ShipperDashboardController extends Controller
         $query->whereIn('status', $this->assignmentStatuses())
             ->orWhere(function ($imported): void {
                 $imported->where('status', Order::STATUS_COMPLETED)
-                    ->whereNotNull('accounting_sales_import_batch_id');
+                    ->whereNotNull('accounting_sales_import_batch_id')
+                    ->where('needs_operational_completion', true);
             });
     }
 
     private function isAssignmentEligible(Order $order): bool
     {
         return in_array($order->status, $this->assignmentStatuses(), true)
-            || ($order->status === Order::STATUS_COMPLETED && $order->accounting_sales_import_batch_id !== null);
+            || ($order->status === Order::STATUS_COMPLETED
+                && $order->accounting_sales_import_batch_id !== null
+                && (bool) $order->needs_operational_completion);
     }
 
     /**

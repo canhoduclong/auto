@@ -3,16 +3,133 @@
 namespace Tests\Feature;
 
 use App\Models\Customer;
+use App\Models\AccountingSalesImportBatch;
 use App\Models\Order;
+use App\Models\OrderHistory;
 use App\Models\OrderReturn;
 use App\Models\Role;
 use App\Models\User;
+use App\Models\Warehouse;
+use App\Models\WarehouseTransfer;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class ShipperAssignmentWorkflowTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_confirmed_ready_order_is_visible_in_shippers_my_orders(): void
+    {
+        $shipperRole = Role::create(['name' => 'shipper']);
+        $shipper = User::factory()->create(['name' => 'Leloi Huynh']);
+        $shipper->roles()->attach($shipperRole->id);
+        $customer = Customer::create([
+            'name' => 'Khách trong lịch trình',
+            'phone' => '0912345678',
+            'status' => 'active',
+        ]);
+        $order = Order::create([
+            'customer_id' => $customer->id,
+            'user_id' => $shipper->id,
+            'shipper_id' => $shipper->id,
+            'code' => 'ORD-CONFIRMED-READY',
+            'total' => 100000,
+            'status' => Order::STATUS_READY_TO_SHIP,
+        ]);
+        OrderHistory::create([
+            'order_id' => $order->id,
+            'action' => 'schedule_confirmed',
+            'user_id' => $shipper->id,
+            'role' => 'shipper',
+            'status_before' => Order::STATUS_READY_TO_SHIP,
+            'status_after' => Order::STATUS_READY_TO_SHIP,
+            'note' => 'Shipper xác nhận lịch trình.',
+        ]);
+
+        $this->actingAs($shipper)
+            ->get(route('shipper.my-orders'))
+            ->assertOk()
+            ->assertSee('ORD-CONFIRMED-READY')
+            ->assertSee('Chờ ship nhận')
+            ->assertSee('Nhận đơn để giao');
+    }
+
+    public function test_received_warehouse_transfer_does_not_complete_imported_order_before_customer_delivery(): void
+    {
+        $shipperRole = Role::create(['name' => 'shipper']);
+        $shipper = User::factory()->create(['name' => 'Ship Dương']);
+        $shipper->roles()->attach($shipperRole->id);
+
+        $customer = Customer::create([
+            'name' => 'Khách chờ giao từ kho chiến lược',
+            'phone' => '0909090909',
+            'address' => 'Long An',
+            'status' => 'active',
+        ]);
+        $sourceWarehouse = Warehouse::create(['name' => 'Kho Long An', 'status' => true]);
+        $targetWarehouse = Warehouse::create(['name' => 'Kho Chiến Lược', 'status' => true]);
+        $batch = AccountingSalesImportBatch::create([
+            'imported_by' => $shipper->id,
+            'source_hash' => hash('sha256', 'pending-customer-delivery'),
+            'row_count' => 1,
+            'total_amount' => 100000,
+            'raw_text' => 'test',
+        ]);
+
+        $order = Order::create([
+            'customer_id' => $customer->id,
+            'user_id' => $shipper->id,
+            'shipper_id' => $shipper->id,
+            'warehouse_id' => $targetWarehouse->id,
+            'code' => 'ORD-WAREHOUSE-LEG-DONE',
+            'total' => 100000,
+            'status' => Order::STATUS_COMPLETED,
+            'accounting_sales_import_batch_id' => $batch->id,
+            'needs_operational_completion' => true,
+        ]);
+
+        WarehouseTransfer::create([
+            'order_id' => $order->id,
+            'source_warehouse_id' => $sourceWarehouse->id,
+            'target_warehouse_id' => $targetWarehouse->id,
+            'shipper_id' => $shipper->id,
+            'status' => WarehouseTransfer::STATUS_RECEIVED_COMPLETED,
+            'received_at' => now(),
+        ]);
+        OrderHistory::create([
+            'order_id' => $order->id,
+            'action' => 'schedule_confirmed',
+            'user_id' => $shipper->id,
+            'role' => 'shipper',
+            'status_before' => Order::STATUS_COMPLETED,
+            'status_after' => Order::STATUS_COMPLETED,
+            'note' => 'Shipper xác nhận chặng giao khách.',
+        ]);
+
+        $this->actingAs($shipper)
+            ->get(route('shipper.my-orders'))
+            ->assertOk()
+            ->assertSee('Chờ ship nhận giao khách')
+            ->assertSee('Nhận đơn để giao khách')
+            ->assertDontSee('Đơn đã hoàn thành, không còn thao tác');
+
+        $this->actingAs($shipper)
+            ->post(route('shipper.accept', $order))
+            ->assertRedirect(route('shipper.my-orders'));
+        $this->assertSame(Order::STATUS_DELIVERING, $order->fresh()->status);
+
+        $this->actingAs($shipper)
+            ->post(route('shipper.mark-delivered', $order), [
+                'collected_amount' => 100000,
+                'has_partial_return' => 0,
+            ])
+            ->assertRedirect(route('shipper.my-orders'));
+
+        $order->refresh();
+        $this->assertSame(Order::STATUS_COMPLETED, $order->status);
+        $this->assertFalse($order->needs_operational_completion);
+        $this->assertNotNull($order->operational_completed_at);
+    }
 
     public function test_partial_return_order_resumes_at_payment_completion(): void
     {
