@@ -3,7 +3,6 @@
 namespace Tests\Unit;
 
 use App\Http\Controllers\WarehouseStocktakeController;
-use App\Models\Inventory;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 use ReflectionMethod;
@@ -15,7 +14,7 @@ class WarehouseStocktakeGuardTest extends TestCase
     {
         $this->invokeGuard(
             collect([5 => ['expected_quantity' => 12.5, 'expected_weight_kg' => 30.2, 'counted_quantity' => 11.8, 'counted_weight_kg' => 28.7]]),
-            collect([5 => $this->inventory(5, 12.5, 30.2)])
+            collect([5 => $this->balance(12.5, 30.2)])
         );
 
         $this->addToAssertionCount(1);
@@ -27,7 +26,7 @@ class WarehouseStocktakeGuardTest extends TestCase
 
         $this->invokeGuard(
             collect([5 => ['expected_quantity' => 12.5, 'expected_weight_kg' => 30.2, 'counted_quantity' => 11.8, 'counted_weight_kg' => 28.7]]),
-            collect([5 => $this->inventory(5, 13.0, 30.2)])
+            collect([5 => $this->balance(13.0, 30.2)])
         );
     }
 
@@ -37,16 +36,13 @@ class WarehouseStocktakeGuardTest extends TestCase
 
         $this->invokeGuard(
             collect([5 => ['expected_quantity' => 12, 'expected_weight_kg' => 30.2, 'counted_quantity' => 12, 'counted_weight_kg' => 29.5]]),
-            collect([5 => $this->inventory(5, 12, 29.9)])
+            collect([5 => $this->balance(12, 29.9)])
         );
     }
 
-    private function inventory(int $id, float $quantity, float $weightKg): Inventory
+    private function balance(float $quantity, float $weightKg): array
     {
-        $inventory = new Inventory;
-        $inventory->setRawAttributes(['id' => $id, 'quantity' => $quantity, 'weight_kg' => $weightKg]);
-
-        return $inventory;
+        return ['quantity' => $quantity, 'weight_kg' => $weightKg];
     }
 
     private function invokeGuard(Collection $rows, Collection $inventories): void

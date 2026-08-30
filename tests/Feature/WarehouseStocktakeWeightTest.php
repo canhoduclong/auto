@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Inventory;
+use App\Models\InventoryMovement;
 use App\Models\ProductVariant;
 use App\Models\Role;
 use App\Models\User;
@@ -95,5 +96,77 @@ class WarehouseStocktakeWeightTest extends TestCase
             'quantity' => 10,
             'weight_kg' => 24.4,
         ]);
+    }
+
+    public function test_past_stocktake_loads_historical_balance_and_only_applies_difference_to_current_stock(): void
+    {
+        $warehouse = Warehouse::factory()->create();
+        $user = User::factory()->create(['warehouse_id' => $warehouse->id]);
+        $user->roles()->attach(Role::create(['name' => 'warehouse']));
+        $variant = ProductVariant::factory()->create(['stock' => 15, 'kg' => 2.5]);
+        $inventory = Inventory::factory()->create([
+            'warehouse_id' => $warehouse->id,
+            'product_variant_id' => $variant->id,
+            'quantity' => 15,
+            'weight_kg' => 37.5,
+            'reserved_quantity' => 0,
+        ]);
+        $countedAt = now()->subDays(5)->startOfHour();
+
+        $movement = new InventoryMovement;
+        $movement->forceFill([
+            'inventory_id' => $inventory->id,
+            'quantity' => 5,
+            'weight_kg' => 12.5,
+            'type' => 'import',
+            'reference_id' => $inventory->id,
+            'reference_type' => Inventory::class,
+            'user_id' => $user->id,
+            'created_at' => $countedAt->copy()->addDay(),
+            'updated_at' => $countedAt->copy()->addDay(),
+        ])->save();
+
+        $this->actingAs($user)
+            ->get(route('warehouse.stocktakes.index', [
+                'warehouse_id' => $warehouse->id,
+                'counted_at' => $countedAt->format('Y-m-d H:i:s'),
+            ]))
+            ->assertOk()
+            ->assertSee('value="10.000"', false)
+            ->assertSee('data-system="25.000"', false);
+
+        $this->actingAs($user)->post(route('warehouse.stocktakes.store'), [
+            'warehouse_id' => $warehouse->id,
+            'counted_at' => $countedAt->format('Y-m-d H:i:s'),
+            'items' => [
+                $inventory->id => [
+                    'expected_quantity' => 10,
+                    'expected_weight_kg' => 25,
+                    'counted_quantity' => 8,
+                    'counted_weight_kg' => 20,
+                ],
+            ],
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('inventories', [
+            'id' => $inventory->id,
+            'quantity' => 13,
+            'weight_kg' => 32.5,
+        ]);
+        $this->assertDatabaseHas('inventory_stocktake_items', [
+            'inventory_id' => $inventory->id,
+            'system_quantity' => 10,
+            'counted_quantity' => 8,
+            'difference' => -2,
+            'system_weight_kg' => 25,
+            'counted_weight_kg' => 20,
+            'weight_difference' => -5,
+        ]);
+
+        $adjustment = InventoryMovement::query()
+            ->where('inventory_id', $inventory->id)
+            ->where('type', 'stocktake_adjustment')
+            ->sole();
+        $this->assertSame($countedAt->format('Y-m-d H:i:s'), $adjustment->created_at->format('Y-m-d H:i:s'));
     }
 }

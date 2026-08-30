@@ -8,6 +8,7 @@ use App\Models\InventoryMovement;
 use App\Models\InventoryStocktake;
 use App\Models\ProductVariant;
 use App\Models\Warehouse;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -21,10 +22,14 @@ class WarehouseStocktakeController extends Controller
         $request->validate([
             'warehouse_id' => ['nullable', 'integer', 'exists:warehouses,id'],
             'search' => ['nullable', 'string', 'max:255'],
+            'counted_at' => ['nullable', 'date', 'before_or_equal:now'],
         ]);
 
         $warehouse = $this->resolveWarehouse($request);
         $search = trim((string) $request->input('search', ''));
+        $countedAt = $request->filled('counted_at')
+            ? Carbon::parse($request->input('counted_at'))
+            : now();
 
         $inventories = Inventory::query()
             ->with(['productVariant.product:id,name,unit'])
@@ -46,6 +51,8 @@ class WarehouseStocktakeController extends Controller
             ->paginate(50)
             ->withQueryString();
 
+        $this->attachBalancesAt($inventories->getCollection(), $countedAt);
+
         $recentStocktakes = InventoryStocktake::query()
             ->with(['creator:id,name', 'items.productVariant.product:id,name'])
             ->withCount('items')
@@ -63,7 +70,8 @@ class WarehouseStocktakeController extends Controller
             'warehouses',
             'inventories',
             'recentStocktakes',
-            'search'
+            'search',
+            'countedAt'
         ));
     }
 
@@ -101,7 +109,9 @@ class WarehouseStocktakeController extends Controller
             ]);
         }
 
-        $stocktake = DB::transaction(function () use ($countedRows, $validated, $warehouse) {
+        $countedAt = Carbon::parse($validated['counted_at']);
+
+        $stocktake = DB::transaction(function () use ($countedRows, $validated, $warehouse, $countedAt) {
             $inventories = Inventory::query()
                 ->where('warehouse_id', $warehouse->id)
                 ->whereIn('id', $countedRows->keys()->all())
@@ -115,11 +125,12 @@ class WarehouseStocktakeController extends Controller
                 ]);
             }
 
-            $this->guardUnchangedInventory($countedRows, $inventories);
+            $balancesAtCount = $this->balancesAt($inventories, $countedAt);
+            $this->guardUnchangedInventory($countedRows, $balancesAtCount);
 
             $stocktake = InventoryStocktake::create([
                 'warehouse_id' => $warehouse->id,
-                'counted_at' => $validated['counted_at'],
+                'counted_at' => $countedAt,
                 'status' => InventoryStocktake::STATUS_COMPLETED,
                 'note' => trim((string) ($validated['note'] ?? '')) ?: null,
                 'created_by' => Auth::id(),
@@ -131,10 +142,11 @@ class WarehouseStocktakeController extends Controller
             $variantIds = collect();
             foreach ($countedRows as $inventoryId => $row) {
                 $inventory = $inventories->get($inventoryId);
-                $systemQuantity = round((float) $inventory->quantity, 3);
+                $balanceAtCount = $balancesAtCount->get($inventoryId);
+                $systemQuantity = round((float) $balanceAtCount['quantity'], 3);
                 $countedQuantity = round((float) $row['counted_quantity'], 3);
                 $difference = round($countedQuantity - $systemQuantity, 3);
-                $systemWeight = round((float) $inventory->weight_kg, 3);
+                $systemWeight = round((float) $balanceAtCount['weight_kg'], 3);
                 $countedWeight = round((float) $row['counted_weight_kg'], 3);
                 $weightDifference = round($countedWeight - $systemWeight, 3);
 
@@ -150,14 +162,19 @@ class WarehouseStocktakeController extends Controller
                 ]);
 
                 if (abs($difference) >= 0.001 || abs($weightDifference) >= 0.001) {
-                    InventoryAdjustment::create([
+                    $adjustment = new InventoryAdjustment;
+                    $adjustment->forceFill([
                         'inventory_id' => $inventory->id,
                         'quantity' => $difference,
                         'weight_kg' => $weightDifference,
                         'reason' => 'Kiểm kê kho '.$stocktake->code,
                         'user_id' => Auth::id(),
-                    ]);
-                    InventoryMovement::create([
+                        'created_at' => $countedAt,
+                        'updated_at' => $countedAt,
+                    ])->save();
+
+                    $movement = new InventoryMovement;
+                    $movement->forceFill([
                         'inventory_id' => $inventory->id,
                         'quantity' => $difference,
                         'weight_kg' => $weightDifference,
@@ -165,12 +182,17 @@ class WarehouseStocktakeController extends Controller
                         'reference_id' => $stocktake->id,
                         'reference_type' => InventoryStocktake::class,
                         'user_id' => Auth::id(),
-                    ]);
+                        'created_at' => $countedAt,
+                        'updated_at' => $countedAt,
+                    ])->save();
                 }
 
+                // A past stocktake must restate the present balance only by its
+                // historical difference. Replacing the current balance with the
+                // old physical count would discard all later movements.
                 $inventory->update([
-                    'quantity' => $countedQuantity,
-                    'weight_kg' => $countedWeight,
+                    'quantity' => round((float) $inventory->quantity + $difference, 3),
+                    'weight_kg' => round((float) $inventory->weight_kg + $weightDifference, 3),
                 ]);
                 $variantIds->push((int) $inventory->product_variant_id);
             }
@@ -205,19 +227,58 @@ class WarehouseStocktakeController extends Controller
         return $warehouse;
     }
 
-    private function guardUnchangedInventory(Collection $countedRows, Collection $inventories): void
+    private function guardUnchangedInventory(Collection $countedRows, Collection $balancesAtCount): void
     {
         foreach ($countedRows as $inventoryId => $row) {
             $expected = round((float) $row['expected_quantity'], 3);
-            $current = round((float) $inventories->get($inventoryId)->quantity, 3);
+            $current = round((float) $balancesAtCount->get($inventoryId)['quantity'], 3);
             $expectedWeight = round((float) $row['expected_weight_kg'], 3);
-            $currentWeight = round((float) $inventories->get($inventoryId)->weight_kg, 3);
+            $currentWeight = round((float) $balancesAtCount->get($inventoryId)['weight_kg'], 3);
 
             if (abs($expected - $current) >= 0.001 || abs($expectedWeight - $currentWeight) >= 0.001) {
                 throw ValidationException::withMessages([
-                    'items' => 'Tồn kho đã thay đổi trong lúc kiểm kê. Vui lòng tải lại trang và kiểm tra lại số thực tế.',
+                    'items' => 'Tồn kho tại thời điểm kiểm kê đã thay đổi. Vui lòng tải lại tồn theo thời điểm và kiểm tra lại số thực tế.',
                 ]);
             }
+        }
+    }
+
+    /**
+     * Rebuild balances at a point in time from the current balance by reversing
+     * every inventory movement recorded after that point.
+     */
+    private function balancesAt(Collection $inventories, Carbon $countedAt): Collection
+    {
+        if ($inventories->isEmpty()) {
+            return collect();
+        }
+
+        $futureMovements = InventoryMovement::query()
+            ->whereIn('inventory_id', $inventories->pluck('id'))
+            ->where('created_at', '>', $countedAt)
+            ->selectRaw('inventory_id, SUM(quantity) AS quantity_after, SUM(COALESCE(weight_kg, 0)) AS weight_after')
+            ->groupBy('inventory_id')
+            ->get()
+            ->keyBy('inventory_id');
+
+        return $inventories->mapWithKeys(function (Inventory $inventory) use ($futureMovements): array {
+            $future = $futureMovements->get($inventory->id);
+
+            return [$inventory->id => [
+                'quantity' => round((float) $inventory->quantity - (float) ($future?->quantity_after ?? 0), 3),
+                'weight_kg' => round((float) $inventory->weight_kg - (float) ($future?->weight_after ?? 0), 3),
+            ]];
+        });
+    }
+
+    private function attachBalancesAt(Collection $inventories, Carbon $countedAt): void
+    {
+        $balances = $this->balancesAt($inventories, $countedAt);
+
+        foreach ($inventories as $inventory) {
+            $balance = $balances->get($inventory->id, ['quantity' => 0, 'weight_kg' => 0]);
+            $inventory->setAttribute('stocktake_quantity', $balance['quantity']);
+            $inventory->setAttribute('stocktake_weight_kg', $balance['weight_kg']);
         }
     }
 

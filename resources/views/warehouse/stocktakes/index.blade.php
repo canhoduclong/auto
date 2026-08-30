@@ -60,8 +60,13 @@
                 <label class="form-label small fw-semibold mb-1">Tìm sản phẩm / biến thể / SKU</label>
                 <input type="search" name="search" class="form-control form-control-sm" value="{{ $search }}" placeholder="Nhập từ khóa...">
             </div>
-            <div class="col-lg-3 col-md-3 d-flex gap-2">
-                <button class="btn btn-primary btn-sm flex-fill"><i class="bi bi-search me-1"></i>Tìm</button>
+            <div class="col-lg-3 col-md-4">
+                <label class="form-label small fw-semibold mb-1">Tồn tại thời điểm</label>
+                <input type="datetime-local" name="counted_at" class="form-control form-control-sm"
+                       value="{{ $countedAt->format('Y-m-d\TH:i:s') }}" max="{{ now()->format('Y-m-d\TH:i:s') }}" step="1" required>
+            </div>
+            <div class="col-lg-2 col-md-3 d-flex gap-2">
+                <button class="btn btn-primary btn-sm flex-fill"><i class="bi bi-arrow-clockwise me-1"></i>Tải tồn</button>
                 <a href="{{ route('warehouse.stocktakes.index', ['warehouse_id' => $warehouse->id]) }}" class="btn btn-outline-secondary btn-sm">Đặt lại</a>
             </div>
         </form>
@@ -70,6 +75,7 @@
     <form method="POST" action="{{ route('warehouse.stocktakes.store') }}" id="stocktakeForm">
         @csrf
         <input type="hidden" name="warehouse_id" value="{{ $warehouse->id }}">
+        <input type="hidden" name="counted_at" value="{{ $countedAt->format('Y-m-d H:i:s') }}">
         <div class="p-3 border-bottom bg-light">
             <div class="row g-2 align-items-end">
                 <div class="col-lg-3 col-md-4">
@@ -78,7 +84,8 @@
                 </div>
                 <div class="col-lg-3 col-md-4">
                     <label class="form-label small fw-semibold mb-1">Thời điểm kiểm kê</label>
-                    <input type="datetime-local" name="counted_at" class="form-control form-control-sm" value="{{ old('counted_at', now()->format('Y-m-d\TH:i')) }}" max="{{ now()->format('Y-m-d\TH:i') }}" required>
+                    <input class="form-control form-control-sm" value="{{ $countedAt->format('d/m/Y H:i:s') }}" readonly>
+                    <div class="small text-muted mt-1">Đổi thời điểm ở bộ lọc phía trên rồi bấm “Tải tồn”.</div>
                 </div>
                 <div class="col-lg-6 col-md-4">
                     <label class="form-label small fw-semibold mb-1">Ghi chú</label>
@@ -108,8 +115,8 @@
                         <th>Sản phẩm / Biến thể</th>
                         <th>SKU</th>
                         <th>ĐVT</th>
-                        <th class="text-end">SL</th>
-                        <th class="text-end">Kg</th>
+                        <th class="text-end" title="Tồn hệ thống tại {{ $countedAt->format('d/m/Y H:i:s') }}">SL tại giờ kiểm</th>
+                        <th class="text-end" title="Khối lượng hệ thống tại {{ $countedAt->format('d/m/Y H:i:s') }}">Kg tại giờ kiểm</th>
                         <th class="text-end">SL thực tế</th>
                         <th class="text-end">Kg thực tế</th>
                         <th class="text-end">Lệch SL</th>
@@ -136,17 +143,17 @@
                             </td>
                             <td class="stocktake-sku">{{ $variant?->sku ?: '—' }}</td>
                             <td>{{ $variant?->product?->unit_label ?? '—' }}</td>
-                            <td class="text-end stocktake-number">{{ number_format((float) $inventory->quantity, 0, ',', '.') }}</td>
-                            <td class="text-end stocktake-number">{{ format_kg((float) $inventory->weight_kg) }}</td>
+                            <td class="text-end stocktake-number">{{ number_format((float) $inventory->stocktake_quantity, 0, ',', '.') }}</td>
+                            <td class="text-end stocktake-number">{{ format_kg((float) $inventory->stocktake_weight_kg) }}</td>
                             <td class="text-end">
-                                <input type="hidden" name="items[{{ $inventory->id }}][expected_quantity]" value="{{ number_format((float) $inventory->quantity, 3, '.', '') }}">
-                                <input type="hidden" name="items[{{ $inventory->id }}][expected_weight_kg]" value="{{ number_format((float) $inventory->weight_kg, 3, '.', '') }}">
+                                <input type="hidden" name="items[{{ $inventory->id }}][expected_quantity]" value="{{ number_format((float) $inventory->stocktake_quantity, 3, '.', '') }}">
+                                <input type="hidden" name="items[{{ $inventory->id }}][expected_weight_kg]" value="{{ number_format((float) $inventory->stocktake_weight_kg, 3, '.', '') }}">
                                 <input type="number"
                                        name="items[{{ $inventory->id }}][counted_quantity]"
                                        class="form-control form-control-sm stocktake-input ms-auto js-counted-value"
                                        value="{{ $oldQuantity }}"
                                        min="0" step="1"
-                                       data-system="{{ number_format((float) $inventory->quantity, 3, '.', '') }}"
+                                       data-system="{{ number_format((float) $inventory->stocktake_quantity, 3, '.', '') }}"
                                        data-diff-target="quantity-diff-{{ $inventory->id }}"
                                        data-suffix=""
                                        aria-label="Số lượng thực tế {{ $productName }} {{ $variantName }}">
@@ -157,7 +164,7 @@
                                        class="form-control form-control-sm stocktake-input ms-auto js-counted-value"
                                        value="{{ $oldWeight }}"
                                        min="0" step="0.001"
-                                       data-system="{{ number_format((float) $inventory->weight_kg, 3, '.', '') }}"
+                                       data-system="{{ number_format((float) $inventory->stocktake_weight_kg, 3, '.', '') }}"
                                        data-diff-target="weight-diff-{{ $inventory->id }}"
                                        data-suffix=" kg"
                                        aria-label="Kg thực tế {{ $productName }} {{ $variantName }}">
