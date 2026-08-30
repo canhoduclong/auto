@@ -1234,7 +1234,10 @@ class ShipperDashboardController extends Controller
             $successMsg .= ' Đã tạo phiếu hoàn trả '.count($returnedItems).' sản phẩm – chờ kho xác nhận nhập.';
         }
 
-        return redirect()->route('shipper.my-orders')->with('success', $successMsg);
+        $routeDate = $order->created_at?->toDateString() ?: Carbon::today()->toDateString();
+
+        return redirect()->route('shipper.available', ['date' => $routeDate])
+            ->with('success', $successMsg.' Tiếp tục nhận đơn kế tiếp trong lộ trình.');
     }
 
     /**

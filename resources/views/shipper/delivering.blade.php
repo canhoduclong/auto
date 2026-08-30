@@ -123,13 +123,16 @@
 @section('content')
 @php
     $customerDeliveryCompletionActions = ['delivered', 'mobile_delivered', 'shipper_delivered_bulk'];
-    $isCustomerDeliveryCompleted = fn ($order) => in_array($order->status, ['delivered', 'completed'], true)
-        || $order->histories->contains(fn ($history) => in_array($history->action, $customerDeliveryCompletionActions, true));
+    $hasCustomerDeliveryHistory = fn ($order) => $order->histories
+        ->contains(fn ($history) => in_array($history->action, $customerDeliveryCompletionActions, true));
     $isPendingImportedDelivery = fn ($order) => $order->status === 'completed'
         && $order->accounting_sales_import_batch_id !== null
         && (bool) $order->needs_operational_completion
         && $order->warehouseTransfers->isNotEmpty()
-        && !$isCustomerDeliveryCompleted($order);
+        && !$hasCustomerDeliveryHistory($order);
+    $isCustomerDeliveryCompleted = fn ($order) => $hasCustomerDeliveryHistory($order)
+        || $order->status === 'delivered'
+        || ($order->status === 'completed' && !$isPendingImportedDelivery($order));
     $waitingCount = $orders
         ->filter(fn ($order) => !$isCustomerDeliveryCompleted($order)
             && in_array($order->status, ['approved', 'ready_to_pack', 'packing'], true))

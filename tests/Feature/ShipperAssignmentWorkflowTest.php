@@ -123,7 +123,7 @@ class ShipperAssignmentWorkflowTest extends TestCase
                 'collected_amount' => 100000,
                 'has_partial_return' => 0,
             ])
-            ->assertRedirect(route('shipper.my-orders'));
+            ->assertRedirect(route('shipper.available', ['date' => $order->created_at->toDateString()]));
 
         $order->refresh();
         $this->assertSame(Order::STATUS_COMPLETED, $order->status);

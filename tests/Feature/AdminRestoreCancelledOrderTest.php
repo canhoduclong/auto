@@ -586,7 +586,7 @@ class AdminRestoreCancelledOrderTest extends TestCase
                 'collected_amount' => 500000,
                 'has_partial_return' => 0,
             ])
-            ->assertRedirect(route('shipper.my-orders'))
+            ->assertRedirect(route('shipper.available', ['date' => $order->created_at->toDateString()]))
             ->assertSessionHas('success');
         $this->assertSame(Order::STATUS_DELIVERED, $order->fresh()->status);
 
