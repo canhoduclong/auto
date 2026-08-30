@@ -3130,12 +3130,22 @@ class WarehouseDashboardController extends Controller
             return back()->with('error', 'Đơn hàng không đang ở trạng thái Đang đóng gói.');
         }
 
-        if ($order->actual_weight === null) {
+        $order->loadMissing(['items.variant.product', 'items.product']);
+        $missingWeightItems = $this->packingItemsMissingActualWeight($order);
+        if ($missingWeightItems->isNotEmpty()) {
+            $itemNames = $missingWeightItems
+                ->map(fn ($item) => $item->variant?->name ?? $item->product?->name ?? ('Sản phẩm #'.$item->id))
+                ->filter()
+                ->take(3)
+                ->join(', ');
+            $message = 'Vui lòng cập nhật Kg thực tế cho mặt hàng tính theo kg trước khi hoàn thành đóng gói'
+                .($itemNames ? ': '.$itemNames.'.' : '.');
+
             if ($request->expectsJson()) {
-                return response()->json(['ok' => false, 'message' => 'Vui lòng cập nhật Kg thực tế trước khi hoàn thành đóng gói.'], 422);
+                return response()->json(['ok' => false, 'message' => $message], 422);
             }
 
-            return back()->with('error', 'Vui lòng cập nhật Kg thực tế trước khi hoàn thành đóng gói.');
+            return back()->with('error', $message);
         }
 
         $managedWarehouseId = Auth::user()?->warehouse_id
@@ -3224,6 +3234,22 @@ class WarehouseDashboardController extends Controller
         }
 
         return back()->with('success', 'Đơn #'.$order->code.' đã đóng gói xong cho ngày '.Carbon::parse($packingDate)->format('d/m/Y').', sẵn sàng giao!');
+    }
+
+    private function packingItemsMissingActualWeight(Order $order): Collection
+    {
+        return $order->items->filter(function ($item): bool {
+            $unit = strtolower((string) ($item->variant?->product?->unit ?? $item->product?->unit ?? ''));
+
+            // Bộ/Bánh are counted as discrete units. Old rows may still carry
+            // the legacy is_priced_by_kg=true default, but must never force the
+            // warehouse to enter a physical kg value to finish packing.
+            if (in_array($unit, ['bo', 'banh'], true)) {
+                return false;
+            }
+
+            return (bool) $item->effective_priced_by_kg && $item->actual_weight === null;
+        })->values();
     }
 
     private function recalculateOrderTotalsAfterWarehouseAdjustment(Order $order): void
