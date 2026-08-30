@@ -33,6 +33,7 @@ use App\Services\CustomerPriorityService;
 use App\Services\CustomerClassificationService;
 use App\Services\CompletedSalesJournalService;
 use App\Services\GoogleSheetsJournalService;
+use App\Services\GoogleSheetsOrderReviewService;
 use Carbon\Carbon;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Enums\DeliveryStatus;
@@ -1145,6 +1146,18 @@ class PageController extends Controller
         $canApproveAllAny = $canApproveAllOrders
             && !$hasPendingLeaderApprovals
             && $allApprovalQuery->exists();
+        $orderReviewSheetState = [
+            'enabled' => false,
+            'needs_sync' => false,
+            'last_synced_at' => null,
+            'activity_at' => null,
+            'order_count' => 0,
+            'deleted_count' => 0,
+        ];
+        if ($activeTab === 'today') {
+            $orderReviewSheetState = app(GoogleSheetsOrderReviewService::class)
+                ->state($user, $selectedDate, $selectedDateField);
+        }
 
         $allowedPerPage = [10, 20, 50, 100];
         $perPage = (int) $request->input('per_page', 20);
@@ -1473,6 +1486,7 @@ class PageController extends Controller
             'monitoringJournalRows' => $monitoringJournalRows,
             'monitoringJournalSummary' => $monitoringJournalSummary,
             'googleSheetsConfigured' => $googleSheetsConfigured,
+            'orderReviewSheetState' => $orderReviewSheetState,
             'activeTab' => $activeTab,
             'tabContentHtml' => $tabContentHtml,
             'truckStations' => TruckStation::query()

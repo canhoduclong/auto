@@ -1307,6 +1307,28 @@
                 <button class="btn btn-sm btn-outline-primary monitor-summary-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#monitorProductSummary" aria-expanded="false">
                     <i class="bi bi-inbox me-1"></i>Hàng Hóa
                 </button>
+                @if(($orderReviewSheetState['enabled'] ?? false))
+                    @php
+                        $reviewNeedsSync = (bool) ($orderReviewSheetState['needs_sync'] ?? false);
+                        $reviewLastSync = $orderReviewSheetState['last_synced_at'] ?? null;
+                        $reviewTitle = $reviewNeedsSync
+                            ? 'Có đơn hoặc thay đổi mới — bấm để đồng bộ đối soát Google Sheets'
+                            : ($reviewLastSync
+                                ? 'Đã đồng bộ lúc '.$reviewLastSync->format('H:i d/m/Y').' — bấm để đồng bộ lại'
+                                : 'Không có đơn mới cần đồng bộ Google Sheets');
+                    @endphp
+                    <form method="POST" action="{{ route('pages.my_orders.monitoring.order_review.google_sheets') }}" onsubmit="return confirm('Ghi toàn bộ đơn của ngày {{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}, gồm đơn hủy, xóa và yêu cầu thay đổi, lên Google Sheets?');">
+                        @csrf
+                        <input type="hidden" name="date" value="{{ $selectedDate }}">
+                        <input type="hidden" name="date_field" value="{{ $selectedDateField }}">
+                        <button type="submit"
+                            class="btn btn-sm {{ $reviewNeedsSync ? 'btn-primary' : 'btn-secondary' }} monitor-icon-action"
+                            title="{{ $reviewTitle }}"
+                            aria-label="{{ $reviewTitle }}">
+                            <i class="bi bi-cloud-arrow-up-fill"></i>
+                        </button>
+                    </form>
+                @endif
             </div>
             <button type="button" class="btn btn-sm btn-success" id="monitorOpenCreate">
                 <i class="bi bi-plus-circle me-1"></i>Thêm đơn

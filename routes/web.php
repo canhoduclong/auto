@@ -1095,6 +1095,8 @@ Route::middleware(['auth', 'role:sale,leader,leader_sale,sale_manager,manager,ma
         ->name('pages.my_orders.monitoring.refresh_sequence');
     Route::post('/my-orders/monitoring/sales-journal/google-sheets', [PageController::class, 'myOrdersMonitoringSyncSalesJournal'])
         ->name('pages.my_orders.monitoring.sales_journal.google_sheets');
+    Route::post('/my-orders/monitoring/order-review/google-sheets', [\App\Http\Controllers\GoogleSheetsOrderReviewController::class, 'store'])
+        ->name('pages.my_orders.monitoring.order_review.google_sheets');
     Route::post('/my-orders/monitoring/restore-all', [OrderController::class, 'restoreAllCancelledFromMonitoring'])
         ->name('pages.my_orders.monitoring.restore_all')
         ->middleware('role:admin');
