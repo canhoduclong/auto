@@ -2404,8 +2404,17 @@ class ShipperDashboardController extends Controller
         }
 
         $plannedOrders = collect($routePlan)
-            ->flatMap(fn ($shipperPlan) => $shipperPlan['routes'] ?? [])
-            ->flatMap(fn ($route) => $route['orders'] ?? [])
+            ->flatMap(function ($shipperPlan) {
+                $shipperId = (int) ($shipperPlan['shipper_id'] ?? 0);
+                $shipperName = trim((string) ($shipperPlan['shipper_name'] ?? ''));
+
+                return collect($shipperPlan['routes'] ?? [])->flatMap(
+                    fn ($route) => collect($route['orders'] ?? [])->map(fn ($order) => array_merge($order, [
+                        '_planned_shipper_id' => $shipperId,
+                        '_planned_shipper_name' => $shipperName,
+                    ]))
+                );
+            })
             ->filter(fn ($order) => ! empty($order['order_id']))
             ->keyBy(fn ($order) => (int) $order['order_id']);
 
@@ -2413,9 +2422,20 @@ class ShipperDashboardController extends Controller
             return;
         }
 
-        $orders = Order::with(['items', 'accountingReconciliation'])
+        $allPlannedOrders = Order::with(['items', 'accountingReconciliation', 'customer:id,name', 'shipper:id,name'])
+            ->whereIn('id', $plannedOrders->keys()->all())
+            ->get()
+            ->keyBy('id');
+
+        $statusEligibleIds = Order::query()
             ->whereIn('id', $plannedOrders->keys()->all())
             ->where(fn ($query) => $this->constrainAssignmentStatuses($query))
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        $dateEligibleIds = Order::query()
+            ->whereIn('id', $plannedOrders->keys()->all())
             ->where(function ($dateQuery) use ($date, $plannedOrders): void {
                 $dateQuery->forWorkflowDate($date)
                     ->orWhere(function ($exceptionQuery) use ($plannedOrders): void {
@@ -2423,11 +2443,31 @@ class ShipperDashboardController extends Controller
                             ->whereIn('id', $plannedOrders->keys()->all());
                     });
             })
-            ->get()
-            ->keyBy('id');
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
 
-        abort_if($orders->count() !== $plannedOrders->count(), 422, 'Có đơn trong lộ trình không còn hợp lệ. Vui lòng tải lại trang.');
-        $hasLockedFeeChange = $orders->contains(function (Order $order) use ($plannedOrders): bool {
+        $orders = $allPlannedOrders->filter(function (Order $order) use ($plannedOrders, $statusEligibleIds, $dateEligibleIds): bool {
+            $plannedOrder = $plannedOrders->get((int) $order->id, []);
+            $plannedShipperId = (int) ($plannedOrder['_planned_shipper_id'] ?? 0);
+
+            return in_array((int) $order->id, $statusEligibleIds, true)
+                && in_array((int) $order->id, $dateEligibleIds, true)
+                && $plannedShipperId > 0
+                && (int) $order->shipper_id === $plannedShipperId;
+        });
+
+        if ($orders->count() !== $plannedOrders->count()) {
+            abort(422, $this->invalidRouteOrdersMessage(
+                $plannedOrders,
+                $allPlannedOrders,
+                $statusEligibleIds,
+                $dateEligibleIds,
+                $date
+            ));
+        }
+
+        $lockedFeeOrders = $orders->filter(function (Order $order) use ($plannedOrders): bool {
             $plannedOrder = $plannedOrders->get((int) $order->id, []);
             $newFee = max(0, (float) ($plannedOrder['final_fee'] ?? $order->shipping_fee ?? 0));
             $oldFee = (float) ($order->shipping_fee ?? 0);
@@ -2436,7 +2476,10 @@ class ShipperDashboardController extends Controller
                 && $order->accountingReconciliation?->status === \App\Models\AccountingReconciliation::STATUS_CONFIRMED
                 && $order->accounting_sales_import_batch_id === null;
         });
-        abort_if($hasLockedFeeChange, 422, 'Có đơn đã được kế toán xác nhận nên không thể đổi phí ship. Bạn vẫn có thể gửi nếu giữ nguyên phí của đơn đó.');
+        if ($lockedFeeOrders->isNotEmpty()) {
+            $codes = $lockedFeeOrders->map(fn (Order $order) => $order->code ?: '#'.$order->id)->implode(', ');
+            abort(422, 'Không thể đổi phí ship của đơn đã được kế toán xác nhận: '.$codes.'. Bạn vẫn có thể gửi nếu giữ nguyên phí của các đơn này.');
+        }
 
         DB::transaction(function () use ($plannedOrders, $orders): void {
             foreach ($plannedOrders as $orderId => $plannedOrder) {
@@ -2482,6 +2525,68 @@ class ShipperDashboardController extends Controller
                 $this->syncCustomerShippingFeeHistory($order, $oldFee, $newFee, $plannedOrder['note'] ?? null);
             }
         });
+    }
+
+    private function invalidRouteOrdersMessage($plannedOrders, $allPlannedOrders, array $statusEligibleIds, array $dateEligibleIds, string $date): string
+    {
+        $details = $plannedOrders->map(function (array $plannedOrder, int $orderId) use ($allPlannedOrders, $statusEligibleIds, $dateEligibleIds, $date): ?string {
+            /** @var Order|null $order */
+            $order = $allPlannedOrders->get($orderId);
+            $fallbackCode = trim((string) ($plannedOrder['order_code'] ?? $plannedOrder['code'] ?? ''));
+            $code = $order?->code ?: ($fallbackCode !== '' ? $fallbackCode : '#'.$orderId);
+            $customerName = $order?->customer?->name
+                ?: trim((string) ($plannedOrder['customer_name'] ?? ''));
+            $label = $customerName !== '' ? $code.' – '.$customerName : $code;
+
+            if (! $order) {
+                return $label.' (đơn đã bị xóa hoặc không còn tồn tại)';
+            }
+
+            if (! in_array($orderId, $statusEligibleIds, true)) {
+                return $label.' (trạng thái hiện tại: '.$this->routeOrderStatusLabel((string) $order->status).')';
+            }
+
+            if (! in_array($orderId, $dateEligibleIds, true)) {
+                return $label.' (không còn thuộc ngày điều phối '.Carbon::parse($date)->format('d/m/Y').')';
+            }
+
+            $plannedShipperId = (int) ($plannedOrder['_planned_shipper_id'] ?? 0);
+            if ($plannedShipperId <= 0) {
+                return $label.' (lộ trình chưa xác định shipper)';
+            }
+
+            if ((int) $order->shipper_id !== $plannedShipperId) {
+                $currentShipper = $order->shipper?->name ?: 'chưa gán';
+                $plannedShipper = trim((string) ($plannedOrder['_planned_shipper_name'] ?? '')) ?: '#'.$plannedShipperId;
+
+                return $label.' (đã đổi shipper từ '.$plannedShipper.' sang '.$currentShipper.')';
+            }
+
+            return null;
+        })->filter()->values();
+
+        $visibleDetails = $details->take(10)->implode('; ');
+        if ($details->count() > 10) {
+            $visibleDetails .= '; và '.($details->count() - 10).' đơn khác';
+        }
+
+        return 'Đơn không còn hợp lệ trong lộ trình: '.$visibleDetails.'. Vui lòng quay lại trang điều phối và tải lại dữ liệu.';
+    }
+
+    private function routeOrderStatusLabel(string $status): string
+    {
+        return match ($status) {
+            Order::STATUS_APPROVED => 'Đã duyệt',
+            Order::STATUS_READY_TO_PACK => 'Chờ đóng gói',
+            Order::STATUS_PACKING => 'Đang đóng gói',
+            Order::STATUS_PACKED => 'Đã đóng gói',
+            Order::STATUS_READY_TO_SHIP => 'Chờ ship nhận',
+            Order::STATUS_DELIVERING => 'Đang giao',
+            Order::STATUS_DELIVERED => 'Đã giao',
+            Order::STATUS_COMPLETED => 'Hoàn thành',
+            Order::STATUS_CANCELLED => 'Đã hủy',
+            default => $status,
+        };
     }
 
     /**

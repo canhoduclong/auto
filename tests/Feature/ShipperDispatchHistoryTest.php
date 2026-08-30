@@ -14,6 +14,52 @@ class ShipperDispatchHistoryTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_invalid_route_message_identifies_order_customer_and_reason(): void
+    {
+        $managerRole = Role::create(['name' => 'manager_shipper']);
+        $shipperRole = Role::create(['name' => 'shipper']);
+        $manager = User::factory()->create(['name' => 'Quản lý điều phối']);
+        $manager->roles()->attach($managerRole);
+        $shipper = User::factory()->create(['name' => 'Shipper tuyến']);
+        $shipper->roles()->attach($shipperRole);
+        $customer = Customer::create([
+            'name' => 'Khách cần nhận diện',
+            'phone' => '0901234567',
+            'status' => 'active',
+        ]);
+        $order = Order::create([
+            'customer_id' => $customer->id,
+            'user_id' => $manager->id,
+            'shipper_id' => $shipper->id,
+            'code' => 'ORD-INVALID-ROUTE',
+            'total' => 50000,
+            'shipping_fee' => 50000,
+            'status' => Order::STATUS_COMPLETED,
+        ]);
+        $routePlan = [[
+            'shipper_id' => $shipper->id,
+            'shipper_name' => $shipper->name,
+            'routes' => [[
+                'name' => 'Lộ trình 1',
+                'orders' => [[
+                    'order_id' => $order->id,
+                    'customer_name' => $customer->name,
+                    'final_fee' => 50000,
+                ]],
+            ]],
+        ]];
+
+        $this->actingAs($manager)
+            ->postJson(route('shipper.create-delivery-schedule'), [
+                'date' => now()->toDateString(),
+                'route_plan' => json_encode($routePlan, JSON_UNESCAPED_UNICODE),
+            ])
+            ->assertUnprocessable()
+            ->assertJsonFragment([
+                'message' => 'Đơn không còn hợp lệ trong lộ trình: ORD-INVALID-ROUTE – Khách cần nhận diện (trạng thái hiện tại: Hoàn thành). Vui lòng quay lại trang điều phối và tải lại dữ liệu.',
+            ]);
+    }
+
     protected function tearDown(): void
     {
         Carbon::setTestNow();
