@@ -119,6 +119,9 @@ class ShipperDashboardController extends Controller
                 });
         });
 
+        $query->whereDoesntHave('histories', fn ($historyQuery) => $historyQuery
+            ->whereIn('action', $this->customerDeliveryCompletionActions()));
+
         $this->constrainNoActiveWarehouseTransfer($query);
     }
 
@@ -574,6 +577,7 @@ class ShipperDashboardController extends Controller
                 Order::STATUS_PACKED,
                 Order::STATUS_READY_TO_SHIP,
                 Order::STATUS_DELIVERING,
+                Order::STATUS_DELIVERED,
                 Order::STATUS_COMPLETED,
             ])
             ->orderBy('created_at', 'asc')
@@ -2422,7 +2426,14 @@ class ShipperDashboardController extends Controller
             return;
         }
 
-        $allPlannedOrders = Order::with(['items', 'accountingReconciliation', 'customer:id,name', 'shipper:id,name'])
+        $allPlannedOrders = Order::with([
+            'items',
+            'accountingReconciliation',
+            'customer:id,name',
+            'shipper:id,name',
+            'histories' => fn ($historyQuery) => $historyQuery
+                ->whereIn('action', $this->customerDeliveryCompletionActions()),
+        ])
             ->whereIn('id', $plannedOrders->keys()->all())
             ->get()
             ->keyBy('id');
@@ -2540,6 +2551,10 @@ class ShipperDashboardController extends Controller
 
             if (! $order) {
                 return $label.' (đơn đã bị xóa hoặc không còn tồn tại)';
+            }
+
+            if ($order->histories->isNotEmpty()) {
+                return $label.' (đã giao khách, không cần gửi lại lộ trình)';
             }
 
             if (! in_array($orderId, $statusEligibleIds, true)) {
@@ -2866,20 +2881,36 @@ class ShipperDashboardController extends Controller
 
     private function constrainAssignmentStatuses($query): void
     {
-        $query->whereIn('status', $this->assignmentStatuses())
-            ->orWhere(function ($imported): void {
-                $imported->where('status', Order::STATUS_COMPLETED)
-                    ->whereNotNull('accounting_sales_import_batch_id')
-                    ->where('needs_operational_completion', true);
-            });
+        $query->where(function ($eligibleStatuses): void {
+            $eligibleStatuses->whereIn('status', $this->assignmentStatuses())
+                ->orWhere(function ($imported): void {
+                    $imported->where('status', Order::STATUS_COMPLETED)
+                        ->whereNotNull('accounting_sales_import_batch_id')
+                        ->where('needs_operational_completion', true);
+                });
+        })->whereDoesntHave('histories', fn ($historyQuery) => $historyQuery
+            ->whereIn('action', $this->customerDeliveryCompletionActions()));
     }
 
     private function isAssignmentEligible(Order $order): bool
     {
-        return in_array($order->status, $this->assignmentStatuses(), true)
+        $hasCustomerDeliveryCompletion = $order->histories()
+            ->whereIn('action', $this->customerDeliveryCompletionActions())
+            ->exists();
+
+        return ! $hasCustomerDeliveryCompletion && (in_array($order->status, $this->assignmentStatuses(), true)
             || ($order->status === Order::STATUS_COMPLETED
                 && $order->accounting_sales_import_batch_id !== null
-                && (bool) $order->needs_operational_completion);
+                && (bool) $order->needs_operational_completion));
+    }
+
+    private function customerDeliveryCompletionActions(): array
+    {
+        return [
+            'delivered',
+            'mobile_delivered',
+            'shipper_delivered_bulk',
+        ];
     }
 
     /**

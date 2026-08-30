@@ -60,6 +60,75 @@ class ShipperDispatchHistoryTest extends TestCase
             ]);
     }
 
+    public function test_delivered_order_is_completed_and_cannot_be_sent_in_another_route(): void
+    {
+        $managerRole = Role::create(['name' => 'manager_shipper']);
+        $shipperRole = Role::create(['name' => 'shipper']);
+        $manager = User::factory()->create(['name' => 'Quản lý điều phối']);
+        $manager->roles()->attach($managerRole);
+        $shipper = User::factory()->create(['name' => 'Shipper đã giao']);
+        $shipper->roles()->attach($shipperRole);
+        $customer = Customer::create([
+            'name' => 'Khách đã nhận hàng',
+            'phone' => '0907654321',
+            'status' => 'active',
+        ]);
+        $order = Order::create([
+            'customer_id' => $customer->id,
+            'user_id' => $manager->id,
+            'shipper_id' => $shipper->id,
+            'code' => 'ORD-ALREADY-DELIVERED',
+            'total' => 75000,
+            // Reproduce stale data whose status was not advanced even though
+            // the shipper had already recorded customer delivery.
+            'status' => Order::STATUS_READY_TO_SHIP,
+        ]);
+        $order->histories()->create([
+            'action' => 'delivered',
+            'user_id' => $shipper->id,
+            'role' => 'shipper',
+            'status_before' => Order::STATUS_DELIVERING,
+            'status_after' => Order::STATUS_DELIVERED,
+            'note' => 'Khách đã nhận hàng.',
+        ]);
+
+        $this->actingAs($manager)
+            ->get(route('shipper.manage-assignments', ['date' => now()->toDateString()]))
+            ->assertOk()
+            ->assertDontSee('ORD-ALREADY-DELIVERED');
+
+        $this->actingAs($shipper)
+            ->get(route('shipper.my-orders'))
+            ->assertOk()
+            ->assertSee('ORD-ALREADY-DELIVERED')
+            ->assertSee('Hoàn thành: 1')
+            ->assertSee('Đơn đã hoàn thành, không còn thao tác')
+            ->assertDontSee('Nhận đơn để giao');
+
+        $routePlan = [[
+            'shipper_id' => $shipper->id,
+            'shipper_name' => $shipper->name,
+            'routes' => [[
+                'name' => 'Lộ trình 1',
+                'orders' => [[
+                    'order_id' => $order->id,
+                    'customer_name' => $customer->name,
+                    'final_fee' => 0,
+                ]],
+            ]],
+        ]];
+
+        $this->actingAs($manager)
+            ->postJson(route('shipper.create-delivery-schedule'), [
+                'date' => now()->toDateString(),
+                'route_plan' => json_encode($routePlan, JSON_UNESCAPED_UNICODE),
+            ])
+            ->assertUnprocessable()
+            ->assertJsonFragment([
+                'message' => 'Đơn không còn hợp lệ trong lộ trình: ORD-ALREADY-DELIVERED – Khách đã nhận hàng (đã giao khách, không cần gửi lại lộ trình). Vui lòng quay lại trang điều phối và tải lại dữ liệu.',
+            ]);
+    }
+
     protected function tearDown(): void
     {
         Carbon::setTestNow();

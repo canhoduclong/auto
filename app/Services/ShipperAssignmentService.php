@@ -24,15 +24,18 @@ class ShipperAssignmentService
 
     private function constrainAssignmentOrders($query): void
     {
-        $query->whereIn('status', $this->assignmentStatuses())
-            ->orWhere(function ($importedOrderQuery): void {
-                $importedOrderQuery
-                    ->where('status', Order::STATUS_COMPLETED)
-                    ->whereNotNull('accounting_sales_import_batch_id')
-                    ->where('needs_operational_completion', true)
-                    ->whereHas('warehouseTransfers', fn ($transferQuery) => $transferQuery
-                        ->where('status', WarehouseTransfer::STATUS_RECEIVED_COMPLETED));
-            });
+        $query->where(function ($eligibleStatuses): void {
+            $eligibleStatuses->whereIn('status', $this->assignmentStatuses())
+                ->orWhere(function ($importedOrderQuery): void {
+                    $importedOrderQuery
+                        ->where('status', Order::STATUS_COMPLETED)
+                        ->whereNotNull('accounting_sales_import_batch_id')
+                        ->where('needs_operational_completion', true)
+                        ->whereHas('warehouseTransfers', fn ($transferQuery) => $transferQuery
+                            ->where('status', WarehouseTransfer::STATUS_RECEIVED_COMPLETED));
+                });
+        })->whereDoesntHave('histories', fn ($historyQuery) => $historyQuery
+            ->whereIn('action', ['delivered', 'mobile_delivered', 'shipper_delivered_bulk']));
     }
 
     private function plannedOrderIdsForShipper(array $routePlan, int $shipperId): array

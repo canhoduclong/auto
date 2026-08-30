@@ -122,22 +122,32 @@
 
 @section('content')
 @php
+    $customerDeliveryCompletionActions = ['delivered', 'mobile_delivered', 'shipper_delivered_bulk'];
+    $isCustomerDeliveryCompleted = fn ($order) => in_array($order->status, ['delivered', 'completed'], true)
+        || $order->histories->contains(fn ($history) => in_array($history->action, $customerDeliveryCompletionActions, true));
     $isPendingImportedDelivery = fn ($order) => $order->status === 'completed'
         && $order->accounting_sales_import_batch_id !== null
         && (bool) $order->needs_operational_completion
-        && $order->warehouseTransfers->isNotEmpty();
-    $waitingCount = $orders->whereIn('status', ['approved', 'ready_to_pack', 'packing'])->count();
+        && $order->warehouseTransfers->isNotEmpty()
+        && !$isCustomerDeliveryCompleted($order);
+    $waitingCount = $orders
+        ->filter(fn ($order) => !$isCustomerDeliveryCompleted($order)
+            && in_array($order->status, ['approved', 'ready_to_pack', 'packing'], true))
+        ->count();
     $readyToShipCount = $orders
-        ->filter(fn ($order) => $order->status === 'packed_waiting_pickup' || $isPendingImportedDelivery($order))
+        ->filter(fn ($order) => !$isCustomerDeliveryCompleted($order)
+            && ($order->status === 'packed_waiting_pickup' || $isPendingImportedDelivery($order)))
         ->count();
     $awaitingCompletionCount = $orders
-        ->filter(fn ($order) => $order->status === 'delivering' && $order->returnRecords->isNotEmpty())
+        ->filter(fn ($order) => !$isCustomerDeliveryCompleted($order)
+            && $order->status === 'delivering' && $order->returnRecords->isNotEmpty())
         ->count();
     $deliveringCount = $orders
-        ->filter(fn ($order) => $order->status === 'delivering' && $order->returnRecords->isEmpty())
+        ->filter(fn ($order) => !$isCustomerDeliveryCompleted($order)
+            && $order->status === 'delivering' && $order->returnRecords->isEmpty())
         ->count();
     $completedCount = $orders
-        ->filter(fn ($order) => $order->status === 'completed' && !$isPendingImportedDelivery($order))
+        ->filter(fn ($order) => $isCustomerDeliveryCompleted($order) && !$isPendingImportedDelivery($order))
         ->count();
 @endphp
 
@@ -166,6 +176,7 @@
 <div class="row g-3">
     @foreach($orders as $order)
     @php
+        $isCompletedCustomerDelivery = $isCustomerDeliveryCompleted($order);
         $isPendingCustomerDelivery = $isPendingImportedDelivery($order);
         $isAwaitingPaymentCompletion = $order->status === 'delivering'
             && $order->returnRecords->isNotEmpty();
@@ -239,6 +250,9 @@
                         [$statusLabel, $statusClass] = $statusMap[$order->status] ?? [strtoupper((string) $order->status), 'bg-light text-dark border'];
                         if ($isPendingCustomerDelivery) {
                             [$statusLabel, $statusClass] = ['Chờ ship nhận giao khách', 'bg-primary'];
+                        }
+                        if ($isCompletedCustomerDelivery && !$isPendingCustomerDelivery) {
+                            [$statusLabel, $statusClass] = ['Hoàn thành', 'bg-success'];
                         }
                         if ($isAwaitingPaymentCompletion) {
                             [$statusLabel, $statusClass] = ['Chờ thu tiền & hoàn tất', 'bg-info text-dark'];
@@ -346,7 +360,7 @@
                         </button>
                     </form>
                 </div>
-            @elseif($order->status === 'completed')
+            @elseif($isCompletedCustomerDelivery)
                 <div class="card-footer bg-white border-top">
                     <span class="badge bg-success-subtle text-success-emphasis border border-success-subtle">Đơn đã hoàn thành, không còn thao tác</span>
                 </div>
