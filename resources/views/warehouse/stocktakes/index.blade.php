@@ -6,11 +6,17 @@
 @push('styles')
 <style>
     .stocktake-card { background:#fff; border:1px solid #e2e8f0; border-radius:12px; box-shadow:0 4px 14px rgba(15,23,42,.05); overflow:hidden; }
-    .stocktake-table { min-width:1320px; }
-    .stocktake-table th { white-space:nowrap; font-size:.75rem; text-transform:uppercase; color:#64748b; background:#f8fafc; }
-    .stocktake-table td, .stocktake-table th { vertical-align:middle; }
-    .stocktake-input { min-width:130px; text-align:right; font-variant-numeric:tabular-nums; }
-    .stocktake-diff { min-width:105px; font-weight:700; font-variant-numeric:tabular-nums; }
+    .stocktake-table { min-width:1110px; table-layout:fixed; }
+    .stocktake-table th { white-space:nowrap; font-size:.7rem; text-transform:uppercase; color:#64748b; background:#f8fafc; padding:.55rem .45rem; }
+    .stocktake-table td { padding:.55rem .45rem; }
+    .stocktake-table td, .stocktake-table th { vertical-align:middle; border-color:#e2e8f0; }
+    .stocktake-product { display:flex; align-items:baseline; gap:14px; min-width:0; white-space:nowrap; }
+    .stocktake-product-name { overflow:hidden; text-overflow:ellipsis; }
+    .stocktake-variant { color:#64748b; font-size:.8rem; flex-shrink:0; }
+    .stocktake-sku { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .stocktake-number { font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap; }
+    .stocktake-input { width:104px; min-width:0; text-align:right; font-variant-numeric:tabular-nums; }
+    .stocktake-diff { font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap; }
     .stocktake-diff.positive { color:#047857; }
     .stocktake-diff.negative { color:#dc2626; }
     .stocktake-diff.equal { color:#64748b; }
@@ -83,19 +89,32 @@
 
         <div class="table-responsive">
             <table class="table table-hover table-sm align-middle mb-0 stocktake-table">
+                <colgroup>
+                    <col style="width:44px;">
+                    <col style="width:215px;">
+                    <col style="width:125px;">
+                    <col style="width:62px;">
+                    <col style="width:70px;">
+                    <col style="width:82px;">
+                    <col style="width:125px;">
+                    <col style="width:125px;">
+                    <col style="width:82px;">
+                    <col style="width:82px;">
+                    <col style="width:98px;">
+                </colgroup>
                 <thead>
                     <tr>
-                        <th style="width:50px;">#</th>
+                        <th>#</th>
                         <th>Sản phẩm / Biến thể</th>
                         <th>SKU</th>
                         <th>ĐVT</th>
-                        <th class="text-end">SL hệ thống</th>
-                        <th class="text-end">Đã giữ chỗ</th>
+                        <th class="text-end">SL</th>
+                        <th class="text-end">Kg</th>
                         <th class="text-end">SL thực tế</th>
-                        <th class="text-end">Lệch SL</th>
-                        <th class="text-end">Kg hệ thống</th>
                         <th class="text-end">Kg thực tế</th>
+                        <th class="text-end">Lệch SL</th>
                         <th class="text-end">Lệch kg</th>
+                        <th class="text-end">Đã giữ chỗ</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -110,15 +129,15 @@
                         <tr>
                             <td class="text-muted">{{ $inventories->firstItem() + $loop->index }}</td>
                             <td>
-                                <div class="fw-semibold">{{ $productName }}</div>
-                                <div class="small text-muted">{{ $variantName }}</div>
+                                <div class="stocktake-product">
+                                    <span class="stocktake-product-name fw-semibold">{{ $productName }}</span>
+                                    <span class="stocktake-variant">{{ $variantName }}</span>
+                                </div>
                             </td>
-                            <td>{{ $variant?->sku ?: '—' }}</td>
+                            <td class="stocktake-sku">{{ $variant?->sku ?: '—' }}</td>
                             <td>{{ $variant?->product?->unit_label ?? '—' }}</td>
-                            <td class="text-end fw-semibold">{{ number_format((float) $inventory->quantity, 0, ',', '.') }}</td>
-                            <td class="text-end {{ (float) $inventory->reserved_quantity > (float) $inventory->quantity ? 'text-danger fw-semibold' : 'text-muted' }}">
-                                {{ number_format((float) $inventory->reserved_quantity, 0, ',', '.') }}
-                            </td>
+                            <td class="text-end stocktake-number">{{ number_format((float) $inventory->quantity, 0, ',', '.') }}</td>
+                            <td class="text-end stocktake-number">{{ format_kg((float) $inventory->weight_kg) }}</td>
                             <td class="text-end">
                                 <input type="hidden" name="items[{{ $inventory->id }}][expected_quantity]" value="{{ number_format((float) $inventory->quantity, 3, '.', '') }}">
                                 <input type="hidden" name="items[{{ $inventory->id }}][expected_weight_kg]" value="{{ number_format((float) $inventory->weight_kg, 3, '.', '') }}">
@@ -130,12 +149,8 @@
                                        data-system="{{ number_format((float) $inventory->quantity, 3, '.', '') }}"
                                        data-diff-target="quantity-diff-{{ $inventory->id }}"
                                        data-suffix=""
-                                       placeholder="Số thực tế">
+                                       aria-label="Số lượng thực tế {{ $productName }} {{ $variantName }}">
                             </td>
-                            <td class="text-end">
-                                <span id="quantity-diff-{{ $inventory->id }}" class="stocktake-diff equal">—</span>
-                            </td>
-                            <td class="text-end fw-semibold">{{ format_kg((float) $inventory->weight_kg) }}</td>
                             <td class="text-end">
                                 <input type="number"
                                        name="items[{{ $inventory->id }}][counted_weight_kg]"
@@ -145,10 +160,16 @@
                                        data-system="{{ number_format((float) $inventory->weight_kg, 3, '.', '') }}"
                                        data-diff-target="weight-diff-{{ $inventory->id }}"
                                        data-suffix=" kg"
-                                       placeholder="Kg thực tế">
+                                       aria-label="Kg thực tế {{ $productName }} {{ $variantName }}">
+                            </td>
+                            <td class="text-end">
+                                <span id="quantity-diff-{{ $inventory->id }}" class="stocktake-diff equal">—</span>
                             </td>
                             <td class="text-end">
                                 <span id="weight-diff-{{ $inventory->id }}" class="stocktake-diff equal">—</span>
+                            </td>
+                            <td class="text-end {{ (float) $inventory->reserved_quantity > (float) $inventory->quantity ? 'text-danger fw-semibold' : 'text-muted' }}">
+                                {{ number_format((float) $inventory->reserved_quantity, 0, ',', '.') }}
                             </td>
                         </tr>
                     @empty
