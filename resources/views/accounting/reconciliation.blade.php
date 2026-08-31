@@ -151,7 +151,14 @@
         <div class="panel-body">
             <form method="GET" class="row g-2 mb-3">
                 <div class="col-12">
-                    <label class="form-label">Ngày giao hàng</label>
+                    <label class="form-label">Loại ngày</label>
+                    <select class="form-select" name="date_field">
+                        <option value="business_date" @selected($dateField === 'business_date')>Ngày nghiệp vụ</option>
+                        <option value="delivered_at" @selected($dateField === 'delivered_at')>Ngày giao thực tế</option>
+                    </select>
+                </div>
+                <div class="col-12">
+                    <label class="form-label">{{ $dateField === 'business_date' ? 'Ngày nghiệp vụ' : 'Ngày giao thực tế' }}</label>
                     <input class="form-control" type="date" name="date" value="{{ $selectedDate }}">
                 </div>
                 <div class="col-12">
@@ -248,7 +255,7 @@
                             <th>Shipper</th>
                             <th>Phí ship</th>
                             <th>Kế toán</th>
-                            <th>Ngày giao</th>
+                            <th>{{ $dateField === 'business_date' ? 'Ngày nghiệp vụ' : 'Ngày giao' }}</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -285,7 +292,15 @@
                                     {{ $isConfirmed ? 'Đã xác nhận' : 'Chưa xác nhận' }}
                                 </span>
                             </td>
-                            <td>{{ optional($order->delivered_at)->format('d/m/Y H:i') ?: '-' }}</td>
+                            <td>
+                                @if($dateField === 'business_date')
+                                    {{ $order->accounting_sales_import_batch_id
+                                        ? (optional($order->delivery_date)->format('d/m/Y') ?: '-')
+                                        : (optional($order->created_at)->format('d/m/Y H:i') ?: '-') }}
+                                @else
+                                    {{ optional($order->delivered_at)->format('d/m/Y H:i') ?: '-' }}
+                                @endif
+                            </td>
                             <td>
                                 <div class="d-flex gap-1">
                                     <button class="btn btn-sm btn-outline-primary js-recon-toggle" type="button">Xem chi tiết</button>

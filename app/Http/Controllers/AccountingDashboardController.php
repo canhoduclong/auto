@@ -897,6 +897,10 @@ class AccountingDashboardController extends Controller
         $status = trim((string) $request->input('status', ''));
         $paymentStatus = trim((string) $request->input('payment_status', ''));
         $accountingStatus = trim((string) $request->input('accounting_status', ''));
+        $dateField = (string) $request->input('date_field', 'business_date');
+        if (! in_array($dateField, ['business_date', 'delivered_at'], true)) {
+            $dateField = 'business_date';
+        }
 
         $baseQuery = Order::query()
             ->with([
@@ -908,25 +912,31 @@ class AccountingDashboardController extends Controller
             ])
             ->withSum('items as total_item_quantity', 'quantity')
             ->withSum('returnRecords as return_amount_sum', 'refund_amount')
-            ->where(function ($dateQuery) use ($targetDate, $request): void {
-                if ($request->boolean('business_date')) {
-                    $dateQuery->where(function ($importQuery) use ($targetDate): void {
-                        $importQuery->whereNotNull('accounting_sales_import_batch_id')
-                            ->whereDate('delivery_date', $targetDate);
-                    })->orWhere(function ($normalQuery) use ($targetDate): void {
-                        $normalQuery->whereNull('accounting_sales_import_batch_id')
-                            ->whereDate('delivered_at', $targetDate);
-                    });
+            ->where(function ($dateQuery) use ($targetDate, $dateField): void {
+                if ($dateField === 'delivered_at') {
+                    $dateQuery->whereDate('delivered_at', $targetDate);
 
                     return;
                 }
 
-                $dateQuery->whereDate('delivered_at', $targetDate);
+                // Đồng bộ với màn Theo dõi đơn hàng ngày: đơn thường theo
+                // ngày tạo, đơn nhập kế toán theo ngày giao/ngày nghiệp vụ.
+                $dateQuery->where(function ($normalQuery) use ($targetDate): void {
+                    $normalQuery->whereNull('accounting_sales_import_batch_id')
+                        ->whereDate('created_at', $targetDate);
+                })->orWhere(function ($importQuery) use ($targetDate): void {
+                    $importQuery->whereNotNull('accounting_sales_import_batch_id')
+                        ->whereDate('delivery_date', $targetDate);
+                });
             })
             ->when($orderId > 0, fn ($q) => $q->whereKey($orderId))
             ->when($saleId > 0, fn ($q) => $q->where('user_id', $saleId))
             ->when($shipperId > 0, fn ($q) => $q->where('shipper_id', $shipperId))
-            ->when($status !== '', fn ($q) => $q->where('status', $status))
+            ->when(
+                $status !== '',
+                fn ($q) => $q->where('status', $status),
+                fn ($q) => $q->whereIn('status', [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED])
+            )
             ->when($paymentStatus !== '', fn ($q) => $q->where('payment_status', $paymentStatus))
             ->when($accountingStatus === 'confirmed', fn ($q) => $q->whereHas('accountingReconciliation', fn ($r) => $r->where('status', AccountingReconciliation::STATUS_CONFIRMED)))
             ->when($accountingStatus === 'pending', fn ($q) => $q->whereDoesntHave('accountingReconciliation', fn ($r) => $r->where('status', AccountingReconciliation::STATUS_CONFIRMED)));
@@ -975,6 +985,7 @@ class AccountingDashboardController extends Controller
             'status' => $status,
             'paymentStatus' => $paymentStatus,
             'accountingStatus' => $accountingStatus,
+            'dateField' => $dateField,
         ]);
     }
 
