@@ -303,6 +303,56 @@ class WarehouseDispatchSlipWorkflowTest extends TestCase
             ->assertSessionHas('error', 'Phiếu xuất kho tổng '.$slip->code.' chưa được kho xuất chốt.');
     }
 
+    public function test_delivered_order_from_source_warehouse_can_be_added_to_a_dispatch_slip(): void
+    {
+        $warehouseRole = Role::create(['name' => 'warehouse']);
+        $shipperRole = Role::create(['name' => 'shipper']);
+        $source = Warehouse::create(['name' => 'Kho xuất đơn đã giao']);
+        $target = Warehouse::create(['name' => 'Kho nhận đơn đã giao']);
+        $warehouseUser = User::factory()->create(['warehouse_id' => $source->id]);
+        $warehouseUser->roles()->attach($warehouseRole);
+        $shipper = User::factory()->create(['name' => 'Tài xế đơn đã giao']);
+        $shipper->roles()->attach($shipperRole);
+        $customer = Customer::create(['name' => 'Khách đã nhận hàng', 'status' => 'active']);
+        $order = Order::create([
+            'customer_id' => $customer->id,
+            'user_id' => $warehouseUser->id,
+            'warehouse_id' => $source->id,
+            'shipper_id' => $shipper->id,
+            'code' => 'ORD-DELIVERED-DISPATCH',
+            'status' => Order::STATUS_DELIVERED,
+            'delivered_at' => now(),
+        ]);
+        $transfer = WarehouseTransfer::create([
+            'order_id' => $order->id,
+            'source_warehouse_id' => $source->id,
+            'target_warehouse_id' => $target->id,
+            'shipper_id' => $shipper->id,
+            'status' => WarehouseTransfer::STATUS_RECEIVED_COMPLETED,
+            'packed_total_weight' => 18.5,
+            'received_total_weight' => 18.5,
+            'received_at' => now(),
+        ]);
+
+        $this->actingAs($warehouseUser)
+            ->get(route('warehouse.dispatch-slips.index'))
+            ->assertOk()
+            ->assertSee('ORD-DELIVERED-DISPATCH');
+
+        $this->actingAs($warehouseUser)
+            ->post(route('warehouse.dispatch-slips.store'), [
+                'source_warehouse_id' => $source->id,
+                'target_warehouse_id' => $target->id,
+                'shipper_id' => $shipper->id,
+                'business_date' => now()->toDateString(),
+                'warehouse_transfer_ids' => [$transfer->id],
+            ])
+            ->assertSessionHasNoErrors();
+
+        $slip = WarehouseDispatchSlip::query()->sole();
+        $this->assertSame($transfer->id, $slip->entries()->sole()->warehouse_transfer_id);
+    }
+
     public function test_source_warehouse_can_edit_and_delete_a_draft_dispatch_slip(): void
     {
         $warehouseRole = Role::create(['name' => 'warehouse']);

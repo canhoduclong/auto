@@ -98,7 +98,7 @@
                             <span class="small text-end">{{ $transfer->shipper?->short_name ?: $transfer->shipper?->name }}<br>{{ $transfer->warehouse?->name }}</span>
                         </label>
                     @empty
-                        <div class="dispatch-empty">Không có nhóm đơn đang chờ tài xế nhận.</div>
+                        <div class="dispatch-empty">Không có nhóm đơn xuất từ kho chưa thuộc phiếu tổng.</div>
                     @endforelse
                     <div class="dispatch-empty d-none" data-filter-empty>Chọn đúng kho nhận và tài xế để xem nhóm đơn.</div>
                 </div>
@@ -116,7 +116,7 @@
                             <span class="small text-end">{{ $transfer->shipper?->short_name ?: $transfer->shipper?->name }}<br>{{ $transfer->targetWarehouse?->name }}</span>
                         </label>
                     @empty
-                        <div class="dispatch-empty">Không có đơn giao tài xế riêng đang chờ nhận.</div>
+                        <div class="dispatch-empty">Không có đơn giao tài xế riêng xuất từ kho chưa thuộc phiếu tổng.</div>
                     @endforelse
                     <div class="dispatch-empty d-none" data-filter-empty>Chọn đúng kho nhận và tài xế để xem đơn.</div>
                 </div>

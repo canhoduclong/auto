@@ -19,6 +19,13 @@ use Illuminate\Validation\ValidationException;
 
 class WarehouseDispatchSlipController extends Controller
 {
+    private const DISPATCHABLE_ORDER_MOVEMENT_STATUSES = [
+        WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
+        WarehouseTransfer::STATUS_IN_TRANSIT,
+        WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
+        WarehouseTransfer::STATUS_RECEIVED_COMPLETED,
+    ];
+
     public function ceoIndex(Request $request)
     {
         $from = $request->filled('from_date')
@@ -121,15 +128,19 @@ class WarehouseDispatchSlipController extends Controller
             ->whereDoesntHave('dispatchEntry')
             ->whereHas('orders.warehouseTransfers', fn ($query) => $query
                 ->where('source_warehouse_id', $sourceWarehouseId)
-                ->where('status', WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP))
+                ->whereIn('status', self::DISPATCHABLE_ORDER_MOVEMENT_STATUSES))
             ->latest('id')->get()
-            ->filter(function (OrderTransfer $transfer): bool {
+            ->filter(function (OrderTransfer $transfer) use ($sourceWarehouseId): bool {
                 if ($transfer->orders->isEmpty()) {
                     return false;
                 }
 
-                return $transfer->orders->every(function (Order $order): bool {
-                    return $order->warehouseTransfers->first()?->status === WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP;
+                return $transfer->orders->every(function (Order $order) use ($sourceWarehouseId): bool {
+                    $movement = $order->warehouseTransfers->first();
+
+                    return $movement
+                        && (int) $movement->source_warehouse_id === $sourceWarehouseId
+                        && in_array($movement->status, self::DISPATCHABLE_ORDER_MOVEMENT_STATUSES, true);
                 });
             })->values();
 
@@ -145,7 +156,7 @@ class WarehouseDispatchSlipController extends Controller
         $warehouseTransfers = WarehouseTransfer::query()
             ->with(['order.customer:id,name', 'order.user:id,name,short_name', 'order.items.variant.product', 'targetWarehouse:id,name', 'shipper:id,name,short_name'])
             ->where('source_warehouse_id', $sourceWarehouseId)
-            ->where('status', WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP)
+            ->whereIn('status', self::DISPATCHABLE_ORDER_MOVEMENT_STATUSES)
             ->whereDoesntHave('dispatchEntry')
             ->whereHas('order', fn ($query) => $query->whereNull('order_transfer_id'))
             ->latest('id')->get();
@@ -218,10 +229,10 @@ class WarehouseDispatchSlipController extends Controller
 
                         return $movement
                             && (int) $movement->source_warehouse_id === $sourceWarehouseId
-                            && $movement->status === WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP;
+                            && in_array($movement->status, self::DISPATCHABLE_ORDER_MOVEMENT_STATUSES, true);
                     });
                 if (! $valid) {
-                    throw ValidationException::withMessages(['entries' => 'Nhóm đơn #'.$transfer->id.' không cùng tài xế/kho hoặc đã bắt đầu vận chuyển.']);
+                    throw ValidationException::withMessages(['entries' => 'Nhóm đơn #'.$transfer->id.' không cùng tài xế/kho, đã hủy hoặc đã thuộc phiếu tổng khác.']);
                 }
             }
 
@@ -231,8 +242,8 @@ class WarehouseDispatchSlipController extends Controller
                     || (int) $transfer->source_warehouse_id !== $sourceWarehouseId
                     || (int) $transfer->target_warehouse_id !== $targetWarehouseId
                     || (int) $transfer->shipper_id !== $shipperId
-                    || $transfer->status !== WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP) {
-                    throw ValidationException::withMessages(['entries' => 'Phiếu điều chuyển đơn #'.$transfer->id.' không cùng tài xế/kho, đã thuộc phiếu tổng khác hoặc đã bắt đầu vận chuyển.']);
+                    || ! in_array($transfer->status, self::DISPATCHABLE_ORDER_MOVEMENT_STATUSES, true)) {
+                    throw ValidationException::withMessages(['entries' => 'Phiếu điều chuyển đơn #'.$transfer->id.' không cùng tài xế/kho, đã hủy hoặc đã thuộc phiếu tổng khác.']);
                 }
             }
 
@@ -374,10 +385,10 @@ class WarehouseDispatchSlipController extends Controller
 
                         return $movement
                             && (int) $movement->source_warehouse_id === $sourceWarehouseId
-                            && $movement->status === WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP;
+                            && in_array($movement->status, self::DISPATCHABLE_ORDER_MOVEMENT_STATUSES, true);
                     });
                 if (! $valid) {
-                    throw ValidationException::withMessages(['entries' => 'Nhóm đơn #'.$transfer->id.' không cùng tài xế/kho, đã thuộc phiếu khác hoặc đã bắt đầu vận chuyển.']);
+                    throw ValidationException::withMessages(['entries' => 'Nhóm đơn #'.$transfer->id.' không cùng tài xế/kho, đã hủy hoặc đã thuộc phiếu khác.']);
                 }
             }
 
@@ -389,7 +400,7 @@ class WarehouseDispatchSlipController extends Controller
                     || (int) $transfer->source_warehouse_id !== $sourceWarehouseId
                     || (int) $transfer->target_warehouse_id !== $targetWarehouseId
                     || (int) $transfer->shipper_id !== $shipperId
-                    || $transfer->status !== WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP) {
+                    || ! in_array($transfer->status, self::DISPATCHABLE_ORDER_MOVEMENT_STATUSES, true)) {
                     throw ValidationException::withMessages(['entries' => 'Phiếu điều chuyển đơn #'.$transfer->id.' không hợp lệ hoặc đã thuộc phiếu tổng khác.']);
                 }
             }
@@ -545,17 +556,23 @@ class WarehouseDispatchSlipController extends Controller
             ->where($available)
             ->whereHas('orders.warehouseTransfers', fn ($query) => $query
                 ->where('source_warehouse_id', $sourceWarehouseId)
-                ->where('status', WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP))
+                ->whereIn('status', self::DISPATCHABLE_ORDER_MOVEMENT_STATUSES))
             ->latest('id')->get()
             ->filter(fn (OrderTransfer $transfer): bool => $transfer->orders->isNotEmpty()
-                && $transfer->orders->every(fn (Order $order): bool => $order->warehouseTransfers->first()?->status === WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP))
+                && $transfer->orders->every(function (Order $order) use ($sourceWarehouseId): bool {
+                    $movement = $order->warehouseTransfers->first();
+
+                    return $movement
+                        && (int) $movement->source_warehouse_id === $sourceWarehouseId
+                        && in_array($movement->status, self::DISPATCHABLE_ORDER_MOVEMENT_STATUSES, true);
+                }))
             ->values();
 
         $warehouseTransfers = WarehouseTransfer::query()
             ->with(['order.customer:id,name', 'order.items.variant.product', 'targetWarehouse:id,name', 'shipper:id,name,short_name', 'dispatchEntry'])
             ->where($available)
             ->where('source_warehouse_id', $sourceWarehouseId)
-            ->where('status', WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP)
+            ->whereIn('status', self::DISPATCHABLE_ORDER_MOVEMENT_STATUSES)
             ->whereHas('order', fn ($query) => $query->whereNull('order_transfer_id'))
             ->latest('id')->get();
 
