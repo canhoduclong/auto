@@ -53,9 +53,8 @@
                 );
                 $canTransferPackingWarehouse = !$isPackageOrderLayout
                     && $canProcessThisOrder
-                    && $isReadyToPack
+                    && ($isPacking || ($isReadyToPack && $stockShortages->isNotEmpty()))
                     && !$isPendingSaleConfirmation
-                    && $stockShortages->isNotEmpty()
                     && !$hasActiveCuttingBatch
                     && !$activeTransfer
                     && !$activePackingGoodsTransfer
@@ -869,12 +868,12 @@
                                 @if($canTransferPackingWarehouse)
                                     <details class="wh-footer-adjustment wh-footer-transfer">
                                         <summary>
-                                            <i class="bi bi-arrow-left-right me-1"></i>Gửi hàng & chuyển đơn
+                                            <i class="bi bi-arrow-left-right me-1"></i>{{ $isPacking ? 'Chuyển tiếp đơn đang đóng dở' : 'Gửi hàng & chuyển đơn' }}
                                         </summary>
                                         <form action="{{ route('warehouse.orders.transfer-packing-warehouse', $order) }}"
                                               method="POST"
                                               class="wh-footer-transfer-form"
-                                              onsubmit="return confirm('Gửi phần hàng đã gom và chuyển đơn #{{ addslashes($order->code ?: $order->id) }} khỏi {{ addslashes($order->warehouse?->name ?: 'kho hiện tại') }} sang kho đã chọn để tiếp tục đóng hàng?');">
+                                              onsubmit="return confirm('{{ $isPacking ? 'Chuyển tiếp đơn đang đóng dở' : 'Gửi phần hàng đã gom và chuyển đơn' }} #{{ addslashes($order->code ?: $order->id) }} khỏi {{ addslashes($order->warehouse?->name ?: 'kho hiện tại') }} sang kho đã chọn để tiếp tục đóng hàng?');">
                                             @csrf
                                             <input type="hidden" name="packing_date" value="{{ $selectedDate ?? now()->toDateString() }}">
                                             <div>
@@ -885,10 +884,16 @@
                                                         <option value="{{ $warehouse->id }}">{{ $warehouse->name }}</option>
                                                     @endforeach
                                                 </select>
-                                                <div class="form-text">Đơn sẽ biến mất khỏi {{ $order->warehouse?->name ?: 'kho hiện tại' }} và chỉ xuất hiện tại kho được chọn. Hệ thống gửi kèm {{ number_format($packingReservedQuantity, 0, ',', '.') }} sản phẩm đang được giữ riêng cho đơn; nếu bằng 0 thì chỉ chuyển đơn.</div>
+                                                <div class="form-text">
+                                                    Đơn sẽ biến mất khỏi {{ $order->warehouse?->name ?: 'kho hiện tại' }} và chỉ xuất hiện tại kho được chọn.
+                                                    @if($isPacking)
+                                                        Kg thực tế, số bọc và quy cách đã nhập được giữ nguyên.
+                                                    @endif
+                                                    Hệ thống gửi kèm {{ number_format($packingReservedQuantity, 0, ',', '.') }} sản phẩm đang được giữ riêng cho đơn; nếu bằng 0 thì chỉ chuyển đơn.
+                                                </div>
                                             </div>
                                             <button type="submit" class="btn btn-success btn-sm">
-                                                <i class="bi bi-check2-circle me-1"></i>Gửi hàng và chuyển đơn
+                                                <i class="bi bi-check2-circle me-1"></i>{{ $isPacking ? 'Chuyển kho đóng tiếp' : 'Gửi hàng và chuyển đơn' }}
                                             </button>
                                         </form>
                                     </details>

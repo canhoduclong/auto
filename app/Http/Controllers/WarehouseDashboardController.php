@@ -1219,11 +1219,7 @@ class WarehouseDashboardController extends Controller
         ));
     }
 
-    /**
-     * Move a stock-short packing order to another warehouse. This mirrors the
-     * manager warehouse selector while keeping the action scoped to the source
-     * warehouse that currently owns the order.
-     */
+    /** Move a waiting or partially packed order to another packing warehouse. */
     public function transferPackingWarehouse(Request $request, Order $order)
     {
         $user = $request->user();
@@ -1251,8 +1247,9 @@ class WarehouseDashboardController extends Controller
         if ((int) ($order->warehouse_id ?? 0) !== $sourceWarehouseId) {
             return back()->with('error', 'Đơn không thuộc kho bạn đang làm hoặc đã được chuyển sang kho khác.');
         }
-        if (! in_array((string) $order->status, self::READY_TO_PACK_STATUSES, true)) {
-            return back()->with('error', 'Chỉ có thể điều chuyển đơn đang ở trạng thái chờ đóng gói.');
+        $transferableStatuses = array_merge(self::READY_TO_PACK_STATUSES, [Order::STATUS_PACKING]);
+        if (! in_array((string) $order->status, $transferableStatuses, true)) {
+            return back()->with('error', 'Chỉ có thể chuyển tiếp đơn đang chờ hoặc đang đóng dở.');
         }
         if (! $this->canProcessOrderOnCurrentRun($order)) {
             return back()->with('error', 'Đơn không còn thuộc ngày nghiệp vụ được phép xử lý.');
@@ -1263,13 +1260,14 @@ class WarehouseDashboardController extends Controller
             : $order->created_at->toDateString();
         $packingDate = (string) ($validated['packing_date'] ?? $defaultPackingDate);
         $order->loadMissing(['items.product', 'items.variant.product']);
+        $isPartiallyPacking = (string) $order->status === Order::STATUS_PACKING;
         $stockCheck = $this->evaluateSingleOrderStock($order, $sourceWarehouseId, $packingDate);
-        if (! ($stockCheck['has_shortage'] ?? false)) {
+        if (! $isPartiallyPacking && ! ($stockCheck['has_shortage'] ?? false)) {
             return back()->with('error', 'Đơn hiện đã đủ hàng tại kho đang làm nên không cần điều chuyển.');
         }
 
         try {
-            [$sourceWarehouseName, $targetWarehouseName, $goodsTransfer] = DB::transaction(function () use ($order, $user, $sourceWarehouseId, $targetWarehouse): array {
+            [$sourceWarehouseName, $targetWarehouseName, $goodsTransfer, $wasPartiallyPacking] = DB::transaction(function () use ($order, $user, $sourceWarehouseId, $targetWarehouse, $transferableStatuses): array {
                 $lockedOrder = Order::query()
                     ->with(['items.variant', 'warehouse:id,name'])
                     ->lockForUpdate()
@@ -1278,8 +1276,8 @@ class WarehouseDashboardController extends Controller
                 if ((int) ($lockedOrder->warehouse_id ?? 0) !== $sourceWarehouseId) {
                     throw new \RuntimeException('Đơn không còn thuộc kho bạn đang làm hoặc đã được chuyển sang kho khác.');
                 }
-                if (! in_array((string) $lockedOrder->status, self::READY_TO_PACK_STATUSES, true)) {
-                    throw new \RuntimeException('Chỉ có thể điều chuyển đơn đang ở trạng thái chờ đóng gói.');
+                if (! in_array((string) $lockedOrder->status, $transferableStatuses, true)) {
+                    throw new \RuntimeException('Chỉ có thể chuyển tiếp đơn đang chờ hoặc đang đóng dở.');
                 }
                 if (! $this->canProcessOrderOnCurrentRun($lockedOrder)) {
                     throw new \RuntimeException('Đơn không còn thuộc ngày nghiệp vụ được phép xử lý.');
@@ -1311,6 +1309,7 @@ class WarehouseDashboardController extends Controller
                 }
 
                 $sourceWarehouseName = $lockedOrder->warehouse?->name ?: 'Kho hiện tại';
+                $wasPartiallyPacking = (string) $lockedOrder->status === Order::STATUS_PACKING;
                 $goodsTransfer = $this->createPackingOrderGoodsTransfer(
                     $lockedOrder,
                     $sourceWarehouseId,
@@ -1318,7 +1317,10 @@ class WarehouseDashboardController extends Controller
                     (int) $user->id
                 );
                 $this->releaseOrderReservations($lockedOrder);
-                $this->reserveOrderStockAtWarehouse($lockedOrder, (int) $targetWarehouse->id);
+                $incomingQuantities = $goodsTransfer
+                    ? $goodsTransfer->items()->selectRaw('product_variant_id, SUM(quantity) as quantity')->groupBy('product_variant_id')->pluck('quantity', 'product_variant_id')->all()
+                    : [];
+                $this->reserveOrderStockAtWarehouse($lockedOrder, (int) $targetWarehouse->id, $incomingQuantities);
                 $lockedOrder->forceFill([
                     'warehouse_id' => $targetWarehouse->id,
                     'stock_sufficient' => null,
@@ -1328,16 +1330,18 @@ class WarehouseDashboardController extends Controller
 
                 OrderHistory::create([
                     'order_id' => $lockedOrder->id,
-                    'action' => 'warehouse_transfer_packing_warehouse',
+                    'action' => $wasPartiallyPacking ? 'warehouse_forward_partial_packing' : 'warehouse_transfer_packing_warehouse',
                     'user_id' => $user->id,
                     'role' => 'warehouse',
                     'status_before' => $lockedOrder->status,
                     'status_after' => $lockedOrder->status,
-                    'note' => "Kho điều chuyển đơn thiếu hàng từ {$sourceWarehouseName} sang {$targetWarehouse->name} để kho mới hoàn thiện đóng hàng."
+                    'note' => ($wasPartiallyPacking
+                        ? "Kho chuyển tiếp đơn đang đóng dở từ {$sourceWarehouseName} sang {$targetWarehouse->name}; giữ nguyên kg thực tế, số bọc và quy cách đã nhập."
+                        : "Kho điều chuyển đơn thiếu hàng từ {$sourceWarehouseName} sang {$targetWarehouse->name} để kho mới hoàn thiện đóng hàng.")
                         .($goodsTransfer ? ' Hàng đã gom gửi kèm phiếu '.$goodsTransfer->transfer_code.'.' : ' Chưa có hàng đã giữ tại kho nguồn để gửi kèm.'),
                 ]);
 
-                return [$sourceWarehouseName, (string) $targetWarehouse->name, $goodsTransfer];
+                return [$sourceWarehouseName, (string) $targetWarehouse->name, $goodsTransfer, $wasPartiallyPacking];
             });
         } catch (\RuntimeException $exception) {
             return back()->with('error', $exception->getMessage());
@@ -1347,7 +1351,11 @@ class WarehouseDashboardController extends Controller
             ? ' Đã tạo phiếu '.$goodsTransfer->transfer_code.' gửi phần hàng đang giữ cho đơn; kho nhận xác nhận tại mục Tiếp nhận điều chuyển.'
             : ' Đơn chưa có hàng được giữ tại kho nguồn nên không phát sinh phiếu hàng gửi kèm.';
 
-        return back()->with('success', "Đã chuyển đơn thiếu hàng từ {$sourceWarehouseName} sang {$targetWarehouseName}. Đơn sẽ chỉ xuất hiện tại kho mới để tiếp tục đóng hàng.".$goodsMessage);
+        $actionMessage = $wasPartiallyPacking
+            ? "Đã chuyển tiếp đơn đang đóng dở từ {$sourceWarehouseName} sang {$targetWarehouseName}. Kg thực tế và thông tin đóng gói đã được giữ nguyên."
+            : "Đã chuyển đơn thiếu hàng từ {$sourceWarehouseName} sang {$targetWarehouseName}.";
+
+        return back()->with('success', $actionMessage.' Đơn sẽ chỉ xuất hiện tại kho mới để tiếp tục đóng hàng.'.$goodsMessage);
     }
 
     private function createPackingOrderGoodsTransfer(
@@ -1482,42 +1490,56 @@ class WarehouseDashboardController extends Controller
     }
 
     /** Reserve as much as possible at the destination; missing stock remains a backorder. */
-    private function reserveOrderStockAtWarehouse(Order $order, int $warehouseId): void
+    public function reserveOrderStockAtWarehouse(Order $order, int $warehouseId, array $incomingQuantitiesByVariant = []): void
     {
-        $order->loadMissing('items.variant');
+        $order->loadMissing(['items.variant', 'items.packingSizeAllocations']);
+        $incomingRemaining = collect($incomingQuantitiesByVariant)
+            ->mapWithKeys(fn ($quantity, $variantId) => [(int) $variantId => max(0, (int) $quantity)])
+            ->all();
         foreach ($order->items as $item) {
-            $alreadyReserved = (int) InventoryReservation::query()
-                ->join('inventories', 'inventories.id', '=', 'inventory_reservations.inventory_id')
-                ->where('inventory_reservations.order_item_id', $item->id)
-                ->where('inventories.warehouse_id', $warehouseId)
-                ->sum('inventory_reservations.quantity');
-            $requiredQty = max(0, (int) $item->quantity - $alreadyReserved);
-            if ($requiredQty <= 0) {
-                continue;
-            }
+            $allocations = $item->packingSizeAllocations;
+            $requirements = $allocations->sum('quantity') === (int) $item->quantity
+                ? $allocations->map(fn ($allocation) => [(int) $allocation->product_variant_id, (int) $allocation->quantity])
+                : collect([[(int) $item->product_variant_id, (int) $item->quantity]]);
 
-            $inventory = Inventory::query()
-                ->lockForUpdate()
-                ->where('product_variant_id', $item->product_variant_id)
-                ->where('warehouse_id', $warehouseId)
-                ->first();
-            if (! $inventory) {
-                continue;
-            }
+            foreach ($requirements as [$variantId, $desiredQty]) {
+                $alreadyReserved = (int) InventoryReservation::query()
+                    ->join('inventories', 'inventories.id', '=', 'inventory_reservations.inventory_id')
+                    ->where('inventory_reservations.order_item_id', $item->id)
+                    ->where('inventories.warehouse_id', $warehouseId)
+                    ->where('inventories.product_variant_id', $variantId)
+                    ->sum('inventory_reservations.quantity');
+                $outstandingQty = max(0, $desiredQty - $alreadyReserved);
+                $incomingCredit = min($outstandingQty, (int) ($incomingRemaining[$variantId] ?? 0));
+                $incomingRemaining[$variantId] = max(0, (int) ($incomingRemaining[$variantId] ?? 0) - $incomingCredit);
+                $requiredQty = max(0, $outstandingQty - $incomingCredit);
+                if ($requiredQty <= 0) {
+                    continue;
+                }
 
-            $availableQty = max(0, (int) $inventory->quantity - (int) $inventory->reserved_quantity);
-            $reserveQty = min($requiredQty, $availableQty);
-            if ($reserveQty <= 0) {
-                continue;
-            }
+                $inventory = Inventory::query()
+                    ->lockForUpdate()
+                    ->where('product_variant_id', $variantId)
+                    ->where('warehouse_id', $warehouseId)
+                    ->first();
+                if (! $inventory) {
+                    continue;
+                }
 
-            $inventory->increment('reserved_quantity', $reserveQty);
-            InventoryReservation::create([
-                'order_item_id' => $item->id,
-                'inventory_id' => $inventory->id,
-                'quantity' => $reserveQty,
-                'reserved_at' => now(),
-            ]);
+                $availableQty = max(0, (int) $inventory->quantity - (int) $inventory->reserved_quantity);
+                $reserveQty = min($requiredQty, $availableQty);
+                if ($reserveQty <= 0) {
+                    continue;
+                }
+
+                $inventory->increment('reserved_quantity', $reserveQty);
+                InventoryReservation::create([
+                    'order_item_id' => $item->id,
+                    'inventory_id' => $inventory->id,
+                    'quantity' => $reserveQty,
+                    'reserved_at' => now(),
+                ]);
+            }
         }
     }
 
@@ -3337,6 +3359,19 @@ class WarehouseDashboardController extends Controller
             return back()->with('error', 'Đơn hàng không đang ở trạng thái Đang đóng gói.');
         }
 
+        $pendingForwardTransfer = WarehouseInventoryTransfer::query()
+            ->where('order_id', $order->id)
+            ->where('status', WarehouseInventoryTransfer::STATUS_PENDING_RECEIVE)
+            ->first();
+        if ($pendingForwardTransfer) {
+            $message = 'Đơn đang chờ kho mới tiếp nhận hàng chuyển tiếp theo phiếu '.$pendingForwardTransfer->transfer_code.'. Chưa thể hoàn thành đóng gói.';
+            if ($request->expectsJson()) {
+                return response()->json(['ok' => false, 'message' => $message], 422);
+            }
+
+            return back()->with('error', $message);
+        }
+
         $order->loadMissing(['items.variant.product', 'items.product']);
         $missingWeightItems = $this->packingItemsMissingActualWeight($order);
         if ($missingWeightItems->isNotEmpty()) {
@@ -4980,7 +5015,7 @@ class WarehouseDashboardController extends Controller
 
                 if ($lockedTransfer->order
                 && (int) $lockedTransfer->order->warehouse_id === (int) $lockedTransfer->target_warehouse_id
-                && in_array((string) $lockedTransfer->order->status, self::READY_TO_PACK_STATUSES, true)
+                && in_array((string) $lockedTransfer->order->status, array_merge(self::READY_TO_PACK_STATUSES, [Order::STATUS_PACKING]), true)
                 ) {
                     $order = Order::query()->with('items.variant')->lockForUpdate()->findOrFail($lockedTransfer->order->id);
                     $this->reserveOrderStockAtWarehouse($order, (int) $lockedTransfer->target_warehouse_id);

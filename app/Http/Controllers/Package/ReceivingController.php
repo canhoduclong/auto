@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Package;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\WarehouseDashboardController;
 use App\Models\Inventory;
 use App\Models\InventoryDocument;
 use App\Models\InventoryMovement;
@@ -81,15 +82,15 @@ class ReceivingController extends Controller
         return view('package.receiving.inventory', compact('transfers'));
     }
 
-    public function confirmIncomingInventory(WarehouseInventoryTransfer $transfer)
+    public function confirmIncomingInventory(WarehouseInventoryTransfer $transfer, WarehouseDashboardController $warehouseOrders)
     {
         $this->assertTargetWarehouse((int) $transfer->target_warehouse_id);
         if ($transfer->status !== WarehouseInventoryTransfer::STATUS_PENDING_RECEIVE) {
             return back()->with('error', 'Phiếu điều chuyển không còn chờ tiếp nhận.');
         }
-        $transfer->loadMissing('items');
+        $transfer->loadMissing(['items', 'order.items.variant', 'order.items.packingSizeAllocations']);
 
-        DB::transaction(function () use ($transfer) {
+        DB::transaction(function () use ($transfer, $warehouseOrders) {
             $document = $this->createImportDocument(
                 (int) $transfer->target_warehouse_id,
                 'Package tiếp nhận điều chuyển kho #'.($transfer->transfer_code ?: $transfer->id)
@@ -103,9 +104,28 @@ class ReceivingController extends Controller
                 'received_at' => now(),
                 'import_document_id' => $document->id,
             ]);
+
+            $order = $transfer->order;
+            if ($order
+                && (int) $order->warehouse_id === (int) $transfer->target_warehouse_id
+                && in_array((string) $order->status, [Order::STATUS_APPROVED, Order::STATUS_READY_TO_PACK, Order::STATUS_PACKING], true)
+            ) {
+                $warehouseOrders->reserveOrderStockAtWarehouse($order, (int) $transfer->target_warehouse_id);
+                OrderHistory::create([
+                    'order_id' => $order->id,
+                    'action' => 'warehouse_order_goods_received',
+                    'user_id' => Auth::id(),
+                    'role' => 'package',
+                    'status_before' => $order->status,
+                    'status_after' => $order->status,
+                    'note' => 'Kho nhận đã tiếp nhận phiếu '.$transfer->transfer_code.' và tiếp tục đơn đang đóng dở.',
+                ]);
+            }
         });
 
-        return back()->with('success', 'Đã tiếp nhận hàng và cập nhật nhập kho.');
+        return back()->with('success', $transfer->order_id
+            ? 'Đã tiếp nhận hàng và giữ tồn cho đơn chuyển tiếp. Có thể tiếp tục đóng hàng.'
+            : 'Đã tiếp nhận hàng và cập nhật nhập kho.');
     }
 
     public function incomingReturns()

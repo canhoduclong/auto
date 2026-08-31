@@ -35,7 +35,7 @@ class WarehousePackingWarehouseTransferTest extends TestCase
         $this->assertSame((int) $targetInventory->warehouse_id, (int) $order->fresh()->warehouse_id);
         $this->assertSame(0, (int) $sourceInventory->fresh()->quantity);
         $this->assertSame(0, (int) $sourceInventory->fresh()->reserved_quantity);
-        $this->assertSame(5, (int) $targetInventory->fresh()->reserved_quantity);
+        $this->assertSame(3, (int) $targetInventory->fresh()->reserved_quantity);
         $this->assertDatabaseMissing('inventory_reservations', [
             'order_item_id' => $order->items()->value('id'),
             'inventory_id' => $sourceInventory->id,
@@ -43,7 +43,7 @@ class WarehousePackingWarehouseTransferTest extends TestCase
         $this->assertDatabaseHas('inventory_reservations', [
             'order_item_id' => $order->items()->value('id'),
             'inventory_id' => $targetInventory->id,
-            'quantity' => 5,
+            'quantity' => 3,
         ]);
         $this->assertDatabaseHas('order_histories', [
             'order_id' => $order->id,
@@ -111,6 +111,63 @@ class WarehousePackingWarehouseTransferTest extends TestCase
         $this->assertSame(0, (int) $targetInventory->fresh()->reserved_quantity);
     }
 
+    public function test_in_progress_order_can_be_forwarded_and_completed_by_target_warehouse(): void
+    {
+        [$sourceUser, $targetUser, $order, $sourceInventory, $targetInventory] = $this->createShortOrder();
+        $item = $order->items()->firstOrFail();
+        $order->update([
+            'status' => Order::STATUS_PACKING,
+            'actual_weight' => 12.5,
+            'total_weight' => 12.5,
+            'package_count' => 2,
+            'packing_specification' => '2 bọc đang đóng dở',
+        ]);
+        $item->update(['actual_weight' => 12.5, 'packed_weight' => 12.5]);
+
+        $this->actingAs($sourceUser)
+            ->withSession(['active_role' => 'warehouse'])
+            ->post(route('warehouse.orders.transfer-packing-warehouse', $order), [
+                'warehouse_id' => $targetInventory->warehouse_id,
+                'packing_date' => now()->toDateString(),
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $forwarded = $order->fresh();
+        $this->assertSame(Order::STATUS_PACKING, $forwarded->status);
+        $this->assertSame((int) $targetInventory->warehouse_id, (int) $forwarded->warehouse_id);
+        $this->assertSame('12.500', $forwarded->actual_weight);
+        $this->assertSame(2, $forwarded->package_count);
+        $this->assertSame('2 bọc đang đóng dở', $forwarded->packing_specification);
+        $this->assertSame(3, (int) $targetInventory->fresh()->reserved_quantity);
+        $this->assertDatabaseHas('order_histories', [
+            'order_id' => $order->id,
+            'action' => 'warehouse_forward_partial_packing',
+            'status_before' => Order::STATUS_PACKING,
+            'status_after' => Order::STATUS_PACKING,
+        ]);
+
+        $goodsTransfer = WarehouseInventoryTransfer::query()->where('order_id', $order->id)->firstOrFail();
+        $this->actingAs($targetUser)
+            ->withSession(['active_role' => 'warehouse'])
+            ->post(route('warehouse.orders.complete-packing', $order), ['packing_date' => now()->toDateString()])
+            ->assertSessionHas('error', 'Đơn đang chờ kho mới tiếp nhận hàng chuyển tiếp theo phiếu '.$goodsTransfer->transfer_code.'. Chưa thể hoàn thành đóng gói.');
+
+        $this->actingAs($targetUser)
+            ->withSession(['active_role' => 'warehouse'])
+            ->post(route('warehouse.inventory-transfers.confirm', $goodsTransfer))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertSame(5, (int) $targetInventory->fresh()->reserved_quantity);
+        $this->actingAs($targetUser)
+            ->withSession(['active_role' => 'warehouse'])
+            ->post(route('warehouse.orders.complete-packing', $order), ['packing_date' => now()->toDateString()])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+        $this->assertSame(Order::STATUS_READY_TO_SHIP, $order->fresh()->status);
+    }
+
     public function test_short_order_without_collected_goods_still_moves_to_the_selected_warehouse(): void
     {
         [$sourceUser, $targetUser, $order, $sourceInventory, $targetInventory] = $this->createShortOrder();
@@ -139,6 +196,7 @@ class WarehousePackingWarehouseTransferTest extends TestCase
         $this->assertStringContainsString("route('warehouse.orders.transfer-packing-warehouse', \$order)", $card);
         $this->assertStringContainsString('(int) $warehouse->id !== $currentWorkingWarehouseId', $card);
         $this->assertStringContainsString('$stockShortages->isNotEmpty()', $card);
+        $this->assertStringContainsString("'Chuyển tiếp đơn đang đóng dở'", $card);
         $this->assertStringContainsString('(int) ($order->warehouse_id ?? 0) === $currentWorkingWarehouseId', $card);
         $this->assertStringContainsString('$activePackingGoodsTransfer', $card);
         $this->assertStringContainsString("route('warehouse.inventory-transfers.incoming')", $card);
