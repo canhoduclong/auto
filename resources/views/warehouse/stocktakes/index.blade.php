@@ -1,6 +1,6 @@
 @extends('layouts.warehouse')
 
-@section('title', 'Kiểm Kê Kho')
+@section('title', 'Kiểm Kê Tồn Đầu')
 @section('subtitle', 'Đối chiếu số thực tế và điều chỉnh tồn kho có lưu lịch sử')
 
 @push('styles')
@@ -46,7 +46,7 @@
         <form method="GET" action="{{ route('warehouse.stocktakes.index') }}" class="row g-2 align-items-end">
             @if($warehouses->count() > 1)
                 <div class="col-lg-3 col-md-4">
-                    <label class="form-label small fw-semibold mb-1">Kho kiểm kê</label>
+                    <label class="form-label small fw-semibold mb-1">Kho kiểm kê tồn đầu</label>
                     <select name="warehouse_id" class="form-select form-select-sm">
                         @foreach($warehouses as $warehouseOption)
                             <option value="{{ $warehouseOption->id }}" @selected((int) $warehouse->id === (int) $warehouseOption->id)>{{ $warehouseOption->name }}</option>

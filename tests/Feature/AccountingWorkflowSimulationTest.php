@@ -72,7 +72,7 @@ class AccountingWorkflowSimulationTest extends TestCase
         $this->actingAs($accounting)
             ->get(route('accounting.workflow-simulation.index', ['date' => now()->toDateString(), 'step' => 2]))
             ->assertOk()
-            ->assertSee('Kiểm kê kho để hoàn thiện đơn')
+            ->assertSee('Kiểm kê tồn đầu để hoàn thiện đơn')
             ->assertSee('Hoàn tất kiểm kê')
             ->assertSee('Tồn kho hiện tại')
             ->assertSee('Đơn thiếu hàng cần chỉnh');

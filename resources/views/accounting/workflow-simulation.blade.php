@@ -106,7 +106,7 @@
         @endphp
         <details class="card wf-card wf-stocktake-card mt-3">
             <summary class="card-header bg-white py-3 d-flex justify-content-between align-items-center gap-2 flex-wrap">
-                <div><b><i class="bi bi-clipboard2-check me-1 text-info"></i>Kiểm kê kho để hoàn thiện đơn</b><div class="small text-muted">Kiểm đếm thực tế các SKU liên quan, ghi nhận chênh lệch và tự kiểm tra lại khả năng đóng toàn bộ đơn trong ngày.</div></div>
+                <div><b><i class="bi bi-clipboard2-check me-1 text-info"></i>Kiểm kê tồn đầu để hoàn thiện đơn</b><div class="small text-muted">Kiểm đếm thực tế các SKU liên quan, ghi nhận chênh lệch và tự kiểm tra lại khả năng đóng toàn bộ đơn trong ngày.</div></div>
                 <span class="d-flex align-items-center gap-2"><span class="badge {{ $fulfillmentRows->sum('shortage') > 0 ? 'bg-danger' : 'bg-success' }}">Thiếu tổng {{ number_format($fulfillmentRows->sum('shortage'), 0, ',', '.') }}</span><span class="wf-stocktake-toggle">Mở / thu gọn <i class="bi bi-chevron-down ms-1"></i></span></span>
             </summary>
             <div class="card-body">

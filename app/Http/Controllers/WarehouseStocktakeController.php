@@ -167,7 +167,7 @@ class WarehouseStocktakeController extends Controller
                         'inventory_id' => $inventory->id,
                         'quantity' => $difference,
                         'weight_kg' => $weightDifference,
-                        'reason' => 'Kiểm kê kho '.$stocktake->code,
+                        'reason' => 'Kiểm kê tồn đầu '.$stocktake->code,
                         'user_id' => Auth::id(),
                         'created_at' => $countedAt,
                         'updated_at' => $countedAt,
