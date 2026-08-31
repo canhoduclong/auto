@@ -500,7 +500,9 @@
                                                                     min="0" step="0.001" required
                                                                     inputmode="decimal"
                                                                     data-qty="{{ $orderedQty }}"
-                                                                    data-size="{{ is_numeric($variantSize) && (float)$variantSize > 0 ? (float)$variantSize : 0 }}">
+                                                                    data-size="{{ is_numeric($variantSize) && (float)$variantSize > 0 ? (float)$variantSize : 0 }}"
+                                                                    data-average-min="{{ abs((float)$variantSize - 2.5) < 0.0001 ? '2.47' : '' }}"
+                                                                    data-average-max="{{ abs((float)$variantSize - 2.5) < 0.0001 ? '2.57' : '' }}">
                                                                 <button class="btn btn-sm {{ $isItemLogisticsSaved ? 'btn-secondary' : 'wh-warning-action-btn' }} js-logistics-submit-btn" type="submit">Lưu</button>
                                                             </form>
                                                         </div>
@@ -518,8 +520,46 @@
                                                 <div class="wh-item-cell js-item-total-amount">
                                                     <strong>{{ !is_null($lineTotal) ? number_format($lineTotal) . 'đ' : ($pricedByKg ? '---' : number_format($orderedQty * $unitPrice) . 'đ') }}</strong>
                                                 </div>
-                                             </div>
+                                            </div>
                                              <div class="js-weight-error text-danger text-center px-1" style="font-size:.72rem;display:none;"></div>
+                                             @php $packingSizeOptions = collect($packingSizeOptionsByItem[$item->id] ?? []); @endphp
+                                             @if($packingSizeOptions->isNotEmpty() && !$isPackedReadonly && $canProcessThisOrder)
+                                                <div class="mx-2 mb-2 mt-1 rounded border border-warning-subtle bg-warning-subtle p-2">
+                                                    <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap mb-2">
+                                                        <div>
+                                                            <strong><i class="bi bi-boxes me-1"></i>Bổ sung size 2.4 / 2.6 cho mốc 2.5</strong>
+                                                            <div class="small text-muted">Tổng phải đủ {{ number_format($orderedQty) }} con, size 2.5 &gt; 70%, bình quân 2.47–2.57 kg.</div>
+                                                        </div>
+                                                    </div>
+                                                    <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.packing-size-allocation', $order) }}"
+                                                          method="POST" class="js-packing-size-form" data-total="{{ $orderedQty }}">
+                                                        @csrf
+                                                        <input type="hidden" name="order_item_id" value="{{ $item->id }}">
+                                                        <div class="row g-2 align-items-end">
+                                                            @foreach($packingSizeOptions as $sizeOption)
+                                                                <div class="col-6 col-md-2">
+                                                                    <label class="form-label small mb-1 fw-semibold">
+                                                                        Size {{ $formatCompactDecimal((float)$sizeOption['size']) }}
+                                                                        <span class="d-block text-muted fw-normal">Khả dụng: {{ number_format((int)$sizeOption['available']) }}</span>
+                                                                    </label>
+                                                                    <input type="number" min="0" step="1"
+                                                                           max="{{ (int)$sizeOption['available'] }}"
+                                                                           class="form-control form-control-sm js-packing-size-qty"
+                                                                           data-size="{{ (float)$sizeOption['size'] }}"
+                                                                           name="allocations[{{ (int)$sizeOption['variant_id'] }}]"
+                                                                           value="{{ (int)$sizeOption['quantity'] }}">
+                                                                </div>
+                                                            @endforeach
+                                                            <div class="col-md-4">
+                                                                <div class="small js-packing-size-summary mb-1"></div>
+                                                                <button class="btn btn-warning btn-sm js-packing-size-submit" type="submit">
+                                                                    <i class="bi bi-save2 me-1"></i>Lưu cơ cấu thực đóng
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </form>
+                                                </div>
+                                             @endif
                                         </li>
                                     @endforeach
                                 </ul>

@@ -114,6 +114,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/cutting-batches/{batch}/complete', [OrderPackingController::class, 'completeCuttingBatch'])->name('cutting-batches.complete');
         Route::post('/orders/{order}/start-packing', [OrderPackingController::class, 'startPacking'])->name('orders.start-packing');
         Route::post('/orders/{order}/logistics', [OrderPackingController::class, 'updateLogistics'])->name('orders.logistics');
+        Route::post('/orders/{order}/packing-size-allocation', [OrderPackingController::class, 'updatePackingSizeAllocation'])->name('orders.packing-size-allocation');
         Route::post('/orders/{order}/complete-packing', [OrderPackingController::class, 'completePacking'])->name('orders.complete-packing');
         Route::post('/orders/{order}/request-adjustment', [OrderPackingController::class, 'requestAdjustment'])->name('orders.request-adjustment');
         Route::post('/orders/{order}/transfer-request', [OrderPackingController::class, 'createTransferRequest'])->name('orders.transfer-request');
@@ -398,6 +399,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/orders', [WarehouseDashboardController::class, 'orders'])->name('orders');
         Route::post('/orders/{order}/transfer-packing-warehouse', [WarehouseDashboardController::class, 'transferPackingWarehouse'])->name('orders.transfer-packing-warehouse');
         Route::post('/orders/{order}/logistics', [WarehouseDashboardController::class, 'updateLogistics'])->name('orders.logistics');
+        Route::post('/orders/{order}/packing-size-allocation', [WarehouseDashboardController::class, 'updatePackingSizeAllocation'])->name('orders.packing-size-allocation');
         Route::post('/orders/{order}/start-packing', [WarehouseDashboardController::class, 'startPacking'])->name('orders.start-packing');
         Route::post('/orders/{order}/complete-packing', [WarehouseDashboardController::class, 'completePacking'])->name('orders.complete-packing');
         Route::post('/orders/{order}/request-adjustment', [WarehouseDashboardController::class, 'requestAdjustment'])->name('orders.request-adjustment');

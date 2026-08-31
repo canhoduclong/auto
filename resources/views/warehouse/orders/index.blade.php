@@ -868,6 +868,95 @@
     .wh-order-nav-pill.is-unpacked {
         background-color: #64748b;
     }
+    .wh-orders-workspace {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 320px;
+        gap: 16px;
+        align-items: start;
+    }
+    .wh-order-priority-panel {
+        position: sticky;
+        top: 75px;
+        max-height: calc(100vh - 92px);
+        overflow-y: auto;
+        padding: 10px;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        background: #fff;
+        box-shadow: 0 4px 15px rgba(15, 23, 42, .06);
+    }
+    .wh-order-priority-title {
+        padding: 4px 6px 10px;
+        color: #475569;
+        font-size: .76rem;
+        font-weight: 800;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+    }
+    .wh-order-priority-item {
+        --order-state-color: #64748b;
+        --order-state-contrast: #fff;
+        display: grid;
+        grid-template-columns: 42px minmax(0, 1fr);
+        gap: 8px;
+        align-items: center;
+        padding: 5px 4px;
+        border-bottom: 1px solid #e2e8f0;
+        text-decoration: none;
+    }
+    .wh-order-priority-item:last-child {
+        border-bottom: 0;
+    }
+    .wh-order-priority-item.is-packed {
+        --order-state-color: #198754;
+    }
+    .wh-order-priority-item.is-packing {
+        --order-state-color: #ffc107;
+        --order-state-contrast: #212529;
+    }
+    .wh-order-priority-number,
+    .wh-order-priority-name {
+        background: var(--order-state-color);
+        color: var(--order-state-contrast) !important;
+        transition: transform .15s ease, box-shadow .15s ease;
+    }
+    .wh-order-priority-number {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        justify-self: center;
+        min-width: 30px;
+        height: 30px;
+        padding: 0 7px;
+        border-radius: 999px;
+        font-weight: 800;
+    }
+    .wh-order-priority-name {
+        display: block;
+        min-width: 0;
+        padding: 8px 10px;
+        border-radius: 7px;
+        overflow: hidden;
+        font-weight: 800;
+        line-height: 1.2;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .wh-order-priority-item:hover .wh-order-priority-number,
+    .wh-order-priority-item:hover .wh-order-priority-name,
+    .wh-order-priority-item.active .wh-order-priority-number,
+    .wh-order-priority-item.active .wh-order-priority-name {
+        transform: translateY(-1px);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--order-state-color) 24%, transparent);
+    }
+    @media (max-width: 1199.98px) {
+        .wh-orders-workspace {
+            display: block;
+        }
+        .wh-order-priority-panel {
+            display: none;
+        }
+    }
 </style>
 @endpush
 
@@ -1090,6 +1179,8 @@
         $unpackedOrders = $orders->reject(fn($o) => in_array((string)$o->status, $packedLikeStatuses, true))->sortBy('daily_sequence');
     @endphp
 
+    <div class="wh-orders-workspace">
+    <div class="wh-orders-main">
     <div class="wh-order-nav-area mb-4">
         <div class="d-flex flex-wrap gap-2 align-items-center">
             @foreach($orders->sortBy('daily_sequence') as $navOrder)
@@ -1119,6 +1210,27 @@
         @foreach($orderedPackingList as $order)
             @include('warehouse.orders._order_card', ['order' => $order, 'statusMeta' => $statusMeta, 'activeTransfersByOrder' => $activeTransfersByOrder ?? [], 'selectedDate' => $selectedDate ?? now()->toDateString()])
         @endforeach
+    </div>
+    </div>
+    <aside class="wh-order-priority-panel" aria-label="Thứ tự ưu tiên và khách hàng">
+        <div class="wh-order-priority-title"><i class="bi bi-list-ol me-1"></i>Thứ tự ưu tiên</div>
+        @foreach($orders->sortBy('daily_sequence') as $priorityOrder)
+            @php
+                $isPackedPriority = in_array((string)$priorityOrder->status, $packedLikeStatuses, true);
+                $isPackingPriority = (string)$priorityOrder->status === 'packing';
+                $priorityStateClass = $isPackingPriority ? 'is-packing' : ($isPackedPriority ? 'is-packed' : 'is-unpacked');
+                $priorityNumber = $priorityOrder->daily_sequence ?? $loop->iteration;
+            @endphp
+            <a href="#order-card-{{ $priorityOrder->id }}"
+               class="wh-order-priority-item {{ $priorityStateClass }}"
+               data-priority-order-id="{{ $priorityOrder->id }}"
+               onclick="event.preventDefault(); document.getElementById('order-card-{{ $priorityOrder->id }}')?.scrollIntoView({ behavior: 'smooth', block: 'start' });"
+               title="{{ $priorityOrder->customer?->name ?? 'Khách hàng' }} · {{ $statusMeta[$priorityOrder->status]['label'] ?? $priorityOrder->status }}">
+                <span class="wh-order-priority-number">{{ $priorityNumber }}</span>
+                <span class="wh-order-priority-name">{{ $priorityOrder->customer?->name ?? 'Khách hàng' }}</span>
+            </a>
+        @endforeach
+    </aside>
     </div>
     @endif
 </div>
@@ -1263,6 +1375,26 @@
 @push('scripts')
 <script>
     document.addEventListener('DOMContentLoaded', function () {
+        function setPriorityState(orderId, stateClass) {
+            const priorityItem = document.querySelector(`[data-priority-order-id="${orderId}"]`);
+            if (!priorityItem) return;
+            priorityItem.classList.remove('is-packed', 'is-packing', 'is-unpacked');
+            priorityItem.classList.add(stateClass);
+        }
+
+        const priorityObserver = 'IntersectionObserver' in window
+            ? new IntersectionObserver(function (entries) {
+                entries.forEach(function (entry) {
+                    if (!entry.isIntersecting) return;
+                    document.querySelectorAll('.wh-order-priority-item.active').forEach(item => item.classList.remove('active'));
+                    document.querySelector(`[data-priority-order-id="${entry.target.dataset.orderId || ''}"]`)?.classList.add('active');
+                });
+            }, { rootMargin: '-20% 0px -65% 0px', threshold: 0 })
+            : null;
+        if (priorityObserver) {
+            document.querySelectorAll('.js-order-card[data-order-id]').forEach(card => priorityObserver.observe(card));
+        }
+
         function formatCompactDecimal(value, decimals = 2) {
             const num = Number(value);
             if (Number.isNaN(num)) return '';
@@ -1618,6 +1750,14 @@
             if (!errEl) return true;
             if (size <= 0 || isNaN(qty) || qty <= 0) return setValid();
             if (isNaN(val)) return setInvalid('Nhập số kg hợp lệ.');
+            const averageMin = parseFloat(input.dataset.averageMin || '0');
+            const averageMax = parseFloat(input.dataset.averageMax || '0');
+            if (averageMin > 0 && averageMax > 0) {
+                const average = val / qty;
+                if (average < averageMin || average > averageMax) {
+                    return setInvalid(`Bình quân phải trong khoảng ${formatCompactDecimal(averageMin)} – ${formatCompactDecimal(averageMax)} kg/sản phẩm (hiện tại ${formatCompactDecimal(average)} kg)`);
+                }
+            }
             const min = qty * (size - 0.25);
             const max = qty * (size + 0.25);
             if (val < min || val > max) {
@@ -1635,6 +1775,35 @@
                 }
                 validateWeightInput(input);
             });
+        });
+
+        document.querySelectorAll('.js-packing-size-form').forEach(function (form) {
+            const inputs = Array.from(form.querySelectorAll('.js-packing-size-qty'));
+            const summary = form.querySelector('.js-packing-size-summary');
+            const submit = form.querySelector('.js-packing-size-submit');
+            const totalRequired = parseInt(form.dataset.total || '0', 10);
+            function refreshSizeMix() {
+                let total = 0;
+                let main = 0;
+                let weighted = 0;
+                inputs.forEach(function (input) {
+                    const qty = Math.max(0, parseInt(input.value || '0', 10) || 0);
+                    const size = parseFloat(input.dataset.size || '0');
+                    total += qty;
+                    weighted += qty * size;
+                    if (Math.abs(size - 2.5) < 0.001) main += qty;
+                });
+                const ratio = total > 0 ? main * 100 / total : 0;
+                const average = total > 0 ? weighted / total : 0;
+                const valid = total === totalRequired && ratio > 70 && average >= 2.47 && average <= 2.57;
+                if (summary) {
+                    summary.className = 'small js-packing-size-summary mb-1 ' + (valid ? 'text-success' : 'text-danger');
+                    summary.textContent = `Tổng ${total}/${totalRequired} · Size 2.5: ${formatCompactDecimal(ratio)}% · Bình quân: ${formatCompactDecimal(average)} kg`;
+                }
+                if (submit) submit.disabled = !valid;
+            }
+            inputs.forEach(input => input.addEventListener('input', refreshSizeMix));
+            refreshSizeMix();
         });
 
         document.querySelectorAll('.js-logistics-fee-form input, .js-logistics-fee-form textarea').forEach(function (input) {
@@ -1713,6 +1882,7 @@
                             navPill.classList.remove('is-packed', 'is-unpacked');
                             navPill.classList.add('is-packing');
                         }
+                        setPriorityState(card.dataset.orderId || '', 'is-packing');
 
                         card.querySelectorAll('.js-ready-only').forEach(function (el) {
                             el.classList.add('d-none');
@@ -1784,6 +1954,7 @@
                             navPill.classList.remove('is-packed', 'is-packing');
                             navPill.classList.add('is-unpacked');
                         }
+                        setPriorityState(card.dataset.orderId || '', 'is-unpacked');
 
                         card.querySelectorAll('.js-ready-only').forEach(function (el) {
                             el.classList.remove('d-none');

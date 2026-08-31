@@ -13,6 +13,7 @@ use App\Models\InventoryReservation;
 use App\Models\InventoryStocktake;
 use App\Models\Order;
 use App\Models\OrderHistory;
+use App\Models\OrderItemPackingSizeAllocation;
 use App\Models\OrderReturn;
 use App\Models\ProcurementPurchase;
 use App\Models\ProcurementPurchaseItem;
@@ -1002,6 +1003,7 @@ class WarehouseDashboardController extends Controller
             'adjustments:id,order_id,status',
             'histories.user.warehouse',
             'items.product.avatar.media',
+            'items.packingSizeAllocations.variant',
             'items.variant' => function ($query) {
                 $query->withAvailableStock()->with('avatar.media');
             },
@@ -1134,6 +1136,7 @@ class WarehouseDashboardController extends Controller
             ]);
         });
         $cuttingPlansByOrder = $this->buildCuttingPlansForGuards($stockGuardMap, $managedWarehouseId);
+        $packingSizeOptionsByItem = $this->buildPackingSizeOptions($orders, $stockGuardMap, $managedWarehouseId);
 
         $orderIds = $orders->pluck('id')->all();
         $activeCuttingBatchesByOrder = ProductCuttingBatch::query()
@@ -1211,7 +1214,8 @@ class WarehouseDashboardController extends Controller
             'packingInventoryRoute',
             'packingDashboardRoute',
             'cuttingPlansByOrder',
-            'activeCuttingBatchesByOrder'
+            'activeCuttingBatchesByOrder',
+            'packingSizeOptionsByItem'
         ));
     }
 
@@ -1411,8 +1415,9 @@ class WarehouseDashboardController extends Controller
             $inventory = $entry['inventory'];
             $item = $entry['item'];
             $quantity = (int) $entry['quantity'];
-            $variantId = (int) $item->product_variant_id;
-            $weight = round($quantity * (float) $item->effective_unit_weight, 3);
+            $variantId = (int) $inventory->product_variant_id;
+            $physicalVariant = ProductVariant::query()->find($variantId);
+            $weight = round($quantity * (float) ($physicalVariant?->effective_kg ?? $item->effective_unit_weight), 3);
 
             $inventory->update([
                 'quantity' => max(0, (float) $inventory->quantity - $quantity),
@@ -2085,6 +2090,62 @@ class WarehouseDashboardController extends Controller
         ];
     }
 
+    private function buildPackingSizeOptions(Collection $orders, array $stockGuards, ?int $warehouseId): array
+    {
+        $eligibleItems = $orders->flatMap(function (Order $order) use ($stockGuards) {
+            $shortItemIds = collect($stockGuards[$order->id]['shortages'] ?? [])
+                ->pluck('order_item_id')
+                ->map(fn ($id) => (int) $id);
+
+            return $order->items->filter(function ($item) use ($shortItemIds) {
+                return abs((float) ($item->variant?->size ?? 0) - 2.5) < 0.0001
+                    && ($shortItemIds->contains((int) $item->id) || $item->packingSizeAllocations->isNotEmpty());
+            });
+        })->values();
+
+        if ($eligibleItems->isEmpty()) {
+            return [];
+        }
+
+        $productIds = $eligibleItems->pluck('variant.product_id')->filter()->unique()->values();
+        $variantsByProduct = ProductVariant::query()
+            ->with(['inventories' => fn ($query) => $query->when($warehouseId, fn ($scope) => $scope->where('warehouse_id', $warehouseId))])
+            ->whereIn('product_id', $productIds->all())
+            ->get()
+            ->filter(fn (ProductVariant $variant) => in_array(round((float) $variant->size, 1), [2.4, 2.5, 2.6], true))
+            ->groupBy('product_id');
+
+        $reservationByItemAndInventory = InventoryReservation::query()
+            ->whereIn('order_item_id', $eligibleItems->pluck('id')->all())
+            ->get()
+            ->groupBy('order_item_id')
+            ->map(fn ($rows) => $rows->pluck('quantity', 'inventory_id'));
+
+        return $eligibleItems->mapWithKeys(function ($item) use ($variantsByProduct, $reservationByItemAndInventory) {
+            $saved = $item->packingSizeAllocations->pluck('quantity', 'product_variant_id');
+            $options = collect($variantsByProduct->get((int) $item->variant->product_id, collect()))
+                ->map(function (ProductVariant $variant) use ($item, $saved, $reservationByItemAndInventory) {
+                    $inventories = $variant->inventories;
+                    $ownReserved = (int) $inventories->sum(function (Inventory $inventory) use ($item, $reservationByItemAndInventory) {
+                        return (int) ($reservationByItemAndInventory->get($item->id)?->get($inventory->id) ?? 0);
+                    });
+                    $available = (int) $inventories->sum(fn (Inventory $inventory) => max(0, (int) $inventory->quantity - (int) $inventory->reserved_quantity));
+
+                    return [
+                        'variant_id' => (int) $variant->id,
+                        'size' => (float) $variant->size,
+                        'name' => (string) ($variant->name ?: $variant->sku),
+                        'available' => $available + $ownReserved,
+                        'quantity' => (int) ($saved[$variant->id] ?? ((int) $variant->id === (int) $item->product_variant_id ? $item->quantity : 0)),
+                    ];
+                })
+                ->sortBy('size')
+                ->values();
+
+            return [(int) $item->id => $options];
+        })->all();
+    }
+
     private function cuttingOrdersForVariant(ProductVariant $variant, ?int $warehouseId, string $forDate): Collection
     {
         $queueStatuses = array_merge(self::READY_TO_PACK_STATUSES, [Order::STATUS_PACKING]);
@@ -2179,7 +2240,7 @@ class WarehouseDashboardController extends Controller
 
         // Load ALL queued orders from the SAME packing date for FIFO simulation
         // (oldest first). Orders belonging to another date never enter this pool.
-        $allQueueOrders = Order::with(['items.product', 'items.variant.product'])
+        $allQueueOrders = Order::with(['items.product', 'items.variant.product', 'items.packingSizeAllocations.variant'])
             ->whereIn('status', $queueStatuses)
             ->forPackingDate($forDate)
             ->when($warehouseId, fn ($query) => $query->where(function ($scope) use ($warehouseId) {
@@ -2194,7 +2255,10 @@ class WarehouseDashboardController extends Controller
         }
 
         $variantIds = $allQueueOrders
-            ->flatMap(fn (Order $order) => $order->items->pluck('product_variant_id'))
+            ->flatMap(fn (Order $order) => $order->items->flatMap(function ($item) {
+                return collect([(int) $item->product_variant_id])
+                    ->merge($item->packingSizeAllocations->pluck('product_variant_id'));
+            }))
             ->filter()
             ->map(fn ($id) => (int) $id)
             ->unique()
@@ -2217,29 +2281,46 @@ class WarehouseDashboardController extends Controller
             $pendingDeductions = [];  // staged; applied only if order has NO shortage
 
             foreach ($order->items as $item) {
-                $variantId = (int) $item->product_variant_id;
                 $neededQty = (float) $item->quantity;
-
-                if ($variantId <= 0 || $neededQty <= 0) {
+                if ($neededQty <= 0) {
                     continue;
                 }
 
-                $remaining = (float) ($remainingByVariant[$variantId] ?? 0.0);
+                $savedAllocations = $item->packingSizeAllocations;
+                $requirements = $savedAllocations->sum('quantity') === (int) $neededQty
+                    ? $savedAllocations->map(fn ($allocation) => [
+                        'variant_id' => (int) $allocation->product_variant_id,
+                        'quantity' => (float) $allocation->quantity,
+                        'name' => (string) ($allocation->variant?->name ?? ('SP #'.$allocation->product_variant_id)),
+                    ])
+                    : collect([[
+                        'variant_id' => (int) $item->product_variant_id,
+                        'quantity' => $neededQty,
+                        'name' => (string) ($item->variant?->name ?? $item->product?->name ?? ('SP #'.$item->product_variant_id)),
+                    ]]);
 
-                if ($remaining < $neededQty) {
-                    $shortages[] = [
-                        'order_id' => (int) $order->id,
-                        'order_code' => (string) $order->code,
-                        'order_item_id' => (int) $item->id,
-                        'variant_id' => $variantId,
-                        'variant_name' => (string) ($item->variant?->name ?? $item->product?->name ?? ('SP #'.$variantId)),
-                        'required_qty' => $neededQty,
-                        'available_qty' => $remaining,
-                        'short_qty' => round($neededQty - $remaining, 3),
-                        'reason' => $remaining <= 0 ? 'blocked_by_prior_order' : 'insufficient_stock',
-                    ];
-                } else {
-                    $pendingDeductions[$variantId] = ($pendingDeductions[$variantId] ?? 0.0) + $neededQty;
+                foreach ($requirements as $requirement) {
+                    $variantId = (int) $requirement['variant_id'];
+                    $requiredQty = (float) $requirement['quantity'];
+                    $remaining = max(0, (float) ($remainingByVariant[$variantId] ?? 0.0) - (float) ($pendingDeductions[$variantId] ?? 0.0));
+                    if ($variantId <= 0 || $requiredQty <= 0) {
+                        continue;
+                    }
+                    if ($remaining < $requiredQty) {
+                        $shortages[] = [
+                            'order_id' => (int) $order->id,
+                            'order_code' => (string) $order->code,
+                            'order_item_id' => (int) $item->id,
+                            'variant_id' => $variantId,
+                            'variant_name' => (string) $requirement['name'],
+                            'required_qty' => $requiredQty,
+                            'available_qty' => $remaining,
+                            'short_qty' => round($requiredQty - $remaining, 3),
+                            'reason' => $remaining <= 0 ? 'blocked_by_prior_order' : 'insufficient_stock',
+                        ];
+                    } else {
+                        $pendingDeductions[$variantId] = ($pendingDeductions[$variantId] ?? 0.0) + $requiredQty;
+                    }
                 }
             }
 
@@ -2625,9 +2706,124 @@ class WarehouseDashboardController extends Controller
             ->all();
     }
 
-    /**
-     * Warehouse/package updates actual packed item weight for an order.
-     */
+    /** Save the physical 2.4/2.5/2.6 mix used to fulfil a size-2.5 order line. */
+    public function updatePackingSizeAllocation(Request $request, Order $order)
+    {
+        $this->authorizePackingOrderAccess($order);
+
+        if (! $this->canProcessOrderOnCurrentRun($order)) {
+            return back()->with('error', 'Chỉ được bổ sung cơ cấu size cho đơn của ngày hôm nay.');
+        }
+        if (! in_array($order->status, array_merge(self::READY_TO_PACK_STATUSES, [Order::STATUS_PACKING]), true)) {
+            return back()->with('error', 'Chỉ được bổ sung size khi đơn đang chờ hoặc đang đóng hàng.');
+        }
+
+        $validated = $request->validate([
+            'order_item_id' => ['required', 'integer'],
+            'allocations' => ['required', 'array', 'min:1'],
+            'allocations.*' => ['nullable', 'integer', 'min:0'],
+        ]);
+        $order->loadMissing(['items.variant.product']);
+        $item = $order->items->firstWhere('id', (int) $validated['order_item_id']);
+        if (! $item || abs((float) ($item->variant?->size ?? 0) - 2.5) > 0.0001) {
+            return back()->withErrors(['allocations' => 'Dòng hàng không phải sản phẩm size 2.5 của đơn này.']);
+        }
+
+        $allocationInput = collect($validated['allocations'])
+            ->mapWithKeys(fn ($quantity, $variantId) => [(int) $variantId => (int) ($quantity ?? 0)])
+            ->filter(fn (int $quantity, int $variantId) => $variantId > 0 && $quantity > 0);
+        $variants = ProductVariant::query()
+            ->whereIn('id', $allocationInput->keys()->all())
+            ->where('product_id', (int) $item->variant->product_id)
+            ->get()
+            ->keyBy('id');
+        if ($variants->count() !== $allocationInput->count()
+            || $variants->contains(fn (ProductVariant $variant) => ! in_array(round((float) $variant->size, 1), [2.4, 2.5, 2.6], true))) {
+            return back()->withErrors(['allocations' => 'Chỉ được dùng size 2.4, 2.5 hoặc 2.6 của cùng sản phẩm.']);
+        }
+
+        $orderedQuantity = (int) $item->quantity;
+        if ((int) $allocationInput->sum() !== $orderedQuantity) {
+            return back()->withErrors(['allocations' => "Tổng số lượng đóng phải bằng {$orderedQuantity} sản phẩm của đơn."]);
+        }
+        $mainSizeQuantity = (int) $allocationInput
+            ->map(fn (int $quantity, int $variantId) => abs((float) $variants[$variantId]->size - 2.5) < 0.0001 ? $quantity : 0)
+            ->sum();
+        if ($orderedQuantity <= 0 || $mainSizeQuantity * 100 <= $orderedQuantity * 70) {
+            return back()->withErrors(['allocations' => 'Tỷ lệ size 2.5 phải lớn hơn 70% tổng số lượng.']);
+        }
+        $weightedAverage = (float) $allocationInput
+            ->map(fn (int $quantity, int $variantId) => $quantity * (float) $variants[$variantId]->size)
+            ->sum() / $orderedQuantity;
+        if ($weightedAverage < 2.47 - 0.000001 || $weightedAverage > 2.57 + 0.000001) {
+            return back()->withErrors(['allocations' => 'Size bình quân phải nằm trong khoảng 2.47–2.57 kg (hiện tại '.number_format($weightedAverage, 3, '.', '').' kg).']);
+        }
+
+        $warehouseId = (int) ($request->user()?->warehouse_id ?: $order->warehouse_id ?: 0);
+        if ($warehouseId <= 0) {
+            return back()->withErrors(['allocations' => 'Không xác định được kho đang đóng hàng.']);
+        }
+
+        try {
+            DB::transaction(function () use ($item, $allocationInput, $warehouseId): void {
+                $oldReservations = InventoryReservation::query()->where('order_item_id', $item->id)->lockForUpdate()->get();
+                foreach ($oldReservations as $reservation) {
+                    $inventory = Inventory::query()->lockForUpdate()->find($reservation->inventory_id);
+                    if ($inventory) {
+                        $inventory->update(['reserved_quantity' => max(0, (float) $inventory->reserved_quantity - (float) $reservation->quantity)]);
+                    }
+                    $reservation->delete();
+                }
+
+                foreach ($allocationInput as $variantId => $quantity) {
+                    $inventory = Inventory::query()
+                        ->where('warehouse_id', $warehouseId)
+                        ->where('product_variant_id', $variantId)
+                        ->lockForUpdate()
+                        ->first();
+                    $available = $inventory ? max(0, (int) $inventory->quantity - (int) $inventory->reserved_quantity) : 0;
+                    if (! $inventory || $available < $quantity) {
+                        $variant = ProductVariant::query()->find($variantId);
+                        throw new \RuntimeException('Không đủ tồn kho size '.($variant?->size ?? $variantId)." (cần {$quantity}, khả dụng {$available}).");
+                    }
+                    $inventory->increment('reserved_quantity', $quantity);
+                    InventoryReservation::create([
+                        'order_item_id' => $item->id,
+                        'inventory_id' => $inventory->id,
+                        'quantity' => $quantity,
+                        'reserved_at' => now(),
+                    ]);
+                }
+
+                OrderItemPackingSizeAllocation::query()->where('order_item_id', $item->id)->delete();
+                foreach ($allocationInput as $variantId => $quantity) {
+                    OrderItemPackingSizeAllocation::create([
+                        'order_item_id' => $item->id,
+                        'product_variant_id' => $variantId,
+                        'quantity' => $quantity,
+                    ]);
+                }
+            });
+        } catch (\RuntimeException $exception) {
+            return back()->withErrors(['allocations' => $exception->getMessage()]);
+        }
+
+        OrderHistory::create([
+            'order_id' => $order->id,
+            'action' => 'warehouse_update_packing_size_mix',
+            'user_id' => Auth::id(),
+            'role' => $this->packingActorRole(),
+            'status_before' => $order->status,
+            'status_after' => $order->status,
+            'note' => 'Cơ cấu thực đóng size 2.5: '.$allocationInput->map(
+                fn (int $quantity, int $variantId) => $variants[$variantId]->size.' × '.$quantity
+            )->join(', ').' · Bình quân '.number_format($weightedAverage, 3, '.', '').' kg.',
+        ]);
+
+        return back()->with('success', 'Đã lưu cơ cấu size thực đóng; size 2.5 chiếm '.number_format($mainSizeQuantity * 100 / $orderedQuantity, 1).'% và bình quân '.number_format($weightedAverage, 3).' kg.');
+    }
+
+    /** Warehouse/package updates actual packed item weight for an order. */
     public function updateLogistics(Request $request, Order $order)
     {
         $this->authorizePackingOrderAccess($order);
@@ -2732,6 +2928,17 @@ class WarehouseDashboardController extends Controller
             $item = $order->items->firstWhere('id', $itemId);
             if ($item) {
                 $newWeight = round((float) $validated['item_actual_weight'], 3);
+                if (abs((float) ($item->variant?->size ?? 0) - 2.5) < 0.0001 && (int) $item->quantity > 0) {
+                    $averageWeight = $newWeight / (int) $item->quantity;
+                    if ($averageWeight < 2.47 - 0.000001 || $averageWeight > 2.57 + 0.000001) {
+                        $message = 'Khối lượng bình quân của size 2.5 phải nằm trong khoảng 2.47–2.57 kg/sản phẩm.';
+                        if ($expectsJson) {
+                            return response()->json(['ok' => false, 'message' => $message], 422);
+                        }
+
+                        return back()->withErrors(['item_actual_weight' => $message]);
+                    }
+                }
                 $item->actual_weight = $newWeight;
                 // Giữ lại KL kho cân lần đầu để đối chiếu hao hụt sau này
                 if ($item->packed_weight === null) {

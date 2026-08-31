@@ -30,6 +30,11 @@ class OrderPackingController extends Controller
         return $this->warehouseOrders->updateLogistics($request, $order);
     }
 
+    public function updatePackingSizeAllocation(Request $request, Order $order)
+    {
+        return $this->warehouseOrders->updatePackingSizeAllocation($request, $order);
+    }
+
     public function completePacking(Request $request, Order $order)
     {
         return $this->warehouseOrders->completePacking($request, $order);
