@@ -441,6 +441,7 @@ class ShipperDashboardController extends Controller
                 $isReturnOrder = (bool) ($fresh->is_return_order ?? false)
                     || (string) ($fresh->order_type ?? '') === 'order_return'
                     || (string) ($fresh->workflow_code ?? '') === 'order_return';
+                $statusBeforeAccept = (string) $fresh->status;
 
                 if (! $isReturnOrder && $warehouseId > 0 && (int) ($fresh->warehouse_id ?? 0) !== $warehouseId) {
                     $fresh->update(['warehouse_id' => $warehouseId]);
@@ -456,7 +457,7 @@ class ShipperDashboardController extends Controller
                     'action' => 'shipper_accepted',
                     'user_id' => Auth::id(),
                     'role' => 'shipper',
-                    'status_before' => $isReturnOrder ? Order::STATUS_APPROVED : (string) $fresh->getOriginal('status'),
+                    'status_before' => $statusBeforeAccept,
                     'status_after' => Order::STATUS_DELIVERING,
                     'note' => $isReturnOrder ? 'Shipper nhận đơn hoàn trả' : 'Shipper nhận đơn để giao',
                 ]);
@@ -552,6 +553,126 @@ class ShipperDashboardController extends Controller
 
         return redirect()->route('shipper.my-orders')
             ->with('success', 'Đã nhận đơn #'.$order->code.' thành công!');
+    }
+
+    /**
+     * Return an accepted order to the available queue and reverse its stock export.
+     */
+    public function rollbackAcceptance(Order $order)
+    {
+        try {
+            $restoredStatus = DB::transaction(function () use ($order): string {
+                $fresh = Order::query()->with('items')->lockForUpdate()->findOrFail($order->id);
+                $user = Auth::user();
+
+                if ((int) $fresh->shipper_id !== (int) $user?->id && ! $user?->hasRole('admin')) {
+                    abort(403, 'Bạn không có quyền hoàn lại đơn này.');
+                }
+                if ((string) $fresh->status !== Order::STATUS_DELIVERING) {
+                    throw new \RuntimeException('Chỉ có thể hoàn lại đơn đang ở trạng thái đã nhận/chờ giao.');
+                }
+
+                $acceptance = $fresh->histories()
+                    ->where('action', 'shipper_accepted')
+                    ->latest('id')
+                    ->first();
+                $restorableStatuses = [
+                    Order::STATUS_READY_TO_SHIP,
+                    Order::STATUS_PACKED,
+                    Order::STATUS_APPROVED,
+                    Order::STATUS_COMPLETED,
+                ];
+                $restoredStatus = in_array((string) $acceptance?->status_before, $restorableStatuses, true)
+                    ? (string) $acceptance->status_before
+                    : '';
+
+                if ($restoredStatus === '') {
+                    $previousHistoryStatus = $fresh->histories()
+                        ->when($acceptance, fn ($query) => $query->where('id', '<', $acceptance->id))
+                        ->whereIn('status_after', $restorableStatuses)
+                        ->latest('id')
+                        ->value('status_after');
+                    $restoredStatus = in_array((string) $previousHistoryStatus, $restorableStatuses, true)
+                        ? (string) $previousHistoryStatus
+                        : Order::STATUS_READY_TO_SHIP;
+                }
+
+                $isReturnOrder = (bool) ($fresh->is_return_order ?? false)
+                    || (string) ($fresh->order_type ?? '') === 'order_return'
+                    || (string) ($fresh->workflow_code ?? '') === 'order_return';
+                if ($isReturnOrder) {
+                    $restoredStatus = Order::STATUS_APPROVED;
+                } elseif ($fresh->accounting_sales_import_batch_id && $fresh->needs_operational_completion) {
+                    $restoredStatus = Order::STATUS_COMPLETED;
+                }
+
+                $exportDocument = InventoryDocument::query()
+                    ->where('type', 'export')
+                    ->where('notes', 'Xuất kho cho đơn #'.$fresh->code)
+                    ->when($acceptance?->user_id, fn ($query) => $query->where('user_id', $acceptance->user_id))
+                    ->latest('id')
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($exportDocument) {
+                    $movements = InventoryMovement::query()
+                        ->where('reference_type', InventoryDocument::class)
+                        ->where('reference_id', $exportDocument->id)
+                        ->lockForUpdate()
+                        ->get();
+                    $variantIds = [];
+
+                    foreach ($movements as $movement) {
+                        $inventory = Inventory::query()->lockForUpdate()->find($movement->inventory_id);
+                        if (! $inventory) {
+                            throw new \RuntimeException('Không tìm thấy tồn kho để hoàn lại phiếu xuất '.$exportDocument->document_number.'.');
+                        }
+
+                        $inventory->quantity += max(0, -(float) $movement->quantity);
+                        $inventory->save();
+                        $variantIds[] = (int) $inventory->product_variant_id;
+                    }
+
+                    InventoryMovement::query()
+                        ->where('reference_type', InventoryDocument::class)
+                        ->where('reference_id', $exportDocument->id)
+                        ->delete();
+                    $exportDocument->items()->delete();
+                    $exportDocument->delete();
+
+                    collect($variantIds)->unique()->each(fn (int $variantId) => $this->syncVariantStockFromInventories($variantId));
+                }
+
+                $fresh->update(['status' => $restoredStatus]);
+                OrderHistory::create([
+                    'order_id' => $fresh->id,
+                    'action' => 'shipper_acceptance_rolled_back',
+                    'user_id' => Auth::id(),
+                    'role' => 'shipper',
+                    'status_before' => Order::STATUS_DELIVERING,
+                    'status_after' => $restoredStatus,
+                    'note' => 'Shipper hoàn lại đơn đã nhận về danh sách có thể nhận.',
+                ]);
+
+                return $restoredStatus;
+            });
+        } catch (\RuntimeException $exception) {
+            $message = trim($exception->getMessage()) ?: 'Không thể hoàn lại đơn.';
+
+            return request()->expectsJson()
+                ? response()->json(['message' => $message], 422)
+                : back()->with('error', $message);
+        }
+
+        if (request()->expectsJson()) {
+            return response()->json([
+                'message' => 'Đã hoàn lại đơn #'.$order->code.' về danh sách có thể nhận.',
+                'order' => ['id' => $order->id, 'status' => $restoredStatus],
+            ]);
+        }
+
+        return redirect()->route('shipper.available', ['date' => $this->inventoryBusinessDateForOrder($order->fresh())])
+            ->with('success', 'Đã hoàn lại đơn #'.$order->code.' về danh sách có thể nhận.');
     }
 
     /**

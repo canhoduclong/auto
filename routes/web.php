@@ -485,6 +485,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/', [ShipperDashboardController::class, 'index'])->name('dashboard');
         Route::get('/available', [ShipperDashboardController::class, 'available'])->name('available');
         Route::post('/available/{order}/accept', [ShipperDashboardController::class, 'accept'])->name('accept');
+        Route::post('/available/{order}/rollback', [ShipperDashboardController::class, 'rollbackAcceptance'])->name('accept.rollback');
         Route::get('/my-orders', [ShipperDashboardController::class, 'myOrders'])->name('my-orders');
         Route::get('/orders/{order}/delivered-form', [ShipperDashboardController::class, 'deliveredForm'])->name('delivered-form');
         Route::post('/orders/{order}/mark-delivered', [ShipperDashboardController::class, 'markDelivered'])->name('mark-delivered');

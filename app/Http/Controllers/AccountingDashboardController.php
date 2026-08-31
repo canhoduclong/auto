@@ -912,6 +912,10 @@ class AccountingDashboardController extends Controller
             ])
             ->withSum('items as total_item_quantity', 'quantity')
             ->withSum('returnRecords as return_amount_sum', 'refund_amount')
+            ->withExists([
+                'histories as is_restored_order' => fn ($historyQuery) => $historyQuery
+                    ->where('action', 'restore_cancelled_order'),
+            ])
             ->where(function ($dateQuery) use ($targetDate, $dateField): void {
                 if ($dateField === 'delivered_at') {
                     $dateQuery->whereDate('delivered_at', $targetDate);
@@ -919,14 +923,28 @@ class AccountingDashboardController extends Controller
                     return;
                 }
 
-                // Đồng bộ với màn Theo dõi đơn hàng ngày: đơn thường theo
-                // ngày tạo, đơn nhập kế toán theo ngày giao/ngày nghiệp vụ.
-                $dateQuery->where(function ($normalQuery) use ($targetDate): void {
-                    $normalQuery->whereNull('accounting_sales_import_batch_id')
-                        ->whereDate('created_at', $targetDate);
-                })->orWhere(function ($importQuery) use ($targetDate): void {
-                    $importQuery->whereNotNull('accounting_sales_import_batch_id')
-                        ->whereDate('delivery_date', $targetDate);
+                $dateQuery->where(function ($regularBusinessDateQuery) use ($targetDate): void {
+                    $regularBusinessDateQuery
+                        ->whereDoesntHave('histories', fn ($historyQuery) => $historyQuery
+                            ->where('action', 'restore_cancelled_order'))
+                        ->where(function ($businessDateQuery) use ($targetDate): void {
+                            // Đồng bộ với màn Theo dõi đơn hàng ngày: đơn thường
+                            // theo ngày tạo, đơn nhập kế toán theo ngày nghiệp vụ.
+                            $businessDateQuery->where(function ($normalQuery) use ($targetDate): void {
+                                $normalQuery->whereNull('accounting_sales_import_batch_id')
+                                    ->whereDate('created_at', $targetDate);
+                            })->orWhere(function ($importQuery) use ($targetDate): void {
+                                $importQuery->whereNotNull('accounting_sales_import_batch_id')
+                                    ->whereDate('delivery_date', $targetDate);
+                            });
+                        });
+                })->orWhere(function ($restoredOrderQuery) use ($targetDate): void {
+                    // Đơn phục hồi có ngày tạo cũ nhưng phải được kế toán nhận
+                    // tại ngày Shipper thực sự giao lại đơn.
+                    $restoredOrderQuery
+                        ->whereHas('histories', fn ($historyQuery) => $historyQuery
+                            ->where('action', 'restore_cancelled_order'))
+                        ->whereDate('delivered_at', $targetDate);
                 });
             })
             ->when($orderId > 0, fn ($q) => $q->whereKey($orderId))

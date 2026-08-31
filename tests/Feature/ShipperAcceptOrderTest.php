@@ -20,6 +20,79 @@ class ShipperAcceptOrderTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_shipper_can_rollback_an_accepted_order_and_restore_exported_stock(): void
+    {
+        $shipper = User::factory()->create();
+        $shipper->roles()->attach(Role::query()->create(['name' => 'shipper']));
+        $customer = Customer::query()->create(['name' => 'Khách hoàn lại đơn', 'status' => 'active']);
+        $warehouse = Warehouse::query()->create(['name' => 'Kho hoàn lại đơn', 'status' => true]);
+        $product = Product::query()->create([
+            'user_id' => $shipper->id,
+            'name' => 'Sản phẩm hoàn lại',
+            'unit' => 'cái',
+            'status' => true,
+        ]);
+        $variant = $product->variants()->create([
+            'name' => 'Tiêu chuẩn',
+            'sku' => 'ROLLBACK-ACCEPTED-ORDER',
+            'kg' => 1,
+        ]);
+        $inventory = Inventory::query()->create([
+            'warehouse_id' => $warehouse->id,
+            'product_variant_id' => $variant->id,
+            'quantity' => 5,
+            'reserved_quantity' => 2,
+        ]);
+        $order = Order::query()->create([
+            'customer_id' => $customer->id,
+            'user_id' => $shipper->id,
+            'shipper_id' => $shipper->id,
+            'warehouse_id' => $warehouse->id,
+            'code' => 'ORDER-ROLLBACK-ACCEPT',
+            'status' => Order::STATUS_READY_TO_SHIP,
+            'skip_auto_cancel' => true,
+        ]);
+        $item = $order->items()->create([
+            'product_id' => $product->id,
+            'product_variant_id' => $variant->id,
+            'quantity' => 2,
+            'price' => 50000,
+            'total' => 100000,
+            'is_priced_by_kg' => false,
+        ]);
+        InventoryReservation::query()->create([
+            'order_item_id' => $item->id,
+            'inventory_id' => $inventory->id,
+            'quantity' => 2,
+            'reserved_at' => now(),
+        ]);
+
+        $this->actingAs($shipper)->postJson(route('shipper.accept', $order))->assertOk();
+        $exportDocument = InventoryDocument::query()
+            ->where('notes', 'Xuất kho cho đơn #'.$order->code)
+            ->sole();
+        $this->assertSame(3, (int) $inventory->fresh()->quantity);
+
+        $this->actingAs($shipper)
+            ->post(route('shipper.accept.rollback', $order))
+            ->assertRedirect(route('shipper.available', ['date' => $order->created_at->toDateString()]));
+
+        $order->refresh();
+        $this->assertSame(Order::STATUS_READY_TO_SHIP, $order->status);
+        $this->assertSame($shipper->id, (int) $order->shipper_id);
+        $this->assertSame(5, (int) $inventory->fresh()->quantity);
+        $this->assertDatabaseMissing('inventory_documents', ['id' => $exportDocument->id]);
+        $this->assertDatabaseMissing('inventory_movements', [
+            'reference_type' => InventoryDocument::class,
+            'reference_id' => $exportDocument->id,
+        ]);
+        $this->assertDatabaseHas('order_histories', [
+            'order_id' => $order->id,
+            'action' => 'shipper_acceptance_rolled_back',
+            'status_after' => Order::STATUS_READY_TO_SHIP,
+        ]);
+    }
+
     public function test_shipper_can_accept_imported_order_with_non_stock_fee_item(): void
     {
         $shipper = User::factory()->create();

@@ -598,6 +598,7 @@
                              data-order-id="{{ $order->id }}"
                              data-order-code="{{ $order->code }}"
                              data-delivery-url="{{ $isReturnOrder ? route('shipper.return-form', $order) : route('shipper.delivered-form', $order) }}"
+                             data-rollback-url="{{ route('shipper.accept.rollback', $order) }}"
                              data-is-return-order="{{ $isReturnOrder ? '1' : '0' }}"
                              data-order-group="{{ $isAccepted ? 'accepted' : 'available' }}"
                              data-order-sequence="{{ $order->daily_sequence ?? $loop->iteration }}">
@@ -635,6 +636,12 @@
                                                     <a href="{{ $isReturnOrder ? route('shipper.return-form', $order) : route('shipper.delivered-form', $order) }}" class="btn {{ $isReturnOrder ? 'btn-outline-danger' : 'btn-success' }} btn-sm sp-av-delivery-btn d-inline-flex align-items-center gap-1">
                                                         <i class="bi {{ $isReturnOrder ? 'bi-arrow-return-left' : 'bi-truck' }}"></i> {{ $isReturnOrder ? 'Nhập kho trả' : 'Giao hàng' }}
                                                     </a>
+                                                    <form action="{{ route('shipper.accept.rollback', $order) }}" method="POST">
+                                                        @csrf
+                                                        <button class="btn btn-outline-danger btn-sm d-inline-flex align-items-center gap-1" type="submit">
+                                                            <i class="bi bi-arrow-counterclockwise"></i> Hoàn lại
+                                                        </button>
+                                                    </form>
                                                 </div>
                                             @elseif($canAcceptToday && ($order->updated_at->isToday() || $order->created_at->isToday() || (bool) $order->skip_auto_cancel))
                                                 <form action="{{ route('shipper.accept', $order) }}" method="POST" class="js-shipper-accept-form">
@@ -821,12 +828,19 @@ document.addEventListener('DOMContentLoaded', function () {
         const action = card.querySelector('[data-accept-action]');
         if (action) {
             const deliveryUrl = card.dataset.deliveryUrl || '#';
+            const rollbackUrl = card.dataset.rollbackUrl || '#';
             const isReturnOrder = card.dataset.isReturnOrder === '1';
             action.innerHTML = `<div class="d-flex gap-2 flex-wrap align-items-center">
                 <span class="badge rounded-pill bg-warning text-dark border px-2 py-1" style="font-size: 0.72rem;"><i class="bi bi-check2-circle me-1"></i>Đã nhận</span>
                 <a href="${deliveryUrl}" class="btn ${isReturnOrder ? 'btn-outline-danger' : 'btn-success'} btn-sm sp-av-delivery-btn d-inline-flex align-items-center gap-1">
                     <i class="bi ${isReturnOrder ? 'bi-arrow-return-left' : 'bi-truck'}"></i> ${isReturnOrder ? 'Nhập kho trả' : 'Giao hàng'}
                 </a>
+                <form action="${rollbackUrl}" method="POST">
+                    <input type="hidden" name="_token" value="${csrfToken}">
+                    <button class="btn btn-outline-danger btn-sm d-inline-flex align-items-center gap-1" type="submit">
+                        <i class="bi bi-arrow-counterclockwise"></i> Hoàn lại
+                    </button>
+                </form>
             </div>`;
         }
 
@@ -876,7 +890,7 @@ document.addEventListener('DOMContentLoaded', function () {
         event.preventDefault();
 
         const card = form.closest('.js-shipper-order-card');
-        if (!card || !window.confirm(`Xác nhận nhận đơn #${card.dataset.orderCode || card.dataset.orderSequence}?`)) {
+        if (!card) {
             return;
         }
 

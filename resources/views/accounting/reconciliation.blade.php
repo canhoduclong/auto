@@ -294,9 +294,11 @@
                             </td>
                             <td>
                                 @if($dateField === 'business_date')
-                                    {{ $order->accounting_sales_import_batch_id
+                                    {{ $order->is_restored_order
+                                        ? (optional($order->delivered_at)->format('d/m/Y H:i') ?: '-')
+                                        : ($order->accounting_sales_import_batch_id
                                         ? (optional($order->delivery_date)->format('d/m/Y') ?: '-')
-                                        : (optional($order->created_at)->format('d/m/Y H:i') ?: '-') }}
+                                        : (optional($order->created_at)->format('d/m/Y H:i') ?: '-')) }}
                                 @else
                                     {{ optional($order->delivered_at)->format('d/m/Y H:i') ?: '-' }}
                                 @endif

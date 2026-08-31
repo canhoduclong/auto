@@ -13,6 +13,51 @@ class AccountingReconciliationBusinessDateTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_restored_delivered_order_is_listed_on_its_actual_delivery_day(): void
+    {
+        $accountRole = Role::create(['name' => 'accounting']);
+        $accountant = User::factory()->create();
+        $accountant->roles()->attach($accountRole);
+        $sale = User::factory()->create();
+        $customer = Customer::create(['name' => 'Khách đơn phục hồi', 'status' => 'active']);
+        $oldBusinessDate = now()->subDays(8)->toDateString();
+        $actualDeliveryDate = now()->toDateString();
+
+        $order = Order::create([
+            'customer_id' => $customer->id,
+            'user_id' => $sale->id,
+            'code' => 'ORD-RESTORED-DELIVERED-RECON',
+            'status' => Order::STATUS_DELIVERED,
+            'delivered_at' => $actualDeliveryDate.' 14:20:00',
+            'total' => 980000,
+            'skip_auto_cancel' => true,
+        ]);
+        Order::withoutTimestamps(function () use ($order, $oldBusinessDate): void {
+            $order->forceFill([
+                'created_at' => $oldBusinessDate.' 08:00:00',
+                'updated_at' => $oldBusinessDate.' 09:00:00',
+            ])->save();
+        });
+        $order->histories()->create([
+            'action' => 'restore_cancelled_order',
+            'user_id' => $accountant->id,
+            'role' => 'admin',
+            'status_before' => Order::STATUS_CANCELLED,
+            'status_after' => Order::STATUS_READY_TO_SHIP,
+            'note' => 'Phục hồi đơn để tiếp tục giao',
+        ]);
+
+        $this->actingAs($accountant)
+            ->get(route('accounting.reconciliation', ['date' => $actualDeliveryDate]))
+            ->assertOk()
+            ->assertSee('ORD-RESTORED-DELIVERED-RECON');
+
+        $this->actingAs($accountant)
+            ->get(route('accounting.reconciliation', ['date' => $oldBusinessDate]))
+            ->assertOk()
+            ->assertDontSee('ORD-RESTORED-DELIVERED-RECON');
+    }
+
     public function test_completed_order_without_delivered_timestamp_is_listed_by_business_date(): void
     {
         $accountRole = Role::create(['name' => 'accounting']);
