@@ -113,6 +113,22 @@ class WarehousePackingSizeAllocationTest extends TestCase
                 'item_actual_weight' => 250,
             ])
             ->assertOk();
+
+        $this->actingAs($user)
+            ->postJson(route('warehouse.orders.logistics', $order), [
+                'item_id' => $item->id,
+                'clear_item_weight' => true,
+            ])
+            ->assertOk()
+            ->assertJsonPath('cleared', true);
+
+        $this->assertNull($item->fresh()->actual_weight);
+        $this->assertNull($item->fresh()->packed_weight);
+        $this->assertNull($order->fresh()->actual_weight);
+        $this->assertDatabaseHas('order_histories', [
+            'order_id' => $order->id,
+            'action' => 'warehouse_clear_item_weight',
+        ]);
     }
 
     private function fixture(int $quantity): array

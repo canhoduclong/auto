@@ -502,7 +502,11 @@
                                                                     data-size="{{ is_numeric($variantSize) && (float)$variantSize > 0 ? (float)$variantSize : 0 }}"
                                                                     data-average-min="{{ abs((float)$variantSize - 2.5) < 0.0001 ? '2.47' : '' }}"
                                                                     data-average-max="{{ abs((float)$variantSize - 2.5) < 0.0001 ? '2.57' : '' }}">
-                                                                <button class="btn btn-sm {{ $isItemLogisticsSaved ? 'btn-secondary' : 'wh-warning-action-btn' }} js-logistics-submit-btn" type="submit">Lưu</button>
+                                                                <button class="btn btn-sm {{ $isItemLogisticsSaved ? 'btn-secondary' : 'btn-success' }} js-logistics-submit-btn" type="submit">{{ $isItemLogisticsSaved ? 'Đã lưu' : 'Lưu' }}</button>
+                                                                <button class="btn btn-sm btn-outline-danger js-clear-item-weight {{ $isItemLogisticsSaved ? '' : 'd-none' }}"
+                                                                        type="submit" formnovalidate title="Gỡ kg đã lưu nhầm">
+                                                                    <i class="bi bi-arrow-counterclockwise"></i>
+                                                                </button>
                                                             </form>
                                                         </div>
                                                         <div class="wh-readonly-item js-ready-only {{ $isPacking ? 'd-none' : '' }}">{{ $displayActualWeight }}</div>

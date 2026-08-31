@@ -2883,10 +2883,11 @@ class WarehouseDashboardController extends Controller
         $rules = [
             'item_id' => ['nullable', 'integer'],
             'item_actual_weight' => ['nullable', 'numeric', 'min:0'],
+            'clear_item_weight' => ['nullable', 'boolean'],
             'packing_details' => ['nullable', 'boolean'],
         ];
 
-        if ($request->filled('item_id')) {
+        if ($request->filled('item_id') && ! $request->boolean('clear_item_weight')) {
             $rules['item_actual_weight'] = ['required', 'numeric', 'min:0'];
         }
 
@@ -2949,6 +2950,46 @@ class WarehouseDashboardController extends Controller
 
             $item = $order->items->firstWhere('id', $itemId);
             if ($item) {
+                if ($request->boolean('clear_item_weight')) {
+                    $clearedWeight = $item->actual_weight;
+                    $item->forceFill([
+                        'actual_weight' => null,
+                        'packed_weight' => null,
+                    ])->save();
+
+                    $hasRemainingWeight = $order->items()->whereNotNull('actual_weight')->exists();
+                    $remainingWeight = round((float) $order->items()->sum('actual_weight'), 3);
+                    $order->update([
+                        'actual_weight' => $hasRemainingWeight ? $remainingWeight : null,
+                        'total_weight' => $hasRemainingWeight
+                            ? $remainingWeight
+                            : round((float) $order->items()->sum('total_weight'), 3),
+                    ]);
+
+                    OrderHistory::create([
+                        'order_id' => $order->id,
+                        'action' => 'warehouse_clear_item_weight',
+                        'user_id' => Auth::id(),
+                        'role' => $this->packingActorRole(),
+                        'status_before' => $order->status,
+                        'status_after' => $order->status,
+                        'note' => 'Gỡ Kg thực tế đã lưu nhầm cho '.($item->variant?->name ?? $item->product?->name ?? ('dòng #'.$item->id))
+                            .': '.number_format((float) $clearedWeight, 3, '.', '').' kg.',
+                    ]);
+
+                    $message = 'Đã gỡ kg đã lưu. Bạn có thể nhập lại và bấm Lưu màu xanh.';
+                    if ($expectsJson) {
+                        return response()->json([
+                            'ok' => true,
+                            'cleared' => true,
+                            'message' => $message,
+                            'order' => ['id' => $order->id, 'actual_weight' => $order->actual_weight],
+                        ]);
+                    }
+
+                    return back()->with('success', $message);
+                }
+
                 $newWeight = round((float) $validated['item_actual_weight'], 3);
                 if (abs((float) ($item->variant?->size ?? 0) - 2.5) < 0.0001 && (int) $item->quantity > 0) {
                     $averageWeight = $newWeight / (int) $item->quantity;
