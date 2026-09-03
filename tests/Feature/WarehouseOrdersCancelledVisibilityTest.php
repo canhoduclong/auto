@@ -32,9 +32,11 @@ class WarehouseOrdersCancelledVisibilityTest extends TestCase
         $warehouse = Warehouse::query()->create(['name' => 'Kho Long An', 'status' => true]);
         $user = User::factory()->create(['warehouse_id' => $warehouse->id]);
         $user->roles()->attach(Role::query()->create(['name' => 'warehouse']));
+        $sale = User::factory()->create(['name' => 'Sale Nguyễn An']);
         $customer = Customer::query()->create(['name' => 'Khách đóng hàng', 'status' => 'active']);
 
-        $this->order($customer, $warehouse, 'VISIBLE-PACKING', Order::STATUS_READY_TO_PACK);
+        $visibleOrder = $this->order($customer, $warehouse, 'VISIBLE-PACKING', Order::STATUS_READY_TO_PACK);
+        $visibleOrder->update(['user_id' => $sale->id]);
         $this->order($customer, $warehouse, 'HIDDEN-CANCELLED', Order::STATUS_CANCELLED);
         $this->order($customer, $warehouse, 'HIDDEN-TRASHED', Order::STATUS_READY_TO_PACK, now());
 
@@ -42,6 +44,7 @@ class WarehouseOrdersCancelledVisibilityTest extends TestCase
             ->get(route('warehouse.orders', ['date' => now()->toDateString()]))
             ->assertOk()
             ->assertSee('VISIBLE-PACKING')
+            ->assertSee('Sale: Sale Nguyễn An')
             ->assertDontSee('HIDDEN-CANCELLED')
             ->assertDontSee('HIDDEN-TRASHED')
             ->assertSee('Tổng đơn: 1');

@@ -153,7 +153,7 @@
     .monitor-stock-available { display: block; margin-top: 2px; color: #64748b; font-size: .64rem; white-space: nowrap; }
     .monitor-layout {
         display: grid;
-        grid-template-columns: 260px minmax(0, 1fr);
+        grid-template-columns: 330px minmax(0, 1fr);
         gap: 20px;
         margin-top: 0;
     }
@@ -232,6 +232,8 @@
     .monitor-draft-customer-row { display: flex; align-items: stretch; border-bottom: 1px solid #eef2f7; }
     .monitor-draft-customer-row:last-child { border-bottom: 0; }
     .monitor-draft-customer-row .monitor-filter-link { min-width: 0; flex: 1; border-bottom: 0; }
+    .monitor-draft-customer-identity { display: flex; min-width: 0; align-items: center; gap: 8px; }
+    .monitor-draft-customer-sequence { min-width: 22px; flex: 0 0 22px; color: #64748b; text-align: right; }
     .monitor-draft-customer-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .monitor-draft-customer-pin { width: 34px; flex: 0 0 34px; border: 0; border-left: 1px solid #eef2f7; background: #fff; color: #94a3b8; }
     .monitor-draft-customer-pin:hover, .monitor-draft-customer-pin.is-pinned { color: #d97706; background: #fffbeb; }
@@ -1082,8 +1084,10 @@
                                 <a class="monitor-filter-link {{ $selectedDraftCustomerId === $draftCustomer->id ? 'active' : '' }}"
                                    href="{{ route('pages.my_orders.monitoring', array_merge($draftCustomerQuery, ['draft_customer_id' => $draftCustomer->id])) }}#draft-list-start"
                                    title="Mở đơn mẫu của {{ $draftCustomer->name }}">
-                                    <span class="monitor-draft-customer-name">{{ $draftCustomer->name }}</span>
-                                    <span class="monitor-filter-count">{{ (int) $draftCustomer->drafts_count }}</span>
+                                    <span class="monitor-draft-customer-identity">
+                                        <span class="monitor-draft-customer-sequence">{{ $loop->iteration }}.</span>
+                                        <span class="monitor-draft-customer-name">{{ $draftCustomer->name }}</span>
+                                    </span>
                                 </a>
                                 <button type="button" class="monitor-draft-customer-pin js-monitor-draft-customer-pin {{ $draftCustomer->is_pinned ? 'is-pinned' : '' }}"
                                         data-pin-url="{{ route('pages.my_order_drafts.customers.pin', $draftCustomer) }}"
